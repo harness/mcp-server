@@ -1,5 +1,167 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, BodyFieldSpec } from "../types.js";
 import { passthrough } from "../extractors.js";
+
+// ── Body Schema Fields for Database Schema ────────────────────────────────
+// Note: Create and Update have different required fields per OpenAPI spec.
+// - Create requires: identifier, name, migrationType, type
+// - Update: all fields optional (partial update), migrationType not supported
+
+const databaseSchemaCreateSchema = {
+  description:
+    "Database schema definition. Use type='Repository' for git-based changelogs (requires changelog object), " +
+    "type='Script' for custom script-based migrations (requires changeLogScript object). " +
+    "Only include changelog OR changeLogScript based on type — not both.",
+  fields: [
+    {
+      name: "identifier",
+      type: "string",
+      required: true,
+      description:
+        "Unique schema identifier (required on create). Must start with letter/underscore, " +
+        "may contain letters, numbers, underscores, and $. Max 128 chars. " +
+        "Pattern: ^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$",
+    },
+    {
+      name: "name",
+      type: "string",
+      required: true,
+      description: "Schema display name (max 128 chars)",
+    },
+    {
+      name: "migrationType",
+      type: "string",
+      required: true,
+      description: "Migration tool: 'Liquibase' or 'Flyway'",
+    },
+    {
+      name: "type",
+      type: "string",
+      required: true,
+      description:
+        "Source type: 'Repository' (git-based changelog) or 'Script' (custom script)",
+    },
+    {
+      name: "tags",
+      type: "object",
+      required: false,
+      description: "Key-value tag map (max 128 keys, each value max 128 chars)",
+    },
+    {
+      name: "changelog",
+      type: "object",
+      required: false,
+      description:
+        "Required when type='Repository': git repository details. OMIT this field entirely if type='Script'.",
+      fields: [
+        { name: "connector", type: "string", required: true, description: "Git connector identifier" },
+        { name: "location", type: "string", required: true, description: "Path to changelog file (e.g. 'db/changelog.xml')" },
+        { name: "repo", type: "string", required: false, description: "Repository name (if connector doesn't specify)" },
+        { name: "archivePath", type: "string", required: false, description: "Archive path for migration files" },
+        { name: "toml", type: "string", required: false, description: "Flyway TOML configuration path" },
+      ],
+    },
+    {
+      name: "changeLogScript",
+      type: "object",
+      required: false,
+      description:
+        "Required when type='Script': custom script configuration. OMIT this field entirely if type='Repository'.",
+      fields: [
+        { name: "location", type: "string", required: true, description: "Script path" },
+        { name: "image", type: "string", required: true, description: "Docker image (e.g. 'liquibase/liquibase:4.25')" },
+        { name: "shell", type: "string", required: true, description: "Shell type: 'Bash' or 'Sh'" },
+        { name: "command", type: "string", required: true, description: "Shell command to run" },
+        { name: "toml", type: "string", required: false, description: "Flyway TOML configuration path" },
+      ],
+    },
+    {
+      name: "usePercona",
+      type: "boolean",
+      required: false,
+      description: "Liquibase only: enable Percona toolkit for online schema changes",
+    },
+    {
+      name: "service",
+      type: "string",
+      required: false,
+      description: "Optional Harness service reference",
+    },
+  ] as BodyFieldSpec[],
+};
+
+// Update schema: all fields optional, migrationType not supported per OpenAPI DBSchemaUpdateRequest
+const databaseSchemaUpdateSchema = {
+  description:
+    "Database schema update. Identifier cannot be changed (comes from path). " +
+    "All fields are optional — only include fields you want to update. " +
+    "Note: migrationType cannot be changed after creation.",
+  fields: [
+    {
+      name: "name",
+      type: "string",
+      required: false,
+      description: "Schema display name (max 128 chars)",
+    },
+    {
+      name: "tags",
+      type: "object",
+      required: false,
+      description: "Key-value tag map (max 128 keys, each value max 128 chars)",
+    },
+    {
+      name: "type",
+      type: "string",
+      required: false,
+      description:
+        "Source type: 'Repository' (git-based changelog) or 'Script' (custom script)",
+    },
+    {
+      name: "changelog",
+      type: "object",
+      required: false,
+      description: "For type='Repository': git repository details.",
+      fields: [
+        { name: "connector", type: "string", required: false, description: "Git connector identifier" },
+        { name: "location", type: "string", required: false, description: "Path to changelog file" },
+        { name: "repo", type: "string", required: false, description: "Repository name" },
+        { name: "archivePath", type: "string", required: false, description: "Archive path for migration files" },
+        { name: "toml", type: "string", required: false, description: "Flyway TOML configuration path" },
+      ],
+    },
+    {
+      name: "changeLogScript",
+      type: "object",
+      required: false,
+      description: "For type='Script': custom script configuration.",
+      fields: [
+        { name: "location", type: "string", required: false, description: "Script path" },
+        { name: "image", type: "string", required: false, description: "Docker image" },
+        { name: "shell", type: "string", required: false, description: "Shell type: 'Bash' or 'Sh'" },
+        { name: "command", type: "string", required: false, description: "Shell command to run" },
+        { name: "toml", type: "string", required: false, description: "Flyway TOML configuration path" },
+      ],
+    },
+    {
+      name: "usePercona",
+      type: "boolean",
+      required: false,
+      description: "Liquibase only: enable Percona toolkit for online schema changes",
+    },
+    {
+      name: "service",
+      type: "string",
+      required: false,
+      description: "Optional Harness service reference",
+    },
+    {
+      name: "primaryDbInstanceId",
+      type: "string",
+      required: false,
+      description:
+        "Primary DB instance identifier for LLM authoring and related features",
+    },
+  ] as BodyFieldSpec[],
+};
 
 export const dbopsToolset: ToolsetDefinition = {
   name: "dbops",
@@ -12,7 +174,8 @@ export const dbopsToolset: ToolsetDefinition = {
       resourceType: "database_schema",
       displayName: "Database Schema",
       description:
-        "Harness DBOPS schema entity. Defines how database migrations are managed (Liquibase or Flyway), " +
+        "Harness DBOPS schema entity — supports full CRUD (list, get, create, update, delete). " +
+        "Defines how database migrations are managed (Liquibase or Flyway), " +
         "the source of migration scripts, and the set of linked instances. " +
         "NOTE: 'type' field is the schema source type (Repository/Script), NOT the database engine. " +
         "The DB engine type (MySQL, PostgreSQL, etc.) is NOT stored on the schema — it is on the JDBC " +
@@ -72,76 +235,15 @@ export const dbopsToolset: ToolsetDefinition = {
           path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema",
           pathParams: { org_id: "org", project_id: "project" },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          // DBOPS API expects flat DBSchemaIn shape at root (no wrapper object)
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description:
             "Create a new database schema. Requires name, identifier, migrationType (Liquibase/Flyway), " +
             "and type (Repository for git-based or Script for custom). " +
-            "For Repository type, provide changelog object with connector, repo, and location. " +
-            "For Script type, provide changeLogScript object with location, image, shell, and command.",
-          bodySchema: {
-            description:
-              "Database schema definition. Use type='Repository' for git-based changelogs, " +
-              "type='Script' for custom script-based migrations.",
-            fields: [
-              {
-                name: "name",
-                type: "string",
-                required: true,
-                description: "Schema display name",
-              },
-              {
-                name: "identifier",
-                type: "string",
-                required: true,
-                description: "Unique schema identifier (lowercase, hyphens allowed)",
-              },
-              {
-                name: "migrationType",
-                type: "string",
-                required: true,
-                description: "Migration tool: 'Liquibase' or 'Flyway'",
-              },
-              {
-                name: "type",
-                type: "string",
-                required: true,
-                description:
-                  "Source type: 'Repository' (git-based changelog) or 'Script' (custom script)",
-              },
-              {
-                name: "changelog",
-                type: "object",
-                required: false,
-                description:
-                  "For type='Repository': git repository details. Fields: connector (required, git connector ID), " +
-                  "repo (repository name), location (path to changelog file, e.g. 'db/changelog.xml'), " +
-                  "archivePath (optional), toml (optional, for Flyway)",
-              },
-              {
-                name: "changeLogScript",
-                type: "object",
-                required: false,
-                description:
-                  "For type='Script': custom script configuration. Fields: location (required, script path), " +
-                  "image (required, Docker image e.g. 'liquibase/liquibase:4.25'), " +
-                  "shell (required, 'Bash' or 'Sh'), command (required, shell command to run), " +
-                  "toml (optional, for Flyway)",
-              },
-              {
-                name: "usePercona",
-                type: "boolean",
-                required: false,
-                description: "Liquibase only: enable Percona toolkit for online schema changes",
-              },
-              {
-                name: "service",
-                type: "string",
-                required: false,
-                description: "Optional Harness service reference",
-              },
-            ],
-          },
+            "For Repository type, provide changelog object with connector and location (OMIT changeLogScript). " +
+            "For Script type, provide changeLogScript object with location, image, shell, and command (OMIT changelog).",
+          bodySchema: databaseSchemaCreateSchema,
         },
         update: {
           method: "PUT",
@@ -152,10 +254,13 @@ export const dbopsToolset: ToolsetDefinition = {
             dbschema_id: "dbschema",
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          // DBOPS API expects flat DBSchemaUpdateRequest shape at root (no wrapper object)
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description:
-            "Update an existing database schema. Same body structure as create, but identifier cannot be changed.",
+            "Update an existing database schema. All fields are optional — only include what you want to change. " +
+            "Identifier cannot be changed (comes from path). Note: migrationType cannot be changed after creation.",
+          bodySchema: databaseSchemaUpdateSchema,
         },
         delete: {
           method: "DELETE",
@@ -165,10 +270,11 @@ export const dbopsToolset: ToolsetDefinition = {
             project_id: "project",
             dbschema_id: "dbschema",
           },
-          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description:
-            "Delete a database schema. WARNING: This will also delete all linked instances and migration history.",
+            "Delete a database schema. WARNING: This will also delete all linked instances and migration history. " +
+            "This action cannot be undone.",
         },
       },
     },
