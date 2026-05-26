@@ -352,6 +352,36 @@ const LOG_SERVICE_GATEWAY_PREFIX = "/gateway/log-service";
  * Harness-hosted URLs are routed through the client so that auth headers
  * (PAT, service JWT, or log-service token) are injected by the client or
  * any proxy installed on it (e.g. mcpServerInternal's service routing).
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════╗
+ * ║  ⚠  THIS FUNCTION HAS BROKEN MULTIPLE TIMES — READ BEFORE CHANGING  ⚠  ║
+ * ╠══════════════════════════════════════════════════════════════════════════╣
+ * ║                                                                          ║
+ * ║  INVARIANT A — always rewrite when blob host ≠ base URL host            ║
+ * ║    The log-service always returns app.harness.io/storage/... in blob     ║
+ * ║    links regardless of HARNESS_BASE_URL. On self-managed deployments,   ║
+ * ║    app.harness.io is NOT reachable. Rewrite to the configured host.      ║
+ * ║    This MUST happen even when X-Amz-SignedHeaders / X-Goog-SignedHeaders ║
+ * ║    includes "host" — the original URL is blocked, so a potential 403 is  ║
+ * ║    better than a guaranteed network error.                               ║
+ * ║                                                                          ║
+ * ║  INVARIANT B — skip rewrite only when blob host = base URL host         ║
+ * ║    When the blob URL hostname already matches our base URL hostname, the  ║
+ * ║    signature is valid for direct fetch and rewriting would be a no-op.   ║
+ * ║    Skipping the rewrite in this case is safe.                            ║
+ * ║                                                                          ║
+ * ║  INVARIANT C — never call requestStream() for /storage/ CDN blobs       ║
+ * ║    Strategy 3 prepends /gateway/log-service/ which produces a 404 for   ║
+ * ║    CDN storage paths. /storage/ blobs must always be direct-fetched.     ║
+ * ║                                                                          ║
+ * ║  INVARIANT D — external S3/GCS hosts bypass all rewriting               ║
+ * ║    True external storage (amazonaws.com, googleapis.com, etc.) URLs are  ║
+ * ║    publicly routable with embedded signature params. Rewriting or adding  ║
+ * ║    auth headers invalidates the AWS/GCS signature.                       ║
+ * ║                                                                          ║
+ * ║  Tests in tests/utils/log-resolver.test.ts are labeled REGRESSION-GUARD ║
+ * ║  [A], [B], [C], [D]. ALL must stay green after any change here.         ║
+ * ╚══════════════════════════════════════════════════════════════════════════╝
  */
 async function downloadBlobContent(
   client: HarnessClient,

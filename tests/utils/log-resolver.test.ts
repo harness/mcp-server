@@ -512,4 +512,214 @@ describe("resolveLogContent", () => {
       resolveLogContent(client, "prefix", { maxLogSizeBytes: 1024 }),
     ).rejects.toThrow(/too large/);
   });
+
+  // ─── REGRESSION GUARD: blob hostname rewriting (breaks repeatedly) ──────────
+  //
+  // This logic has regressed multiple times. Every strategy change in
+  // downloadBlobContent() MUST leave all tests below green. The invariants:
+  //
+  //   A) blob host ≠ base URL host  →  ALWAYS rewrite (even when host in SignedHeaders)
+  //      Rationale: original app.harness.io is unreachable on self-managed nets.
+  //   B) blob host = base URL host  →  skip rewrite when host is in SignedHeaders
+  //      Rationale: signature already valid; rewriting is a no-op anyway.
+  //   C) requestStream must NEVER be called for /storage/ CDN blob URLs.
+  //   D) External S3/GCS host URLs bypass rewriting entirely (Strategy 1).
+
+  it("REGRESSION-GUARD [A]: self-managed instance (corp.harness.example) + host in SignedHeaders → rewrites to corp host", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=sig123" +
+      "&X-Amz-Expires=3600";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://corp.harness.example/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("corp.harness.example");
+    expect(url).not.toContain("app.harness.io");
+    expect(url).toContain("X-Amz-Signature=sig123");
+    expect(url).toContain("/storage/blob.zip");
+  });
+
+  it("REGRESSION-GUARD [A]: multiple headers in SignedHeaders including host → self-managed still rewrites", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=content-type%3Bhost%3Bx-amz-date" +
+      "&X-Amz-Signature=multi123";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.corp.example/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.corp.example");
+    expect(url).not.toContain("app.harness.io");
+    expect(url).toContain("X-Amz-Signature=multi123");
+  });
+
+  it("REGRESSION-GUARD [A]: SignedHeaders host value is case-insensitive → self-managed rewrites", async () => {
+    // The check must handle 'Host', 'HOST', 'host' — all the same
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=Host" +
+      "&X-Amz-Signature=case123";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+    expect(url).not.toContain("app.harness.io");
+  });
+
+  it("REGRESSION-GUARD [B]: SaaS base URL = app.harness.io + host in SignedHeaders → no rewrite, direct fetch", async () => {
+    // Standard SaaS: blob URL host matches base URL host — no rewrite needed.
+    // If rewrite were applied it would be a no-op, but it must NOT be applied to
+    // preserve the original URL for cases where signature covers the Host header.
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=saas456";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://app.harness.io" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("app.harness.io");
+    expect(url).toContain("/storage/blob.zip");
+    expect(url).toContain("X-Amz-Signature=saas456");
+  });
+
+  it("REGRESSION-GUARD [B]: GCS blob, host in X-Goog-SignedHeaders, base = app.harness.io → no rewrite", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Goog-SignedHeaders=host" +
+      "&X-Goog-Signature=gcssaas789";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://app.harness.io" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("app.harness.io");
+    expect(url).not.toContain("self-managed");
+    expect(url).toContain("X-Goog-Signature=gcssaas789");
+  });
+
+  it("REGRESSION-GUARD [C]: requestStream is NEVER called for host-bound /storage/ CDN blob on self-managed", async () => {
+    // Strategy 2 (direct fetch with host rewrite) must handle this — not Strategy 3 (requestStream).
+    // If requestStream is called, it would prepend /gateway/log-service/ → 404.
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=s1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const streamFn = vi.fn();
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    expect(streamFn).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+  });
+
+  it("REGRESSION-GUARD [A]: network error after host rewrite surfaces rewritten hostname in error message", async () => {
+    // When the rewritten URL is also unreachable, the error must name the rewritten host —
+    // not app.harness.io — so operators know the rewrite happened and look at the right host.
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=err1";
+    fetchSpy.mockRejectedValue(new TypeError("fetch failed"));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await expect(resolveLogContent(client, "prefix")).rejects.toThrow("self-managed.example.com");
+  });
+
+  it("REGRESSION-GUARD [A]: self-managed with non-default port + host in SignedHeaders → rewrites with port preserved", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=port1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://corp.harness.example:8443/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("corp.harness.example:8443");
+    expect(url).not.toContain("app.harness.io");
+    expect(url).toContain("/storage/blob.zip");
+  });
+
+  it("REGRESSION-GUARD [A]: non-host-bound URL on self-managed always rewrites (unchanged baseline)", async () => {
+    // SignedHeaders that do NOT include host — rewrite must happen regardless of this fix.
+    // Guards against the fix accidentally narrowing the rewrite condition too far.
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=content-type%3Bx-amz-date" +
+      "&X-Amz-Signature=noh1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+    expect(url).not.toContain("app.harness.io");
+    expect(url).toContain("X-Amz-Signature=noh1");
+  });
+
+  it("REGRESSION-GUARD [A+C]: host-bound blob returns HTTP 403 after rewrite — error propagates, requestStream not attempted", async () => {
+    // When CDN returns 403 (e.g. host-bound signature mismatch after rewrite), the error
+    // must be surfaced immediately. Strategy 3 (requestStream) must NOT be tried as fallback.
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=sig403";
+    fetchSpy.mockResolvedValue(new Response("Forbidden", { status: 403 }));
+    const streamFn = vi.fn();
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    await expect(resolveLogContent(client, "prefix")).rejects.toThrow(/HTTP 403/);
+    expect(streamFn).not.toHaveBeenCalled();
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+  });
 });
