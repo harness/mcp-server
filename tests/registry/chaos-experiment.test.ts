@@ -632,3 +632,81 @@ describe("chaos_experiment isIdentity routing", () => {
     expect(call.params.isIdentity).toBe(false);
   });
 });
+
+describe("chaos_experiment.run bodyBuilder — runtime_inputs handling", () => {
+  let registry: Registry;
+  beforeEach(() => { registry = new Registry(makeConfig()); });
+
+  it("run: merges runtime_inputs with experiment_variables instead of overwriting (A1)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment", "run", {
+      experiment_id: "exp1",
+      project_id: "proj1",
+      org_id: "org1",
+      runtime_inputs: { experiment: [{ name: "REGION", value: "us-east-1" }] },
+      experiment_variables: [{ name: "DURATION", value: "60s" }],
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    const expArr = (call.body.runtimeInputs as { experiment: Array<{ name: string; value: unknown }> }).experiment;
+    expect(expArr).toEqual(
+      expect.arrayContaining([
+        { name: "REGION", value: "us-east-1" },
+        { name: "DURATION", value: "60s" },
+      ]),
+    );
+    expect(expArr).toHaveLength(2);
+  });
+
+  it("run: top-level experiment_variables wins on name conflict with runtime_inputs (A1)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment", "run", {
+      experiment_id: "exp1",
+      project_id: "proj1",
+      org_id: "org1",
+      runtime_inputs: { experiment: [{ name: "REGION", value: "us-east-1" }] },
+      experiment_variables: [{ name: "REGION", value: "eu-west-1" }],
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    const expArr = (call.body.runtimeInputs as { experiment: Array<{ name: string; value: unknown }> }).experiment;
+    expect(expArr).toEqual([{ name: "REGION", value: "eu-west-1" }]);
+  });
+
+  it("run: unwraps input.body via coerceBody so body={runtime_inputs:...} flows through (A2)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment", "run", {
+      experiment_id: "exp1",
+      project_id: "proj1",
+      org_id: "org1",
+      body: { runtime_inputs: { experiment: [{ name: "REGION", value: "us-east-1" }] } },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.runtimeInputs).toEqual({
+      experiment: [{ name: "REGION", value: "us-east-1" }],
+    });
+  });
+
+  it("run: throws via coerceBody when body is malformed JSON (A2)", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "chaos_experiment", "run", {
+        experiment_id: "exp1",
+        project_id: "proj1",
+        org_id: "org1",
+        body: "{",
+      }),
+    ).rejects.toThrow(/Invalid JSON in 'body'/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});

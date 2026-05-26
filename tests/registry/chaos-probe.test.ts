@@ -772,3 +772,115 @@ describe("chaos_probe create — apmProbe (Prometheus)", () => {
     expect(call.body.inputs).toEqual([]);
   });
 });
+
+describe("coerceBody fail-loud on malformed JSON body", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("enable: throws and does not call the API when body is malformed JSON", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "chaos_probe", "enable", {
+        project_id: "proj1",
+        org_id: "org1",
+        probe_id: "p1",
+        body: "{",
+      }),
+    ).rejects.toThrow(/Invalid JSON in 'body'/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("verify: throws and does not call the API when body is malformed JSON", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "chaos_probe", "verify", {
+        project_id: "proj1",
+        org_id: "org1",
+        probe_id: "p1",
+        body: "{bad json",
+      }),
+    ).rejects.toThrow(/Invalid JSON in 'body'/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: throws and does not call the API when body is malformed JSON", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "chaos_probe", "create", {
+        project_id: "proj1",
+        org_id: "org1",
+        body: '{"name":',
+      }),
+    ).rejects.toThrow(/Invalid JSON in 'body'/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("chaos_component_variable.get required field validation (preflight)", () => {
+  let registry: Registry;
+  beforeEach(() => { registry = new Registry(makeConfig()); });
+
+  it("get: throws locally when 'type' is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "chaos_component_variable", "get", {
+        project_id: "proj1",
+        org_id: "org1",
+        identifier: "some-component",
+      }),
+    ).rejects.toThrow(/Missing required field.*type/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: throws locally when 'identifier' is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "chaos_component_variable", "get", {
+        project_id: "proj1",
+        org_id: "org1",
+        type: "Probe",
+      }),
+    ).rejects.toThrow(/Missing required field.*identifier/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: throws locally when both 'type' and 'identifier' are missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "chaos_component_variable", "get", {
+        project_id: "proj1",
+        org_id: "org1",
+      }),
+    ).rejects.toThrow(/type.*identifier|identifier.*type/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: proceeds and sends both query params when required fields are present", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ items: [{ name: "var1", variables: [] }] });
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_component_variable", "get", {
+      project_id: "proj1",
+      org_id: "org1",
+      type: "Probe",
+      identifier: "some-component",
+    });
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params).toMatchObject({ type: "Probe", identifier: "some-component" });
+  });
+});

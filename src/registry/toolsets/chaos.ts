@@ -157,11 +157,22 @@ const chaosComponentVarExtract = (raw: unknown): unknown => {
   return r.items?.[0] ?? raw;
 };
 
-/** Parse input.body when LLMs double-serialize it as a JSON string instead of an object. */
+/**
+ * Parse input.body when LLMs double-serialize it as a JSON string instead of an object.
+ * Fails loudly on malformed JSON so callers' defaults can never silently produce a
+ * phantom write to Harness (see CLAUDE.md "Fail Loudly" rule).
+ */
 function coerceBody(input: Record<string, unknown>): Record<string, unknown> {
   const raw = input.body ?? input;
   if (typeof raw === "string") {
-    try { return JSON.parse(raw) as Record<string, unknown>; } catch { /* fall through */ }
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Invalid JSON in 'body': ${detail}. Pass 'body' as an object or a valid JSON-encoded string.`,
+      );
+    }
   }
   return raw as Record<string, unknown>;
 }
@@ -312,28 +323,46 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "true" },
           bodyBuilder: (input) => {
+            // Unwrap input.body (object or JSON string) so the documented
+            // harness_execute(body={runtime_inputs|experiment_variables|tasks: ...})
+            // path flows through. coerceBody throws on malformed JSON (fail-loud).
+            const b = coerceBody(input);
             const body: Record<string, unknown> = {};
-            if (input.inputset_identity) {
-              body.inputsetIdentity = input.inputset_identity;
+
+            if (b.inputset_identity) {
+              body.inputsetIdentity = b.inputset_identity;
             }
-            if (input.runtime_inputs) {
-              body.runtimeInputs = input.runtime_inputs;
+
+            // Seed runtimeInputs from caller's raw runtime_inputs so we never
+            // silently drop it when experiment_variables / tasks are also passed.
+            // Defensive shallow clone — do not mutate the caller's input.
+            const seed = (b.runtime_inputs as Record<string, unknown>) ?? {};
+            const runtimeInputs: Record<string, unknown> = { ...seed };
+
+            const expVars = b.experiment_variables as Array<{ name: string; value?: unknown }> | undefined;
+            if (expVars && expVars.length > 0) {
+              const existing = (runtimeInputs.experiment as Array<{ name: string; value: unknown }>) ?? [];
+              // Top-level experiment_variables override runtime_inputs.experiment on name conflict.
+              const byName = new Map(existing.map(v => [v.name, v]));
+              for (const v of expVars) byName.set(v.name, { name: v.name, value: v.value });
+              runtimeInputs.experiment = Array.from(byName.values());
             }
-            // Build runtimeInputs from experiment_variables and tasks if provided
-            const expVars = input.experiment_variables as Array<{ name: string; value?: unknown }> | undefined;
-            const taskVars = input.tasks as Record<string, Record<string, unknown>> | undefined;
-            if ((expVars && expVars.length > 0) || (taskVars && Object.keys(taskVars).length > 0)) {
-              const runtimeInputs: Record<string, unknown> = {};
-              if (expVars && expVars.length > 0) {
-                runtimeInputs.experiment = expVars.map(v => ({ name: v.name, value: v.value }));
-              }
-              if (taskVars && Object.keys(taskVars).length > 0) {
-                const tasks: Record<string, Array<{ name: string; value: unknown }>> = {};
-                for (const [taskName, vars] of Object.entries(taskVars)) {
-                  tasks[taskName] = Object.entries(vars as Record<string, unknown>).map(([n, v]) => ({ name: n, value: v }));
+
+            const taskVars = b.tasks as Record<string, Record<string, unknown>> | undefined;
+            if (taskVars && Object.keys(taskVars).length > 0) {
+              const existing = (runtimeInputs.tasks as Record<string, Array<{ name: string; value: unknown }>>) ?? {};
+              for (const [taskName, vars] of Object.entries(taskVars)) {
+                // Top-level tasks override runtime_inputs.tasks on (taskName, varName) conflict.
+                const byName = new Map((existing[taskName] ?? []).map(v => [v.name, v]));
+                for (const [n, v] of Object.entries(vars as Record<string, unknown>)) {
+                  byName.set(n, { name: n, value: v });
                 }
-                runtimeInputs.tasks = tasks;
+                existing[taskName] = Array.from(byName.values());
               }
+              runtimeInputs.tasks = existing;
+            }
+
+            if (Object.keys(runtimeInputs).length > 0) {
               body.runtimeInputs = runtimeInputs;
             }
             return Object.keys(body).length > 0 ? body : {};
@@ -1196,6 +1225,21 @@ export const chaosToolset: ToolsetDefinition = {
             type: "type",
             identifier: "identifier",
             hub_reference: "hubReference",
+          },
+          // Registry only enforces listFilterFields.required for operation==="list"
+          // and this resource has only `get`, so we validate locally via preflight.
+          // Keeps the `required: true` flags on listFilterFields as accurate docs
+          // for harness_describe while also failing loudly before any HTTP call.
+          preflight: async ({ input }) => {
+            const missing: string[] = [];
+            if (input.type === undefined || input.type === "") missing.push("type");
+            if (input.identifier === undefined || input.identifier === "") missing.push("identifier");
+            if (missing.length > 0) {
+              throw new Error(
+                `Missing required field(s) for get on chaos_component_variable: ${missing.join(", ")}. ` +
+                `Both 'type' (Fault | Probe | Action) and 'identifier' must be provided.`,
+              );
+            }
           },
           responseExtractor: chaosComponentVarExtract,
           description: descGetComponentVariable,
