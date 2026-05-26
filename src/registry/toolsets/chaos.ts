@@ -329,6 +329,17 @@ export const chaosToolset: ToolsetDefinition = {
             const b = coerceBody(input);
             const body: Record<string, unknown> = {};
 
+            // is_identity is declared in BOTH queryParams (URL) and bodySchema.fields
+            // (so LLMs reasonably nest it inside `body`). The Registry's queryParam
+            // resolver only reads top-level input — see index.ts:633-652 — so we
+            // hoist body-nested is_identity back onto input here. The dispatcher
+            // builds the body BEFORE resolving queryParams (see index.ts:628-631),
+            // making this the sanctioned point to hoist. Top-level input wins on
+            // conflict; we only hoist when top-level is unset.
+            if (input.is_identity === undefined && b.is_identity !== undefined) {
+              (input as Record<string, unknown>).is_identity = b.is_identity;
+            }
+
             if (b.inputset_identity) {
               body.inputsetIdentity = b.inputset_identity;
             }
@@ -2367,6 +2378,25 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: {
             environment_id: "environmentIdentifier",
             infra_id: "infraId",
+          },
+          // The backend composes its Mongo lookup as {identity, infra_id,
+          // environment_ref} (composite key). Missing environment_id or
+          // infra_id yields HTTP 500 ("mongo: no documents in result")
+          // instead of a clean 404. Validate locally so the agent gets a
+          // clear, actionable error per the repo's fail-loud rule.
+          // Mirrors the preflight on chaos_component_variable.get.
+          preflight: async ({ input }) => {
+            const missing: string[] = [];
+            if (input.environment_id === undefined || input.environment_id === "") missing.push("environment_id");
+            if (input.infra_id === undefined || input.infra_id === "") missing.push("infra_id");
+            if (missing.length > 0) {
+              throw new Error(
+                `Missing required field(s) for get on chaos_application_map: ${missing.join(", ")}. ` +
+                `Both 'environment_id' (Harness environment identifier) and 'infra_id' ` +
+                `(chaos_k8s_infrastructure.identity) must be passed so the backend can resolve ` +
+                `the composite {identity, infra_id, environment_ref} key.`,
+              );
+            }
           },
           responseExtractor: passthrough,
           description: descGetApplicationMap,

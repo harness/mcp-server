@@ -164,7 +164,7 @@ describe("chaos_experiment create", () => {
       project_id: "test-project",
       name: "demo-exp-01",
       manifest: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine",
-      infra_id: "infra-1",
+      infra_id: "demo/infra-1",
       infra_type: "Kubernetes",
     });
 
@@ -174,8 +174,8 @@ describe("chaos_experiment create", () => {
     expect(call.path).toBe("/chaos/manager/api/rest/v2/experiment");
     expect(call.body.id).toMatch(UUID_V4);
     expect(call.body.name).toBe("demo-exp-01");
-    expect(call.body.infraId).toBe("infra-1");
-    expect(call.body.infra_id).toBe("infra-1");
+    expect(call.body.infraId).toBe("demo/infra-1");
+    expect(call.body.infra_id).toBe("demo/infra-1");
     expect(call.body.infraType).toBe("Kubernetes");
   });
 
@@ -190,12 +190,30 @@ describe("chaos_experiment create", () => {
       id: callerId,
       name: "demo-exp-02",
       manifest: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine",
-      infra_id: "infra-2",
+      infra_id: "demo/infra-2",
       infra_type: "Kubernetes",
     });
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.body.id).toBe(callerId);
+  });
+
+  it("create: documented contract — composite infra_id '{environmentIdentifier}/{infraID}' passes through verbatim", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentID: "exp-composite" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_experiment", "create", {
+      org_id: "default",
+      project_id: "test-project",
+      name: "demo-exp-composite",
+      manifest: "apiVersion: litmuschaos.io/v1alpha1\nkind: ChaosEngine",
+      infra_id: "demo/qaauto1",
+      infra_type: "Kubernetes",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.infraId).toBe("demo/qaauto1");
+    expect(call.body.infra_id).toBe("demo/qaauto1");
   });
 });
 
@@ -708,5 +726,100 @@ describe("chaos_experiment.run bodyBuilder — runtime_inputs handling", () => {
     ).rejects.toThrow(/Invalid JSON in 'body'/);
 
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("run: hoists is_identity from body so URL gets ?isIdentity=false (Call 2/3 regression)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment", "run", {
+      experiment_id: "ef9199b6-0248-4c0b-9d63-9176bf2b7123",
+      project_id: "proj1",
+      org_id: "org1",
+      body: { is_identity: false, inputset_identity: "testinputset" },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.isIdentity).toBe(false);
+    expect(call.body.inputsetIdentity).toBe("testinputset");
+  });
+
+  it("run: top-level is_identity wins over body.is_identity on conflict", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment", "run", {
+      experiment_id: "ef9199b6-0248-4c0b-9d63-9176bf2b7123",
+      project_id: "proj1",
+      org_id: "org1",
+      is_identity: false,
+      body: { is_identity: true },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.isIdentity).toBe(false);
+  });
+});
+
+describe("chaos_application_map.get required field validation (preflight)", () => {
+  let registry: Registry;
+  beforeEach(() => { registry = new Registry(makeConfig()); });
+
+  it("get: throws locally when 'environment_id' is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "chaos_application_map", "get", {
+        project_id: "proj1",
+        org_id: "org1",
+        map_id: "some-map-id",
+        infra_id: "some-infra",
+      }),
+    ).rejects.toThrow(/Missing required field.*environment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: throws locally when 'infra_id' is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "chaos_application_map", "get", {
+        project_id: "proj1",
+        org_id: "org1",
+        map_id: "some-map-id",
+        environment_id: "demo",
+      }),
+    ).rejects.toThrow(/Missing required field.*infra_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: throws locally when both 'environment_id' and 'infra_id' are missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "chaos_application_map", "get", {
+        project_id: "proj1",
+        org_id: "org1",
+        map_id: "some-map-id",
+      }),
+    ).rejects.toThrow(/environment_id.*infra_id|infra_id.*environment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: proceeds and sends both query params when required fields are present", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "map1", services: [] });
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_application_map", "get", {
+      project_id: "proj1",
+      org_id: "org1",
+      map_id: "some-map-id",
+      environment_id: "demo",
+      infra_id: "qaauto1",
+    });
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/applicationmaps/some-map-id");
+    expect(call.params).toMatchObject({ environmentIdentifier: "demo", infraId: "qaauto1" });
   });
 });
