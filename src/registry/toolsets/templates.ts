@@ -350,6 +350,7 @@ export const templatesToolset: ToolsetDefinition = {
       toolset: "templates",
       scope: "project",
       scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       headerBasedScoping: true,
       identifierFields: ["template_id"],
       searchAliases: ["v1 template", "unified template", "agent template", "template v1"],

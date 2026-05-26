@@ -528,7 +528,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MAX_BODY_SIZE_MB`  | No       | `10`                        | Max HTTP request body size in MB for `http` transport                                                                                                                                                                                                 |
 | `HARNESS_RATE_LIMIT_RPS`    | No       | `10`                        | Client-side request throttle (requests per second) to Harness APIs                                                                                                                                                                                    |
 | `LOG_LEVEL`                 | No       | `info`                      | Log verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                                       |
-| `HARNESS_TOOLSETS`          | No       | *(all)*                     | Comma-separated toolset list. Empty loads all toolsets. Supports `+name` to explicitly include and `-name` to remove toolsets (see [Toolset Filtering](#toolset-filtering))                                                                           |
+| `HARNESS_TOOLSETS`          | No       | *(defaults)*                | Comma-separated toolset list. Empty loads default toolsets. Supports `+name` to explicitly include opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering))                                                       |
 | `HARNESS_READ_ONLY`         | No       | `false`                     | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments                                                                                                                   |
 | `HARNESS_AUTO_APPROVE_RISK` | No       | `none`                      | Risk-based auto-approve threshold for autonomous workflows. Operations at or below this risk proceed without confirmation. Values: `none`, `low_write`, `medium_write`, `high_write`, `all`. See [Elicitation](#elicitation)                          |
 | `HARNESS_SKIP_ELICITATION`  | No       | `false`                     | **Deprecated** — use `HARNESS_AUTO_APPROVE_RISK=all` instead. Kept for backward compatibility                                                                                                                                                         |
@@ -538,6 +538,12 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_AUTH_TOKEN`    | No       | --                          | Bearer token required on `/mcp` HTTP routes when set. Required by default when HTTP transport binds to a non-loopback host                                                                                                                             |
 | `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | No | `false`         | Explicitly allow unauthenticated HTTP transport on non-loopback binds. Use only behind another authenticated control                                                                                                                                    |
 | `HARNESS_MCP_LOG_FILE`      | No       | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available                                                                                                                                                               |
+| `HARNESS_AUDIT_FILE`        | No       | --                          | Append audit events to a newline-delimited JSON file in addition to stderr                                                                                                                                                                             |
+| `HARNESS_AUDIT_WEBHOOK_URL` | No       | --                          | HTTPS endpoint that receives batched audit events. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development                                                                                                                                   |
+| `HARNESS_AUDIT_WEBHOOK_TOKEN` | No     | --                          | Optional bearer token sent to the audit webhook                                                                                                                                                                                                        |
+| `HARNESS_AUDIT_WEBHOOK_BATCH_SIZE` | No | `10`                       | Number of audit events to batch before webhook flush                                                                                                                                                                                                   |
+| `HARNESS_AUDIT_WEBHOOK_FLUSH_MS` | No  | `5000`                     | Max time to hold audit events before webhook flush                                                                                                                                                                                                     |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No     | --                          | Enables OpenTelemetry audit spans when the optional OpenTelemetry packages are installed                                                                                                                                                               |
 
 
 ### HTTPS Enforcement
@@ -550,13 +556,29 @@ HARNESS_BASE_URL must use HTTPS (got "http://..."). If you need HTTP for local d
 
 ### Audit Logging
 
-All write operations (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) emit structured audit log entries to stderr. Each entry includes the tool name, resource type, operation, identifiers, and timestamp. This provides an audit trail without requiring external logging infrastructure.
+All write operations (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) emit structured audit events. The stderr sink is always active; additional sinks are enabled by configuration:
+
+- `HARNESS_AUDIT_FILE` appends newline-delimited JSON events for local collection.
+- `HARNESS_AUDIT_WEBHOOK_URL` posts batched events to an HTTPS webhook, optionally with `HARNESS_AUDIT_WEBHOOK_TOKEN`.
+- `OTEL_EXPORTER_OTLP_ENDPOINT` enables audit spans when the optional OpenTelemetry packages are installed.
+
+Each event includes the tool name, resource type, operation, identifiers, timestamp, and confirmation method. Audit sinks are best-effort telemetry; a webhook delivery issue is logged and does not retry or replay the mutating Harness operation.
 
 ## Tools Reference
 
 The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id` as optional overrides — if omitted, they fall back to `HARNESS_ORG` and `HARNESS_PROJECT`. `harness_describe` is local metadata only and does not use org/project scope.
 
 **URL support:** Most API-facing tools accept a `url` parameter — paste a Harness UI URL and the server auto-extracts org, project, resource type, resource ID, pipeline ID, and execution ID. `harness_describe` does not accept `url`.
+
+**Scope support:** Resource types with account/org/project variants expose `supportedScopes` in `harness_describe`. Pass `resource_scope` when you need a specific level:
+
+- `resource_scope: "account"` sends only `accountIdentifier`.
+- `resource_scope: "org"` sends `accountIdentifier` and `orgIdentifier`.
+- `resource_scope: "project"` sends account, org, and project identifiers.
+
+Current multi-scope resources include `connector`, `service`, `environment`, `infrastructure`, `secret`, and `template`. If `resource_scope` is omitted, the registry uses the resource's default scope and configured defaults, except resources marked as optional scope may omit org/project unless explicitly passed. Harness URLs can also set the scope automatically when the path contains account-level or project-level context.
+
+**Structured output:** Every tool declares an MCP `outputSchema`. `harness_list` normalizes list-like Harness responses into object-shaped structured content so strict clients can validate it: top-level arrays become `{ "items": [...], "total": <count>, "page": <page> }`, and common wrapper keys such as `content`, `data`, `body`, `objects`, or `features` are hoisted to `items` when needed. The text response still contains the compact JSON payload returned to all clients.
 
 
 | Tool               | Description                                                                                                                                                                                                                                                                                                           |
@@ -613,7 +635,8 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
   "resource_type": "pipeline",
   "action": "run",
   "resource_id": "my-pipeline",
-  "inputs": { "tag": "v1.2.3" }
+  "inputs": { "tag": "v1.2.3" },
+  "wait": true
 }
 ```
 
@@ -766,13 +789,39 @@ Use this sequence to reduce execution-time input errors:
       "action": "run",
       "resource_id": "deploy_app",
       "params": { "pipeline_branch": "feature/new-stage" },
-      "inputs": { "branch": "main" }
+      "inputs": { "branch": "main" },
+      "wait": true
     }
     ```
 4. **Optional: combine both**
   - Use `input_set_ids` for the base shape and `inputs` for simple overrides.
 
 If required fields are unresolved, the tool returns a pre-flight error with expected keys and suggested input sets. You can inspect available shorthand mappings with `harness_describe(resource_type="pipeline")` (`executeActions.run.inputShorthands`).
+
+### Pipeline Execute Wait Mode
+
+For `pipeline.run`, `pipeline.retry`, and `pipeline_v1.run`, pass `wait: true` to let the server poll until the execution reaches a terminal status. This keeps a pipeline launch and status check in one tool call instead of asking the client or LLM to run a polling loop.
+
+```json
+{
+  "resource_type": "pipeline",
+  "action": "run",
+  "resource_id": "deploy_app",
+  "inputs": { "branch": "main" },
+  "wait": true,
+  "wait_timeout_seconds": 900,
+  "wait_poll_interval_seconds": 5
+}
+```
+
+Wait mode behavior:
+
+- Default timeout is 600 seconds; allowed range is 10 seconds to 7200 seconds.
+- Initial poll interval defaults to 3 seconds, backs off by 1.5x, and caps at 30 seconds.
+- On success or failure, the response includes fields such as `execution_id`, `execution_status`, `execution_terminal`, `execution_elapsed_ms`, and `execution_poll_count`.
+- If the timeout fires, the original trigger still succeeded; the response includes `execution_timed_out: true` and `_wait.hint` with the last observed status.
+- If polling fails after the trigger succeeds, the response includes `_wait.error` and a recheck hint. Do not blindly rerun the pipeline unless you have confirmed the first execution is not running.
+- Failed terminal statuses include `_diagnose_hint` pointing to `harness_diagnose(resource_type="execution", options={execution_id: "..."})`.
 
 **Ask the AI DevOps Agent to create a pipeline:**
 
@@ -1446,15 +1495,15 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, 32 of 33 toolsets are enabled. One toolset (`ai-evals`) is opt-in — excluded by default to avoid polluting the resource list for users who don't need it.
+By default, 32 of 33 toolsets are enabled. The `iacm` toolset is opt-in because Harness IaCM APIs are project-scoped and add Terraform workspace/module concepts that many users do not need. The `ai-evals` toolset is default-enabled.
 
 ### Adding toolsets with `+` prefix
 
-Use the `+` prefix to explicitly include toolsets alongside all defaults (useful if a toolset becomes opt-in in the future):
+Use the `+` prefix to explicitly include opt-in toolsets alongside all defaults:
 
 ```bash
-# Explicitly include ai-evals alongside all defaults
-HARNESS_TOOLSETS=+ai-evals
+# Explicitly include IaCM alongside all defaults
+HARNESS_TOOLSETS=+iacm
 ```
 
 ### Removing default toolsets
@@ -1469,8 +1518,8 @@ HARNESS_TOOLSETS=-chaos,-ccm
 ### Combining + and -
 
 ```bash
-# Add ai-evals, remove chaos
-HARNESS_TOOLSETS=+ai-evals,-chaos
+# Add IaCM, remove chaos
+HARNESS_TOOLSETS=+iacm,-chaos
 ```
 
 ### Explicit allowlist
@@ -1519,6 +1568,7 @@ Available toolset names:
 | `settings`              | setting                                                                                                                                                                                                                                                                                         |
 | `visualizations`        | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture                                                                                                                                                         |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
+| `iacm` *(opt-in)*       | iacm_workspace, iacm_resource, iacm_module, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                                                                 |
 
 
 ## Architecture
@@ -1553,10 +1603,11 @@ Available toolset names:
 
 1. **Tools** are generic verbs: `harness_list`, `harness_get`, etc. They accept a `resource_type` parameter that routes to the correct API endpoint.
 2. **The Registry** maps each `resource_type` to a `ResourceDefinition` — a declarative data structure specifying the HTTP method, URL path, path/query parameter mappings, and response extraction logic.
-3. **Dispatch** resolves the resource definition, builds the HTTP request (path substitution, query params, scope injection), calls the Harness API through `HarnessClient`, and extracts the relevant response data.
+3. **Dispatch** resolves the resource definition, builds the HTTP request (path substitution, query params, `resource_scope`-aware account/org/project injection), calls the Harness API through `HarnessClient`, and extracts the relevant response data.
 4. **Toolset filtering** (`HARNESS_TOOLSETS`) controls which resource definitions are loaded into the registry at startup.
-5. **Deep links** are automatically appended to responses, providing direct Harness UI URLs for every resource.
-6. **Compact mode** strips verbose metadata from list results, keeping only actionable fields (identity, status, type, timestamps, deep links) to minimize token usage.
+5. **Structured output** is declared with MCP `outputSchema`; `harness_list` coerces arrays and common list wrappers into object-shaped `structuredContent` for strict clients.
+6. **Deep links** are automatically appended to responses, providing direct Harness UI URLs for every resource.
+7. **Compact mode** strips verbose metadata from list results, keeping only actionable fields (identity, status, type, timestamps, deep links) to minimize token usage.
 
 ### Adding a New Resource Type
 
@@ -1643,7 +1694,7 @@ src/
       ccm.ts
       access-control.ts
       ...
-  tools/                            # 10 generic MCP tools
+  tools/                            # 11 generic MCP tools
     harness-list.ts
     harness-get.ts
     harness-create.ts
@@ -1654,6 +1705,7 @@ src/
     harness-diagnose.ts
     harness-describe.ts
     harness-status.ts
+    harness-schema.ts
 
   resources/                        # MCP resource providers
     pipeline-yaml.ts
@@ -1820,10 +1872,13 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | HTTP `Invalid request`                                                           | Invalid JSON body or request body exceeded `HARNESS_MAX_BODY_SIZE_MB`                                | Validate JSON payload size/shape; increase `HARNESS_MAX_BODY_SIZE_MB` if needed                                                      |
 | `Unknown resource_type "..."` from tools                                         | Resource type is misspelled or filtered out via `HARNESS_TOOLSETS`                                   | Call `harness_describe` (with optional `search_term`) to discover valid types                                                        |
 | `Missing required field "... for path parameter ..."`                            | A project/org scoped call is missing identifiers                                                     | Set `HARNESS_ORG`/`HARNESS_PROJECT` or pass `org_id`/`project_id` per tool call                                                      |
+| `resource_scope "org" requires org_id...` or `resource_scope "project" requires project_id...` | A multi-scope resource was forced to org/project scope without enough identifiers                     | Pass the missing `org_id`/`project_id`, configure `HARNESS_ORG`/`HARNESS_PROJECT`, or use `resource_scope: "account"` when supported |
 | `Read-only mode is enabled ... operations are not allowed`                       | `HARNESS_READ_ONLY=true` blocks create/update/delete/execute                                         | Set `HARNESS_READ_ONLY=false` if write operations are intended                                                                       |
 | Pipeline run fails pre-flight with unresolved required inputs                    | Provided `inputs` did not cover required runtime placeholders                                        | Fetch `runtime_input_template`, supply missing simple keys, or use `input_set_ids` for structural inputs                             |
 | Pipeline CI shorthand (`branch`, `tag`, `pr_number`, `commit_sha`) did not apply | `inputs.build` was already provided, so shorthand expansion was intentionally skipped                | Remove `inputs.build` to use shorthand expansion, or keep full explicit `build` structure                                            |
 | Pipeline run loaded the wrong YAML revision                                     | The pipeline definition is stored in Git and the run did not specify the desired pipeline branch      | Pass `params.pipeline_branch` on the `run` action; this maps to Harness `pipelineBranchName`                                         |
+| `wait: true` returned `_wait.error`                                              | The pipeline trigger succeeded, but server-side polling failed                                       | Recheck the `execution_id` with `harness_get(resource_type="execution", ...)` before deciding whether to rerun                        |
+| `wait: true` returned `execution_timed_out: true`                                | The execution did not reach a terminal status before `wait_timeout_seconds`                          | Use the returned `execution_id` to recheck status or diagnose the still-running execution                                             |
 | Execution logs are empty or blob downloads return 403                           | Harness-hosted log blob URLs require the configured Harness client/auth path, especially for internal or self-managed hosts | Keep `HARNESS_BASE_URL` pointed at the target Harness host and use `harness_get(resource_type="execution_log", ...)` or `harness_diagnose(..., include_logs=true)` rather than bypassing the MCP client |
 | `Operation declined by user`                                                     | User declined the elicitation confirmation dialog                                                    | The user chose not to proceed — verify the operation details and retry if intended                                                   |
 | `body.template_yaml (or body.yaml) is required` for template create/update       | Template APIs expect full YAML payload                                                               | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |

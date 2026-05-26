@@ -1,5 +1,45 @@
 # Harness MCP Server — Task Tracking
 
+## Jira Feature Request Spec Automation (2026-05-25)
+- [x] Inspect current automation registry and saved schedules
+- [x] Create Jira Feature Request spec drafting automation
+- [x] Update vault registry and TODO notes
+- [x] Verify saved automation TOML and document review
+
+### Plan
+- Add a weekday batch automation scoped to `/Users/rohangupta` so it can write vault files.
+- Target Jira issues with JQL equivalent to `project in (AIPLAT, AICODE) AND issuetype = "Feature Request"`.
+- Process a small batch per run, skipping issues with an existing Codex product-spec marker or up-to-date vault spec.
+- For each processed issue, write `/Users/rohangupta/.codex/vault/jira-specs/{ISSUEKEY}/spec.md` and post a Jira comment with the spec marker, vault path, and spec content or a compact fallback if Jira limits the comment size.
+
+### Review
+- Created active automation `jira-feature-request-spec-drafting`.
+- Schedule: weekdays at 10:30 AM.
+- Scope: `/Users/rohangupta`; Jira query equivalent to `project in (AIPLAT, AICODE) AND issuetype = "Feature Request" ORDER BY updated DESC`.
+- Batch behavior: up to 5 issues per run, prioritizing unprocessed or stale specs.
+- Safety: skips existing `<!-- codex-product-spec:` markers, only writes vault files and Jira comments, and does not mutate Jira fields.
+- Vault output path: `/Users/rohangupta/.codex/vault/jira-specs/{ISSUEKEY}/spec.md`; index at `/Users/rohangupta/.codex/vault/jira-specs/index.md`.
+
+## Starter Automation System (2026-05-25)
+- [x] Inspect existing Codex automations and confirm actual local paths
+- [x] Create or preserve the requested starter automations
+- [x] Update the automation registry and agent notes
+- [x] Verify automation TOML files were saved
+
+### Plan
+- Use `/Users/rohangupta` in place of `/Users/rohan` because `/Users/rohan` is not present on this machine.
+- Create a thread heartbeat for Chief of Staff pulse, returning to this conversation every 30 minutes.
+- Create standalone cron automations for the morning operating brief and weekly external monitoring.
+- Preserve existing automations; create a daily bug scan only if no matching active automation exists.
+- Record the active set in the local vault and summarize verification results here.
+
+### Review
+- Created active automations: `chief-of-staff-pulse`, `morning-operating-brief`, `weekly-external-monitoring`, and `daily-bug-scan`.
+- Left the existing `slack-updates-review` automation active and unchanged.
+- Used `/Users/rohangupta` and `/Users/rohangupta/code/mcp-server` because `/Users/rohan` is not present on this machine.
+- Wrote the registry and reusable prompts under `/Users/rohangupta/.codex/vault`.
+- Verified saved TOML files under `/Users/rohangupta/.codex/automations`.
+
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
 - [x] Add `normalizeHarnessListPayload` and call it from `harness_list` after dispatch; unit tests in `response-formatter.test.ts`.

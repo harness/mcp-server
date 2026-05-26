@@ -1,6 +1,6 @@
 # Harness MCP Server — Gemini CLI Context
 
-This extension connects Gemini CLI to the Harness Platform through 10 consolidated MCP tools that cover 137 resource types across 29 toolsets.
+This extension connects Gemini CLI to the Harness Platform through 11 consolidated MCP tools that cover 190 resource types across 32 default toolsets.
 
 ## How This Server Works
 
@@ -19,7 +19,7 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - `harness_delete` — Delete a resource (destructive; blocked if confirmation cannot be obtained)
 
 **Specialized tools:**
-- `harness_execute` — Run pipelines, toggle feature flags, test connectors, sync GitOps apps
+- `harness_execute` — Run pipelines, toggle feature flags, test connectors, sync GitOps apps; pass `wait: true` for server-side pipeline run/retry polling
 - `harness_search` — Search across multiple resource types at once
 - `harness_diagnose` — Diagnose pipelines, connectors, delegates, and GitOps applications
 - `harness_status` — Project health overview: failed, running, and recent executions
@@ -32,6 +32,7 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - View execution history and download execution logs
 - Manage pipeline triggers and input sets
 - Pipeline run shorthand support: `branch`, `tag`, `pr_number`, and `commit_sha` auto-expand into CI build input structures (unless `inputs.build` is already provided explicitly)
+- Pipeline run/retry wait mode returns terminal status fields or `_wait` recheck hints without requiring a client-side polling loop
 
 ### Services & Environments
 - CRUD operations on services and environments
@@ -78,6 +79,10 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - Browse and use pipeline, stage, and step templates
 - Access custom dashboards and data exports
 
+### Infrastructure as Code Management (IaCM)
+- Opt-in toolset for Terraform workspaces, resources, module registry entries, workspace costs, and activity resource changes
+- Enable with `HARNESS_TOOLSETS=+iacm`; IaCM APIs require org/project scope
+
 ### Access Control
 - Manage users, user groups, service accounts
 - Create and assign roles, resource groups, permissions
@@ -109,11 +114,13 @@ Ask natural language questions like:
 
 Write operations (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use MCP elicitation when the client supports it.
 
-- If elicitation is unavailable or fails:
-  - `harness_create`, `harness_update`, and `harness_execute` proceed (best-effort behavior).
-  - `harness_delete` is blocked (fail-closed for destructive operations).
+- Operations classified as `read` or `low_write` can proceed without confirmation.
+- `medium_write`, `high_write`, and `destructive` operations fail closed if confirmation cannot be obtained, unless `HARNESS_AUTO_APPROVE_RISK` explicitly allows that risk level.
+- `harness_delete` is always classified as destructive.
 
 Secret values are never exposed — only metadata (name, type, scope).
+
+Multi-scope resources such as connectors, services, environments, infrastructure, secrets, and templates can be called with `resource_scope: "account" | "org" | "project"`. Use `harness_describe(resource_type="...")` to see `supportedScopes`.
 
 ## Setup
 
@@ -146,4 +153,5 @@ Secret values are never exposed — only metadata (name, type, scope).
 
 **Toolset filtering:**
 - Set `HARNESS_TOOLSETS=pipelines,services,connectors` in `.env` to limit which resource types are available
-- Leave empty to enable all 29 toolsets
+- Leave empty to enable all default toolsets
+- Add opt-in IaCM alongside defaults with `HARNESS_TOOLSETS=+iacm`

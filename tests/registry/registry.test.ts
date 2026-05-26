@@ -272,7 +272,7 @@ describe("Registry", () => {
         HARNESS_TOOLSETS: "connectors,services,environments,infrastructure,secrets,templates",
       }));
 
-      for (const resourceType of ["connector", "service", "environment", "infrastructure", "secret", "template"]) {
+      for (const resourceType of ["connector", "service", "environment", "infrastructure", "secret", "template", "template_v1"]) {
         expect(registry.getResource(resourceType).supportedScopes).toEqual(["account", "org", "project"]);
       }
     });
@@ -787,6 +787,26 @@ describe("Registry", () => {
       await templateRegistry.dispatch(client, "template_v1", "create", {
         body: {
           template_yaml: "version: 1\ntemplate:\n  identifier: acc_step\n  name: Account Step\n  step:\n    run:\n      script: echo hi\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/templates");
+    });
+
+    it("template_v1 create accepts explicit resource_scope account", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "acc_explicit", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "create", {
+        resource_scope: "account",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: acc_explicit\n  name: Account Explicit\n  step:\n    run:\n      script: echo hi\n",
         },
       });
 
