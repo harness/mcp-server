@@ -51,6 +51,7 @@ export const connectorsToolset: ToolsetDefinition = {
         { name: "description", description: "Filter by connector description" },
         { name: "inheriting_credentials_from_delegate", description: "Filter connectors inheriting credentials from delegate", type: "boolean" },
         { name: "tags", description: "Filter by tags as key:value pairs (JSON object)" },
+        { name: "include_all_connectors_available_at_scope", type: "boolean", description: "When true, also return connectors inherited from parent scopes (org/account). Default: false. Set to true when picking an APM/observability connector for chaos_probe apmProbe." },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/connectors/{connectorIdentifier}",
       operations: {
@@ -62,6 +63,7 @@ export const connectorsToolset: ToolsetDefinition = {
             search_term: "searchTerm",
             page: "pageIndex",
             size: "pageSize",
+            include_all_connectors_available_at_scope: "includeAllConnectorsAvailableAtScope",
           },
           bodyBuilder: (input) => {
             const csv = (v: unknown): string[] | undefined => {
