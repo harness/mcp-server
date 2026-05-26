@@ -398,7 +398,17 @@ async function downloadBlobContent(
     // that happen to carry pre-signed params — those must go through client.requestStream() for auth.
     // The blob link always points to app.harness.io/storage/... regardless of HARNESS_BASE_URL.
     // Rewrite to the configured host so self-managed deployments can reach it.
-    if (signedHeadersIncludeHost(blobUrl)) {
+    const baseUrl = safeParseUrl(client.baseURL);
+    if (!baseUrl) {
+      // If baseURL is unparseable we cannot safely rewrite — throw rather than
+      // direct-fetching the original app.harness.io URL (which is blocked on self-managed nets).
+      throw new Error(`Cannot rewrite Harness CDN blob URL: HARNESS_BASE_URL "${client.baseURL}" is not a valid URL`);
+    }
+    // Skip rewriting only when the signature covers the Host header AND the blob hostname
+    // already matches our base URL (rewrite would be a no-op). When hostnames differ
+    // (self-managed deployment), rewrite regardless — the original hostname (app.harness.io)
+    // may not be reachable from the client's network.
+    if (signedHeadersIncludeHost(blobUrl) && blobUrl.hostname === baseUrl.hostname) {
       log.debug("Downloading log blob (direct, host-bound presigned CDN)", {
         prefix,
         url: blobLink.slice(0, 80),
@@ -409,12 +419,6 @@ async function downloadBlobContent(
         const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
         throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
       }
-    }
-    const baseUrl = safeParseUrl(client.baseURL);
-    if (!baseUrl) {
-      // If baseURL is unparseable we cannot safely rewrite — throw rather than
-      // direct-fetching the original app.harness.io URL (which is blocked on self-managed nets).
-      throw new Error(`Cannot rewrite Harness CDN blob URL: HARNESS_BASE_URL "${client.baseURL}" is not a valid URL`);
     }
     blobUrl.hostname = baseUrl.hostname;
     blobUrl.protocol = baseUrl.protocol;

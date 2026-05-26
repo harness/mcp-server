@@ -266,9 +266,9 @@ describe("resolveLogContent", () => {
     );
   });
 
-  it("STRICT: host-bound presigned CDN URL (SignedHeaders includes host) is fetched as-is — no host rewrite", async () => {
-    // When X-Amz-SignedHeaders (or X-Goog-SignedHeaders) includes `host`, the signature is tied to
-    // the link hostname. Rewriting to HARNESS_BASE_URL breaks the signature (401 in QA SaaS).
+  it("STRICT: host-bound presigned CDN URL on self-managed instance rewrites hostname (original host unreachable)", async () => {
+    // When X-Amz-SignedHeaders includes `host` AND blob hostname differs from base URL hostname,
+    // rewrite anyway — the original app.harness.io is not reachable on self-managed networks.
     const blobLink =
       "https://app.harness.io/storage/harness-download/logs.zip" +
       "?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
@@ -286,8 +286,8 @@ describe("resolveLogContent", () => {
     await resolveLogContent(client, "prefix");
 
     const fetchUrl = fetchSpy.mock.calls[0]![0] as string;
-    expect(fetchUrl).toContain("app.harness.io");
-    expect(fetchUrl).not.toContain("self-managed.example.com");
+    expect(fetchUrl).toContain("self-managed.example.com");
+    expect(fetchUrl).not.toContain("app.harness.io");
     expect(fetchUrl).toContain("X-Amz-Signature=abc123def456");
     expect(fetchUrl).toContain("X-Amz-Expires=86400");
     expect(fetchUrl).toContain("X-Amz-SignedHeaders=host");
@@ -295,7 +295,30 @@ describe("resolveLogContent", () => {
     expect(fetchUrl).not.toContain("/gateway/storage");
   });
 
-  it("STRICT: GCS host-bound presigned CDN URL is fetched as-is — no host rewrite", async () => {
+  it("STRICT: host-bound presigned CDN URL on matching-host SaaS is fetched as-is — no rewrite needed", async () => {
+    // When X-Amz-SignedHeaders includes `host` AND blob hostname already matches base URL hostname,
+    // skip rewriting — the signature is valid for direct fetch and rewrite would be a no-op.
+    const blobLink =
+      "https://app.harness.io/storage/harness-download/logs.zip" +
+      "?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+      "&X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=abc123def456";
+    fetchSpy.mockResolvedValue(new Response('{"out":"saas direct"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://app.harness.io" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const fetchUrl = fetchSpy.mock.calls[0]![0] as string;
+    expect(fetchUrl).toContain("app.harness.io");
+    expect(fetchUrl).toContain("X-Amz-Signature=abc123def456");
+    expect(fetchUrl).toContain("X-Amz-SignedHeaders=host");
+    expect(fetchUrl).toContain("/storage/harness-download/logs.zip");
+  });
+
+  it("STRICT: GCS host-bound presigned CDN URL on self-managed instance rewrites hostname", async () => {
     const blobLink =
       "https://app.harness.io/storage/harness-download/logs.zip" +
       "?X-Goog-Algorithm=GOOG4-RSA-SHA256" +
@@ -311,8 +334,8 @@ describe("resolveLogContent", () => {
     await resolveLogContent(client, "prefix");
 
     const fetchUrl = fetchSpy.mock.calls[0]![0] as string;
-    expect(fetchUrl).toContain("app.harness.io");
-    expect(fetchUrl).not.toContain("self-managed.example.com");
+    expect(fetchUrl).toContain("self-managed.example.com");
+    expect(fetchUrl).not.toContain("app.harness.io");
     expect(fetchUrl).toContain("X-Goog-Signature=gcs-sig");
     expect(fetchUrl).toContain("X-Goog-SignedHeaders=host");
     expect(fetchUrl).not.toContain("/gateway/storage");
