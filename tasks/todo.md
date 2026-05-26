@@ -1,5 +1,23 @@
 # Harness MCP Server — Task Tracking
 
+## Documentation Alignment Automation (2026-05-25)
+- [x] Audit recent source/task history for public interface and operational documentation drift.
+- [x] Update existing README sections for resource scoping, structured list output, execute wait mode, audit sinks, and toolset filtering.
+- [x] Align developer/operator docs (`.env.example`, `CONTRIBUTING.md`, `docs/architecture.md`) with the verified codepaths.
+- [x] Run documentation consistency checks plus focused text searches.
+- [x] Commit, push, and open/update a documentation-only PR.
+
+### Plan
+- Use source as truth for recently changed subsystems: `src/registry/index.ts`, `src/tools/input-schemas.ts`, `src/tools/harness-execute.ts`, `src/utils/response-formatter.ts`, `src/audit/index.ts`, and `src/registry/toolsets/iacm.ts`.
+- Prefer targeted edits to existing public docs rather than adding duplicate pages.
+- Keep the PR documentation-only and avoid changing generated schemas or runtime code.
+
+### Review
+- README now documents `resource_scope`, MCP structured list output normalization, pipeline execute wait semantics, audit sink configuration, and the current `iacm` opt-in / `ai-evals` default-enabled toolset behavior.
+- `.env.example`, `CONTRIBUTING.md`, `docs/architecture.md`, and `docs/gemini.md` now align with current scope, output schema, audit, HTTP auth, and OperationPolicy expectations.
+- Verified with `git diff --check`, `pnpm build`, `pnpm docs:check`, `pnpm typecheck`, `pnpm test`, and focused `rg` checks for stale docs phrases.
+- Code review follow-up corrected the wait-mode docs to exclude unsupported `pipeline_v1.retry` and refreshed `.env.example` toolset guidance to include `dbops` and explicit IaCM allowlist usage.
+
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
 - [x] Add `normalizeHarnessListPayload` and call it from `harness_list` after dispatch; unit tests in `response-formatter.test.ts`.

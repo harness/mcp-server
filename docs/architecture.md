@@ -194,6 +194,48 @@ const hc = client as unknown as HarnessClient;
 
 `HarnessClientInterface` exposes only `readonly account: string` — the minimum surface needed for structural compatibility. The `request()` method is intentionally omitted because its `RequestOptions` parameter type lives in `client/types.ts` and would create a cross-module dependency. Preflight hooks that call `request` cast to the concrete type anyway.
 
+### Resource Scope Selection
+
+Resource definitions declare a default `scope` (`account`, `org`, or `project`). Multi-scope APIs also set `supportedScopes`, and callers can pass `resource_scope` through the generic tools to choose the request level explicitly. The registry validates the requested scope, injects only the identifiers required for that scope, and fails before the API call if `resource_scope: "org"` is missing `org_id`/`HARNESS_ORG` or `resource_scope: "project"` is missing `project_id`/`HARNESS_PROJECT`.
+
+`harness_describe` exposes `supportedScopes` and `scopeHint` from local registry metadata so agents can discover when account/org/project variants are available without making a Harness API call.
+
+### Structured MCP Output
+
+All 11 generic tools declare `outputSchema` in `src/tools/output-schemas.ts`. Because MCP `structuredContent` must be an object, `harness_list` normalizes list payloads in `src/utils/response-formatter.ts` before returning:
+
+- top-level arrays become `{ items, total, page? }`;
+- object wrappers such as `content`, `data`, `body`, `objects`, or `features` are hoisted to `items` when no `items` array exists;
+- existing object payloads keep additional fields via catchall schemas.
+
+This keeps strict clients compatible with Harness APIs that return arrays or module-specific list envelopes while preserving the compact JSON text response.
+
+### HTTP Transport Security Layers
+
+HTTP transport has three separate controls:
+
+1. **Bearer auth** (`HARNESS_MCP_AUTH_TOKEN`) gates `/mcp` `POST`, `GET`, and `DELETE` before body parsing. `/health` and `OPTIONS` remain unauthenticated.
+2. **Bind-host enforcement** (`src/utils/http-auth.ts`) requires `HARNESS_MCP_AUTH_TOKEN` for non-loopback binds unless `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true` is set explicitly. Single-user HTTP mode without a token emits a warning because the configured Harness API key may be exposed through proxies or tunnels.
+3. **Host/CORS controls** (`HARNESS_MCP_ALLOWED_HOSTS` plus the HTTP adapter) protect against DNS rebinding and browser-origin abuse. These are not authentication; they complement the bearer token or an external authenticated gateway.
+
+In multi-user mode, per-session Harness credentials come from initialize headers (`x-harness-api-key`, `x-harness-account-id`, optional org/project). `HARNESS_MCP_AUTH_TOKEN` remains an independent transport-layer gate.
+
+### Server-Side Pipeline Wait
+
+`harness_execute` supports `wait: true` for pipeline run/retry actions. After the trigger succeeds, the tool extracts the execution ID and calls `pollExecutionToTerminal()` with progress notifications over the MCP request context. The wait result is merged into the response envelope with fields such as `execution_status`, `execution_terminal`, `execution_timed_out`, and `_wait`.
+
+Wait failure is intentionally non-fatal to the trigger: if polling errors or the client cancels, the response includes `_wait.error` or `_wait.cancelled` and tells the caller to recheck the returned `execution_id`. This avoids duplicate pipeline runs caused by treating a poll failure as a failed trigger.
+
+### Audit Sinks
+
+`createAuditManager()` always installs `StderrSink`. Optional sinks are configured from environment:
+
+- `HARNESS_AUDIT_FILE` enables newline-delimited JSON file writes.
+- `HARNESS_AUDIT_WEBHOOK_URL` enables batched webhook delivery with optional bearer token, batch size, and flush interval.
+- `OTEL_EXPORTER_OTLP_ENDPOINT` enables OpenTelemetry audit spans when the optional OpenTelemetry packages are available.
+
+The registry emits audit events when dispatching mutating operations through tool handlers. Sinks are telemetry outputs; they should not change the outcome of the Harness API operation.
+
 ### HTTP Client Retry (Future: P5)
 
 The `retryPolicy` field is declared on every spec but NOT yet consumed by the HTTP client. In P5, the dispatch layer will read `operationPolicy.retryPolicy` to decide:
