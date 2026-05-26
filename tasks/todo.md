@@ -5,7 +5,7 @@
 - [x] Trace suspicious changes through caller chains and downstream effects
 - [x] Implement a minimal fix only if a concrete critical bug is confirmed
 - [x] Run focused verification for reviewed or changed behavior
-- [ ] Report the outcome in Slack; open a PR only for a confirmed critical fix
+- [x] Report the outcome in Slack; open a PR only for a confirmed critical fix
 
 ### Plan
 - Review commits merged after the previous critical-bug scan, prioritizing code changes over docs/version-only updates.
@@ -17,6 +17,7 @@
 - Found `template_v1` write routing could hit the wrong scope when explicit `resource_scope` was combined with incidental `org_id`/`project_id` from a URL, and updates could send body `identifier`/`label` values that conflicted with the path template/version.
 - Fixed the endpoint specs/extractors, made `template_v1` path building prefer explicit `resource_scope`, and rejected mismatched template identifier/version body fields before dispatch.
 - Verified with focused red/green coverage, `pnpm typecheck`, `pnpm build`, full `pnpm test` (64 files / 1536 tests), and `git diff --check HEAD~1..HEAD`.
+- Opened PR #267 for the confirmed fixes.
 
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
