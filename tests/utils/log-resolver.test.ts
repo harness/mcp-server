@@ -722,4 +722,374 @@ describe("resolveLogContent", () => {
     const url = fetchSpy.mock.calls[0]![0] as string;
     expect(url).toContain("self-managed.example.com");
   });
+
+  // ─── Extended coverage: every routing branch and edge case ──────────────────
+  //
+  // Strategy 1 (external S3/GCS) — direct fetch, no rewrite, no auth headers
+  // Strategy 2 (*.harness.io /storage/ CDN) — rewrite hostname, direct fetch
+  // Strategy 3 (everything else) — requestStream via gateway prefix
+
+  // ── Strategy 1 edge cases ───────────────────────────────────────────────────
+
+  it("Strategy 1: regional S3 bucket URL is fetched directly (external host)", async () => {
+    const blobLink = "https://my-bucket.s3.us-east-1.amazonaws.com/logs/run.zip?X-Amz-Signature=s1&X-Amz-Expires=3600";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const streamFn = vi.fn();
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    expect(streamFn).not.toHaveBeenCalled();
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("my-bucket.s3.us-east-1.amazonaws.com");
+    expect(url).not.toContain("self-managed.example.com");
+  });
+
+  it("Strategy 1: regional S3 path-style URL is fetched directly (external host)", async () => {
+    // my-bucket.s3.us-west-2.amazonaws.com matches S3_BUCKET_HOST_RE → external storage.
+    const blobLink = "https://my-bucket.s3.us-west-2.amazonaws.com/logs/run.zip?X-Amz-Signature=s2";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("s3.us-west-2.amazonaws.com");
+    expect(url).not.toContain("self-managed.example.com");
+  });
+
+  it("Strategy 1: GCS subdomain bucket URL is fetched directly (external host)", async () => {
+    const blobLink = "https://my-bucket.storage.googleapis.com/logs/run.zip?X-Goog-Signature=gcs1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("storage.googleapis.com");
+    expect(url).not.toContain("self-managed.example.com");
+  });
+
+  it("Strategy 1 beats Strategy 2: S3 URL with host in X-Amz-SignedHeaders is still direct-fetched as external", async () => {
+    // isExternalStorageHost takes priority over the /storage/ presigned-URL path.
+    // An S3 URL must never be routed through Strategy 2 (Harness CDN rewrite).
+    const blobLink = "https://my-bucket.s3.amazonaws.com/storage/run.zip?X-Amz-Signature=s3&X-Amz-SignedHeaders=host";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const streamFn = vi.fn();
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    expect(streamFn).not.toHaveBeenCalled();
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("s3.amazonaws.com");
+    expect(url).not.toContain("self-managed.example.com");
+  });
+
+  // ── Strategy 2 edge cases ───────────────────────────────────────────────────
+
+  it("Strategy 2: baseURL without a path suffix still rewrites hostname correctly", async () => {
+    // Covers: baseURL = "https://corp.example.com" (no /gateway path).
+    const blobLink = "https://app.harness.io/storage/blob.zip?X-Amz-Signature=np1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://corp.example.com" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("corp.example.com");
+    expect(url).not.toContain("app.harness.io");
+    expect(url).not.toContain("/gateway");
+    expect(url).toContain("/storage/blob.zip");
+  });
+
+  it("Strategy 2: protocol is also rewritten when baseURL uses HTTP", async () => {
+    const blobLink = "https://app.harness.io/storage/blob.zip?X-Amz-Signature=http1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "http://corp-internal.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toMatch(/^http:\/\/corp-internal\.example\.com/);
+    expect(url).not.toContain("https://app.harness.io");
+  });
+
+  it("Strategy 2: non-app.harness.io Harness host in blob URL is still host-rewritten on self-managed", async () => {
+    // qa.harness.io is a valid Harness SaaS host — isHarnessHost matches it.
+    // When baseURL points to a different self-managed host, it must be rewritten.
+    const blobLink = "https://qa.harness.io/storage/blob.zip?X-Amz-Signature=qa1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+    expect(url).not.toContain("qa.harness.io");
+  });
+
+  it("Strategy 2: GCS blob on self-managed (no host in SignedHeaders) — rewrites hostname", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Goog-Algorithm=GOOG4-RSA-SHA256" +
+      "&X-Goog-SignedHeaders=content-type" +
+      "&X-Goog-Signature=gcsnoh1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+    expect(url).not.toContain("app.harness.io");
+    expect(url).toContain("X-Goog-Signature=gcsnoh1");
+  });
+
+  it("Strategy 2: X-Amz-SignedHeaders with host at end of semicolon list — self-managed still rewrites", async () => {
+    // Checks the split+includes logic handles trailing position correctly.
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=x-amz-date%3Bcontent-type%3Bhost" +
+      "&X-Amz-Signature=tailhost1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+    expect(url).not.toContain("app.harness.io");
+  });
+
+  it("Strategy 2: X-Amz-SignedHeaders present but empty — treated as not including host, rewrite happens", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=" +
+      "&X-Amz-Signature=empty1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+    expect(url).not.toContain("app.harness.io");
+  });
+
+  it("Strategy 2: presigned URL path is exactly /storage/ with no further segments — still rewritten", async () => {
+    const blobLink = "https://app.harness.io/storage/?X-Amz-Signature=root1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+    expect(url).toContain("/storage/");
+  });
+
+  it("Strategy 2 not triggered: presigned app.harness.io URL on /api/ path routes to requestStream", async () => {
+    // /api/ does not start with /storage/ — must go to Strategy 3, not Strategy 2.
+    const blobLink =
+      "https://app.harness.io/api/logs/stream" +
+      "?X-Amz-Signature=api1" +
+      "&X-Amz-SignedHeaders=host";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(streamFn).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Strategy 3 edge cases ───────────────────────────────────────────────────
+
+  it("Strategy 3: URL already starting with /gateway/log-service/ is not double-prefixed", async () => {
+    const blobLink = "/gateway/log-service/blob/download?prefix=abc";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const calledPath = (streamFn.mock.calls[0]![0] as { path: string }).path;
+    expect(calledPath).toMatch(/^\/gateway\/log-service\//);
+    expect(calledPath).not.toContain("/gateway/log-service/gateway/log-service/");
+  });
+
+  it("Strategy 3: non-presigned Harness URL gets /gateway/log-service/ prefix added", async () => {
+    const blobLink = "/log-service/blob/some-id";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    const calledPath = (streamFn.mock.calls[0]![0] as { path: string }).path;
+    expect(calledPath).toContain("/gateway/log-service/");
+  });
+
+  it("Strategy 3: HarnessApiError from requestStream propagates without wrapping", async () => {
+    class HarnessApiError extends Error {
+      constructor(msg: string) { super(msg); this.name = "HarnessApiError"; }
+    }
+    const blobLink = "/log-service/blob/error-id";
+    const apiErr = new HarnessApiError("401 Unauthorized");
+    const streamFn = vi.fn().mockRejectedValue(apiErr);
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    await expect(resolveLogContent(client, "prefix")).rejects.toThrow("401 Unauthorized");
+  });
+
+  // ── isPresignedUrl detection edge cases ─────────────────────────────────────
+
+  it("URL with X-Goog-Signature but no X-Amz-Signature is detected as presigned", async () => {
+    // Validates isPresignedUrl() handles GCS-only signatures correctly.
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Goog-Signature=gcsonlysig" +
+      "&X-Goog-SignedHeaders=content-type";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+  });
+
+  it("URL with neither X-Amz-Signature nor X-Goog-Signature routes to requestStream (not presigned)", async () => {
+    const blobLink = "https://app.harness.io/storage/blob.zip?some-other-param=abc";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(streamFn).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Full decision-matrix: signedHeadersIncludeHost × hostname-match ─────────
+  //
+  // This table must stay complete. Any change to the condition
+  // `signedHeadersIncludeHost(blobUrl) && blobUrl.hostname === baseUrl.hostname`
+  // will break at least one of these four tests.
+  //
+  //  signedHeadersIncludeHost | hosts match | expected action
+  //  false                    | false       | rewrite  (covered by REGRESSION tests above)
+  //  false                    | true        | rewrite (no-op)
+  //  true                     | false       | rewrite  ← the bug fixed by this PR
+  //  true                     | true        | direct fetch, no rewrite
+
+  it("MATRIX [false×true]: SignedHeaders has no host, blob host = base host → rewrite (no-op)", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=content-type" +
+      "&X-Amz-Signature=noh-same1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://app.harness.io" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    // hostname unchanged (no-op rewrite), path and params intact
+    expect(url).toContain("app.harness.io");
+    expect(url).toContain("/storage/blob.zip");
+    expect(url).toContain("X-Amz-Signature=noh-same1");
+  });
+
+  it("MATRIX [true×false]: SignedHeaders has host, blob host ≠ base host → rewrite (the fixed bug)", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=yh-diff1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+    expect(url).not.toContain("app.harness.io");
+    expect(url).toContain("X-Amz-Signature=yh-diff1");
+  });
+
+  it("MATRIX [true×true]: SignedHeaders has host, blob host = base host → direct fetch, no rewrite", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/blob.zip" +
+      "?X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=yh-same1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://app.harness.io" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("app.harness.io");
+    expect(url).toContain("X-Amz-Signature=yh-same1");
+    // no rewrite → original URL fetched as-is
+    expect(url).toMatch(/^https:\/\/app\.harness\.io\/storage\/blob\.zip/);
+  });
 });
