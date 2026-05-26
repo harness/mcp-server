@@ -1040,11 +1040,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-<<<<<<< HEAD
 195 resource types organized across 32 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
-=======
-195 resource types organized across 32 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
->>>>>>> 3bdba6871dca5ad4d08995d2dc1ee918d2a18fbb
 
 ### Platform
 
@@ -1605,11 +1601,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  32 Toolsets      |      (data files, not code)
-<<<<<<< HEAD
                 |  195 Resource Types|
-=======
-                |  195 Resource Types|
->>>>>>> 3bdba6871dca5ad4d08995d2dc1ee918d2a18fbb
                  +--------+---------+
                           |
                  +--------v---------+
