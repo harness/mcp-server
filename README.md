@@ -1196,7 +1196,7 @@ Template operations use the Harness Template service paths (`/template/api/templ
 | Resource Type                     | List | Get | Create | Update | Delete | Execute Actions |
 | --------------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `database_schema`                 | x    | x   | x      | x      | x      |                 |
-| `database_instance`               | x    | x   |        |        |        |                 |
+| `database_instance`               | x    | x   | x      | x      | x      |                 |
 | `database_snapshot_object`        | x    | x   |        |        |        |                 |
 | `database_llm_authoring_pipeline` |      | x   |        |        |        |                 |
 
