@@ -187,7 +187,7 @@ export const descGetExperimentRun = `Get the full timeline of a chaos experiment
 Returns the execution pipeline: individual fault/probe/action nodes with status, timing, chaos data, and error details.
 Also returns experiment name, infraID, resiliency score, run phase, manifest version, and template details.
 Pass experiment_id via resource_id. Pass run_id or notify_id via params (not resource_id) to identify the specific run.
-To start a new run, use chaos_experiment execute action: run instead. Pass the internal UUID (experimentID) via resource_id; the slug from a UI URL will not work for this endpoint.`;
+To start a new run, use chaos_experiment execute action: run instead. By default, chaos_experiment.run accepts the human-readable identity slug as experiment_id (isIdentity=true). Pass is_identity=false in params if you have the internal UUID (experimentID, e.g. "ef9199b6-0248-4c0b-9d63-9176bf2b7123"). See descIsIdentity for details.`;
 
 export const descListProbes = `List chaos probes with optional filtering.
 Supports filtering by name, tags, date range, probe IDs, infrastructure type, probe entity type, and sorting.
