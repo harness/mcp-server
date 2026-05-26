@@ -67,6 +67,109 @@ export const dbopsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: "Get a single database schema by identifier",
         },
+        create: {
+          method: "POST",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema",
+          pathParams: { org_id: "org", project_id: "project" },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description:
+            "Create a new database schema. Requires name, identifier, migrationType (Liquibase/Flyway), " +
+            "and type (Repository for git-based or Script for custom). " +
+            "For Repository type, provide changelog object with connector, repo, and location. " +
+            "For Script type, provide changeLogScript object with location, image, shell, and command.",
+          bodySchema: {
+            description:
+              "Database schema definition. Use type='Repository' for git-based changelogs, " +
+              "type='Script' for custom script-based migrations.",
+            fields: [
+              {
+                name: "name",
+                type: "string",
+                required: true,
+                description: "Schema display name",
+              },
+              {
+                name: "identifier",
+                type: "string",
+                required: true,
+                description: "Unique schema identifier (lowercase, hyphens allowed)",
+              },
+              {
+                name: "migrationType",
+                type: "string",
+                required: true,
+                description: "Migration tool: 'Liquibase' or 'Flyway'",
+              },
+              {
+                name: "type",
+                type: "string",
+                required: true,
+                description:
+                  "Source type: 'Repository' (git-based changelog) or 'Script' (custom script)",
+              },
+              {
+                name: "changelog",
+                type: "object",
+                required: false,
+                description:
+                  "For type='Repository': git repository details. Fields: connector (required, git connector ID), " +
+                  "repo (repository name), location (path to changelog file, e.g. 'db/changelog.xml'), " +
+                  "archivePath (optional), toml (optional, for Flyway)",
+              },
+              {
+                name: "changeLogScript",
+                type: "object",
+                required: false,
+                description:
+                  "For type='Script': custom script configuration. Fields: location (required, script path), " +
+                  "image (required, Docker image e.g. 'liquibase/liquibase:4.25'), " +
+                  "shell (required, 'Bash' or 'Sh'), command (required, shell command to run), " +
+                  "toml (optional, for Flyway)",
+              },
+              {
+                name: "usePercona",
+                type: "boolean",
+                required: false,
+                description: "Liquibase only: enable Percona toolkit for online schema changes",
+              },
+              {
+                name: "service",
+                type: "string",
+                required: false,
+                description: "Optional Harness service reference",
+              },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description:
+            "Update an existing database schema. Same body structure as create, but identifier cannot be changed.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+          },
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description:
+            "Delete a database schema. WARNING: This will also delete all linked instances and migration history.",
+        },
       },
     },
 
