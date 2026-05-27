@@ -358,8 +358,7 @@ export const dbopsToolset: ToolsetDefinition = {
         "(schema, instance, changeset, K8s connector), executes the pipeline, and " +
         "records the billing event — all in one call. " +
         "Returns { pipelineExecutionId, pipelineIdentifier }. " +
-        "Poll status with harness_get(resource_type='pipeline_execution_status', " +
-        "pipeline_execution_id='<returned_id>', pipeline_id='<returned_pipelineIdentifier>'). " +
+        "Poll status with harness_get(resource_type='execution', execution_id='<returned_id>'). " +
         "Use this INSTEAD of separate database_llm_authoring_pipeline + pipeline execution calls.",
       toolset: "dbops",
       scope: "project",
@@ -382,7 +381,7 @@ export const dbopsToolset: ToolsetDefinition = {
             "Required body fields: schema_id (database schema identifier), " +
             "instance_id (database instance identifier), " +
             "conversation_id (chat conversation ID), " +
-            "changeset (base64-encoded Liquibase changeset YAML). " +
+            "changeset (Liquibase changeset YAML). " +
             "The backend resolves the correct pipeline, fills all runtime inputs " +
             "(including K8s connector), executes it, and records the billing event. " +
             "Returns { pipelineExecutionId, pipelineIdentifier }.",
@@ -392,7 +391,7 @@ export const dbopsToolset: ToolsetDefinition = {
               { name: "schema_id", type: "string", required: true, description: "Database schema identifier" },
               { name: "instance_id", type: "string", required: true, description: "Database instance identifier" },
               { name: "conversation_id", type: "string", required: true, description: "Chat conversation ID" },
-              { name: "changeset", type: "string", required: true, description: "Base64-encoded Liquibase changeset YAML" },
+              { name: "changeset", type: "string", required: true, description: "Liquibase changeset YAML content" },
             ],
           },
         },
