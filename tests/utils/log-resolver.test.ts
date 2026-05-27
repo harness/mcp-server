@@ -1092,4 +1092,497 @@ describe("resolveLogContent", () => {
     // no rewrite → original URL fetched as-is
     expect(url).toMatch(/^https:\/\/app\.harness\.io\/storage\/blob\.zip/);
   });
+
+  // ─── Blob initiation response contract ──────────────────────────────────────
+  //
+  // resolveLogContent reads two specific fields from the log-service response:
+  //   blob.status  — must equal "success" to break out of the polling loop
+  //   blob.link    — the URL passed to downloadBlobContent
+  //
+  // If Harness renames either field (e.g. status→state, link→url), every call
+  // silently exhausts poll attempts and throws "not ready". These tests make
+  // that contract explicit so a field rename is immediately caught.
+
+  it("CONTRACT: throws 'not ready' when blob.link is absent from initiation response", async () => {
+    // blob.status is "success" but blob.link is missing → treated as not ready
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success" }), // no `link` field
+    );
+    await expect(
+      resolveLogContent(client, "prefix", { maxPollAttempts: 1, pollIntervalMs: 0 }),
+    ).rejects.toThrow(/not ready/);
+  });
+
+  it("CONTRACT: throws 'not ready' when blob.link is an empty string", async () => {
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "" }),
+    );
+    await expect(
+      resolveLogContent(client, "prefix", { maxPollAttempts: 1, pollIntervalMs: 0 }),
+    ).rejects.toThrow(/not ready/);
+  });
+
+  it("CONTRACT: throws 'not ready' when blob.link is null", async () => {
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: null }),
+    );
+    await expect(
+      resolveLogContent(client, "prefix", { maxPollAttempts: 1, pollIntervalMs: 0 }),
+    ).rejects.toThrow(/not ready/);
+  });
+
+  it("CONTRACT: field rename status→state causes 'not ready' (documents dependency)", async () => {
+    // If Harness renames `status` to `state`, the loop never breaks and throws.
+    // This test documents the exact field name the code depends on.
+    // No `link` field — when status is renamed the loop never breaks,
+    // all attempts exhaust, blob.link stays undefined → "not ready".
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ state: "success" }),
+    );
+    await expect(
+      resolveLogContent(client, "prefix", { maxPollAttempts: 1, pollIntervalMs: 0 }),
+    ).rejects.toThrow(/not ready/);
+  });
+
+  it("CONTRACT: field rename link→url causes 'not ready' (documents dependency)", async () => {
+    // If Harness renames `link` to `url`, blob.link is undefined and throws.
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", url: "https://app.harness.io/storage/blob.zip?X-Amz-Signature=x" }),
+    );
+    await expect(
+      resolveLogContent(client, "prefix", { maxPollAttempts: 1, pollIntervalMs: 0 }),
+    ).rejects.toThrow(/not ready/);
+  });
+
+  it("CONTRACT: initiation POST is sent to /gateway/log-service/blob/download with prefix param", async () => {
+    // Guards against the initiation endpoint path being accidentally changed.
+    const requestFn = vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/blob" });
+    const streamFn = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
+    const client = makeClient(requestFn, { requestStream: streamFn });
+
+    await resolveLogContent(client, "my/prefix/value");
+
+    expect(requestFn).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/gateway/log-service/blob/download",
+      params: expect.objectContaining({ prefix: "my/prefix/value" }),
+    }));
+  });
+
+  it("CONTRACT: error message includes attempt count and last known status", async () => {
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "processing" }),
+    );
+    const err = await resolveLogContent(client, "prefix", { maxPollAttempts: 3, pollIntervalMs: 0 })
+      .catch((e: Error) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect((err as Error).message).toContain("3 attempts");
+    expect((err as Error).message).toContain("processing");
+  });
+
+  // ─── Blob URL path contract ──────────────────────────────────────────────────
+  //
+  // Strategy 2 only fires when pathname starts with /storage/.
+  // A Harness API change that moves blobs to a different path
+  // (e.g. /blobs/, /cdn/, /artifacts/) would silently fall to Strategy 3,
+  // which routes via requestStream and would 404 or 403 at the gateway.
+  // These tests document the /storage/ dependency explicitly.
+
+  it("PATH CONTRACT: presigned Harness URL on /blobs/ path routes to requestStream, not direct fetch", async () => {
+    // If Harness moves blob storage from /storage/ to /blobs/, Strategy 2 won't
+    // match and the URL falls to Strategy 3 (requestStream via gateway).
+    // This test documents that behaviour so the change is immediately visible.
+    const blobLink = "https://app.harness.io/blobs/harness-download/logs.zip?X-Amz-Signature=s1";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway", requestStream: streamFn },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    // direct fetch must NOT be called — the URL must go through requestStream
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(streamFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("PATH CONTRACT: all query params are preserved exactly after Strategy 2 hostname rewrite", async () => {
+    // Ensures the rewrite only changes hostname/protocol/port and leaves
+    // every query parameter (Credential, Date, Expires, SignedHeaders, Signature) intact.
+    const blobLink =
+      "https://app.harness.io/storage/harness-download/logs.zip" +
+      "?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+      "&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20260526%2Fus-east-1%2Fs3%2Faws4_request" +
+      "&X-Amz-Date=20260526T000000Z" +
+      "&X-Amz-Expires=86400" +
+      "&X-Amz-SignedHeaders=content-type" +
+      "&X-Amz-Signature=preservedSignatureValue";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+    expect(url).toContain("X-Amz-Algorithm=AWS4-HMAC-SHA256");
+    expect(url).toContain("X-Amz-Credential=AKIAIOSFODNN7EXAMPLE");
+    expect(url).toContain("X-Amz-Date=20260526T000000Z");
+    expect(url).toContain("X-Amz-Expires=86400");
+    expect(url).toContain("X-Amz-SignedHeaders=content-type");
+    expect(url).toContain("X-Amz-Signature=preservedSignatureValue");
+    expect(url).toContain("/storage/harness-download/logs.zip");
+  });
+
+  it("PATH CONTRACT: Strategy 3 always uses GET method when calling requestStream", async () => {
+    const blobLink = "/some/log/path";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { requestStream: streamFn },
+    );
+
+    await resolveLogContent(client, "prefix");
+
+    expect(streamFn).toHaveBeenCalledWith(expect.objectContaining({ method: "GET" }));
+  });
+
+  // ─── REGRESSION-GUARD: full decision matrix ──────────────────────────────────
+  //
+  // These four tests cover every combination of:
+  //   signedHeadersIncludeHost(blobUrl)  — is `host` in X-Amz/Goog-SignedHeaders?
+  //   blobUrl.hostname === baseUrl.hostname  — do blob and base URL share a host?
+  //
+  // Any change to the condition in Strategy 2 will break at least one of them.
+  //
+  //  signedHeadersIncludeHost | hosts match | expected
+  //  false                    | false       | rewrite          (self-managed, normal)
+  //  false                    | true        | rewrite (no-op)  (SaaS, normal)
+  //  true                     | false       | rewrite          ← THE BUG THIS PR FIXED
+  //  true                     | true        | direct fetch     (SaaS, host-bound sig)
+
+  it("MATRIX [false×false]: no host in SignedHeaders, hosts differ → rewrite (self-managed baseline)", async () => {
+    const blobLink = "https://app.harness.io/storage/blob.zip?X-Amz-SignedHeaders=content-type&X-Amz-Signature=ff1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+    await resolveLogContent(client, "prefix");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+    expect(url).not.toContain("app.harness.io");
+  });
+
+  it("MATRIX [false×true]: no host in SignedHeaders, hosts match → rewrite (no-op, SaaS baseline)", async () => {
+    const blobLink = "https://app.harness.io/storage/blob.zip?X-Amz-SignedHeaders=content-type&X-Amz-Signature=ft1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://app.harness.io" },
+    );
+    await resolveLogContent(client, "prefix");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("app.harness.io");
+    expect(url).toContain("/storage/blob.zip");
+  });
+
+  it("MATRIX [true×false]: host in SignedHeaders, hosts differ → rewrite (the bug this PR fixed)", async () => {
+    const blobLink = "https://app.harness.io/storage/blob.zip?X-Amz-SignedHeaders=host&X-Amz-Signature=tf1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+    await resolveLogContent(client, "prefix");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self-managed.example.com");
+    expect(url).not.toContain("app.harness.io");
+  });
+
+  it("MATRIX [true×true]: host in SignedHeaders, hosts match → direct fetch, no rewrite (SaaS host-bound)", async () => {
+    const blobLink = "https://app.harness.io/storage/blob.zip?X-Amz-SignedHeaders=host&X-Amz-Signature=tt1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://app.harness.io" },
+    );
+    await resolveLogContent(client, "prefix");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    // hostname unchanged — original URL fetched as-is
+    expect(url).toContain("app.harness.io");
+    expect(url).toContain("X-Amz-Signature=tt1");
+    expect(url).not.toContain("self-managed");
+  });
+
+  // ─── Strategy 1: external storage hosts ─────────────────────────────────────
+
+  it("S1: regional S3 bucket (bucket.s3.region.amazonaws.com) is fetched directly", async () => {
+    const link = "https://my-bucket.s3.us-east-1.amazonaws.com/logs/run.zip?X-Amz-Signature=s1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const streamFn = vi.fn();
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { requestStream: streamFn });
+    await resolveLogContent(client, "p");
+    expect(streamFn).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls[0]![0] as string).toContain("s3.us-east-1.amazonaws.com");
+  });
+
+  it("S1: GCS subdomain bucket (bucket.storage.googleapis.com) is fetched directly", async () => {
+    const link = "https://my-bucket.storage.googleapis.com/logs/run.zip?X-Goog-Signature=g1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const streamFn = vi.fn();
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { requestStream: streamFn });
+    await resolveLogContent(client, "p");
+    expect(streamFn).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls[0]![0] as string).toContain("storage.googleapis.com");
+  });
+
+  it("S1 beats S2: external S3 URL with /storage/ path and host in SignedHeaders still goes S1", async () => {
+    // isExternalStorageHost must be checked before the /storage/ presigned guard.
+    const link = "https://my-bucket.s3.amazonaws.com/storage/run.zip?X-Amz-Signature=s2&X-Amz-SignedHeaders=host";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const streamFn = vi.fn();
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gw", requestStream: streamFn });
+    await resolveLogContent(client, "p");
+    expect(streamFn).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls[0]![0] as string).toContain("s3.amazonaws.com");
+    expect(fetchSpy.mock.calls[0]![0] as string).not.toContain("self.example.com");
+  });
+
+  // ─── Strategy 2: hostname rewrite ────────────────────────────────────────────
+
+  it("S2: baseURL with no path suffix — hostname extracted correctly", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?X-Amz-Signature=np1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://corp.example.com" });
+    await resolveLogContent(client, "p");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("corp.example.com");
+    expect(url).not.toContain("app.harness.io");
+    expect(url).toContain("/storage/blob.zip");
+    expect(url).not.toContain("/gateway");
+  });
+
+  it("S2: HTTP baseURL rewrites blob protocol from https to http", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?X-Amz-Signature=http1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "http://corp-internal.example.com/gateway" });
+    await resolveLogContent(client, "p");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toMatch(/^http:\/\/corp-internal\.example\.com/);
+    expect(url).not.toContain("https://app.harness.io");
+  });
+
+  it("S2: non-standard port in baseURL is preserved after rewrite", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?X-Amz-Signature=port1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://corp.example.com:8443/gateway" });
+    await resolveLogContent(client, "p");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("corp.example.com:8443");
+    expect(url).toContain("/storage/blob.zip");
+  });
+
+  it("S2: all query params preserved exactly after hostname rewrite", async () => {
+    const link =
+      "https://app.harness.io/storage/harness-download/logs.zip" +
+      "?X-Amz-Algorithm=AWS4-HMAC-SHA256" +
+      "&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20260526%2Fus-east-1%2Fs3%2Faws4_request" +
+      "&X-Amz-Date=20260526T000000Z" +
+      "&X-Amz-Expires=86400" +
+      "&X-Amz-SignedHeaders=content-type" +
+      "&X-Amz-Signature=preservedSig";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gateway" });
+    await resolveLogContent(client, "p");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self.example.com");
+    expect(url).toContain("X-Amz-Algorithm=AWS4-HMAC-SHA256");
+    expect(url).toContain("X-Amz-Credential=AKIAIOSFODNN7EXAMPLE");
+    expect(url).toContain("X-Amz-Date=20260526T000000Z");
+    expect(url).toContain("X-Amz-Expires=86400");
+    expect(url).toContain("X-Amz-SignedHeaders=content-type");
+    expect(url).toContain("X-Amz-Signature=preservedSig");
+  });
+
+  it("S2: non-app.harness.io Harness host in blob URL is also rewritten on self-managed", async () => {
+    const link = "https://qa.harness.io/storage/blob.zip?X-Amz-Signature=qa1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gateway" });
+    await resolveLogContent(client, "p");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self.example.com");
+    expect(url).not.toContain("qa.harness.io");
+  });
+
+  it("S2: host at end of semicolon-delimited SignedHeaders list is still detected", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?X-Amz-SignedHeaders=content-type%3Bx-amz-date%3Bhost&X-Amz-Signature=tail1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gateway" });
+    await resolveLogContent(client, "p");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self.example.com");
+    expect(url).not.toContain("app.harness.io");
+  });
+
+  it("S2: empty X-Amz-SignedHeaders is not treated as including host", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?X-Amz-SignedHeaders=&X-Amz-Signature=empty1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gateway" });
+    await resolveLogContent(client, "p");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self.example.com");
+    expect(url).not.toContain("app.harness.io");
+  });
+
+  it("S2: requestStream is never called for host-bound /storage/ blob on self-managed", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?X-Amz-SignedHeaders=host&X-Amz-Signature=nostream1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const streamFn = vi.fn();
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gateway", requestStream: streamFn });
+    await resolveLogContent(client, "p");
+    expect(streamFn).not.toHaveBeenCalled();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(fetchSpy.mock.calls[0]![0] as string).toContain("self.example.com");
+  });
+
+  it("S2: network error after rewrite shows rewritten hostname in error, not app.harness.io", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?X-Amz-Signature=err1&X-Amz-SignedHeaders=host";
+    fetchSpy.mockRejectedValue(new TypeError("fetch failed"));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gateway" });
+    await expect(resolveLogContent(client, "p")).rejects.toThrow("self.example.com");
+  });
+
+  it("S2: HTTP 403 after rewrite propagates immediately — requestStream not tried as fallback", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?X-Amz-SignedHeaders=host&X-Amz-Signature=sig403";
+    fetchSpy.mockResolvedValue(new Response("Forbidden", { status: 403 }));
+    const streamFn = vi.fn();
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gateway", requestStream: streamFn });
+    await expect(resolveLogContent(client, "p")).rejects.toThrow(/HTTP 403/);
+    expect(streamFn).not.toHaveBeenCalled();
+    expect(fetchSpy.mock.calls[0]![0] as string).toContain("self.example.com");
+  });
+
+  it("S2: GCS blob on self-managed (no host in X-Goog-SignedHeaders) is rewritten", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?X-Goog-Signature=gcsnoh1&X-Goog-SignedHeaders=content-type";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gateway" });
+    await resolveLogContent(client, "p");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self.example.com");
+    expect(url).not.toContain("app.harness.io");
+  });
+
+  it("S2: GCS blob on self-managed with host in X-Goog-SignedHeaders is still rewritten", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?X-Goog-Signature=gcsh1&X-Goog-SignedHeaders=host";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gateway" });
+    await resolveLogContent(client, "p");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self.example.com");
+    expect(url).not.toContain("app.harness.io");
+  });
+
+  it("S2: unparseable baseURL throws before any fetch attempt", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?X-Amz-Signature=up1";
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "not-a-valid-url" });
+    await expect(resolveLogContent(client, "p")).rejects.toThrow(/Cannot rewrite/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // ─── Strategy 3: requestStream routing ───────────────────────────────────────
+
+  it("S3: presigned app.harness.io URL on /api/ path (not /storage/) routes to requestStream", async () => {
+    const link = "https://app.harness.io/api/logs/stream?X-Amz-Signature=api1&X-Amz-SignedHeaders=host";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gateway", requestStream: streamFn });
+    await resolveLogContent(client, "p");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(streamFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("S3: path already starting with /gateway/log-service/ is not double-prefixed", async () => {
+    const link = "/gateway/log-service/blob/download?prefix=abc";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { requestStream: streamFn });
+    await resolveLogContent(client, "p");
+    const path = (streamFn.mock.calls[0]![0] as { path: string }).path;
+    expect(path).toMatch(/^\/gateway\/log-service\//);
+    expect(path).not.toContain("/gateway/log-service/gateway/log-service/");
+  });
+
+  it("S3: relative path gets /gateway/log-service/ prepended", async () => {
+    const link = "/log-service/blob/some-id";
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { requestStream: streamFn });
+    await resolveLogContent(client, "p");
+    const path = (streamFn.mock.calls[0]![0] as { path: string }).path;
+    expect(path).toContain("/gateway/log-service/");
+  });
+
+  it("S3: always uses GET method", async () => {
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "/log/path" }), { requestStream: streamFn });
+    await resolveLogContent(client, "p");
+    expect(streamFn).toHaveBeenCalledWith(expect.objectContaining({ method: "GET" }));
+  });
+
+  it("S3: non-presigned Harness URL routes to requestStream, not direct fetch", async () => {
+    const link = "https://app.harness.io/storage/blob.zip?token=abc"; // no X-Amz-Signature
+    const streamFn = vi.fn().mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link }), { baseURL: "https://self.example.com/gateway", requestStream: streamFn });
+    await resolveLogContent(client, "p");
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(streamFn).toHaveBeenCalledTimes(1);
+  });
+
+  // ─── Polling and initiation ───────────────────────────────────────────────────
+
+  it("POLL: initiation always POSTs to /gateway/log-service/blob/download with exact prefix", async () => {
+    const requestFn = vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/blob" });
+    const streamFn = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
+    const client = makeClient(requestFn, { requestStream: streamFn });
+    await resolveLogContent(client, "acct/org/proj/pipeline/exec");
+    expect(requestFn).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/gateway/log-service/blob/download",
+      params: expect.objectContaining({ prefix: "acct/org/proj/pipeline/exec" }),
+    }));
+  });
+
+  it("POLL: blob.link absent — throws 'not ready' immediately", async () => {
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success" }));
+    await expect(resolveLogContent(client, "p", { maxPollAttempts: 1, pollIntervalMs: 0 })).rejects.toThrow(/not ready/);
+  });
+
+  it("POLL: blob.link empty string — throws 'not ready'", async () => {
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: "" }));
+    await expect(resolveLogContent(client, "p", { maxPollAttempts: 1, pollIntervalMs: 0 })).rejects.toThrow(/not ready/);
+  });
+
+  it("POLL: blob.link null — throws 'not ready'", async () => {
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", link: null }));
+    await expect(resolveLogContent(client, "p", { maxPollAttempts: 1, pollIntervalMs: 0 })).rejects.toThrow(/not ready/);
+  });
+
+  it("POLL: error message contains attempt count and last status", async () => {
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "processing" }));
+    const err = await resolveLogContent(client, "p", { maxPollAttempts: 3, pollIntervalMs: 0 }).catch((e: Error) => e);
+    expect((err as Error).message).toContain("3 attempts");
+    expect((err as Error).message).toContain("processing");
+  });
+
+  it("POLL: field rename link→url causes 'not ready' (documents field name dependency)", async () => {
+    const client = makeClient(vi.fn().mockResolvedValue({ status: "success", url: "https://app.harness.io/storage/b.zip?X-Amz-Signature=x" }));
+    await expect(resolveLogContent(client, "p", { maxPollAttempts: 1, pollIntervalMs: 0 })).rejects.toThrow(/not ready/);
+  });
+
+  it("POLL: field rename status→state exhausts all attempts (loop never breaks early)", async () => {
+    const requestFn = vi.fn().mockResolvedValue({ state: "success" });
+    const client = makeClient(requestFn);
+    await expect(resolveLogContent(client, "p", { maxPollAttempts: 2, pollIntervalMs: 0 })).rejects.toThrow(/not ready/);
+    expect(requestFn).toHaveBeenCalledTimes(2);
+  });
 });
