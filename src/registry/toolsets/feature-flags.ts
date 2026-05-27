@@ -58,13 +58,13 @@ const fmeRbsCreateSchema: BodySchema = {
 };
 
 const fmeRbsUpdateDefinitionSchema: BodySchema = {
-  description: "Update a rule-based segment definition in an environment",
+  description: "Update a rule-based segment definition in an environment. Rules use: {condition: {combiner: 'AND', matchers: [{type, attribute, ...}]}}. Matcher types: IN_LIST_STRING (strings:[]), GREATER_THAN_OR_EQUAL_NUMBER (number:N), LESS_THAN_OR_EQUAL_NUMBER (number:N), BETWEEN_NUMBER (between:{from,to}), BOOLEAN (bool:true/false), ON_DATE (date:ms), IN_SPLIT (depends:{splitName,treatment}). Combiner values: AND, OR.",
   fields: [
     { name: "title", type: "string", required: false, description: "Segment title" },
-    { name: "comment", type: "string", required: false, description: "Comment about the segment" },
-    { name: "rules", type: "array", required: false, description: "Targeting rules with conditions and matchers", itemType: "object" },
+    { name: "comment", type: "string", required: false, description: "Comment about the change" },
+    { name: "rules", type: "array", required: false, description: "Targeting rules. Each: {condition: {combiner: 'AND'|'OR', matchers: [{type: 'IN_LIST_STRING', attribute: 'field', strings: [...]}]}}", itemType: "object" },
     { name: "excludedKeys", type: "array", required: false, description: "User keys to exclude from the segment", itemType: "string" },
-    { name: "excludedSegments", type: "array", required: false, description: "Segments to exclude (objects with name and type)", itemType: "object" },
+    { name: "excludedSegments", type: "array", required: false, description: "Segments to exclude. Each: {name: 'segment_name', type: 'standard_segment'|'rule_based_segment'}", itemType: "object" },
   ],
 };
 
