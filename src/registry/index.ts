@@ -687,7 +687,8 @@ export class Registry {
     // Validate required fields if bodySchema is defined.
     // When bodyWrapperKey is set, the bodyBuilder wraps user fields inside that
     // key (e.g. { project: { identifier, name } }), so we validate the inner object.
-    if (spec.bodySchema && body && typeof body === "object") {
+    // Skip validation when body is an array (e.g. Split API endpoints that expect raw JSON arrays).
+    if (spec.bodySchema && body && typeof body === "object" && !Array.isArray(body)) {
       const bodyRecord = body as Record<string, unknown>;
       const payload =
         spec.bodyWrapperKey &&

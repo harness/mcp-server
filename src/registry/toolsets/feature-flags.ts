@@ -69,19 +69,17 @@ const fmeRbsUpdateDefinitionSchema: BodySchema = {
 };
 
 const fmeIdentityUpdateSchema: BodySchema = {
-  description: "Update identity attributes (display name alias, custom attributes). Uses PATCH — only provided fields are changed.",
+  description: "Update identity attributes. Body: {values: {attr: value}}. The 'values' object is a flat map of attribute names to values (e.g. {name: 'Display Name', plan: 'enterprise'}). Only provided attributes are updated; others are preserved.",
   fields: [
-    { name: "displayName", type: "string", required: false, description: "Human-readable display name alias for this identity key" },
-    { name: "attributes", type: "object", required: false, description: "Custom attributes to set on the identity (key-value pairs)" },
+    { name: "values", type: "object", required: true, description: "Flat map of attribute names to values. Use 'name' key for display name. Only provided keys are updated." },
   ],
 };
 
 const fmeSegmentKeysUpdateSchema: BodySchema = {
-  description: "Update keys in a standard segment. Provide keys to add and/or remove.",
+  description: "Add keys to a standard segment. The Split Admin API only supports adding keys; removal requires the UI or a different API version.",
   fields: [
-    { name: "add", type: "array", required: false, description: "Keys to add to the segment", itemType: "string" },
-    { name: "remove", type: "array", required: false, description: "Keys to remove from the segment", itemType: "string" },
-    { name: "comment", type: "string", required: false, description: "Comment describing the change" },
+    { name: "add", type: "array", required: false, description: "Keys to add to the segment (string array of identity keys)", itemType: "string" },
+    { name: "comment", type: "string", required: false, description: "Comment describing the change (metadata only, not sent to API)" },
   ],
 };
 
@@ -642,14 +640,18 @@ export const featureFlagsToolset: ToolsetDefinition = {
           description: "List keys (members) of a standard segment with pagination. Returns an array of key strings.",
         },
         update: {
-          method: "POST",
-          path: "/internal/api/v2/segments/{environmentId}/{segmentName}",
+          method: "PUT",
+          path: "/internal/api/v2/segments/{environmentId}/{segmentName}/upload",
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: { environment_id: "environmentId", segment_name: "segmentName" },
-          bodyBuilder: (input) => input.body,
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown>;
+            return (body.add ?? body.keys ?? []) as string[];
+          },
           responseExtractor: passthrough,
           bodySchema: fmeSegmentKeysUpdateSchema,
-          description: "Add or remove keys from a standard segment. Provide 'add' and/or 'remove' arrays of key strings. Limit: 10,000 keys per request.",
+          description: "Add keys to a standard segment. Provide 'add' array of key strings. Note: the Split Admin API only supports adding keys via this endpoint; removal requires the UI. Limit: 10,000 keys per request.",
         },
       },
     },
