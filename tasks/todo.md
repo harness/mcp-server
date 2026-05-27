@@ -1,5 +1,20 @@
 # Harness MCP Server — Task Tracking
 
+## Slack Bug Triage: Cursor `npx ENOENT` Startup Failure (2026-05-27)
+- [x] Read the triggered Slack thread and capture the complete report
+- [x] Trace the failure path through local MCP client configuration and docs
+- [ ] Clarify GUI-client `npx` startup guidance to prevent auth misdiagnosis
+- [ ] Run focused docs verification
+- [ ] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Treat `spawn npx ENOENT` as a client process-launch failure because Cursor fails before the MCP server starts and before Harness auth can be used.
+- Keep the fix in public configuration guidance: make the Cursor/local examples point users toward absolute `npx`/`node` paths and explain that auth changes do not affect this error.
+- Verify the documentation remains generated/consistent before reporting back.
+
+### Review
+- Pending.
+
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
 - [x] Create Jira Feature Request spec drafting automation
