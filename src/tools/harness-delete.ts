@@ -25,6 +25,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         resource_scope: resourceScopeSchema,
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        confirm: z.boolean().describe("Set to true to confirm the destructive operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP).").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources (e.g. pipeline_id for triggers/input sets, environment_id for infrastructure).").optional(),
       },
       outputSchema: deleteOutputSchema,
@@ -50,11 +51,14 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
           message: `Delete ${args.resource_type} "${args.resource_id}"?\n\nThis is destructive and cannot be undone.`,
           risk: "destructive",
           autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
+          callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
-          return errorResult(`Operation ${elicit.reason} by user.`);
+          return errorResult(
+            `Operation ${elicit.reason} by user. Hint: if your client does not support interactive confirmation, pass confirm: true to proceed.`,
+          );
         }
-        const { params, ...rest } = args;
+        const { params, confirm: _confirm, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
