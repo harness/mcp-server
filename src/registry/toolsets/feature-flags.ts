@@ -1,6 +1,11 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { passthrough, fmeListExtract, fmeGetExtract } from "../extractors.js";
 
+const fmeActionExtract = (raw: unknown) => {
+  if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) return raw;
+  return { success: true, result: raw };
+};
+
 const fmeFeatureFlagUpdateSchema: BodySchema = {
   description: "Partial update for an FME feature flag's metadata. Provide the fields you want to change — they are converted to JSON Patch (RFC 6902) operations automatically.",
   fields: [
@@ -11,11 +16,10 @@ const fmeFeatureFlagUpdateSchema: BodySchema = {
 };
 
 const fmeFeatureFlagCreateSchema: BodySchema = {
-  description: "Create a new feature flag (split) in a workspace under a specific traffic type",
+  description: "Create a new feature flag (split) in a workspace under a specific traffic type. Note: the Split API does not support tags on create — use harness_update to add tags after creation.",
   fields: [
     { name: "name", type: "string", required: true, description: "Feature flag name (must be unique within the workspace)" },
     { name: "description", type: "string", required: false, description: "Optional description of the feature flag" },
-    { name: "tags", type: "array", required: false, description: "Optional tags to categorize the flag", itemType: "string" },
   ],
 };
 
@@ -209,12 +213,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return {
               name: body?.name ?? input.name,
               ...(body?.description || input.description ? { description: body?.description ?? input.description } : {}),
-              ...(body?.tags || input.tags ? { tags: body?.tags ?? input.tags } : {}),
             };
           },
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagCreateSchema,
-          description: "Create a feature flag in a workspace. Requires workspace_id and traffic_type_id (get from fme_workspace). Body requires name, optional description and tags.",
+          description: "Create a feature flag in a workspace. Requires workspace_id and traffic_type_id (get from fme_workspace). Body requires name, optional description. Note: tags must be set via a follow-up harness_update call (Split API limitation).",
         },
         delete: {
           method: "DELETE",
@@ -267,7 +270,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             environment_id: "environmentId",
           },
           bodyBuilder: () => ({}),
-          responseExtractor: passthrough,
+          responseExtractor: fmeActionExtract,
           actionDescription: "Kill (turn off) a feature flag in a specific environment. Requires workspace_id, feature_flag_name, and environment_id.",
           bodySchema: {
             description: "No body required — identifiers are in path/query params.",
@@ -284,7 +287,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             environment_id: "environmentId",
           },
           bodyBuilder: () => ({}),
-          responseExtractor: passthrough,
+          responseExtractor: fmeActionExtract,
           actionDescription: "Restore (re-enable) a killed feature flag in a specific environment. Requires workspace_id, feature_flag_name, and environment_id.",
           bodySchema: {
             description: "No body required — identifiers are in path/query params.",
@@ -297,7 +300,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           bodyBuilder: () => ({}),
-          responseExtractor: passthrough,
+          responseExtractor: fmeActionExtract,
           actionDescription: "Archive a feature flag. Requires workspace_id and feature_flag_name. Subject to OPA policy checks (409 on failure).",
           bodySchema: {
             description: "No body required for this action.",
@@ -310,7 +313,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           bodyBuilder: () => ({}),
-          responseExtractor: passthrough,
+          responseExtractor: fmeActionExtract,
           actionDescription: "Unarchive a previously archived feature flag. Requires workspace_id and feature_flag_name. Returns 409 if the flag has dependent objects.",
           bodySchema: {
             description: "No body required for this action.",
@@ -326,7 +329,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation. Supports create, get, and update. Create requires treatments, defaultTreatment, and defaultRule.",
       toolset: "feature-flags",
       scope: "account",
-      identifierFields: ["workspace_id", "feature_flag_name", "environment_id"],
+      identifierFields: ["workspace_id", "environment_id", "feature_flag_name"],
       product: "fme",
       operations: {
         get: {
@@ -375,7 +378,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_rollout_status",
       displayName: "FME Rollout Status",
       description:
-        "Rollout status definitions for a workspace (e.g. Killed, Permanent, Ramping). Use to discover valid rollout_status_id UUIDs for filtering fme_feature_flag lists.",
+        "Rollout status definitions for a workspace (e.g. Killed, Permanent, Ramping). Use to discover valid rollout_status_id UUIDs for filtering fme_feature_flag lists. Note: this endpoint may not be available on all account types — rollout status IDs are also returned inline with fme_feature_flag list results.",
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id"],
@@ -387,7 +390,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId" },
           responseExtractor: passthrough,
-          description: "List rollout status definitions for a workspace (Killed, Permanent, Ramping, etc.)",
+          description: "List rollout status definitions for a workspace (Killed, Permanent, Ramping, etc.). If this returns 404, use rolloutStatus fields from fme_feature_flag list results instead.",
         },
       },
     },
@@ -551,15 +554,21 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/trafficTypes/{trafficTypeId}/environments/{environmentId}/identities",
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { traffic_type_id: "trafficTypeId", environment_id: "environmentId" },
-          bodyBuilder: (input) => input.body,
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | unknown[] | undefined;
+            if (Array.isArray(body)) return body;
+            if (body && Array.isArray(body.items)) return body.items;
+            return [];
+          },
           responseExtractor: passthrough,
           bodySchema: {
-            description: "Batch create/upsert identities. Body is an array of identity objects.",
+            description: "Batch create/upsert identities. Provide {items: [{key, values}]} where each item has a 'key' (string identifier) and 'values' (object of attribute name-value pairs, e.g. {name: 'Display Name', company: 'Acme'}).",
             fields: [
-              { name: "items", type: "array", required: true, description: "Array of identity objects. Each must have 'key' (string) and 'values' (object mapping attribute names to values, e.g. {name: 'Display Name', company: 'Acme'})", itemType: "object" },
+              { name: "items", type: "array", required: false, description: "Array of identity objects. Each must have 'key' (string) and 'values' (object mapping attribute names to values, e.g. {name: 'Display Name', company: 'Acme'})", itemType: "object" },
             ],
           },
-          description: "Create or upsert identities in batch. Body is an array of {key, values} objects. Returns created/updated objects and any failures.",
+          description: "Create or upsert identities in batch. Body: {items: [{key, values}]}. Returns created/updated objects and any failures.",
         },
         update: {
           method: "PATCH",
