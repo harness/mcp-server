@@ -1,5 +1,23 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-05-27)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification for any reviewed or changed behavior
+- [ ] Report the outcome in Slack; open a PR only for a confirmed critical fix
+
+### Plan
+- Review recent merged commits since the last critical bug inspection, prioritizing code-path changes over docs, schema sync, and version metadata.
+- Focus on high-blast-radius surfaces: PR comment/write routing, write-operation elicitation fallback, blob URL rewriting for self-managed installs, DBOps resource defaults, and broad endpoint-spec refactors.
+- Require a concrete trigger scenario causing data loss, crashes, security bypass, or significant user-facing breakage before patching.
+
+### Review
+- Reviewed recent behavioral commits since `v3.0.7`: PR comment line translation, write confirmation fallback for non-elicitation clients, log blob hostname rewriting, DBOps default authoring instance resource, and the Chaos endpoint-spec expansion/refactor.
+- Traced the riskiest paths through tool handlers, registry dispatch, body/query construction, confirmation gating, read-only enforcement, and log blob download routing.
+- No high-confidence critical bug was found. The strongest observed risks were non-critical compatibility or documentation gaps, such as Chaos `isIdentity` default changes and stale comments around host-bound log blob rewriting; none had a concrete trigger for data loss, crashes, security bypass, or silent corruption.
+- Verification: `pnpm test tests/utils/elicitation.test.ts tests/registry/pull-requests.test.ts tests/utils/log-resolver.test.ts tests/registry/chaos-experiment.test.ts tests/registry/chaos-probe.test.ts tests/registry/extractors-chaos.test.ts tests/release-metadata.test.ts` passed (7 files / 178 tests), followed by `pnpm typecheck` passing.
+
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
 - [x] Create Jira Feature Request spec drafting automation
