@@ -3,8 +3,8 @@
 ## Slack Bug Triage: Cursor `npx ENOENT` Startup Failure (2026-05-27)
 - [x] Read the triggered Slack thread and capture the complete report
 - [x] Trace the failure path through local MCP client configuration and docs
-- [ ] Clarify GUI-client `npx` startup guidance to prevent auth misdiagnosis
-- [ ] Run focused docs verification
+- [x] Clarify GUI-client `npx` startup guidance to prevent auth misdiagnosis
+- [x] Run focused docs verification
 - [ ] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
@@ -13,7 +13,10 @@
 - Verify the documentation remains generated/consistent before reporting back.
 
 ### Review
-- Pending.
+- The Slack thread contained only the Cursor output log; there were no screenshots or follow-up messages.
+- Root cause is client-side process launch: Cursor reports `spawn npx ENOENT` immediately after `config_server_modified`, before the Harness MCP server can start or read `HARNESS_API_KEY`.
+- Updated `README.md` local/Cursor examples to use an absolute `npx` path, `-y harness-mcp-v2@latest`, and explicit `PATH`, and expanded troubleshooting to state that `spawn npx ENOENT` is not an auth failure.
+- Verified with `pnpm install --frozen-lockfile`, `pnpm build`, and `pnpm docs:check`.
 
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
