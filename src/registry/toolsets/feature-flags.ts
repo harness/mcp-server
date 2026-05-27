@@ -64,6 +64,23 @@ const fmeRbsUpdateDefinitionSchema: BodySchema = {
   ],
 };
 
+const fmeIdentityUpdateSchema: BodySchema = {
+  description: "Update identity attributes (display name alias, custom attributes). Uses PATCH — only provided fields are changed.",
+  fields: [
+    { name: "displayName", type: "string", required: false, description: "Human-readable display name alias for this identity key" },
+    { name: "attributes", type: "object", required: false, description: "Custom attributes to set on the identity (key-value pairs)" },
+  ],
+};
+
+const fmeSegmentKeysUpdateSchema: BodySchema = {
+  description: "Update keys in a standard segment. Provide keys to add and/or remove.",
+  fields: [
+    { name: "add", type: "array", required: false, description: "Keys to add to the segment", itemType: "string" },
+    { name: "remove", type: "array", required: false, description: "Keys to remove from the segment", itemType: "string" },
+    { name: "comment", type: "string", required: false, description: "Comment describing the change" },
+  ],
+};
+
 const fmeRbsChangeRequestSchema: BodySchema = {
   description: "Create a change request for a rule-based segment definition",
   fields: [
@@ -494,6 +511,146 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           bodySchema: fmeRbsChangeRequestSchema,
           actionDescription: "Submit a change request for a rule-based segment definition. Requires title, operationType, and ruleBasedSegment. Supports approvers for approval flow. Subject to governance rules (OPA policies).",
+        },
+      },
+    },
+    // ── FME Traffic Types ─────────────────────────────────────────────────
+    {
+      resourceType: "fme_traffic_type",
+      displayName: "FME Traffic Type",
+      description:
+        "Traffic type in a workspace (e.g. 'user', 'account'). List traffic types to discover traffic_type_id values needed for identity queries and flag/segment creation.",
+      toolset: "feature-flags",
+      scope: "account",
+      identifierFields: ["workspace_id"],
+      product: "fme",
+      operations: {
+        list: {
+          method: "GET",
+          path: "/internal/api/v2/trafficTypes/ws/{wsId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { workspace_id: "wsId" },
+          responseExtractor: passthrough,
+          description: "List traffic types for a workspace. Returns id, name, and displayAttributeId for each traffic type.",
+        },
+      },
+    },
+    // ── FME Identities / Targets ──────────────────────────────────────────
+    {
+      resourceType: "fme_identity",
+      displayName: "FME Identity",
+      description:
+        "Identity (target) in an environment. List, get, or update identities to manage display name aliases and custom attributes. Requires traffic_type_id and environment_id.",
+      toolset: "feature-flags",
+      scope: "account",
+      identifierFields: ["traffic_type_id", "environment_id", "key"],
+      product: "fme",
+      listFilterFields: [
+        { name: "traffic_type_id", description: "Traffic type ID (get from fme_traffic_type)", required: true },
+        { name: "environment_id", description: "Environment ID (get from fme_environment)", required: true },
+        { name: "offset", description: "Pagination offset", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/internal/api/v2/trafficTypes/{trafficTypeId}/environments/{environmentId}/identities",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { traffic_type_id: "trafficTypeId", environment_id: "environmentId" },
+          queryParams: {
+            offset: "offset",
+            size: "limit",
+          },
+          responseExtractor: passthrough,
+          description: "List identities (targets) for a traffic type in an environment. Returns key, display name, and attributes for each identity.",
+        },
+        get: {
+          method: "GET",
+          path: "/internal/api/v2/trafficTypes/{trafficTypeId}/environments/{environmentId}/identities/{key}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { traffic_type_id: "trafficTypeId", environment_id: "environmentId", key: "key" },
+          responseExtractor: passthrough,
+          description: "Get a specific identity by key. Returns display name alias, attributes, and metadata.",
+        },
+        update: {
+          method: "PATCH",
+          path: "/internal/api/v2/trafficTypes/{trafficTypeId}/environments/{environmentId}/identities/{key}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          pathParams: { traffic_type_id: "trafficTypeId", environment_id: "environmentId", key: "key" },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          bodySchema: fmeIdentityUpdateSchema,
+          description: "Update an identity's display name alias and/or custom attributes. Uses PATCH — only provided fields are changed.",
+        },
+      },
+    },
+    // ── FME Standard Segments ─────────────────────────────────────────────
+    {
+      resourceType: "fme_standard_segment",
+      displayName: "FME Standard Segment",
+      description:
+        "Standard (static list) segment in an environment. List all segments to see names, descriptions, and member counts. For member management, use fme_segment_keys.",
+      toolset: "feature-flags",
+      scope: "account",
+      identifierFields: ["environment_id", "segment_name"],
+      product: "fme",
+      listFilterFields: [
+        { name: "environment_id", description: "Environment ID (get from fme_environment)", required: true },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/internal/api/v2/segments/{environmentId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { environment_id: "environmentId" },
+          responseExtractor: passthrough,
+          description: "List all standard segments in an environment. Returns segment name, description, and creation metadata.",
+        },
+        get: {
+          method: "GET",
+          path: "/internal/api/v2/segments/{environmentId}/{segmentName}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { environment_id: "environmentId", segment_name: "segmentName" },
+          responseExtractor: passthrough,
+          description: "Get a standard segment's metadata by name.",
+        },
+      },
+    },
+    {
+      resourceType: "fme_segment_keys",
+      displayName: "FME Segment Keys",
+      description:
+        "Membership keys (members) of a standard segment. List keys with pagination, or update to add/remove members. Limit: 10,000 keys per request, 100,000 per segment total.",
+      toolset: "feature-flags",
+      scope: "account",
+      identifierFields: ["environment_id", "segment_name"],
+      product: "fme",
+      listFilterFields: [
+        { name: "environment_id", description: "Environment ID (get from fme_environment)", required: true },
+        { name: "segment_name", description: "Segment name", required: true },
+        { name: "offset", description: "Pagination offset", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/internal/api/v2/segments/{environmentId}/{segmentName}/keys",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { environment_id: "environmentId", segment_name: "segmentName" },
+          queryParams: {
+            offset: "offset",
+            size: "limit",
+          },
+          responseExtractor: passthrough,
+          description: "List keys (members) of a standard segment with pagination. Returns an array of key strings.",
+        },
+        update: {
+          method: "PUT",
+          path: "/internal/api/v2/segments/{environmentId}/{segmentName}",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          pathParams: { environment_id: "environmentId", segment_name: "segmentName" },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          bodySchema: fmeSegmentKeysUpdateSchema,
+          description: "Add or remove keys from a standard segment. Provide 'add' and/or 'remove' arrays of key strings. Limit: 10,000 keys per request.",
         },
       },
     },
