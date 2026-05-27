@@ -452,7 +452,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Environment-specific definition of a rule-based segment, including targeting rules, exclusions, and matchers. Supports list (by environment), update, and enable/disable/change_request execute actions.",
       toolset: "feature-flags",
       scope: "account",
-      identifierFields: ["workspace_id", "segment_name", "environment_id"],
+      identifierFields: ["workspace_id", "environment_id", "segment_name"],
       product: "fme",
       operations: {
         list: {
