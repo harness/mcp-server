@@ -28,6 +28,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         resource_scope: resourceScopeSchema,
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        confirm: z.boolean().describe("Set to true to confirm the operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP).").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional parameters. For external Git pipelines: store_type='REMOTE', connector_ref, repo_name, branch, file_path, commit_msg. For Harness Code pipelines: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path.").optional(),
       },
       outputSchema: createOutputSchema,
@@ -41,7 +42,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
     },
     async (args) => {
       try {
-        const { params, body, ...rest } = args;
+        const { params, body, confirm: _confirm, ...rest } = args;
         const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
         const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url);
         const coercedParams = coerceRecord(params);
@@ -63,9 +64,12 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           message: `Create ${args.resource_type}?\n\n${bodyPreview}`,
           risk,
           autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
+          callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
-          return errorResult(`Operation ${elicit.reason} by user.`);
+          return errorResult(
+            `Operation ${elicit.reason} by user. Hint: if your client does not support interactive confirmation, pass confirm: true to proceed.`,
+          );
         }
 
         const result = await registry.dispatch(client, args.resource_type, "create", input, { tool: "harness_create", confirmation: elicit.method });
