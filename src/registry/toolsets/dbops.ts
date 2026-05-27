@@ -347,5 +347,56 @@ export const dbopsToolset: ToolsetDefinition = {
         },
       },
     },
+
+    // ── Execute LLM Authoring Pipeline (consolidated endpoint) ────────────
+    {
+      resourceType: "database_execute_llm_authoring_pipeline",
+      displayName: "Execute LLM Authoring Pipeline",
+      description:
+        "Consolidated endpoint for LLM change authoring Accept & Commit. " +
+        "Resolves the pipeline (settings override or default), fills runtime inputs " +
+        "(schema, instance, changeset, K8s connector), executes the pipeline, and " +
+        "records the billing event — all in one call. " +
+        "Returns { pipelineExecutionId, pipelineIdentifier }. " +
+        "Poll status with harness_get(resource_type='pipeline_execution_status', " +
+        "pipeline_execution_id='<returned_id>', pipeline_id='<returned_pipelineIdentifier>'). " +
+        "Use this INSTEAD of separate database_llm_authoring_pipeline + pipeline execution calls.",
+      toolset: "dbops",
+      scope: "project",
+      identifierFields: [],
+      operations: {
+        create: {
+          method: "POST",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/execute-llm-authoring-pipeline",
+          pathParams: { org_id: "org", project_id: "project" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input: Record<string, unknown>) => ({
+            schemaIdentifier: input.schema_id,
+            instanceIdentifier: input.instance_id,
+            conversationId: input.conversation_id,
+            changeset: input.changeset,
+          }),
+          responseExtractor: passthrough,
+          description:
+            "Execute the LLM changeset pipeline with integrated billing tracking. " +
+            "Required body fields: schema_id (database schema identifier), " +
+            "instance_id (database instance identifier), " +
+            "conversation_id (chat conversation ID), " +
+            "changeset (base64-encoded Liquibase changeset YAML). " +
+            "The backend resolves the correct pipeline, fills all runtime inputs " +
+            "(including K8s connector), executes it, and records the billing event. " +
+            "Returns { pipelineExecutionId, pipelineIdentifier }.",
+          bodySchema: {
+            description: "Changeset execution parameters",
+            fields: [
+              { name: "schema_id", type: "string", required: true, description: "Database schema identifier" },
+              { name: "instance_id", type: "string", required: true, description: "Database instance identifier" },
+              { name: "conversation_id", type: "string", required: true, description: "Chat conversation ID" },
+              { name: "changeset", type: "string", required: true, description: "Base64-encoded Liquibase changeset YAML" },
+            ],
+          },
+        },
+      },
+    },
   ],
 };
