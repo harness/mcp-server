@@ -1585,4 +1585,56 @@ describe("resolveLogContent", () => {
     await expect(resolveLogContent(client, "p", { maxPollAttempts: 2, pollIntervalMs: 0 })).rejects.toThrow(/not ready/);
     expect(requestFn).toHaveBeenCalledTimes(2);
   });
+
+  // ─── Final three gaps ────────────────────────────────────────────────────────
+
+  it("aborted signal throws before any poll attempt is made", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const requestFn = vi.fn();
+    const client = makeClient(requestFn);
+    await expect(
+      resolveLogContent(client, "p", { signal: controller.signal }),
+    ).rejects.toThrow(/cancelled/);
+    expect(requestFn).not.toHaveBeenCalled();
+  });
+
+  it("multi-entry ZIP entries are sorted by filename before joining", async () => {
+    function storedEntry(name: string, content: string): Buffer {
+      const nameBuf = Buffer.from(name);
+      const dataBuf = Buffer.from(content);
+      const h = Buffer.alloc(30);
+      h.writeUInt32LE(0x04034b50, 0);
+      h.writeUInt32LE(dataBuf.length, 18);
+      h.writeUInt32LE(dataBuf.length, 22);
+      h.writeUInt16LE(nameBuf.length, 26);
+      return Buffer.concat([h, nameBuf, dataBuf]);
+    }
+    const zip = Buffer.concat([
+      storedEntry("2026-b.log", "second entry\n"),
+      storedEntry("2026-a.log", "first entry\n"),
+    ]);
+    const streamFn = vi.fn().mockResolvedValue(new Response(zip, { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: "https://logs.example.com/multi" }),
+      { requestStream: streamFn },
+    );
+    const result = await resolveLogContent(client, "p");
+    expect(result.indexOf("first entry")).toBeGreaterThanOrEqual(0);
+    expect(result.indexOf("second entry")).toBeGreaterThanOrEqual(0);
+    expect(result.indexOf("first entry")).toBeLessThan(result.indexOf("second entry"));
+  });
+
+  it("S2: uppercase blob hostname is still rewritten (isHarnessHost is case-insensitive)", async () => {
+    const link = "https://APP.HARNESS.IO/storage/blob.zip?X-Amz-Signature=upper1";
+    fetchSpy.mockResolvedValue(new Response('{"out":"ok"}', { status: 200 }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link }),
+      { baseURL: "https://self.example.com/gateway" },
+    );
+    await resolveLogContent(client, "p");
+    const url = fetchSpy.mock.calls[0]![0] as string;
+    expect(url).toContain("self.example.com");
+    expect(url).not.toContain("HARNESS.IO");
+  });
 });
