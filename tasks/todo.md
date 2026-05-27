@@ -5,7 +5,7 @@
 - [x] Trace the failure path through local MCP client configuration and docs
 - [x] Clarify GUI-client `npx` startup guidance to prevent auth misdiagnosis
 - [x] Run focused docs verification
-- [ ] Commit, push, open PR, and reply in the Slack thread
+- [x] Commit, push, open PR, and reply in the Slack thread
 
 ### Plan
 - Treat `spawn npx ENOENT` as a client process-launch failure because Cursor fails before the MCP server starts and before Harness auth can be used.
@@ -17,6 +17,7 @@
 - Root cause is client-side process launch: Cursor reports `spawn npx ENOENT` immediately after `config_server_modified`, before the Harness MCP server can start or read `HARNESS_API_KEY`.
 - Updated `README.md` local/Cursor examples to use an absolute `npx` path, `-y harness-mcp-v2@latest`, and explicit `PATH`, and expanded troubleshooting to state that `spawn npx ENOENT` is not an auth failure.
 - Verified with `pnpm install --frozen-lockfile`, `pnpm build`, and `pnpm docs:check`.
+- Opened PR #271 and replied in the original Slack thread.
 
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
