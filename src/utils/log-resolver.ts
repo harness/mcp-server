@@ -352,6 +352,37 @@ const LOG_SERVICE_GATEWAY_PREFIX = "/gateway/log-service";
  * Harness-hosted URLs are routed through the client so that auth headers
  * (PAT, service JWT, or log-service token) are injected by the client or
  * any proxy installed on it (e.g. mcpServerInternal's service routing).
+ *
+ * ### Routing invariants — please read before modifying
+ *
+ * The three strategies below have specific edge cases that are easy to get
+ * wrong. Here is the reasoning behind each constraint:
+ *
+ * **A. Always rewrite when blob host ≠ base URL host.**
+ * The log-service always returns `app.harness.io/storage/...` in blob links
+ * regardless of `HARNESS_BASE_URL`. On self-managed deployments that host is
+ * not publicly reachable, so the URL must be rewritten to the configured host.
+ * This includes cases where `X-Amz-SignedHeaders` / `X-Goog-SignedHeaders`
+ * contains `host` — a potential 403 from the CDN is preferable to a guaranteed
+ * network error on a blocked host.
+ *
+ * **B. Skip rewrite only when blob host already equals base URL host.**
+ * When the hostnames already match, the presigned signature is valid as-is and
+ * rewriting would be a no-op. In that case it is safe (and cleaner) to fetch
+ * the original URL directly.
+ *
+ * **C. Never route `/storage/` blobs through `requestStream()`.**
+ * Strategy 3 prepends `/gateway/log-service/` to the path, which produces a
+ * 404 for CDN storage paths. Blobs with a `/storage/` path must always be
+ * direct-fetched (Strategy 2).
+ *
+ * **D. External S3/GCS hosts bypass all rewriting.**
+ * True external storage URLs (amazonaws.com, googleapis.com, …) are publicly
+ * routable with embedded signature params. Adding auth headers or rewriting the
+ * host invalidates the AWS/GCS signature.
+ *
+ * Each invariant is covered by `REGRESSION-GUARD [A/B/C/D]` tests in
+ * `tests/utils/log-resolver.test.ts`. Please keep all of them green.
  */
 async function downloadBlobContent(
   client: HarnessClient,
@@ -398,7 +429,17 @@ async function downloadBlobContent(
     // that happen to carry pre-signed params — those must go through client.requestStream() for auth.
     // The blob link always points to app.harness.io/storage/... regardless of HARNESS_BASE_URL.
     // Rewrite to the configured host so self-managed deployments can reach it.
-    if (signedHeadersIncludeHost(blobUrl)) {
+    const baseUrl = safeParseUrl(client.baseURL);
+    if (!baseUrl) {
+      // If baseURL is unparseable we cannot safely rewrite — throw rather than
+      // direct-fetching the original app.harness.io URL (which is blocked on self-managed nets).
+      throw new Error(`Cannot rewrite Harness CDN blob URL: HARNESS_BASE_URL "${client.baseURL}" is not a valid URL`);
+    }
+    // Skip rewriting only when the signature covers the Host header AND the blob hostname
+    // already matches our base URL (rewrite would be a no-op). When hostnames differ
+    // (self-managed deployment), rewrite regardless — the original hostname (app.harness.io)
+    // may not be reachable from the client's network.
+    if (signedHeadersIncludeHost(blobUrl) && blobUrl.hostname === baseUrl.hostname) {
       log.debug("Downloading log blob (direct, host-bound presigned CDN)", {
         prefix,
         url: blobLink.slice(0, 80),
@@ -409,12 +450,6 @@ async function downloadBlobContent(
         const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
         throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
       }
-    }
-    const baseUrl = safeParseUrl(client.baseURL);
-    if (!baseUrl) {
-      // If baseURL is unparseable we cannot safely rewrite — throw rather than
-      // direct-fetching the original app.harness.io URL (which is blocked on self-managed nets).
-      throw new Error(`Cannot rewrite Harness CDN blob URL: HARNESS_BASE_URL "${client.baseURL}" is not a valid URL`);
     }
     blobUrl.hostname = baseUrl.hostname;
     blobUrl.protocol = baseUrl.protocol;
