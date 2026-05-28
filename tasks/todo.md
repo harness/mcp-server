@@ -4,7 +4,7 @@
 - [x] Inspect recent commits for high-severity behavioral regressions
 - [x] Trace suspicious changes through caller chains and downstream behavior
 - [x] Implement a minimal fix only if a concrete critical bug is confirmed
-- [ ] Run focused verification for reviewed or changed behavior
+- [x] Run focused verification for reviewed or changed behavior
 - [ ] Report the outcome in Slack; open a PR only for a confirmed critical fix
 
 ### Plan
@@ -17,6 +17,7 @@
 - Found a blocking correctness bug in `database_execute_llm_authoring_pipeline.create`: normal `harness_create` calls put the DBOPS fields under `body`, but the endpoint's `bodyBuilder` read top-level fields and then body-schema validation checked the transformed camelCase API payload against snake_case agent-facing field names.
 - Impact: every Accept & Commit call through this new consolidated resource failed locally before reaching the DBOPS API, making the main feature from the recent commit unusable.
 - Fixed the DBOPS body builder to read nested tool body fields and added a narrow registry opt-in so this endpoint validates its exposed input schema before mapping to API wire names.
+- Verified with red/green focused DBOPS coverage, `pnpm test tests/registry/dbops.test.ts tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and `git diff --check origin/main...HEAD`.
 
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
