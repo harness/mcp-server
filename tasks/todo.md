@@ -1,5 +1,23 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-05-28)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream behavior
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [ ] Run focused verification for reviewed or changed behavior
+- [ ] Report the outcome in Slack; open a PR only for a confirmed critical fix
+
+### Plan
+- Review branch changes against `origin/main` first; if this automation branch has no delta, inspect recent mainline commits since the last critical-bug inspection.
+- Prioritize behavioral code paths with high blast radius: request construction, auth/session handling, write-operation safety, resource scoping, polling/wait semantics, and response normalization.
+- For each suspicious change, require a concrete trigger scenario that can cause data loss, crashes, security bypass, or significant user-facing breakage before patching.
+- If no issue clears that confidence bar, do not open a PR; post a concise no-critical-findings summary.
+
+### Review
+- Found a blocking correctness bug in `database_execute_llm_authoring_pipeline.create`: normal `harness_create` calls put the DBOPS fields under `body`, but the endpoint's `bodyBuilder` read top-level fields and then body-schema validation checked the transformed camelCase API payload against snake_case agent-facing field names.
+- Impact: every Accept & Commit call through this new consolidated resource failed locally before reaching the DBOPS API, making the main feature from the recent commit unusable.
+- Fixed the DBOPS body builder to read nested tool body fields and added a narrow registry opt-in so this endpoint validates its exposed input schema before mapping to API wire names.
+
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
 - [x] Create Jira Feature Request spec drafting automation

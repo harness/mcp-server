@@ -249,6 +249,8 @@ export interface EndpointSpec {
   description?: string;
   /** Optional body schema for write operations — exposed via harness_describe */
   bodySchema?: BodySchema;
+  /** Validate bodySchema required fields against input.body instead of the built request body. */
+  validateBodySchemaOnInput?: boolean;
   /**
    * When the bodyBuilder wraps user fields inside a single key
    * (e.g. `{ project: { identifier, name } }`), set this to the wrapper key

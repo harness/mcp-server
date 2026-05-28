@@ -683,16 +683,20 @@ export class Registry {
     }
 
     // Validate required fields if bodySchema is defined.
-    // When bodyWrapperKey is set, the bodyBuilder wraps user fields inside that
-    // key (e.g. { project: { identifier, name } }), so we validate the inner object.
+    // Most schemas are validated against the built request body. Some bodyBuilders
+    // map agent-facing fields to API wire names, so those opt into input-body validation.
     if (spec.bodySchema && body && typeof body === "object") {
       const bodyRecord = body as Record<string, unknown>;
+      const inputBody = input.body && typeof input.body === "object"
+        ? (input.body as Record<string, unknown>)
+        : input;
+      const validationRecord = spec.validateBodySchemaOnInput ? inputBody : bodyRecord;
       const payload =
         spec.bodyWrapperKey &&
-        bodyRecord[spec.bodyWrapperKey] != null &&
-        typeof bodyRecord[spec.bodyWrapperKey] === "object"
-          ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
-          : bodyRecord;
+        validationRecord[spec.bodyWrapperKey] != null &&
+        typeof validationRecord[spec.bodyWrapperKey] === "object"
+          ? (validationRecord[spec.bodyWrapperKey] as Record<string, unknown>)
+          : validationRecord;
       const missing = spec.bodySchema.fields
         .filter(f => f.required && payload[f.name] === undefined)
         .map(f => f.name);

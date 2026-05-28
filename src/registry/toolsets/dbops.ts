@@ -369,12 +369,17 @@ export const dbopsToolset: ToolsetDefinition = {
           path: "/dbops/v1/orgs/{org}/projects/{project}/execute-llm-authoring-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input: Record<string, unknown>) => ({
-            schemaIdentifier: input.schema_id,
-            instanceIdentifier: input.instance_id,
-            conversationId: input.conversation_id,
-            changeset: input.changeset,
-          }),
+          bodyBuilder: (input: Record<string, unknown>) => {
+            const body = input.body && typeof input.body === "object"
+              ? (input.body as Record<string, unknown>)
+              : input;
+            return {
+              schemaIdentifier: body.schema_id,
+              instanceIdentifier: body.instance_id,
+              conversationId: body.conversation_id,
+              changeset: body.changeset,
+            };
+          },
           responseExtractor: passthrough,
           description:
             "Execute the LLM changeset pipeline with integrated billing tracking. " +
@@ -394,6 +399,7 @@ export const dbopsToolset: ToolsetDefinition = {
               { name: "changeset", type: "string", required: true, description: "Liquibase changeset YAML content" },
             ],
           },
+          validateBodySchemaOnInput: true,
         },
       },
     },
