@@ -1,5 +1,29 @@
 # Harness MCP Server — Task Tracking
 
+## SAT Account Extraction (2026-05-28)
+- [x] Confirm SAT failure mode from config and session header handling
+- [x] Allow account ID extraction from SAT tokens
+- [x] Let multi-user sessions derive account ID from PAT/SAT when possible
+- [x] Update focused tests and user-facing guidance
+- [x] Run focused and full verification
+- [x] Document review results and lesson
+
+### Plan
+- Keep the token parser simple: account ID is the second dot-delimited segment for supported Harness API key prefixes.
+- Extend supported account-scoped prefixes from only `pat` to `pat` and `sat`, case-insensitively.
+- Preserve explicit account-ID overrides and continue rejecting mismatches when the token embeds an account ID.
+- Update single-user config tests, multi-user session header tests, HTTP initialize coverage, and docs.
+- Keep the PR scoped to the SAT bug.
+
+### Review
+- Updated `extractAccountIdFromToken` so supported account-scoped API key prefixes are `pat` and `sat`, case-insensitively.
+- Updated single-user config handling so `HARNESS_ACCOUNT_ID` is derived from SATs with an embedded account segment.
+- Updated multi-user HTTP session handling so `x-harness-account-id` can be omitted when `x-harness-api-key` embeds the account ID; explicit mismatched account headers still fail.
+- Updated focused tests for config parsing, session header merging, and HTTP initialize behavior.
+- Updated README, manifests, `.env.example`, and Gemini docs from PAT-only account extraction to PAT/SAT account extraction.
+- Verified the customer-provided SAT sample was not written into the repo.
+- Verification passed: `pnpm vitest run tests/config.test.ts tests/utils/session-headers.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, and `pnpm test` outside the sandbox for local HTTP port binding.
+
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
 - [x] Create Jira Feature Request spec drafting automation

@@ -123,29 +123,45 @@ describe("multi-user session credentials", () => {
     ).toThrow(MissingSessionCredentialsError);
   });
 
-  it("throws MissingSessionCredentialsError when account id is missing in multi-user mode", () => {
+  it("derives account ID from a PAT when x-harness-account-id is missing in multi-user mode", () => {
+    const base = makeConfig({ HARNESS_MCP_MODE: "multi-user", HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "" });
+    const merged = mergeConfigWithSessionHeaders(base, {
+      "x-harness-api-key": "pat.user1.tok.sec",
+    });
+    expect(merged.HARNESS_ACCOUNT_ID).toBe("user1");
+  });
+
+  it("derives account ID from an SAT when x-harness-account-id is missing in multi-user mode", () => {
+    const base = makeConfig({ HARNESS_MCP_MODE: "multi-user", HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "" });
+    const merged = mergeConfigWithSessionHeaders(base, {
+      "x-harness-api-key": "sat.user1.tok.sec",
+    });
+    expect(merged.HARNESS_ACCOUNT_ID).toBe("user1");
+  });
+
+  it("throws MissingSessionCredentialsError when account id is missing and token has no account segment", () => {
     const base = makeConfig({ HARNESS_MCP_MODE: "multi-user", HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "" });
     expect(() =>
       mergeConfigWithSessionHeaders(base, {
-        "x-harness-api-key": "pat.user1.tok.sec",
+        "x-harness-api-key": "opaque-token",
       }),
     ).toThrow(MissingSessionCredentialsError);
   });
 
-  it("throws when PAT account ID does not match x-harness-account-id", () => {
+  it("throws when API key account ID does not match x-harness-account-id", () => {
     const base = makeConfig({ HARNESS_MCP_MODE: "multi-user", HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "" });
     expect(() =>
       mergeConfigWithSessionHeaders(base, {
-        "x-harness-api-key": "pat.accountA.tok.sec",
+        "x-harness-api-key": "sat.accountA.tok.sec",
         "x-harness-account-id": "accountB",
       }),
     ).toThrow(MissingSessionCredentialsError);
   });
 
-  it("allows non-PAT tokens without account ID validation", () => {
+  it("allows opaque tokens without account ID validation when x-harness-account-id is provided", () => {
     const base = makeConfig({ HARNESS_MCP_MODE: "multi-user", HARNESS_API_KEY: "", HARNESS_ACCOUNT_ID: "" });
     const merged = mergeConfigWithSessionHeaders(base, {
-      "x-harness-api-key": "sat.sometoken.secret",
+      "x-harness-api-key": "opaque-token",
       "x-harness-account-id": "any-account",
     });
     expect(merged.HARNESS_ACCOUNT_ID).toBe("any-account");

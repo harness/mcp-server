@@ -70,7 +70,7 @@
     "HARNESS_ACCOUNT_ID": {
       "type": "string",
       "title": "Harness Account ID",
-      "description": "Harness account identifier. Optional when using a PAT because the server can extract the account ID from pat.<accountId>.<tokenId>.<secret>.",
+      "description": "Harness account identifier. Optional when using a PAT or SAT because the server can extract the account ID from pat.<accountId>.<tokenId>.<secret> or sat.<accountId>.<tokenId>.<secret>.",
       "required": false,
       "sensitive": false
     },
