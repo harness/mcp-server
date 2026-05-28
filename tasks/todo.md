@@ -5,7 +5,7 @@
 - [x] Trace suspicious changes through caller chains and downstream behavior
 - [x] Implement a minimal fix only if a concrete critical bug is confirmed
 - [x] Run focused verification for reviewed or changed behavior
-- [ ] Report the outcome in Slack; open a PR only for a confirmed critical fix
+- [x] Report the outcome in Slack; open a PR only for a confirmed critical fix
 
 ### Plan
 - Review branch changes against `origin/main` first; if this automation branch has no delta, inspect recent mainline commits since the last critical-bug inspection.
@@ -18,6 +18,7 @@
 - Impact: every Accept & Commit call through this new consolidated resource failed locally before reaching the DBOPS API, making the main feature from the recent commit unusable.
 - Fixed the DBOPS body builder to read nested tool body fields and added a narrow registry opt-in so this endpoint validates its exposed input schema before mapping to API wire names.
 - Verified with red/green focused DBOPS coverage, `pnpm test tests/registry/dbops.test.ts tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and `git diff --check origin/main...HEAD`.
+- Opened PR #278 and posted the bug/fix summary to Slack.
 
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
