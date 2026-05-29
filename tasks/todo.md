@@ -6,7 +6,7 @@
 - [x] Add regression coverage for DBOPS schema create/update request bodies
 - [x] Apply the minimal endpoint metadata fix
 - [x] Run focused verification
-- [ ] Commit, push, and open/update PR
+- [x] Commit, push, and open/update PR
 - [ ] Reply in the original Slack thread
 
 ### Plan
@@ -19,6 +19,7 @@
 - Confirmed PR #266's create/update body tests missed the regression because the expected body object was the same object passed through dispatch and was mutated by registry scope injection.
 - Added DBOPS schema CRUD coverage that checks the actual request body omits `orgIdentifier` / `projectIdentifier` and that caller input bodies remain unchanged.
 - Marked `database_schema.create` and `database_schema.update` with `skipScopeBodyInjection: true` so flat DBOPS request bodies remain aligned with the OpenAPI contract.
+- Opened PR #281 with the working fix.
 - Verification passed: `pnpm test tests/registry/dbops.test.ts`, `pnpm test tests/registry/structural-validation.test.ts tests/registry/dbops.test.ts`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and `git diff --check`.
 
 ## Version Bump 3.0.9 (2026-05-28)
