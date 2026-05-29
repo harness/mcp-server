@@ -1,5 +1,22 @@
 # Harness MCP Server — Task Tracking
 
+## Version Bump 3.1.0 (2026-05-29)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.0
+- [x] Update release metadata regression test
+- [x] Run verification
+- [x] Open PR
+
+### Plan
+- Keep this as a metadata-only release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.0`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.0` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts` and `pnpm typecheck`.
+
 ## PR 282 IaCM Activity Resource Changes (2026-05-29)
 - [x] Restore engineer's activity-scoped resource change endpoint
 - [x] Keep IaCM default-enabled and Ansible opt-in on current main

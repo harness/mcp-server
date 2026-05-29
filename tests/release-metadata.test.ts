@@ -9,12 +9,12 @@ function readJson(path: string): { version: string } {
 }
 
 describe("release metadata", () => {
-  it("keeps package and bundle manifest versions in sync for the next patch release", () => {
+  it("keeps package and bundle manifest versions in sync for the next release", () => {
     const packageJson = readJson("package.json");
     const rootManifest = readJson("manifest.json");
     const directoryManifest = readJson("mcp-directory/manifest.json");
 
-    expect(packageJson.version).toBe("3.0.9");
+    expect(packageJson.version).toBe("3.1.0");
     expect(rootManifest.version).toBe(packageJson.version);
     expect(directoryManifest.version).toBe(packageJson.version);
   });
