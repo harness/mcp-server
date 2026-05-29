@@ -235,6 +235,7 @@ export const dbopsToolset: ToolsetDefinition = {
           path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema",
           pathParams: { org_id: "org", project_id: "project" },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           // DBOPS API expects flat DBSchemaIn shape at root (no wrapper object)
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
@@ -254,6 +255,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbschema_id: "dbschema",
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           // DBOPS API expects flat DBSchemaUpdateRequest shape at root (no wrapper object)
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,

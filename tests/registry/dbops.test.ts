@@ -1,5 +1,5 @@
 /**
- * Unit tests for DBOPS toolset database_schema CRUD operations.
+ * Unit tests for DBOPS toolset database_schema and database_instance CRUD operations.
  * Verifies path construction, body handling, bodySchema fields, and operation policies.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -11,6 +11,7 @@ import type { ResourceDefinition, EndpointSpec } from "../../src/registry/types.
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
+    HARNESS_MCP_MODE: "single-user",
     HARNESS_API_KEY: "pat.test",
     HARNESS_ACCOUNT_ID: "test-account",
     HARNESS_BASE_URL: "https://app.harness.io",
@@ -19,13 +20,24 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_API_TIMEOUT_MS: 30000,
     HARNESS_MAX_RETRIES: 3,
     LOG_LEVEL: "info",
+    HARNESS_TOOLSETS: "+dbops",
     HARNESS_MAX_BODY_SIZE_MB: 10,
     HARNESS_RATE_LIMIT_RPS: 10,
     HARNESS_READ_ONLY: false,
     HARNESS_SKIP_ELICITATION: false,
+    HARNESS_AUTO_APPROVE_RISK: "none",
     HARNESS_ALLOW_HTTP: false,
+    HARNESS_MCP_ALLOWED_HOSTS: undefined,
+    HARNESS_MCP_AUTH_TOKEN: undefined,
+    HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
     HARNESS_FME_BASE_URL: "https://api.split.io",
-    HARNESS_TOOLSETS: "+dbops",
+    HARNESS_LOG_UNSAFE_BODIES: false,
+    HARNESS_PIPELINE_VERSION: undefined,
+    HARNESS_AUDIT_FILE: undefined,
+    HARNESS_AUDIT_WEBHOOK_URL: undefined,
+    HARNESS_AUDIT_WEBHOOK_TOKEN: undefined,
+    HARNESS_AUDIT_WEBHOOK_BATCH_SIZE: 10,
+    HARNESS_AUDIT_WEBHOOK_FLUSH_MS: 5000,
     ...overrides,
   };
 }
@@ -93,7 +105,7 @@ describe("database_schema CRUD operations", () => {
     expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema");
   });
 
-  it("create: uses POST and passes flat body through", async () => {
+  it("create: uses POST and passes flat body through without scope injection", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "new_schema" });
     const client = makeClient(mockRequest);
 
@@ -114,10 +126,20 @@ describe("database_schema CRUD operations", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema");
-    expect(call.body).toEqual(body);
+    // Use immutable literal to catch mutation bugs — body must stay flat without scope injection
+    expect(call.body).toEqual({
+      identifier: "new_schema",
+      name: "New Schema",
+      migrationType: "Liquibase",
+      type: "Repository",
+      changelog: { connector: "git_connector", location: "db/changelog.xml" },
+    });
+    // Explicitly verify no scope fields were injected
+    expect(call.body).not.toHaveProperty("orgIdentifier");
+    expect(call.body).not.toHaveProperty("projectIdentifier");
   });
 
-  it("update: uses PUT with dbschema_id in path", async () => {
+  it("update: uses PUT with dbschema_id in path without scope injection", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "my_schema" });
     const client = makeClient(mockRequest);
 
@@ -133,7 +155,11 @@ describe("database_schema CRUD operations", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("PUT");
     expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema");
-    expect(call.body).toEqual(body);
+    // Use immutable literal to catch mutation bugs — body must stay flat without scope injection
+    expect(call.body).toEqual({ name: "Updated Schema", tags: { env: "production" } });
+    // Explicitly verify no scope fields were injected
+    expect(call.body).not.toHaveProperty("orgIdentifier");
+    expect(call.body).not.toHaveProperty("projectIdentifier");
   });
 
   it("delete: uses DELETE with dbschema_id in path", async () => {
@@ -280,5 +306,68 @@ describe("database_schema resource metadata", () => {
     const spec = getOp("database_schema", "delete");
     expect(spec.description).toContain("linked instances");
     expect(spec.description).toContain("cannot be undone");
+  });
+});
+
+// ─── Database Instance Tests ─────────────────────────────────────────────────
+
+describe("database_instance CRUD operations", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: uses POST with dbschema_id in path", async () => {
+    const mockRequest = vi.fn().mockResolvedValue([
+      { identifier: "instance1", name: "Dev Instance" },
+    ]);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "database_instance", "list", {
+      dbschema_id: "my_schema",
+      project_id: "test-project",
+      org_id: "default",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/instancelist");
+    // Body may contain org/project identifiers added by the framework
+    expect(call.body).toBeDefined();
+    expect(result).toHaveLength(1);
+  });
+
+  it("get: builds path with dbschema_id and dbinstance_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "my_instance" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_instance", "get", {
+      dbschema_id: "my_schema",
+      dbinstance_id: "my_instance",
+      project_id: "test-project",
+      org_id: "default",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/instance/my_instance");
+  });
+
+  // NOTE: database_instance create/update/delete tests are in the feat/dbinstance branch
+});
+
+describe("database_instance resource metadata", () => {
+  it("is project-scoped with correct identifierFields", () => {
+    const res = findResource("database_instance");
+    expect(res.scope).toBe("project");
+    expect(res.identifierFields).toContain("dbinstance_id");
+  });
+
+  it("has dbschema_id as required listFilterField", () => {
+    const res = findResource("database_instance");
+    const schemaFilter = res.listFilterFields?.find((f) => f.name === "dbschema_id");
+    expect(schemaFilter).toBeDefined();
+    expect(schemaFilter!.required).toBe(true);
   });
 });
