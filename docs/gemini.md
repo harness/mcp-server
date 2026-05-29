@@ -131,7 +131,7 @@ Multi-scope resources such as connectors, services, environments, infrastructure
 2. **Configure environment variables** in the project's `.env` file:
    ```
    HARNESS_API_KEY=pat.xxxxx.xxxxx.xxxxx
-   HARNESS_ACCOUNT_ID=your_account_id   # Optional for PATs, required for non-PAT API keys
+   HARNESS_ACCOUNT_ID=your_account_id   # Optional for PAT/SAT keys with embedded account ID
    HARNESS_ORG=default
    HARNESS_PROJECT=your_project
    HARNESS_RATE_LIMIT_RPS=10            # Optional: client-side throttling

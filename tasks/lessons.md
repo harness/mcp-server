@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Harness SAT Account Extraction
+- **Issue**: Service account tokens can use the same account-scoped segment shape as PATs, but the parser only recognized the `pat` prefix.
+- **Fix**: Extract account IDs from both `pat` and `sat` prefixes, and let multi-user HTTP sessions derive `HARNESS_ACCOUNT_ID` from either prefix when `x-harness-account-id` is omitted.
+- **Rule**: Before requiring explicit account IDs for new Harness API key types, check whether the token format embeds the account ID segment; preserve explicit account overrides and mismatch validation.
+
 ## MCP SDK v1.27+ Type Compatibility
 - **Issue**: `server.tool()` callback return type requires `[key: string]: unknown` index signature on the result object.
 - **Fix**: Add `[key: string]: unknown` to the ToolResult interface.

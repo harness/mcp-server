@@ -10,8 +10,16 @@ describe("extractAccountIdFromToken", () => {
     expect(extractAccountIdFromToken("pat.acct123.tokenId.secret.extra")).toBe("acct123");
   });
 
-  it("returns undefined for non-PAT tokens", () => {
-    expect(extractAccountIdFromToken("sat.acct123.tokenId.secret")).toBeUndefined();
+  it("extracts account ID from a valid SAT", () => {
+    expect(extractAccountIdFromToken("sat.acct123.tokenId.secret")).toBe("acct123");
+  });
+
+  it("extracts account ID from token prefixes case-insensitively", () => {
+    expect(extractAccountIdFromToken("SAT.acct123.tokenId.secret")).toBe("acct123");
+  });
+
+  it("returns undefined for unsupported token prefixes", () => {
+    expect(extractAccountIdFromToken("api.acct123.tokenId.secret")).toBeUndefined();
   });
 
   it("returns undefined for tokens with too few segments", () => {
@@ -63,6 +71,17 @@ describe("ConfigSchema", () => {
   it("HARNESS_ACCOUNT_ID is optional in schema", () => {
     const result = ConfigSchema.safeParse({ HARNESS_API_KEY: "pat.acct123.tok.sec" });
     expect(result.success).toBe(true);
+  });
+
+  it("extracts HARNESS_ACCOUNT_ID from service account API keys", () => {
+    const result = ConfigSchema.safeParse({
+      HARNESS_API_KEY: "sat.acct123.tokenId.secret",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_ACCOUNT_ID).toBe("acct123");
+    }
   });
 
   it("fails when HARNESS_API_KEY is empty", () => {
@@ -390,10 +409,17 @@ describe("loadConfig — account ID extraction", () => {
     });
   });
 
-  it("throws when HARNESS_ACCOUNT_ID missing and API key is not a PAT", () => {
-    withEnv({ HARNESS_API_KEY: "sat.notapat.tok.sec" }, () => {
+  it("extracts account ID from SAT when HARNESS_ACCOUNT_ID is not set", () => {
+    withEnv({ HARNESS_API_KEY: "sat.extracted123.tok.sec" }, () => {
+      const config = loadConfig();
+      expect(config.HARNESS_ACCOUNT_ID).toBe("extracted123");
+    });
+  });
+
+  it("throws when HARNESS_ACCOUNT_ID missing and API key has no account segment", () => {
+    withEnv({ HARNESS_API_KEY: "opaque-token" }, () => {
       expect(() => loadConfig()).toThrow(
-        "HARNESS_ACCOUNT_ID is required when the API key is not a PAT",
+        "HARNESS_ACCOUNT_ID is required when the API key does not include an account ID segment",
       );
     });
   });
