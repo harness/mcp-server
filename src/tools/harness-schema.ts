@@ -1,19 +1,33 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { Registry } from "../registry/index.js";
+import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { createLogger } from "../utils/logger.js";
-import { SCHEMAS, VALID_SCHEMAS } from "../data/schemas/index.js";
+import { SCHEMAS, V0_SCHEMA_KEYS, V1_SCHEMA_KEYS } from "../data/schemas/index.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
 import { schemaOutputSchema } from "./output-schemas.js";
+import {
+  createLiveSchemaFetcher,
+  getDefinitionSections,
+  getEntitySchemaSummary,
+  navigateEntitySchemaPath,
+  LIVE_ENTITY_RESOURCE_TYPES,
+  type HarnessYamlScope,
+} from "./entity-schema/live.js";
+import type { JsonObject } from "./entity-schema/normalize.js";
 
-const log = createLogger("tool:harness-schema");
+const V0_ONLY = new Set<string>(V0_SCHEMA_KEYS);
+const V1_ONLY = new Set<string>(V1_SCHEMA_KEYS);
 
+const scopeSchema = z
+  .enum(["account", "org", "project"])
+  .optional()
+  .describe(
+    "Harness YAML scope for live entity schemas (connector, environment, service, secret, infrastructure). " +
+      "Defaults to account. Org/project scoped entities require org_id and/or project_id.",
+  );
 
-/**
- * Resolve a $ref pointer within the schema.
- * E.g. "#/definitions/trigger/trigger_source" → schema.definitions.trigger.trigger_source
- */
 function resolveRef(schema: Record<string, unknown>, ref: string): unknown {
   if (!ref.startsWith("#/")) return undefined;
   const parts = ref.slice(2).split("/");
@@ -28,12 +42,8 @@ function resolveRef(schema: Record<string, unknown>, ref: string): unknown {
   return current;
 }
 
-/**
- * Inline $ref references one level deep so the returned schema fragment
- * is self-contained and useful without chasing references.
- */
 function inlineRefs(schema: Record<string, unknown>, node: unknown, depth = 0): unknown {
-  if (depth > 3) return node; // prevent infinite recursion
+  if (depth > 3) return node;
   if (!node || typeof node !== "object") return node;
 
   if (Array.isArray(node)) {
@@ -42,7 +52,6 @@ function inlineRefs(schema: Record<string, unknown>, node: unknown, depth = 0): 
 
   const obj = node as Record<string, unknown>;
 
-  // If this node is a $ref, resolve it
   if (typeof obj["$ref"] === "string") {
     const resolved = resolveRef(schema, obj["$ref"]);
     if (resolved && typeof resolved === "object") {
@@ -51,21 +60,15 @@ function inlineRefs(schema: Record<string, unknown>, node: unknown, depth = 0): 
     return obj;
   }
 
-  // Recurse into child properties
   const result: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(obj)) {
-    if (key === "$schema") continue; // strip noise
+    if (key === "$schema") continue;
     result[key] = inlineRefs(schema, value, depth + 1);
   }
   return result;
 }
 
-/**
- * Navigate into definitions by dot-separated path.
- * E.g. "trigger_source" → definitions.trigger.trigger_source
- *       "scheduled_trigger" → definitions.trigger.scheduled_trigger
- */
-function navigateToPath(
+function navigateStaticPath(
   schema: Record<string, unknown>,
   resourceType: string,
   path: string,
@@ -76,10 +79,8 @@ function navigateToPath(
   const resourceDefs = definitions[resourceType] as Record<string, unknown> | undefined;
   if (!resourceDefs) return undefined;
 
-  // Try direct key first
   if (resourceDefs[path]) return resourceDefs[path];
 
-  // Try dot-separated path
   const parts = path.split(".");
   let current: unknown = resourceDefs;
   for (const part of parts) {
@@ -92,15 +93,8 @@ function navigateToPath(
   return current;
 }
 
-/**
- * Get a compact summary of the top-level structure: property names, types,
- * required fields, and available definition sections.
- */
-function getSummary(schema: Record<string, unknown>, resourceType: string): Record<string, unknown> {
+function getStaticSummary(schema: Record<string, unknown>, resourceType: string): Record<string, unknown> {
   const definitions = schema.definitions as Record<string, Record<string, unknown>> | undefined;
-
-  // Harness-generated schemas nest the root definition under definitions[type][type].
-  // Plain JSON Schemas (extension schemas) place properties at the root level.
   const harnessRootDef = definitions?.[resourceType]?.[resourceType] as Record<string, unknown> | undefined;
   const rootDef = harnessRootDef ?? (schema.properties ? schema : undefined) as Record<string, unknown> | undefined;
 
@@ -123,14 +117,34 @@ function getSummary(schema: Record<string, unknown>, resourceType: string): Reco
 
   return {
     resource_type: resourceType,
+    source: "harness-schema",
     fields,
     available_sections: sections,
     hint: "Use path parameter to drill into a section. E.g. path='trigger_source' for source structure, path='scheduled_trigger' for cron spec.",
   };
 }
 
+function listAvailableSchemaNames(
+  staticSchemaKeys: string[],
+  registeredTypes: Set<string> | undefined,
+  liveFetcher: ReturnType<typeof createLiveSchemaFetcher> | undefined,
+): string[] {
+  const excludeSet = registeredTypes?.has("pipeline_v1") ? V0_ONLY : V1_ONLY;
+
+  const staticSchemas = staticSchemaKeys.filter((s) => {
+    if (!registeredTypes) return true;
+    if (V0_ONLY.has(s) || V1_ONLY.has(s)) return !excludeSet.has(s);
+    return true;
+  });
+
+  const live = liveFetcher?.listResourceTypes() ?? LIVE_ENTITY_RESOURCE_TYPES;
+  return [...staticSchemas, ...live];
+}
+
 export function registerSchemaTool(
   server: McpServer,
+  registry: Registry | undefined,
+  client: HarnessClient | undefined,
   additionalSchemas?: Record<string, SchemaEntry>,
 ): void {
   if (additionalSchemas) {
@@ -140,16 +154,26 @@ export function registerSchemaTool(
       }
     }
   }
-  const allSchemas: Record<string, Record<string, any>> = additionalSchemas
-    ? { ...SCHEMAS, ...Object.fromEntries(Object.entries(additionalSchemas).map(([k, v]) => [k, v.schema])) }
+
+  const allSchemas: Record<string, Record<string, unknown>> = additionalSchemas
+    ? {
+        ...SCHEMAS,
+        ...Object.fromEntries(Object.entries(additionalSchemas).map(([k, v]) => [k, v.schema])),
+      }
     : { ...SCHEMAS };
-  const availableSchemas = Object.keys(allSchemas);
+
+  const registeredTypes = registry ? new Set(registry.getAllResourceTypes()) : undefined;
+  const liveFetcher = client ? createLiveSchemaFetcher(client) : undefined;
+  const availableSchemas = listAvailableSchemaNames(Object.keys(allSchemas), registeredTypes, liveFetcher);
+  const hasLiveEntities = liveFetcher !== undefined;
 
   server.registerTool(
     "harness_schema",
     {
       description:
         "Fetch Harness YAML schema or examples for a resource type. " +
+        "Pipeline/template schemas are bundled from harness-schema; connector, environment, service, " +
+        "secret, and infrastructure schemas are fetched live from NG /yaml-schema (pass scope, org_id, project_id). " +
         "Use without path for a summary of fields and available sections. " +
         "Use with path to drill into a specific section. " +
         "Use with example to fetch a named example YAML snippet. " +
@@ -159,14 +183,16 @@ export function registerSchemaTool(
       inputSchema: {
         resource_type: z
           .enum(availableSchemas as [string, ...string[]])
-          .describe(`Schema to fetch. Available: ${availableSchemas.join(", ")}. Required for schema/path lookups, optional for example_search.`)
+          .describe(
+            `Schema to fetch. Available: ${availableSchemas.join(", ")}. Required for schema/path lookups, optional for example_search.`,
+          )
           .optional(),
         path: z
           .string()
           .optional()
           .describe(
             "Dot-separated path to drill into a specific definition section. " +
-            "Omit for a top-level summary showing all available sections.",
+              "Omit for a top-level summary showing all available sections.",
           ),
         example: z
           .string()
@@ -175,20 +201,29 @@ export function registerSchemaTool(
         example_search: z
           .string()
           .optional()
-          .describe("Search examples by keyword. Returns matching example names and descriptions. Optionally combine with resource_type to filter."),
+          .describe(
+            "Search examples by keyword. Returns matching example names and descriptions. Optionally combine with resource_type to filter.",
+          ),
+        scope: scopeSchema,
+        org_id: z
+          .string()
+          .optional()
+          .describe("Organization identifier — required when scope is org or project (live entity schemas)."),
+        project_id: z
+          .string()
+          .optional()
+          .describe("Project identifier — required when scope is project (live entity schemas)."),
       },
       outputSchema: schemaOutputSchema,
       annotations: {
         title: "Harness YAML Schema",
         readOnlyHint: true,
         destructiveHint: false,
-        // Bundled schemas/examples only — no external API call
-        openWorldHint: false,
+        openWorldHint: hasLiveEntities,
       },
     },
     async (args) => {
       try {
-        // --- Example fetch mode ---
         if (args.example) {
           const ex = getExample(args.example);
           if (!ex) {
@@ -197,7 +232,9 @@ export function registerSchemaTool(
               : [];
             return jsonResult({
               error: `Example '${args.example}' not found.` +
-                (available.length ? ` Available for ${args.resource_type}: ${available.join(", ")}` : " Use example_search to find examples."),
+                (available.length
+                  ? ` Available for ${args.resource_type}: ${available.join(", ")}`
+                  : " Use example_search to find examples."),
               available_examples: available,
             });
           }
@@ -210,7 +247,6 @@ export function registerSchemaTool(
           });
         }
 
-        // --- Example search mode ---
         if (args.example_search) {
           const results = searchExamples(args.example_search, args.resource_type);
           return jsonResult({
@@ -223,22 +259,69 @@ export function registerSchemaTool(
               description: e.description,
               tags: e.tags,
             })),
-            hint: results.length > 0
-              ? "Use example='<name>' to fetch the full YAML for any result."
-              : "No matches. Try a broader keyword or omit resource_type to search globally.",
+            hint:
+              results.length > 0
+                ? "Use example='<name>' to fetch the full YAML for any result."
+                : "No matches. Try a broader keyword or omit resource_type to search globally.",
           });
         }
 
-        // --- Schema mode (existing behavior) ---
         if (!args.resource_type) {
-          return errorResult("resource_type is required for schema lookups. Use example_search to search examples without specifying a resource type.");
+          return errorResult(
+            "resource_type is required for schema lookups. Use example_search to search examples without specifying a resource type.",
+          );
         }
 
-        const schema = allSchemas[args.resource_type] as Record<string, unknown>;
+        const isLive = liveFetcher?.isLiveEntity(args.resource_type) ?? false;
 
-        // No path → return summary with available examples
+        if (isLive) {
+          if (!liveFetcher) {
+            return errorResult(
+              "Live entity schemas require an authenticated Harness client. Configure HARNESS_API_KEY.",
+            );
+          }
+
+          const fetched = await liveFetcher.fetch(args.resource_type, {
+            scope: args.scope as HarnessYamlScope | undefined,
+            orgId: args.org_id,
+            projectId: args.project_id,
+          });
+
+          if (!fetched) {
+            return errorResult(`Unknown live entity schema: ${args.resource_type}`);
+          }
+
+          const { schema, source } = fetched;
+
+          if (!args.path) {
+            return jsonResult(getEntitySchemaSummary(schema, args.resource_type, source));
+          }
+
+          const node = navigateEntitySchemaPath(schema, args.resource_type, args.path);
+          if (!node) {
+            const available = getDefinitionSections(schema, args.resource_type);
+            return errorResult(
+              `Path '${args.path}' not found in ${args.resource_type} schema. ` +
+                `Available sections: ${available.join(", ")}`,
+            );
+          }
+
+          const resolved = inlineRefs(schema as JsonObject, node);
+          return jsonResult({
+            resource_type: args.resource_type,
+            path: args.path,
+            source,
+            schema: resolved,
+          });
+        }
+
+        const schema = allSchemas[args.resource_type];
+        if (!schema) {
+          return errorResult(`Unknown schema: ${args.resource_type}`);
+        }
+
         if (!args.path) {
-          const summary = getSummary(schema, args.resource_type);
+          const summary = getStaticSummary(schema, args.resource_type);
           const examples = getExamplesForResource(args.resource_type);
           if (examples.length > 0) {
             (summary as Record<string, unknown>).examples_available = examples.map((e) => e.name);
@@ -246,23 +329,21 @@ export function registerSchemaTool(
           return jsonResult(summary);
         }
 
-        // Navigate to the requested path
-        const node = navigateToPath(schema, args.resource_type, args.path);
+        const node = navigateStaticPath(schema, args.resource_type, args.path);
         if (!node) {
           const definitions = schema.definitions as Record<string, Record<string, unknown>> | undefined;
           const available = definitions ? Object.keys(definitions[args.resource_type] ?? {}) : [];
           return errorResult(
             `Path '${args.path}' not found in ${args.resource_type} schema. ` +
-            `Available sections: ${available.join(", ")}`,
+              `Available sections: ${available.join(", ")}`,
           );
         }
 
-        // Inline $ref references so the result is self-contained
         const resolved = inlineRefs(schema, node);
-
         return jsonResult({
           resource_type: args.resource_type,
           path: args.path,
+          source: "harness-schema",
           schema: resolved,
         });
       } catch (err) {

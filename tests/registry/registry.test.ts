@@ -167,7 +167,8 @@ describe("Registry", () => {
 
       expect(server.registerTool).toHaveBeenCalled();
 
-      const LOCAL_ONLY_TOOLS = new Set(["harness_describe", "harness_schema"]);
+      // harness_schema may call NG /yaml-schema for entity types when a client is configured.
+      const LOCAL_ONLY_TOOLS = new Set(["harness_describe"]);
 
       for (const [toolName, definition] of server.registerTool.mock.calls) {
         const annotations = (definition as { annotations?: Record<string, unknown> }).annotations;
