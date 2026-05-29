@@ -83,6 +83,10 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - Opt-in toolset for Terraform workspaces, resources, module registry entries, workspace costs, and activity resource changes
 - Enable with `HARNESS_TOOLSETS=+iacm`; IaCM APIs require org/project scope
 
+### Ansible
+- Opt-in toolset for Ansible inventories, playbooks, hosts, and activity history
+- Enable with `HARNESS_TOOLSETS=+ansible`; Ansible APIs require org/project scope
+
 ### Access Control
 - Manage users, user groups, service accounts
 - Create and assign roles, resource groups, permissions
@@ -154,4 +158,4 @@ Multi-scope resources such as connectors, services, environments, infrastructure
 **Toolset filtering:**
 - Set `HARNESS_TOOLSETS=pipelines,services,connectors` in `.env` to limit which resource types are available
 - Leave empty to enable all default toolsets
-- Add opt-in IaCM alongside defaults with `HARNESS_TOOLSETS=+iacm`
+- Add opt-in toolsets alongside defaults: `HARNESS_TOOLSETS=+iacm`, `HARNESS_TOOLSETS=+ansible`, or `HARNESS_TOOLSETS=+iacm,+ansible`
