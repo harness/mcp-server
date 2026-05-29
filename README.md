@@ -1510,7 +1510,10 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, 32 of 33 toolsets are enabled. The `iacm` toolset is opt-in because Harness IaCM APIs are project-scoped and add Terraform workspace/module concepts that many users do not need. The `ai-evals` toolset is default-enabled.
+By default, 32 of 34 toolsets are enabled. Two toolsets are opt-in and excluded from the defaults:
+
+- **`iacm`** — Harness IaCM (Terraform workspaces, modules, resources). Opt-in because it is project-scoped and adds concepts many users do not need.
+- **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in for the same reason.
 
 ### Adding toolsets with `+` prefix
 
@@ -1519,6 +1522,12 @@ Use the `+` prefix to explicitly include opt-in toolsets alongside all defaults:
 ```bash
 # Explicitly include IaCM alongside all defaults
 HARNESS_TOOLSETS=+iacm
+
+# Explicitly include Ansible alongside all defaults
+HARNESS_TOOLSETS=+ansible
+
+# Include both
+HARNESS_TOOLSETS=+iacm,+ansible
 ```
 
 ### Removing default toolsets
@@ -1584,6 +1593,7 @@ Available toolset names:
 | `visualizations`        | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture                                                                                                                                                         |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
 | `iacm` *(opt-in)*       | iacm_workspace, iacm_resource, iacm_module, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                                                                 |
+| `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
 
 
 ## Architecture

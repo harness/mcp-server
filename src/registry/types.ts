@@ -138,7 +138,8 @@ export type ToolsetName =
   | "freeze"
   | "overrides"
   | "ai-evals"
-  | "iacm";
+  | "iacm"
+  | "ansible";
 
 export type ProductName = "harness" | "fme";
 
