@@ -301,6 +301,58 @@ describe("costsListExtract", () => {
   });
 });
 
+// ─── Response extractor: iacmResourceGetExtract ──────────────────────────────
+
+describe("iacmResourceGetExtract", () => {
+  function extract(raw: unknown) {
+    return getOp("iacm_resource", "get").responseExtractor!(raw) as Record<string, unknown>;
+  }
+
+  it("normalizes a flat snake_case payload", () => {
+    const result = extract({
+      name: "aws_instance.web",
+      type: "aws_instance",
+      provider: "aws",
+      module: "root",
+      drift_status: "unchanged",
+      cost_data: { monthly: 12.5 },
+      resource_id: "res-1",
+      workspace_id: "ws-1",
+      attributes: { ami: "ami-123" },
+    });
+    expect(result.name).toBe("aws_instance.web");
+    expect(result.type).toBe("aws_instance");
+    expect(result.drift_status).toBe("unchanged");
+    expect(result.cost_data).toEqual({ monthly: 12.5 });
+    expect(result.resource_id).toBe("res-1");
+  });
+
+  it("unwraps payloads nested under a 'resource' key", () => {
+    const result = extract({ resource: { name: "aws_instance.web", resourceId: "res-7" } });
+    expect(result.name).toBe("aws_instance.web");
+    expect(result.resource_id).toBe("res-7");
+  });
+
+  it("maps camelCase fields to snake_case", () => {
+    const result = extract({
+      name: "aws_instance.web",
+      driftStatus: "drifted",
+      costData: { monthly: 5 },
+      resourceId: "res-9",
+      workspaceId: "ws-1",
+    });
+    expect(result.drift_status).toBe("drifted");
+    expect(result.cost_data).toEqual({ monthly: 5 });
+    expect(result.resource_id).toBe("res-9");
+    expect(result.workspace_id).toBe("ws-1");
+  });
+
+  it("passes through non-object input unchanged", () => {
+    expect(extract(null)).toBeNull();
+    expect(extract("oops")).toBe("oops");
+  });
+});
+
 // ─── Response extractor: activityChangesExtract ──────────────────────────────
 
 describe("activityChangesExtract", () => {
@@ -344,6 +396,12 @@ describe("endpoint paths", () => {
     expect(getOp("iacm_resource", "list").path).toContain("/resources");
   });
 
+  it("iacm_resource get uses /workspaces/{workspaceId}/resources/{resourceId}", () => {
+    expect(getOp("iacm_resource", "get").path).toBe(
+      "/iacm/api/orgs/{org}/projects/{project}/workspaces/{workspaceId}/resources/{resourceId}",
+    );
+  });
+
   it("iacm_module list uses /iacm/api/modules (account-scoped, no org/project)", () => {
     expect(getOp("iacm_module", "list").path).toBe("/iacm/api/modules");
     expect(getOp("iacm_module", "list").pathParams).toBeUndefined();
@@ -371,6 +429,23 @@ describe("iacm registry dispatch", () => {
 
     const request = mockRequest.mock.calls[0]![0] as { path: string };
     expect(request.path).toBe("/iacm/api/modules/4640");
+  });
+
+  it("dispatches iacm_resource get with workspace_id and resource id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "res-1", name: "aws_instance.web" });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_resource", "get", {
+      org_id: "default",
+      project_id: "Testim",
+      workspace_id: "ws-1",
+      resource_id: "res-1",
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as { path: string };
+    expect(request.path).toBe(
+      "/iacm/api/orgs/default/projects/Testim/workspaces/ws-1/resources/res-1",
+    );
   });
 
   it("dispatches activity resource changes by execution id", async () => {

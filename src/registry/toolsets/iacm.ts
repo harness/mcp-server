@@ -108,6 +108,42 @@ const costsListExtract = (
 };
 
 /**
+ * IACM single Terraform resource get: normalize the API response into a
+ * predictable, flat shape. The upstream API may return the resource directly
+ * or wrap it under a `resource` key — handle both. snake_case any camelCase
+ * fields (driftStatus, costData, resourceId) so consumers see one consistent
+ * shape, and always surface the cross-system Resource ID at the top level.
+ */
+const iacmResourceGetExtract = (raw: unknown): unknown => {
+  if (!raw || typeof raw !== "object") return raw;
+  const wrapper = raw as Record<string, unknown>;
+  const inner =
+    wrapper.resource && typeof wrapper.resource === "object"
+      ? (wrapper.resource as Record<string, unknown>)
+      : wrapper;
+
+  const get = (...keys: string[]): unknown => {
+    for (const k of keys) {
+      if (inner[k] !== undefined && inner[k] !== null) return inner[k];
+    }
+    return undefined;
+  };
+
+  return {
+    name: get("name", "resource_name"),
+    type: get("type", "resource_type"),
+    provider: get("provider"),
+    module: get("module"),
+    drift_status: get("drift_status", "driftStatus"),
+    cost_data: get("cost_data", "costData", "cost"),
+    resource_id: get("resource_id", "resourceId", "id"),
+    workspace_id: get("workspace_id", "workspaceId"),
+    attributes: get("attributes"),
+    raw: inner,
+  };
+};
+
+/**
  * IaCM execution resource changes: keep the documented response intact while
  * preserving the older resource_changes alias for agents that look for it.
  */
@@ -277,7 +313,7 @@ export const iacmToolset: ToolsetDefinition = {
         "workspace_id is required — use harness_list with iacm_workspace to find workspace identifiers.",
       toolset: "iacm",
       scope: "project",
-      identifierFields: ["workspace_id"],
+      identifierFields: ["workspace_id", "resource_id"],
       listFilterFields: [
         {
           name: "workspace_id",
@@ -330,6 +366,24 @@ export const iacmToolset: ToolsetDefinition = {
             "Use total_items when it is >= 0 as the authoritative total. " +
             "If has_more=true, call again with page+1. " +
             "To answer 'how many resources?', prefer total_items; if -1, paginate all pages and sum page_counts.",
+        },
+        get: {
+          method: "GET",
+          path: "/iacm/api/orgs/{org}/projects/{project}/workspaces/{workspaceId}/resources/{resourceId}",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            workspace_id: "workspaceId",
+            resource_id: "resourceId",
+          },
+          preflight: requireProjectScope,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: iacmResourceGetExtract,
+          description:
+            "Get full metadata for a single Terraform resource within a workspace. " +
+            "Returns name, type, provider, module, drift_status, cost_data, and the Resource ID " +
+            "used for cross-system correlation (IDP, CCM, Dashboards). " +
+            "Requires workspace_id and resource_id (pass the resource identifier as resource_id).",
         },
       },
     },
