@@ -1,6 +1,43 @@
 import type { ToolsetDefinition, BodyFieldSpec } from "../types.js";
 import { passthrough } from "../extractors.js";
 
+// ── Validation helpers for conditional nested fields ──────────────────────
+
+/**
+ * Validates database_schema create body for conditionally required nested fields.
+ * - type='Repository' requires changelog with connector and location
+ * - type='Script' requires changeLogScript with location, image, shell, and command
+ */
+function validateDatabaseSchemaCreate(body: Record<string, unknown>): void {
+  const schemaType = body.type as string | undefined;
+
+  if (schemaType === "Repository") {
+    const changelog = body.changelog as Record<string, unknown> | undefined;
+    if (!changelog) {
+      throw new Error("changelog object is required when type='Repository'");
+    }
+    if (!changelog.connector) {
+      throw new Error("changelog.connector is required when type='Repository'");
+    }
+    if (!changelog.location) {
+      throw new Error("changelog.location is required when type='Repository'");
+    }
+  } else if (schemaType === "Script") {
+    const script = body.changeLogScript as Record<string, unknown> | undefined;
+    if (!script) {
+      throw new Error("changeLogScript object is required when type='Script'");
+    }
+    const missing: string[] = [];
+    if (!script.location) missing.push("location");
+    if (!script.image) missing.push("image");
+    if (!script.shell) missing.push("shell");
+    if (!script.command) missing.push("command");
+    if (missing.length > 0) {
+      throw new Error(`changeLogScript.{${missing.join(", ")}} required when type='Script'`);
+    }
+  }
+}
+
 // ── Body Schema Fields for Database Schema ────────────────────────────────
 // Note: Create and Update have different required fields per OpenAPI spec.
 // - Create requires: identifier, name, migrationType, type
@@ -237,7 +274,12 @@ export const dbopsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
           // DBOPS API expects flat DBSchemaIn shape at root (no wrapper object)
-          bodyBuilder: (input) => input.body,
+          // Validates conditionally required nested fields based on type
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown>;
+            validateDatabaseSchemaCreate(body);
+            return body;
+          },
           responseExtractor: passthrough,
           description:
             "Create a new database schema. Requires name, identifier, migrationType (Liquibase/Flyway), " +

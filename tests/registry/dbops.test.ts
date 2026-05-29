@@ -309,6 +309,143 @@ describe("database_schema resource metadata", () => {
   });
 });
 
+describe("database_schema create validation", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("rejects Repository type without changelog object", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_schema", "create", {
+        project_id: "test-project",
+        org_id: "default",
+        body: {
+          identifier: "test_schema",
+          name: "Test Schema",
+          migrationType: "Liquibase",
+          type: "Repository",
+          // missing changelog
+        },
+      })
+    ).rejects.toThrow("changelog object is required when type='Repository'");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects Repository type without changelog.connector", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_schema", "create", {
+        project_id: "test-project",
+        org_id: "default",
+        body: {
+          identifier: "test_schema",
+          name: "Test Schema",
+          migrationType: "Liquibase",
+          type: "Repository",
+          changelog: { location: "db/changelog.xml" }, // missing connector
+        },
+      })
+    ).rejects.toThrow("changelog.connector is required when type='Repository'");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects Repository type without changelog.location", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_schema", "create", {
+        project_id: "test-project",
+        org_id: "default",
+        body: {
+          identifier: "test_schema",
+          name: "Test Schema",
+          migrationType: "Liquibase",
+          type: "Repository",
+          changelog: { connector: "git_connector" }, // missing location
+        },
+      })
+    ).rejects.toThrow("changelog.location is required when type='Repository'");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects Script type without changeLogScript object", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_schema", "create", {
+        project_id: "test-project",
+        org_id: "default",
+        body: {
+          identifier: "test_schema",
+          name: "Test Schema",
+          migrationType: "Liquibase",
+          type: "Script",
+          // missing changeLogScript
+        },
+      })
+    ).rejects.toThrow("changeLogScript object is required when type='Script'");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects Script type with missing required changeLogScript fields", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_schema", "create", {
+        project_id: "test-project",
+        org_id: "default",
+        body: {
+          identifier: "test_schema",
+          name: "Test Schema",
+          migrationType: "Liquibase",
+          type: "Script",
+          changeLogScript: { location: "/scripts" }, // missing image, shell, command
+        },
+      })
+    ).rejects.toThrow("changeLogScript.{image, shell, command} required when type='Script'");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("accepts valid Script type with all required fields", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "test_schema" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_schema", "create", {
+      project_id: "test-project",
+      org_id: "default",
+      body: {
+        identifier: "test_schema",
+        name: "Test Schema",
+        migrationType: "Liquibase",
+        type: "Script",
+        changeLogScript: {
+          location: "/scripts",
+          image: "liquibase/liquibase:latest",
+          shell: "sh",
+          command: "liquibase update",
+        },
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalled();
+  });
+});
+
 // ─── Database Instance Tests ─────────────────────────────────────────────────
 
 describe("database_instance CRUD operations", () => {
