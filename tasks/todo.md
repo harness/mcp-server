@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## PR 282 IaCM Activity Resource Changes (2026-05-29)
+- [x] Restore engineer's activity-scoped resource change endpoint
+- [x] Keep IaCM default-enabled and Ansible opt-in on current main
+- [x] Update generated docs plus config/Gemini guidance
+- [x] Run focused registry, build, and docs checks
+- [x] Push updated PR branch
+
+### Plan
+- Rebuild PR 282 on current `origin/main` so the change includes recent Ansible docs and registry updates.
+- Preserve the intended IaCM activity resource-changes contract: `/activities/{activityId}/resource-changes` with required `workspace_id`.
+- Preserve `operationPolicy` on the endpoint and keep IaCM default-enabled.
+- Update docs that previously described IaCM as opt-in.
+
+### Review
+- Updated `iacm_activity_resource_change` to use the activity-scoped endpoint and required `workspace_id` query mapping.
+- Updated IaCM registry tests for default-on loading and activity-scoped dispatch.
+- Updated README, `.env.example`, and Gemini docs so IaCM is documented as default-enabled and Ansible remains the only opt-in toolset.
+- Verification passed: `pnpm vitest run tests/registry/iacm.test.ts tests/registry/ansible.test.ts tests/registry/registry.test.ts tests/registry/structural-validation.test.ts`, `pnpm build`, and `pnpm docs:check`.
+
 ## Version Bump 3.0.9 (2026-05-28)
 - [x] Identify release metadata fields pinned to the previous version
 - [x] Update package and manifest versions to 3.0.9

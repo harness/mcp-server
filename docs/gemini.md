@@ -1,6 +1,6 @@
 # Harness MCP Server — Gemini CLI Context
 
-This extension connects Gemini CLI to the Harness Platform through 11 consolidated MCP tools that cover 190 resource types across 32 default toolsets.
+This extension connects Gemini CLI to the Harness Platform through 11 consolidated MCP tools that cover 201 resource types across 33 default toolsets.
 
 ## How This Server Works
 
@@ -80,8 +80,8 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - Access custom dashboards and data exports
 
 ### Infrastructure as Code Management (IaCM)
-- Opt-in toolset for Terraform workspaces, resources, module registry entries, workspace costs, and activity resource changes
-- Enable with `HARNESS_TOOLSETS=+iacm`; IaCM APIs require org/project scope
+- Default-enabled toolset for Terraform workspaces, resources, module registry entries, workspace costs, and activity resource changes
+- IaCM APIs require org/project scope
 
 ### Ansible
 - Opt-in toolset for Ansible inventories, playbooks, hosts, and activity history
@@ -158,4 +158,4 @@ Multi-scope resources such as connectors, services, environments, infrastructure
 **Toolset filtering:**
 - Set `HARNESS_TOOLSETS=pipelines,services,connectors` in `.env` to limit which resource types are available
 - Leave empty to enable all default toolsets
-- Add opt-in toolsets alongside defaults: `HARNESS_TOOLSETS=+iacm`, `HARNESS_TOOLSETS=+ansible`, or `HARNESS_TOOLSETS=+iacm,+ansible`
+- Add opt-in toolsets alongside defaults: `HARNESS_TOOLSETS=+ansible`

@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 196 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 201 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,8 +8,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 196 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 32 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Opt-in IaCM coverage is available when you need Terraform workspace and module data.
+- **11 tools, 201 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 33 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **32 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -1041,7 +1041,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-196 resource types organized across 32 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+201 resource types organized across 33 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1510,24 +1510,17 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, 32 of 34 toolsets are enabled. Two toolsets are opt-in and excluded from the defaults:
+By default, 33 of 34 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
 
-- **`iacm`** — Harness IaCM (Terraform workspaces, modules, resources). Opt-in because it is project-scoped and adds concepts many users do not need.
-- **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in for the same reason.
+- **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 
 ### Adding toolsets with `+` prefix
 
 Use the `+` prefix to explicitly include opt-in toolsets alongside all defaults:
 
 ```bash
-# Explicitly include IaCM alongside all defaults
-HARNESS_TOOLSETS=+iacm
-
 # Explicitly include Ansible alongside all defaults
 HARNESS_TOOLSETS=+ansible
-
-# Include both
-HARNESS_TOOLSETS=+iacm,+ansible
 ```
 
 ### Removing default toolsets
@@ -1542,8 +1535,8 @@ HARNESS_TOOLSETS=-chaos,-ccm
 ### Combining + and -
 
 ```bash
-# Add IaCM, remove chaos
-HARNESS_TOOLSETS=+iacm,-chaos
+# Add Ansible, remove chaos
+HARNESS_TOOLSETS=+ansible,-chaos
 ```
 
 ### Explicit allowlist
@@ -1592,7 +1585,7 @@ Available toolset names:
 | `settings`              | setting                                                                                                                                                                                                                                                                                         |
 | `visualizations`        | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture                                                                                                                                                         |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
-| `iacm` *(opt-in)*       | iacm_workspace, iacm_resource, iacm_module, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                                                                 |
+| `iacm`                  | iacm_workspace, iacm_resource, iacm_module, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                                                                 |
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
 
 
@@ -1611,8 +1604,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  32 Toolsets      |      (data files, not code)
-                |  196 Resource Types|
+                |  33 Toolsets      |      (data files, not code)
+                |  201 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
