@@ -133,7 +133,7 @@ function listAvailableSchemaNames(
 
 export function registerSchemaTool(
   server: McpServer,
-  registry: Registry | undefined,
+  _registry: Registry | undefined,
   client: HarnessClient | undefined,
   additionalSchemas?: Record<string, SchemaEntry>,
 ): void {
@@ -152,14 +152,9 @@ export function registerSchemaTool(
       }
     : { ...SCHEMAS };
 
-  const prefersPipelineV1 = registry?.getAllResourceTypes().includes("pipeline_v1") ?? false;
   const liveFetcher = client ? createLiveSchemaFetcher(client) : undefined;
   const availableSchemas = listAvailableSchemaNames(Object.keys(allSchemas), liveFetcher);
   const hasLiveEntities = liveFetcher !== undefined;
-
-  const pipelineVersionHint = prefersPipelineV1
-    ? " Prefer pipeline_v1, template_v1, and trigger_v1 for new YAML when the registry supports v1 pipelines."
-    : "";
 
   server.registerTool(
     "harness_schema",
@@ -167,9 +162,7 @@ export function registerSchemaTool(
       description:
         "Fetch Harness YAML schema or examples for a resource type. " +
         "Pipeline/template schemas are bundled from harness-schema; connector, environment, service, " +
-        "secret, and infrastructure schemas are fetched live from NG /yaml-schema (pass scope, org_id, project_id)." +
-        pipelineVersionHint +
-        " " +
+        "secret, and infrastructure schemas are fetched live from NG /yaml-schema (pass scope, org_id, project_id). " +
         "Use without path for a summary of fields and available sections. " +
         "Use with path to drill into a specific section. " +
         "Use with example to fetch a named example YAML snippet. " +
