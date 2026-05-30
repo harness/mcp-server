@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { SCHEMAS, V0_SCHEMA_KEYS, V1_SCHEMA_KEYS } from "../data/schemas/index.js";
+import { SCHEMAS } from "../data/schemas/index.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
 import { schemaOutputSchema } from "./output-schemas.js";
@@ -16,9 +16,6 @@ import {
   type HarnessYamlScope,
 } from "./entity-schema/live.js";
 import type { JsonObject } from "./entity-schema/normalize.js";
-
-const V0_ONLY = new Set<string>(V0_SCHEMA_KEYS);
-const V1_ONLY = new Set<string>(V1_SCHEMA_KEYS);
 
 const scopeSchema = z
   .enum(["account", "org", "project"])
@@ -126,19 +123,12 @@ function getStaticSummary(schema: Record<string, unknown>, resourceType: string)
 
 function listAvailableSchemaNames(
   staticSchemaKeys: string[],
-  registeredTypes: Set<string> | undefined,
   liveFetcher: ReturnType<typeof createLiveSchemaFetcher> | undefined,
 ): string[] {
-  const excludeSet = registeredTypes?.has("pipeline_v1") ? V0_ONLY : V1_ONLY;
-
-  const staticSchemas = staticSchemaKeys.filter((s) => {
-    if (!registeredTypes) return true;
-    if (V0_ONLY.has(s) || V1_ONLY.has(s)) return !excludeSet.has(s);
-    return true;
-  });
-
+  // Expose every bundled static key in the Zod enum so harness_schema({ resource_type: "pipeline" })
+  // still validates when pipeline_v1 is also registered (schemas remain in allSchemas).
   const live = liveFetcher?.listResourceTypes() ?? LIVE_ENTITY_RESOURCE_TYPES;
-  return [...staticSchemas, ...live];
+  return [...staticSchemaKeys, ...live];
 }
 
 export function registerSchemaTool(
@@ -162,10 +152,14 @@ export function registerSchemaTool(
       }
     : { ...SCHEMAS };
 
-  const registeredTypes = registry ? new Set(registry.getAllResourceTypes()) : undefined;
+  const prefersPipelineV1 = registry?.getAllResourceTypes().includes("pipeline_v1") ?? false;
   const liveFetcher = client ? createLiveSchemaFetcher(client) : undefined;
-  const availableSchemas = listAvailableSchemaNames(Object.keys(allSchemas), registeredTypes, liveFetcher);
+  const availableSchemas = listAvailableSchemaNames(Object.keys(allSchemas), liveFetcher);
   const hasLiveEntities = liveFetcher !== undefined;
+
+  const pipelineVersionHint = prefersPipelineV1
+    ? " Prefer pipeline_v1, template_v1, and trigger_v1 for new YAML when the registry supports v1 pipelines."
+    : "";
 
   server.registerTool(
     "harness_schema",
@@ -173,7 +167,9 @@ export function registerSchemaTool(
       description:
         "Fetch Harness YAML schema or examples for a resource type. " +
         "Pipeline/template schemas are bundled from harness-schema; connector, environment, service, " +
-        "secret, and infrastructure schemas are fetched live from NG /yaml-schema (pass scope, org_id, project_id). " +
+        "secret, and infrastructure schemas are fetched live from NG /yaml-schema (pass scope, org_id, project_id)." +
+        pipelineVersionHint +
+        " " +
         "Use without path for a summary of fields and available sections. " +
         "Use with path to drill into a specific section. " +
         "Use with example to fetch a named example YAML snippet. " +

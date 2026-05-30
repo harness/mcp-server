@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
+import type { Registry } from "../../src/registry/index.js";
 import { registerSchemaTool } from "../../src/tools/harness-schema.js";
 import { extractLiveSchema } from "../../src/tools/entity-schema/live.js";
 
@@ -116,6 +117,41 @@ describe("harness_schema live entities", () => {
     expect(requestMock).not.toHaveBeenCalled();
     expect(parsed.source).toBe("harness-schema");
     expect(parsed.resource_type).toBe("pipeline");
+  });
+
+  it("rejects project scope without org_id before bundled or live fetch", async () => {
+    vi.spyOn(
+      await import("../../src/tools/entity-schema/bundled.js"),
+      "getBundledEntitySchema",
+    ).mockReturnValue({ type: "object" });
+
+    const result = await server.call("harness_schema", {
+      resource_type: "connector",
+      scope: "project",
+    });
+    const parsed = parseResult(result) as { error: string };
+
+    expect(result.isError).toBe(true);
+    expect(parsed.error).toMatch(/org_id is required/);
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("harness_schema static enum with v1 registry", () => {
+  it("lists legacy and v1 pipeline schemas when registry includes pipeline_v1", () => {
+    const server = makeMcpServer();
+    const registry = {
+      getAllResourceTypes: () => ["pipeline", "pipeline_v1"],
+    } as unknown as Registry;
+
+    registerSchemaTool(server, registry, undefined);
+
+    const call = server.registerTool.mock.calls.find((c: unknown[]) => c[0] === "harness_schema");
+    const description = (call![1] as { description: string }).description;
+
+    expect(description).toContain("pipeline,");
+    expect(description).toContain("pipeline_v1");
+    expect(description).toContain("Prefer pipeline_v1");
   });
 });
 
