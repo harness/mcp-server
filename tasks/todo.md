@@ -3,9 +3,9 @@
 ## Critical Bug Inspection (2026-05-30)
 - [x] Gather recent commits and confirm this branch matches `origin/main`
 - [x] Trace high-risk behavioral changes through registry dispatch and tool callers
-- [ ] Add a failing regression test for confirmed critical behavior
-- [ ] Implement the minimal fix
-- [ ] Run focused and broader verification
+- [x] Add a failing regression test for confirmed critical behavior
+- [x] Implement the minimal fix
+- [x] Run focused and broader verification
 - [ ] Commit, push, open PR, and report in Slack if fixed
 
 ### Plan
@@ -13,6 +13,13 @@
 - Focus on newly added write paths and high-blast-radius registry/tool behavior.
 - Confirm any candidate with a failing local test before production edits.
 - Keep any fix narrow, with no unrelated refactors.
+
+### Review
+- Found `database_execute_llm_authoring_pipeline.create` was unusable through the documented `harness_create` input shape: `harness_create` nests user fields under `body`, but the endpoint body builder read top-level fields and body-schema validation checked the translated request body for the original snake_case field names.
+- Impact: DBOPS Accept & Commit / LLM changeset execution failed before sending any DBOPS request, blocking the newly added consolidated execution path.
+- Added a red/green registry regression test for the normal `harness_create` body shape.
+- Fixed the endpoint to validate the public input body before translation, map body fields to the DBOPS wire names, and skip org/project body injection for the path-scoped DBOPS API.
+- Verification passed: focused `pnpm vitest run tests/registry/dbops.test.ts`; broader `pnpm typecheck && pnpm build && pnpm test`.
 
 ## Version Bump 3.1.0 (2026-05-29)
 - [x] Identify release metadata fields pinned to the previous version
