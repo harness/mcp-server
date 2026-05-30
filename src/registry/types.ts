@@ -257,6 +257,12 @@ export interface EndpointSpec {
    */
   bodyWrapperKey?: string;
   /**
+   * Required-field validation normally checks the built request body. Set this
+   * to "input" when bodySchema documents the public harness_create body before
+   * bodyBuilder translates it to the API wire shape.
+   */
+  bodySchemaValidationTarget?: "built" | "input";
+  /**
    * When true, do not inject orgIdentifier/projectIdentifier into POST/PUT
    * bodies. Some APIs take scope only in query/path and reject extra body fields.
    */
