@@ -40,7 +40,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
   server.registerTool(
     "harness_update",
     {
-      description: "Update an existing Harness resource. Two modes: (1) Full body replacement — pass 'body' with the complete resource definition. (2) JSON Patch (RFC 6902) — pass 'operations' with targeted patch ops (the tool fetches the current resource, applies patches server-side, and sends the merged result). Use operations to change specific fields without outputting the entire resource. body and operations are mutually exclusive.",
+      description: "Update an existing Harness resource via full replacement ('body') or targeted JSON Patch ('operations') — mutually exclusive; prefer 'operations' to change specific fields without resending the whole resource. For full replacement of pipelines/input sets, pass body as a YAML string directly, or use body.yamlPipeline/body.pipeline. You can pass a Harness URL to auto-extract identifiers. Response includes openInHarness link to the updated resource when applicable.",
       inputSchema: {
         resource_type: resourceTypeSchema(updatableTypes).describe("The type of resource to update"),
         resource_id: z.string().describe("The identifier of the resource to update"),
