@@ -1,5 +1,19 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-05-30)
+- [x] Gather recent commits and confirm this branch matches `origin/main`
+- [x] Trace high-risk behavioral changes through registry dispatch and tool callers
+- [ ] Add a failing regression test for confirmed critical behavior
+- [ ] Implement the minimal fix
+- [ ] Run focused and broader verification
+- [ ] Commit, push, open PR, and report in Slack if fixed
+
+### Plan
+- Review recent merged code changes rather than branch-local diff because the automation branch is currently identical to `origin/main`.
+- Focus on newly added write paths and high-blast-radius registry/tool behavior.
+- Confirm any candidate with a failing local test before production edits.
+- Keep any fix narrow, with no unrelated refactors.
+
 ## Version Bump 3.1.0 (2026-05-29)
 - [x] Identify release metadata fields pinned to the previous version
 - [x] Update package and manifest versions to 3.1.0

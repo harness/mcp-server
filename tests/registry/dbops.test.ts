@@ -508,3 +508,41 @@ describe("database_instance resource metadata", () => {
     expect(schemaFilter!.required).toBe(true);
   });
 });
+
+describe("database_execute_llm_authoring_pipeline create", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("maps the harness_create body fields to the DBOPS execution request body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      pipelineExecutionId: "exec-123",
+      pipelineIdentifier: "llm-authoring",
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_execute_llm_authoring_pipeline", "create", {
+      project_id: "test-project",
+      org_id: "default",
+      body: {
+        schema_id: "schema-1",
+        instance_id: "instance-1",
+        conversation_id: "conversation-1",
+        changeset: "databaseChangeLog: []",
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/execute-llm-authoring-pipeline");
+    expect(call.body).toEqual({
+      schemaIdentifier: "schema-1",
+      instanceIdentifier: "instance-1",
+      conversationId: "conversation-1",
+      changeset: "databaseChangeLog: []",
+    });
+  });
+});
