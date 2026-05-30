@@ -223,6 +223,10 @@ describe("parseHarnessUrl", () => {
     expect(result.pipeline_id).toBe("build_jdk11_github_clickops");
     expect(result.execution_id).toBe("2QvnKmYBRK2H5oC37YjdMQ");
     expect(result.resource_id).toBe("2QvnKmYBRK2H5oC37YjdMQ");
+    expect(result.connector_ref).toBe("org.org_ghec_con");
+    expect(result.repo_name).toBe("harn-merdeploy");
+    expect(result.branch).toBe("vk_sandbox");
+    expect(result.store_type).toBe("REMOTE");
   });
 
   it("parses a path-only pipeline-studio URL", () => {
@@ -235,6 +239,7 @@ describe("parseHarnessUrl", () => {
     expect(result.resource_type).toBe("pipeline");
     expect(result.pipeline_id).toBe("slack_channel_summarizer_pipeline");
     expect(result.resource_id).toBe("slack_channel_summarizer_pipeline");
+    expect(result.store_type).toBe("INLINE");
   });
 
   it("parses a path-only URL with stage_id query param", () => {
@@ -350,6 +355,39 @@ describe("applyUrlDefaults", () => {
     expect(result.resource_type).toBe("execution");
     expect(result.execution_id).toBe("exec123");
     expect(result.pipeline_id).toBe("myPipeline");
+  });
+
+  it("merges remote Git query params from a Harness URL", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/module/ci/orgs/myOrg/projects/myProject/pipelines/myPipeline/executions/exec123/pipeline?connectorRef=account.git_connector&repoName=ExampleOrg%2Fexample-service&branch=feature-branch&storeType=REMOTE",
+    );
+
+    expect(result.pipeline_id).toBe("myPipeline");
+    expect(result.execution_id).toBe("exec123");
+    expect(result.connector_ref).toBe("account.git_connector");
+    expect(result.repo_name).toBe("ExampleOrg/example-service");
+    expect(result.branch).toBe("feature-branch");
+    expect(result.store_type).toBe("REMOTE");
+  });
+
+  it("preserves explicit remote Git params over URL-derived defaults", () => {
+    const result = applyUrlDefaults(
+      {
+        branch: "explicit-branch",
+        store_type: "INLINE",
+        connector_ref: "explicit.connector",
+        repo_name: "explicit/repo",
+      },
+      "https://app.harness.io/ng/account/abc/module/ci/orgs/myOrg/projects/myProject/pipelines/myPipeline/executions/exec123/pipeline?connectorRef=url.connector&repoName=url%2Frepo&branch=url-branch&storeType=REMOTE",
+    );
+
+    expect(result.branch).toBe("explicit-branch");
+    expect(result.store_type).toBe("INLINE");
+    expect(result.connector_ref).toBe("explicit.connector");
+    expect(result.repo_name).toBe("explicit/repo");
+    expect(result.pipeline_id).toBe("myPipeline");
+    expect(result.execution_id).toBe("exec123");
   });
 
   it("does not mutate the original args object", () => {
