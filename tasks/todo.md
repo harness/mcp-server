@@ -5,7 +5,7 @@
 - [x] Trace suspicious changes through caller chains and downstream behavior
 - [x] Implement a minimal fix only if a concrete critical bug is confirmed
 - [x] Run focused verification for reviewed or changed behavior
-- [ ] Report the outcome in Slack; open a PR only for a confirmed critical fix
+- [x] Report the outcome in Slack; open a PR only for a confirmed critical fix
 
 ### Plan
 - Review recent merged commits after the last critical bug inspection, prioritizing code-path changes over release/version metadata.
