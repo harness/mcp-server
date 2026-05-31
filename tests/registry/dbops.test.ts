@@ -470,8 +470,7 @@ describe("database_instance CRUD operations", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/instancelist");
-    // Body may contain org/project identifiers added by the framework
-    expect(call.body).toBeDefined();
+    expect(call.body).toEqual({});
     expect(result).toHaveLength(1);
   });
 
@@ -492,6 +491,79 @@ describe("database_instance CRUD operations", () => {
   });
 
   // NOTE: database_instance create/update/delete tests are in the feat/dbinstance branch
+});
+
+describe("database_snapshot_object operations", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("get: sends only snapshot selector fields in POST body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [{ objectName: "users", objectValue: { columns: [] } }],
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_snapshot_object", "get", {
+      dbschema_id: "my_schema",
+      dbinstance_id: "dev_db",
+      object_type: "Table",
+      object_names: ["users"],
+      project_id: "test-project",
+      org_id: "default",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe(
+      "/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/dbinstance/dev_db/snapshot-object-values",
+    );
+    expect(call.body).toEqual({
+      objectType: "Table",
+      objectNames: ["users"],
+    });
+  });
+});
+
+describe("database_execute_llm_authoring_pipeline operations", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("create: maps caller body fields to API body without scope injection", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      pipelineExecutionId: "exec-123",
+      pipelineIdentifier: "dbops_authoring",
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_execute_llm_authoring_pipeline", "create", {
+      project_id: "test-project",
+      org_id: "default",
+      body: {
+        schema_id: "my_schema",
+        instance_id: "dev_db",
+        conversation_id: "conv-123",
+        changeset: "databaseChangeLog: []",
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe(
+      "/dbops/v1/orgs/default/projects/test-project/execute-llm-authoring-pipeline",
+    );
+    expect(call.body).toEqual({
+      schemaIdentifier: "my_schema",
+      instanceIdentifier: "dev_db",
+      conversationId: "conv-123",
+      changeset: "databaseChangeLog: []",
+    });
+  });
 });
 
 describe("database_instance resource metadata", () => {

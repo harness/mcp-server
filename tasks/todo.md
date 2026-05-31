@@ -1,5 +1,23 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-05-31)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream behavior
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification for reviewed or changed behavior
+- [ ] Report the outcome in Slack; open a PR only for a confirmed critical fix
+
+### Plan
+- Review recent merged commits after the last critical bug inspection, prioritizing code-path changes over release/version metadata.
+- Focus on high-blast-radius surfaces: IaCM resource changes, Ansible and DBOps write paths, schema/entity sync behavior, LLM authoring execution, request construction, and auth/session handling.
+- Require a concrete trigger scenario that can cause data loss, crashes, security bypass, or significant user-facing breakage before patching.
+
+### Review
+- Found that `database_execute_llm_authoring_pipeline.create` could not be used through `harness_create`: caller fields live under `body`, but the endpoint body builder read top-level fields and then validated the API-shaped body against caller-facing field names.
+- Impact: the DBOps Accept & Commit flow failed before reaching Harness, blocking the consolidated LLM authoring pipeline execution path.
+- Fixed the endpoint to read body fields, map caller aliases to backend fields, and avoid injecting NG scope fields into DBOps path-scoped POST bodies. Also locked down related DBOps POST read bodies (`database_instance.list`, `database_snapshot_object.get`) so they send only the API-supported body shape.
+- Verification passed: red/green `pnpm vitest run tests/registry/dbops.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (67 files / 1687 tests).
+
 ## Version Bump 3.1.0 (2026-05-29)
 - [x] Identify release metadata fields pinned to the previous version
 - [x] Update package and manifest versions to 3.1.0

@@ -376,6 +376,7 @@ export const dbopsToolset: ToolsetDefinition = {
             page: "page",
             size: "limit",
           },
+          skipScopeBodyInjection: true,
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           description:
@@ -475,6 +476,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbinstance_id: "dbinstance",
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const names = input.object_names;
             if (!Array.isArray(names) || names.length === 0) {
@@ -622,18 +624,25 @@ export const dbopsToolset: ToolsetDefinition = {
           path: "/dbops/v1/orgs/{org}/projects/{project}/execute-llm-authoring-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input: Record<string, unknown>) => ({
-            schemaIdentifier: input.schema_id,
-            instanceIdentifier: input.instance_id,
-            conversationId: input.conversation_id,
-            changeset: input.changeset,
-          }),
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input: Record<string, unknown>) => {
+            const body =
+              input.body && typeof input.body === "object" && !Array.isArray(input.body)
+                ? (input.body as Record<string, unknown>)
+                : input;
+            return {
+              schemaIdentifier: body.schemaIdentifier ?? body.schema_id,
+              instanceIdentifier: body.instanceIdentifier ?? body.instance_id,
+              conversationId: body.conversationId ?? body.conversation_id,
+              changeset: body.changeset,
+            };
+          },
           responseExtractor: passthrough,
           description:
             "Execute the LLM changeset pipeline with integrated billing tracking. " +
-            "Required body fields: schema_id (database schema identifier), " +
-            "instance_id (database instance identifier), " +
-            "conversation_id (chat conversation ID), " +
+            "Required body fields: schemaIdentifier/schema_id (database schema identifier), " +
+            "instanceIdentifier/instance_id (database instance identifier), " +
+            "conversationId/conversation_id (chat conversation ID), " +
             "changeset (Liquibase changeset YAML). " +
             "The backend resolves the correct pipeline, fills all runtime inputs " +
             "(including K8s connector), executes it, and records the billing event. " +
@@ -641,9 +650,9 @@ export const dbopsToolset: ToolsetDefinition = {
           bodySchema: {
             description: "Changeset execution parameters",
             fields: [
-              { name: "schema_id", type: "string", required: true, description: "Database schema identifier" },
-              { name: "instance_id", type: "string", required: true, description: "Database instance identifier" },
-              { name: "conversation_id", type: "string", required: true, description: "Chat conversation ID" },
+              { name: "schemaIdentifier", type: "string", required: true, description: "Database schema identifier. Caller alias: schema_id." },
+              { name: "instanceIdentifier", type: "string", required: true, description: "Database instance identifier. Caller alias: instance_id." },
+              { name: "conversationId", type: "string", required: true, description: "Chat conversation ID. Caller alias: conversation_id." },
               { name: "changeset", type: "string", required: true, description: "Liquibase changeset YAML content" },
             ],
           },
