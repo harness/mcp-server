@@ -1,5 +1,20 @@
 # Harness MCP Server — Task Tracking
 
+## Documentation Alignment Automation (2026-06-01)
+- [x] Identify recently changed subsystems with weak docs
+- [ ] Update user-facing docs for entity schemas, IaCM, and audit telemetry
+- [ ] Align contributor and agent-facing guidance
+- [ ] Run docs verification and review the documentation-only diff
+- [ ] Commit, push, and open/update the docs PR
+
+### Plan
+- Use source and recent merged commits as the source of truth; do not document behavior that is not present in code.
+- Keep the PR documentation-only and update existing surfaces instead of adding redundant pages.
+- Refresh `README.md` for `harness_schema` usage, IaCM resource workflows, and audit sink behavior.
+- Refresh `docs/gemini.md` for agent-facing parity around schema lookup, structured list output, IaCM, Ansible, and DbOps coverage.
+- Refresh `CONTRIBUTING.md` so maintainers see Ansible as the opt-in toolset example and know how to refresh vendored entity schemas.
+- Refresh `docs/architecture.md` where it currently describes audit coverage as mutating-only.
+
 ## Version Bump 3.1.0 (2026-05-29)
 - [x] Identify release metadata fields pinned to the previous version
 - [x] Update package and manifest versions to 3.1.0

@@ -234,7 +234,7 @@ Wait failure is intentionally non-fatal to the trigger: if polling errors or the
 - `HARNESS_AUDIT_WEBHOOK_URL` enables batched webhook delivery with optional bearer token, batch size, and flush interval.
 - `OTEL_EXPORTER_OTLP_ENDPOINT` enables OpenTelemetry audit spans when the optional OpenTelemetry packages are available.
 
-The registry emits audit events when dispatching mutating operations through tool handlers. Sinks are telemetry outputs; they should not change the outcome of the Harness API operation.
+The registry emits audit events for every registry-dispatched Harness API operation (`list`, `get`, `create`, `update`, `delete`, and `execute`). Read operations use `confirmation: "not_required"`; mutating operations record the elicitation or auto-approval path. Tools that bypass registry dispatch for local metadata or schema discovery are outside this audit stream. Sinks are telemetry outputs; they should not change the outcome of the Harness API operation.
 
 ### HTTP Client Retry (Future: P5)
 

@@ -23,6 +23,9 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - `harness_search` — Search across multiple resource types at once
 - `harness_diagnose` — Diagnose pipelines, connectors, delegates, and GitOps applications
 - `harness_status` — Project health overview: failed, running, and recent executions
+- `harness_schema` — Fetch bundled pipeline/template schemas, named YAML examples, and scope-aware entity schemas for connectors, environments, services, secrets, and infrastructure
+
+`harness_list` returns strict structured content for MCP clients: array-like Harness responses are normalized into `{ "items": [...], "total": <count>, "page": <page> }`, while the text payload still contains compact JSON.
 
 ## Available Capabilities
 
@@ -53,7 +56,7 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 ### Security & Compliance
 - Security Test Orchestration (STO): manage issues, approve/reject exemptions
 - Supply Chain Security (SCS): track artifacts, compliance, SBOMs, chain of custody
-- Audit trail: comprehensive audit logs for governance
+- Audit trail: registry-dispatched list/get/create/update/delete/execute operations emit structured events to stderr, optional JSONL/webhook sinks, and optional OpenTelemetry spans
 
 ### GitOps
 - Manage agents, applications, clusters, repositories
@@ -81,11 +84,18 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 
 ### Infrastructure as Code Management (IaCM)
 - Default-enabled toolset for Terraform workspaces, resources, module registry entries, workspace costs, and activity resource changes
-- IaCM APIs require org/project scope
+- Workspace, resource, cost, and activity-change APIs require org/project scope; the module registry is account-scoped
+- Use `iacm_workspace` to find `workspace_id`; `iacm_activity_resource_change` requires both `activity_id` and `workspace_id`
+- IaCM `page_count` values count the current page only; paginate while `has_more` is true when a total is needed
 
 ### Ansible
 - Opt-in toolset for Ansible inventories, playbooks, hosts, and activity history
 - Enable with `HARNESS_TOOLSETS=+ansible`; Ansible APIs require org/project scope
+
+### Database DevOps (DbOps)
+- Manage database schemas and instances with create/update/delete support
+- List snapshot object names and fetch full snapshot metadata for schema instances
+- Resolve the default LLM authoring pipeline with `database_llm_authoring_pipeline`
 
 ### Access Control
 - Manage users, user groups, service accounts
@@ -159,3 +169,8 @@ Multi-scope resources such as connectors, services, environments, infrastructure
 - Set `HARNESS_TOOLSETS=pipelines,services,connectors` in `.env` to limit which resource types are available
 - Leave empty to enable all default toolsets
 - Add opt-in toolsets alongside defaults: `HARNESS_TOOLSETS=+ansible`
+
+**Schema lookup:**
+- Use `harness_schema(resource_type="pipeline")` or a nested `path` before authoring pipeline YAML
+- Use `harness_schema(resource_type="connector", scope="project", org_id="...", project_id="...")` for scoped entity YAML schemas
+- Maintainers refresh vendored entity schema snapshots with `pnpm sync-entity-schemas`
