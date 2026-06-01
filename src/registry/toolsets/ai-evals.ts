@@ -43,7 +43,7 @@ const createDatasetSchema: BodySchema = {
     },
     { name: "metadata", type: "object", required: false, description: "Arbitrary metadata" },
     { name: "storage_type", type: "string", required: false, description: "managed (default) | git" },
-    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path (required) }" },
   ],
 };
 
@@ -62,7 +62,7 @@ const updateDatasetSchema: BodySchema = {
     },
     { name: "metadata", type: "object", required: false, description: "Metadata" },
     { name: "storage_type", type: "string", required: false, description: "managed | git (switches storage mode)" },
-    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path (required) }" },
   ],
 };
 
@@ -112,7 +112,7 @@ const createEvalSchema: BodySchema = {
     { name: "cost_limit_usd", type: "number", required: false, description: "Max cost in USD" },
     { name: "timeout_per_item_ms", type: "number", required: false, description: "Per-item timeout ms (default 30000, min 1000)" },
     { name: "storage_type", type: "string", required: false, description: "managed (default) | git" },
-    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path (required) }" },
   ],
 };
 
@@ -132,7 +132,7 @@ const updateEvalSchema: BodySchema = {
     { name: "cost_limit_usd", type: "number", required: false, description: "Max cost in USD" },
     { name: "timeout_per_item_ms", type: "number", required: false, description: "Per-item timeout ms (min 1000)" },
     { name: "storage_type", type: "string", required: false, description: "managed | git (switches storage mode)" },
-    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path (required) }" },
   ],
 };
 
@@ -289,7 +289,7 @@ const createSuiteSchema: BodySchema = {
     { name: "triggered_by", type: "string", required: false, description: "Who created the suite" },
     { name: "schedule", type: "object", required: false, description: "Cron schedule: { cron: string, timezone?: string (default UTC), enabled?: boolean (default true) }" },
     { name: "storage_type", type: "string", required: false, description: "managed (default) | git" },
-    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path (required) }" },
   ],
 };
 
@@ -304,7 +304,7 @@ const updateSuiteSchema: BodySchema = {
     { name: "is_blocking", type: "boolean", required: false, description: "Blocking suite" },
     { name: "schedule", type: "object", required: false, description: "Cron schedule: { cron, timezone?, enabled? } — set null to remove" },
     { name: "storage_type", type: "string", required: false, description: "managed | git (switches storage mode)" },
-    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path (required) }" },
   ],
 };
 
@@ -365,7 +365,7 @@ const createTargetSchema: BodySchema = {
     { name: "env_secrets", type: "object", required: false, description: "Env var to Harness secret ref mapping" },
     { name: "connector_ref", type: "string", required: false, description: "Harness HTTP connector for endpoint configuration" },
     { name: "storage_type", type: "string", required: false, description: "managed (default) | git" },
-    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when storage_type='git'): { connector_ref?, repo?, branch?, file_path (required) }" },
   ],
 };
 
@@ -381,7 +381,7 @@ const updateTargetSchema: BodySchema = {
     { name: "env_secrets", type: "object", required: false, description: "Env var to Harness secret ref mapping" },
     { name: "connector_ref", type: "string", required: false, description: "Harness HTTP connector for endpoint configuration" },
     { name: "storage_type", type: "string", required: false, description: "managed | git (switches storage mode)" },
-    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path }" },
+    { name: "git_source", type: "object", required: false, description: "Git location (required when switching to storage_type='git'): { connector_ref?, repo?, branch?, file_path (required) }" },
   ],
 };
 
