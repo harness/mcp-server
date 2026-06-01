@@ -24,7 +24,7 @@ function base(input: Record<string, unknown>, config: PathBuilderConfig): string
   return `${AI}/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}`;
 }
 
-const listQ = { page: "page", size: "limit" };
+const listQ = { page: "page", limit: "limit" };
 
 // --- Body schemas (concise; full shapes in OpenAPI / harness_describe) ---
 
@@ -507,7 +507,7 @@ const createRunItemsSchema: BodySchema = {
 };
 
 const generateDatasetItemsSchema: BodySchema = {
-  description: "Generate synthetic dataset items using an LLM (async via pipeline)",
+  description: "Generate synthetic dataset items using an LLM (synchronous)",
   fields: [
     {
       name: "strategy",
@@ -594,6 +594,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       identifierFields: ["dataset_id"],
       listFilterFields: [
         { name: "search", description: "Search by name, identifier, or description" },
+        { name: "target_id", description: "Filter datasets used by evals referencing this target UUID" },
       ],
       relatedResources: [
         { resourceType: "eval_dataset_item", relationship: "contains", description: "Dataset rows" },
@@ -605,7 +606,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/dataset`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { ...listQ, search: "search" },
+          queryParams: { ...listQ, search: "search", target_id: "target_id" },
           responseExtractor: aiEvalsListExtract,
           description: "List datasets",
         },
@@ -681,20 +682,9 @@ export const aiEvalsToolset: ToolsetDefinition = {
           bodySchema: generateDatasetItemsSchema,
           responseExtractor: passthrough,
           actionDescription:
-            "Generate synthetic dataset items using an LLM (async). " +
+            "Generate synthetic dataset items using an LLM (synchronous). " +
             "Strategies: use_case (from description), rephrase (from seed_inputs), adversarial, complexity_ladder. " +
-            "Returns job_id — poll with poll_generate action.",
-        },
-        poll_generate: {
-          method: "GET",
-          path: "",
-          pathBuilder: (input, config) =>
-            `${base(input, config)}/dataset/${input.dataset_id as string}/generate/${input.job_id as string}`,
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
-          actionDescription:
-            "Poll generation job status. Pass dataset_id and job_id (from generate action response).",
-          bodySchema: { description: "No body", fields: [] },
+            "Returns generated_count and items directly.",
         },
       },
     },
@@ -839,7 +829,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) => `${base(input, config)}/evals/${input.eval_id as string}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
-          description: "Soft-delete (archive) eval",
+          description: "Hard-delete eval and its runs (409 if referenced by a suite)",
         },
       },
       executeActions: {
@@ -1034,14 +1024,18 @@ export const aiEvalsToolset: ToolsetDefinition = {
       scopeOptional: true,
       headerBasedScoping: true,
       identifierFields: ["metric_id"],
-      listFilterFields: [{ name: "type", description: "Filter by metric type (e.g. heuristic, llm)" }],
+      listFilterFields: [
+        { name: "type", description: "Filter by metric type (e.g. heuristic, llm)" },
+        { name: "search", description: "Search by metric name or description" },
+        { name: "target_id", description: "Filter metrics used by evals referencing this target UUID" },
+      ],
       operations: {
         list: {
           method: "GET",
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/metrics`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { ...listQ, type: "type" },
+          queryParams: { ...listQ, type: "type", search: "search", target_id: "target_id" },
           responseExtractor: aiEvalsListExtract,
           description: "List metrics",
         },
@@ -1113,6 +1107,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       identifierFields: ["set_id"],
       listFilterFields: [
         { name: "search", description: "Search by name or description" },
+        { name: "target_id", description: "Filter metric sets used by evals referencing this target UUID" },
       ],
       operations: {
         list: {
@@ -1120,7 +1115,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/metric-sets`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { ...listQ, search: "search" },
+          queryParams: { ...listQ, search: "search", target_id: "target_id" },
           responseExtractor: aiEvalsListExtract,
           description: "List metric sets",
         },
