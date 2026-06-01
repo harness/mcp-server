@@ -1,5 +1,25 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-01)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+- [x] Commit/push/open PR only if a fix is made
+
+### Plan
+- Review commits and diffs on `cursor/critical-bug-investigation-f1bf` against `origin/main`, and recent merged history if the branch has no substantive code changes.
+- Prioritize behavioral changes in auth/session handling, write-operation scoping, request construction, polling/lifecycle flows, and any output contracts that can break MCP clients.
+- Require a concrete trigger scenario for data loss, crash, security bypass, or significant user-facing breakage before patching. If none is confirmed, report a concise no-critical-findings summary without opening a PR.
+
+### Review
+- Found a concrete DB Ops regression in `database_instance.list`: the endpoint is defined as `POST /dbschema/{dbschema}/instancelist` with an empty body, but the shared dispatcher injected `orgIdentifier` and `projectIdentifier` into POST bodies unless an endpoint opts out.
+- Impact: listing DB instances for a schema could fail against DB Ops APIs that reject unknown body fields, blocking the newly added instance CRUD workflow for affected projects.
+- Fixed the endpoint metadata with `skipScopeBodyInjection: true`, matching DB Ops create/update endpoints that scope by path and require flat or empty bodies.
+- Added regression coverage that the list request body remains `{}` and contains no NG scope fields.
+- Reviewed DB Ops schema/instance CRUD, IaCM/Ansible, SAT session extraction, and entity schema changes. Other candidates did not meet the high-confidence critical patch bar for this run.
+- Verification passed: red test failed before the fix, then `pnpm vitest run tests/registry/dbops.test.ts --testNamePattern "list: uses POST with dbschema_id in path"`, `pnpm vitest run tests/registry/dbops.test.ts`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and `git diff --check`.
+
 ## Version Bump 3.1.0 (2026-05-29)
 - [x] Identify release metadata fields pinned to the previous version
 - [x] Update package and manifest versions to 3.1.0
