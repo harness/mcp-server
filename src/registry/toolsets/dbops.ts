@@ -200,6 +200,121 @@ const databaseSchemaUpdateSchema = {
   ] as BodyFieldSpec[],
 };
 
+// ── Body Schema Fields for Database Instance ────────────────────────────────
+// Note: OpenAPI DBInstanceIn marks only identifier and connector in `required`, but server-side
+// validation enforces name as well. We mark all three as required here for safer agent behavior.
+// Update has all fields optional.
+
+const databaseInstanceCreateSchema = {
+  description:
+    "Database instance definition. Links a schema's migration scripts to a specific database via a JDBC connector. " +
+    "The connector determines the database engine type and connection details.",
+  fields: [
+    {
+      name: "identifier",
+      type: "string",
+      required: true,
+      description:
+        "Unique instance identifier. Must start with letter/underscore, " +
+        "may contain letters, numbers, underscores, and $. Max 128 chars. " +
+        "Pattern: ^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$",
+    },
+    {
+      name: "name",
+      type: "string",
+      required: true,
+      description: "Instance display name (max 128 chars).",
+    },
+    {
+      name: "connector",
+      type: "string",
+      required: true,
+      description:
+        "JDBC connector identifier (required). The connector defines the database engine type (MySQL, PostgreSQL, etc.) " +
+        "and connection details including the target database. " +
+        "Use harness_list(resource_type='connector', filters={type: 'Jdbc'}) to find available JDBC connectors.",
+    },
+    {
+      name: "branch",
+      type: "string",
+      required: false,
+      description:
+        "Git branch for this instance. **REQUIRED when parent schema uses GIT or Harness Code source**. " +
+        "Specifies which branch to pull migration scripts from. Not needed for Script-based schemas. " +
+        "Check the parent schema's source type via harness_get before creating the instance.",
+    },
+    {
+      name: "context",
+      type: "string",
+      required: false,
+      description:
+        "Liquibase/Flyway context filter. Allows you to filter which changesets run for this instance. " +
+        "For example, 'dev', 'staging', 'release' — only changesets tagged with matching contexts will execute. " +
+        "Leave empty to run all changesets.",
+    },
+    {
+      name: "tags",
+      type: "object",
+      required: false,
+      description:
+        "Optional key-value pairs for tagging/labeling the instance. Format: { \"key1\": \"value1\", \"key2\": \"value2\" }",
+    },
+    {
+      name: "substituteProperties",
+      type: "object",
+      required: false,
+      description:
+        "Optional key-value pairs for Liquibase property substitution. These values replace ${property} placeholders in changesets. " +
+        "Format: { \"schemaName\": \"myschema\", \"tablespace\": \"users_ts\" }",
+    },
+  ] as BodyFieldSpec[],
+};
+
+// Update schema: all fields optional for partial updates
+const databaseInstanceUpdateSchema = {
+  description:
+    "Database instance update. Identifier cannot be changed (comes from path). " +
+    "All fields are optional — only include fields you want to update.",
+  fields: [
+    {
+      name: "name",
+      type: "string",
+      required: false,
+      description: "Instance display name",
+    },
+    {
+      name: "connector",
+      type: "string",
+      required: false,
+      description: "JDBC connector identifier",
+    },
+    {
+      name: "branch",
+      type: "string",
+      required: false,
+      description: "Git branch for Repository-type schemas",
+    },
+    {
+      name: "context",
+      type: "string",
+      required: false,
+      description: "Liquibase/Flyway context filter",
+    },
+    {
+      name: "tags",
+      type: "object",
+      required: false,
+      description: "Key-value pairs for tagging/labeling",
+    },
+    {
+      name: "substituteProperties",
+      type: "object",
+      required: false,
+      description: "Liquibase property substitution values",
+    },
+  ] as BodyFieldSpec[],
+};
+
 export const dbopsToolset: ToolsetDefinition = {
   name: "dbops",
   displayName: "Database DevOps",
@@ -328,8 +443,8 @@ export const dbopsToolset: ToolsetDefinition = {
       resourceType: "database_instance",
       displayName: "Database Instance",
       description:
-        "A database instance linked to a schema. Connects the schema's migration scripts " +
-        "to a specific database via a Harness connector. " +
+        "A database instance linked to a schema — supports full CRUD (list, get, create, update, delete). " +
+        "Connects the schema's migration scripts to a specific database via a Harness JDBC connector. " +
         "The 'connector' field holds the connector identifier — the DB engine type " +
         "(MySQL, PostgreSQL, etc.) is determined by that connector. " +
         "Use the connectors toolset to look up the connector when you need the exact engine type or JDBC details.",
@@ -360,7 +475,10 @@ export const dbopsToolset: ToolsetDefinition = {
       ],
       diagnosticHint:
         "If listing fails with 400 or 404, verify the schema identifier (dbschema_id) is correct " +
-        "by first calling harness_list(resource_type='database_schema').",
+        "by first calling harness_list(resource_type='database_schema'). " +
+        "All instance operations require dbschema_id to identify the parent schema. " +
+        "For create: if the API returns 400 about 'branch', the parent schema uses GIT/Harness Code source — " +
+        "call harness_get on the schema to check its source type, then retry with branch specified.",
       operations: {
         list: {
           method: "POST",
@@ -394,6 +512,63 @@ export const dbopsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get a single database instance by identifier",
+        },
+        create: {
+          method: "POST",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}/instance",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          // DBOPS API expects flat DBInstanceIn shape at root (no wrapper object)
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description:
+            "Create a new database instance under a schema. Links the schema's migration scripts to a specific database. " +
+            "Required: identifier, name, connector (JDBC connector ID). " +
+            "For Git-based schemas (GIT or Harness Code source), branch is REQUIRED. " +
+            "Optional: context (Liquibase context filter), tags, substituteProperties. " +
+            "TIP: Call harness_get on the parent schema first to check its source type and determine if branch is needed. " +
+            "The dbschema_id must be provided in params to specify the parent schema.",
+          bodySchema: databaseInstanceCreateSchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}/instance/{dbinstance}",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+            dbinstance_id: "dbinstance",
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          // DBOPS API expects flat DBInstanceUpdateRequest shape at root (no wrapper object)
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description:
+            "Update an existing database instance. All fields are optional — only include what you want to change. " +
+            "Identifier cannot be changed (comes from dbinstance_id in path).",
+          bodySchema: databaseInstanceUpdateSchema,
+        },
+        delete: {
+          method: "DELETE",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}/instance/{dbinstance}",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+            dbinstance_id: "dbinstance",
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description:
+            "Delete a database instance. WARNING: This removes the instance and its migration execution history. " +
+            "The underlying database is NOT affected — only Harness's record of applied migrations. " +
+            "This action cannot be undone.",
         },
       },
     },

@@ -491,7 +491,172 @@ describe("database_instance CRUD operations", () => {
     expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/instance/my_instance");
   });
 
-  // NOTE: database_instance create/update/delete tests are in the feat/dbinstance branch
+  it("create: uses POST and passes flat body through without scope injection", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "new_instance" });
+    const client = makeClient(mockRequest);
+
+    const body = {
+      identifier: "new_instance",
+      name: "New Instance",
+      connector: "jdbc_connector",
+      branch: "main",
+    };
+
+    await registry.dispatch(client, "database_instance", "create", {
+      dbschema_id: "my_schema",
+      project_id: "test-project",
+      org_id: "default",
+      body,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/instance");
+    // Use immutable literal to catch mutation bugs — body must stay flat without scope injection
+    expect(call.body).toEqual({
+      identifier: "new_instance",
+      name: "New Instance",
+      connector: "jdbc_connector",
+      branch: "main",
+    });
+    // Explicitly verify no scope fields were injected
+    expect(call.body).not.toHaveProperty("orgIdentifier");
+    expect(call.body).not.toHaveProperty("projectIdentifier");
+  });
+
+  it("update: uses PUT with dbinstance_id in path without scope injection", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "my_instance" });
+    const client = makeClient(mockRequest);
+
+    const body = { name: "Updated Instance", tags: { env: "staging" } };
+
+    await registry.dispatch(client, "database_instance", "update", {
+      dbschema_id: "my_schema",
+      dbinstance_id: "my_instance",
+      project_id: "test-project",
+      org_id: "default",
+      body,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/instance/my_instance");
+    // Use immutable literal to catch mutation bugs
+    expect(call.body).toEqual({ name: "Updated Instance", tags: { env: "staging" } });
+    // Explicitly verify no scope fields were injected
+    expect(call.body).not.toHaveProperty("orgIdentifier");
+    expect(call.body).not.toHaveProperty("projectIdentifier");
+  });
+
+  it("delete: uses DELETE with dbinstance_id in path", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_instance", "delete", {
+      dbschema_id: "my_schema",
+      dbinstance_id: "my_instance",
+      project_id: "test-project",
+      org_id: "default",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/instance/my_instance");
+  });
+});
+
+describe("database_instance create bodySchema", () => {
+  it("has correct required and optional fields per OpenAPI DBInstanceIn", () => {
+    const spec = getOp("database_instance", "create");
+    expect(spec.bodySchema).toBeDefined();
+
+    const fields = spec.bodySchema!.fields;
+    const fieldMap = Object.fromEntries(fields.map((f) => [f.name, f]));
+
+    // Required fields: identifier, name, connector
+    expect(fieldMap.identifier.required).toBe(true);
+    expect(fieldMap.name.required).toBe(true);
+    expect(fieldMap.connector.required).toBe(true);
+
+    // Optional fields
+    expect(fieldMap.branch.required).toBe(false);
+    expect(fieldMap.context.required).toBe(false);
+    expect(fieldMap.tags.required).toBe(false);
+    expect(fieldMap.substituteProperties.required).toBe(false);
+  });
+
+  it("identifier has pattern description from OpenAPI", () => {
+    const spec = getOp("database_instance", "create");
+    const idField = spec.bodySchema!.fields.find((f) => f.name === "identifier");
+
+    expect(idField!.description).toContain("^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$");
+  });
+
+  it("branch description mentions it is required for GIT/Harness Code schemas", () => {
+    const spec = getOp("database_instance", "create");
+    const branchField = spec.bodySchema!.fields.find((f) => f.name === "branch");
+
+    expect(branchField!.description).toContain("REQUIRED");
+    expect(branchField!.description).toContain("GIT");
+    expect(branchField!.description).toContain("Harness Code");
+  });
+});
+
+describe("database_instance update bodySchema", () => {
+  it("has all fields optional (no identifier)", () => {
+    const spec = getOp("database_instance", "update");
+    expect(spec.bodySchema).toBeDefined();
+
+    const fields = spec.bodySchema!.fields;
+    const fieldNames = fields.map((f) => f.name);
+
+    // identifier should NOT be in update schema
+    expect(fieldNames).not.toContain("identifier");
+
+    // All fields should be optional
+    for (const field of fields) {
+      expect(field.required, `${field.name} should be optional`).toBe(false);
+    }
+  });
+
+  it("contains all expected update fields", () => {
+    const spec = getOp("database_instance", "update");
+    const fieldNames = spec.bodySchema!.fields.map((f) => f.name);
+
+    expect(fieldNames).toContain("name");
+    expect(fieldNames).toContain("connector");
+    expect(fieldNames).toContain("branch");
+    expect(fieldNames).toContain("context");
+    expect(fieldNames).toContain("tags");
+    expect(fieldNames).toContain("substituteProperties");
+    // NOTE: OpenAPI has 'version' but it's a no-op in the backend — not exposed to agents
+  });
+});
+
+describe("database_instance operationPolicy", () => {
+  it("create: low_write risk, do_not_retry", () => {
+    const spec = getOp("database_instance", "create");
+    expect(spec.operationPolicy).toEqual({
+      risk: "low_write",
+      retryPolicy: "do_not_retry",
+    });
+  });
+
+  it("update: low_write risk, safe retryPolicy (idempotent PUT)", () => {
+    const spec = getOp("database_instance", "update");
+    expect(spec.operationPolicy).toEqual({
+      risk: "low_write",
+      retryPolicy: "safe",
+    });
+  });
+
+  it("delete: destructive risk, do_not_retry", () => {
+    const spec = getOp("database_instance", "delete");
+    expect(spec.operationPolicy).toEqual({
+      risk: "destructive",
+      retryPolicy: "do_not_retry",
+    });
+  });
 });
 
 describe("database_instance resource metadata", () => {
@@ -501,10 +666,33 @@ describe("database_instance resource metadata", () => {
     expect(res.identifierFields).toContain("dbinstance_id");
   });
 
+  it("description mentions CRUD operations", () => {
+    const res = findResource("database_instance");
+    expect(res.description).toContain("CRUD");
+  });
+
+  it("delete description warns about migration history deletion", () => {
+    const spec = getOp("database_instance", "delete");
+    expect(spec.description).toContain("migration");
+    expect(spec.description).toContain("cannot be undone");
+  });
+
   it("has dbschema_id as required listFilterField", () => {
     const res = findResource("database_instance");
     const schemaFilter = res.listFilterFields?.find((f) => f.name === "dbschema_id");
     expect(schemaFilter).toBeDefined();
     expect(schemaFilter!.required).toBe(true);
+  });
+});
+
+describe("database_instance skipScopeBodyInjection", () => {
+  it("create has skipScopeBodyInjection enabled", () => {
+    const spec = getOp("database_instance", "create");
+    expect(spec.skipScopeBodyInjection).toBe(true);
+  });
+
+  it("update has skipScopeBodyInjection enabled", () => {
+    const spec = getOp("database_instance", "update");
+    expect(spec.skipScopeBodyInjection).toBe(true);
   });
 });
