@@ -201,7 +201,8 @@ const databaseSchemaUpdateSchema = {
 };
 
 // ── Body Schema Fields for Database Instance ────────────────────────────────
-// Note: Per OpenAPI spec DBInstanceIn, only identifier and connector are required for create.
+// Note: OpenAPI DBInstanceIn marks only identifier and connector in `required`, but server-side
+// validation enforces name as well. We mark all three as required here for safer agent behavior.
 // Update has all fields optional.
 
 const databaseInstanceCreateSchema = {
