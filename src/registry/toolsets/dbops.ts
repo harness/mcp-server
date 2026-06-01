@@ -489,6 +489,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbschema_id: "dbschema",
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           queryParams: {
             search_term: "search_term",
             page: "page",

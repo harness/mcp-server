@@ -470,8 +470,10 @@ describe("database_instance CRUD operations", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/instancelist");
-    // Body may contain org/project identifiers added by the framework
-    expect(call.body).toBeDefined();
+    // DBOPS scopes this endpoint via the path and expects an empty POST body.
+    expect(call.body).toEqual({});
+    expect(call.body).not.toHaveProperty("orgIdentifier");
+    expect(call.body).not.toHaveProperty("projectIdentifier");
     expect(result).toHaveLength(1);
   });
 
