@@ -221,8 +221,8 @@ const databaseInstanceCreateSchema = {
     {
       name: "name",
       type: "string",
-      required: false,
-      description: "Instance display name (max 128 chars). If omitted, defaults to identifier.",
+      required: true,
+      description: "Instance display name (max 128 chars).",
     },
     {
       name: "connector",
@@ -238,8 +238,9 @@ const databaseInstanceCreateSchema = {
       type: "string",
       required: false,
       description:
-        "Git branch for this instance. **REQUIRED for Repository/Git-based schemas** (type='Repository'). " +
-        "Specifies which branch to pull migration scripts from. Not needed for Script-based schemas.",
+        "Git branch for this instance. **REQUIRED when parent schema uses GIT or Harness Code source**. " +
+        "Specifies which branch to pull migration scripts from. Not needed for Script-based schemas. " +
+        "Check the parent schema's source type via harness_get before creating the instance.",
     },
     {
       name: "context",
@@ -474,7 +475,9 @@ export const dbopsToolset: ToolsetDefinition = {
       diagnosticHint:
         "If listing fails with 400 or 404, verify the schema identifier (dbschema_id) is correct " +
         "by first calling harness_list(resource_type='database_schema'). " +
-        "All instance operations require dbschema_id to identify the parent schema.",
+        "All instance operations require dbschema_id to identify the parent schema. " +
+        "For create: if the API returns 400 about 'branch', the parent schema uses GIT/Harness Code source — " +
+        "call harness_get on the schema to check its source type, then retry with branch specified.",
       operations: {
         list: {
           method: "POST",
@@ -524,9 +527,10 @@ export const dbopsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description:
             "Create a new database instance under a schema. Links the schema's migration scripts to a specific database. " +
-            "Required: name, identifier, connector (JDBC connector ID). " +
-            "For Repository-type schemas, branch is REQUIRED to specify the git branch. " +
+            "Required: identifier, name, connector (JDBC connector ID). " +
+            "For Git-based schemas (GIT or Harness Code source), branch is REQUIRED. " +
             "Optional: context (Liquibase context filter), tags, substituteProperties. " +
+            "TIP: Call harness_get on the parent schema first to check its source type and determine if branch is needed. " +
             "The dbschema_id must be provided in params to specify the parent schema.",
           bodySchema: databaseInstanceCreateSchema,
         },

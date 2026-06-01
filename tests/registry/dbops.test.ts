@@ -573,12 +573,12 @@ describe("database_instance create bodySchema", () => {
     const fields = spec.bodySchema!.fields;
     const fieldMap = Object.fromEntries(fields.map((f) => [f.name, f]));
 
-    // Required fields per OpenAPI: only identifier and connector
+    // Required fields: identifier, name, connector
     expect(fieldMap.identifier.required).toBe(true);
+    expect(fieldMap.name.required).toBe(true);
     expect(fieldMap.connector.required).toBe(true);
 
-    // Optional fields per OpenAPI
-    expect(fieldMap.name.required).toBe(false);
+    // Optional fields
     expect(fieldMap.branch.required).toBe(false);
     expect(fieldMap.context.required).toBe(false);
     expect(fieldMap.tags.required).toBe(false);
@@ -592,12 +592,13 @@ describe("database_instance create bodySchema", () => {
     expect(idField!.description).toContain("^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$");
   });
 
-  it("branch description mentions it is required for Repository-type schemas", () => {
+  it("branch description mentions it is required for GIT/Harness Code schemas", () => {
     const spec = getOp("database_instance", "create");
     const branchField = spec.bodySchema!.fields.find((f) => f.name === "branch");
 
     expect(branchField!.description).toContain("REQUIRED");
-    expect(branchField!.description).toContain("Repository");
+    expect(branchField!.description).toContain("GIT");
+    expect(branchField!.description).toContain("Harness Code");
   });
 });
 
@@ -628,6 +629,7 @@ describe("database_instance update bodySchema", () => {
     expect(fieldNames).toContain("context");
     expect(fieldNames).toContain("tags");
     expect(fieldNames).toContain("substituteProperties");
+    // NOTE: OpenAPI has 'version' but it's a no-op in the backend — not exposed to agents
   });
 });
 
