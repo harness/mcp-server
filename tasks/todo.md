@@ -5,7 +5,7 @@
 - [x] Update user-facing docs for entity schemas, IaCM, and audit telemetry
 - [x] Align contributor and agent-facing guidance
 - [x] Run docs verification and review the documentation-only diff
-- [ ] Commit, push, and open/update the docs PR
+- [x] Commit, push, and open/update the docs PR
 
 ### Plan
 - Use source and recent merged commits as the source of truth; do not document behavior that is not present in code.
@@ -22,6 +22,7 @@
 - `docs/gemini.md` now covers `harness_schema`, structured `harness_list` output, IaCM workflow constraints, Ansible opt-in status, and DbOps capabilities.
 - `CONTRIBUTING.md` now uses Ansible as the opt-in toolset example and documents vendored entity schema maintenance.
 - Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `git diff --check HEAD~1..HEAD`, and targeted stale-language scans across README, docs, and CONTRIBUTING.
+- Opened PR: https://github.com/harness/mcp-server/pull/293
 
 ## Version Bump 3.1.0 (2026-05-29)
 - [x] Identify release metadata fields pinned to the previous version
