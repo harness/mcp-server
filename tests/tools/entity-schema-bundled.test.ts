@@ -29,4 +29,21 @@ describe("entity schema bundled + live fallback", () => {
   it("bundledSnapshotsMatchAccount is false for mismatched account", () => {
     expect(bundled.bundledSnapshotsMatchAccount("other-account")).toBe(false);
   });
+
+  it("throws for project scope without org_id before returning bundled schema", async () => {
+    vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue({ type: "object" });
+    vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(true);
+
+    const client = {
+      account: "acct-123",
+      request: vi.fn(),
+    } as unknown as HarnessClient;
+
+    const fetcher = createLiveSchemaFetcher(client);
+
+    await expect(fetcher.fetch("connector", { scope: "project" })).rejects.toThrow(
+      /org_id is required/,
+    );
+    expect(client.request).not.toHaveBeenCalled();
+  });
 });
