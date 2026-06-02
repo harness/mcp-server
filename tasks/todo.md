@@ -1,5 +1,21 @@
 # Harness MCP Server — Task Tracking
 
+## Version Bump 3.1.1 (2026-06-01)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.1
+- [x] Update release metadata regression test
+- [x] Run verification
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.1`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.1` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts` and `pnpm typecheck`.
+
 ## Version Bump 3.1.0 (2026-05-29)
 - [x] Identify release metadata fields pinned to the previous version
 - [x] Update package and manifest versions to 3.1.0
