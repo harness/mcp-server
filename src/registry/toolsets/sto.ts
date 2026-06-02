@@ -139,8 +139,9 @@ export const stoToolset: ToolsetDefinition = {
         + "set to 100 returns the full page of each partition.",
       searchAliases: ["pipeline security", "execution issues", "security tab", "issues for execution", "issues that failed pipeline"],
       relatedResources: [
-        { resourceType: "pipeline_security_step", relationship: "sibling", description: "List the STO scan steps (Trivy, Semgrep, …) that ran in this execution. Required to attribute an issue to its source scanner." },
-        { resourceType: "security_exemption", relationship: "child", description: "Create exemptions for issues from this view (one per issue_id)." },
+        { resourceType: "pipeline_security_step", relationship: "sibling", description: "REQUIRED when creating target-scoped exemptions: issue rows here only carry `targetVariantName` (a display string like 'repo:branch'), NOT a raw `target_id`. List pipeline_security_step for the same execution_id and join on `targetName:targetVariant === issue.targetVariantName` to resolve the raw `target_id` you need for harness_create body.target_id. Also used to attribute an issue to its source scanner." },
+        { resourceType: "security_exemption", relationship: "child", description: "Create exemptions for issues from this view (one per issue_id). For target-scope, first resolve target_id via pipeline_security_step (see sibling above)." },
+        { resourceType: "security_exemption_bulk", relationship: "child", description: "Bulk-create exemptions for many issues from this view in a single all-or-none transaction (≤100 items). For target-scope, pre-resolve target_id via pipeline_security_step." },
         { resourceType: "policy_evaluation", relationship: "sibling", description: "Find OPA policy evaluations that ran on the same execution_id to learn why the pipeline was denied." },
       ],
       toolset: "sto",
@@ -248,6 +249,21 @@ export const stoToolset: ToolsetDefinition = {
             ];
             const existingTotal = partitionTotal(r.existing, existingItems.length);
             const newTotal = partitionTotal(r.new, newItems.length);
+            // Surface one-line breadcrumbs for the two IDs that are NOT on the
+            // issue row but ARE required for narrower-scope exemptions. Without
+            // these hints, agents spend multiple turns chasing the raw IDs
+            // through unrelated endpoints (security_issue_filter, harness_get
+            // on the issue, etc).
+            const targetIdHint =
+              "Each row carries `targetVariantName` (display string like 'repo:branch') but NOT a raw `target_id`. " +
+              "For target-scoped exemptions, also call harness_list(resource_type='pipeline_security_step', " +
+              "filters={execution_id:<same id>}) and join on `targetName:targetVariant === issue.targetVariantName` " +
+              "to resolve the `target_id` you pass to harness_create body.target_id.";
+            const pipelineIdHint =
+              "Issue rows do NOT carry `pipeline_id` either. For pipeline-scoped exemptions: " +
+              "(1) if a Harness pipeline execution URL was pasted, `pipeline_id` is already auto-extracted from the URL path; " +
+              "(2) otherwise call harness_get(resource_type='execution', resource_id=<execution_id>) once and read `pipelineIdentifier`. " +
+              "Do NOT iterate through harness_list(resource_type='pipeline') — the execution-to-pipeline link is 1:1.";
             return {
               items: tagged,
               total: existingTotal + newTotal,
@@ -255,6 +271,8 @@ export const stoToolset: ToolsetDefinition = {
               new_total: newTotal,
               counts: r.counts,
               matching_steps: r.matchingSteps,
+              _target_id_lookup_hint: targetIdHint,
+              _pipeline_id_lookup_hint: pipelineIdHint,
             };
           },
           skipCompact: true,
@@ -276,6 +294,8 @@ export const stoToolset: ToolsetDefinition = {
       searchAliases: ["scan steps", "sto steps", "pipeline scan steps", "execution scan steps"],
       relatedResources: [
         { resourceType: "pipeline_security_issue", relationship: "sibling", description: "List issues for the same execution; filter by 'steps' to scope to one scanner." },
+        { resourceType: "security_exemption", relationship: "sibling", description: "Use this resource to look up `target_id` when creating target-scoped exemptions: pipeline_security_issue rows expose `targetVariantName` (a display string) but not the raw `target_id`. Build a `{targetName:targetVariant → targetId}` map from this response and join against each issue row's `targetVariantName`." },
+        { resourceType: "security_exemption_bulk", relationship: "sibling", description: "Same target_id lookup pattern when bulk-exempting from a specific execution." },
       ],
       toolset: "sto",
       scope: "project",

@@ -15,7 +15,41 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import { stoToolset } from "../../src/registry/toolsets/sto.js";
+import { Registry } from "../../src/registry/index.js";
+import type { Config } from "../../src/config.js";
+import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { EndpointSpec, ResourceDefinition, PreflightContext } from "../../src/registry/types.js";
+
+function makeConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    HARNESS_API_KEY: "pat.test",
+    HARNESS_ACCOUNT_ID: "test-account",
+    HARNESS_BASE_URL: "https://app.harness.io",
+    HARNESS_ORG: "default-org",
+    HARNESS_PROJECT: "default-project",
+    HARNESS_API_TIMEOUT_MS: 30000,
+    HARNESS_MAX_RETRIES: 3,
+    LOG_LEVEL: "info",
+    HARNESS_MAX_BODY_SIZE_MB: 10,
+    HARNESS_RATE_LIMIT_RPS: 10,
+    HARNESS_READ_ONLY: false,
+    HARNESS_SKIP_ELICITATION: false,
+    HARNESS_ALLOW_HTTP: false,
+    HARNESS_FME_BASE_URL: "https://api.split.io",
+    ...overrides,
+  } as Config;
+}
+
+function makeClient(
+  requestFn: (...args: unknown[]) => unknown,
+  currentUserId = "user-uuid-derived",
+): HarnessClient {
+  return {
+    request: requestFn,
+    account: "test-account",
+    getCurrentUserId: vi.fn().mockResolvedValue(currentUserId),
+  } as unknown as HarnessClient;
+}
 
 function getBulkResource(): ResourceDefinition {
   const r = stoToolset.resources.find((x) => x.resourceType === "security_exemption_bulk");
@@ -220,5 +254,165 @@ describe("security_exemption_bulk responseExtractor", () => {
   it("emits EMPTY for a zero-item response (defensive)", () => {
     const out = extract({ results: [], succeeded: 0, failed: 0 }) as Record<string, unknown>;
     expect(out.status).toBe("EMPTY");
+  });
+});
+
+// ─── 4. End-to-end: registry dispatch ──────────────────────────────────
+//
+// Exercises the actual Registry.dispatch path so any future regression in
+// dispatcher body injection, scope-param mapping, or preflight ordering is
+// caught here rather than only in production.
+
+describe("security_exemption_bulk — registry dispatch", () => {
+  const rawApiResponse = {
+    results: [
+      { issueId: "issueA", id: "exemA", statusCode: 201 },
+      { issueId: "issueB", id: "exemB", statusCode: 201 },
+    ],
+    succeeded: 2,
+    failed: 0,
+  };
+
+  it("posts to /sto/api/v2/exemptions/bulk with STO scope params, derived requesterId, camelCase body, and surfaces ALL_SUCCEEDED", async () => {
+    const requestSpy = vi.fn().mockResolvedValue(rawApiResponse);
+    const client = makeClient(requestSpy, "user-uuid-derived");
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    const result = (await registry.dispatch(client, "security_exemption_bulk", "create", {
+      body: {
+        type: "False Positive",
+        reason: "Patched upstream",
+        duration_days: 45,
+        link: "https://j/X-1",
+        items: [
+          { issue_id: "issueA" },
+          { issue_id: "issueB", pipeline_id: "pipe-1" },
+        ],
+      },
+    })) as Record<string, unknown>;
+
+    // 1. Exactly one HTTP call
+    expect(requestSpy).toHaveBeenCalledTimes(1);
+    const callArgs = requestSpy.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params: Record<string, unknown>;
+      body: Record<string, unknown>;
+    };
+
+    // 2. Method + path are the bulk endpoint
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/sto/api/v2/exemptions/bulk");
+
+    // 3. STO uses snake-case scope param names (accountId/orgId/projectId),
+    //    NOT the standard NG accountIdentifier/orgIdentifier/projectIdentifier.
+    //    Defaults come from config.
+    expect(callArgs.params.accountId).toBe("test-account");
+    expect(callArgs.params.orgId).toBe("default-org");
+    expect(callArgs.params.projectId).toBe("default-project");
+    // Standard NG names must NOT appear (regression check for scope override).
+    expect(callArgs.params.accountIdentifier).toBeUndefined();
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+
+    // 4. Body is the bodyBuilder-produced camelCase shape.
+    expect(callArgs.body.type).toBe("False Positive");
+    expect(callArgs.body.reason).toBe("Patched upstream");
+    expect(callArgs.body.requesterId).toBe("user-uuid-derived");
+    expect(callArgs.body.exemptFutureOccurrences).toBe(true);
+    expect(callArgs.body.pendingChanges).toEqual({ durationDays: 45 });
+    expect(callArgs.body.link).toBe("https://j/X-1");
+    expect(callArgs.body.items).toEqual([
+      { issueId: "issueA" },
+      { issueId: "issueB", pipelineId: "pipe-1" },
+    ]);
+    // Caller never supplied requester_id — preflight must have derived it.
+    expect((client as unknown as { getCurrentUserId: ReturnType<typeof vi.fn> }).getCurrentUserId)
+      .toHaveBeenCalledOnce();
+
+    // 5. responseExtractor projected the all-or-none banner.
+    expect(result.status).toBe("ALL_SUCCEEDED");
+    expect(result.succeeded).toBe(2);
+    expect(result.failed).toBe(0);
+    expect(result.total).toBe(2);
+    expect(result._action_hint).toBeUndefined();
+  });
+
+  it("surfaces ALL_FAILED with an action hint when the server rolls back the batch", async () => {
+    const requestSpy = vi.fn().mockResolvedValue({
+      results: [
+        { issueId: "issueA", error: "issue not found", statusCode: 404 },
+        { issueId: "issueB", error: "issue not found", statusCode: 404 },
+      ],
+      succeeded: 0,
+      failed: 2,
+    });
+    const client = makeClient(requestSpy);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    const result = (await registry.dispatch(client, "security_exemption_bulk", "create", {
+      body: {
+        type: "Other",
+        reason: "x",
+        items: [{ issue_id: "issueA" }, { issue_id: "issueB" }],
+      },
+    })) as Record<string, unknown>;
+
+    expect(result.status).toBe("ALL_FAILED");
+    expect(result._action_hint).toMatch(/rolled back/i);
+    expect(result._action_hint).toMatch(/full corrected list/i);
+  });
+
+  it("pipeline_security_issue list surfaces _target_id_lookup_hint and _pipeline_id_lookup_hint so agents don't chase IDs through unrelated endpoints", async () => {
+    const requestSpy = vi.fn().mockResolvedValue({
+      existing: {
+        issues: [{ id: "issueA", title: "Eval Injection", targetVariantName: "nodegoat:master" }],
+        pagination: { totalItems: 1 },
+      },
+      new: { issues: [], pagination: { totalItems: 0 } },
+      counts: {},
+      matchingSteps: [],
+    });
+    const client = makeClient(requestSpy);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    const result = (await registry.dispatch(client, "pipeline_security_issue", "list", {
+      execution_id: "exec-1",
+    })) as Record<string, unknown>;
+
+    // target_id hint must point at pipeline_security_step + the join key.
+    expect(result._target_id_lookup_hint).toBeDefined();
+    const targetHint = String(result._target_id_lookup_hint);
+    expect(targetHint).toMatch(/pipeline_security_step/);
+    expect(targetHint).toMatch(/targetName:targetVariant/);
+    expect(targetHint).toMatch(/targetVariantName/);
+
+    // pipeline_id hint must steer toward URL extraction first and execution-get
+    // second, and explicitly warn against listing pipelines.
+    expect(result._pipeline_id_lookup_hint).toBeDefined();
+    const pipelineHint = String(result._pipeline_id_lookup_hint);
+    expect(pipelineHint).toMatch(/URL/);
+    expect(pipelineHint).toMatch(/harness_get.*execution/);
+    expect(pipelineHint).toMatch(/pipelineIdentifier/);
+    expect(pipelineHint).toMatch(/Do NOT iterate/i);
+  });
+
+  it("fails dispatch BEFORE issuing a request when preflight catches a mutual-exclusion violation", async () => {
+    const requestSpy = vi.fn();
+    const client = makeClient(requestSpy);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    await expect(
+      registry.dispatch(client, "security_exemption_bulk", "create", {
+        body: {
+          type: "Other",
+          reason: "x",
+          items: [{ issue_id: "issueA", target_id: "t1", pipeline_id: "p1" }],
+        },
+      }),
+    ).rejects.toThrow(/mutually exclusive/);
+
+    // Most critical assertion: a malformed batch never reaches the server.
+    expect(requestSpy).not.toHaveBeenCalled();
   });
 });
