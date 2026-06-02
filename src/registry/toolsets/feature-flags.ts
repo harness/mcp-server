@@ -555,9 +555,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | unknown[] | undefined;
-            if (Array.isArray(body)) return body;
-            if (body && Array.isArray(body.items)) return body.items;
-            return [];
+            const items = Array.isArray(body) ? body : body && Array.isArray(body.items) ? body.items : undefined;
+            if (!items || items.length === 0) {
+              throw new Error("fme_identity create requires body.items with at least one identity, or a raw non-empty identity array.");
+            }
+            return items;
           },
           responseExtractor: passthrough,
           bodySchema: {
