@@ -1,5 +1,23 @@
 # Harness MCP Server — Task Tracking
 
+## PR 298 Header-Based Body Scope Follow-Up (2026-06-02)
+- [x] Move header-based body scope suppression into the dispatcher
+- [x] Remove redundant AI Evals per-endpoint suppression flags
+- [x] Add regressions for AI Evals and template v1 body payloads
+- [x] Run focused and broad verification
+- [x] Push updated PR branch
+
+### Plan
+- Treat `def.headerBasedScoping` and `spec.headerBasedScoping` as default body-scope suppression signals inside `Registry.executeSpec`, matching the documented `ResourceDefinition` contract.
+- Keep `skipScopeBodyInjection` for non-header-scoped exceptions such as DBOps path-scoped POST/PUT bodies.
+- Add a registry regression using `template_v1.create`, since that was the reviewer's concrete reproduction of the abstraction gap.
+
+### Review
+- `Registry.executeSpec` now treats `spec.skipScopeBodyInjection`, `spec.headerBasedScoping`, and `def.headerBasedScoping` as body-scope suppression signals before POST/PUT body injection.
+- Removed redundant AI Evals endpoint-level `skipScopeBodyInjection` flags; AI Evals relies on resource-level `headerBasedScoping` for the shared behavior.
+- Added regression coverage that AI Evals resources use header scoping without redundant endpoint flags and that `template_v1.create` no longer leaks `orgIdentifier`/`projectIdentifier` into its JSON body.
+- Verification passed: `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm test` (68 files / 1734 tests), `pnpm build`, and `git diff --check`.
+
 ## Critical Bug Inspection (2026-06-02)
 - [x] Inspect recent commits for high-severity behavioral regressions
 - [x] Trace suspicious changes through caller chains and downstream effects

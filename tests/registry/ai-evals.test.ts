@@ -81,23 +81,24 @@ describe("AI Evals pagination mapping", () => {
 // ─── Path-scoped writes ─────────────────────────────────────────────────────
 
 describe("AI Evals path-scoped write bodies", () => {
-  it("all POST/PUT body builders opt out of generic NG scope body injection", () => {
-    const missing: string[] = [];
+  it("uses resource-level header scoping instead of redundant endpoint-level body injection flags", () => {
+    const redundant: string[] = [];
 
     for (const resource of aiEvalsToolset.resources) {
+      expect(resource.headerBasedScoping).toBe(true);
       for (const [operation, spec] of Object.entries(resource.operations)) {
-        if (spec?.bodyBuilder && (spec.method === "POST" || spec.method === "PUT") && !spec.skipScopeBodyInjection) {
-          missing.push(`${resource.resourceType}.${operation}`);
+        if (spec?.skipScopeBodyInjection) {
+          redundant.push(`${resource.resourceType}.${operation}`);
         }
       }
       for (const [action, spec] of Object.entries(resource.executeActions ?? {})) {
-        if (spec.bodyBuilder && (spec.method === "POST" || spec.method === "PUT") && !spec.skipScopeBodyInjection) {
-          missing.push(`${resource.resourceType}.${action}`);
+        if (spec.skipScopeBodyInjection) {
+          redundant.push(`${resource.resourceType}.${action}`);
         }
       }
     }
 
-    expect(missing).toEqual([]);
+    expect(redundant).toEqual([]);
   });
 
   it("dataset create does not inject NG scope fields into the API body", async () => {
