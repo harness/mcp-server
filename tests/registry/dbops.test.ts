@@ -696,3 +696,37 @@ describe("database_instance skipScopeBodyInjection", () => {
     expect(spec.skipScopeBodyInjection).toBe(true);
   });
 });
+
+describe("database_execute_llm_authoring_pipeline create", () => {
+  it("maps body aliases to the DBOPS API payload without scope injection", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      pipelineExecutionId: "exec-1",
+      pipelineIdentifier: "authoring-pipeline",
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_execute_llm_authoring_pipeline", "create", {
+      org_id: "default",
+      project_id: "test-project",
+      body: {
+        schema_id: "schema_1",
+        instance_id: "instance_1",
+        conversation_id: "conversation-1",
+        changeset: "databaseChangeLog: []",
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/execute-llm-authoring-pipeline");
+    expect(call.body).toEqual({
+      schemaIdentifier: "schema_1",
+      instanceIdentifier: "instance_1",
+      conversationId: "conversation-1",
+      changeset: "databaseChangeLog: []",
+    });
+    expect(call.body).not.toHaveProperty("orgIdentifier");
+    expect(call.body).not.toHaveProperty("projectIdentifier");
+  });
+});

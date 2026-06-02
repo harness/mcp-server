@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-02)
+- [ ] Inspect recent commits for high-severity behavioral regressions
+- [ ] Trace suspicious changes through caller chains and downstream effects
+- [ ] Implement a minimal fix only if a concrete critical bug is confirmed
+- [ ] Run focused verification and report the outcome
+- [ ] Commit/push/open PR only if a fix is made
+
+### Plan
+- Compare this branch against `origin/main`; if empty, inspect recent `origin/main` commits since the last critical-bug run.
+- Prioritize behavioral changes with high blast radius: auth/session handling, request construction, write-operation safety, scoping, pagination/output contracts, and long-running execution semantics.
+- Require a concrete trigger scenario for data loss, crash, security bypass, or significant user-facing breakage before patching.
+
 ## Version Bump 3.1.1 (2026-06-01)
 - [x] Identify release metadata fields pinned to the previous version
 - [x] Update package and manifest versions to 3.1.1

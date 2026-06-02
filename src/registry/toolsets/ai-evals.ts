@@ -648,6 +648,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/dataset`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createDatasetSchema,
           responseExtractor: passthrough,
@@ -658,6 +659,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/dataset/${input.dataset_id as string}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateDatasetSchema,
           responseExtractor: passthrough,
@@ -703,6 +705,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/dataset/${input.dataset_id as string}/generate`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: bodyFromInput,
           bodySchema: generateDatasetItemsSchema,
           responseExtractor: passthrough,
@@ -749,6 +752,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/dataset/${input.dataset_id as string}/items`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createDatasetItemSchema,
           responseExtractor: passthrough,
@@ -760,6 +764,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/dataset/${input.dataset_id as string}/items/${input.item_id as string}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateDatasetItemSchema,
           responseExtractor: passthrough,
@@ -844,6 +849,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/evals`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createEvalSchema,
           responseExtractor: passthrough,
@@ -875,6 +881,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/evals/${input.eval_id as string}/run`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: bodyFromInput,
           bodySchema: triggerEvalRunSchema,
           responseExtractor: passthrough,
@@ -885,6 +892,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/evals/import-yaml`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: bodyFromInput,
           bodySchema: importEvalYamlSchema,
           responseExtractor: passthrough,
@@ -956,6 +964,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/runs/${input.run_id as string}/rescore`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: bodyFromInput,
           bodySchema: rescoreSchema,
           responseExtractor: passthrough,
@@ -1054,6 +1063,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/metrics`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createMetricSchema,
           responseExtractor: passthrough,
@@ -1144,6 +1154,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/metric-sets`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createMetricSetSchema,
           responseExtractor: passthrough,
@@ -1175,6 +1186,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/metric-sets/${input.set_id as string}/calibrate`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: bodyFromInput,
           bodySchema: calibrateSchema,
           responseExtractor: passthrough,
@@ -1186,6 +1198,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/metric-sets/${input.set_id as string}/metrics`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const b = input.body;
             if (Array.isArray(b)) return b;
@@ -1234,6 +1247,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/metric-sets/${input.set_id as string}/metrics`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: addMetricSetEntrySchema,
           responseExtractor: passthrough,
@@ -1303,6 +1317,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/suites`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createSuiteSchema,
           responseExtractor: passthrough,
@@ -1334,6 +1349,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/suites/${input.suite_id as string}/run`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: bodyFromInput,
           bodySchema: triggerSuiteRunSchema,
           responseExtractor: passthrough,
@@ -1345,6 +1361,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/suites/${input.suite_id as string}/evaluations`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: replaceSuiteEntriesSchema,
           responseExtractor: aiEvalsArrayExtract,
@@ -1355,6 +1372,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/suites/import-yaml`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: bodyFromInput,
           bodySchema: importSuiteYamlSchema,
           responseExtractor: passthrough,
@@ -1403,6 +1421,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/suites/${input.suite_id as string}/evaluations`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: addSuiteEntrySchema,
           responseExtractor: passthrough,
@@ -1499,6 +1518,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/targets`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createTargetSchema,
           responseExtractor: passthrough,
@@ -1530,6 +1550,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/targets/${input.target_id as string}/test`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           bodyBuilder: bodyFromInput,
           bodySchema: testTargetSchema,
           responseExtractor: passthrough,
@@ -1541,6 +1562,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/targets/${input.target_id as string}/outputs`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: bodyFromInput,
           bodySchema: uploadOutputsSchema,
           responseExtractor: passthrough,
@@ -1618,6 +1640,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/models`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createModelSchema,
           responseExtractor: passthrough,
@@ -1687,6 +1710,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/observe/annotations`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createAnnotationSchema,
           responseExtractor: passthrough,
@@ -1755,6 +1779,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/traces/${input.trace_id as string}/evaluate`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: bodyFromInput,
           bodySchema: evaluateTraceSchema,
           responseExtractor: passthrough,
@@ -1809,6 +1834,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/settings/git`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: upsertGitSettingsSchema,
           responseExtractor: passthrough,
@@ -1851,6 +1877,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/registry`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createRegistryItemSchema,
           responseExtractor: passthrough,

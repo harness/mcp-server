@@ -797,12 +797,16 @@ export const dbopsToolset: ToolsetDefinition = {
           path: "/dbops/v1/orgs/{org}/projects/{project}/execute-llm-authoring-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input: Record<string, unknown>) => ({
-            schemaIdentifier: input.schema_id,
-            instanceIdentifier: input.instance_id,
-            conversationId: input.conversation_id,
-            changeset: input.changeset,
-          }),
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input: Record<string, unknown>) => {
+            const body = ((input.body ?? input) as Record<string, unknown>) ?? {};
+            return {
+              schemaIdentifier: body.schemaIdentifier ?? body.schema_id,
+              instanceIdentifier: body.instanceIdentifier ?? body.instance_id,
+              conversationId: body.conversationId ?? body.conversation_id,
+              changeset: body.changeset,
+            };
+          },
           responseExtractor: passthrough,
           description:
             "Execute the LLM changeset pipeline with integrated billing tracking. " +
@@ -814,11 +818,12 @@ export const dbopsToolset: ToolsetDefinition = {
             "(including K8s connector), executes it, and records the billing event. " +
             "Returns { pipelineExecutionId, pipelineIdentifier }.",
           bodySchema: {
-            description: "Changeset execution parameters",
+            description:
+              "Changeset execution parameters. Caller aliases schema_id, instance_id, and conversation_id are accepted and mapped to backend field names.",
             fields: [
-              { name: "schema_id", type: "string", required: true, description: "Database schema identifier" },
-              { name: "instance_id", type: "string", required: true, description: "Database instance identifier" },
-              { name: "conversation_id", type: "string", required: true, description: "Chat conversation ID" },
+              { name: "schemaIdentifier", type: "string", required: true, description: "Database schema identifier" },
+              { name: "instanceIdentifier", type: "string", required: true, description: "Database instance identifier" },
+              { name: "conversationId", type: "string", required: true, description: "Chat conversation ID" },
               { name: "changeset", type: "string", required: true, description: "Liquibase changeset YAML content" },
             ],
           },
