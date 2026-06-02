@@ -1,16 +1,23 @@
 # Harness MCP Server — Task Tracking
 
 ## Critical Bug Inspection (2026-06-02)
-- [ ] Inspect recent commits for high-severity behavioral regressions
-- [ ] Trace suspicious changes through caller chains and downstream effects
-- [ ] Implement a minimal fix only if a concrete critical bug is confirmed
-- [ ] Run focused verification and report the outcome
-- [ ] Commit/push/open PR only if a fix is made
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+- [x] Commit/push/open PR only if a fix is made
 
 ### Plan
 - Compare this branch against `origin/main`; if empty, inspect recent `origin/main` commits since the last critical-bug run.
 - Prioritize behavioral changes with high blast radius: auth/session handling, request construction, write-operation safety, scoping, pagination/output contracts, and long-running execution semantics.
 - Require a concrete trigger scenario for data loss, crash, security bypass, or significant user-facing breakage before patching.
+
+### Review
+- Found that AI Evals path-scoped POST/PUT requests leaked generic NG `orgIdentifier` and `projectIdentifier` fields into API-specific JSON bodies whenever callers supplied explicit org/project IDs or a parsed Harness URL. This could make normal dataset/eval/metric/suite/target/model write workflows fail against the AI Evals API despite correct path scoping.
+- Fixed AI Evals mutating endpoint specs to opt out of generic body scope injection while preserving org/project in the REST path and account scoping via headers.
+- Found that `database_execute_llm_authoring_pipeline.create` read `schema_id`, `instance_id`, and `conversation_id` from top-level input even though `harness_create` sends user fields under `body`, then validated the transformed backend payload against the pre-transform alias names. This made the consolidated Accept & Commit endpoint fail before sending any request.
+- Fixed the DBOps LLM authoring body builder to read `input.body`, map caller aliases to backend fields, and skip generic body scope injection.
+- Verified red/green focused coverage with `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/dbops.test.ts`, then broader verification with `pnpm typecheck`, full `pnpm test` (68 files / 1732 tests), and `pnpm build`.
 
 ## Version Bump 3.1.1 (2026-06-01)
 - [x] Identify release metadata fields pinned to the previous version
