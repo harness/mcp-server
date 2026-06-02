@@ -1,5 +1,44 @@
 # Harness MCP Server — Task Tracking
 
+## PR 298 Header-Based Body Scope Follow-Up (2026-06-02)
+- [x] Move header-based body scope suppression into the dispatcher
+- [x] Remove redundant AI Evals per-endpoint suppression flags
+- [x] Add regressions for AI Evals and template v1 body payloads
+- [x] Run focused and broad verification
+- [x] Push updated PR branch
+
+### Plan
+- Treat `def.headerBasedScoping` and `spec.headerBasedScoping` as default body-scope suppression signals inside `Registry.executeSpec`, matching the documented `ResourceDefinition` contract.
+- Keep `skipScopeBodyInjection` for non-header-scoped exceptions such as DBOps path-scoped POST/PUT bodies.
+- Add a registry regression using `template_v1.create`, since that was the reviewer's concrete reproduction of the abstraction gap.
+
+### Review
+- `Registry.executeSpec` now treats `spec.skipScopeBodyInjection`, `spec.headerBasedScoping`, and `def.headerBasedScoping` as body-scope suppression signals before POST/PUT body injection.
+- Removed redundant AI Evals endpoint-level `skipScopeBodyInjection` flags; AI Evals relies on resource-level `headerBasedScoping` for the shared behavior.
+- Added regression coverage that AI Evals resources use header scoping without redundant endpoint flags and that `template_v1.create` no longer leaks `orgIdentifier`/`projectIdentifier` into its JSON body.
+- Verification passed: `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm test` (68 files / 1734 tests), `pnpm build`, and `git diff --check`.
+
+## Critical Bug Inspection (2026-06-02)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+- [x] Commit/push/open PR only if a fix is made
+
+### Plan
+- Compare this branch against `origin/main`; if empty, inspect recent `origin/main` commits since the last critical-bug run.
+- Prioritize behavioral changes with high blast radius: auth/session handling, request construction, write-operation safety, scoping, pagination/output contracts, and long-running execution semantics.
+- Require a concrete trigger scenario for data loss, crash, security bypass, or significant user-facing breakage before patching.
+
+### Review
+- Found that AI Evals path-scoped POST/PUT requests leaked generic NG `orgIdentifier` and `projectIdentifier` fields into API-specific JSON bodies whenever callers supplied explicit org/project IDs or a parsed Harness URL. This could make normal dataset/eval/metric/suite/target/model write workflows fail against the AI Evals API despite correct path scoping.
+- Fixed AI Evals mutating endpoint specs to opt out of generic body scope injection while preserving org/project in the REST path and account scoping via headers.
+- Found that `database_execute_llm_authoring_pipeline.create` read `schema_id`, `instance_id`, and `conversation_id` from top-level input even though `harness_create` sends user fields under `body`, then validated the transformed backend payload against the pre-transform alias names. This made the consolidated Accept & Commit endpoint fail before sending any request.
+- Fixed the DBOps LLM authoring body builder to read `input.body`, map caller aliases to backend fields, and skip generic body scope injection.
+- Review follow-up: also found two path-scoped DBOps POST read endpoints (`database_instance.list` and `database_snapshot_object.get`) that were still receiving generic body scope fields. They now opt out and have payload regression coverage.
+- Added an AI Evals structural regression so every current and future POST/PUT body builder in that toolset must opt out of generic NG scope body injection.
+- Verified focused coverage with `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/dbops.test.ts`, then broader verification with `pnpm typecheck`, full `pnpm test` (68 files / 1734 tests, rerun outside the sandbox after localhost bind tests hit `EPERM`), and `pnpm build`.
+
 ## Version Bump 3.1.1 (2026-06-01)
 - [x] Identify release metadata fields pinned to the previous version
 - [x] Update package and manifest versions to 3.1.1
