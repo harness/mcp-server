@@ -24,7 +24,7 @@ function base(input: Record<string, unknown>, config: PathBuilderConfig): string
   return `${AI}/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}`;
 }
 
-const listQ = { page: "page", limit: "limit" };
+const listQ = { page: "page", size: "limit" };
 
 // --- Body schemas (concise; full shapes in OpenAPI / harness_describe) ---
 
