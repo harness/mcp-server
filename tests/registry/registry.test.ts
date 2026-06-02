@@ -753,6 +753,8 @@ describe("Registry", () => {
         label: "1.0.0",
         git_details: { store_type: "INLINE" },
       });
+      expect(call.body).not.toHaveProperty("orgIdentifier");
+      expect(call.body).not.toHaveProperty("projectIdentifier");
       expect(typeof call.body.template_yaml).toBe("string");
     });
 
