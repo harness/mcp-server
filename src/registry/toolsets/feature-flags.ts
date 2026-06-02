@@ -618,7 +618,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment_keys",
       displayName: "FME Segment Keys",
       description:
-        "Membership keys (members) of a standard segment. List keys with pagination, or update to add/remove members. Limit: 10,000 keys per request, 100,000 per segment total.",
+        "Membership keys (members) of a standard segment. List keys with pagination, or update to add members. Removal is not supported by this endpoint. Limit: 10,000 keys per request, 100,000 per segment total.",
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["environment_id", "segment_name"],
@@ -648,9 +648,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
           pathParams: { environment_id: "environmentId", segment_name: "segmentName" },
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
-            const body = input.body as Record<string, unknown>;
-            const keys = (body.add ?? body.keys) as string[] | undefined;
-            if (!keys || keys.length === 0) {
+            const body = input.body;
+            if (!body || typeof body !== "object" || Array.isArray(body)) {
+              throw new Error("fme_segment_keys update requires body.add or body.keys with at least one key.");
+            }
+            const record = body as Record<string, unknown>;
+            const keys = record.add ?? record.keys;
+            if (!Array.isArray(keys) || keys.length === 0) {
               throw new Error("fme_segment_keys update requires body.add or body.keys with at least one key.");
             }
             return keys;

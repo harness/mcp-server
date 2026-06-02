@@ -15,6 +15,8 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const README_PATH = join(ROOT, "README.md");
+// Other README sections have historical drift; expand this set as those tables are normalized.
+const README_COVERAGE_TOOLSETS = new Set(["feature-flags"]);
 
 async function getCounts() {
   const { Registry } = await import(join(ROOT, "build", "registry", "index.js"));
@@ -31,8 +33,15 @@ async function getCounts() {
   };
   const reg = new Registry(config);
 
-  const resourceTypes = reg.getAllResourceTypes().length;
-  const defaultToolsets = reg.getAllToolsets().length;
+  const defaultResourceTypes = reg.getAllResourceTypes();
+  const defaultToolsetResources = reg.getAllToolsets().map((toolset) => ({
+    name: toolset.name,
+    resourceTypes: toolset.resources.map((resource) => resource.resourceType),
+  }));
+  const coverageToolsetResources = defaultToolsetResources.filter((toolset) => README_COVERAGE_TOOLSETS.has(toolset.name));
+  const coverageResourceTypes = [...new Set(coverageToolsetResources.flatMap((toolset) => toolset.resourceTypes))].sort();
+  const resourceTypes = defaultResourceTypes.length;
+  const defaultToolsets = defaultToolsetResources.length;
 
   // Discover opt-in toolset names dynamically: add every toolset that
   // isn't already loaded. This avoids hardcoding opt-in names.
@@ -59,7 +68,45 @@ async function getCounts() {
     console.error("WARNING: No prompt files found in src/prompts/ — expected at least 1");
   }
 
-  return { resourceTypes, defaultToolsets, totalToolsets, promptCount };
+  return { resourceTypes, defaultToolsets, totalToolsets, promptCount, coverageResourceTypes, coverageToolsetResources };
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function validateReadmeCoverage(readme, counts) {
+  const errors = [];
+
+  const missingResourceRows = counts.coverageResourceTypes.filter((resourceType) => {
+    const rowPattern = new RegExp("^\\| `" + escapeRegExp(resourceType) + "`\\s*\\|", "m");
+    return !rowPattern.test(readme);
+  });
+  if (missingResourceRows.length > 0) {
+    errors.push(`README.md Resource Types tables are missing rows for: ${missingResourceRows.join(", ")}`);
+  }
+
+  for (const toolset of counts.coverageToolsetResources) {
+    const rowPattern = new RegExp("^\\| `" + escapeRegExp(toolset.name) + "`\\s*\\|([^\\n]*)$", "m");
+    const rowMatch = readme.match(rowPattern);
+    if (!rowMatch) {
+      errors.push(`README.md Toolset Filtering table is missing a row for toolset: ${toolset.name}`);
+      continue;
+    }
+
+    const documentedResources = new Set(
+      rowMatch[1]
+        .split(",")
+        .map((resourceType) => resourceType.trim())
+        .filter(Boolean),
+    );
+    const missingResources = toolset.resourceTypes.filter((resourceType) => !documentedResources.has(resourceType));
+    if (missingResources.length > 0) {
+      errors.push(`README.md Toolset Filtering row for ${toolset.name} is missing: ${missingResources.join(", ")}`);
+    }
+  }
+
+  return errors;
 }
 
 const REPLACEMENTS = [
@@ -88,10 +135,20 @@ async function main() {
     updated = updated.replace(pattern, replacement(counts));
   }
 
+  const coverageErrors = validateReadmeCoverage(updated, counts);
+
   if (checkMode) {
-    if (original !== updated) {
-      console.error("README.md is stale. Run `pnpm docs:generate` to refresh.");
-      console.error("Differences found in counts or clone instructions.");
+    if (original !== updated || coverageErrors.length > 0) {
+      if (original !== updated) {
+        console.error("README.md is stale. Run `pnpm docs:generate` to refresh.");
+        console.error("Differences found in counts or clone instructions.");
+      }
+      if (coverageErrors.length > 0) {
+        console.error("README.md resource coverage is incomplete.");
+      }
+      for (const error of coverageErrors) {
+        console.error(error);
+      }
       process.exit(1);
     }
     console.error("README.md is up to date.");
@@ -103,6 +160,14 @@ async function main() {
   } else {
     writeFileSync(README_PATH, updated);
     console.error(`README.md updated: ${counts.resourceTypes} resource types, ${counts.defaultToolsets}/${counts.totalToolsets} toolsets, ${counts.promptCount} prompts.`);
+  }
+
+  if (coverageErrors.length > 0) {
+    console.error("README.md resource coverage is incomplete:");
+    for (const error of coverageErrors) {
+      console.error(error);
+    }
+    process.exit(1);
   }
 }
 

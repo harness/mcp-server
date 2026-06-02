@@ -79,6 +79,14 @@ describe("FME registry metadata", () => {
     expect(createSpec.description).toContain("traffic_type_id (get from fme_traffic_type)");
     expect(createSpec.description).not.toContain("traffic_type_id (get from fme_workspace)");
   });
+
+  it("documents segment key updates as add-only", () => {
+    const resource = findResource("fme_segment_keys");
+
+    expect(resource.description).toContain("update to add members");
+    expect(resource.description).toContain("Removal is not supported by this endpoint");
+    expect(resource.description).not.toContain("add/remove");
+  });
 });
 
 describe("fme_identity create", () => {
@@ -193,6 +201,20 @@ describe("fme_segment_keys update", () => {
         environment_id: "env-prod",
         segment_name: "beta_users",
         body: { add: [] },
+      }),
+    ).rejects.toThrow("fme_segment_keys update requires body.add or body.keys with at least one key");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fails before request construction when body is omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ ok: true });
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment_keys", "update", {
+        environment_id: "env-prod",
+        segment_name: "beta_users",
       }),
     ).rejects.toThrow("fme_segment_keys update requires body.add or body.keys with at least one key");
 
