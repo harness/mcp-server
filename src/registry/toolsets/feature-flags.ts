@@ -114,7 +114,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
     {
       resourceType: "fme_workspace",
       displayName: "FME Workspace",
-      description: "Feature Management workspace. Supports list with pagination (offset/size, default 20, max 1000) and get by workspace_id.",
+      description: "Feature Management workspace. Supports list with pagination (offset/size, default 20, max 1000).",
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id"],

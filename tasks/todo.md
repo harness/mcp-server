@@ -1,23 +1,5 @@
 # Harness MCP Server — Task Tracking
 
-## PR 296 FME CI Fix (2026-06-02)
-- [x] Inspect failing GitHub Actions logs and changed files
-- [x] Regenerate stale docs
-- [x] Run focused docs and build/test verification
-- [x] Push fix to the PR head branch if permitted
-
-### Plan
-- Root cause from CI: Node 22 `build-and-test` passed tests and typecheck, then failed at `pnpm docs:check` because `README.md` was stale against the PR merge ref.
-- Keep the fix scoped to generated documentation and current-main merge resolution unless local verification reveals a real registry/toolset bug.
-- Verify with `pnpm docs:check`, `pnpm typecheck`, `pnpm test`, and `pnpm build` so the PR is review-ready.
-
-### Review
-- PR 296 was failing because GitHub tested the PR merge ref after `main` advanced, and generated README metadata no longer matched the merged registry counts.
-- Merged current `origin/main` into the PR branch and refreshed generated docs; the remaining README diff is count-only generated documentation.
-- Follow-up CI confirmed the docs script was counting prompt files from stale-prone `build/prompts`; it now counts `src/prompts` modules so local docs generation matches CI clean builds.
-- Regenerated README to match CI's `207` default / `212` all-toolset registry counts and `32` source prompt modules.
-- Verification passed from a clean build: `pnpm build`, `pnpm docs:check`, `pnpm typecheck`, `pnpm test` (69 files / 1753 tests), and `git diff --check`.
-
 ## PR 298 Header-Based Body Scope Follow-Up (2026-06-02)
 - [x] Move header-based body scope suppression into the dispatcher
 - [x] Remove redundant AI Evals per-endpoint suppression flags
