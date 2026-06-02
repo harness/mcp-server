@@ -87,6 +87,14 @@ describe("FME registry metadata", () => {
     expect(resource.description).toContain("Removal is not supported by this endpoint");
     expect(resource.description).not.toContain("add/remove");
   });
+
+  it("marks raw-array write canonical bodies as required in structured schema", () => {
+    const identityItemsField = getOperation("fme_identity", "create").bodySchema?.fields.find((field) => field.name === "items");
+    const segmentAddField = getOperation("fme_segment_keys", "update").bodySchema?.fields.find((field) => field.name === "add");
+
+    expect(identityItemsField?.required).toBe(true);
+    expect(segmentAddField?.required).toBe(true);
+  });
 });
 
 describe("fme_identity create", () => {

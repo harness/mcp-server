@@ -78,7 +78,7 @@ const fmeIdentityUpdateSchema: BodySchema = {
 const fmeSegmentKeysUpdateSchema: BodySchema = {
   description: "Add keys to a standard segment. The Split Admin API only supports adding keys; removal requires the UI or a different API version.",
   fields: [
-    { name: "add", type: "array", required: false, description: "Keys to add to the segment (string array of identity keys)", itemType: "string" },
+    { name: "add", type: "array", required: true, description: "Keys to add to the segment (string array of identity keys)", itemType: "string" },
     { name: "comment", type: "string", required: false, description: "Comment describing the change (metadata only, not sent to API)" },
   ],
 };
@@ -565,7 +565,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodySchema: {
             description: "Batch create/upsert identities. Provide {items: [{key, values}]} where each item has a 'key' (string identifier) and 'values' (object of attribute name-value pairs, e.g. {name: 'Display Name', company: 'Acme'}).",
             fields: [
-              { name: "items", type: "array", required: false, description: "Array of identity objects. Each must have 'key' (string) and 'values' (object mapping attribute names to values, e.g. {name: 'Display Name', company: 'Acme'})", itemType: "object" },
+              { name: "items", type: "array", required: true, description: "Array of identity objects. Each must have 'key' (string) and 'values' (object mapping attribute names to values, e.g. {name: 'Display Name', company: 'Acme'})", itemType: "object" },
             ],
           },
           description: "Create or upsert identities in batch. Body: {items: [{key, values}]}. Returns created/updated objects and any failures.",
