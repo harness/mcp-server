@@ -48,15 +48,15 @@ async function getCounts() {
   const regAll = additive ? new Registry(configAll) : reg;
   const totalToolsets = regAll.getAllToolsets().length;
 
-  // Prompt count: count built prompt modules under build/prompts/ (excludes index bundler).
-  // Resource/toolset counts above come from Registry (same surface as the running server).
-  const promptDir = join(ROOT, "build", "prompts");
+  // Prompt count: count source prompt modules (excludes index bundler).
+  // Counting build/prompts is vulnerable to stale tsc output because tsc does not clean deleted files.
+  const promptDir = join(ROOT, "src", "prompts");
   const promptCount = readdirSync(promptDir)
-    .filter((f) => f.endsWith(".js") && f !== "index.js")
+    .filter((f) => f.endsWith(".ts") && f !== "index.ts")
     .length;
 
   if (promptCount === 0) {
-    console.error("WARNING: No prompt files found in build/prompts/ — expected at least 1");
+    console.error("WARNING: No prompt files found in src/prompts/ — expected at least 1");
   }
 
   return { resourceTypes, defaultToolsets, totalToolsets, promptCount };
