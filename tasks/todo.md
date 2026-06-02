@@ -17,7 +17,9 @@
 - Fixed AI Evals mutating endpoint specs to opt out of generic body scope injection while preserving org/project in the REST path and account scoping via headers.
 - Found that `database_execute_llm_authoring_pipeline.create` read `schema_id`, `instance_id`, and `conversation_id` from top-level input even though `harness_create` sends user fields under `body`, then validated the transformed backend payload against the pre-transform alias names. This made the consolidated Accept & Commit endpoint fail before sending any request.
 - Fixed the DBOps LLM authoring body builder to read `input.body`, map caller aliases to backend fields, and skip generic body scope injection.
-- Verified red/green focused coverage with `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/dbops.test.ts`, then broader verification with `pnpm typecheck`, full `pnpm test` (68 files / 1732 tests), and `pnpm build`.
+- Review follow-up: also found two path-scoped DBOps POST read endpoints (`database_instance.list` and `database_snapshot_object.get`) that were still receiving generic body scope fields. They now opt out and have payload regression coverage.
+- Added an AI Evals structural regression so every current and future POST/PUT body builder in that toolset must opt out of generic NG scope body injection.
+- Verified focused coverage with `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/dbops.test.ts`, then broader verification with `pnpm typecheck`, full `pnpm test` (68 files / 1734 tests, rerun outside the sandbox after localhost bind tests hit `EPERM`), and `pnpm build`.
 
 ## Version Bump 3.1.1 (2026-06-01)
 - [x] Identify release metadata fields pinned to the previous version

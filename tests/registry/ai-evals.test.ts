@@ -81,6 +81,25 @@ describe("AI Evals pagination mapping", () => {
 // ─── Path-scoped writes ─────────────────────────────────────────────────────
 
 describe("AI Evals path-scoped write bodies", () => {
+  it("all POST/PUT body builders opt out of generic NG scope body injection", () => {
+    const missing: string[] = [];
+
+    for (const resource of aiEvalsToolset.resources) {
+      for (const [operation, spec] of Object.entries(resource.operations)) {
+        if (spec?.bodyBuilder && (spec.method === "POST" || spec.method === "PUT") && !spec.skipScopeBodyInjection) {
+          missing.push(`${resource.resourceType}.${operation}`);
+        }
+      }
+      for (const [action, spec] of Object.entries(resource.executeActions ?? {})) {
+        if (spec.bodyBuilder && (spec.method === "POST" || spec.method === "PUT") && !spec.skipScopeBodyInjection) {
+          missing.push(`${resource.resourceType}.${action}`);
+        }
+      }
+    }
+
+    expect(missing).toEqual([]);
+  });
+
   it("dataset create does not inject NG scope fields into the API body", async () => {
     const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({ id: "dataset-1" });

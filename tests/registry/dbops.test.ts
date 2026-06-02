@@ -470,8 +470,9 @@ describe("database_instance CRUD operations", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/instancelist");
-    // Body may contain org/project identifiers added by the framework
-    expect(call.body).toBeDefined();
+    expect(call.body).toEqual({});
+    expect(call.body).not.toHaveProperty("orgIdentifier");
+    expect(call.body).not.toHaveProperty("projectIdentifier");
     expect(result).toHaveLength(1);
   });
 
@@ -725,6 +726,37 @@ describe("database_execute_llm_authoring_pipeline create", () => {
       instanceIdentifier: "instance_1",
       conversationId: "conversation-1",
       changeset: "databaseChangeLog: []",
+    });
+    expect(call.body).not.toHaveProperty("orgIdentifier");
+    expect(call.body).not.toHaveProperty("projectIdentifier");
+  });
+});
+
+describe("database_snapshot_object get", () => {
+  it("passes object lookup body without scope injection", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [{ objectName: "users", objectValue: { columns: [] } }],
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_snapshot_object", "get", {
+      org_id: "default",
+      project_id: "test-project",
+      dbschema_id: "my_schema",
+      dbinstance_id: "my_instance",
+      object_type: "Table",
+      object_names: ["users"],
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe(
+      "/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/dbinstance/my_instance/snapshot-object-values",
+    );
+    expect(call.body).toEqual({
+      objectType: "Table",
+      objectNames: ["users"],
     });
     expect(call.body).not.toHaveProperty("orgIdentifier");
     expect(call.body).not.toHaveProperty("projectIdentifier");

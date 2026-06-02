@@ -489,6 +489,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbschema_id: "dbschema",
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           queryParams: {
             search_term: "search_term",
             page: "page",
@@ -650,6 +651,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbinstance_id: "dbinstance",
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const names = input.object_names;
             if (!Array.isArray(names) || names.length === 0) {
