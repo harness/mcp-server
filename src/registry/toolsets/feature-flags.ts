@@ -381,6 +381,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: ["workspace_id"],
       product: "fme",
+      listFilterFields: [
+        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace)", required: true },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -402,6 +405,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: ["workspace_id", "segment_name"],
       product: "fme",
+      listFilterFields: [
+        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace)", required: true },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -454,6 +460,10 @@ export const featureFlagsToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: ["workspace_id", "environment_id", "segment_name"],
       product: "fme",
+      listFilterFields: [
+        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace)", required: true },
+        { name: "environment_id", description: "FME environment ID (get from fme_environment)", required: true },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -525,6 +535,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: ["workspace_id"],
       product: "fme",
+      listFilterFields: [
+        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace)", required: true },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -554,10 +567,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
           pathParams: { traffic_type_id: "trafficTypeId", environment_id: "environmentId" },
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
-            const body = input.body as Record<string, unknown> | unknown[] | undefined;
-            const items = Array.isArray(body) ? body : body && Array.isArray(body.items) ? body.items : undefined;
-            if (!items || items.length === 0) {
-              throw new Error("fme_identity create requires body.items with at least one identity, or a raw non-empty identity array.");
+            const body = input.body;
+            if (!body || typeof body !== "object" || Array.isArray(body)) {
+              throw new Error("fme_identity create requires body.items with at least one identity.");
+            }
+            const items = (body as Record<string, unknown>).items;
+            if (!Array.isArray(items) || items.length === 0) {
+              throw new Error("fme_identity create requires body.items with at least one identity.");
             }
             return items;
           },
@@ -650,12 +666,12 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = input.body;
             if (!body || typeof body !== "object" || Array.isArray(body)) {
-              throw new Error("fme_segment_keys update requires body.add or body.keys with at least one key.");
+              throw new Error("fme_segment_keys update requires body.add with at least one key.");
             }
             const record = body as Record<string, unknown>;
-            const keys = record.add ?? record.keys;
+            const keys = record.add;
             if (!Array.isArray(keys) || keys.length === 0) {
-              throw new Error("fme_segment_keys update requires body.add or body.keys with at least one key.");
+              throw new Error("fme_segment_keys update requires body.add with at least one key.");
             }
             return keys;
           },

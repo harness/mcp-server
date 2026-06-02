@@ -688,17 +688,10 @@ export class Registry {
     }
 
     // Validate required fields if bodySchema is defined.
-    // When bodyWrapperKey is set, the bodyBuilder wraps user fields inside that
-    // key (e.g. { project: { identifier, name } }), so we validate the inner object.
-    // Skip validation when body is an array (e.g. Split API endpoints that expect raw JSON arrays).
-    if (spec.bodySchema && body && typeof body === "object" && !Array.isArray(body)) {
-      const bodyRecord = body as Record<string, unknown>;
-      const payload =
-        spec.bodyWrapperKey &&
-        bodyRecord[spec.bodyWrapperKey] != null &&
-        typeof bodyRecord[spec.bodyWrapperKey] === "object"
-          ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
-          : bodyRecord;
+    // When the API body is transformed into a raw array, validate the caller's
+    // canonical object-shaped input body so registry behavior matches harness_describe.
+    if (spec.bodySchema && body && typeof body === "object") {
+      const payload = this.getBodySchemaValidationPayload(spec, input, body);
       const missing = spec.bodySchema.fields
         .filter(f => f.required && payload[f.name] === undefined)
         .map(f => f.name);
@@ -999,6 +992,27 @@ export class Registry {
     }
 
     return result;
+  }
+
+  private getBodySchemaValidationPayload(
+    spec: EndpointSpec,
+    input: Record<string, unknown>,
+    body: object,
+  ): Record<string, unknown> {
+    if (Array.isArray(body)) {
+      const inputBody = input.body;
+      return inputBody && typeof inputBody === "object" && !Array.isArray(inputBody)
+        ? (inputBody as Record<string, unknown>)
+        : {};
+    }
+
+    const bodyRecord = body as Record<string, unknown>;
+    return spec.bodyWrapperKey &&
+      bodyRecord[spec.bodyWrapperKey] != null &&
+      typeof bodyRecord[spec.bodyWrapperKey] === "object" &&
+      !Array.isArray(bodyRecord[spec.bodyWrapperKey])
+        ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
+        : bodyRecord;
   }
 
   /** Get describe metadata for all enabled resource types (full detail). */

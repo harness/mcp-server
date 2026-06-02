@@ -80,6 +80,34 @@ describe("FME registry metadata", () => {
     expect(createSpec.description).not.toContain("traffic_type_id (get from fme_workspace)");
   });
 
+  it("documents fme_traffic_type list workspace_id requirement", () => {
+    const resource = findResource("fme_traffic_type");
+
+    expect(resource.listFilterFields).toContainEqual({
+      name: "workspace_id",
+      description: "FME workspace ID (get from fme_workspace)",
+      required: true,
+    });
+  });
+
+  it("documents every required FME list path parameter as a list filter", () => {
+    const missing: string[] = [];
+
+    for (const resource of featureFlagsToolset.resources.filter((candidate) => candidate.resourceType.startsWith("fme_"))) {
+      const listPathParamKeys = Object.keys(resource.operations.list?.pathParams ?? {});
+      if (listPathParamKeys.length === 0) continue;
+
+      const listFilterNames = new Set((resource.listFilterFields ?? []).map((field) => field.name));
+      for (const paramKey of listPathParamKeys) {
+        if (!listFilterNames.has(paramKey)) {
+          missing.push(`${resource.resourceType}.${paramKey}`);
+        }
+      }
+    }
+
+    expect(missing).toEqual([]);
+  });
+
   it("documents segment key updates as add-only", () => {
     const resource = findResource("fme_segment_keys");
 
@@ -104,7 +132,7 @@ describe("fme_identity create", () => {
     registry = new Registry(makeConfig());
   });
 
-  it("posts a raw identity array without generic NG scope fields", async () => {
+  it("transforms body.items into a raw API array without generic NG scope fields", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ ok: true });
     const client = makeClient(mockRequest);
 
@@ -135,18 +163,20 @@ describe("fme_identity create", () => {
     expect(call.body).not.toHaveProperty("projectIdentifier");
   });
 
-  it("accepts a raw identity array body", async () => {
+  it("rejects raw identity array bodies outside the public object contract", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ ok: true });
     const client = makeClient(mockRequest);
     const body = [{ key: "user-1", values: { name: "Ada" } }];
 
-    await registry.dispatch(client, "fme_identity", "create", {
-      traffic_type_id: "tt-user",
-      environment_id: "env-prod",
-      body,
-    });
+    await expect(
+      registry.dispatch(client, "fme_identity", "create", {
+        traffic_type_id: "tt-user",
+        environment_id: "env-prod",
+        body,
+      }),
+    ).rejects.toThrow("fme_identity create requires body.items with at least one identity");
 
-    expect(firstRequest(mockRequest).body).toEqual(body);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("fails before request construction when no identities are provided", async () => {
@@ -210,7 +240,22 @@ describe("fme_segment_keys update", () => {
         segment_name: "beta_users",
         body: { add: [] },
       }),
-    ).rejects.toThrow("fme_segment_keys update requires body.add or body.keys with at least one key");
+    ).rejects.toThrow("fme_segment_keys update requires body.add with at least one key");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects undocumented body.keys alias", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ ok: true });
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment_keys", "update", {
+        environment_id: "env-prod",
+        segment_name: "beta_users",
+        body: { keys: ["user-1"] },
+      }),
+    ).rejects.toThrow("fme_segment_keys update requires body.add with at least one key");
 
     expect(mockRequest).not.toHaveBeenCalled();
   });
@@ -224,7 +269,7 @@ describe("fme_segment_keys update", () => {
         environment_id: "env-prod",
         segment_name: "beta_users",
       }),
-    ).rejects.toThrow("fme_segment_keys update requires body.add or body.keys with at least one key");
+    ).rejects.toThrow("fme_segment_keys update requires body.add with at least one key");
 
     expect(mockRequest).not.toHaveBeenCalled();
   });
