@@ -72,6 +72,13 @@ describe("FME registry metadata", () => {
     expect(resource.operations.list).toBeDefined();
     expect(resource.operations.get).toBeUndefined();
   });
+
+  it("points feature flag create callers at fme_traffic_type for traffic_type_id discovery", () => {
+    const createSpec = getOperation("fme_feature_flag", "create");
+
+    expect(createSpec.description).toContain("traffic_type_id (get from fme_traffic_type)");
+    expect(createSpec.description).not.toContain("traffic_type_id (get from fme_workspace)");
+  });
 });
 
 describe("fme_identity create", () => {
@@ -175,6 +182,21 @@ describe("fme_segment_keys update", () => {
     expect(call.body).not.toHaveProperty("comment");
     expect(call.body).not.toHaveProperty("orgIdentifier");
     expect(call.body).not.toHaveProperty("projectIdentifier");
+  });
+
+  it("fails before request construction when no keys are provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ ok: true });
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment_keys", "update", {
+        environment_id: "env-prod",
+        segment_name: "beta_users",
+        body: { add: [] },
+      }),
+    ).rejects.toThrow("fme_segment_keys update requires body.add or body.keys with at least one key");
+
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("opts out of body scope injection", () => {

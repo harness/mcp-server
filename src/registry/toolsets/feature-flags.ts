@@ -215,7 +215,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagCreateSchema,
-          description: "Create a feature flag in a workspace. Requires workspace_id and traffic_type_id (get from fme_workspace). Body requires name, optional description. Note: tags must be set via a follow-up harness_update call (Split API limitation).",
+          description: "Create a feature flag in a workspace. Requires workspace_id and traffic_type_id (get from fme_traffic_type). Body requires name, optional description. Note: tags must be set via a follow-up harness_update call (Split API limitation).",
         },
         delete: {
           method: "DELETE",
@@ -649,7 +649,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown>;
-            return (body.add ?? body.keys ?? []) as string[];
+            const keys = (body.add ?? body.keys) as string[] | undefined;
+            if (!keys || keys.length === 0) {
+              throw new Error("fme_segment_keys update requires body.add or body.keys with at least one key.");
+            }
+            return keys;
           },
           responseExtractor: passthrough,
           bodySchema: fmeSegmentKeysUpdateSchema,
