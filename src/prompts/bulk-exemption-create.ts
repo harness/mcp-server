@@ -97,27 +97,50 @@ Follow this workflow exactly:
    - Exclude issues where exemption status is already set (anything other than "None"/empty).
    - If no candidate issues remain, return a short "nothing to create" summary and stop.
 
-3. Create exemptions for each remaining issue.
-   - For every issue_id, call:
+3. Create exemptions in bulk (one all-or-none transaction per chunk).
+   - Use resource_type="security_exemption_bulk" — NOT a loop of single security_exemption creates.
+     The bulk endpoint writes ONE audit row and ONE DB transaction for the whole chunk;
+     looping the single endpoint produces N audit rows and N transactions and is the wrong shape here.
+   - Chunk the de-duplicated issue_id list into batches of AT MOST 100 items.
+   - For every chunk, call:
      harness_create(
-       resource_type="security_exemption"${orgScope}${projectScope},
+       resource_type="security_exemption_bulk"${orgScope}${projectScope},
        body={
-         issue_id: "<issue_id>",
          type: "${exemption_type}",
          reason: "${reason}"${duration_days ? `,
          duration_days: ${duration_days}` : ""}${link ? `,
          link: "${link}"` : ""}${expiration ? `,
-         expiration: ${expiration}` : ""}
+         expiration: ${expiration}` : ""},
+         items: [
+           { issue_id: "<issue_id_1>" },
+           { issue_id: "<issue_id_2>" },
+           ...
+         ]
        }
      )
-   - DO NOT send requester_id.
+   - DO NOT send requester_id at the top level or per item.
    - DO NOT send exempt_future_occurrences.
    - The server enforces requesterId from the authenticated PAT and always sets exemptFutureOccurrences=true.
+   - This prompt is the All Issues (project-scope) workflow — do NOT add target_id or pipeline_id
+     to any item. Mixed-scope bulk batches are only valid from the per-execution Vuln tab flow.
 
-4. Report results.
-   - Return: total candidate issues, total skipped (already exempted), total created, total failed.
-   - Include a compact table with issue_id, status (created/skipped/failed), exemption_id (if created), and failure reason (if failed).
-   - End with a one-line recommendation for next action.
+4. Handle each chunk's response strictly per its top-level "status":
+   - status = "ALL_SUCCEEDED" — record every results[i].id as a created exemption.
+   - status = "ALL_FAILED"    — the WHOLE chunk was rolled back. Read results[0].error for the
+     cause, record every issue_id in that chunk as failed with that error, and continue to the
+     next chunk. DO NOT retry the chunk and DO NOT split it — re-running the same payload will
+     hit the same error.
+   - status = "MIXED_UNEXPECTED" — server-side contract violation. Surface raw results[] to the
+     user, mark every item in the chunk as failed, and stop processing further chunks.
+   - status = "EMPTY"          — treat as a failed chunk and surface the raw response.
+
+5. Report results.
+   - Return: total candidate issues, total skipped (already exempted), total created, total failed,
+     and the number of bulk chunks that succeeded vs failed.
+   - Include a compact table with issue_id, status (created/skipped/failed), exemption_id (if created),
+     and failure reason (if failed).
+   - If any chunk failed, end with a one-line recommendation: fix the root cause from
+     results[0].error and re-run this prompt with the failed issue_ids — never retry mid-batch.
 
 Pipeline Agent Integration Pattern:
 - This prompt is designed for a downstream step after "Snyk Agent Security Scan".
