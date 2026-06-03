@@ -85,12 +85,14 @@ function getRequestedScope(def: ResourceDefinition, input: Record<string, unknow
 
 export function describePatchSupport(def: ResourceDefinition): Record<string, unknown> | undefined {
   if (!def.patchSupport) return undefined;
+  // Only expose the public harness_update contract here. bodyFields are internal
+  // GET-response extractor keys (e.g. "yaml"), not valid update args, and patch
+  // paths target the parsed document root (/pipeline/...), so agents never need them.
   return {
     input: "operations",
     format: "RFC 6902 JSON Patch",
     bodyKind: def.patchSupport.kind,
-    bodyFields: [...def.patchSupport.bodyFields],
-    dryRun: true,
+    dry_run: true,
   };
 }
 

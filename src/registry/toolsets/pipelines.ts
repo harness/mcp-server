@@ -674,7 +674,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id", "input_set_id"],
-      patchSupport: { kind: "yaml", bodyFields: ["yamlInputSet"] },
+      patchSupport: { kind: "yaml", bodyFields: ["inputSetYaml"] },
       listFilterFields: [
         { name: "pipeline_id", description: "Pipeline identifier to filter input sets", required: true },
       ],

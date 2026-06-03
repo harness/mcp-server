@@ -11,9 +11,9 @@ const patchableResource = (
 
 const pipelineResource = patchableResource("pipeline", ["yamlPipeline"]);
 const pipelineV1Resource = patchableResource("pipeline_v1", ["pipeline_yaml", "yaml"]);
-const templateResource = patchableResource("template", ["template_yaml"]);
-const templateV1Resource = patchableResource("template_v1", ["template_yaml"]);
-const inputSetResource = patchableResource("input_set", ["yamlInputSet"]);
+const templateResource = patchableResource("template", ["yaml"]);
+const templateV1Resource = patchableResource("template_v1", ["template.yaml", "yaml", "template_yaml"]);
+const inputSetResource = patchableResource("input_set", ["inputSetYaml"]);
 const serviceResource: PatchableResourceDefinition = { resourceType: "service" };
 const triggerResource: PatchableResourceDefinition = { resourceType: "trigger" };
 
@@ -183,17 +183,31 @@ describe("extractMutableBody", () => {
     expect((document.pipeline as any).name).toBe("V1 Pipeline");
   });
 
-  it("parses template_yaml field for templates", () => {
+  it("parses yaml field for templates", () => {
     const getResult = {
       identifier: "my-tmpl",
-      template_yaml: "template:\n  name: My Template\n  type: Step",
+      yaml: "template:\n  name: My Template\n  type: Step",
     };
     const { document, yamlSource } = extractMutableBody(getResult, templateResource);
     expect(yamlSource).toBe(true);
     expect((document.template as any).name).toBe("My Template");
   });
 
-  it("parses template_yaml field for template_v1", () => {
+  it("parses nested template.yaml for template_v1 GET shape", () => {
+    const getResult = {
+      template: {
+        identifier: "my-tmpl",
+        yaml: "version: 1\ntemplate:\n  name: My Template\n  type: Step",
+      },
+      inputs: { foo: "bar" },
+      openInHarness: "https://app.harness.io/...",
+    };
+    const { document, yamlSource } = extractMutableBody(getResult, templateV1Resource);
+    expect(yamlSource).toBe(true);
+    expect((document.template as any).name).toBe("My Template");
+  });
+
+  it("falls back to top-level template_yaml for template_v1", () => {
     const getResult = {
       identifier: "my-tmpl",
       template_yaml: "version: 1\ntemplate:\n  name: My Template\n  type: Step",
@@ -203,10 +217,10 @@ describe("extractMutableBody", () => {
     expect((document.template as any).name).toBe("My Template");
   });
 
-  it("parses yamlInputSet field for input_set", () => {
+  it("parses inputSetYaml field for input_set", () => {
     const getResult = {
       identifier: "my-is",
-      yamlInputSet: "inputSet:\n  name: My Input Set",
+      inputSetYaml: "inputSet:\n  name: My Input Set",
     };
     const { document, yamlSource } = extractMutableBody(getResult, inputSetResource);
     expect(yamlSource).toBe(true);
@@ -240,31 +254,6 @@ describe("extractMutableBody", () => {
   it("throws when pipeline has no YAML field", () => {
     const getResult = { identifier: "pipe-1", name: "No YAML" };
     expect(() => extractMutableBody(getResult, pipelineResource)).toThrow(/does not contain a YAML body/);
-  });
-
-  it("preserves metadata for git-backed resources", () => {
-    const getResult = {
-      identifier: "remote-pipe",
-      yamlPipeline: "pipeline:\n  name: Remote\n  stages: []",
-      lastObjectId: "abc123",
-      lastCommitId: "def456",
-      storeType: "REMOTE",
-      connectorRef: "git_connector",
-    };
-    const { metadata } = extractMutableBody(getResult, pipelineResource);
-    expect(metadata.lastObjectId).toBe("abc123");
-    expect(metadata.lastCommitId).toBe("def456");
-    expect(metadata.storeType).toBe("REMOTE");
-    expect(metadata.connectorRef).toBe("git_connector");
-  });
-
-  it("returns empty metadata for inline resources", () => {
-    const getResult = {
-      identifier: "inline-pipe",
-      yamlPipeline: "pipeline:\n  name: Inline\n  stages: []",
-    };
-    const { metadata } = extractMutableBody(getResult, pipelineResource);
-    expect(Object.keys(metadata)).toHaveLength(0);
   });
 });
 

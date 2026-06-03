@@ -16,8 +16,6 @@ export type PatchableResourceDefinition = Pick<ResourceDefinition, "resourceType
 export interface ExtractResult {
   document: Record<string, unknown>;
   yamlSource: boolean;
-  /** Raw GET metadata (e.g. lastObjectId, storeType) preserved for the update call */
-  metadata: Record<string, unknown>;
 }
 
 export function supportsJsonPatch(def: PatchableResourceDefinition): boolean {
@@ -25,10 +23,29 @@ export function supportsJsonPatch(def: PatchableResourceDefinition): boolean {
 }
 
 /**
+ * Resolve a bodyFields entry against a GET response. A plain name (e.g.
+ * "inputSetYaml") reads a top-level field; a dotted path (e.g. "template.yaml")
+ * walks nested objects. Returns undefined if any segment is missing or not an
+ * object, so extraction fails closed rather than throwing.
+ */
+function resolveFieldPath(record: Record<string, unknown>, field: string): unknown {
+  if (!field.includes(".")) {
+    return record[field];
+  }
+  let current: unknown = record;
+  for (const segment of field.split(".")) {
+    if (current === null || typeof current !== "object") {
+      return undefined;
+    }
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+/**
  * Extract the mutable JSON body from a GET response.
  * For YAML-based resources (pipelines, templates, etc.), parses the embedded
  * YAML string into a JSON object. Unsupported resource types fail closed.
- * Also preserves GET metadata needed for optimistic concurrency (lastObjectId, etc.).
  */
 export function extractMutableBody(
   getResult: unknown,
@@ -40,12 +57,6 @@ export function extractMutableBody(
     throw new Error(`GET response for "${resourceType}" is not an object — cannot apply patch operations.`);
   }
 
-  const metadata: Record<string, unknown> = {};
-  if (record.lastObjectId !== undefined) metadata.lastObjectId = record.lastObjectId;
-  if (record.lastCommitId !== undefined) metadata.lastCommitId = record.lastCommitId;
-  if (record.storeType !== undefined) metadata.storeType = record.storeType;
-  if (record.connectorRef !== undefined) metadata.connectorRef = record.connectorRef;
-
   if (!supportsJsonPatch(def)) {
     throw new Error(
       `JSON Patch is not configured for "${resourceType}". ` +
@@ -56,15 +67,16 @@ export function extractMutableBody(
   let yamlStr: string | undefined;
   const bodyFields = def.patchSupport!.bodyFields;
   for (const field of bodyFields) {
-    if (typeof record[field] === "string") {
-      yamlStr = record[field] as string;
+    const value = resolveFieldPath(record, field);
+    if (typeof value === "string") {
+      yamlStr = value;
       break;
     }
   }
   if (typeof yamlStr === "string") {
     const parsed = YAML.parse(yamlStr);
     if (parsed && typeof parsed === "object") {
-      return { document: parsed as Record<string, unknown>, yamlSource: true, metadata };
+      return { document: parsed as Record<string, unknown>, yamlSource: true };
     }
     throw new Error(`Parsed YAML for "${resourceType}" is not an object.`);
   }

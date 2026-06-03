@@ -16,7 +16,7 @@ import { applyJsonPatch, extractMutableBody, serializeBody, computeDiff, support
 
 interface UpdateToolArgs {
   resource_type: string;
-  resource_id: string;
+  resource_id?: string;
   url?: string;
   resource_scope?: string;
   body?: Record<string, unknown> | string;
@@ -116,17 +116,17 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
   server.registerTool(
     "harness_update",
     {
-      description: "Update an existing Harness resource via full replacement ('body') or targeted JSON Patch ('operations') — mutually exclusive; prefer 'operations' to change specific fields without resending the whole resource. For full replacement of pipelines/input sets, pass body as a YAML string directly, or use body.yamlPipeline/body.pipeline. You can pass a Harness URL to auto-extract identifiers. Response includes openInHarness link to the updated resource when applicable.",
+      description: "Update an existing Harness resource. For pipelines/input sets: pass body as a YAML string directly, or use body.yamlPipeline/body.pipeline. You can pass a Harness URL to auto-extract identifiers. Response includes openInHarness link to the updated resource when applicable. For large YAML-backed pipelines and templates, you can do targeted JSON Patch via 'operations' mode (mutually exclusive with 'body') to change specific fields without resending the whole definition.",
       inputSchema: {
         resource_type: resourceTypeSchema(updatableTypes).describe("The type of resource to update"),
-        resource_id: z.string().describe("The identifier of the resource to update"),
+        resource_id: z.string().describe("The identifier of the resource to update. Auto-extracted from url when omitted.").optional(),
         url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
         resource_scope: resourceScopeSchema,
         body: z.union([
           z.record(z.string(), z.unknown()),
           z.string(),
         ]).optional().describe("Full resource definition body (mutually exclusive with operations). For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object)"),
-        operations: patchOperationsSchema.optional().describe("RFC 6902 JSON Patch operations (mutually exclusive with body, max 100). The tool fetches the current resource, applies these operations server-side, and sends the merged result. Array paths use numeric indices per RFC 6901 (e.g. /pipeline/stages/0/stage/spec). To safely target an array element (stage, step, variable), precede the replace/remove with a `test` op asserting that element's identifier or name at the index."),
+        operations: patchOperationsSchema.optional().describe("RFC 6902 JSON Patch operations for large YAML-backed pipelines, templates, and input sets (mutually exclusive with body, max 100). Array paths use numeric indices per RFC 6901 (e.g. /pipeline/stages/0/stage/spec). To safely target an array element (stage, step, variable), precede the replace/remove with a `test` op asserting that element's identifier or name at the index. For REMOTE (git-backed) resources, still pass git details in params (branch, store_type, connector_ref, repo_name, file_path, last_object_id, last_commit_id, commit_msg)."),
         dry_run: z.boolean().default(false).optional().describe("When true with operations, validates the patch and returns a preview of changes without actually updating the resource"),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
@@ -144,6 +144,17 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
     },
     async (args) => {
       try {
+        // Resolve resource_id from the URL when not passed explicitly, mirroring
+        // harness_get. Do this before any confirmation/GET/network so we can fail
+        // loud and early if the id is still unresolved.
+        if (!args.resource_id && args.url) {
+          const fromUrl = asString(applyUrlDefaults({}, args.url).resource_id);
+          if (fromUrl) args.resource_id = fromUrl;
+        }
+        if (!args.resource_id) {
+          return errorResult("resource_id is required (pass it directly or provide a url that contains it).");
+        }
+
         if (args.body !== undefined && args.operations !== undefined) {
           return errorResult("Provide either 'body' (full replacement) or 'operations' (JSON Patch), not both.");
         }
@@ -255,7 +266,7 @@ async function handlePatchUpdate(server: McpServer, registry: Registry, client: 
   applyUpdateInputDefaults(getInput, def, args);
 
   const getResult = await registry.dispatch(client, args.resource_type, "get", getInput);
-  const { document, yamlSource, metadata } = extractMutableBody(getResult, def);
+  const { document, yamlSource } = extractMutableBody(getResult, def);
 
   const patched = applyJsonPatch(document, operations);
 
@@ -268,12 +279,12 @@ async function handlePatchUpdate(server: McpServer, registry: Registry, client: 
   }
 
   const serialized = serializeBody(patched, yamlSource);
+  // Git context for REMOTE resources (branch, last_object_id, last_commit_id,
+  // commit_msg, repo_name, file_path) is supplied by the caller via params — the
+  // same way full-body updates require it. Patch mode does not auto-derive it:
+  // JSON Patch targets the document body, not git plumbing. Whatever the caller
+  // passed already flowed into getInput, so it carries through here unchanged.
   const updateInput: Record<string, unknown> = { ...getInput, body: serialized };
-
-  if (metadata.lastObjectId) updateInput.last_object_id = metadata.lastObjectId;
-  if (metadata.lastCommitId) updateInput.last_commit_id = metadata.lastCommitId;
-  if (metadata.storeType) updateInput.store_type = metadata.storeType;
-  if (metadata.connectorRef) updateInput.connector_ref = metadata.connectorRef;
 
   const result = await registry.dispatch(client, args.resource_type, "update", updateInput, { tool: "harness_update", confirmation, resource_id: args.resource_id });
   return jsonResult(result);
