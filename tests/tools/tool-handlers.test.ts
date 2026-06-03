@@ -11,6 +11,8 @@ import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { Registry } from "../../src/registry/index.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import { listOutputSchema } from "../../src/tools/output-schemas.js";
+import { AuditManager } from "../../src/audit/manager.js";
+import type { AuditEvent, AuditSink } from "../../src/audit/types.js";
 
 // Top-level mocks for execution_log tests — must be before any imports that pull these in
 vi.mock("../../src/utils/log-resolver.js", () => ({
@@ -43,6 +45,17 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
     request: requestFn ?? vi.fn().mockResolvedValue({}),
     account: "test-account",
   } as unknown as HarnessClient;
+}
+
+function collectingSink(): AuditSink & { events: AuditEvent[] } {
+  const events: AuditEvent[] = [];
+  return {
+    name: "test-collector",
+    events,
+    emit(event: AuditEvent) {
+      events.push(event);
+    },
+  };
 }
 
 /** Minimal McpServer stub that captures registered tools. */
@@ -650,6 +663,167 @@ describe("harness_update", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
   });
 
+  it("rejects dry_run for full-body updates before dispatch", async () => {
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      body: { yamlPipeline: "pipeline:\n  name: Updated" },
+      dry_run: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("dry_run is only supported"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("previews a YAML-backed pipeline patch without updating when dry_run is true", async () => {
+    mockRequest.mockResolvedValueOnce({
+      data: {
+        identifier: "my-pipe",
+        yamlPipeline: "pipeline:\n  name: Old Pipeline\n  identifier: my-pipe\n  stages: []\n",
+      },
+    });
+
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      dry_run: true,
+      operations: [{ op: "replace", path: "/pipeline/name", value: "New Pipeline" }],
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/pipeline/api/pipelines/my-pipe");
+    const parsed = parseResult(result) as { dry_run?: boolean; operations_applied?: number; diff?: Array<Record<string, unknown>> };
+    expect(parsed.dry_run).toBe(true);
+    expect(parsed.operations_applied).toBe(1);
+    expect(parsed.diff).toContainEqual({ op: "replace", path: "/pipeline/name", value: "New Pipeline" });
+  });
+
+  it("applies a YAML-backed pipeline patch and preserves actual confirmation in audit", async () => {
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+    const auditedRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }), { auditManager });
+    const auditedServer = makeMcpServer("accept");
+    mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        data: {
+          identifier: "my-pipe",
+          yamlPipeline: "pipeline:\n  name: Old Pipeline\n  identifier: my-pipe\n  stages: []\n",
+          lastObjectId: "obj-1",
+          lastCommitId: "commit-1",
+          storeType: "REMOTE",
+          connectorRef: "git-conn",
+        },
+      })
+      .mockResolvedValueOnce({ data: { identifier: "my-pipe" } });
+    client = makeClient(mockRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(auditedServer, auditedRegistry, client);
+
+    const result = await auditedServer.call("harness_update", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      operations: [{ op: "replace", path: "/pipeline/name", value: "New Pipeline" }],
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    const updateCall = mockRequest.mock.calls[1]![0] as { method?: string; body?: unknown; params?: Record<string, unknown> };
+    expect(updateCall.method).toBe("PUT");
+    expect(typeof updateCall.body).toBe("string");
+    expect(updateCall.body as string).toContain("name: New Pipeline");
+    expect(updateCall.params).toMatchObject({
+      lastObjectId: "obj-1",
+      lastCommitId: "commit-1",
+      storeType: "REMOTE",
+      connectorRef: "git-conn",
+    });
+    const updateAudit = sink.events.find((event) => event.operation === "update");
+    expect(updateAudit?.confirmation).toBe("elicited");
+  });
+
+  it("applies a v0 template YAML patch using template_yaml", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    const templateRequest = vi.fn()
+      .mockResolvedValueOnce({
+        data: {
+          identifier: "my_tpl",
+          template_yaml: "template:\n  name: Old Template\n  identifier: my_tpl\n  versionLabel: 1.0.0\n  type: Step\n",
+        },
+      })
+      .mockResolvedValueOnce({ data: { identifier: "my_tpl" } });
+    const templateClient = makeClient(templateRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, templateRegistry, templateClient);
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "my_tpl",
+      params: { version_label: "1.0.0" },
+      operations: [{ op: "replace", path: "/template/name", value: "New Template" }],
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(templateRequest).toHaveBeenCalledTimes(2);
+    const updateCall = templateRequest.mock.calls[1]![0] as { method?: string; path?: string; body?: unknown };
+    expect(updateCall.method).toBe("PUT");
+    expect(updateCall.path).toBe("/template/api/templates/update/my_tpl/1.0.0");
+    expect(updateCall.body as string).toContain("name: New Template");
+  });
+
+  it("applies a v1 template YAML patch using parsed template_yaml", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    const templateRequest = vi.fn()
+      .mockResolvedValueOnce({
+        identifier: "my_tpl",
+        template_yaml:
+          "version: 1\n" +
+          "template:\n" +
+          "  name: Old Template\n" +
+          "  identifier: my_tpl\n" +
+          "  versionLabel: 1.0.0\n" +
+          "  type: Step\n",
+      })
+      .mockResolvedValueOnce({ identifier: "my_tpl" });
+    const templateClient = makeClient(templateRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, templateRegistry, templateClient);
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template_v1",
+      resource_id: "my_tpl",
+      org_id: "default",
+      project_id: "test-project",
+      params: { version_label: "1.0.0" },
+      operations: [{ op: "replace", path: "/template/name", value: "New Template" }],
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(templateRequest).toHaveBeenCalledTimes(2);
+    const updateCall = templateRequest.mock.calls[1]![0] as {
+      method?: string;
+      path?: string;
+      body?: Record<string, unknown>;
+    };
+    expect(updateCall.method).toBe("PUT");
+    expect(updateCall.path).toBe("/v1/orgs/default/projects/test-project/templates/my_tpl/versions/1.0.0");
+    expect(updateCall.body).toMatchObject({
+      yaml_version: "1",
+      identifier: "my_tpl",
+      name: "New Template",
+      label: "1.0.0",
+    });
+    expect(updateCall.body?.template_yaml as string).toContain("name: New Template");
+  });
+
   it("coerces JSON-string bodies before dispatch", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "platform" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "proj1" } });
@@ -737,6 +911,28 @@ describe("harness_update — pull request", () => {
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({
       error: expect.stringContaining("Cannot combine state change"),
+    });
+    expect(prRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects JSON Patch for pull_request instead of patching the read shape", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({});
+    const prClient = makeClient(prRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_update", {
+      resource_type: "pull_request",
+      resource_id: "42",
+      params: { repo_id: "my-repo" },
+      operations: [{ op: "replace", path: "/title", value: "New Title" }],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("only supported for YAML-backed resources"),
     });
     expect(prRequest).not.toHaveBeenCalled();
   });

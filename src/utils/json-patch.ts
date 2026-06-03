@@ -14,10 +14,11 @@ export interface PatchOperation {
 
 /**
  * Resource types whose GET responses contain an embedded YAML string that
- * must be parsed before patching. The trigger type is intentionally excluded
- * because its update bodyBuilder expects a JSON object, not a YAML string.
+ * must be parsed before patching. Patch mode is intentionally limited to this
+ * allowlist because many non-YAML resources have read shapes that differ from
+ * write shapes.
  */
-const YAML_BODY_TYPES = new Set(["pipeline", "pipeline_v1", "input_set", "template"]);
+const YAML_BODY_TYPES = new Set(["pipeline", "pipeline_v1", "input_set", "template", "template_v1"]);
 
 const YAML_FIELD_NAMES = ["yamlPipeline", "yaml", "pipeline_yaml", "template_yaml", "yamlInputSet"] as const;
 
@@ -28,10 +29,14 @@ export interface ExtractResult {
   metadata: Record<string, unknown>;
 }
 
+export function supportsJsonPatch(resourceType: string): boolean {
+  return YAML_BODY_TYPES.has(resourceType);
+}
+
 /**
  * Extract the mutable JSON body from a GET response.
  * For YAML-based resources (pipelines, templates, etc.), parses the embedded
- * YAML string into a JSON object. For others, returns the response as-is.
+ * YAML string into a JSON object. Unsupported resource types fail closed.
  * Also preserves GET metadata needed for optimistic concurrency (lastObjectId, etc.).
  */
 export function extractMutableBody(
@@ -49,28 +54,32 @@ export function extractMutableBody(
   if (record.storeType !== undefined) metadata.storeType = record.storeType;
   if (record.connectorRef !== undefined) metadata.connectorRef = record.connectorRef;
 
-  if (YAML_BODY_TYPES.has(resourceType)) {
-    let yamlStr: string | undefined;
-    for (const field of YAML_FIELD_NAMES) {
-      if (typeof record[field] === "string") {
-        yamlStr = record[field] as string;
-        break;
-      }
-    }
-    if (typeof yamlStr === "string") {
-      const parsed = YAML.parse(yamlStr);
-      if (parsed && typeof parsed === "object") {
-        return { document: parsed as Record<string, unknown>, yamlSource: true, metadata };
-      }
-      throw new Error(`Parsed YAML for "${resourceType}" is not an object.`);
-    }
+  if (!supportsJsonPatch(resourceType)) {
     throw new Error(
-      `GET response for "${resourceType}" does not contain a YAML body (checked: ${YAML_FIELD_NAMES.join(", ")}). ` +
-      `Ensure the GET returns the full resource definition.`
+      `JSON Patch is only supported for YAML-backed resources (${[...YAML_BODY_TYPES].join(", ")}). ` +
+      `"${resourceType}" has no mutable-body projector, so patching its GET response is unsafe. ` +
+      `Use a full body update instead.`,
     );
   }
 
-  return { document: { ...record }, yamlSource: false, metadata };
+  let yamlStr: string | undefined;
+  for (const field of YAML_FIELD_NAMES) {
+    if (typeof record[field] === "string") {
+      yamlStr = record[field] as string;
+      break;
+    }
+  }
+  if (typeof yamlStr === "string") {
+    const parsed = YAML.parse(yamlStr);
+    if (parsed && typeof parsed === "object") {
+      return { document: parsed as Record<string, unknown>, yamlSource: true, metadata };
+    }
+    throw new Error(`Parsed YAML for "${resourceType}" is not an object.`);
+  }
+  throw new Error(
+    `GET response for "${resourceType}" does not contain a YAML body (checked: ${YAML_FIELD_NAMES.join(", ")}). ` +
+    `Ensure the GET returns the full resource definition.`,
+  );
 }
 
 /**

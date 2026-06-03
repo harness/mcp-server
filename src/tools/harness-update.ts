@@ -4,6 +4,7 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import type { ResourceDefinition } from "../registry/types.js";
+import type { ConfirmationMethod } from "../audit/types.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
@@ -11,7 +12,7 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { updateOutputSchema } from "./output-schemas.js";
-import { applyJsonPatch, extractMutableBody, serializeBody, computeDiff, type PatchOperation } from "../utils/json-patch.js";
+import { applyJsonPatch, extractMutableBody, serializeBody, computeDiff, supportsJsonPatch, type PatchOperation } from "../utils/json-patch.js";
 
 interface UpdateToolArgs {
   resource_type: string;
@@ -71,6 +72,9 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         if (args.body !== undefined && args.operations !== undefined) {
           return errorResult("Provide either 'body' (full replacement) or 'operations' (JSON Patch), not both.");
         }
+        if (args.body !== undefined && args.dry_run === true) {
+          return errorResult("dry_run is only supported with 'operations' JSON Patch mode. Full-body dry_run preview is not implemented.");
+        }
         if (args.body === undefined && args.operations === undefined) {
           return errorResult("Provide either 'body' (full replacement) or 'operations' (JSON Patch array).");
         }
@@ -83,6 +87,12 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         const isPatchMode = args.operations !== undefined;
 
         if (isPatchMode) {
+          if (!supportsJsonPatch(args.resource_type)) {
+            return errorResult(
+              `JSON Patch is only supported for YAML-backed resources (pipeline, pipeline_v1, input_set, template, template_v1). ` +
+              `"${args.resource_type}" has no mutable-body projector, so patching its GET response is unsafe. Use a full body update instead.`,
+            );
+          }
           if (!def.operations.get) {
             return errorResult(`JSON Patch requires a "get" operation for "${args.resource_type}", but it only supports: ${Object.keys(def.operations).join(", ")}`);
           }
@@ -148,6 +158,7 @@ async function handlePatchUpdate(server: McpServer, registry: Registry, client: 
   const opsJson = JSON.stringify(operations, null, 2);
   const opsPreview = opsJson.length > 1000 ? opsJson.slice(0, 1000) + "\n...(truncated)" : opsJson;
   const risk = def.operations.update!.operationPolicy.risk;
+  let confirmation: ConfirmationMethod = "not_required";
 
   if (!dryRun) {
     const elicit = await confirmViaElicitation({
@@ -163,6 +174,7 @@ async function handlePatchUpdate(server: McpServer, registry: Registry, client: 
         `Operation ${elicit.reason} by user. Hint: if your client does not support interactive confirmation, pass confirm: true to proceed.`,
       );
     }
+    confirmation = elicit.method;
   }
 
   const { params, operations: _ops, dry_run: _dry, confirm: _confirm, ...rest } = args;
@@ -199,6 +211,6 @@ async function handlePatchUpdate(server: McpServer, registry: Registry, client: 
   if (metadata.storeType) updateInput.store_type = metadata.storeType;
   if (metadata.connectorRef) updateInput.connector_ref = metadata.connectorRef;
 
-  const result = await registry.dispatch(client, args.resource_type, "update", updateInput, { tool: "harness_update", confirmation: "auto_approved", resource_id: args.resource_id });
+  const result = await registry.dispatch(client, args.resource_type, "update", updateInput, { tool: "harness_update", confirmation, resource_id: args.resource_id });
   return jsonResult(result);
 }

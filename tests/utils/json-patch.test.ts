@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyJsonPatch, extractMutableBody, serializeBody, computeDiff, type PatchOperation } from "../../src/utils/json-patch.js";
+import { applyJsonPatch, extractMutableBody, serializeBody, computeDiff, supportsJsonPatch, type PatchOperation } from "../../src/utils/json-patch.js";
 
 describe("applyJsonPatch", () => {
   const baseDoc = {
@@ -177,6 +177,16 @@ describe("extractMutableBody", () => {
     expect((document.template as any).name).toBe("My Template");
   });
 
+  it("parses template_yaml field for template_v1", () => {
+    const getResult = {
+      identifier: "my-tmpl",
+      template_yaml: "version: 1\ntemplate:\n  name: My Template\n  type: Step",
+    };
+    const { document, yamlSource } = extractMutableBody(getResult, "template_v1");
+    expect(yamlSource).toBe(true);
+    expect((document.template as any).name).toBe("My Template");
+  });
+
   it("parses yamlInputSet field for input_set", () => {
     const getResult = {
       identifier: "my-is",
@@ -187,18 +197,20 @@ describe("extractMutableBody", () => {
     expect((document.inputSet as any).name).toBe("My Input Set");
   });
 
-  it("returns raw object for non-YAML resource types", () => {
-    const getResult = { identifier: "svc-1", name: "My Service", type: "K8s" };
-    const { document, yamlSource } = extractMutableBody(getResult, "service");
-    expect(yamlSource).toBe(false);
-    expect(document).toEqual(getResult);
+  it("reports supported YAML-backed patch resources", () => {
+    expect(supportsJsonPatch("pipeline")).toBe(true);
+    expect(supportsJsonPatch("template_v1")).toBe(true);
+    expect(supportsJsonPatch("pull_request")).toBe(false);
   });
 
-  it("returns raw object for trigger type (trigger uses JSON, not YAML)", () => {
+  it("rejects non-YAML resource types without a mutable-body projector", () => {
+    const getResult = { identifier: "svc-1", name: "My Service", type: "K8s" };
+    expect(() => extractMutableBody(getResult, "service")).toThrow(/only supported for YAML-backed resources/);
+  });
+
+  it("rejects trigger type because trigger update expects JSON, not YAML", () => {
     const getResult = { identifier: "trg-1", name: "My Trigger", enabled: true };
-    const { document, yamlSource } = extractMutableBody(getResult, "trigger");
-    expect(yamlSource).toBe(false);
-    expect(document).toEqual(getResult);
+    expect(() => extractMutableBody(getResult, "trigger")).toThrow(/only supported for YAML-backed resources/);
   });
 
   it("throws for null GET response", () => {
