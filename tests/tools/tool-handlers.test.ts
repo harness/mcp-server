@@ -833,7 +833,7 @@ describe("harness_update", () => {
     });
   });
 
-  it("applies a v0 template YAML patch using template_yaml", async () => {
+  it("applies a v0 template YAML patch using template_yaml and defaults version_label", async () => {
     const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
     const templateServer = makeMcpServer("accept");
     const templateRequest = vi.fn()
@@ -851,15 +851,18 @@ describe("harness_update", () => {
     const result = await templateServer.call("harness_update", {
       resource_type: "template",
       resource_id: "my_tpl",
-      params: { version_label: "1.0.0" },
       operations: [{ op: "replace", path: "/template/name", value: "New Template" }],
     });
 
     expect(result.isError).toBeUndefined();
     expect(templateRequest).toHaveBeenCalledTimes(2);
+    const getCall = templateRequest.mock.calls[0]![0] as { method?: string; path?: string; params?: Record<string, unknown> };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toBe("/template/api/templates/my_tpl");
+    expect(getCall.params).toMatchObject({ versionLabel: "v1" });
     const updateCall = templateRequest.mock.calls[1]![0] as { method?: string; path?: string; body?: unknown };
     expect(updateCall.method).toBe("PUT");
-    expect(updateCall.path).toBe("/template/api/templates/update/my_tpl/1.0.0");
+    expect(updateCall.path).toBe("/template/api/templates/update/my_tpl/v1");
     expect(updateCall.body as string).toContain("name: New Template");
   });
 
@@ -1645,9 +1648,20 @@ describe("harness_describe", () => {
   it("returns details for a specific resource_type", async () => {
     const result = await server.call("harness_describe", { resource_type: "pipeline" });
     expect(result.isError).toBeUndefined();
-    const data = parseResult(result) as { resource_type: string; operations: unknown[] };
+    const data = parseResult(result) as {
+      resource_type: string;
+      operations: unknown[];
+      patchSupport?: { input?: string; format?: string; bodyKind?: string; bodyFields?: string[]; dryRun?: boolean };
+    };
     expect(data.resource_type).toBe("pipeline");
     expect(data.operations.length).toBeGreaterThan(0);
+    expect(data.patchSupport).toMatchObject({
+      input: "operations",
+      format: "RFC 6902 JSON Patch",
+      bodyKind: "yaml",
+      bodyFields: ["yamlPipeline"],
+      dryRun: true,
+    });
   });
 
   it("describes account/org/project scope support for multi-scope resources", async () => {
@@ -1674,9 +1688,18 @@ describe("harness_describe", () => {
   it("filters by toolset", async () => {
     const result = await server.call("harness_describe", { toolset: "pipelines" });
     expect(result.isError).toBeUndefined();
-    const data = parseResult(result) as { toolset: string; displayName: string };
+    const data = parseResult(result) as {
+      toolset: string;
+      displayName: string;
+      resources?: Array<{ resource_type?: string; patchSupport?: { input?: string; bodyFields?: string[] } }>;
+    };
     expect(data.toolset).toBe("pipelines");
     expect(data.displayName).toBe("Pipelines");
+    const pipeline = data.resources?.find((resource) => resource.resource_type === "pipeline");
+    expect(pipeline?.patchSupport).toMatchObject({
+      input: "operations",
+      bodyFields: ["yamlPipeline"],
+    });
   });
 
   it("returns error for unknown toolset", async () => {

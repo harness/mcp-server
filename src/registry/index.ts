@@ -83,6 +83,17 @@ function getRequestedScope(def: ResourceDefinition, input: Record<string, unknow
   return value;
 }
 
+export function describePatchSupport(def: ResourceDefinition): Record<string, unknown> | undefined {
+  if (!def.patchSupport) return undefined;
+  return {
+    input: "operations",
+    format: "RFC 6902 JSON Patch",
+    bodyKind: def.patchSupport.kind,
+    bodyFields: [...def.patchSupport.bodyFields],
+    dryRun: true,
+  };
+}
+
 function shouldUseOrg(scope: ResourceScope): boolean {
   return scope === "org" || scope === "project";
 }
@@ -1012,6 +1023,7 @@ export class Registry {
           executeActions: r.executeActions ? Object.keys(r.executeActions) : undefined,
           identifierFields: r.identifierFields,
           listFilterFields: r.listFilterFields,
+          patchSupport: describePatchSupport(r),
           diagnosticHint: r.diagnosticHint ?? undefined,
           relatedResources: r.relatedResources ?? undefined,
         })),
@@ -1084,7 +1096,7 @@ export class Registry {
       total_resource_types: this.resourceMap.size,
       total_toolsets: this.toolsets.length,
       resource_types,
-      hint: "Call harness_describe(resource_type='<type>') for full details including diagnosticHint and executeHint.",
+      hint: "Call harness_describe(resource_type='<type>') for full details including diagnosticHint, executeHint, and patchSupport.",
     };
   }
 }

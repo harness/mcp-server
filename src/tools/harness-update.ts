@@ -42,6 +42,24 @@ function getPatchableResourceTypes(registry: Registry): string[] {
     .map((resource) => resource.resourceType);
 }
 
+function applyUpdateInputDefaults(input: Record<string, unknown>, def: ResourceDefinition, args: UpdateToolArgs): void {
+  const identFields = def.identifierFields;
+  const primaryField = identFields.length > 1
+    ? identFields[identFields.length - 1]!
+    : identFields[0];
+  if (primaryField && args.resource_id) {
+    input[primaryField] = args.resource_id;
+  }
+
+  const versionLabel = asString(input.version_label);
+  if (versionLabel) return;
+  if (isRecord(args.body) && "version_label" in args.body) {
+    input.version_label = args.body.version_label;
+  } else if (args.resource_type === "template") {
+    input.version_label = "v1";
+  }
+}
+
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
   const updatableTypes = registry.getTypesForOperation("update");
 
@@ -141,20 +159,7 @@ async function handleFullBodyUpdate(server: McpServer, registry: Registry, clien
   const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url);
   const coercedParams = coerceRecord(params);
   if (coercedParams) Object.assign(input, coercedParams);
-  const identFields = def.identifierFields;
-  const primaryField = identFields.length > 1
-    ? identFields[identFields.length - 1]!
-    : identFields[0];
-  if (primaryField && args.resource_id) {
-    input[primaryField] = args.resource_id;
-  }
-  const versionLabel = asString(input.version_label);
-  if (versionLabel) { /* already set via params */ }
-  else if (isRecord(args.body) && "version_label" in args.body) {
-    input.version_label = args.body.version_label;
-  } else if (args.resource_type === "template") {
-    input.version_label = "v1";
-  }
+  applyUpdateInputDefaults(input, def, args);
 
   const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation: elicit.method, resource_id: args.resource_id });
   return jsonResult(result);
@@ -190,14 +195,7 @@ async function handlePatchUpdate(server: McpServer, registry: Registry, client: 
   const getInput = applyUrlDefaults({ ...rest } as Record<string, unknown>, args.url);
   const coercedParams = coerceRecord(params);
   if (coercedParams) Object.assign(getInput, coercedParams);
-
-  const identFields = def.identifierFields;
-  const primaryField = identFields.length > 1
-    ? identFields[identFields.length - 1]!
-    : identFields[0];
-  if (primaryField && args.resource_id) {
-    getInput[primaryField] = args.resource_id;
-  }
+  applyUpdateInputDefaults(getInput, def, args);
 
   const getResult = await registry.dispatch(client, args.resource_type, "get", getInput);
   const { document, yamlSource, metadata } = extractMutableBody(getResult, def);
