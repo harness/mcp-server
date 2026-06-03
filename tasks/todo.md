@@ -1,5 +1,23 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-03)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+- [x] Commit/push/open PR only if a fix is made
+
+### Plan
+- Compare the current branch against `origin/main`; if there is no branch diff, review recent merged commits since the previous critical-bug automation.
+- Prioritize behavior in the FME/feature-management toolset changes, request construction, auth/session handling, write-operation safety, and generated schema/dependency updates.
+- Require a concrete trigger scenario for data loss, crash, security bypass, or significant user-facing breakage before patching; otherwise report no critical findings without opening a PR.
+
+### Review
+- Current branch matched `origin/main`, so the investigation focused on recent merged commits: PR #296 (`feat(fme): Identity tools, standard segments, traffic types + bug fixes`) and PR #299 (`Bump release and fix dependency advisories`).
+- Traced the FME request-building changes, array-body validation, `harness_execute` resource-id remapping, FME write/action paths, generated-doc checks, and the dependency/version bump. The `harness_execute` remap only applies to the intended FME rule-based segment enable/disable actions when all toolsets are enabled.
+- No concrete high-severity trigger was found for data loss, crashes, security bypass, silent truncation, or significant user-facing breakage. No code fix or PR was opened.
+- Verification passed: `pnpm build`, `pnpm vitest run tests/registry/feature-flags.test.ts tests/tools/tool-handlers.test.ts` (104 tests), `pnpm typecheck`, `pnpm docs:check`, `pnpm audit`, full `pnpm test` (70 files / 1770 tests), and `git diff --check`.
+
 ## Vitest Security Upgrade (2026-06-03)
 - [x] Confirm the affected local Vitest version and patched target
 - [x] Upgrade `vitest` dev dependency to the patched 4.1 line
