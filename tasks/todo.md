@@ -1,5 +1,37 @@
 # Harness MCP Server — Task Tracking
 
+## Vitest Security Upgrade (2026-06-03)
+- [x] Confirm the affected local Vitest version and patched target
+- [x] Upgrade `vitest` dev dependency to the patched 4.1 line
+- [x] Regenerate `pnpm-lock.yaml`
+- [x] Run focused and broad verification
+
+### Plan
+- Address GHSA-5xrq-8626-4rwp / Dependabot alert by moving from `vitest` 3.2.4 to `vitest` 4.1.0 or later.
+- Keep the change limited to test tooling metadata and lockfile updates unless v4 requires code/config changes.
+- Verify with the release metadata test, typecheck, and the full Vitest test suite.
+
+### Review
+- Updated `devDependencies.vitest` from `^3.0.6` to `^4.1.0`; `pnpm-lock.yaml` now resolves `vitest` to `4.1.8`.
+- `pnpm audit` also surfaced a moderate `qs` advisory through `express`; added a narrow `pnpm.overrides.qs >=6.15.2` entry and regenerated the lockfile to resolve `qs` to `6.15.2`.
+- Verification passed: `pnpm audit` reports no known vulnerabilities; `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, `pnpm test` (70 files / 1770 tests), `pnpm build`, and `git diff --check` all pass.
+
+## Version Bump 3.1.2 (2026-06-03)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.2
+- [x] Update release metadata regression test
+- [x] Run verification
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.2`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.2` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, and `git diff --check`.
+
 ## PR 298 Header-Based Body Scope Follow-Up (2026-06-02)
 - [x] Move header-based body scope suppression into the dispatcher
 - [x] Remove redundant AI Evals per-endpoint suppression flags
