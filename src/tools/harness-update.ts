@@ -29,9 +29,15 @@ interface UpdateToolArgs {
 }
 
 const jsonPointerSchema = z.string().describe("JSON Pointer (RFC 6901) to the target location, e.g. /pipeline/stages/0/stage/spec/execution/steps/0/step/spec/command");
-const patchValueSchema = z.custom<unknown>((value) => value !== undefined, {
-  error: "value is required for add, replace, and test operations",
-}).describe("Value for add/replace/test operations");
+const jsonPatchValueSchema: z.ZodType<unknown> = z.lazy(() => z.union([
+  z.null(),
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(jsonPatchValueSchema),
+  z.record(z.string(), jsonPatchValueSchema),
+]));
+const patchValueSchema = jsonPatchValueSchema.describe("Value for add/replace/test operations");
 
 const patchOperationSchema = z.discriminatedUnion("op", [
   z.object({
@@ -71,6 +77,9 @@ function formatPatchOperationValidationError(error: z.ZodError): string {
   return error.issues
     .map((issue) => {
       const path = issue.path.length > 0 ? issue.path.join(".") : "operations";
+      if (issue.path.at(-1) === "value") {
+        return `${path}: value is required for add, replace, and test operations`;
+      }
       return `${path}: ${issue.message}`;
     })
     .join("; ");
