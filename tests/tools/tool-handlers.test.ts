@@ -991,6 +991,32 @@ describe("harness_execute", () => {
     expect(call.path).toContain("/agents/account.myagent/applications/my-app/operation");
   });
 
+  it.each([
+    { action: "enable", method: "POST", expectedBody: {} },
+    { action: "disable", method: "DELETE", expectedBody: undefined },
+  ])("maps resource_id to segment_name for FME rule-based segment $action", async ({ action, method, expectedBody }) => {
+    const fmeServer = makeMcpServer("accept");
+    const fmeRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    const fmeRequest = vi.fn().mockResolvedValue({});
+    const fmeClient = makeClient(fmeRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(fmeServer, fmeRegistry, fmeClient);
+
+    const result = await fmeServer.call("harness_execute", {
+      resource_type: "fme_rule_based_segment_definition",
+      action,
+      resource_id: "beta_users",
+      params: { environment_id: "env-prod" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(fmeRequest).toHaveBeenCalledOnce();
+    const call = fmeRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe(method);
+    expect(call.path).toBe("/internal/api/v2/rule-based-segments/env-prod/beta_users");
+    expect(call.body).toEqual(expectedBody);
+  });
+
   it("materializes input_set_ids by GETting each input set then POSTing merged pipeline YAML", async () => {
     const inputSetYaml = `inputSet:\n  pipeline:\n    identifier: mat_pipe\n    variables:\n      - name: x\n        type: String\n        value: "1"\n`;
     mockRequest
