@@ -685,6 +685,7 @@ describe("harness_update", () => {
       };
     };
 
+    expect(registration.inputSchema.operations.safeParse([]).success).toBe(false);
     expect(registration.inputSchema.operations.safeParse([
       { op: "replace", path: "/pipeline/name" },
     ]).success).toBe(false);
@@ -709,6 +710,21 @@ describe("harness_update", () => {
     });
     expect(parseResult(result)).toMatchObject({
       error: expect.stringContaining("value is required"),
+    });
+    expect(server.server.elicitInput).not.toHaveBeenCalled();
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty JSON Patch operations before confirmation or GET", async () => {
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      operations: [],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Invalid JSON Patch operations"),
     });
     expect(server.server.elicitInput).not.toHaveBeenCalled();
     expect(mockRequest).not.toHaveBeenCalled();

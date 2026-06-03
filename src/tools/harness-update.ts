@@ -71,7 +71,7 @@ const patchOperationSchema = z.discriminatedUnion("op", [
   }),
 ]);
 
-const patchOperationsSchema = z.array(patchOperationSchema).max(100);
+const patchOperationsSchema = z.array(patchOperationSchema).min(1).max(100);
 
 function formatPatchOperationValidationError(error: z.ZodError): string {
   return error.issues
@@ -126,7 +126,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           z.record(z.string(), z.unknown()),
           z.string(),
         ]).optional().describe("Full resource definition body (mutually exclusive with operations). For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object)"),
-        operations: z.array(patchOperationSchema).max(100).optional().describe("RFC 6902 JSON Patch operations (mutually exclusive with body, max 100). The tool fetches the current resource, applies these operations server-side, and sends the merged result. Array paths use numeric indices per RFC 6901 (e.g. /pipeline/stages/0/stage/spec). To safely target an array element (stage, step, variable), precede the replace/remove with a `test` op asserting that element's identifier or name at the index."),
+        operations: patchOperationsSchema.optional().describe("RFC 6902 JSON Patch operations (mutually exclusive with body, max 100). The tool fetches the current resource, applies these operations server-side, and sends the merged result. Array paths use numeric indices per RFC 6901 (e.g. /pipeline/stages/0/stage/spec). To safely target an array element (stage, step, variable), precede the replace/remove with a `test` op asserting that element's identifier or name at the index."),
         dry_run: z.boolean().default(false).optional().describe("When true with operations, validates the patch and returns a preview of changes without actually updating the resource"),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
