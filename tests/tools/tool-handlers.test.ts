@@ -678,6 +678,60 @@ describe("harness_update", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("exposes RFC 6902 operation-specific validation in the registered schema", () => {
+    const registration = server.schema("harness_update") as {
+      inputSchema: {
+        operations: { safeParse: (input: unknown) => { success: boolean } };
+      };
+    };
+
+    expect(registration.inputSchema.operations.safeParse([
+      { op: "replace", path: "/pipeline/name" },
+    ]).success).toBe(false);
+    expect(registration.inputSchema.operations.safeParse([
+      { op: "move", path: "/pipeline/name" },
+    ]).success).toBe(false);
+    expect(registration.inputSchema.operations.safeParse([
+      { op: "replace", path: "/pipeline/name", value: null },
+    ]).success).toBe(true);
+  });
+
+  it("rejects malformed JSON Patch operations before confirmation or GET", async () => {
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      operations: [{ op: "replace", path: "/pipeline/name" }],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Invalid JSON Patch operations"),
+    });
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("value is required"),
+    });
+    expect(server.server.elicitInput).not.toHaveBeenCalled();
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects move/copy operations without from before confirmation or GET", async () => {
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      operations: [{ op: "move", path: "/pipeline/name" }],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Invalid JSON Patch operations"),
+    });
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("from"),
+    });
+    expect(server.server.elicitInput).not.toHaveBeenCalled();
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("previews a YAML-backed pipeline patch without updating when dry_run is true", async () => {
     mockRequest.mockResolvedValueOnce({
       data: {

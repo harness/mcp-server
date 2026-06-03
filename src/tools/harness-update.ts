@@ -28,12 +28,53 @@ interface UpdateToolArgs {
   params?: Record<string, unknown>;
 }
 
-const patchOperationSchema = z.object({
-  op: z.enum(["add", "remove", "replace", "move", "copy", "test"]).describe("RFC 6902 operation type"),
-  path: z.string().describe("JSON Pointer (RFC 6901) to the target location, e.g. /pipeline/stages/0/stage/spec/execution/steps/0/step/spec/command"),
-  value: z.unknown().optional().describe("Value for add/replace/test operations"),
-  from: z.string().optional().describe("Source JSON Pointer for move/copy operations"),
-});
+const jsonPointerSchema = z.string().describe("JSON Pointer (RFC 6901) to the target location, e.g. /pipeline/stages/0/stage/spec/execution/steps/0/step/spec/command");
+const patchValueSchema = z.custom<unknown>((value) => value !== undefined, {
+  error: "value is required for add, replace, and test operations",
+}).describe("Value for add/replace/test operations");
+
+const patchOperationSchema = z.discriminatedUnion("op", [
+  z.object({
+    op: z.literal("add").describe("Add a value at path"),
+    path: jsonPointerSchema,
+    value: patchValueSchema,
+  }),
+  z.object({
+    op: z.literal("replace").describe("Replace the value at path"),
+    path: jsonPointerSchema,
+    value: patchValueSchema,
+  }),
+  z.object({
+    op: z.literal("test").describe("Assert the value at path before later operations run"),
+    path: jsonPointerSchema,
+    value: patchValueSchema,
+  }),
+  z.object({
+    op: z.literal("remove").describe("Remove the value at path"),
+    path: jsonPointerSchema,
+  }),
+  z.object({
+    op: z.literal("move").describe("Move a value from one JSON Pointer to another"),
+    from: z.string().describe("Source JSON Pointer for move operations"),
+    path: jsonPointerSchema,
+  }),
+  z.object({
+    op: z.literal("copy").describe("Copy a value from one JSON Pointer to another"),
+    from: z.string().describe("Source JSON Pointer for copy operations"),
+    path: jsonPointerSchema,
+  }),
+]);
+
+const patchOperationsSchema = z.array(patchOperationSchema).max(100);
+
+function formatPatchOperationValidationError(error: z.ZodError): string {
+  return error.issues
+    .map((issue) => {
+      const path = issue.path.length > 0 ? issue.path.join(".") : "operations";
+      return `${path}: ${issue.message}`;
+    })
+    .join("; ");
+}
 
 function getPatchableResourceTypes(registry: Registry): string[] {
   return registry.getAllResourceTypes()
@@ -102,6 +143,13 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         }
         if (args.body === undefined && args.operations === undefined) {
           return errorResult("Provide either 'body' (full replacement) or 'operations' (JSON Patch array).");
+        }
+        if (args.operations !== undefined) {
+          const parsedOperations = patchOperationsSchema.safeParse(args.operations);
+          if (!parsedOperations.success) {
+            return errorResult(`Invalid JSON Patch operations: ${formatPatchOperationValidationError(parsedOperations.error)}`);
+          }
+          args.operations = parsedOperations.data as PatchOperation[];
         }
 
         const def = registry.getResource(args.resource_type);

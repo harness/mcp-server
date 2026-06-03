@@ -6,12 +6,10 @@ import type { ResourceDefinition } from "../registry/types.js";
 // under Node's ESM interop, so destructure from default rather than named imports.
 const { applyPatch, compare, deepClone } = fastJsonPatch;
 
-export interface PatchOperation {
-  op: "add" | "remove" | "replace" | "move" | "copy" | "test";
-  path: string;
-  value?: unknown;
-  from?: string;
-}
+export type PatchOperation =
+  | { op: "add" | "replace" | "test"; path: string; value: unknown }
+  | { op: "remove"; path: string }
+  | { op: "move" | "copy"; path: string; from: string };
 
 export type PatchableResourceDefinition = Pick<ResourceDefinition, "resourceType" | "patchSupport">;
 
