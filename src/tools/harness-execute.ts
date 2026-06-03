@@ -116,23 +116,29 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           );
         }
 
-        // Map resource_id → identifierFields[0] (the documented primary field).
-        // For multi-identifier resources where the primary field is already
-        // populated with a DIFFERENT value (e.g. URL filled repo_id while
-        // resource_id is the pr_number), fall through to the child (last)
-        // identifier field instead — preserving the parent context.
-        // When the primary field holds the SAME value as resource_id (e.g.
-        // GitOps agent_id supplied via both resource_id and params), just
-        // overwrite — no fallthrough.
+        // Map resource_id to the execute action's target identifier. Most
+        // resources use identifierFields[0], but some execute endpoints omit
+        // the parent identifier used by get/update/delete and target a child
+        // path field directly.
         const primaryField = def.identifierFields[0];
         if (primaryField && resourceId) {
-          const existing = input[primaryField];
-          const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
-          if (primaryAlreadySet && def.identifierFields.length > 1) {
-            const childField = def.identifierFields[def.identifierFields.length - 1]!;
-            input[childField] = resourceId;
+          const actionPathFields = new Set(Object.keys(actionSpec?.pathParams ?? {}));
+          const primaryUsedByAction = actionPathFields.has(primaryField);
+          const actionTargetField = primaryUsedByAction
+            ? undefined
+            : [...def.identifierFields].reverse().find((field) => actionPathFields.has(field));
+
+          if (actionTargetField) {
+            input[actionTargetField] = resourceId;
           } else {
-            input[primaryField] = resourceId;
+            const existing = input[primaryField];
+            const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
+            if (primaryAlreadySet && def.identifierFields.length > 1) {
+              const childField = def.identifierFields[def.identifierFields.length - 1]!;
+              input[childField] = resourceId;
+            } else {
+              input[primaryField] = resourceId;
+            }
           }
         }
 
