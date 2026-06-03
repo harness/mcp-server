@@ -31,9 +31,16 @@ interface UpdateToolArgs {
 const patchOperationSchema = z.object({
   op: z.enum(["add", "remove", "replace", "move", "copy", "test"]).describe("RFC 6902 operation type"),
   path: z.string().describe("JSON Pointer (RFC 6901) to the target location, e.g. /pipeline/stages/0/stage/spec/execution/steps/0/step/spec/command"),
-  value: z.unknown().describe("Value for add/replace/test operations").optional(),
-  from: z.string().describe("Source JSON Pointer for move/copy operations").optional(),
+  value: z.unknown().optional().describe("Value for add/replace/test operations"),
+  from: z.string().optional().describe("Source JSON Pointer for move/copy operations"),
 });
+
+function getPatchableResourceTypes(registry: Registry): string[] {
+  return registry.getAllResourceTypes()
+    .map((resourceType) => registry.getResource(resourceType))
+    .filter((resource) => supportsJsonPatch(resource))
+    .map((resource) => resource.resourceType);
+}
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
   const updatableTypes = registry.getTypesForOperation("update");
@@ -50,9 +57,9 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         body: z.union([
           z.record(z.string(), z.unknown()),
           z.string(),
-        ]).describe("Full resource definition body (mutually exclusive with operations). For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object)").optional(),
-        operations: z.array(patchOperationSchema).max(100).describe("RFC 6902 JSON Patch operations (mutually exclusive with body, max 100). The tool fetches the current resource, applies these operations server-side, and sends the merged result. Array paths use numeric indices per RFC 6901 (e.g. /pipeline/stages/0/stage/spec). To safely target an array element (stage, step, variable), precede the replace/remove with a `test` op asserting that element's identifier or name at the index.").optional(),
-        dry_run: z.boolean().default(false).describe("When true with operations, validates the patch and returns a preview of changes without actually updating the resource").optional(),
+        ]).optional().describe("Full resource definition body (mutually exclusive with operations). For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object)"),
+        operations: z.array(patchOperationSchema).max(100).optional().describe("RFC 6902 JSON Patch operations (mutually exclusive with body, max 100). The tool fetches the current resource, applies these operations server-side, and sends the merged result. Array paths use numeric indices per RFC 6901 (e.g. /pipeline/stages/0/stage/spec). To safely target an array element (stage, step, variable), precede the replace/remove with a `test` op asserting that element's identifier or name at the index."),
+        dry_run: z.boolean().default(false).optional().describe("When true with operations, validates the patch and returns a preview of changes without actually updating the resource"),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         confirm: z.boolean().describe("Set to true to confirm the operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP).").optional(),
@@ -87,9 +94,11 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         const isPatchMode = args.operations !== undefined;
 
         if (isPatchMode) {
-          if (!supportsJsonPatch(args.resource_type)) {
+          if (!supportsJsonPatch(def)) {
+            const patchableTypes = getPatchableResourceTypes(registry);
+            const patchableTypesText = patchableTypes.length > 0 ? patchableTypes.join(", ") : "none in the enabled toolsets";
             return errorResult(
-              `JSON Patch is only supported for YAML-backed resources (pipeline, pipeline_v1, input_set, template, template_v1). ` +
+              `JSON Patch is only supported for YAML-backed resources (${patchableTypesText}). ` +
               `"${args.resource_type}" has no mutable-body projector, so patching its GET response is unsafe. Use a full body update instead.`,
             );
           }
@@ -191,7 +200,7 @@ async function handlePatchUpdate(server: McpServer, registry: Registry, client: 
   }
 
   const getResult = await registry.dispatch(client, args.resource_type, "get", getInput);
-  const { document, yamlSource, metadata } = extractMutableBody(getResult, args.resource_type);
+  const { document, yamlSource, metadata } = extractMutableBody(getResult, def);
 
   const patched = applyJsonPatch(document, operations);
 

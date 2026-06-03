@@ -748,6 +748,91 @@ describe("harness_update", () => {
     expect(updateAudit?.confirmation).toBe("elicited");
   });
 
+  it("applies a pipeline_v1 YAML patch using registry patch metadata", async () => {
+    const v1Server = makeMcpServer("accept");
+    const v1Registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const v1Request = vi.fn()
+      .mockResolvedValueOnce({
+        identifier: "v1-pipe",
+        pipeline_yaml:
+          "pipeline:\n" +
+          "  name: Old V1 Pipeline\n" +
+          "  identifier: v1-pipe\n" +
+          "  stages: []\n",
+      })
+      .mockResolvedValueOnce({ identifier: "v1-pipe" });
+    const v1Client = makeClient(v1Request);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(v1Server, v1Registry, v1Client);
+
+    const result = await v1Server.call("harness_update", {
+      resource_type: "pipeline_v1",
+      resource_id: "v1-pipe",
+      operations: [{ op: "replace", path: "/pipeline/name", value: "New V1 Pipeline" }],
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(v1Request).toHaveBeenCalledTimes(2);
+    const updateCall = v1Request.mock.calls[1]![0] as {
+      method?: string;
+      path?: string;
+      body?: Record<string, unknown>;
+    };
+    expect(updateCall.method).toBe("PUT");
+    expect(updateCall.path).toBe("/v1/orgs/default/projects/test-project/pipelines/v1-pipe");
+    expect(updateCall.body).toMatchObject({
+      identifier: "v1-pipe",
+      name: "New V1 Pipeline",
+      version: "1",
+    });
+    expect(updateCall.body?.pipeline_yaml as string).toContain("name: New V1 Pipeline");
+  });
+
+  it("applies an input_set YAML patch using registry patch metadata", async () => {
+    const inputSetRequest = vi.fn()
+      .mockResolvedValueOnce({
+        data: {
+          identifier: "saved_set",
+          yamlInputSet:
+            "inputSet:\n" +
+            "  name: Old Input Set\n" +
+            "  identifier: saved_set\n" +
+            "  pipeline:\n" +
+            "    identifier: my-pipe\n",
+          lastObjectId: "input-obj-1",
+        },
+      })
+      .mockResolvedValueOnce({ data: { identifier: "saved_set" } });
+    const inputSetClient = makeClient(inputSetRequest);
+    const inputSetServer = makeMcpServer("accept");
+    const inputSetRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(inputSetServer, inputSetRegistry, inputSetClient);
+
+    const result = await inputSetServer.call("harness_update", {
+      resource_type: "input_set",
+      resource_id: "saved_set",
+      params: { pipeline_id: "my-pipe" },
+      operations: [{ op: "replace", path: "/inputSet/name", value: "New Input Set" }],
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(inputSetRequest).toHaveBeenCalledTimes(2);
+    const updateCall = inputSetRequest.mock.calls[1]![0] as {
+      method?: string;
+      path?: string;
+      body?: unknown;
+      params?: Record<string, unknown>;
+    };
+    expect(updateCall.method).toBe("PUT");
+    expect(updateCall.path).toBe("/pipeline/api/inputSets/saved_set");
+    expect(updateCall.body as string).toContain("name: New Input Set");
+    expect(updateCall.params).toMatchObject({
+      pipelineIdentifier: "my-pipe",
+      lastObjectId: "input-obj-1",
+    });
+  });
+
   it("applies a v0 template YAML patch using template_yaml", async () => {
     const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
     const templateServer = makeMcpServer("accept");

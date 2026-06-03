@@ -1,5 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { applyJsonPatch, extractMutableBody, serializeBody, computeDiff, supportsJsonPatch, type PatchOperation } from "../../src/utils/json-patch.js";
+import { applyJsonPatch, extractMutableBody, serializeBody, computeDiff, supportsJsonPatch, type PatchableResourceDefinition, type PatchOperation } from "../../src/utils/json-patch.js";
+
+const patchableResource = (
+  resourceType: string,
+  bodyFields: readonly string[],
+): PatchableResourceDefinition => ({
+  resourceType,
+  patchSupport: { kind: "yaml", bodyFields },
+});
+
+const pipelineResource = patchableResource("pipeline", ["yamlPipeline"]);
+const pipelineV1Resource = patchableResource("pipeline_v1", ["pipeline_yaml", "yaml"]);
+const templateResource = patchableResource("template", ["template_yaml"]);
+const templateV1Resource = patchableResource("template_v1", ["template_yaml"]);
+const inputSetResource = patchableResource("input_set", ["yamlInputSet"]);
+const serviceResource: PatchableResourceDefinition = { resourceType: "service" };
+const triggerResource: PatchableResourceDefinition = { resourceType: "trigger" };
 
 describe("applyJsonPatch", () => {
   const baseDoc = {
@@ -151,7 +167,7 @@ describe("extractMutableBody", () => {
       name: "My Pipe",
       yamlPipeline: "pipeline:\n  name: My Pipeline\n  identifier: my_pipeline\n  stages: []",
     };
-    const { document, yamlSource } = extractMutableBody(getResult, "pipeline");
+    const { document, yamlSource } = extractMutableBody(getResult, pipelineResource);
     expect(yamlSource).toBe(true);
     expect(document).toHaveProperty("pipeline");
     expect((document.pipeline as any).name).toBe("My Pipeline");
@@ -162,7 +178,7 @@ describe("extractMutableBody", () => {
       identifier: "v1-pipe",
       pipeline_yaml: "pipeline:\n  name: V1 Pipeline\n  stages: []",
     };
-    const { document, yamlSource } = extractMutableBody(getResult, "pipeline_v1");
+    const { document, yamlSource } = extractMutableBody(getResult, pipelineV1Resource);
     expect(yamlSource).toBe(true);
     expect((document.pipeline as any).name).toBe("V1 Pipeline");
   });
@@ -172,7 +188,7 @@ describe("extractMutableBody", () => {
       identifier: "my-tmpl",
       template_yaml: "template:\n  name: My Template\n  type: Step",
     };
-    const { document, yamlSource } = extractMutableBody(getResult, "template");
+    const { document, yamlSource } = extractMutableBody(getResult, templateResource);
     expect(yamlSource).toBe(true);
     expect((document.template as any).name).toBe("My Template");
   });
@@ -182,7 +198,7 @@ describe("extractMutableBody", () => {
       identifier: "my-tmpl",
       template_yaml: "version: 1\ntemplate:\n  name: My Template\n  type: Step",
     };
-    const { document, yamlSource } = extractMutableBody(getResult, "template_v1");
+    const { document, yamlSource } = extractMutableBody(getResult, templateV1Resource);
     expect(yamlSource).toBe(true);
     expect((document.template as any).name).toBe("My Template");
   });
@@ -192,38 +208,38 @@ describe("extractMutableBody", () => {
       identifier: "my-is",
       yamlInputSet: "inputSet:\n  name: My Input Set",
     };
-    const { document, yamlSource } = extractMutableBody(getResult, "input_set");
+    const { document, yamlSource } = extractMutableBody(getResult, inputSetResource);
     expect(yamlSource).toBe(true);
     expect((document.inputSet as any).name).toBe("My Input Set");
   });
 
   it("reports supported YAML-backed patch resources", () => {
-    expect(supportsJsonPatch("pipeline")).toBe(true);
-    expect(supportsJsonPatch("template_v1")).toBe(true);
-    expect(supportsJsonPatch("pull_request")).toBe(false);
+    expect(supportsJsonPatch(pipelineResource)).toBe(true);
+    expect(supportsJsonPatch(templateV1Resource)).toBe(true);
+    expect(supportsJsonPatch({ resourceType: "pull_request" })).toBe(false);
   });
 
   it("rejects non-YAML resource types without a mutable-body projector", () => {
     const getResult = { identifier: "svc-1", name: "My Service", type: "K8s" };
-    expect(() => extractMutableBody(getResult, "service")).toThrow(/only supported for YAML-backed resources/);
+    expect(() => extractMutableBody(getResult, serviceResource)).toThrow(/not configured/);
   });
 
   it("rejects trigger type because trigger update expects JSON, not YAML", () => {
     const getResult = { identifier: "trg-1", name: "My Trigger", enabled: true };
-    expect(() => extractMutableBody(getResult, "trigger")).toThrow(/only supported for YAML-backed resources/);
+    expect(() => extractMutableBody(getResult, triggerResource)).toThrow(/not configured/);
   });
 
   it("throws for null GET response", () => {
-    expect(() => extractMutableBody(null, "pipeline")).toThrow(/not an object/);
+    expect(() => extractMutableBody(null, pipelineResource)).toThrow(/not an object/);
   });
 
   it("throws for non-object GET response", () => {
-    expect(() => extractMutableBody("just a string", "pipeline")).toThrow(/not an object/);
+    expect(() => extractMutableBody("just a string", pipelineResource)).toThrow(/not an object/);
   });
 
   it("throws when pipeline has no YAML field", () => {
     const getResult = { identifier: "pipe-1", name: "No YAML" };
-    expect(() => extractMutableBody(getResult, "pipeline")).toThrow(/does not contain a YAML body/);
+    expect(() => extractMutableBody(getResult, pipelineResource)).toThrow(/does not contain a YAML body/);
   });
 
   it("preserves metadata for git-backed resources", () => {
@@ -235,7 +251,7 @@ describe("extractMutableBody", () => {
       storeType: "REMOTE",
       connectorRef: "git_connector",
     };
-    const { metadata } = extractMutableBody(getResult, "pipeline");
+    const { metadata } = extractMutableBody(getResult, pipelineResource);
     expect(metadata.lastObjectId).toBe("abc123");
     expect(metadata.lastCommitId).toBe("def456");
     expect(metadata.storeType).toBe("REMOTE");
@@ -247,7 +263,7 @@ describe("extractMutableBody", () => {
       identifier: "inline-pipe",
       yamlPipeline: "pipeline:\n  name: Inline\n  stages: []",
     };
-    const { metadata } = extractMutableBody(getResult, "pipeline");
+    const { metadata } = extractMutableBody(getResult, pipelineResource);
     expect(Object.keys(metadata)).toHaveLength(0);
   });
 });
@@ -301,7 +317,7 @@ describe("YAML round-trip", () => {
     ].join("\n");
 
     const getResult = { yamlPipeline: yaml, identifier: "my_pipeline" };
-    const { document, yamlSource } = extractMutableBody(getResult, "pipeline");
+    const { document, yamlSource } = extractMutableBody(getResult, pipelineResource);
 
     const ops: PatchOperation[] = [
       { op: "replace", path: "/pipeline/name", value: "Updated" },

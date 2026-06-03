@@ -184,6 +184,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id"],
+      patchSupport: { kind: "yaml", bodyFields: ["yamlPipeline"] },
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
       executeHint: "Before executing, check required inputs: harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID'). For simple variables, pass key-value pairs in inputs. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex template inputs, use input_set_ids — list available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
       listFilterFields: [
@@ -413,6 +414,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       headerBasedScoping: true,
       identifierFields: ["pipeline_id"],
+      patchSupport: { kind: "yaml", bodyFields: ["pipeline_yaml", "yaml"] },
       searchAliases: ["v1 pipeline", "agent pipeline", "v1"],
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures. V1 pipelines use the same execution engine as v0.",
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
@@ -672,6 +674,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id", "input_set_id"],
+      patchSupport: { kind: "yaml", bodyFields: ["yamlInputSet"] },
       listFilterFields: [
         { name: "pipeline_id", description: "Pipeline identifier to filter input sets", required: true },
       ],
