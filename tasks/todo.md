@@ -750,3 +750,8 @@
 - Added regression tests for fallback auth, explicit FME credential override, placeholder rejection before network I/O, and client preservation of explicit FME Bearer headers.
 - Updated README and `.env.example` to document the direct Split.io credential requirement for FME resources.
 - Verified with `pnpm test tests/config.test.ts tests/registry/feature-flags.test.ts tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+
+### Review Follow-up
+- Fixed review finding that a deployment-level `HARNESS_FME_API_KEY` could override per-session `x-harness-api-key` in shared multi-user HTTP mode.
+- `ConfigSchema` now rejects `HARNESS_FME_API_KEY` when `HARNESS_MCP_MODE=multi-user`, and `resolveFmeApiKey()` defensively ignores deployment-level FME keys in multi-user mode.
+- Added regression coverage for config rejection and the exact session merge path (`mergeConfigWithSessionHeaders` plus `resolveFmeApiKey`) so FME auth stays tied to the session credential.

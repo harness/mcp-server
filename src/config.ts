@@ -116,6 +116,13 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
+  if (isMultiUser && data.HARNESS_FME_API_KEY) {
+    throw new Error(
+      "HARNESS_FME_API_KEY must not be set in multi-user mode. " +
+      "FME calls must use the session user's x-harness-api-key credential.",
+    );
+  }
+
   if (!isMultiUser && !data.HARNESS_API_KEY) {
     throw new Error(
       "HARNESS_API_KEY is required in single-user mode.",
@@ -199,8 +206,12 @@ export function isPlaceholderCredential(value: string | undefined): boolean {
  * FME talks directly to api.split.io, so hosted OAuth/proxy auth for Harness
  * platform APIs cannot be reused there.
  */
-export function resolveFmeApiKey(config: Pick<Config, "HARNESS_FME_API_KEY" | "HARNESS_API_KEY">): string | undefined {
-  const explicitFmeKey = config.HARNESS_FME_API_KEY?.trim();
+export function resolveFmeApiKey(
+  config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_FME_API_KEY" | "HARNESS_API_KEY">,
+): string | undefined {
+  const explicitFmeKey = config.HARNESS_MCP_MODE === "multi-user"
+    ? undefined
+    : config.HARNESS_FME_API_KEY?.trim();
   if (explicitFmeKey && !isPlaceholderCredential(explicitFmeKey)) {
     return explicitFmeKey;
   }

@@ -224,6 +224,16 @@ describe("ConfigSchema", () => {
     ).toThrow("HARNESS_API_KEY must not be set in multi-user mode");
   });
 
+  it("rejects multi-user mode when HARNESS_FME_API_KEY is set", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        HARNESS_MCP_MODE: "multi-user",
+        HARNESS_ACCOUNT_ID: "acct123",
+        HARNESS_FME_API_KEY: "shared-fme-key",
+      }),
+    ).toThrow("HARNESS_FME_API_KEY must not be set in multi-user mode");
+  });
+
   it("requires HARNESS_API_KEY in single-user mode", () => {
     expect(() =>
       ConfigSchema.parse({
@@ -403,6 +413,7 @@ describe("ConfigSchema — HTTPS enforcement", () => {
 
   it("resolves FME auth from explicit key before Harness API key", () => {
     expect(resolveFmeApiKey({
+      HARNESS_MCP_MODE: "single-user",
       HARNESS_FME_API_KEY: "fme-admin-key",
       HARNESS_API_KEY: "pat.acct123.tokenId.secret",
     })).toBe("fme-admin-key");
@@ -410,6 +421,7 @@ describe("ConfigSchema — HTTPS enforcement", () => {
 
   it("falls back to non-placeholder Harness API key for FME auth", () => {
     expect(resolveFmeApiKey({
+      HARNESS_MCP_MODE: "single-user",
       HARNESS_FME_API_KEY: undefined,
       HARNESS_API_KEY: "pat.acct123.tokenId.secret",
     })).toBe("pat.acct123.tokenId.secret");
@@ -419,9 +431,18 @@ describe("ConfigSchema — HTTPS enforcement", () => {
     expect(isPlaceholderCredential("dummy")).toBe(true);
     expect(isPlaceholderCredential("pat.internal.internal.dummy")).toBe(true);
     expect(resolveFmeApiKey({
+      HARNESS_MCP_MODE: "single-user",
       HARNESS_FME_API_KEY: undefined,
       HARNESS_API_KEY: "dummy",
     })).toBeUndefined();
+  });
+
+  it("does not prefer a deployment-level FME key in multi-user mode", () => {
+    expect(resolveFmeApiKey({
+      HARNESS_MCP_MODE: "multi-user",
+      HARNESS_FME_API_KEY: "shared-fme-key",
+      HARNESS_API_KEY: "pat.session-account.token.secret",
+    })).toBe("pat.session-account.token.secret");
   });
 });
 

@@ -37,3 +37,8 @@
 - **Pass criteria**: If the first element of page 2 matches across both servers → pagination parity ✓
 - **Fail criteria**: If they differ (same scope) → investigate (API params, sort order, date filters, etc.)
 - **Rule**: Apply this pattern to all tools when testing pagination across MCP v1 and v2.
+
+## Product Credentials in Multi-User Mode
+- **Issue**: A deployment-level product credential can silently override the per-session credential after `mergeConfigWithSessionHeaders()` injects the user's API key, breaking shared HTTP auth isolation.
+- **Fix**: Reject server-held product credentials in `HARNESS_MCP_MODE=multi-user` unless there is an explicit per-session credential channel, and defensively ignore shared product credentials in auth resolvers for multi-user configs.
+- **Rule**: For any product-specific auth config, test the full multi-user path: base config → session header merge → product auth resolver. The resolved product credential must remain tied to the session user or fail closed.
