@@ -19,7 +19,8 @@
 - Root cause: generic `harness_create`/`harness_update` calls route path identifiers through `params`, but `harness_describe` only exposed body schemas; agents could see PR body fields but not the required `repo_id` path param and guessed `repo_identifier`.
 - Added `EndpointSpec.paramsSchema`, surfaced it in `harness_describe`, and annotated Harness Code PR operations/actions with `repo_id` and `pr_number`.
 - Added scoped alias support so declared params can accept compatibility names; PR repo params accept `repo_identifier` only where the endpoint schema declares it.
-- Verification passed: red failures reproduced for missing metadata/alias behavior, then `pnpm test -- tests/registry/pull-requests.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, full `pnpm test` (70 files / 1775 tests), `pnpm build`, and `git diff --check`.
+- Code review found `pr_comment.update` and `pr_comment.delete` also needed to advertise `comment_id`; added a dedicated comment params schema and a consistency test that every declared `pathParams` key appears in `paramsSchema`.
+- Verification passed: red failures reproduced for missing metadata/alias behavior and missing `comment_id`, then `pnpm test -- tests/registry/pull-requests.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, full `pnpm test` (70 files / 1776 tests), `pnpm build`, and `git diff --check`.
 
 ## Vitest Security Upgrade (2026-06-03)
 - [x] Confirm the affected local Vitest version and patched target
