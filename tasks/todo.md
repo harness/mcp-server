@@ -1,5 +1,92 @@
 # Harness MCP Server — Task Tracking
 
+## Vitest Security Upgrade (2026-06-03)
+- [x] Confirm the affected local Vitest version and patched target
+- [x] Upgrade `vitest` dev dependency to the patched 4.1 line
+- [x] Regenerate `pnpm-lock.yaml`
+- [x] Run focused and broad verification
+
+### Plan
+- Address GHSA-5xrq-8626-4rwp / Dependabot alert by moving from `vitest` 3.2.4 to `vitest` 4.1.0 or later.
+- Keep the change limited to test tooling metadata and lockfile updates unless v4 requires code/config changes.
+- Verify with the release metadata test, typecheck, and the full Vitest test suite.
+
+### Review
+- Updated `devDependencies.vitest` from `^3.0.6` to `^4.1.0`; `pnpm-lock.yaml` now resolves `vitest` to `4.1.8`.
+- `pnpm audit` also surfaced a moderate `qs` advisory through `express`; added a narrow `pnpm.overrides.qs >=6.15.2` entry and regenerated the lockfile to resolve `qs` to `6.15.2`.
+- Verification passed: `pnpm audit` reports no known vulnerabilities; `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, `pnpm test` (70 files / 1770 tests), `pnpm build`, and `git diff --check` all pass.
+
+## Version Bump 3.1.2 (2026-06-03)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.2
+- [x] Update release metadata regression test
+- [x] Run verification
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.2`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.2` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, and `git diff --check`.
+
+## PR 298 Header-Based Body Scope Follow-Up (2026-06-02)
+- [x] Move header-based body scope suppression into the dispatcher
+- [x] Remove redundant AI Evals per-endpoint suppression flags
+- [x] Add regressions for AI Evals and template v1 body payloads
+- [x] Run focused and broad verification
+- [x] Push updated PR branch
+
+### Plan
+- Treat `def.headerBasedScoping` and `spec.headerBasedScoping` as default body-scope suppression signals inside `Registry.executeSpec`, matching the documented `ResourceDefinition` contract.
+- Keep `skipScopeBodyInjection` for non-header-scoped exceptions such as DBOps path-scoped POST/PUT bodies.
+- Add a registry regression using `template_v1.create`, since that was the reviewer's concrete reproduction of the abstraction gap.
+
+### Review
+- `Registry.executeSpec` now treats `spec.skipScopeBodyInjection`, `spec.headerBasedScoping`, and `def.headerBasedScoping` as body-scope suppression signals before POST/PUT body injection.
+- Removed redundant AI Evals endpoint-level `skipScopeBodyInjection` flags; AI Evals relies on resource-level `headerBasedScoping` for the shared behavior.
+- Added regression coverage that AI Evals resources use header scoping without redundant endpoint flags and that `template_v1.create` no longer leaks `orgIdentifier`/`projectIdentifier` into its JSON body.
+- Verification passed: `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm test` (68 files / 1734 tests), `pnpm build`, and `git diff --check`.
+
+## Critical Bug Inspection (2026-06-02)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+- [x] Commit/push/open PR only if a fix is made
+
+### Plan
+- Compare this branch against `origin/main`; if empty, inspect recent `origin/main` commits since the last critical-bug run.
+- Prioritize behavioral changes with high blast radius: auth/session handling, request construction, write-operation safety, scoping, pagination/output contracts, and long-running execution semantics.
+- Require a concrete trigger scenario for data loss, crash, security bypass, or significant user-facing breakage before patching.
+
+### Review
+- Found that AI Evals path-scoped POST/PUT requests leaked generic NG `orgIdentifier` and `projectIdentifier` fields into API-specific JSON bodies whenever callers supplied explicit org/project IDs or a parsed Harness URL. This could make normal dataset/eval/metric/suite/target/model write workflows fail against the AI Evals API despite correct path scoping.
+- Fixed AI Evals mutating endpoint specs to opt out of generic body scope injection while preserving org/project in the REST path and account scoping via headers.
+- Found that `database_execute_llm_authoring_pipeline.create` read `schema_id`, `instance_id`, and `conversation_id` from top-level input even though `harness_create` sends user fields under `body`, then validated the transformed backend payload against the pre-transform alias names. This made the consolidated Accept & Commit endpoint fail before sending any request.
+- Fixed the DBOps LLM authoring body builder to read `input.body`, map caller aliases to backend fields, and skip generic body scope injection.
+- Review follow-up: also found two path-scoped DBOps POST read endpoints (`database_instance.list` and `database_snapshot_object.get`) that were still receiving generic body scope fields. They now opt out and have payload regression coverage.
+- Added an AI Evals structural regression so every current and future POST/PUT body builder in that toolset must opt out of generic NG scope body injection.
+- Verified focused coverage with `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/dbops.test.ts`, then broader verification with `pnpm typecheck`, full `pnpm test` (68 files / 1734 tests, rerun outside the sandbox after localhost bind tests hit `EPERM`), and `pnpm build`.
+
+## Version Bump 3.1.1 (2026-06-01)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.1
+- [x] Update release metadata regression test
+- [x] Run verification
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.1`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.1` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts` and `pnpm typecheck`.
+
 ## Documentation Alignment Automation (2026-06-01)
 - [x] Identify recently changed subsystems with weak docs
 - [x] Update user-facing docs for entity schemas, IaCM, and audit telemetry
@@ -23,6 +110,7 @@
 - `CONTRIBUTING.md` now uses Ansible as the opt-in toolset example and documents vendored entity schema maintenance.
 - Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `git diff --check HEAD~1..HEAD`, and targeted stale-language scans across README, docs, and CONTRIBUTING.
 - Opened PR: https://github.com/harness/mcp-server/pull/293
+- Review follow-up: relaxed audit confirmation wording to match current read event payloads, carried IaCM org/project scope through follow-up workflow examples, and rechecked the merged `harness_schema` runtime contract before pushing.
 
 ## Version Bump 3.1.0 (2026-05-29)
 - [x] Identify release metadata fields pinned to the previous version
@@ -100,6 +188,26 @@
 - Updated README, manifests, `.env.example`, and Gemini docs from PAT-only account extraction to PAT/SAT account extraction.
 - Verified the customer-provided SAT sample was not written into the repo.
 - Verification passed: `pnpm vitest run tests/config.test.ts tests/utils/session-headers.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, and `pnpm test` outside the sandbox for local HTTP port binding.
+
+## Slack Bug Triage: Cursor `npx ENOENT` Startup Failure (2026-05-27)
+- [x] Read the triggered Slack thread and capture the complete report
+- [x] Trace the failure path through local MCP client configuration and docs
+- [x] Clarify GUI-client `npx` startup guidance to prevent auth misdiagnosis
+- [x] Run focused docs verification
+- [x] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Treat `spawn npx ENOENT` as a client process-launch failure because Cursor fails before the MCP server starts and before Harness auth can be used.
+- Keep the fix in public configuration guidance: make the Cursor/local examples point users toward absolute `npx`/`node` paths and explain that auth changes do not affect this error.
+- Verify the documentation remains generated/consistent before reporting back.
+
+### Review
+- The Slack thread contained only the Cursor output log; there were no screenshots or follow-up messages.
+- Root cause is client-side process launch: Cursor reports `spawn npx ENOENT` immediately after `config_server_modified`, before the Harness MCP server can start or read `HARNESS_API_KEY`.
+- Updated `README.md` local/Cursor examples to use an absolute `npx` path, `-y harness-mcp-v2@latest`, and explicit `PATH`, and expanded troubleshooting to state that `spawn npx ENOENT` is not an auth failure.
+- Verified with `pnpm install --frozen-lockfile`, `pnpm build`, and `pnpm docs:check`.
+- Opened PR #271 and replied in the original Slack thread.
+- Review follow-up: updated Cursor, Claude Desktop, and Windsurf examples to use absolute executable paths and explicit `PATH`, matching the GUI-client troubleshooting guidance.
 
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
@@ -667,3 +775,37 @@
 - Fixed the poller so only the configured wait deadline reports a timeout; persistent poll failures now throw and are surfaced by `harness_execute` as `_wait.error` while preserving the trigger response and execution ID.
 - Added unit coverage for the poller and boundary coverage that `harness_execute` preserves the trigger response, omits `execution_timed_out`, and returns `_wait.error` on persistent polling failures.
 - Verified with `pnpm test tests/utils/poll-execution.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, full `pnpm test` (61 files / 1459 tests), `pnpm build`, and `git diff --check origin/main...HEAD`.
+
+## Hosted FME Auth Placeholder Bug (2026-06-04)
+- [x] Trace FME request auth from registry config to outgoing Split.io request
+- [x] Add explicit FME credential resolution that does not send hosted placeholders to Split.io
+- [x] Update tests for self-hosted fallback, explicit FME token, and hosted dummy rejection
+- [x] Update docs/env examples for FME auth configuration
+- [x] Run focused tests, typecheck, build, and record review notes
+
+### Plan
+- Keep existing FME resource paths and extraction behavior unchanged; the positive control shows the Split API mapping works.
+- Treat FME/Split auth as product-specific auth, because hosted OAuth/service-routing can authenticate Harness platform APIs without making `HARNESS_API_KEY` a valid external Split credential.
+- Prefer an explicit FME credential for Split.io requests; fall back to the session/server Harness API key only when it is not a known hosted placeholder so self-hosted PAT/SAT setups keep working.
+- Preserve Bearer auth for Split Admin API calls to avoid breaking legacy-token compatibility, and fail loudly before network I/O when no usable FME credential exists.
+
+### Review
+- Added optional `HARNESS_FME_API_KEY` config and a `resolveFmeApiKey()` helper that prefers the explicit FME credential, falls back to a non-placeholder Harness API key, and rejects hosted/internal placeholders such as `dummy` or `*.dummy`.
+- Changed FME registry request construction to send Bearer auth from the resolved FME credential instead of hard-coding `Authorization: Bearer HARNESS_API_KEY`.
+- Added regression tests for fallback auth, explicit FME credential override, placeholder rejection before network I/O, and client preservation of explicit FME Bearer headers.
+- Updated README and `.env.example` to document the direct Split.io credential requirement for FME resources.
+- Verified with `pnpm test tests/config.test.ts tests/registry/feature-flags.test.ts tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+
+### Review Follow-up
+- Fixed review finding that a deployment-level `HARNESS_FME_API_KEY` could override per-session `x-harness-api-key` in shared multi-user HTTP mode.
+- `ConfigSchema` now rejects `HARNESS_FME_API_KEY` when `HARNESS_MCP_MODE=multi-user`, and `resolveFmeApiKey()` defensively ignores deployment-level FME keys in multi-user mode.
+- Added regression coverage for config rejection and the exact session merge path (`mergeConfigWithSessionHeaders` plus `resolveFmeApiKey`) so FME auth stays tied to the session credential.
+
+### Packaging Follow-up
+- Added `HARNESS_FME_API_KEY` to both bundle manifests (`manifest.json` and `mcp-directory/manifest.json`) so manifest-driven and MCPB installs can provide the dedicated FME credential in single-user/self-hosted mode.
+- Added release metadata coverage to keep the packaged FME credential surface aligned with config changes.
+- Made the FME missing-auth remediation mode-aware: single-user points at `HARNESS_FME_API_KEY`, while multi-user points at the session `x-harness-api-key` and explicitly says not to configure `HARNESS_FME_API_KEY`.
+
+### Manifest Base URL Follow-up
+- Added `HARNESS_FME_BASE_URL` to both bundle manifests so manifest-driven and MCPB installs can override the Split/FME Admin API base URL.
+- Extended release metadata coverage to require both FME credential and FME base URL config surfaces in packaged manifests.

@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "harness-mcp-server",
   "display_name": "Harness",
-  "version": "3.1.0",
+  "version": "3.1.2",
   "description": "Connect AI agents to Harness for CI/CD, code repositories, pull requests, services, environments, and feature flags.",
   "long_description": "The Harness MCP Server gives MCP-compatible clients access to Harness platform workflows through consolidated tools, resources, and prompts. It supports local stdio usage and can be bundled as a Node-based MCPB extension.",
   "author": {
@@ -42,6 +42,8 @@
       ],
       "env": {
         "HARNESS_API_KEY": "${user_config.HARNESS_API_KEY}",
+        "HARNESS_FME_API_KEY": "${user_config.HARNESS_FME_API_KEY}",
+        "HARNESS_FME_BASE_URL": "${user_config.HARNESS_FME_BASE_URL}",
         "HARNESS_ACCOUNT_ID": "${user_config.HARNESS_ACCOUNT_ID}",
         "HARNESS_ORG": "${user_config.HARNESS_ORG}",
         "HARNESS_PROJECT": "${user_config.HARNESS_PROJECT}",
@@ -66,6 +68,21 @@
       "description": "Personal access token or service account token used to authenticate with Harness.",
       "required": true,
       "sensitive": true
+    },
+    "HARNESS_FME_API_KEY": {
+      "type": "string",
+      "title": "FME/Split Admin Credential",
+      "description": "Optional single-user/self-hosted FME/Split Admin credential for fme_ resources. This can be a legacy Split admin key or an FME-entitled Harness PAT/SAT. Do not set this for multi-user deployments.",
+      "required": false,
+      "sensitive": true
+    },
+    "HARNESS_FME_BASE_URL": {
+      "type": "string",
+      "title": "FME/Split Base URL",
+      "description": "Optional Split/FME Admin API base URL used by fme_ resources. Defaults to https://api.split.io.",
+      "default": "https://api.split.io",
+      "required": false,
+      "sensitive": false
     },
     "HARNESS_ACCOUNT_ID": {
       "type": "string",

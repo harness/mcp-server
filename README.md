@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 201 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 207 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,7 +8,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 201 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 207 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 33 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **32 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -216,10 +216,11 @@ Harness also supports a hosted MCP endpoint for accounts that have the managed s
       }
     },
     "harness-local": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -228,7 +229,9 @@ Harness also supports a hosted MCP endpoint for accounts that have the managed s
 
 > **Troubleshooting `npx ENOENT` or `node: No such file or directory`**
 >
-> GUI apps (Cursor, Claude Desktop, Windsurf, VS Code) don't inherit your shell's `PATH`, so they often can't find `npx` or `node`. Fix this by using absolute paths and explicitly setting `PATH` in the `env` block:
+> This is a client process-launch failure, not a Harness authentication failure. The MCP server has not started yet, so changing `HARNESS_API_KEY` will not affect `spawn npx ENOENT`.
+>
+> GUI apps (Cursor, Claude Desktop, Windsurf, VS Code) don't always inherit your shell's `PATH`, so they can fail to find `npx` or `node` after a config reload. Fix this by using absolute paths and explicitly setting `PATH` in the `env` block:
 >
 > ```json
 > {
@@ -259,10 +262,11 @@ npx (zero install)
 {
   "mcpServers": {
     "harness": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -279,9 +283,10 @@ npm install -g harness-mcp-v2
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-mcp-v2",
+      "command": "/absolute/path/to/harness-mcp-v2",
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -307,21 +312,24 @@ Then set `HARNESS_API_KEY` in your environment or `.env` file.
 
 #### Cursor (`.cursor/mcp.json`)
 
-npx (zero install)
+npx (zero install, recommended for local Cursor configs)
 
 ```json
 {
   "mcpServers": {
     "harness": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
 }
 ```
+
+Run `which npx` in a terminal and use that full path for `command`; include the directory from `which node` at the front of `PATH`.
 
 node (local install)
 
@@ -333,14 +341,17 @@ npm install -g harness-mcp-v2
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-mcp-v2",
+      "command": "/absolute/path/to/harness-mcp-v2",
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
 }
 ```
+
+Run `which harness-mcp-v2` after `npm install -g harness-mcp-v2` and use that full path for `command`; include the directory from `which node` at the front of `PATH`.
 
 #### Windsurf (`~/.windsurf/mcp.json`)
 
@@ -350,10 +361,11 @@ npx (zero install)
 {
   "mcpServers": {
     "harness": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -370,9 +382,10 @@ npm install -g harness-mcp-v2
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-mcp-v2",
+      "command": "/absolute/path/to/harness-mcp-v2",
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -522,6 +535,8 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_API_KEY`           | Yes*     | --                          | Harness personal access token or service account token. Required in `single-user` mode. Must NOT be set in `multi-user` mode                                                                                                                          |
 | `HARNESS_ACCOUNT_ID`        | No       | *(from PAT/SAT)*            | Harness account identifier. Auto-extracted from PAT/SAT tokens in single-user mode; multi-user sessions can provide their own via `x-harness-account-id` when the API key does not embed one                                                          |
 | `HARNESS_BASE_URL`          | No       | `https://app.harness.io`    | Harness API/UI base URL for local stdio or self-hosted HTTP deployments. Set this to environments such as `https://harness0.harness.io` when running the server yourself. It does not affect the managed `https://mcp.harness.io/mcp` hosted endpoint |
+| `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources. This can be a legacy Split admin key or an FME-entitled Harness PAT/SAT. FME calls go directly to `api.split.io`, so hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate these requests. Must not be set in `multi-user` mode; FME must use each session's `x-harness-api-key` credential. If unset, FME falls back to a non-placeholder `HARNESS_API_KEY` for self-hosted sessions |
+| `HARNESS_FME_BASE_URL`      | No       | `https://api.split.io`      | Split/FME Admin API base URL used by `fme_` resources. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development                                                                                                                              |
 | `HARNESS_ORG`               | No       | --                          | Organization ID. Used when `org_id` is not specified per tool call. If omitted, `org_id` must be provided explicitly. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                      |
 | `HARNESS_PROJECT`           | No       | --                          | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                                          |
 | `HARNESS_API_TIMEOUT_MS`    | No       | `30000`                     | HTTP request timeout in milliseconds                                                                                                                                                                                                                  |
@@ -557,7 +572,7 @@ HARNESS_BASE_URL must use HTTPS (got "http://..."). If you need HTTP for local d
 
 ### Audit Logging
 
-All registry-dispatched Harness API operations (`list`, `get`, `create`, `update`, `delete`, and `execute`) emit structured audit events when audit sinks are configured. Read events use `confirmation: "not_required"`; mutating events include the confirmation path used by elicitation or auto-approval. Local metadata and schema discovery tools that bypass the registry, such as `harness_describe` and `harness_schema`, are not part of this audit stream. The stderr sink is always active; additional sinks are enabled by configuration:
+All registry-dispatched Harness API operations (`list`, `get`, `create`, `update`, `delete`, and `execute`) emit structured audit events when audit sinks are configured. Mutating events include the confirmation path used by elicitation or auto-approval when a confirmation context is present; read events currently omit confirmation metadata. Local metadata and schema discovery tools that bypass the registry, such as `harness_describe` and `harness_schema`, are not part of this audit stream. The stderr sink is always active; additional sinks are enabled by configuration:
 
 - `HARNESS_AUDIT_FILE` appends newline-delimited JSON events for local collection.
 - `HARNESS_AUDIT_WEBHOOK_URL` posts `{ "events": [...] }` batches to an HTTPS webhook, optionally with `HARNESS_AUDIT_WEBHOOK_TOKEN`. Failed batches are re-enqueued with bounded capacity and eventually dropped with a warning rather than blocking tool execution.
@@ -1067,7 +1082,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-201 resource types organized across 33 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+207 resource types organized across 33 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1242,9 +1257,9 @@ IaCM resources are default-enabled and mostly project-scoped. Start with `iacm_w
 Typical workflow:
 
 1. `harness_list(resource_type="iacm_workspace", org_id="...", project_id="...")` to find the workspace.
-2. `harness_list(resource_type="iacm_resource", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
-3. `harness_list(resource_type="iacm_workspace_costs", workspace_id="...")` to review per-execution cost entries.
-4. `harness_list(resource_type="iacm_activity_resource_change", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
+2. `harness_list(resource_type="iacm_resource", org_id="...", project_id="...", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
+3. `harness_list(resource_type="iacm_workspace_costs", org_id="...", project_id="...", workspace_id="...")` to review per-execution cost entries.
+4. `harness_list(resource_type="iacm_activity_resource_change", org_id="...", project_id="...", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
 
 IaCM list responses expose `page_count` as the count for the current page only. When `has_more` is true, keep requesting the next 1-based page and sum page counts if you need a total.
 
@@ -1285,14 +1300,17 @@ Use `harness_execute(resource_type="pull_request", action="close", ...)` for an 
 | `fme_workspace`                     | x    |     |        |        |        |                                           |
 | `fme_environment`                   | x    |     |        |        |        |                                           |
 | `fme_feature_flag`                  | x    | x   | x      | x      | x      | `kill`, `restore`, `archive`, `unarchive` |
-| `fme_feature_flag_definition`       |      | x   |        |        |        |                                           |
+| `fme_feature_flag_definition`       |      | x   | x      | x      |        |                                           |
 | `fme_rollout_status`                | x    |     |        |        |        |                                           |
 | `fme_rule_based_segment`            | x    | x   | x      |        | x      |                                           |
 | `fme_rule_based_segment_definition` | x    |     |        | x      |        | `enable`, `disable`, `change_request`     |
-| `feature_flag`                      | x    | x   | x      |        | x      | `toggle`                                  |
+| `fme_traffic_type`                  | x    |     |        |        |        |                                           |
+| `fme_identity`                      |      |     | x      | x      |        |                                           |
+| `fme_standard_segment`              | x    | x   |        |        |        |                                           |
+| `fme_segment_keys`                  | x    |     |        | x      |        |                                           |
 
 
-**FME (Split.io) resources** — `fme_`* resources use the Split.io API (`api.split.io`) and are scoped by workspace ID rather than org/project. Auth uses `HARNESS_API_KEY` as a Bearer token. `fme_feature_flag` supports full lifecycle management: create (requires `traffic_type_id`), list, get, update metadata, delete, and kill/restore/archive/unarchive execute actions. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows. Use `feature_flag` for the Harness CF admin API which supports environment-specific definitions, create, delete, and toggle.
+**FME (Split.io) resources** — `fme_`* resources use the Split.io API (`api.split.io`) and are scoped by workspace ID rather than org/project. In single-user/self-hosted mode, auth uses a Bearer token from `HARNESS_FME_API_KEY`, falling back to a non-placeholder `HARNESS_API_KEY`. `HARNESS_FME_API_KEY` may be a legacy Split admin key or an FME-entitled Harness PAT/SAT, but it is rejected in `multi-user` mode so shared deployments cannot override each session user's credential. Hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate direct Split.io requests. `fme_feature_flag` supports full lifecycle management: create (requires `traffic_type_id`), list, get, update metadata, delete, and kill/restore/archive/unarchive execute actions. Use `fme_traffic_type` to discover traffic type IDs, `fme_identity` to create/update identity attributes, and `fme_standard_segment` / `fme_segment_keys` to inspect standard segments and add member keys. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows.
 
 ### GitOps
 
@@ -1617,7 +1635,7 @@ Available toolset names:
 | `dashboards`            | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
 | `idp`                   | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc                                                                                                                                                                           |
 | `pull-requests`         | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
-| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, feature_flag                                                                                                                      |
+| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys                                                           |
 | `gitops`                | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree                                               |
 | `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_application_map, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk, chaos_dr_test |
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
@@ -1652,7 +1670,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  33 Toolsets      |      (data files, not code)
-                |  201 Resource Types|
+                |  207 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+

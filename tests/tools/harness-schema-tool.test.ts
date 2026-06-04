@@ -117,6 +117,37 @@ describe("harness_schema live entities", () => {
     expect(parsed.source).toBe("harness-schema");
     expect(parsed.resource_type).toBe("pipeline");
   });
+
+  it("rejects project scope without org_id before bundled or live fetch", async () => {
+    vi.spyOn(
+      await import("../../src/tools/entity-schema/bundled.js"),
+      "getBundledEntitySchema",
+    ).mockReturnValue({ type: "object" });
+
+    const result = await server.call("harness_schema", {
+      resource_type: "connector",
+      scope: "project",
+    });
+    const parsed = parseResult(result) as { error: string };
+
+    expect(result.isError).toBe(true);
+    expect(parsed.error).toMatch(/org_id is required/);
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("harness_schema static enum", () => {
+  it("lists both legacy and v1 bundled pipeline schemas (no version preference)", () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+
+    const call = server.registerTool.mock.calls.find((c: unknown[]) => c[0] === "harness_schema");
+    const description = (call![1] as { description: string }).description;
+
+    expect(description).toContain("pipeline,");
+    expect(description).toContain("pipeline_v1");
+    expect(description).not.toMatch(/prefer pipeline_v1/i);
+  });
 });
 
 describe("extractLiveSchema", () => {

@@ -337,6 +337,9 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
 
       const accountId = client.account;
       const scope = resolveScope(params.scope);
+      // Validate scope/org/project before cache or bundled paths (same rules as live NG fetch).
+      buildYamlSchemaParams(definition, accountId, params);
+
       const cacheKey = buildLiveSchemaCacheKey(resourceType, accountId, scope);
 
       const cached = cache.get(cacheKey);

@@ -23,6 +23,10 @@ export interface ParsedHarnessUrl {
   step_id?: string;
   stage_id?: string;
   stage_execution_id?: string;
+  branch?: string;
+  store_type?: string;
+  connector_ref?: string;
+  repo_name?: string;
 }
 
 /** Union of ParsedHarnessUrl fields that RESOURCE_SEGMENTS can write to. */
@@ -224,6 +228,18 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
   const commentId = url.searchParams.get("commentId");
   if (commentId) result.comment_id = commentId;
 
+  const branch = url.searchParams.get("branch");
+  if (branch) result.branch = branch;
+
+  const storeType = url.searchParams.get("storeType");
+  if (storeType) result.store_type = storeType;
+
+  const connectorRef = url.searchParams.get("connectorRef");
+  if (connectorRef) result.connector_ref = connectorRef;
+
+  const repoName = url.searchParams.get("repoName");
+  if (repoName) result.repo_name = repoName;
+
   return result;
 }
 
@@ -246,6 +262,10 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "step_id",
   "stage_id",
   "stage_execution_id",
+  "branch",
+  "store_type",
+  "connector_ref",
+  "repo_name",
 ];
 
 export interface ApplyUrlDefaultsOptions {
