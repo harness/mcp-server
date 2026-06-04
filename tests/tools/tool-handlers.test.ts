@@ -1029,7 +1029,7 @@ describe("harness_execute", () => {
     });
 
     expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Missing required fields") });
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("body.identifier as a string") });
     expect(fileStoreRequest).not.toHaveBeenCalled();
   });
 

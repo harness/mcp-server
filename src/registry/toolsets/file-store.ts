@@ -132,6 +132,9 @@ export function buildFileStoreMultipartBody(
 
   const bodyIdentifier = optionalStringField(b, ["identifier"], "body.identifier");
   const bodyFileStoreId = optionalStringField(b, ["file_store_id"], "body.file_store_id");
+  if (bodyIdentifier !== undefined && bodyFileStoreId !== undefined && bodyIdentifier !== bodyFileStoreId) {
+    throw new Error("Conflicting file_store identifiers: body.identifier must match body.file_store_id.");
+  }
   const fileUsage = optionalStringField(b, ["file_usage", "fileUsage"], "body.file_usage");
   const description = optionalStringField(b, ["description"], "body.description");
   const mimeType = optionalStringField(b, ["mime_type", "mimeType"], "body.mime_type");
@@ -143,10 +146,18 @@ export function buildFileStoreMultipartBody(
     throw new Error("body.content_base64 must be a string.");
   }
   const contentBase64 = hasContentBase64 ? (b.content_base64 as string) : undefined;
+  const pathIdentifier = optionalStringField(input, ["file_store_id", "resource_id"], "file_store_id");
+  if (
+    mode === "update"
+    && pathIdentifier !== undefined
+    && ((bodyIdentifier !== undefined && bodyIdentifier !== pathIdentifier) || (bodyFileStoreId !== undefined && bodyFileStoreId !== pathIdentifier))
+  ) {
+    throw new Error("Conflicting file_store update identifiers: resource_id/file_store_id must match body.identifier/body.file_store_id.");
+  }
 
   const pathId =
     mode === "update"
-      ? (optionalStringField(input, ["file_store_id"], "file_store_id") ?? bodyIdentifier ?? bodyFileStoreId)
+      ? (pathIdentifier ?? bodyIdentifier ?? bodyFileStoreId)
       : (bodyIdentifier ?? bodyFileStoreId);
 
   if (mode === "update") {
@@ -245,16 +256,23 @@ export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
   const rawBody = input.body;
   if (rawBody !== undefined && typeof rawBody === "object" && rawBody !== null && !Array.isArray(rawBody)) {
     const body = rawBody as Record<string, unknown>;
+    const bodyIdentifier = optionalStringField(body, ["identifier"], "body.identifier");
+    const bodyName = optionalStringField(body, ["name"], "body.name");
     const bodyType = body.type;
+    if (bodyIdentifier === undefined) {
+      throw new Error("file_store.list_children full body requires body.identifier as a string.");
+    }
+    if (bodyName === undefined) {
+      throw new Error("file_store.list_children full body requires body.name as a string.");
+    }
+    if (bodyType === undefined) {
+      throw new Error("file_store.list_children full body requires body.type (FILE|FOLDER).");
+    }
     if (bodyType !== undefined) {
       assertFileStoreNodeType(bodyType, "body.type");
     }
     const genericIdentifier = resolveFolderNodeIdentifier(input);
     if (genericIdentifier !== undefined) {
-      const bodyIdentifier = optionalStringField(body, ["identifier"], "body.identifier");
-      if (bodyIdentifier === undefined) {
-        throw new Error("file_store.list_children full body must include body.identifier when resource_id/file_store_id is provided.");
-      }
       if (bodyIdentifier !== genericIdentifier) {
         throw new Error("Conflicting folder identifiers for file_store.list_children: resource_id/file_store_id must match body.identifier.");
       }
@@ -282,18 +300,37 @@ export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
   return node;
 }
 
-const fileStoreWriteBodySchema: BodySchema = {
+const fileStoreCreateBodySchema: BodySchema = {
   description:
-    "JSON consumed by the server and converted to multipart/form-data for Harness. Required: name, type (FILE|FOLDER), parent_identifier (string 'Root' for root). "
-    + "For FILE: content (UTF-8 text) or content_base64; optional filename, mime_type, file_usage (MANIFEST_FILE|CONFIG|SCRIPT), description, path, tags. "
-    + "For FOLDER: omit content fields. Optional identifier on create if you assign the id.",
+    "JSON consumed by the server and converted to multipart/form-data for Harness create. Required: name, type (FILE|FOLDER), parent_identifier (string 'Root' for root). "
+    + "For FILE create: provide exactly one of content (UTF-8 text) or content_base64. For FOLDER create: omit both content fields. Optional identifier if you assign the id.",
   fields: [
     { name: "name", type: "string", required: true, description: "Display name of the file or folder" },
     { name: "type", type: "string", required: true, description: "FILE or FOLDER" },
     { name: "parent_identifier", type: "string", required: true, description: "Parent node id, or 'Root' for the root of the current scope" },
     { name: "identifier", type: "string", required: false, description: "Optional stable id on create" },
-    { name: "content", type: "string", required: false, description: "File contents as UTF-8 text (FILE only)" },
-    { name: "content_base64", type: "string", required: false, description: "File contents as base64 (FILE only)" },
+    { name: "content", type: "string", required: false, description: "Required for FILE create unless content_base64 is provided; omit for FOLDER" },
+    { name: "content_base64", type: "string", required: false, description: "Required for FILE create unless content is provided; omit for FOLDER" },
+    { name: "filename", type: "string", required: false, description: "Upload filename for the content part" },
+    { name: "mime_type", type: "string", required: false, description: "MIME type (e.g. text/plain)" },
+    { name: "file_usage", type: "string", required: false, description: "MANIFEST_FILE | CONFIG | SCRIPT" },
+    { name: "description", type: "string", required: false, description: "Description" },
+    { name: "path", type: "string", required: false, description: "Logical path if applicable" },
+    { name: "tags", type: "string", required: false, description: "Tags string per Harness expectations" },
+  ],
+};
+
+const fileStoreUpdateBodySchema: BodySchema = {
+  description:
+    "JSON consumed by the server and converted to multipart/form-data for Harness update. Required: name, type (FILE|FOLDER), parent_identifier (current parent node id). "
+    + "Pass resource_id/file_store_id as the node identifier. For FILE update, content or content_base64 is optional for metadata-only updates; if replacing content, provide exactly one. For FOLDER update: omit both content fields.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Display name of the file or folder" },
+    { name: "type", type: "string", required: true, description: "FILE or FOLDER" },
+    { name: "parent_identifier", type: "string", required: true, description: "Current parent node id; use 'Root' only when the current parent is root" },
+    { name: "identifier", type: "string", required: false, description: "Existing node id fallback when resource_id/file_store_id is not supplied; must match when both are supplied" },
+    { name: "content", type: "string", required: false, description: "Optional replacement file contents as UTF-8 text (FILE only); omit for metadata-only update or FOLDER" },
+    { name: "content_base64", type: "string", required: false, description: "Optional replacement file contents as base64 (FILE only); omit for metadata-only update or FOLDER" },
     { name: "filename", type: "string", required: false, description: "Upload filename for the content part" },
     { name: "mime_type", type: "string", required: false, description: "MIME type (e.g. text/plain)" },
     { name: "file_usage", type: "string", required: false, description: "MANIFEST_FILE | CONFIG | SCRIPT" },
@@ -382,7 +419,7 @@ export const fileStoreToolset: ToolsetDefinition = {
           responseExtractor: ngExtract,
           description:
             "Create a file (with content or content_base64) or an empty folder. JSON body is converted to multipart/form-data per Harness File Store API.",
-          bodySchema: fileStoreWriteBodySchema,
+          bodySchema: fileStoreCreateBodySchema,
         },
         update: {
           method: "PUT",
@@ -394,7 +431,7 @@ export const fileStoreToolset: ToolsetDefinition = {
           responseExtractor: ngExtract,
           description:
             "Update file or folder metadata and optionally replace file content (multipart). Pass resource_id as the node identifier.",
-          bodySchema: fileStoreWriteBodySchema,
+          bodySchema: fileStoreUpdateBodySchema,
         },
         delete: {
           method: "DELETE",

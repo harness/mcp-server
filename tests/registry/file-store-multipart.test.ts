@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildFileStoreMultipartBody, buildFolderNodesBody } from "../../src/registry/toolsets/file-store.js";
+import { buildFileStoreMultipartBody, buildFolderNodesBody, fileStoreToolset } from "../../src/registry/toolsets/file-store.js";
 
 describe("buildFileStoreMultipartBody", () => {
   it("builds FOLDER multipart without content", () => {
@@ -127,6 +127,40 @@ describe("buildFileStoreMultipartBody", () => {
       "update",
     );
     expect(fd.get("identifier")).toBe("node123");
+  });
+
+  it("rejects update when file_store_id conflicts with body.identifier", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          file_store_id: "node123",
+          body: {
+            identifier: "node456",
+            name: "renamed",
+            type: "FOLDER",
+            parent_identifier: "Root",
+          },
+        },
+        "update",
+      ),
+    ).toThrow(/resource_id\/file_store_id must match body\.identifier/);
+  });
+
+  it("rejects conflicting body identifier aliases", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            identifier: "node123",
+            file_store_id: "node456",
+            name: "renamed",
+            type: "FOLDER",
+            parent_identifier: "Root",
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/body\.identifier must match body\.file_store_id/);
   });
 
   it("requires an explicit parent identifier on update", () => {
@@ -282,6 +316,18 @@ describe("buildFolderNodesBody", () => {
     })).toThrow(/resource_id\/file_store_id must match body\.identifier/);
   });
 
+  it("rejects a full body object with a non-string identifier", () => {
+    expect(() => buildFolderNodesBody({
+      body: { identifier: 123, name: "scripts", type: "FOLDER" },
+    })).toThrow(/body\.identifier must be a string/);
+  });
+
+  it("rejects a full body object with a non-string name", () => {
+    expect(() => buildFolderNodesBody({
+      body: { identifier: "f1", name: true, type: "FOLDER" },
+    })).toThrow(/body\.name must be a string/);
+  });
+
   it("rejects a full body with an invalid node type", () => {
     expect(() => buildFolderNodesBody({
       body: { identifier: "f1", name: "scripts", type: "BOGUS" },
@@ -347,5 +393,22 @@ describe("buildFolderNodesBody", () => {
 
   it("throws when required shorthand fields are missing", () => {
     expect(() => buildFolderNodesBody({ folder_identifier: "f1" })).toThrow(/folder_identifier/);
+  });
+});
+
+describe("file_store bodySchema metadata", () => {
+  const fileStoreResource = fileStoreToolset.resources[0];
+
+  it("documents the FILE create content one-of requirement", () => {
+    const schema = fileStoreResource.operations.create?.bodySchema;
+    expect(schema?.description).toContain("For FILE create: provide exactly one of content");
+    expect(schema?.fields.find((field) => field.name === "content")?.description).toContain("Required for FILE create unless content_base64 is provided");
+    expect(schema?.fields.find((field) => field.name === "content_base64")?.description).toContain("Required for FILE create unless content is provided");
+  });
+
+  it("documents metadata-only FILE updates separately from create", () => {
+    const schema = fileStoreResource.operations.update?.bodySchema;
+    expect(schema?.description).toContain("optional for metadata-only updates");
+    expect(schema?.fields.find((field) => field.name === "identifier")?.description).toContain("must match when both are supplied");
   });
 });
