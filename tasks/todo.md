@@ -1,5 +1,22 @@
 # Harness MCP Server — Task Tracking
 
+## PR 172 Conflict Resolution (2026-06-04)
+- [x] Inspect PR status and identify conflicted documentation files
+- [x] Merge current `origin/main` into PR branch
+- [x] Resolve documentation and task-log conflicts
+- [x] Run docs/build/test verification
+- [ ] Push resolved branch and re-check PR status
+
+### Plan
+- Preserve current public docs as source of truth where main has newer runtime-facing guidance.
+- Keep the security exemption workflow documentation from the PR where it still matches current files.
+- Treat this as a docs-focused conflict resolution unless verification exposes a runtime contract mismatch.
+
+### Review
+- Merged current `origin/main` into PR #172 and resolved conflicts in contributor docs, Gemini docs, security exemption test docs, and task history.
+- Updated security exemption docs and prompt guidance to match the current execute surface: `approve` and `reject` are the available actions, while elevated approval uses `approve` with `body.scope`.
+- Verification passed: `pnpm docs:check`, `pnpm typecheck`, `pnpm build`, focused STO/registry/tool tests, full `pnpm test`, and `git diff --check`.
+
 ## Vitest Security Upgrade (2026-06-03)
 - [x] Confirm the affected local Vitest version and patched target
 - [x] Upgrade `vitest` dev dependency to the patched 4.1 line

@@ -53,7 +53,7 @@ Example shape (use real titles/types/targets from your output, not these literal
 - Approve at project scope: SQL injection in payment-api (Critical, mitigation in place)
 - Reject: Hardcoded API key in auth-service (no justification)
 - Reject all Pending SECRET-type exemptions for target payment-api
-- Promote all Pending Low-severity SCA exemptions for target shared-libs to ORG scope
+- Approve all Pending Low-severity SCA exemptions for target shared-libs at ORG scope
 - Show all Approved exemptions for target auth-service
 
 Rules:
