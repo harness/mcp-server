@@ -7,12 +7,16 @@
 - [x] Align README resource/toolset discoverability
 - [x] Run focused and broad verification
 - [x] Push branch and re-check PR status
+- [x] Tighten latest File Store validation review feedback
+- [x] Re-run focused and broad verification for the follow-up
+- [ ] Push final PR #211 update and re-check status
 
 ### Plan
 - Keep multipart client plumbing intact unless verification shows it is implicated.
 - Make unsafe File Store inputs fail loudly before request construction.
 - Preserve generic tool contracts: `harness_execute(resource_id=...)` should work without duplicate params.
 - Keep generated README counts and hand-authored resource/toolset tables aligned with the registry.
+- Latest follow-up: validate multipart scalar metadata as strings, reject dual `content`/`content_base64` inputs, and reject conflicting folder identifiers instead of letting stale aliases override the generic resource id.
 
 ### Review
 - Merged current `origin/main` into PR #211 and resolved conflicts in `README.md`, `src/registry/index.ts`, and task history.
@@ -23,6 +27,8 @@
 - Verification passed: `pnpm typecheck`, focused File Store/client and `harness_execute` Vitest runs, `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
 - Follow-up verification passed: `pnpm typecheck`, focused File Store/helper and tool-handler Vitest runs, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
 - Second follow-up verification passed: `pnpm typecheck`, focused File Store/helper and tool-handler Vitest runs, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+- Third follow-up review fix: multipart scalar metadata is string-validated before FormData construction, FILE uploads reject simultaneous `content` and `content_base64`, and `list_children` rejects conflicting folder identifiers instead of letting stale aliases override the generic resource id.
+- Third follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts`, `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "File Store"`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
 
 ## PR 172 Conflict Resolution (2026-06-04)
 - [x] Inspect PR status and identify conflicted documentation files

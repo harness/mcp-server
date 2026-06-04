@@ -5,21 +5,27 @@ import { ngExtract, pageExtract } from "../extractors.js";
 // Matches server-side FileUploadLimit.fileStoreFileLimit (100 MB)
 const MAX_FILE_BYTES = 100_000_000;
 
-function appendPart(fd: FormData, key: string, value: unknown): void {
-  if (value === undefined || value === null || value === "") return;
-  if (typeof value === "boolean") {
-    fd.append(key, value ? "true" : "false");
-    return;
+function appendPart(fd: FormData, key: string, value: string | undefined): void {
+  if (value === undefined || value === "") return;
+  fd.append(key, value);
+}
+
+function optionalStringField(
+  source: Record<string, unknown>,
+  fieldNames: readonly string[],
+  fieldLabel: string,
+): string | undefined {
+  for (const fieldName of fieldNames) {
+    const value = source[fieldName];
+    if (value === undefined || value === null || value === "") {
+      continue;
+    }
+    if (typeof value !== "string") {
+      throw new Error(`${fieldLabel} must be a string.`);
+    }
+    return value;
   }
-  if (typeof value === "number" && !Number.isNaN(value)) {
-    fd.append(key, String(value));
-    return;
-  }
-  if (typeof value === "string") {
-    fd.append(key, value);
-    return;
-  }
-  fd.append(key, JSON.stringify(value));
+  return undefined;
 }
 
 function assertFileStoreNodeType(value: unknown, fieldName: string): asserts value is "FILE" | "FOLDER" {
@@ -88,7 +94,7 @@ function estimateBase64DecodedBytes(normalizedBase64: string): number {
  * Pass a JSON `body` from harness_create / harness_update; this builder converts it to FormData.
  *
  * Required: name, type (FILE | FOLDER), parent_identifier (use "Root" for the scope root).
- * For FILE: pass content (UTF-8 string) and/or content_base64 (raw bytes), plus optional filename.
+ * For FILE: pass content (UTF-8 string) or content_base64 (raw bytes), plus optional filename.
  */
 export function buildFileStoreMultipartBody(
   input: Record<string, unknown>,
@@ -124,10 +130,18 @@ export function buildFileStoreMultipartBody(
   appendPart(fd, "type", nodeType);
   appendPart(fd, "parentIdentifier", parentIdentifier);
 
+  const bodyIdentifier = optionalStringField(b, ["identifier"], "body.identifier");
+  const bodyFileStoreId = optionalStringField(b, ["file_store_id"], "body.file_store_id");
+  const fileUsage = optionalStringField(b, ["file_usage", "fileUsage"], "body.file_usage");
+  const description = optionalStringField(b, ["description"], "body.description");
+  const mimeType = optionalStringField(b, ["mime_type", "mimeType"], "body.mime_type");
+  const path = optionalStringField(b, ["path"], "body.path");
+  const tags = optionalStringField(b, ["tags"], "body.tags");
+
   const pathId =
     mode === "update"
-      ? ((input.file_store_id as string | undefined) ?? (b.identifier as string | undefined) ?? (b.file_store_id as string | undefined))
-      : ((b.identifier as string | undefined) ?? (b.file_store_id as string | undefined));
+      ? (optionalStringField(input, ["file_store_id"], "file_store_id") ?? bodyIdentifier ?? bodyFileStoreId)
+      : (bodyIdentifier ?? bodyFileStoreId);
 
   if (mode === "update") {
     if (typeof pathId !== "string" || pathId === "") {
@@ -138,25 +152,21 @@ export function buildFileStoreMultipartBody(
     appendPart(fd, "identifier", pathId);
   }
 
-  appendPart(fd, "fileUsage", b.file_usage ?? b.fileUsage);
-  appendPart(fd, "description", b.description);
-  appendPart(fd, "mimeType", b.mime_type ?? b.mimeType);
-  appendPart(fd, "path", b.path);
-  if (b.tags !== undefined && b.tags !== null && b.tags !== "") {
-    appendPart(fd, "tags", typeof b.tags === "string" ? b.tags : JSON.stringify(b.tags));
-  }
+  appendPart(fd, "fileUsage", fileUsage);
+  appendPart(fd, "description", description);
+  appendPart(fd, "mimeType", mimeType);
+  appendPart(fd, "path", path);
+  appendPart(fd, "tags", tags);
 
   if (nodeType === "FILE") {
-    const mime =
-      (typeof b.mime_type === "string" && b.mime_type) ||
-      (typeof b.mimeType === "string" && b.mimeType) ||
-      "application/octet-stream";
-    const filename =
-      (typeof b.filename === "string" && b.filename) ||
-      (typeof b.file_name === "string" && b.file_name) ||
-      name;
-    if (typeof b.content_base64 === "string" && b.content_base64 !== "") {
-      const normalizedBase64 = normalizeBase64Content(b.content_base64);
+    const filename = optionalStringField(b, ["filename", "file_name"], "body.filename") ?? name;
+    const contentBase64 = optionalStringField(b, ["content_base64"], "body.content_base64");
+    const hasContent = b.content !== undefined && b.content !== null;
+    if (contentBase64 !== undefined && hasContent) {
+      throw new Error("Provide either body.content or body.content_base64, not both.");
+    }
+    if (contentBase64 !== undefined) {
+      const normalizedBase64 = normalizeBase64Content(contentBase64);
       const estimatedBytes = estimateBase64DecodedBytes(normalizedBase64);
       if (estimatedBytes > MAX_FILE_BYTES) {
         throw new Error(`File content exceeds maximum size of ${MAX_FILE_BYTES} bytes (estimated ${estimatedBytes} bytes from base64).`);
@@ -166,8 +176,8 @@ export function buildFileStoreMultipartBody(
       if (buf.byteLength > MAX_FILE_BYTES) {
         throw new Error(`File content exceeds maximum size of ${MAX_FILE_BYTES} bytes.`);
       }
-      fd.append("content", new Blob([buf], { type: mime }), filename);
-    } else if (b.content !== undefined && b.content !== null) {
+      fd.append("content", new Blob([buf], { type: mimeType ?? "application/octet-stream" }), filename);
+    } else if (hasContent) {
       if (typeof b.content !== "string") {
         throw new Error("body.content must be a string.");
       }
@@ -175,7 +185,7 @@ export function buildFileStoreMultipartBody(
       if (Buffer.byteLength(text) > MAX_FILE_BYTES) {
         throw new Error(`File content exceeds maximum size of ${MAX_FILE_BYTES} bytes.`);
       }
-      fd.append("content", new Blob([text], { type: mime }), filename);
+      fd.append("content", new Blob([text], { type: mimeType ?? "application/octet-stream" }), filename);
     } else if (mode === "create") {
       throw new Error(
         "body.type is FILE but neither body.content nor body.content_base64 was provided. Folders omit both.",
@@ -194,6 +204,31 @@ function buildFileStoreUpdateBody(input: Record<string, unknown>): unknown {
   return buildFileStoreMultipartBody(input, "update");
 }
 
+function resolveFolderNodeIdentifier(input: Record<string, unknown>): string | undefined {
+  const candidates: Array<[string, string]> = [];
+  for (const fieldName of ["file_store_id", "resource_id", "folder_identifier", "identifier"]) {
+    const value = input[fieldName];
+    if (value === undefined || value === null || value === "") {
+      continue;
+    }
+    if (typeof value !== "string") {
+      throw new Error(`${fieldName} must be a string.`);
+    }
+    candidates.push([fieldName, value]);
+  }
+
+  const canonical = candidates.find(([fieldName]) => fieldName === "file_store_id" || fieldName === "resource_id")?.[1]
+    ?? candidates[0]?.[1];
+  if (!canonical) {
+    return undefined;
+  }
+  const conflict = candidates.find(([, value]) => value !== canonical);
+  if (conflict) {
+    throw new Error("Conflicting folder identifiers for file_store.list_children: resource_id/file_store_id must match folder_identifier/identifier.");
+  }
+  return canonical;
+}
+
 /**
  * POST /ng/api/file-store/folder expects a FileStoreNode-shaped JSON body.
  * Accept full `body` from the user, or shorthand folder id + folder_name.
@@ -207,7 +242,7 @@ export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
     }
     return rawBody;
   }
-  const id = input.folder_identifier ?? input.identifier ?? input.file_store_id ?? input.resource_id;
+  const id = resolveFolderNodeIdentifier(input);
   const name = input.folder_name ?? input.name;
   const nodeType = input.node_type ?? "FOLDER";
   assertFileStoreNodeType(nodeType, "node_type");
@@ -221,8 +256,9 @@ export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
     name,
     type: nodeType,
   };
-  if (typeof input.parent_identifier === "string" && input.parent_identifier !== "") {
-    node.parentIdentifier = input.parent_identifier;
+  const parentIdentifier = optionalStringField(input, ["parent_identifier"], "parent_identifier");
+  if (parentIdentifier !== undefined) {
+    node.parentIdentifier = parentIdentifier;
   }
   return node;
 }
@@ -244,7 +280,7 @@ const fileStoreWriteBodySchema: BodySchema = {
     { name: "file_usage", type: "string", required: false, description: "MANIFEST_FILE | CONFIG | SCRIPT" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "path", type: "string", required: false, description: "Logical path if applicable" },
-    { name: "tags", type: "string", required: false, description: "Tags string or JSON per Harness expectations" },
+    { name: "tags", type: "string", required: false, description: "Tags string per Harness expectations" },
   ],
 };
 

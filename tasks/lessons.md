@@ -2,8 +2,8 @@
 
 ## Multipart Tool Contracts
 - **Issue**: Multipart body builders can hide unsafe defaults or malformed encoded inputs until after request construction, and execute shorthands can drift from generic `resource_id` mapping.
-- **Fix**: Validate encoded content before `Buffer.from`, enforce documented scalar/enum types inside multipart builders, require parent IDs explicitly when the API needs location context, accept the registry's mapped primary identifier in execute body builders, and document shorthands via `paramsSchema` instead of `bodySchema`.
-- **Rule**: For multipart resources, fail loudly before network I/O and add regressions for generic tool paths (`resource_id` -> resource identifier), direct helper inputs, and `harness_describe` body/params metadata.
+- **Fix**: Validate encoded content before `Buffer.from`, enforce documented scalar/enum types inside multipart builders, reject mutually exclusive payload variants when both are present, require parent IDs explicitly when the API needs location context, accept the registry's mapped primary identifier in execute body builders, reject conflicting resource-specific aliases, and document shorthands via `paramsSchema` instead of `bodySchema`.
+- **Rule**: For multipart resources, fail loudly before network I/O and add regressions for generic tool paths (`resource_id` -> resource identifier), alias conflicts, direct helper inputs, and `harness_describe` body/params metadata.
 
 ## Harness SAT Account Extraction
 - **Issue**: Service account tokens can use the same account-scoped segment shape as PATs, but the parser only recognized the `pat` prefix.

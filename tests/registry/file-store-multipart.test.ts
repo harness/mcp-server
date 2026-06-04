@@ -161,6 +161,73 @@ describe("buildFileStoreMultipartBody", () => {
       ),
     ).toThrow(/body\.content must be a string/);
   });
+
+  it("rejects non-string scalar metadata", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "bad.txt",
+            type: "FILE",
+            parent_identifier: "Root",
+            content: "hello",
+            description: { foo: "bar" },
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/body\.description must be a string/);
+  });
+
+  it("rejects non-string tags instead of JSON-stringifying them", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "bad.txt",
+            type: "FILE",
+            parent_identifier: "Root",
+            content: "hello",
+            tags: { env: "dev" },
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/body\.tags must be a string/);
+  });
+
+  it("rejects dual file content inputs", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "bad.txt",
+            type: "FILE",
+            parent_identifier: "Root",
+            content: "hello",
+            content_base64: Buffer.from("hello").toString("base64"),
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/either body\.content or body\.content_base64/);
+  });
+
+  it("rejects non-string base64 content", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "bad.bin",
+            type: "FILE",
+            parent_identifier: "Root",
+            content_base64: { encoded: true },
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/body\.content_base64 must be a string/);
+  });
 });
 
 describe("buildFolderNodesBody", () => {
@@ -195,6 +262,25 @@ describe("buildFolderNodesBody", () => {
     expect(result.identifier).toBe("f1");
     expect(result.name).toBe("scripts");
     expect(result.type).toBe("FOLDER");
+  });
+
+  it("accepts matching generic and resource-specific folder identifiers", () => {
+    const result = buildFolderNodesBody({
+      resource_id: "f1",
+      file_store_id: "f1",
+      folder_identifier: "f1",
+      folder_name: "scripts",
+    }) as Record<string, unknown>;
+    expect(result.identifier).toBe("f1");
+  });
+
+  it("rejects conflicting folder identifiers", () => {
+    expect(() => buildFolderNodesBody({
+      resource_id: "folder-a",
+      file_store_id: "folder-a",
+      folder_identifier: "folder-b",
+      folder_name: "scripts",
+    })).toThrow(/Conflicting folder identifiers/);
   });
 
   it("includes parent_identifier when provided", () => {
