@@ -22,6 +22,12 @@ function appendPart(fd: FormData, key: string, value: unknown): void {
   fd.append(key, JSON.stringify(value));
 }
 
+function assertFileStoreNodeType(value: unknown, fieldName: string): asserts value is "FILE" | "FOLDER" {
+  if (value !== "FILE" && value !== "FOLDER") {
+    throw new Error(`${fieldName} must be 'FILE' or 'FOLDER'.`);
+  }
+}
+
 function normalizeBase64Content(value: string): string {
   const normalized = value.replace(/\s+/g, "");
   if (normalized.length === 0) {
@@ -102,9 +108,7 @@ export function buildFileStoreMultipartBody(
   if (typeof name !== "string" || name === "") {
     throw new Error("body.name is required (string).");
   }
-  if (nodeType !== "FILE" && nodeType !== "FOLDER") {
-    throw new Error("body.type must be 'FILE' or 'FOLDER'.");
-  }
+  assertFileStoreNodeType(nodeType, "body.type");
 
   const parentIdentifier = (b.parent_identifier ?? b.parentIdentifier) as unknown;
   if (typeof parentIdentifier !== "string" || parentIdentifier === "") {
@@ -164,7 +168,10 @@ export function buildFileStoreMultipartBody(
       }
       fd.append("content", new Blob([buf], { type: mime }), filename);
     } else if (b.content !== undefined && b.content !== null) {
-      const text = typeof b.content === "string" ? b.content : JSON.stringify(b.content);
+      if (typeof b.content !== "string") {
+        throw new Error("body.content must be a string.");
+      }
+      const text = b.content;
       if (Buffer.byteLength(text) > MAX_FILE_BYTES) {
         throw new Error(`File content exceeds maximum size of ${MAX_FILE_BYTES} bytes.`);
       }
@@ -194,11 +201,16 @@ function buildFileStoreUpdateBody(input: Record<string, unknown>): unknown {
 export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
   const rawBody = input.body;
   if (rawBody !== undefined && typeof rawBody === "object" && rawBody !== null && !Array.isArray(rawBody)) {
+    const bodyType = (rawBody as Record<string, unknown>).type;
+    if (bodyType !== undefined) {
+      assertFileStoreNodeType(bodyType, "body.type");
+    }
     return rawBody;
   }
   const id = input.folder_identifier ?? input.identifier ?? input.file_store_id ?? input.resource_id;
   const name = input.folder_name ?? input.name;
-  const nodeType = (input.node_type as string) || "FOLDER";
+  const nodeType = input.node_type ?? "FOLDER";
+  assertFileStoreNodeType(nodeType, "node_type");
   if (typeof id !== "string" || id === "" || typeof name !== "string" || name === "") {
     throw new Error(
       "file_store.list_children requires `body` (FileStoreNode JSON per Harness API) or `resource_id`/`file_store_id`/`folder_identifier` plus `folder_name` (and optional `parent_identifier`, `node_type` FILE|FOLDER).",

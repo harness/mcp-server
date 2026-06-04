@@ -145,6 +145,22 @@ describe("buildFileStoreMultipartBody", () => {
       ),
     ).toThrow(/exceeds maximum size/);
   });
+
+  it("rejects non-string text content", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "bad.txt",
+            type: "FILE",
+            parent_identifier: "Root",
+            content: { foo: "bar" },
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/body\.content must be a string/);
+  });
 });
 
 describe("buildFolderNodesBody", () => {
@@ -152,6 +168,12 @@ describe("buildFolderNodesBody", () => {
     const body = { identifier: "f1", name: "scripts", type: "FOLDER" };
     const result = buildFolderNodesBody({ body });
     expect(result).toBe(body);
+  });
+
+  it("rejects a full body with an invalid node type", () => {
+    expect(() => buildFolderNodesBody({
+      body: { identifier: "f1", name: "scripts", type: "BOGUS" },
+    })).toThrow(/body\.type must be 'FILE' or 'FOLDER'/);
   });
 
   it("builds node from shorthand folder_identifier + folder_name", () => {
@@ -182,6 +204,14 @@ describe("buildFolderNodesBody", () => {
       parent_identifier: "Root",
     }) as Record<string, unknown>;
     expect(result.parentIdentifier).toBe("Root");
+  });
+
+  it("rejects shorthand with an invalid node_type", () => {
+    expect(() => buildFolderNodesBody({
+      folder_identifier: "f1",
+      folder_name: "scripts",
+      node_type: "BOGUS",
+    })).toThrow(/node_type must be 'FILE' or 'FOLDER'/);
   });
 
   it("throws when required shorthand fields are missing", () => {
