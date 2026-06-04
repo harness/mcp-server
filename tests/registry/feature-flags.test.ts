@@ -27,6 +27,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_MCP_ALLOWED_HOSTS: undefined,
     HARNESS_MCP_AUTH_TOKEN: undefined,
     HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+    HARNESS_FME_API_KEY: undefined,
     HARNESS_FME_BASE_URL: "https://api.split.io",
     HARNESS_LOG_UNSAFE_BODIES: false,
     HARNESS_PIPELINE_VERSION: undefined,
@@ -125,6 +126,72 @@ describe("FME registry metadata", () => {
   });
 });
 
+describe("FME auth", () => {
+  it("uses x-api-key auth from a non-placeholder HARNESS_API_KEY fallback", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ objects: [], totalCount: 0, offset: 0, limit: 20 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_workspace", "list", {});
+
+    const call = firstRequest(mockRequest);
+    expect(call.product).toBe("fme");
+    expect(call.baseUrl).toBe("https://api.split.io");
+    expect(call.headers).toMatchObject({ "x-api-key": "pat.test" });
+    expect(call.headers).not.toHaveProperty("Authorization");
+  });
+
+  it("prefers explicit HARNESS_FME_API_KEY over a hosted placeholder HARNESS_API_KEY", async () => {
+    const registry = new Registry(makeConfig({
+      HARNESS_API_KEY: "dummy",
+      HARNESS_FME_API_KEY: "fme-admin-key",
+    }));
+    const mockRequest = vi.fn().mockResolvedValue({ objects: [], totalCount: 0, offset: 0, limit: 20 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_workspace", "list", {});
+
+    const call = firstRequest(mockRequest);
+    expect(call.headers).toMatchObject({ "x-api-key": "fme-admin-key" });
+    expect(call.headers).not.toHaveProperty("Authorization");
+  });
+
+  it("fails before sending hosted placeholder credentials to Split.io", async () => {
+    const registry = new Registry(makeConfig({
+      HARNESS_API_KEY: "dummy",
+      HARNESS_FME_API_KEY: undefined,
+    }));
+    const mockRequest = vi.fn().mockResolvedValue({ objects: [], totalCount: 0, offset: 0, limit: 20 });
+    const client = makeClient(mockRequest);
+
+    try {
+      await registry.dispatch(client, "fme_workspace", "list", {});
+      expect.fail("expected FME auth guard to throw");
+    } catch (err) {
+      const message = (err as Error).message;
+      expect(message).toContain("FME is not configured or authorized for this MCP session");
+      expect(message).toContain("Ask your Harness administrator to configure an FME/Split Admin API key");
+    }
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fails before sending dotted internal placeholders to Split.io", async () => {
+    const registry = new Registry(makeConfig({
+      HARNESS_API_KEY: "pat.internal.internal.dummy",
+      HARNESS_FME_API_KEY: undefined,
+    }));
+    const mockRequest = vi.fn().mockResolvedValue({ objects: [], totalCount: 0, offset: 0, limit: 20 });
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_workspace", "list", {}),
+    ).rejects.toThrow("Hosted OAuth placeholders");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
 describe("fme_identity create", () => {
   let registry: Registry;
 
@@ -154,7 +221,8 @@ describe("fme_identity create", () => {
     expect(call.path).toBe("/internal/api/v2/trafficTypes/tt-user/environments/env-prod/identities");
     expect(call.baseUrl).toBe("https://api.split.io");
     expect(call.product).toBe("fme");
-    expect(call.headers).toMatchObject({ Authorization: "Bearer pat.test" });
+    expect(call.headers).toMatchObject({ "x-api-key": "pat.test" });
+    expect(call.headers).not.toHaveProperty("Authorization");
     expect(call.body).toEqual([
       { key: "user-1", values: { name: "Ada", company: "Acme" } },
       { key: "user-2", values: { name: "Grace" } },

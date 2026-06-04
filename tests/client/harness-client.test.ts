@@ -234,6 +234,23 @@ describe("HarnessClient", () => {
       expect(headers["Harness-Account"]).toBe("test-account");
     });
 
+    it("preserves explicit FME x-api-key auth instead of injecting configured placeholder token", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_API_KEY: "dummy" }));
+
+      await client.request({
+        path: "/internal/api/v2/workspaces",
+        product: "fme",
+        baseUrl: "https://api.split.io",
+        headers: { "x-api-key": "fme-admin-key" },
+      });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["x-api-key"]).toBe("fme-admin-key");
+      expect(headers["Authorization"]).toBeUndefined();
+      expect(headers["Harness-Account"]).toBeUndefined();
+    });
+
     it("uses resolved account ID for Harness-Account header", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());

@@ -95,6 +95,7 @@ const RawConfigSchema = z.object({
   HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
   HARNESS_MCP_AUTH_TOKEN: optionalStringFromEnv,
   HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: booleanFromEnv.default(false),
+  HARNESS_FME_API_KEY: optionalStringFromEnv,
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
@@ -181,6 +182,36 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
+
+/**
+ * Hosted/internal MCP deployments use literal placeholder credentials (for
+ * example "dummy") while platform auth is handled by service routing. Those
+ * placeholders are not valid external Split/FME API credentials.
+ */
+export function isPlaceholderCredential(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized === "dummy" || normalized.endsWith(".dummy");
+}
+
+/**
+ * Resolve the token used for Split/FME product APIs.
+ * FME talks directly to api.split.io, so hosted OAuth/proxy auth for Harness
+ * platform APIs cannot be reused there.
+ */
+export function resolveFmeApiKey(config: Pick<Config, "HARNESS_FME_API_KEY" | "HARNESS_API_KEY">): string | undefined {
+  const explicitFmeKey = config.HARNESS_FME_API_KEY?.trim();
+  if (explicitFmeKey && !isPlaceholderCredential(explicitFmeKey)) {
+    return explicitFmeKey;
+  }
+
+  const fallbackHarnessKey = config.HARNESS_API_KEY?.trim();
+  if (fallbackHarnessKey && !isPlaceholderCredential(fallbackHarnessKey)) {
+    return fallbackHarnessKey;
+  }
+
+  return undefined;
+}
 
 /**
  * Resolve the base URL for a given product backend.

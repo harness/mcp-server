@@ -110,7 +110,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
   resources: [
     // ── FME Resources (Split.io API at https://api.split.io) ───────────
     // These use account scope to avoid injecting orgIdentifier/projectIdentifier
-    // which Split.io does not use. Auth is via Bearer token (HARNESS_API_KEY).
+    // which Split.io does not use. Auth is via x-api-key (HARNESS_FME_API_KEY,
+    // or a non-placeholder HARNESS_API_KEY fallback for self-hosted sessions).
     {
       resourceType: "fme_workspace",
       displayName: "FME Workspace",

@@ -730,3 +730,23 @@
 - Fixed the poller so only the configured wait deadline reports a timeout; persistent poll failures now throw and are surfaced by `harness_execute` as `_wait.error` while preserving the trigger response and execution ID.
 - Added unit coverage for the poller and boundary coverage that `harness_execute` preserves the trigger response, omits `execution_timed_out`, and returns `_wait.error` on persistent polling failures.
 - Verified with `pnpm test tests/utils/poll-execution.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, full `pnpm test` (61 files / 1459 tests), `pnpm build`, and `git diff --check origin/main...HEAD`.
+
+## Hosted FME Auth Placeholder Bug (2026-06-04)
+- [x] Trace FME request auth from registry config to outgoing Split.io request
+- [x] Add explicit FME credential resolution that does not send hosted placeholders to Split.io
+- [x] Update tests for self-hosted fallback, explicit FME token, and hosted dummy rejection
+- [x] Update docs/env examples for FME auth configuration
+- [x] Run focused tests, typecheck, build, and record review notes
+
+### Plan
+- Keep existing FME resource paths and extraction behavior unchanged; the positive control shows the Split API mapping works.
+- Treat FME/Split auth as product-specific auth, because hosted OAuth/service-routing can authenticate Harness platform APIs without making `HARNESS_API_KEY` a valid external Split credential.
+- Prefer an explicit FME API key for Split.io requests; fall back to the session/server Harness API key only when it is not a known hosted placeholder so self-hosted PAT/SAT setups keep working.
+- Use the current Harness FME `x-api-key` auth convention for Split Admin API calls and fail loudly before network I/O when no usable FME token exists.
+
+### Review
+- Added optional `HARNESS_FME_API_KEY` config and a `resolveFmeApiKey()` helper that prefers the explicit FME key, falls back to a non-placeholder Harness API key, and rejects hosted/internal placeholders such as `dummy` or `*.dummy`.
+- Changed FME registry request construction to send `x-api-key` to `api.split.io` instead of hard-coding `Authorization: Bearer HARNESS_API_KEY`.
+- Added regression tests for fallback auth, explicit FME key override, placeholder rejection before network I/O, and client preservation of explicit FME `x-api-key` headers.
+- Updated README and `.env.example` to document the direct Split.io credential requirement for FME resources.
+- Verified with `pnpm test tests/config.test.ts tests/registry/feature-flags.test.ts tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.

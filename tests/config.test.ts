@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { ConfigSchema, loadConfig, extractAccountIdFromToken } from "../src/config.js";
+import {
+  ConfigSchema,
+  extractAccountIdFromToken,
+  isPlaceholderCredential,
+  loadConfig,
+  resolveFmeApiKey,
+} from "../src/config.js";
 
 describe("extractAccountIdFromToken", () => {
   it("extracts account ID from a valid PAT", () => {
@@ -369,6 +375,53 @@ describe("ConfigSchema — HTTPS enforcement", () => {
     if (result.success) {
       expect(result.data.HARNESS_FME_BASE_URL).toBe("https://custom.split.io");
     }
+  });
+
+  it("parses explicit FME API key config", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_FME_API_KEY: "fme-admin-key",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_FME_API_KEY).toBe("fme-admin-key");
+    }
+  });
+
+  it("treats empty FME API key config as unset", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_FME_API_KEY: "",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_FME_API_KEY).toBeUndefined();
+    }
+  });
+
+  it("resolves FME auth from explicit key before Harness API key", () => {
+    expect(resolveFmeApiKey({
+      HARNESS_FME_API_KEY: "fme-admin-key",
+      HARNESS_API_KEY: "pat.acct123.tokenId.secret",
+    })).toBe("fme-admin-key");
+  });
+
+  it("falls back to non-placeholder Harness API key for FME auth", () => {
+    expect(resolveFmeApiKey({
+      HARNESS_FME_API_KEY: undefined,
+      HARNESS_API_KEY: "pat.acct123.tokenId.secret",
+    })).toBe("pat.acct123.tokenId.secret");
+  });
+
+  it("does not resolve hosted placeholder credentials for FME auth", () => {
+    expect(isPlaceholderCredential("dummy")).toBe(true);
+    expect(isPlaceholderCredential("pat.internal.internal.dummy")).toBe(true);
+    expect(resolveFmeApiKey({
+      HARNESS_FME_API_KEY: undefined,
+      HARNESS_API_KEY: "dummy",
+    })).toBeUndefined();
   });
 });
 
