@@ -20,6 +20,11 @@
 - **Fix**: Keep URL-derived scope behavior aligned across every public tool that accepts `resource_scope`, including create/update/delete paths, and test scoped URLs at the tool-handler level.
 - **Rule**: When adding a resource type to the URL-derived scope allowlist, audit every tool that accepts both `url` and `resource_scope`; either opt the tool in or avoid advertising URL-derived scope for that resource.
 
+## URL-Derived IDs Must Match Tool Schemas
+- **Issue**: A tool can advertise URL-derived IDs while its schema still requires an explicit `resource_id`, so strict MCP clients reject URL-only calls before handler defaulting can run.
+- **Fix**: If URL copy says an ID is extracted, make the public schema accept URL-only input and map the resolved URL/defaulted `resource_id` into the resource-specific identifier field before dispatch.
+- **Rule**: For any write tool that advertises URL ID extraction, add handler-level regressions that omit `resource_id` and prove the URL-derived ID reaches the backend path.
+
 ## Harness SAT Account Extraction
 - **Issue**: Service account tokens can use the same account-scoped segment shape as PATs, but the parser only recognized the `pat` prefix.
 - **Fix**: Extract account IDs from both `pat` and `sat` prefixes, and let multi-user HTTP sessions derive `HARNESS_ACCOUNT_ID` from either prefix when `x-harness-account-id` is omitted.

@@ -245,6 +245,40 @@ describe("buildFileStoreMultipartBody", () => {
     ).toThrow(/body\.description must be a string/);
   });
 
+  it("rejects invalid file_usage enum values", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "bad.txt",
+            type: "FILE",
+            parent_identifier: "Root",
+            content: "hello",
+            file_usage: "NOT_A_REAL_USAGE",
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/body\.file_usage must be MANIFEST_FILE, CONFIG, or SCRIPT/);
+  });
+
+  it("accepts documented file_usage enum values", () => {
+    const fd = buildFileStoreMultipartBody(
+      {
+        body: {
+          name: "ok.txt",
+          type: "FILE",
+          parent_identifier: "Root",
+          content: "hello",
+          file_usage: "SCRIPT",
+        },
+      },
+      "create",
+    );
+
+    expect(fd.get("fileUsage")).toBe("SCRIPT");
+  });
+
   it("rejects non-string tags instead of JSON-stringifying them", () => {
     expect(() =>
       buildFileStoreMultipartBody(
@@ -407,6 +441,24 @@ describe("buildFolderNodesBody", () => {
       folder_name: "scripts",
       node_type: "BOGUS",
     })).toThrow(/node_type must be 'FOLDER'/);
+  });
+
+  it("rejects invalid file_usage query values before dispatch", () => {
+    expect(() => buildFolderNodesBody({
+      folder_identifier: "f1",
+      folder_name: "scripts",
+      file_usage: "NOT_A_REAL_USAGE",
+    })).toThrow(/params\.file_usage must be MANIFEST_FILE, CONFIG, or SCRIPT/);
+  });
+
+  it("accepts documented file_usage query values", () => {
+    const result = buildFolderNodesBody({
+      folder_identifier: "f1",
+      folder_name: "scripts",
+      file_usage: "CONFIG",
+    }) as Record<string, unknown>;
+
+    expect(result.identifier).toBe("f1");
   });
 
   it("rejects shorthand with FILE node_type", () => {

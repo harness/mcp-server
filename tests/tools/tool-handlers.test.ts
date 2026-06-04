@@ -467,6 +467,24 @@ describe("harness_create", () => {
     registerCreateTool(server, registry, client);
   });
 
+  it("keeps optional input descriptions visible in the registered schema", () => {
+    const schema = server.schema("harness_create") as {
+      inputSchema: {
+        url?: { description?: string | null };
+        org_id?: { description?: string | null };
+        project_id?: { description?: string | null };
+        confirm?: { description?: string | null };
+        params?: { description?: string | null };
+      };
+    };
+
+    expect(schema.inputSchema.url?.description).toContain("supported resource_scope");
+    expect(schema.inputSchema.org_id?.description).toContain("Organization identifier");
+    expect(schema.inputSchema.project_id?.description).toContain("Project identifier");
+    expect(schema.inputSchema.confirm?.description).toContain("Set to true");
+    expect(schema.inputSchema.params?.description).toContain("Additional parameters");
+  });
+
   it("returns error for resource with no create operation", async () => {
     // execution only supports list/get, not create
     const fullRegistry = new Registry(makeConfig());
@@ -723,6 +741,63 @@ describe("harness_update", () => {
     expect(callArgs.params.projectIdentifier).toBeUndefined();
     expect(callArgs.body).toBeInstanceOf(FormData);
   });
+
+  it("uses resource id from account-level File Store URLs during update", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "scripts" } });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(fileStoreServer, registry, client);
+
+    const result = await fileStoreServer.call("harness_update", {
+      resource_type: "file_store",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store/scripts",
+      body: {
+        name: "scripts",
+        type: "FOLDER",
+        parent_identifier: "Root",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string; body: FormData };
+    expect(callArgs.path).toBe("/ng/api/file-store/scripts");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+    expect(callArgs.body).toBeInstanceOf(FormData);
+  });
+
+  it("fails loudly when update has neither resource_id nor URL id", async () => {
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      body: { yamlPipeline: "pipeline:\n  name: Updated" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("resource_id is required") });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("keeps optional input descriptions visible in the registered update schema", () => {
+    const schema = server.schema("harness_update") as {
+      inputSchema: {
+        resource_id?: { description?: string | null };
+        url?: { description?: string | null };
+        org_id?: { description?: string | null };
+        project_id?: { description?: string | null };
+        confirm?: { description?: string | null };
+        params?: { description?: string | null };
+      };
+    };
+
+    expect(schema.inputSchema.resource_id?.description).toContain("Optional when url contains");
+    expect(schema.inputSchema.url?.description).toContain("supported resource_scope");
+    expect(schema.inputSchema.org_id?.description).toContain("Organization identifier");
+    expect(schema.inputSchema.project_id?.description).toContain("Project identifier");
+    expect(schema.inputSchema.confirm?.description).toContain("Set to true");
+    expect(schema.inputSchema.params?.description).toContain("Additional identifiers");
+  });
 });
 
 describe("harness_update — pull request", () => {
@@ -901,6 +976,56 @@ describe("harness_delete", () => {
     expect(callArgs.path).toBe("/ng/api/file-store/scripts");
     expect(callArgs.params.orgIdentifier).toBeUndefined();
     expect(callArgs.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("uses resource id from account-level File Store URLs during delete", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: true });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(fileStoreServer, registry, client);
+
+    const result = await fileStoreServer.call("harness_delete", {
+      resource_type: "file_store",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store/scripts",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string };
+    expect(callArgs.path).toBe("/ng/api/file-store/scripts");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("fails loudly when delete has neither resource_id nor URL id", async () => {
+    const result = await server.call("harness_delete", {
+      resource_type: "pipeline",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("resource_id is required") });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("keeps optional input descriptions visible in the registered delete schema", () => {
+    const schema = server.schema("harness_delete") as {
+      inputSchema: {
+        resource_id?: { description?: string | null };
+        url?: { description?: string | null };
+        org_id?: { description?: string | null };
+        project_id?: { description?: string | null };
+        confirm?: { description?: string | null };
+        params?: { description?: string | null };
+      };
+    };
+
+    expect(schema.inputSchema.resource_id?.description).toContain("Optional when url contains");
+    expect(schema.inputSchema.url?.description).toContain("supported resource_scope");
+    expect(schema.inputSchema.org_id?.description).toContain("Organization identifier");
+    expect(schema.inputSchema.project_id?.description).toContain("Project identifier");
+    expect(schema.inputSchema.confirm?.description).toContain("Set to true");
+    expect(schema.inputSchema.params?.description).toContain("Additional identifiers");
   });
 });
 

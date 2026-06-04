@@ -4,6 +4,7 @@ import { ngExtract, pageExtract } from "../extractors.js";
 
 // Matches server-side FileUploadLimit.fileStoreFileLimit (100 MB)
 const MAX_FILE_BYTES = 100_000_000;
+const FILE_USAGE_VALUES = new Set(["MANIFEST_FILE", "CONFIG", "SCRIPT"]);
 
 function appendPart(fd: FormData, key: string, value: string | undefined): void {
   if (value === undefined || value === "") return;
@@ -38,6 +39,24 @@ function assertFolderNodeType(value: unknown, fieldName: string): asserts value 
   if (value !== "FOLDER") {
     throw new Error(`${fieldName} must be 'FOLDER'.`);
   }
+}
+
+function assertFileUsage(value: string, fieldName: string): void {
+  if (!FILE_USAGE_VALUES.has(value)) {
+    throw new Error(`${fieldName} must be MANIFEST_FILE, CONFIG, or SCRIPT.`);
+  }
+}
+
+function optionalFileUsageField(
+  source: Record<string, unknown>,
+  fieldNames: readonly string[],
+  fieldLabel: string,
+): string | undefined {
+  const value = optionalStringField(source, fieldNames, fieldLabel);
+  if (value !== undefined) {
+    assertFileUsage(value, fieldLabel);
+  }
+  return value;
 }
 
 function normalizeBase64Content(value: string): string {
@@ -141,7 +160,7 @@ export function buildFileStoreMultipartBody(
   if (bodyIdentifier !== undefined && bodyFileStoreId !== undefined && bodyIdentifier !== bodyFileStoreId) {
     throw new Error("Conflicting file_store identifiers: body.identifier must match body.file_store_id.");
   }
-  const fileUsage = optionalStringField(b, ["file_usage", "fileUsage"], "body.file_usage");
+  const fileUsage = optionalFileUsageField(b, ["file_usage", "fileUsage"], "body.file_usage");
   const description = optionalStringField(b, ["description"], "body.description");
   const mimeType = optionalStringField(b, ["mime_type", "mimeType"], "body.mime_type");
   const path = optionalStringField(b, ["path"], "body.path");
@@ -259,6 +278,7 @@ function resolveFolderNodeIdentifier(input: Record<string, unknown>): string | u
  * Accept full `body` from the user, or shorthand folder id + folder_name.
  */
 export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
+  optionalFileUsageField(input, ["file_usage"], "params.file_usage");
   const rawBody = input.body;
   if (rawBody !== undefined && typeof rawBody === "object" && rawBody !== null && !Array.isArray(rawBody)) {
     const body = rawBody as Record<string, unknown>;
