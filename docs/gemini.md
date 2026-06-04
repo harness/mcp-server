@@ -56,7 +56,7 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 ### Security & Compliance
 - Security Test Orchestration (STO): manage issues, approve/reject exemptions
 - Supply Chain Security (SCS): track artifacts, compliance, SBOMs, chain of custody
-- Audit trail: registry-dispatched list/get/create/update/delete/execute operations emit structured events to stderr, optional JSONL/webhook sinks, and optional OpenTelemetry spans
+- Audit trail: registry-dispatched list/get/create/update/delete/execute operations can emit structured events through the default logger-filtered stderr sink, optional durable JSONL/webhook sinks, and optional OpenTelemetry spans
 
 ### GitOps
 - Manage agents, applications, clusters, repositories

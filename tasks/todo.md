@@ -111,6 +111,7 @@
 - Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `git diff --check HEAD~1..HEAD`, and targeted stale-language scans across README, docs, and CONTRIBUTING.
 - Opened PR: https://github.com/harness/mcp-server/pull/293
 - Review follow-up: relaxed audit confirmation wording to match current read event payloads, carried IaCM org/project scope through follow-up workflow examples, and rechecked the merged `harness_schema` runtime contract before pushing.
+- Review follow-up: narrowed stderr audit wording to say the sink is registered by default but filtered by `LOG_LEVEL`, and pointed durable audit collection at file/webhook sinks.
 
 ## Version Bump 3.1.0 (2026-05-29)
 - [x] Identify release metadata fields pinned to the previous version

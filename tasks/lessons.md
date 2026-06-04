@@ -57,3 +57,8 @@
 - **Issue**: Documentation can overstate a payload contract by describing intended fields that the current tool handlers do not populate.
 - **Fix**: Either wire the field through the runtime path in the same PR or document the current emitted shape precisely.
 - **Rule**: Before documenting audit, schema, or tool payload fields as guaranteed, verify the exact dispatch path and at least one focused runtime/test assertion.
+
+## Logger-Filtered Audit Sinks
+- **Issue**: Saying stderr audit output is always emitted hides that the stderr sink routes through the shared logger and respects `LOG_LEVEL`.
+- **Fix**: Document stderr as registered by default, and direct durable audit collection to file or webhook sinks.
+- **Rule**: For telemetry sinks built on shared logging, document both registration and filtering semantics.
