@@ -331,7 +331,13 @@ describe("buildFolderNodesBody", () => {
   it("rejects a full body with an invalid node type", () => {
     expect(() => buildFolderNodesBody({
       body: { identifier: "f1", name: "scripts", type: "BOGUS" },
-    })).toThrow(/body\.type must be 'FILE' or 'FOLDER'/);
+    })).toThrow(/body\.type must be 'FOLDER'/);
+  });
+
+  it("rejects a full body with FILE node type", () => {
+    expect(() => buildFolderNodesBody({
+      body: { identifier: "f1", name: "scripts.sh", type: "FILE" },
+    })).toThrow(/body\.type must be 'FOLDER'/);
   });
 
   it("rejects full body snake_case parent_identifier", () => {
@@ -400,7 +406,15 @@ describe("buildFolderNodesBody", () => {
       folder_identifier: "f1",
       folder_name: "scripts",
       node_type: "BOGUS",
-    })).toThrow(/node_type must be 'FILE' or 'FOLDER'/);
+    })).toThrow(/node_type must be 'FOLDER'/);
+  });
+
+  it("rejects shorthand with FILE node_type", () => {
+    expect(() => buildFolderNodesBody({
+      folder_identifier: "f1",
+      folder_name: "scripts.sh",
+      node_type: "FILE",
+    })).toThrow(/node_type must be 'FOLDER'/);
   });
 
   it("throws when required shorthand fields are missing", () => {

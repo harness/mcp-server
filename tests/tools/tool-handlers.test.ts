@@ -1542,8 +1542,8 @@ describe("harness_describe", () => {
     const data = parseResult(result) as {
       executeActions: Array<{
         action: string;
-        paramsSchema?: { fields: Array<{ name: string; required: boolean }> };
-        bodySchema?: { fields: Array<{ name: string; required: boolean }> };
+        paramsSchema?: { fields: Array<{ name: string; required: boolean; description?: string }> };
+        bodySchema?: { fields: Array<{ name: string; required: boolean; description?: string }> };
       }>;
     };
     const listChildren = data.executeActions.find((action) => action.action === "list_children");
@@ -1552,13 +1552,14 @@ describe("harness_describe", () => {
         expect.objectContaining({ name: "file_store_id" }),
         expect.objectContaining({ name: "folder_identifier" }),
         expect.objectContaining({ name: "folder_name" }),
+        expect.objectContaining({ name: "node_type", description: expect.stringContaining("FOLDER only") }),
       ]),
     );
     expect(listChildren?.bodySchema?.fields).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "identifier", required: true }),
         expect.objectContaining({ name: "name", required: true }),
-        expect.objectContaining({ name: "type", required: true }),
+        expect.objectContaining({ name: "type", required: true, description: expect.stringContaining("FOLDER only") }),
       ]),
     );
     const bodyFieldNames = listChildren?.bodySchema?.fields.map((field) => field.name) ?? [];

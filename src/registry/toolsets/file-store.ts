@@ -34,6 +34,12 @@ function assertFileStoreNodeType(value: unknown, fieldName: string): asserts val
   }
 }
 
+function assertFolderNodeType(value: unknown, fieldName: string): asserts value is "FOLDER" {
+  if (value !== "FOLDER") {
+    throw new Error(`${fieldName} must be 'FOLDER'.`);
+  }
+}
+
 function normalizeBase64Content(value: string): string {
   const normalized = value.replace(/\s+/g, "");
   if (normalized.length === 0) {
@@ -266,11 +272,9 @@ export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
       throw new Error("file_store.list_children full body requires body.name as a string.");
     }
     if (bodyType === undefined) {
-      throw new Error("file_store.list_children full body requires body.type (FILE|FOLDER).");
+      throw new Error("file_store.list_children full body requires body.type 'FOLDER'.");
     }
-    if (bodyType !== undefined) {
-      assertFileStoreNodeType(bodyType, "body.type");
-    }
+    assertFolderNodeType(bodyType, "body.type");
     if (body.parent_identifier !== undefined && body.parent_identifier !== null && body.parent_identifier !== "") {
       throw new Error("file_store.list_children full body uses FileStoreNode JSON: use body.parentIdentifier, not body.parent_identifier.");
     }
@@ -286,10 +290,10 @@ export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
   const id = resolveFolderNodeIdentifier(input);
   const name = input.folder_name ?? input.name;
   const nodeType = input.node_type ?? "FOLDER";
-  assertFileStoreNodeType(nodeType, "node_type");
+  assertFolderNodeType(nodeType, "node_type");
   if (typeof id !== "string" || id === "" || typeof name !== "string" || name === "") {
     throw new Error(
-      "file_store.list_children requires `body` (FileStoreNode JSON per Harness API) or `resource_id`/`file_store_id`/`folder_identifier` plus `folder_name` (and optional `parent_identifier`, `node_type` FILE|FOLDER).",
+      "file_store.list_children requires `body` (folder FileStoreNode JSON per Harness API) or `resource_id`/`file_store_id`/`folder_identifier` plus `folder_name` (and optional `parent_identifier`; node_type must be FOLDER when provided).",
     );
   }
   const node: Record<string, unknown> = {
@@ -346,11 +350,11 @@ const fileStoreUpdateBodySchema: BodySchema = {
 
 const folderListChildrenBodySchema: BodySchema = {
   description:
-    "Full Harness FileStoreNode JSON sent directly to POST /ng/api/file-store/folder. Use top-level resource_id or params.file_store_id/folder_identifier plus params.folder_name instead when using shorthand.",
+    "Full Harness folder FileStoreNode JSON sent directly to POST /ng/api/file-store/folder. type must be FOLDER. Use top-level resource_id or params.file_store_id/folder_identifier plus params.folder_name instead when using shorthand.",
   fields: [
     { name: "identifier", type: "string", required: true, description: "Folder node identifier" },
     { name: "name", type: "string", required: true, description: "Folder node display name" },
-    { name: "type", type: "string", required: true, description: "FILE or FOLDER" },
+    { name: "type", type: "string", required: true, description: "FOLDER only" },
     { name: "parentIdentifier", type: "string", required: false, description: "Parent File Store node identifier" },
   ],
 };
@@ -361,7 +365,7 @@ const folderListChildrenParamsSchema: ParamsSchema = {
     { name: "folder_identifier", required: false, description: "Folder node identifier when not using resource_id/file_store_id or a full body" },
     { name: "folder_name", required: false, description: "Folder node display name. Required with resource_id/file_store_id/folder_identifier shorthand." },
     { name: "parent_identifier", required: false, description: "Parent File Store node identifier for shorthand expansion" },
-    { name: "node_type", required: false, description: "FILE or FOLDER for shorthand expansion (default FOLDER)" },
+    { name: "node_type", required: false, description: "FOLDER only for shorthand expansion (default FOLDER)" },
     { name: "file_usage", required: false, description: "Optional fileUsage query: MANIFEST_FILE, CONFIG, or SCRIPT" },
   ],
 };

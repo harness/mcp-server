@@ -10,6 +10,11 @@
 - **Fix**: Expose `resource_scope` on execute when execute actions use multi-scope resources, opt the handler into URL-derived resource scope, and gate read-only mode by the action's `operationPolicy.risk` instead of the tool family alone.
 - **Rule**: For any execute action with `risk: "read"` or multi-scope support, add regressions for the registered tool input schema, explicit and URL-derived `resource_scope`, and read-only mode behavior.
 
+## Endpoint-Specific Node Type Constraints
+- **Issue**: Reusing a general FileStoreNode enum for a folder-only endpoint let agents construct `FILE` requests that the backend endpoint should reject.
+- **Fix**: Add endpoint-specific validators and schema descriptions when an API accepts only one value from a broader shared model.
+- **Rule**: If an endpoint path names a subtype such as `/folder`, do not surface the full shared enum unless that exact endpoint accepts every enum value. Add helper and `harness_describe` metadata regressions for rejected enum values.
+
 ## Harness SAT Account Extraction
 - **Issue**: Service account tokens can use the same account-scoped segment shape as PATs, but the parser only recognized the `pat` prefix.
 - **Fix**: Extract account IDs from both `pat` and `sat` prefixes, and let multi-user HTTP sessions derive `HARNESS_ACCOUNT_ID` from either prefix when `x-harness-account-id` is omitted.
