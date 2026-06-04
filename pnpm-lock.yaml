@@ -6,7 +6,7 @@ settings:
 
 overrides:
   picomatch: '>=4.0.4'
-  hono: '>=4.12.12'
+  hono: '>=4.12.21'
   path-to-regexp: '>=8.4.0'
   '@hono/node-server': '>=1.19.10'
   express-rate-limit: '>=8.2.2'
@@ -37,7 +37,7 @@ importers:
         specifier: ^5.2.1
         version: 5.2.1
       hono:
-        specifier: ^4.12.23
+        specifier: '>=4.12.21'
         version: 4.12.23
       jsonwebtoken:
         specifier: ^9.0.3
@@ -239,7 +239,7 @@ packages:
     resolution: {integrity: sha512-n3GfHwwCvHCkGmOwKfxUPOlbfzuO64Sbc5XC4NGPIXxkuOnJrdgExdRKmHfF924r914WRJPT397GdqLvdYTeyQ==}
     engines: {node: '>=20'}
     peerDependencies:
-      hono: '>=4.12.12'
+      hono: '>=4.12.21'
 
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
