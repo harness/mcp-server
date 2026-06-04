@@ -741,12 +741,12 @@
 ### Plan
 - Keep existing FME resource paths and extraction behavior unchanged; the positive control shows the Split API mapping works.
 - Treat FME/Split auth as product-specific auth, because hosted OAuth/service-routing can authenticate Harness platform APIs without making `HARNESS_API_KEY` a valid external Split credential.
-- Prefer an explicit FME API key for Split.io requests; fall back to the session/server Harness API key only when it is not a known hosted placeholder so self-hosted PAT/SAT setups keep working.
-- Use the current Harness FME `x-api-key` auth convention for Split Admin API calls and fail loudly before network I/O when no usable FME token exists.
+- Prefer an explicit FME credential for Split.io requests; fall back to the session/server Harness API key only when it is not a known hosted placeholder so self-hosted PAT/SAT setups keep working.
+- Preserve Bearer auth for Split Admin API calls to avoid breaking legacy-token compatibility, and fail loudly before network I/O when no usable FME credential exists.
 
 ### Review
-- Added optional `HARNESS_FME_API_KEY` config and a `resolveFmeApiKey()` helper that prefers the explicit FME key, falls back to a non-placeholder Harness API key, and rejects hosted/internal placeholders such as `dummy` or `*.dummy`.
-- Changed FME registry request construction to send `x-api-key` to `api.split.io` instead of hard-coding `Authorization: Bearer HARNESS_API_KEY`.
-- Added regression tests for fallback auth, explicit FME key override, placeholder rejection before network I/O, and client preservation of explicit FME `x-api-key` headers.
+- Added optional `HARNESS_FME_API_KEY` config and a `resolveFmeApiKey()` helper that prefers the explicit FME credential, falls back to a non-placeholder Harness API key, and rejects hosted/internal placeholders such as `dummy` or `*.dummy`.
+- Changed FME registry request construction to send Bearer auth from the resolved FME credential instead of hard-coding `Authorization: Bearer HARNESS_API_KEY`.
+- Added regression tests for fallback auth, explicit FME credential override, placeholder rejection before network I/O, and client preservation of explicit FME Bearer headers.
 - Updated README and `.env.example` to document the direct Split.io credential requirement for FME resources.
 - Verified with `pnpm test tests/config.test.ts tests/registry/feature-flags.test.ts tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.

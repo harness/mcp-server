@@ -712,14 +712,15 @@ export class Registry {
       if (!fmeApiKey) {
         throw new HarnessApiError(
           "FME is not configured or authorized for this MCP session. " +
-          "Ask your Harness administrator to configure an FME/Split Admin API key for hosted MCP, " +
-          "or set HARNESS_FME_API_KEY. Self-hosted sessions may also provide a non-placeholder HARNESS_API_KEY. " +
+          "Ask your Harness administrator to configure an FME/Split Admin credential for hosted MCP, " +
+          "or set HARNESS_FME_API_KEY to a legacy Split admin key or FME-entitled Harness PAT/SAT. " +
+          "Self-hosted sessions may also provide a non-placeholder HARNESS_API_KEY. " +
           "Hosted OAuth placeholders such as \"dummy\" are not sent to api.split.io.",
           401,
           "FME_AUTH_MISSING",
         );
       }
-      productHeaders["x-api-key"] = fmeApiKey;
+      productHeaders["Authorization"] = `Bearer ${fmeApiKey}`;
     }
 
     const requestOpts = {

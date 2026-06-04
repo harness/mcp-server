@@ -127,7 +127,7 @@ describe("FME registry metadata", () => {
 });
 
 describe("FME auth", () => {
-  it("uses x-api-key auth from a non-placeholder HARNESS_API_KEY fallback", async () => {
+  it("uses bearer auth from a non-placeholder HARNESS_API_KEY fallback", async () => {
     const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({ objects: [], totalCount: 0, offset: 0, limit: 20 });
     const client = makeClient(mockRequest);
@@ -137,8 +137,8 @@ describe("FME auth", () => {
     const call = firstRequest(mockRequest);
     expect(call.product).toBe("fme");
     expect(call.baseUrl).toBe("https://api.split.io");
-    expect(call.headers).toMatchObject({ "x-api-key": "pat.test" });
-    expect(call.headers).not.toHaveProperty("Authorization");
+    expect(call.headers).toMatchObject({ Authorization: "Bearer pat.test" });
+    expect(call.headers).not.toHaveProperty("x-api-key");
   });
 
   it("prefers explicit HARNESS_FME_API_KEY over a hosted placeholder HARNESS_API_KEY", async () => {
@@ -152,8 +152,8 @@ describe("FME auth", () => {
     await registry.dispatch(client, "fme_workspace", "list", {});
 
     const call = firstRequest(mockRequest);
-    expect(call.headers).toMatchObject({ "x-api-key": "fme-admin-key" });
-    expect(call.headers).not.toHaveProperty("Authorization");
+    expect(call.headers).toMatchObject({ Authorization: "Bearer fme-admin-key" });
+    expect(call.headers).not.toHaveProperty("x-api-key");
   });
 
   it("fails before sending hosted placeholder credentials to Split.io", async () => {
@@ -170,7 +170,8 @@ describe("FME auth", () => {
     } catch (err) {
       const message = (err as Error).message;
       expect(message).toContain("FME is not configured or authorized for this MCP session");
-      expect(message).toContain("Ask your Harness administrator to configure an FME/Split Admin API key");
+      expect(message).toContain("Ask your Harness administrator to configure an FME/Split Admin credential");
+      expect(message).toContain("legacy Split admin key or FME-entitled Harness PAT/SAT");
     }
 
     expect(mockRequest).not.toHaveBeenCalled();
@@ -221,8 +222,8 @@ describe("fme_identity create", () => {
     expect(call.path).toBe("/internal/api/v2/trafficTypes/tt-user/environments/env-prod/identities");
     expect(call.baseUrl).toBe("https://api.split.io");
     expect(call.product).toBe("fme");
-    expect(call.headers).toMatchObject({ "x-api-key": "pat.test" });
-    expect(call.headers).not.toHaveProperty("Authorization");
+    expect(call.headers).toMatchObject({ Authorization: "Bearer pat.test" });
+    expect(call.headers).not.toHaveProperty("x-api-key");
     expect(call.body).toEqual([
       { key: "user-1", values: { name: "Ada", company: "Acme" } },
       { key: "user-2", values: { name: "Grace" } },
