@@ -730,3 +730,37 @@
 - Fixed the poller so only the configured wait deadline reports a timeout; persistent poll failures now throw and are surfaced by `harness_execute` as `_wait.error` while preserving the trigger response and execution ID.
 - Added unit coverage for the poller and boundary coverage that `harness_execute` preserves the trigger response, omits `execution_timed_out`, and returns `_wait.error` on persistent polling failures.
 - Verified with `pnpm test tests/utils/poll-execution.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, full `pnpm test` (61 files / 1459 tests), `pnpm build`, and `git diff --check origin/main...HEAD`.
+
+## Hosted FME Auth Placeholder Bug (2026-06-04)
+- [x] Trace FME request auth from registry config to outgoing Split.io request
+- [x] Add explicit FME credential resolution that does not send hosted placeholders to Split.io
+- [x] Update tests for self-hosted fallback, explicit FME token, and hosted dummy rejection
+- [x] Update docs/env examples for FME auth configuration
+- [x] Run focused tests, typecheck, build, and record review notes
+
+### Plan
+- Keep existing FME resource paths and extraction behavior unchanged; the positive control shows the Split API mapping works.
+- Treat FME/Split auth as product-specific auth, because hosted OAuth/service-routing can authenticate Harness platform APIs without making `HARNESS_API_KEY` a valid external Split credential.
+- Prefer an explicit FME credential for Split.io requests; fall back to the session/server Harness API key only when it is not a known hosted placeholder so self-hosted PAT/SAT setups keep working.
+- Preserve Bearer auth for Split Admin API calls to avoid breaking legacy-token compatibility, and fail loudly before network I/O when no usable FME credential exists.
+
+### Review
+- Added optional `HARNESS_FME_API_KEY` config and a `resolveFmeApiKey()` helper that prefers the explicit FME credential, falls back to a non-placeholder Harness API key, and rejects hosted/internal placeholders such as `dummy` or `*.dummy`.
+- Changed FME registry request construction to send Bearer auth from the resolved FME credential instead of hard-coding `Authorization: Bearer HARNESS_API_KEY`.
+- Added regression tests for fallback auth, explicit FME credential override, placeholder rejection before network I/O, and client preservation of explicit FME Bearer headers.
+- Updated README and `.env.example` to document the direct Split.io credential requirement for FME resources.
+- Verified with `pnpm test tests/config.test.ts tests/registry/feature-flags.test.ts tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+
+### Review Follow-up
+- Fixed review finding that a deployment-level `HARNESS_FME_API_KEY` could override per-session `x-harness-api-key` in shared multi-user HTTP mode.
+- `ConfigSchema` now rejects `HARNESS_FME_API_KEY` when `HARNESS_MCP_MODE=multi-user`, and `resolveFmeApiKey()` defensively ignores deployment-level FME keys in multi-user mode.
+- Added regression coverage for config rejection and the exact session merge path (`mergeConfigWithSessionHeaders` plus `resolveFmeApiKey`) so FME auth stays tied to the session credential.
+
+### Packaging Follow-up
+- Added `HARNESS_FME_API_KEY` to both bundle manifests (`manifest.json` and `mcp-directory/manifest.json`) so manifest-driven and MCPB installs can provide the dedicated FME credential in single-user/self-hosted mode.
+- Added release metadata coverage to keep the packaged FME credential surface aligned with config changes.
+- Made the FME missing-auth remediation mode-aware: single-user points at `HARNESS_FME_API_KEY`, while multi-user points at the session `x-harness-api-key` and explicitly says not to configure `HARNESS_FME_API_KEY`.
+
+### Manifest Base URL Follow-up
+- Added `HARNESS_FME_BASE_URL` to both bundle manifests so manifest-driven and MCPB installs can override the Split/FME Admin API base URL.
+- Extended release metadata coverage to require both FME credential and FME base URL config surfaces in packaged manifests.

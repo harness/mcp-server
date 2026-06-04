@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Config } from "../../src/config.js";
+import { resolveFmeApiKey } from "../../src/config.js";
 import {
   mergeConfigWithSessionHeaders,
   MissingSessionCredentialsError,
@@ -28,6 +29,7 @@ function makeConfig(overrides?: Partial<Config>): Config {
     HARNESS_MCP_ALLOWED_HOSTS: undefined,
     HARNESS_MCP_AUTH_TOKEN: undefined,
     HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+    HARNESS_FME_API_KEY: undefined,
     HARNESS_FME_BASE_URL: "https://api.split.io",
     HARNESS_LOG_UNSAFE_BODIES: false,
     HARNESS_PIPELINE_VERSION: undefined,
@@ -165,6 +167,22 @@ describe("multi-user session credentials", () => {
       "x-harness-account-id": "any-account",
     });
     expect(merged.HARNESS_ACCOUNT_ID).toBe("any-account");
+  });
+
+  it("resolves FME auth from the session key, not a shared server key, in multi-user mode", () => {
+    const base = makeConfig({
+      HARNESS_MCP_MODE: "multi-user",
+      HARNESS_API_KEY: "",
+      HARNESS_ACCOUNT_ID: "",
+      HARNESS_FME_API_KEY: "shared-fme-key",
+    });
+    const merged = mergeConfigWithSessionHeaders(base, {
+      "x-harness-api-key": "pat.user1.tok.sec",
+    });
+
+    expect(merged.HARNESS_API_KEY).toBe("pat.user1.tok.sec");
+    expect(merged.HARNESS_FME_API_KEY).toBe("shared-fme-key");
+    expect(resolveFmeApiKey(merged)).toBe("pat.user1.tok.sec");
   });
 
   it("does not require session credential headers in personal mode", () => {
