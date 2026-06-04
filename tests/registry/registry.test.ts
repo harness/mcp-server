@@ -83,17 +83,8 @@ describe("Registry", () => {
       expect(registry.getResource("agent").toolset).toBe("agents");
     });
 
-    it("excludes opt-in toolsets by default", () => {
+    it("includes ai-evals in defaults", () => {
       const registry = new Registry(makeConfig());
-      expect(() => registry.getResource("eval_dataset")).toThrow(/Unknown resource_type/);
-    });
-
-    it("enables opt-in toolset with + prefix", () => {
-      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ai-evals" }));
-      const desc = registry.describe() as { total_toolsets: number };
-      // All defaults plus ai-evals
-      expect(desc.total_toolsets).toBeGreaterThan(20);
-      // ai-evals resource is accessible
       const res = registry.getResource("eval_dataset");
       expect(res.resourceType).toBe("eval_dataset");
     });
@@ -159,6 +150,58 @@ describe("Registry", () => {
         makeConfig({ HARNESS_TOOLSETS: "logs" }),
       )).not.toThrow();
       expect(server.registerTool).toHaveBeenCalled();
+    });
+
+    it("registers every tool with explicit GPT App annotation booleans", () => {
+      const registry = new Registry(makeConfig());
+      const server = {
+        registerTool: vi.fn(),
+      };
+
+      registerAllTools(
+        server as never,
+        registry,
+        makeClient(),
+        makeConfig(),
+      );
+
+      expect(server.registerTool).toHaveBeenCalled();
+
+      // harness_schema may call NG /yaml-schema for entity types when a client is configured.
+      const LOCAL_ONLY_TOOLS = new Set(["harness_describe"]);
+
+      for (const [toolName, definition] of server.registerTool.mock.calls) {
+        const annotations = (definition as { annotations?: Record<string, unknown> }).annotations;
+        expect(annotations, `${toolName} should define annotations`).toBeDefined();
+        expect(typeof annotations?.readOnlyHint, `${toolName} readOnlyHint`).toBe("boolean");
+        expect(typeof annotations?.destructiveHint, `${toolName} destructiveHint`).toBe("boolean");
+        expect(typeof annotations?.openWorldHint, `${toolName} openWorldHint`).toBe("boolean");
+
+        if (LOCAL_ONLY_TOOLS.has(toolName)) {
+          expect(annotations?.openWorldHint, `${toolName} is local-only`).toBe(false);
+        } else {
+          expect(annotations?.openWorldHint, `${toolName} calls external API`).toBe(true);
+        }
+      }
+    });
+
+    it("registers every tool with an outputSchema", () => {
+      const registry = new Registry(makeConfig());
+      const server = {
+        registerTool: vi.fn(),
+      };
+
+      registerAllTools(
+        server as never,
+        registry,
+        makeClient(),
+        makeConfig(),
+      );
+
+      for (const [toolName, definition] of server.registerTool.mock.calls) {
+        const outputSchema = (definition as { outputSchema?: unknown }).outputSchema;
+        expect(outputSchema, `${toolName} should define outputSchema`).toBeDefined();
+      }
     });
   });
 
@@ -230,7 +273,7 @@ describe("Registry", () => {
         HARNESS_TOOLSETS: "connectors,services,environments,infrastructure,secrets,templates",
       }));
 
-      for (const resourceType of ["connector", "service", "environment", "infrastructure", "secret", "template"]) {
+      for (const resourceType of ["connector", "service", "environment", "infrastructure", "secret", "template", "template_v1"]) {
         expect(registry.getResource(resourceType).supportedScopes).toEqual(["account", "org", "project"]);
       }
     });
@@ -476,6 +519,24 @@ describe("Registry", () => {
       });
     });
 
+    it("passes the endpoint route template as tracing metadata", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: { content: [], totalElements: 0 },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "pipeline", "list", {
+        org_id: "default",
+        project_id: "test-project",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/pipeline/api/pipelines/list");
+      expect(call.tracing).toEqual({
+        route: "/pipeline/api/pipelines/list",
+      });
+    });
+
     it("omits default org/project query params for explicit account-scope connector list", async () => {
       const accountRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
       const mockRequest = vi.fn().mockResolvedValue({
@@ -624,7 +685,7 @@ describe("Registry", () => {
       expect(call.params.projectIdentifier).toBeUndefined();
     });
 
-    it("template v1 update uses project-scoped path when resource_scope='project' with config defaults", async () => {
+    it("template update uses NG API path with pathParams", async () => {
       const templateRegistry = new Registry(makeConfig({
         HARNESS_TOOLSETS: "templates",
         HARNESS_ORG: "default-org",
@@ -641,10 +702,10 @@ describe("Registry", () => {
       });
 
       const call = mockRequest.mock.calls[0][0];
-      expect(call.path).toBe("/v1/orgs/default-org/projects/default-proj/templates/my-template/versions/v2");
+      expect(call.path).toBe("/template/api/templates/update/my-template/v2");
     });
 
-    it("template v1 update uses account-scoped path when resource_scope='account'", async () => {
+    it("template update at account scope uses same NG API path without org/project query params", async () => {
       const templateRegistry = new Registry(makeConfig({
         HARNESS_TOOLSETS: "templates",
         HARNESS_ORG: "default-org",
@@ -661,7 +722,142 @@ describe("Registry", () => {
       });
 
       const call = mockRequest.mock.calls[0][0];
-      expect(call.path).toBe("/v1/templates/my-template/versions/v2");
+      expect(call.path).toBe("/template/api/templates/update/my-template/v2");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("template_v1 create infers project scope when org_id and project_id are present", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "my_step", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "create", {
+        org_id: "AI_Devops",
+        project_id: "AICHAT",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: my_step\n  name: My Step\n  step:\n    run:\n      script: echo hi\n",
+          is_stable: true,
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/orgs/AI_Devops/projects/AICHAT/templates");
+      expect(call.body).toMatchObject({
+        yaml_version: "1",
+        identifier: "my_step",
+        label: "1.0.0",
+        git_details: { store_type: "INLINE" },
+      });
+      expect(call.body).not.toHaveProperty("orgIdentifier");
+      expect(call.body).not.toHaveProperty("projectIdentifier");
+      expect(typeof call.body.template_yaml).toBe("string");
+    });
+
+    it("template_v1 create infers org scope when only org_id is present", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "org_step", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "create", {
+        org_id: "AI_Devops",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: org_step\n  name: Org Step\n  step:\n    run:\n      script: echo hi\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/orgs/AI_Devops/templates");
+    });
+
+    it("template_v1 create infers account scope when org_id and project_id are omitted", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "acc_step", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "create", {
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: acc_step\n  name: Account Step\n  step:\n    run:\n      script: echo hi\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/templates");
+    });
+
+    it("template_v1 create accepts explicit resource_scope account", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "acc_explicit", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "create", {
+        resource_scope: "account",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: acc_explicit\n  name: Account Explicit\n  step:\n    run:\n      script: echo hi\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/templates");
+    });
+
+    it("template_v1 update uses versioned v1 REST path at account scope", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "testsj", label: "v2" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "update", {
+        template_id: "testsj",
+        version_label: "v2",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: testsj\n  name: Test\n  step:\n    run:\n      script: echo ok\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/templates/testsj/versions/v2");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("template_v1 with only project_id does not use project path without org_id", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "x", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "create", {
+        project_id: "AICHAT",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: x\n  name: X\n  step:\n    run:\n      script: hi\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/templates");
     });
 
     it("does not treat resource-specific scope filters as dispatcher scope", async () => {

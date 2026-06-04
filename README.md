@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 170 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 207 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,12 +8,12 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 170 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 32 toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Governance, Service Overrides, Visualizations, and more. Not just pipelines — the entire Harness platform.
+- **11 tools, 207 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 33 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
-- **30 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
+- **32 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
-- **Zero-config start.** Just provide a Harness API key. Account ID is auto-extracted from PAT tokens, org/project defaults are optional, and toolset filtering lets you expose only what you need.
+- **Zero-config start.** Just provide a Harness API key. Account ID is auto-extracted from PAT and SAT tokens, org/project defaults are optional, and toolset filtering lets you expose only what you need.
 - **Extensible by design.** Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
 
 ## Prerequisites
@@ -22,7 +22,7 @@ Before installing or running the server, you need a Harness API key:
 
 1. Log in to your [Harness account](https://app.harness.io)
 2. Go to **My Profile** → **API Keys** → **+ New API Key**
-3. Create a new **Token** under the API key — this generates a PAT in the format `pat.<accountId>.<tokenId>.<secret>`
+3. Create a new **Token** under the API key — this generates a PAT or SAT in the format `<prefix>.<accountId>.<tokenId>.<secret>`
 4. Save the token somewhere secure — you'll need it in the next step
 
 > For detailed instructions, see the [Harness API Quickstart](https://developer.harness.io/docs/platform/automation/api/api-quickstart/).
@@ -55,7 +55,7 @@ HARNESS_API_KEY=pat.xxx npx harness-mcp-v2
 HARNESS_API_KEY=pat.xxx npx harness-mcp-v2 http --port 8080
 ```
 
-> **Note:** The account ID is auto-extracted from PAT tokens (`pat.<accountId>.<tokenId>.<secret>`), so `HARNESS_ACCOUNT_ID` is only needed for non-PAT API keys.
+> **Note:** The account ID is auto-extracted from PAT and SAT tokens (`pat.<accountId>...` or `sat.<accountId>...`), so `HARNESS_ACCOUNT_ID` is only needed for API keys without an embedded account segment.
 
 ### Option 2: Global Install
 
@@ -125,6 +125,8 @@ The HTTP transport runs in **session-based mode**. A new MCP session is created 
 
 Operational constraints in HTTP mode:
 
+- Set `HARNESS_MCP_AUTH_TOKEN` for any shared or remotely reachable deployment. When set, every `POST`, `GET`, and `DELETE` request to `/mcp` must include `Authorization: Bearer <token>`.
+- Non-loopback binds require `HARNESS_MCP_AUTH_TOKEN` by default. To run unauthenticated on a non-loopback interface anyway, set `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true` explicitly.
 - `POST /mcp` without `mcp-session-id` must be an `initialize` request.
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
 - `GET /mcp` is used for SSE notifications (progress updates and elicitation prompts).
@@ -132,26 +134,48 @@ Operational constraints in HTTP mode:
 - `GET /health` is the only non-MCP endpoint.
 - Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
 - Set `x-harness-pipeline-version: 0` or `1` on the `initialize` request to select V0 or V1 pipeline resources for that HTTP session.
+- Set `x-harness-auto-approve-risk: none|low_write|medium_write|high_write|all` on the `initialize` request to choose a stricter per-session auto-approval threshold. The server caps this value at the deployment-level `HARNESS_AUTO_APPROVE_RISK`, so a session can reduce but not expand the configured approval ceiling.
+
+#### Multi-User Mode
+
+Set `HARNESS_MCP_MODE=multi-user` for shared HTTP deployments where each client authenticates as a different Harness user. In this mode:
+
+- `HARNESS_API_KEY` must **not** be set in the server config — the server holds no Harness credentials.
+- Each session must provide `x-harness-api-key` on the `initialize` request. `x-harness-account-id` is required only when the API key does not embed an account segment.
+- Sessions may also provide `x-harness-org` and `x-harness-project` headers to set default scope for that session.
+- The Harness API key flows through to every Harness API call for that session, so the audit trail in Harness reflects the real user.
+- `HARNESS_MCP_AUTH_TOKEN` is independent and can still be used as an additional transport-layer gate.
 
 ```bash
 # Health check
 curl http://localhost:3000/health
 
 # MCP initialize request (capture mcp-session-id response header)
+# In multi-user mode, x-harness-api-key is required on initialize.
+# x-harness-account-id is needed only for API keys without an embedded account segment.
 curl -i -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
+  -H "x-harness-api-key: $HARNESS_API_KEY" \
+  -H "x-harness-account-id: $HARNESS_ACCOUNT_ID" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'
 
 # Subsequent MCP request (use returned session ID)
 curl -X POST http://localhost:3000/mcp \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
   -H "mcp-session-id: <session-id>" \
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 
 # Terminate session
 curl -X DELETE http://localhost:3000/mcp \
+  -H "Authorization: Bearer $HARNESS_MCP_AUTH_TOKEN" \
   -H "mcp-session-id: <session-id>"
 ```
+
+`HARNESS_MCP_ALLOWED_HOSTS` controls Host-header validation for DNS-rebinding protection, and CORS limits browser origins. Neither is authentication; use `HARNESS_MCP_AUTH_TOKEN` or an authenticated gateway/reverse proxy for access control.
 
 ### Client Configuration
 
@@ -192,10 +216,11 @@ Harness also supports a hosted MCP endpoint for accounts that have the managed s
       }
     },
     "harness-local": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -204,7 +229,9 @@ Harness also supports a hosted MCP endpoint for accounts that have the managed s
 
 > **Troubleshooting `npx ENOENT` or `node: No such file or directory`**
 >
-> GUI apps (Cursor, Claude Desktop, Windsurf, VS Code) don't inherit your shell's `PATH`, so they often can't find `npx` or `node`. Fix this by using absolute paths and explicitly setting `PATH` in the `env` block:
+> This is a client process-launch failure, not a Harness authentication failure. The MCP server has not started yet, so changing `HARNESS_API_KEY` will not affect `spawn npx ENOENT`.
+>
+> GUI apps (Cursor, Claude Desktop, Windsurf, VS Code) don't always inherit your shell's `PATH`, so they can fail to find `npx` or `node` after a config reload. Fix this by using absolute paths and explicitly setting `PATH` in the `env` block:
 >
 > ```json
 > {
@@ -235,10 +262,11 @@ npx (zero install)
 {
   "mcpServers": {
     "harness": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -255,9 +283,10 @@ npm install -g harness-mcp-v2
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-mcp-v2",
+      "command": "/absolute/path/to/harness-mcp-v2",
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -283,21 +312,24 @@ Then set `HARNESS_API_KEY` in your environment or `.env` file.
 
 #### Cursor (`.cursor/mcp.json`)
 
-npx (zero install)
+npx (zero install, recommended for local Cursor configs)
 
 ```json
 {
   "mcpServers": {
     "harness": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
 }
 ```
+
+Run `which npx` in a terminal and use that full path for `command`; include the directory from `which node` at the front of `PATH`.
 
 node (local install)
 
@@ -309,14 +341,17 @@ npm install -g harness-mcp-v2
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-mcp-v2",
+      "command": "/absolute/path/to/harness-mcp-v2",
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
 }
 ```
+
+Run `which harness-mcp-v2` after `npm install -g harness-mcp-v2` and use that full path for `command`; include the directory from `which node` at the front of `PATH`.
 
 #### Windsurf (`~/.windsurf/mcp.json`)
 
@@ -326,10 +361,11 @@ npx (zero install)
 {
   "mcpServers": {
     "harness": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -346,9 +382,10 @@ npm install -g harness-mcp-v2
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-mcp-v2",
+      "command": "/absolute/path/to/harness-mcp-v2",
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -494,9 +531,12 @@ The server automatically loads environment variables from a `.env` file in the p
 
 | Variable                    | Required | Default                     | Description                                                                                                                                                                                                                                           |
 | --------------------------- | -------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HARNESS_API_KEY`           | Yes      | --                          | Harness personal access token or service account token                                                                                                                                                                                                |
-| `HARNESS_ACCOUNT_ID`        | No       | *(from PAT)*                | Harness account identifier. Auto-extracted from PAT tokens; only needed for non-PAT API keys                                                                                                                                                          |
+| `HARNESS_MCP_MODE`          | No       | `single-user`               | Deployment mode: `single-user` (API key in config, used for all sessions) or `multi-user` (HTTP only, per-session credentials via `x-harness-api-key` and optional `x-harness-account-id` headers)                                                   |
+| `HARNESS_API_KEY`           | Yes*     | --                          | Harness personal access token or service account token. Required in `single-user` mode. Must NOT be set in `multi-user` mode                                                                                                                          |
+| `HARNESS_ACCOUNT_ID`        | No       | *(from PAT/SAT)*            | Harness account identifier. Auto-extracted from PAT/SAT tokens in single-user mode; multi-user sessions can provide their own via `x-harness-account-id` when the API key does not embed one                                                          |
 | `HARNESS_BASE_URL`          | No       | `https://app.harness.io`    | Harness API/UI base URL for local stdio or self-hosted HTTP deployments. Set this to environments such as `https://harness0.harness.io` when running the server yourself. It does not affect the managed `https://mcp.harness.io/mcp` hosted endpoint |
+| `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources. This can be a legacy Split admin key or an FME-entitled Harness PAT/SAT. FME calls go directly to `api.split.io`, so hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate these requests. Must not be set in `multi-user` mode; FME must use each session's `x-harness-api-key` credential. If unset, FME falls back to a non-placeholder `HARNESS_API_KEY` for self-hosted sessions |
+| `HARNESS_FME_BASE_URL`      | No       | `https://api.split.io`      | Split/FME Admin API base URL used by `fme_` resources. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development                                                                                                                              |
 | `HARNESS_ORG`               | No       | --                          | Organization ID. Used when `org_id` is not specified per tool call. If omitted, `org_id` must be provided explicitly. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                      |
 | `HARNESS_PROJECT`           | No       | --                          | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                                          |
 | `HARNESS_API_TIMEOUT_MS`    | No       | `30000`                     | HTTP request timeout in milliseconds                                                                                                                                                                                                                  |
@@ -504,14 +544,22 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MAX_BODY_SIZE_MB`  | No       | `10`                        | Max HTTP request body size in MB for `http` transport                                                                                                                                                                                                 |
 | `HARNESS_RATE_LIMIT_RPS`    | No       | `10`                        | Client-side request throttle (requests per second) to Harness APIs                                                                                                                                                                                    |
 | `LOG_LEVEL`                 | No       | `info`                      | Log verbosity: `debug`, `info`, `warn`, `error`                                                                                                                                                                                                       |
-| `HARNESS_TOOLSETS`          | No       | *(defaults)*                | Comma-separated toolset list. Empty loads default toolsets and excludes opt-in toolsets such as `ai-evals`. Supports `+name` to add opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering))                      |
+| `HARNESS_TOOLSETS`          | No       | *(defaults)*                | Comma-separated toolset list. Empty loads default toolsets. Supports `+name` to explicitly include opt-in toolsets and `-name` to remove defaults (see [Toolset Filtering](#toolset-filtering))                                                       |
 | `HARNESS_READ_ONLY`         | No       | `false`                     | Block all mutating operations (create, update, delete, execute). Only list and get are allowed. Useful for shared/demo environments                                                                                                                   |
 | `HARNESS_AUTO_APPROVE_RISK` | No       | `none`                      | Risk-based auto-approve threshold for autonomous workflows. Operations at or below this risk proceed without confirmation. Values: `none`, `low_write`, `medium_write`, `high_write`, `all`. See [Elicitation](#elicitation)                          |
 | `HARNESS_SKIP_ELICITATION`  | No       | `false`                     | **Deprecated** — use `HARNESS_AUTO_APPROVE_RISK=all` instead. Kept for backward compatibility                                                                                                                                                         |
 | `HARNESS_ALLOW_HTTP`        | No       | `false`                     | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance                                                                                   |
 | `HARNESS_PIPELINE_VERSION`  | No       | `0`                         | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
 | `HARNESS_MCP_ALLOWED_HOSTS` | No       | --                          | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here                                                                                 |
+| `HARNESS_MCP_AUTH_TOKEN`    | No       | --                          | Bearer token required on `/mcp` HTTP routes when set. Required by default when HTTP transport binds to a non-loopback host                                                                                                                             |
+| `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | No | `false`         | Explicitly allow unauthenticated HTTP transport on non-loopback binds. Use only behind another authenticated control                                                                                                                                    |
 | `HARNESS_MCP_LOG_FILE`      | No       | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available                                                                                                                                                               |
+| `HARNESS_AUDIT_FILE`        | No       | --                          | Append audit events to a newline-delimited JSON file for durable local collection                                                                                                                                                                      |
+| `HARNESS_AUDIT_WEBHOOK_URL` | No       | --                          | HTTPS endpoint that receives batched audit events. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development                                                                                                                                   |
+| `HARNESS_AUDIT_WEBHOOK_TOKEN` | No     | --                          | Optional bearer token sent to the audit webhook                                                                                                                                                                                                        |
+| `HARNESS_AUDIT_WEBHOOK_BATCH_SIZE` | No | `10`                       | Number of audit events to batch before webhook flush                                                                                                                                                                                                   |
+| `HARNESS_AUDIT_WEBHOOK_FLUSH_MS` | No  | `5000`                     | Max time to hold audit events before webhook flush                                                                                                                                                                                                     |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | No     | --                          | Enables OpenTelemetry audit spans when the optional OpenTelemetry packages are installed                                                                                                                                                               |
 
 
 ### HTTPS Enforcement
@@ -524,7 +572,13 @@ HARNESS_BASE_URL must use HTTPS (got "http://..."). If you need HTTP for local d
 
 ### Audit Logging
 
-All write operations (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) emit structured audit log entries to stderr. Each entry includes the tool name, resource type, operation, identifiers, and timestamp. This provides an audit trail without requiring external logging infrastructure.
+All registry-dispatched Harness API operations (`list`, `get`, `create`, `update`, `delete`, and `execute`) emit structured audit events when audit sinks are configured. Mutating events include the confirmation path used by elicitation or auto-approval when a confirmation context is present; read events currently omit confirmation metadata. Local metadata and schema discovery tools that bypass the registry, such as `harness_describe` and `harness_schema`, are not part of this audit stream. A stderr sink is registered by default but goes through the normal logger and obeys `LOG_LEVEL`; configure file or webhook sinks for durable audit collection:
+
+- `HARNESS_AUDIT_FILE` appends newline-delimited JSON events for local collection.
+- `HARNESS_AUDIT_WEBHOOK_URL` posts `{ "events": [...] }` batches to an HTTPS webhook, optionally with `HARNESS_AUDIT_WEBHOOK_TOKEN`. Failed batches are re-enqueued with bounded capacity and eventually dropped with a warning rather than blocking tool execution.
+- `OTEL_EXPORTER_OTLP_ENDPOINT` enables audit spans when the optional OpenTelemetry peer dependencies are installed. The sink reuses an existing tracer provider when one is registered, otherwise it bootstraps a standalone OTLP exporter.
+
+Each event includes the tool name, resource type, operation, identifiers, timestamp, risk, outcome, HTTP method/path, duration, and confirmation method when applicable. Audit sinks are best-effort telemetry; delivery issues are logged and never replay or change the underlying Harness API operation. For OTel setup details and span attributes, see [`specs/005-otel-audit-sink.md`](specs/005-otel-audit-sink.md).
 
 ## Tools Reference
 
@@ -532,11 +586,21 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
 
 **URL support:** Most API-facing tools accept a `url` parameter — paste a Harness UI URL and the server auto-extracts org, project, resource type, resource ID, pipeline ID, and execution ID. `harness_describe` does not accept `url`.
 
+**Scope support:** Resource types with account/org/project variants expose `supportedScopes` in `harness_describe`. Pass `resource_scope` when you need a specific level:
+
+- `resource_scope: "account"` sends only `accountIdentifier`.
+- `resource_scope: "org"` sends `accountIdentifier` and `orgIdentifier`.
+- `resource_scope: "project"` sends account, org, and project identifiers.
+
+Current multi-scope resources include `connector`, `service`, `environment`, `infrastructure`, `secret`, and `template`. If `resource_scope` is omitted, the registry uses the resource's default scope and configured defaults, except resources marked as optional scope may omit org/project unless explicitly passed. Harness URLs can also set the scope automatically when the path contains account-level or project-level context.
+
+**Structured output:** Every tool declares an MCP `outputSchema`. `harness_list` normalizes list-like Harness responses into object-shaped structured content so strict clients can validate it: top-level arrays become `{ "items": [...], "total": <count>, "page": <page> }`, and common wrapper keys such as `content`, `data`, `body`, `objects`, or `features` are hoisted to `items` when needed. The text response still contains the compact JSON payload returned to all clients.
+
 
 | Tool               | Description                                                                                                                                                                                                                                                                                                           |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `harness_describe` | Discover available resource types, operations, and fields. No API call — returns local registry metadata.                                                                                                                                                                                                             |
-| `harness_schema`   | Fetch exact JSON Schema definitions for creating/updating resources. Supports deep drilling via `path` parameter.                                                                                                                                                                                                     |
+| `harness_schema`   | Fetch exact YAML/JSON Schema definitions and examples for creating/updating resources. Pipeline/template schemas are bundled; connector, environment, service, secret, and infrastructure schemas are scope-aware entity schemas fetched from bundled snapshots or NG `/yaml-schema`. Supports deep drilling via `path`. |
 | `harness_list`     | List resources of a given type with filtering, search, and pagination.                                                                                                                                                                                                                                                |
 | `harness_get`      | Get a single resource by its identifier.                                                                                                                                                                                                                                                                              |
 | `harness_create`   | Create a new resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation).                                                                                                                                                                              |
@@ -547,6 +611,32 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
 | `harness_diagnose` | Diagnose `pipeline`, `connector`, `delegate`, and `gitops_application` resources (aliases: `execution` -> `pipeline`, `gitops_app` -> `gitops_application`). For pipelines, returns stage/step timing and failure details; for connectors/delegates/GitOps apps, returns targeted health and troubleshooting signals. |
 | `harness_status`   | Get a real-time project health dashboard — recent executions, failure rates, and deep links.                                                                                                                                                                                                                          |
 
+
+### Schema Lookup Workflow
+
+Use `harness_schema` before creating or updating YAML-backed resources so agents can copy exact field names and constraints instead of guessing from prose.
+
+- Bundled schemas include `pipeline`, `template`, `trigger`, `pipeline_v1`, `template_v1`, `trigger_v1`, `inputSet_v1`, `overlayInputSet_v1`, `service_v1`, `infra_v1`, and `agent-pipeline`.
+- Entity schemas include `connector`, `environment`, `service`, `secret`, and `infrastructure`. They are scope-aware (`account`, `org`, or `project`) and require `org_id`/`project_id` when the selected scope requires them.
+- Vendored entity snapshots are used first when they match the runtime account; otherwise the tool falls back to the Harness NG `/yaml-schema` API and caches the result.
+- Omit `path` for a field/section summary, then pass a dot-separated `path` to inspect a nested definition.
+
+Examples:
+
+```json
+{ "resource_type": "pipeline", "path": "pipeline.stages" }
+```
+
+```json
+{
+  "resource_type": "connector",
+  "scope": "project",
+  "org_id": "default",
+  "project_id": "payments"
+}
+```
+
+Maintainers can refresh the vendored entity snapshots with `pnpm sync-entity-schemas` when Harness entity YAML schemas change.
 
 ### Tool Examples
 
@@ -587,7 +677,8 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
   "resource_type": "pipeline",
   "action": "run",
   "resource_id": "my-pipeline",
-  "inputs": { "tag": "v1.2.3" }
+  "inputs": { "tag": "v1.2.3" },
+  "wait": true
 }
 ```
 
@@ -732,10 +823,47 @@ Use this sequence to reduce execution-time input errors:
   - **Constraint:** shorthand expansion is skipped when `inputs.build` is already present (explicit `build` wins).
 3. **Execute the run**
   - `harness_execute(resource_type="pipeline", action="run", resource_id="<pipeline_id>", ...)`
+  - For Git-backed pipelines whose YAML should be loaded from a non-default branch, pass `params.pipeline_branch` (sent to Harness as `pipelineBranchName`):
+
+    ```json
+    {
+      "resource_type": "pipeline",
+      "action": "run",
+      "resource_id": "deploy_app",
+      "params": { "pipeline_branch": "feature/new-stage" },
+      "inputs": { "branch": "main" },
+      "wait": true
+    }
+    ```
 4. **Optional: combine both**
   - Use `input_set_ids` for the base shape and `inputs` for simple overrides.
 
 If required fields are unresolved, the tool returns a pre-flight error with expected keys and suggested input sets. You can inspect available shorthand mappings with `harness_describe(resource_type="pipeline")` (`executeActions.run.inputShorthands`).
+
+### Pipeline Execute Wait Mode
+
+For `pipeline.run`, `pipeline.retry`, and `pipeline_v1.run`, pass `wait: true` to let the server poll until the execution reaches a terminal status. This keeps a pipeline launch and status check in one tool call instead of asking the client or LLM to run a polling loop.
+
+```json
+{
+  "resource_type": "pipeline",
+  "action": "run",
+  "resource_id": "deploy_app",
+  "inputs": { "branch": "main" },
+  "wait": true,
+  "wait_timeout_seconds": 900,
+  "wait_poll_interval_seconds": 5
+}
+```
+
+Wait mode behavior:
+
+- Default timeout is 600 seconds; allowed range is 10 seconds to 7200 seconds.
+- Initial poll interval defaults to 3 seconds, backs off by 1.5x, and caps at 30 seconds.
+- On success or failure, the response includes fields such as `execution_id`, `execution_status`, `execution_terminal`, `execution_elapsed_ms`, and `execution_poll_count`.
+- If the timeout fires, the original trigger still succeeded; the response includes `execution_timed_out: true` and `_wait.hint` with the last observed status.
+- If polling fails after the trigger succeeds, the response includes `_wait.error` and a recheck hint. Do not blindly rerun the pipeline unless you have confirmed the first execution is not running.
+- Failed terminal statuses include `_diagnose_hint` pointing to `harness_diagnose(resource_type="execution", options={execution_id: "..."})`.
 
 **Ask the AI DevOps Agent to create a pipeline:**
 
@@ -954,7 +1082,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-170 resource types organized across 32 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+207 resource types organized across 33 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1064,11 +1192,13 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 | -------------- | ---- | --- | ------ | ------ | ------ | -------------------- |
 | `repository`   | x    | x   | x      | x      |        |                      |
 | `branch`       | x    | x   | x      |        | x      |                      |
-| `commit`       | x    | x   |        |        |        | `diff`, `diff_stats` |
+| `commit`       | x    | x   | x      |        |        | `diff`, `diff_stats` |
 | `file_content` |      | x   |        |        |        | `blame`              |
 | `tag`          | x    |     | x      |        | x      |                      |
 | `repo_rule`    | x    | x   |        |        |        |                      |
 | `space_rule`   | x    | x   |        |        |        |                      |
+
+`commit` creation commits one or more file actions directly through the Harness Code API without cloning. Pass `body.title`, `body.branch`, and `body.actions`; each action is `CREATE`, `UPDATE`, `DELETE`, or `MOVE`, and `UPDATE` requires the current blob SHA.
 
 
 ### Artifact Registries
@@ -1089,6 +1219,8 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 | ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `template`    | x    | x   | x      | x      | x      |                 |
 
+Template operations use the Harness Template service paths (`/template/api/templates...`). Create and update require the full template YAML string in `body.template_yaml` or `body.yaml`; `version_label` targets a specific version for update/delete, while deleting without `version_label` deletes all versions.
+
 
 ### Dashboards
 
@@ -1104,11 +1236,32 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 
 | Resource Type                     | List | Get | Create | Update | Delete | Execute Actions |
 | --------------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
-| `database_schema`                 | x    | x   |        |        |        |                 |
-| `database_instance`               | x    | x   |        |        |        |                 |
+| `database_schema`                 | x    | x   | x      | x      | x      |                 |
+| `database_instance`               | x    | x   | x      | x      | x      |                 |
 | `database_snapshot_object`        | x    | x   |        |        |        |                 |
 | `database_llm_authoring_pipeline` |      | x   |        |        |        |                 |
 
+
+### Infrastructure as Code Management (IaCM)
+
+IaCM resources are default-enabled and mostly project-scoped. Start with `iacm_workspace` to find workspace identifiers, then use that `workspace_id` for workspace resources, costs, and activity diffs. The module registry is account-scoped.
+
+| Resource Type                   | List | Get | Create | Update | Delete | Execute Actions |
+| ------------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `iacm_workspace`                | x    | x   |        |        |        |                 |
+| `iacm_resource`                 | x    |     |        |        |        |                 |
+| `iacm_module`                   | x    | x   |        |        |        |                 |
+| `iacm_workspace_costs`          | x    |     |        |        |        |                 |
+| `iacm_activity_resource_change` | x    |     |        |        |        |                 |
+
+Typical workflow:
+
+1. `harness_list(resource_type="iacm_workspace", org_id="...", project_id="...")` to find the workspace.
+2. `harness_list(resource_type="iacm_resource", org_id="...", project_id="...", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
+3. `harness_list(resource_type="iacm_workspace_costs", org_id="...", project_id="...", workspace_id="...")` to review per-execution cost entries.
+4. `harness_list(resource_type="iacm_activity_resource_change", org_id="...", project_id="...", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
+
+IaCM list responses expose `page_count` as the count for the current page only. When `has_more` is true, keep requesting the next 1-based page and sum page counts if you need a total.
 
 ### Internal Developer Portal (IDP)
 
@@ -1130,11 +1283,13 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 
 | Resource Type  | List | Get | Create | Update | Delete | Execute Actions |
 | -------------- | ---- | --- | ------ | ------ | ------ | --------------- |
-| `pull_request` | x    | x   | x      | x      |        | `merge`         |
+| `pull_request` | x    | x   | x      | x      |        | `close`, `merge` |
 | `pr_reviewer`  | x    |     | x      |        |        | `submit_review` |
 | `pr_comment`   | x    |     | x      |        |        |                 |
 | `pr_check`     | x    |     |        |        |        |                 |
 | `pr_activity`  | x    |     |        |        |        |                 |
+
+Use `harness_execute(resource_type="pull_request", action="close", ...)` for an explicit close operation. `harness_update` also accepts `body.state` (`open` or `closed`) and routes state changes to the dedicated Harness Code PR state endpoint; send title/description edits in a separate update call.
 
 
 ### Feature Flags
@@ -1145,14 +1300,17 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 | `fme_workspace`                     | x    |     |        |        |        |                                           |
 | `fme_environment`                   | x    |     |        |        |        |                                           |
 | `fme_feature_flag`                  | x    | x   | x      | x      | x      | `kill`, `restore`, `archive`, `unarchive` |
-| `fme_feature_flag_definition`       |      | x   |        |        |        |                                           |
+| `fme_feature_flag_definition`       |      | x   | x      | x      |        |                                           |
 | `fme_rollout_status`                | x    |     |        |        |        |                                           |
 | `fme_rule_based_segment`            | x    | x   | x      |        | x      |                                           |
 | `fme_rule_based_segment_definition` | x    |     |        | x      |        | `enable`, `disable`, `change_request`     |
-| `feature_flag`                      | x    | x   | x      |        | x      | `toggle`                                  |
+| `fme_traffic_type`                  | x    |     |        |        |        |                                           |
+| `fme_identity`                      |      |     | x      | x      |        |                                           |
+| `fme_standard_segment`              | x    | x   |        |        |        |                                           |
+| `fme_segment_keys`                  | x    |     |        | x      |        |                                           |
 
 
-**FME (Split.io) resources** — `fme_`* resources use the Split.io API (`api.split.io`) and are scoped by workspace ID rather than org/project. Auth uses `HARNESS_API_KEY` as a Bearer token. `fme_feature_flag` supports full lifecycle management: create (requires `traffic_type_id`), list, get, update metadata, delete, and kill/restore/archive/unarchive execute actions. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows. Use `feature_flag` for the Harness CF admin API which supports environment-specific definitions, create, delete, and toggle.
+**FME (Split.io) resources** — `fme_`* resources use the Split.io API (`api.split.io`) and are scoped by workspace ID rather than org/project. In single-user/self-hosted mode, auth uses a Bearer token from `HARNESS_FME_API_KEY`, falling back to a non-placeholder `HARNESS_API_KEY`. `HARNESS_FME_API_KEY` may be a legacy Split admin key or an FME-entitled Harness PAT/SAT, but it is rejected in `multi-user` mode so shared deployments cannot override each session user's credential. Hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate direct Split.io requests. `fme_feature_flag` supports full lifecycle management: create (requires `traffic_type_id`), list, get, update metadata, delete, and kill/restore/archive/unarchive execute actions. Use `fme_traffic_type` to discover traffic type IDs, `fme_identity` to create/update identity attributes, and `fme_standard_segment` / `fme_segment_keys` to inspect standard segments and add member keys. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows.
 
 ### GitOps
 
@@ -1176,23 +1334,37 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 ### Chaos Engineering
 
 
-| Resource Type               | List | Get | Create | Update | Delete | Execute Actions        |
-| --------------------------- | ---- | --- | ------ | ------ | ------ | ---------------------- |
-| `chaos_experiment`          | x    | x   |        |        |        | `run`                  |
-| `chaos_probe`               | x    | x   |        |        |        | `enable`, `verify`     |
-| `chaos_experiment_template` | x    |     |        |        |        | `create_from_template` |
-| `chaos_infrastructure`      | x    |     |        |        |        |                        |
-| `chaos_experiment_variable` | x    |     |        |        |        |                        |
-| `chaos_experiment_run`      | x    | x   |        |        |        |                        |
-| `chaos_loadtest`            | x    | x   | x      |        | x      | `run`, `stop`          |
-| `chaos_k8s_infrastructure`  | x    | x   |        |        |        | `check_health`         |
-| `chaos_hub`                 | x    | x   |        |        |        |                        |
-| `chaos_fault`               | x    | x   |        |        |        |                        |
-| `chaos_network_map`         | x    | x   |        |        |        |                        |
-| `chaos_guard_condition`     | x    | x   |        |        |        |                        |
-| `chaos_guard_rule`          | x    | x   |        |        |        |                        |
-| `chaos_recommendation`      | x    | x   |        |        |        |                        |
-| `chaos_risk`                | x    | x   |        |        |        |                        |
+| Resource Type                | List | Get | Create | Update | Delete | Execute Actions        |
+| ---------------------------- | ---- | --- | ------ | ------ | ------ | ---------------------- |
+| `chaos_experiment`           | x    | x   | x      |        | x      | `run`, `stop`          |
+| `chaos_experiment_run`       |      | x   |        |        |        |                        |
+| `chaos_experiment_variable`  | x    |     |        |        |        |                        |
+| `chaos_component_variable`   |      | x   |        |        |        |                        |
+| `chaos_input_set`            | x    | x   | x      | x      | x      |                        |
+| `chaos_experiment_template`  | x    | x   |        |        | x      | `create_from_template` |
+| `chaos_probe`                | x    | x   | x      |        | x      | `enable`, `verify`     |
+| `chaos_probe_in_run`         | x    |     |        |        |        |                        |
+| `chaos_probe_template`       | x    | x   |        |        | x      |                        |
+| `chaos_infrastructure`       | x    |     |        |        |        |                        |
+| `chaos_k8s_infrastructure`   | x    | x   |        |        |        | `check_health`         |
+| `chaos_environment`          | x    |     |        |        |        |                        |
+| `chaos_hub`                  | x    | x   | x      | x      | x      |                        |
+| `chaos_hub_fault`            | x    |     |        |        |        |                        |
+| `chaos_fault`                | x    | x   |        |        | x      |                        |
+| `chaos_fault_template`       | x    | x   |        |        | x      |                        |
+| `chaos_fault_experiment_run` | x    |     |        |        |        |                        |
+| `chaos_action`               | x    | x   |        |        | x      |                        |
+| `chaos_action_template`      | x    | x   |        |        | x      |                        |
+| `chaos_loadtest`             | x    | x   | x      |        | x      | `run`, `stop`          |
+| `chaos_application_map`      | x    | x   |        |        |        |                        |
+| `discovered_namespace`       | x    |     |        |        |        |                        |
+| `discovered_service`         | x    |     |        |        |        |                        |
+| `discovered_network_map`     | x    |     |        |        |        |                        |
+| `chaos_guard_condition`      | x    | x   |        |        | x      |                        |
+| `chaos_guard_rule`           | x    | x   |        |        | x      | `enable`               |
+| `chaos_recommendation`       | x    | x   |        |        |        |                        |
+| `chaos_risk`                 | x    | x   |        |        |        |                        |
+| `chaos_dr_test`              | x    |     | x      |        |        |                        |
 
 
 ### Cloud Cost Management (CCM)
@@ -1258,7 +1430,16 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 | ----------------------- | ---- | --- | ------ | ------ | ------ | ------------------------------ |
 | `security_issue`        | x    |     |        |        |        |                                |
 | `security_issue_filter` | x    |     |        |        |        |                                |
-| `security_exemption`    | x    |     |        |        |        | `approve`, `reject`, `promote` |
+| `security_exemption`    | x    |     | x      |        |        | `approve`, `reject` |
+
+`security_exemption` create is a `high_write` operation. The server derives `requester_id` from the authenticated PAT, sets `exemptFutureOccurrences=true`, and defaults `duration_days` to 30 when not provided. For listing exemptions, pass a small explicit page size (for example `filters: { "status": "Pending", "size": 5 }`) and follow the `_nextPageHint` returned in each response.
+
+Security exemption execute workflow:
+
+- Use `harness_list` with `resource_type="security_exemption"` and an explicit `status` such as `Pending`, `Approved`, `Rejected`, `Expired`, or `Canceled`.
+- Use `harness_execute` with `action="approve"` and a required `body.scope`: `CURRENT`, `ACCOUNT`, `ORG`, or `PROJECT`. `CURRENT` approves at the exemption's existing scope; the other scopes use the STO promote endpoint internally. The server auto-fills `body.approver_id` from the authenticated user when omitted; `body.comment` is optional.
+- Use `action="reject"` to reject an exemption. `body.approver_id` is also auto-filled when omitted.
+- There is no separate `promote` execute action. Use `action="approve"` with a non-`CURRENT` `body.scope` when the requested outcome is approval at account, organization, or project scope.
 
 
 ### Access Control
@@ -1370,6 +1551,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 | `sbom-compliance-check`     | Audit SBOM and compliance posture for artifacts — license risks, policy violations, component vulnerabilities | `artifactId` (optional), `projectId` (optional)                         |
 | `supply-chain-audit`        | End-to-end software supply chain security audit — provenance, chain of custody, policy compliance             | `projectId` (optional)                                                  |
 | `security-exemption-review` | Review pending security exemptions and make batch approval or rejection decisions                             | `projectId` (optional)                                                  |
+| `bulk-exemption-create`     | Create justified security exemptions for multiple STO issues with explicit scope and duration guidance        | `projectId` (required), `exemption_type` (required), `reason` (required), issue filters (optional) |
 | `access-control-audit`      | Audit user permissions, over-privileged accounts, and role assignments to enforce least-privilege             | `projectId` (optional), `orgId` (optional)                              |
 
 
@@ -1400,15 +1582,17 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, 32 of 33 toolsets are enabled. One toolset (`ai-evals`) is opt-in — excluded by default to avoid polluting the resource list for users who don't need it.
+By default, 33 of 34 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
 
-### Enabling opt-in toolsets
+- **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 
-Use the `+` prefix to add opt-in toolsets to the defaults:
+### Adding toolsets with `+` prefix
+
+Use the `+` prefix to explicitly include opt-in toolsets alongside all defaults:
 
 ```bash
-# Enable ai-evals alongside all defaults
-HARNESS_TOOLSETS=+ai-evals
+# Explicitly include Ansible alongside all defaults
+HARNESS_TOOLSETS=+ansible
 ```
 
 ### Removing default toolsets
@@ -1423,8 +1607,8 @@ HARNESS_TOOLSETS=-chaos,-ccm
 ### Combining + and -
 
 ```bash
-# Add ai-evals, remove chaos
-HARNESS_TOOLSETS=+ai-evals,-chaos
+# Add Ansible, remove chaos
+HARNESS_TOOLSETS=+ansible,-chaos
 ```
 
 ### Explicit allowlist
@@ -1458,9 +1642,9 @@ Available toolset names:
 | `dashboards`            | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
 | `idp`                   | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc                                                                                                                                                                           |
 | `pull-requests`         | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
-| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, feature_flag                                                                                                                      |
+| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys                                                           |
 | `gitops`                | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree                                               |
-| `chaos`                 | chaos_experiment, chaos_probe, chaos_experiment_template, chaos_infrastructure, chaos_experiment_variable, chaos_experiment_run, chaos_loadtest, chaos_k8s_infrastructure, chaos_hub, chaos_fault, chaos_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk |
+| `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_application_map, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk, chaos_dr_test |
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
 | `sei`                   | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric                                                                                     |
 | `scs`                   | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom                                                                                                                             |
@@ -1472,7 +1656,9 @@ Available toolset names:
 | `overrides`             | service_override                                                                                                                                                                                                                                                                                |
 | `settings`              | setting                                                                                                                                                                                                                                                                                         |
 | `visualizations`        | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture                                                                                                                                                         |
-| `ai-evals` **(opt-in)** | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
+| `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
+| `iacm`                  | iacm_workspace, iacm_resource, iacm_module, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                                                                 |
+| `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
 
 
 ## Architecture
@@ -1490,8 +1676,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  32 Toolsets      |      (data files, not code)
-                |  170 Resource Types|
+                |  33 Toolsets      |      (data files, not code)
+                |  207 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
@@ -1507,10 +1693,11 @@ Available toolset names:
 
 1. **Tools** are generic verbs: `harness_list`, `harness_get`, etc. They accept a `resource_type` parameter that routes to the correct API endpoint.
 2. **The Registry** maps each `resource_type` to a `ResourceDefinition` — a declarative data structure specifying the HTTP method, URL path, path/query parameter mappings, and response extraction logic.
-3. **Dispatch** resolves the resource definition, builds the HTTP request (path substitution, query params, scope injection), calls the Harness API through `HarnessClient`, and extracts the relevant response data.
+3. **Dispatch** resolves the resource definition, builds the HTTP request (path substitution, query params, `resource_scope`-aware account/org/project injection), calls the Harness API through `HarnessClient`, and extracts the relevant response data.
 4. **Toolset filtering** (`HARNESS_TOOLSETS`) controls which resource definitions are loaded into the registry at startup.
-5. **Deep links** are automatically appended to responses, providing direct Harness UI URLs for every resource.
-6. **Compact mode** strips verbose metadata from list results, keeping only actionable fields (identity, status, type, timestamps, deep links) to minimize token usage.
+5. **Structured output** is declared with MCP `outputSchema`; `harness_list` coerces arrays and common list wrappers into object-shaped `structuredContent` for strict clients.
+6. **Deep links** are automatically appended to responses, providing direct Harness UI URLs for every resource.
+7. **Compact mode** strips verbose metadata from list results, keeping only actionable fields (identity, status, type, timestamps, deep links) to minimize token usage.
 
 ### Adding a New Resource Type
 
@@ -1576,6 +1763,16 @@ pnpm test:watch
 
 # Interactive MCP Inspector
 pnpm inspect
+
+# Refresh generated README counts from the built registry
+pnpm docs:generate
+
+# Verify README counts and clone instructions are current
+pnpm docs:check
+
+# Sync and verify JSON Schemas used by harness_schema
+pnpm sync-schemas
+pnpm check-schema-coverage
 ```
 
 ### Project Structure
@@ -1597,7 +1794,7 @@ src/
       ccm.ts
       access-control.ts
       ...
-  tools/                            # 10 generic MCP tools
+  tools/                            # 11 generic MCP tools
     harness-list.ts
     harness-get.ts
     harness-create.ts
@@ -1608,6 +1805,7 @@ src/
     harness-diagnose.ts
     harness-describe.ts
     harness-status.ts
+    harness-schema.ts
 
   resources/                        # MCP resource providers
     pipeline-yaml.ts
@@ -1694,17 +1892,15 @@ Elicitation behavior varies by operation risk when client support is missing:
 
 If elicitation fails at runtime, operations at `medium_write` or above are blocked.
 
-### Auto-Approve for Autonomous Workflows
+### Autonomous Mode
 
-For CI/CD bots, headless agents, or batch automation, use `HARNESS_AUTO_APPROVE_RISK` to auto-approve operations up to a given risk level:
+**Autonomous mode** means the server proceeds with all operations — including writes and destructive actions — without prompting for confirmation. Enable it by setting:
 
 ```bash
-# Auto-approve everything (equivalent to old HARNESS_SKIP_ELICITATION=true)
 HARNESS_AUTO_APPROVE_RISK=all
-
-# Auto-approve only low-risk writes, still prompt for medium+
-HARNESS_AUTO_APPROVE_RISK=low_write
 ```
+
+This is the deployment-level ceiling: once set, individual sessions cannot escalate beyond it (though they can choose a stricter threshold per-session via the `x-harness-auto-approve-risk` header).
 
 Or in your MCP client config:
 
@@ -1723,9 +1919,27 @@ Or in your MCP client config:
 }
 ```
 
-> **Migration note:** `HARNESS_SKIP_ELICITATION=true` is still supported and maps to `HARNESS_AUTO_APPROVE_RISK=all`. A deprecation warning is logged to stderr. If both are set, `HARNESS_AUTO_APPROVE_RISK` takes precedence.
+**Partial autonomy:** You can also auto-approve only up to a specific risk level while still prompting for higher-risk operations:
 
-When set to `all`, **all** write and delete operations proceed without user confirmation — including destructive operations like `harness_delete`. Use with caution and consider pairing with `HARNESS_TOOLSETS` to restrict which resource types are available.
+```bash
+# Auto-approve reads and low-risk writes; prompt for medium_write, high_write, destructive
+HARNESS_AUTO_APPROVE_RISK=low_write
+
+# Auto-approve up to high-risk writes; only prompt for destructive operations
+HARNESS_AUTO_APPROVE_RISK=high_write
+```
+
+| Value | What's auto-approved |
+|---|---|
+| `none` (default) | Nothing — no auto-approval threshold |
+| `low_write` | Reads + low-risk writes |
+| `medium_write` | Reads + low + medium-risk writes |
+| `high_write` | Reads + low + medium + high-risk writes |
+| `all` | Everything, including destructive operations |
+
+> **Autonomous mode warning:** `HARNESS_AUTO_APPROVE_RISK=all` skips confirmation for **all** operations including `harness_delete`. Use with caution and consider pairing with `HARNESS_TOOLSETS` to restrict which resource types are available.
+
+> **Migration note:** `HARNESS_SKIP_ELICITATION=true` is still supported and maps to `HARNESS_AUTO_APPROVE_RISK=all`. A deprecation warning is logged to stderr. If both are set, `HARNESS_AUTO_APPROVE_RISK` takes precedence.
 
 ## Safety
 
@@ -1749,7 +1963,7 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 
 | Symptom                                                                          | Likely Cause                                                                                         | What to Do                                                                                                                           |
 | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `HARNESS_ACCOUNT_ID is required when the API key is not a PAT...`                | API key is not in PAT format (`pat.<accountId>.<tokenId>.<secret>`) so account ID cannot be inferred | Set `HARNESS_ACCOUNT_ID` explicitly                                                                                                  |
+| `HARNESS_ACCOUNT_ID is required when the API key does not include an account ID segment...` | API key is not in a supported account-scoped format (`pat.<accountId>...` or `sat.<accountId>...`) so account ID cannot be inferred | Set `HARNESS_ACCOUNT_ID` explicitly |
 | `Unknown transport: "..."` on startup                                            | Unsupported CLI transport arg                                                                        | Use `stdio` or `http` only                                                                                                           |
 | `Invalid HARNESS_TOOLSETS: ...` on startup                                       | One or more toolset names are not recognized                                                         | Use only names from [Toolset Filtering](#toolset-filtering) (exact match)                                                            |
 | HTTP `mcp-session-id header is required...`                                      | A session request was sent without session header                                                    | Send `initialize` first, then include `mcp-session-id` on `POST/GET/DELETE /mcp`                                                     |
@@ -1758,9 +1972,14 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | HTTP `Invalid request`                                                           | Invalid JSON body or request body exceeded `HARNESS_MAX_BODY_SIZE_MB`                                | Validate JSON payload size/shape; increase `HARNESS_MAX_BODY_SIZE_MB` if needed                                                      |
 | `Unknown resource_type "..."` from tools                                         | Resource type is misspelled or filtered out via `HARNESS_TOOLSETS`                                   | Call `harness_describe` (with optional `search_term`) to discover valid types                                                        |
 | `Missing required field "... for path parameter ..."`                            | A project/org scoped call is missing identifiers                                                     | Set `HARNESS_ORG`/`HARNESS_PROJECT` or pass `org_id`/`project_id` per tool call                                                      |
+| `resource_scope "org" requires org_id...` or `resource_scope "project" requires project_id...` | A multi-scope resource was forced to org/project scope without enough identifiers                     | Pass the missing `org_id`/`project_id`, configure `HARNESS_ORG`/`HARNESS_PROJECT`, or use `resource_scope: "account"` when supported |
 | `Read-only mode is enabled ... operations are not allowed`                       | `HARNESS_READ_ONLY=true` blocks create/update/delete/execute                                         | Set `HARNESS_READ_ONLY=false` if write operations are intended                                                                       |
 | Pipeline run fails pre-flight with unresolved required inputs                    | Provided `inputs` did not cover required runtime placeholders                                        | Fetch `runtime_input_template`, supply missing simple keys, or use `input_set_ids` for structural inputs                             |
 | Pipeline CI shorthand (`branch`, `tag`, `pr_number`, `commit_sha`) did not apply | `inputs.build` was already provided, so shorthand expansion was intentionally skipped                | Remove `inputs.build` to use shorthand expansion, or keep full explicit `build` structure                                            |
+| Pipeline run loaded the wrong YAML revision                                     | The pipeline definition is stored in Git and the run did not specify the desired pipeline branch      | Pass `params.pipeline_branch` on the `run` action; this maps to Harness `pipelineBranchName`                                         |
+| `wait: true` returned `_wait.error`                                              | The pipeline trigger succeeded, but server-side polling failed                                       | Recheck the `execution_id` with `harness_get(resource_type="execution", ...)` before deciding whether to rerun                        |
+| `wait: true` returned `execution_timed_out: true`                                | The execution did not reach a terminal status before `wait_timeout_seconds`                          | Use the returned `execution_id` to recheck status or diagnose the still-running execution                                             |
+| Execution logs are empty or blob downloads return 403                           | Harness-hosted log blob URLs require the configured Harness client/auth path, especially for internal or self-managed hosts | Keep `HARNESS_BASE_URL` pointed at the target Harness host and use `harness_get(resource_type="execution_log", ...)` or `harness_diagnose(..., include_logs=true)` rather than bypassing the MCP client |
 | `Operation declined by user`                                                     | User declined the elicitation confirmation dialog                                                    | The user chose not to proceed — verify the operation details and retry if intended                                                   |
 | `body.template_yaml (or body.yaml) is required` for template create/update       | Template APIs expect full YAML payload                                                               | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
 | `HARNESS_BASE_URL must use HTTPS` on startup                                     | `HARNESS_BASE_URL` is set to an HTTP URL                                                             | Use HTTPS, or set `HARNESS_ALLOW_HTTP=true` for local development                                                                    |

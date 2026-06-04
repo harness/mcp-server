@@ -1,6 +1,6 @@
 {
   "name": "harness-mcp-v2",
-  "version": "3.0.2",
+  "version": "3.1.2",
   "description": "Give AI agents full access to the Harness.io platform — manage pipelines, deployments, cloud costs, chaos engineering, feature flags, SEI, and 125+ resource types through 11 MCP tools",
   "type": "module",
   "main": "build/index.js",
@@ -19,6 +19,7 @@
     "prepare:mcpb": "node scripts/prepare-mcpb.js",
     "typecheck": "tsc --noEmit",
     "sync-schemas": "node scripts/sync-schemas.js",
+    "sync-entity-schemas": "node scripts/sync-entity-schemas.js",
     "check-schema-coverage": "node scripts/check-schema-coverage.js",
     "docs:generate": "node scripts/generate-docs.js",
     "docs:check": "node scripts/generate-docs.js --check",
@@ -86,7 +87,7 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.5",
     "typescript": "^5.7.3",
-    "vitest": "^3.0.6"
+    "vitest": "^4.1.0"
   },
   "pnpm": {
     "overrides": {
@@ -99,7 +100,8 @@
       "vite": "^7.3.2",
       "postcss": ">=8.5.10",
       "fast-uri": ">=3.1.2",
-      "protobufjs": ">=8.0.2"
+      "protobufjs": ">=8.0.2",
+      "qs": ">=6.15.2"
     }
   },
   "packageManager": "pnpm@10.18.2",

@@ -13,6 +13,8 @@ import { request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { resolveHttpHostValidationOptions } from "../../src/utils/http-hosts.js";
+import { createHttpAuthMiddleware } from "../../src/utils/http-auth.js";
+import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "../../src/utils/session-headers.js";
 
 // We can't easily test the full HTTP server without starting it,
 // so we test the session management patterns and transport lifecycle
@@ -176,12 +178,13 @@ describe("HTTP transport session management", () => {
       // Simulate CORS middleware
       headers["Access-Control-Allow-Origin"] = `http://${host}:${port}`;
       headers["Access-Control-Allow-Methods"] = "GET, POST, DELETE, OPTIONS";
-      headers["Access-Control-Allow-Headers"] = "Content-Type, mcp-session-id, x-harness-pipeline-version";
+      headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, mcp-session-id, x-harness-api-key, x-harness-account-id, x-harness-org, x-harness-project, x-harness-pipeline-version, x-harness-auto-approve-risk";
       headers["Access-Control-Expose-Headers"] = "mcp-session-id";
 
       expect(headers["Access-Control-Allow-Origin"]).toBe("http://127.0.0.1:3000");
       expect(headers["Access-Control-Allow-Methods"]).toContain("POST");
       expect(headers["Access-Control-Allow-Methods"]).toContain("DELETE");
+      expect(headers["Access-Control-Allow-Headers"]).toContain("Authorization");
       expect(headers["Access-Control-Allow-Headers"]).toContain("mcp-session-id");
       expect(headers["Access-Control-Expose-Headers"]).toContain("mcp-session-id");
     });
@@ -269,6 +272,188 @@ describe("HTTP transport session management", () => {
 
       expect(sessionId).toBeUndefined();
       expect(errorResponse.error.message).toContain("mcp-session-id");
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Route-level tests — exercises the real middleware stack (auth → body parse → route)
+// ---------------------------------------------------------------------------
+
+async function postMcp(
+  baseUrl: string,
+  opts: { headers?: Record<string, string>; body?: unknown },
+): Promise<{ status: number; body: unknown; headers: Record<string, string> }> {
+  const url = new URL("/mcp", baseUrl);
+  const payload = opts.body !== undefined ? JSON.stringify(opts.body) : undefined;
+  return new Promise((resolve, reject) => {
+    const req = httpRequest(
+      {
+        hostname: url.hostname,
+        port: url.port,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json, text/event-stream",
+          ...(payload ? { "Content-Length": Buffer.byteLength(payload).toString() } : {}),
+          ...opts.headers,
+        },
+      },
+      (res) => {
+        let rawBody = "";
+        res.setEncoding("utf8");
+        res.on("data", (chunk) => { rawBody += chunk; });
+        res.on("end", () => {
+          let parsed: unknown;
+          try { parsed = JSON.parse(rawBody); } catch { parsed = rawBody; }
+          const responseHeaders: Record<string, string> = {};
+          for (const [k, v] of Object.entries(res.headers)) {
+            if (typeof v === "string") responseHeaders[k] = v;
+          }
+          resolve({ status: res.statusCode ?? 0, body: parsed, headers: responseHeaders });
+        });
+      },
+    );
+    req.on("error", reject);
+    if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+function buildInitializeBody(): unknown {
+  return {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-03-26",
+      capabilities: {},
+      clientInfo: { name: "test", version: "1.0" },
+    },
+  };
+}
+
+/**
+ * Build a minimal Express app that mirrors the real src/index.ts middleware
+ * stack for the auth + multi-user credential path, but without starting the
+ * full Harness MCP server (which requires a real API key).
+ */
+function buildAuthTestApp(opts: {
+  authToken?: string;
+  multiUser?: boolean;
+}): Express {
+  const { json } = require("express");
+  const app = createMcpExpressApp(resolveHttpHostValidationOptions("127.0.0.1", {}));
+
+  // Mirror src/index.ts ordering: CORS → auth → rate limit → body parse → route
+  app.use((_req: any, res: any, next: any) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    next();
+  });
+  app.use(createHttpAuthMiddleware(opts.authToken));
+  app.use(json({ limit: "1mb" }));
+
+  app.post("/mcp", (req: any, res: any) => {
+    // Simulate multi-user credential check from src/index.ts POST /mcp handler
+    if (opts.multiUser) {
+      const baseConfig = {
+        HARNESS_MCP_MODE: "multi-user" as const,
+        HARNESS_API_KEY: "",
+        HARNESS_ACCOUNT_ID: "",
+        HARNESS_AUTO_APPROVE_RISK: "none" as const,
+      };
+      try {
+        mergeConfigWithSessionHeaders(baseConfig as any, req.headers);
+      } catch (err) {
+        if (err instanceof MissingSessionCredentialsError) {
+          res.status(401).json({
+            jsonrpc: "2.0",
+            error: { code: -32001, message: err.message },
+            id: null,
+          });
+          return;
+        }
+        throw err;
+      }
+    }
+    // If we get here, auth + credentials passed
+    res.json({ jsonrpc: "2.0", id: 1, result: { ok: true } });
+  });
+
+  return app;
+}
+
+describe("HTTP /mcp route-level auth", () => {
+  it("returns 401 when bearer token is required but missing", async () => {
+    const app = buildAuthTestApp({ authToken: "secret-token" });
+    await withListeningApp(app, async (baseUrl) => {
+      const res = await postMcp(baseUrl, { body: buildInitializeBody() });
+      expect(res.status).toBe(401);
+      expect(res.body).toMatchObject({
+        jsonrpc: "2.0",
+        error: { code: -32001, message: "Unauthorized" },
+      });
+    });
+  });
+
+  it("returns 401 when multi-user headers are missing on initialize", async () => {
+    const app = buildAuthTestApp({ multiUser: true });
+    await withListeningApp(app, async (baseUrl) => {
+      const res = await postMcp(baseUrl, { body: buildInitializeBody() });
+      expect(res.status).toBe(401);
+      expect(res.body).toMatchObject({
+        jsonrpc: "2.0",
+        error: { code: -32001 },
+      });
+    });
+  });
+
+  it("returns 401 when API key account ID mismatches x-harness-account-id", async () => {
+    const app = buildAuthTestApp({ multiUser: true });
+    await withListeningApp(app, async (baseUrl) => {
+      const res = await postMcp(baseUrl, {
+        body: buildInitializeBody(),
+        headers: {
+          "x-harness-api-key": "pat.accountA.token.secret",
+          "x-harness-account-id": "accountB",
+        },
+      });
+      expect(res.status).toBe(401);
+      expect(res.body).toMatchObject({
+        jsonrpc: "2.0",
+        error: { code: -32001 },
+      });
+    });
+  });
+
+  it("succeeds with SAT account ID extraction when x-harness-account-id is omitted", async () => {
+    const app = buildAuthTestApp({ multiUser: true });
+    await withListeningApp(app, async (baseUrl) => {
+      const res = await postMcp(baseUrl, {
+        body: buildInitializeBody(),
+        headers: {
+          "x-harness-api-key": "sat.myaccount.token.secret",
+        },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ jsonrpc: "2.0", id: 1, result: { ok: true } });
+    });
+  });
+
+  it("succeeds with correct bearer token and multi-user credentials", async () => {
+    const app = buildAuthTestApp({ authToken: "my-token", multiUser: true });
+    await withListeningApp(app, async (baseUrl) => {
+      const res = await postMcp(baseUrl, {
+        body: buildInitializeBody(),
+        headers: {
+          "Authorization": "Bearer my-token",
+          "x-harness-api-key": "pat.myaccount.token.secret",
+          "x-harness-account-id": "myaccount",
+        },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ jsonrpc: "2.0", id: 1, result: { ok: true } });
     });
   });
 });

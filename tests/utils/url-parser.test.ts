@@ -201,6 +201,71 @@ describe("parseHarnessUrl", () => {
     expect(result.pipeline_id).toBe("My Pipeline"); // resource IDs are decoded
     expect(result.resource_type).toBe("pipeline");
   });
+
+  // Regression tests for path-only URLs.
+  // Background: the Harness UI's "Copy Link" / address-bar fragment frequently
+  // yields a path-only URL (no scheme/host). Previously `new URL(urlStr)` threw,
+  // `applyUrlDefaults` silently caught and dropped every URL-derived field, and
+  // URL-aware tools (harness_diagnose, harness_get, harness_execute, ...) failed
+  // with "execution_id or pipeline_id is required" -- the highest-volume agent
+  // error in production. Using `new URL(urlStr, base)` resolves path-only inputs
+  // against a placeholder host that the parser never reads.
+
+  it("parses a path-only execution URL (no scheme/host)", () => {
+    const result = parseHarnessUrl(
+      "/ng/account/MTEyYzc0MTctMzIyYi00ZT/module/ci/orgs/merdeploy/projects/econn/pipelines/build_jdk11_github_clickops/executions/2QvnKmYBRK2H5oC37YjdMQ/pipeline?connectorRef=org.org_ghec_con&repoName=harn-merdeploy&branch=vk_sandbox&storeType=REMOTE",
+    );
+    expect(result.account_id).toBe("MTEyYzc0MTctMzIyYi00ZT");
+    expect(result.module).toBe("ci");
+    expect(result.org_id).toBe("merdeploy");
+    expect(result.project_id).toBe("econn");
+    expect(result.resource_type).toBe("execution");
+    expect(result.pipeline_id).toBe("build_jdk11_github_clickops");
+    expect(result.execution_id).toBe("2QvnKmYBRK2H5oC37YjdMQ");
+    expect(result.resource_id).toBe("2QvnKmYBRK2H5oC37YjdMQ");
+    expect(result.connector_ref).toBe("org.org_ghec_con");
+    expect(result.repo_name).toBe("harn-merdeploy");
+    expect(result.branch).toBe("vk_sandbox");
+    expect(result.store_type).toBe("REMOTE");
+  });
+
+  it("parses a path-only pipeline-studio URL", () => {
+    const result = parseHarnessUrl(
+      "/ng/account/NjU5NDczNGEtMTE1My00Mz/all/orgs/default/projects/ItsnotyouItstheskill/pipelines/slack_channel_summarizer_pipeline/pipeline-studio/?storeType=INLINE",
+    );
+    expect(result.account_id).toBe("NjU5NDczNGEtMTE1My00Mz");
+    expect(result.org_id).toBe("default");
+    expect(result.project_id).toBe("ItsnotyouItstheskill");
+    expect(result.resource_type).toBe("pipeline");
+    expect(result.pipeline_id).toBe("slack_channel_summarizer_pipeline");
+    expect(result.resource_id).toBe("slack_channel_summarizer_pipeline");
+    expect(result.store_type).toBe("INLINE");
+  });
+
+  it("parses a path-only URL with stage_id query param", () => {
+    const result = parseHarnessUrl(
+      "/ng/account/7i5sLmXBSne4D8bPq52bSw/all/orgs/et/projects/nabserv/pipelines/haproxyflag/executions/dqx6P6SZQbaLj2Qpdg3eLA/pipeline?stage=41EbIRIoRimtbDmHQL-T4A",
+    );
+    expect(result.execution_id).toBe("dqx6P6SZQbaLj2Qpdg3eLA");
+    expect(result.pipeline_id).toBe("haproxyflag");
+    expect(result.stage_id).toBe("41EbIRIoRimtbDmHQL-T4A");
+  });
+
+  it("is host-agnostic: absolute URL from a non-app.harness.io cluster parses identically to its path-only form", () => {
+    const path =
+      "/ng/account/abc123/all/orgs/default/projects/myProject/pipelines/myPipeline/executions/exec123/pipeline";
+    const absoluteAlt = `https://app.eu1.harness.io${path}`;
+    const absoluteSelfManaged = `https://harness.acmecorp.com${path}`;
+
+    const fromPath = parseHarnessUrl(path);
+    const fromAlt = parseHarnessUrl(absoluteAlt);
+    const fromSelfManaged = parseHarnessUrl(absoluteSelfManaged);
+
+    expect(fromPath).toEqual(fromAlt);
+    expect(fromPath).toEqual(fromSelfManaged);
+    expect(fromPath.execution_id).toBe("exec123");
+    expect(fromPath.pipeline_id).toBe("myPipeline");
+  });
 });
 
 describe("applyUrlDefaults", () => {
@@ -268,10 +333,61 @@ describe("applyUrlDefaults", () => {
     expect(result).toEqual(args);
   });
 
-  it("returns args unchanged for invalid URL", () => {
+  it("returns args unchanged for an unparseable / non-Harness URL", () => {
+    // `parseHarnessUrl` now uses a placeholder base host so path-only inputs
+    // succeed (see parseHarnessUrl regression tests). A truly unparseable input
+    // like "not-a-url" still yields no mergeable fields -- the input becomes a
+    // single-segment path with no `orgs` / `projects` / resource markers -- so
+    // args come back unchanged.
     const args = { resource_type: "pipeline" };
     const result = applyUrlDefaults(args as Record<string, unknown>, "not-a-url");
     expect(result).toEqual(args);
+  });
+
+  it("merges URL-derived values from a path-only URL (no scheme/host)", () => {
+    const args = {};
+    const result = applyUrlDefaults(
+      args as Record<string, unknown>,
+      "/ng/account/abc/all/orgs/myOrg/projects/myProject/pipelines/myPipeline/executions/exec123/pipeline",
+    );
+    expect(result.org_id).toBe("myOrg");
+    expect(result.project_id).toBe("myProject");
+    expect(result.resource_type).toBe("execution");
+    expect(result.execution_id).toBe("exec123");
+    expect(result.pipeline_id).toBe("myPipeline");
+  });
+
+  it("merges remote Git query params from a Harness URL", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/module/ci/orgs/myOrg/projects/myProject/pipelines/myPipeline/executions/exec123/pipeline?connectorRef=account.git_connector&repoName=ExampleOrg%2Fexample-service&branch=feature-branch&storeType=REMOTE",
+    );
+
+    expect(result.pipeline_id).toBe("myPipeline");
+    expect(result.execution_id).toBe("exec123");
+    expect(result.connector_ref).toBe("account.git_connector");
+    expect(result.repo_name).toBe("ExampleOrg/example-service");
+    expect(result.branch).toBe("feature-branch");
+    expect(result.store_type).toBe("REMOTE");
+  });
+
+  it("preserves explicit remote Git params over URL-derived defaults", () => {
+    const result = applyUrlDefaults(
+      {
+        branch: "explicit-branch",
+        store_type: "INLINE",
+        connector_ref: "explicit.connector",
+        repo_name: "explicit/repo",
+      },
+      "https://app.harness.io/ng/account/abc/module/ci/orgs/myOrg/projects/myProject/pipelines/myPipeline/executions/exec123/pipeline?connectorRef=url.connector&repoName=url%2Frepo&branch=url-branch&storeType=REMOTE",
+    );
+
+    expect(result.branch).toBe("explicit-branch");
+    expect(result.store_type).toBe("INLINE");
+    expect(result.connector_ref).toBe("explicit.connector");
+    expect(result.repo_name).toBe("explicit/repo");
+    expect(result.pipeline_id).toBe("myPipeline");
+    expect(result.execution_id).toBe("exec123");
   });
 
   it("does not mutate the original args object", () => {

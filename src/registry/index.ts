@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type Config, resolveProductBaseUrl } from "../config.js";
+import { type Config, resolveFmeApiKey, resolveProductBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { HarnessApiError } from "../utils/errors.js";
 import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec, ResourceScope } from "./types.js";
@@ -44,6 +44,8 @@ import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
 import { aiEvalsToolset } from "./toolsets/ai-evals.js";
+import { iacmToolset } from "./toolsets/iacm.js";
+import { ansibleToolset } from "./toolsets/ansible.js";
 
 const log = createLogger("registry");
 
@@ -153,6 +155,8 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   freezeToolset,
   overridesToolset,
   aiEvalsToolset,
+  iacmToolset,
+  ansibleToolset,
 ];
 
 /** All available toolset names — used by docs generation to discover opt-in toolsets. */
@@ -657,12 +661,16 @@ export class Registry {
 
     // Inject orgIdentifier/projectIdentifier into the body for mutating operations (POST/PUT).
     // Harness NG APIs require these in the body (not just query params) to scope the resource correctly.
-    // If bodyWrapperKey is set (e.g., "connector"), inject inside the wrapper object.
+    // Header-scoped APIs and explicit endpoint exceptions scope through headers/path/query and reject
+    // generic NG scope fields in their API-specific JSON bodies. Multipart bodies carry scope in
+    // query params and must not be mutated as plain JSON.
+    const shouldSkipScopeBodyInjection =
+      spec.skipScopeBodyInjection || spec.headerBasedScoping || def.headerBasedScoping;
     if (
       body &&
       typeof body === "object" &&
       !isFormDataBody(body) &&
-      !spec.skipScopeBodyInjection &&
+      !shouldSkipScopeBodyInjection &&
       (resolvedMethod === "POST" || resolvedMethod === "PUT")
     ) {
       const bodyRecord = body as Record<string, unknown>;
@@ -689,27 +697,20 @@ export class Registry {
       }
     }
 
-    // Validate required fields if bodySchema is defined (plain JSON bodies only).
-    if (spec.bodySchema && body && typeof body === "object" && !Array.isArray(body)) {
-      if (isFormDataBody(body)) {
-        // Multipart — validation is enforced inside the resource bodyBuilder
-      } else {
-        const bodyRecord = body as Record<string, unknown>;
-        const payload =
-          spec.bodyWrapperKey &&
-          bodyRecord[spec.bodyWrapperKey] != null &&
-          typeof bodyRecord[spec.bodyWrapperKey] === "object"
-            ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
-            : bodyRecord;
-        const missing = spec.bodySchema.fields
-          .filter(f => f.required && payload[f.name] === undefined)
-          .map(f => f.name);
-        if (missing.length > 0) {
-          throw new Error(
-            `Missing required fields for ${def.resourceType}: ${missing.join(", ")}. ` +
-            `Use harness_describe(resource_type="${def.resourceType}") to see the schema.`
-          );
-        }
+    // Validate required fields if bodySchema is defined.
+    // When the API body is transformed into a raw array, validate the caller's
+    // canonical object-shaped input body so registry behavior matches harness_describe.
+    // Multipart validation is enforced inside the resource bodyBuilder.
+    if (spec.bodySchema && body && typeof body === "object" && !isFormDataBody(body)) {
+      const payload = this.getBodySchemaValidationPayload(spec, input, body);
+      const missing = spec.bodySchema.fields
+        .filter(f => f.required && payload[f.name] === undefined)
+        .map(f => f.name);
+      if (missing.length > 0) {
+        throw new Error(
+          `Missing required fields for ${def.resourceType}: ${missing.join(", ")}. ` +
+          `Use harness_describe(resource_type="${def.resourceType}") to see the schema.`
+        );
       }
     }
 
@@ -718,7 +719,23 @@ export class Registry {
     const baseUrl = resolveProductBaseUrl(this.config, product);
     const productHeaders: Record<string, string> = { ...spec.headers };
     if (product === "fme") {
-      productHeaders["Authorization"] = `Bearer ${this.config.HARNESS_API_KEY}`;
+      const fmeApiKey = resolveFmeApiKey(this.config);
+      if (!fmeApiKey) {
+        const remediation = this.config.HARNESS_MCP_MODE === "multi-user"
+          ? "Ensure the session x-harness-api-key is an FME-entitled Harness PAT/SAT. " +
+            "Do not configure HARNESS_FME_API_KEY in multi-user mode."
+          : "Ask your Harness administrator to configure an FME/Split Admin credential for hosted MCP, " +
+            "or set HARNESS_FME_API_KEY to a legacy Split admin key or FME-entitled Harness PAT/SAT. " +
+            "Self-hosted sessions may also provide a non-placeholder HARNESS_API_KEY.";
+        throw new HarnessApiError(
+          "FME is not configured or authorized for this MCP session. " +
+          `${remediation} ` +
+          "Hosted OAuth placeholders such as \"dummy\" are not sent to api.split.io.",
+          401,
+          "FME_AUTH_MISSING",
+        );
+      }
+      productHeaders["Authorization"] = `Bearer ${fmeApiKey}`;
     }
 
     const requestOpts = {
@@ -732,6 +749,7 @@ export class Registry {
       ...(product !== "harness" ? { product } : {}),
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
+      ...(!spec.pathBuilder ? { tracing: { route: spec.path } } : {}),
       signal,
     };
 
@@ -1001,6 +1019,27 @@ export class Registry {
     }
 
     return result;
+  }
+
+  private getBodySchemaValidationPayload(
+    spec: EndpointSpec,
+    input: Record<string, unknown>,
+    body: object,
+  ): Record<string, unknown> {
+    if (Array.isArray(body)) {
+      const inputBody = input.body;
+      return inputBody && typeof inputBody === "object" && !Array.isArray(inputBody)
+        ? (inputBody as Record<string, unknown>)
+        : {};
+    }
+
+    const bodyRecord = body as Record<string, unknown>;
+    return spec.bodyWrapperKey &&
+      bodyRecord[spec.bodyWrapperKey] != null &&
+      typeof bodyRecord[spec.bodyWrapperKey] === "object" &&
+      !Array.isArray(bodyRecord[spec.bodyWrapperKey])
+        ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
+        : bodyRecord;
   }
 
   /** Get describe metadata for all enabled resource types (full detail). */

@@ -123,7 +123,7 @@ const ID_FIELDS = {
   chaos_k8s_infrastructure: ["infraID", "identifier"],
   chaos_hub: ["hubID", "identifier"],
   chaos_fault: ["faultID", "identifier"],
-  chaos_network_map: ["mapID", "identifier"],
+  chaos_application_map: ["mapID", "identifier"],
   chaos_guard_condition: ["conditionID", "identifier"],
   chaos_guard_rule: ["ruleID", "identifier"],
   chaos_recommendation: ["recommendationID", "identifier"],

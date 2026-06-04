@@ -1,0 +1,49 @@
+name: Sync Entity YAML Schemas
+
+on:
+  schedule:
+    # Weekly — entity schemas change less often than harness-schema pipeline defs
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  sync-entity-schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Sync entity schemas from Harness NG API
+        run: node scripts/sync-entity-schemas.js
+        env:
+          HARNESS_API_KEY: ${{ secrets.HARNESS_ENTITY_SCHEMA_SYNC_API_KEY }}
+          HARNESS_ACCOUNT_ID: ${{ secrets.HARNESS_ENTITY_SCHEMA_SYNC_ACCOUNT_ID }}
+          HARNESS_ORG: ${{ secrets.HARNESS_ENTITY_SCHEMA_SYNC_ORG }}
+          HARNESS_PROJECT: ${{ secrets.HARNESS_ENTITY_SCHEMA_SYNC_PROJECT }}
+          HARNESS_BASE_URL: ${{ secrets.HARNESS_ENTITY_SCHEMA_SYNC_BASE_URL }}
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore: auto-sync entity yaml schemas"
+          title: "chore: auto-sync entity yaml schemas"
+          body: |
+            Automated entity schema sync from Harness NG `/ng/api/yaml-schema`.
+
+            Uses the reference account PAT configured in repository secrets:
+            - `HARNESS_ENTITY_SCHEMA_SYNC_API_KEY`
+            - `HARNESS_ENTITY_SCHEMA_SYNC_ACCOUNT_ID`
+            - `HARNESS_ENTITY_SCHEMA_SYNC_ORG` (for org/project scope snapshots)
+            - `HARNESS_ENTITY_SCHEMA_SYNC_PROJECT` (for project scope snapshots)
+            - `HARNESS_ENTITY_SCHEMA_SYNC_BASE_URL` (optional)
+
+            Snapshots are vendored under `src/data/schemas/entities/` for CI, offline fallback,
+            and startup cache warm-up. Runtime tool calls still prefer live API fetch when available.
+          branch: chore/sync-entity-schemas
+          delete-branch: true
+          labels: dependencies, schemas

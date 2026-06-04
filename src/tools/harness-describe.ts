@@ -4,6 +4,7 @@ import type { Registry } from "../registry/index.js";
 import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
 import { getExamplesForResource } from "../data/examples/index.js";
+import { describeOutputSchema } from "./output-schemas.js";
 
 export function registerDescribeTool(server: McpServer, registry: Registry): void {
   const allTypes = registry.getAllResourceTypes() as [string, ...string[]];
@@ -18,9 +19,12 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
         toolset: z.enum(allToolsets).describe("Filter to a specific toolset").optional(),
         search_term: z.string().describe("Search for resource types by keyword (matches type name, display name, toolset, description)").optional(),
       },
+      outputSchema: describeOutputSchema,
       annotations: {
         title: "Describe Harness Resources",
         readOnlyHint: true,
+        destructiveHint: false,
+        // Local registry metadata only — no external API call
         openWorldHint: false,
       },
     },
@@ -48,6 +52,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
               operation: op,
               method: spec.method,
               description: spec.description,
+              paramsSchema: spec.paramsSchema ?? undefined,
               bodySchema: spec.bodySchema ?? undefined,
             })),
             executeActions: def.executeActions
@@ -55,6 +60,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
                   action,
                   method: spec.method,
                   description: spec.actionDescription,
+                  paramsSchema: spec.paramsSchema ?? undefined,
                   bodySchema: spec.bodySchema ?? undefined,
                   ...(spec.inputExpansions?.length
                     ? { inputShorthands: buildShorthands(spec.inputExpansions) }

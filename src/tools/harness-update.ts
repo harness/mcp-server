@@ -8,7 +8,8 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
-import { resourceTypeSchema } from "./input-schemas.js";
+import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
+import { updateOutputSchema } from "./output-schemas.js";
 
 export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
   const updatableTypes = registry.getTypesForOperation("update");
@@ -21,18 +22,21 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         resource_type: resourceTypeSchema(updatableTypes).describe("The type of resource to update"),
         resource_id: z.string().describe("The identifier of the resource to update"),
         url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
+        resource_scope: resourceScopeSchema,
         body: z.union([
           z.record(z.string(), z.unknown()),
           z.string(),
         ]).describe("The updated resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object)"),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        confirm: z.boolean().describe("Set to true to confirm the operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP).").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional identifiers (e.g. pipeline_id for triggers/input sets, version_label for templates).").optional(),
       },
+      outputSchema: updateOutputSchema,
       annotations: {
         title: "Update Harness Resource",
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: true,
         idempotentHint: true,
         openWorldHint: true,
       },
@@ -55,11 +59,14 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           message: `Update ${args.resource_type} "${args.resource_id}"?\n\n${bodyPreview}`,
           risk,
           autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
+          callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
-          return errorResult(`Operation ${elicit.reason} by user.`);
+          return errorResult(
+            `Operation ${elicit.reason} by user. Hint: if your client does not support interactive confirmation, pass confirm: true to proceed.`,
+          );
         }
-        const { params, body, ...rest } = args;
+        const { params, body, confirm: _confirm, ...rest } = args;
         const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
         const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url);
         const coercedParams = coerceRecord(params);

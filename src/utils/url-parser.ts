@@ -23,6 +23,10 @@ export interface ParsedHarnessUrl {
   step_id?: string;
   stage_id?: string;
   stage_execution_id?: string;
+  branch?: string;
+  store_type?: string;
+  connector_ref?: string;
+  repo_name?: string;
 }
 
 /** Union of ParsedHarnessUrl fields that RESOURCE_SEGMENTS can write to. */
@@ -101,6 +105,16 @@ const STRUCTURAL = new Set([
 ]);
 
 /**
+ * Placeholder base used only to satisfy `new URL()` when the input is a path-only
+ * string like `/ng/account/<id>/...`. parseHarnessUrl never reads `url.host` /
+ * `url.origin` / `url.protocol`; it walks `url.pathname` and `url.searchParams`
+ * only. Using an explicitly fake host makes it clear in code review that the
+ * host is not consulted and the parser is cluster-agnostic (prod0 / eu1 /
+ * harness0 / self-managed / vanity hosts all parse identically).
+ */
+const PLACEHOLDER_BASE = "https://harness.invalid";
+
+/**
  * Parse a Harness UI URL and extract identifiers.
  *
  * Handles patterns like:
@@ -110,9 +124,11 @@ const STRUCTURAL = new Set([
  * - .../all/cd/orgs/{org}/projects/{project}/...
  * - .../all/settings/connectors/{id}
  * - Vanity domains (e.g. ancestry.harness.io)
+ * - Path-only URLs (e.g. `/ng/account/<id>/...`) — the Harness UI's copy-link
+ *   actions sometimes produce these.
  */
 export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
-  const url = new URL(urlStr);
+  const url = new URL(urlStr, PLACEHOLDER_BASE);
   const segments = url.pathname.split("/").filter(Boolean);
 
   const result: ParsedHarnessUrl = { account_id: "" };
@@ -212,6 +228,18 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
   const commentId = url.searchParams.get("commentId");
   if (commentId) result.comment_id = commentId;
 
+  const branch = url.searchParams.get("branch");
+  if (branch) result.branch = branch;
+
+  const storeType = url.searchParams.get("storeType");
+  if (storeType) result.store_type = storeType;
+
+  const connectorRef = url.searchParams.get("connectorRef");
+  if (connectorRef) result.connector_ref = connectorRef;
+
+  const repoName = url.searchParams.get("repoName");
+  if (repoName) result.repo_name = repoName;
+
   return result;
 }
 
@@ -234,6 +262,10 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "step_id",
   "stage_id",
   "stage_execution_id",
+  "branch",
+  "store_type",
+  "connector_ref",
+  "repo_name",
 ];
 
 export interface ApplyUrlDefaultsOptions {
