@@ -53,7 +53,14 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         const primaryField = identFields.length > 1
           ? identFields[identFields.length - 1]!
           : identFields[0];
-        const resolvedResourceId = asString(input.resource_id) ?? (primaryField ? asString(input[primaryField]) : undefined);
+        const fromResourceId = asString(input.resource_id);
+        const fromPrimaryField = primaryField ? asString(input[primaryField]) : undefined;
+        if (fromResourceId && fromPrimaryField && fromResourceId !== fromPrimaryField) {
+          return errorResult(
+            `Conflicting identifiers: resource_id/url gives "${fromResourceId}" but params.${primaryField} gives "${fromPrimaryField}". Provide one or ensure they match.`,
+          );
+        }
+        const resolvedResourceId = fromResourceId ?? fromPrimaryField;
         if (!resolvedResourceId) {
           return errorResult("resource_id is required for harness_delete unless url contains the resource ID or params includes the resource-specific ID field.");
         }

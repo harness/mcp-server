@@ -798,6 +798,19 @@ describe("harness_update", () => {
     expect(schema.inputSchema.confirm?.description).toContain("Set to true");
     expect(schema.inputSchema.params?.description).toContain("Additional identifiers");
   });
+
+  it("rejects conflicting resource_id from URL vs params", async () => {
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      url: "https://app.harness.io/ng/account/acc/module/ci/orgs/default/projects/proj/pipelines/pipe-from-url",
+      params: { pipeline_id: "pipe-from-params" },
+      body: { name: "test" },
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
+  });
 });
 
 describe("harness_update — pull request", () => {
@@ -1026,6 +1039,24 @@ describe("harness_delete", () => {
     expect(schema.inputSchema.project_id?.description).toContain("Project identifier");
     expect(schema.inputSchema.confirm?.description).toContain("Set to true");
     expect(schema.inputSchema.params?.description).toContain("Additional identifiers");
+  });
+
+  it("rejects conflicting resource_id from URL vs params", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const conflictServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(conflictServer, registry, client);
+
+    const result = await conflictServer.call("harness_delete", {
+      resource_type: "pipeline",
+      url: "https://app.harness.io/ng/account/acc/module/ci/orgs/default/projects/proj/pipelines/pipe-from-url",
+      params: { pipeline_id: "pipe-from-params" },
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
 

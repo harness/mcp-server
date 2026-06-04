@@ -182,8 +182,7 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     if (
       next &&
       !RESOURCE_SEGMENTS[next] &&
-      !STRUCTURAL.has(next) &&
-      !MODULES.has(next)
+      !STRUCTURAL.has(next)
     ) {
       id = decodeURIComponent(next);
       i++; // skip past the ID segment
