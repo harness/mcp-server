@@ -6,7 +6,7 @@
 - [x] Add failing regression coverage for PR params metadata and `repo_identifier` alias behavior
 - [x] Implement the minimal metadata/alias fix
 - [x] Run focused and broader verification
-- [ ] Commit, push, open PR, and reply in the original Slack thread
+- [x] Commit, push, open PR, and reply in the original Slack thread
 
 ### Plan
 - Keep the fix scoped to Harness Code pull request metadata and generic path-param resolution.
