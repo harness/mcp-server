@@ -23,6 +23,17 @@ const REPO_PR_PARAMS: ParamsSchema = {
   ],
 };
 
+const REPO_PR_COMMENT_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_PR_PARAMS.fields,
+    {
+      name: "comment_id",
+      required: true,
+      description: "Pull request comment ID",
+    },
+  ],
+};
+
 function bodyRecord(input: Record<string, unknown>): Record<string, unknown> | undefined {
   const body = input.body;
   return body && typeof body === "object" && !Array.isArray(body)
@@ -347,7 +358,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
-          paramsSchema: REPO_PR_PARAMS,
+          paramsSchema: REPO_PR_COMMENT_PARAMS,
           description:
             "Update an existing pull request comment. Body fields: text (required).",
           bodySchema: {
@@ -367,7 +378,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             comment_id: "pullreqCommentId",
           },
           responseExtractor: passthrough,
-          paramsSchema: REPO_PR_PARAMS,
+          paramsSchema: REPO_PR_COMMENT_PARAMS,
           description: "Delete a pull request comment",
         },
       },

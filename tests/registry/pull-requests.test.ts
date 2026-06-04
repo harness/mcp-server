@@ -146,6 +146,30 @@ describe("paramsSchema on pull request resources", () => {
 
     expect(issues, issues.join("\n")).toEqual([]);
   });
+
+  it("documents every declared path param when paramsSchema is present", () => {
+    const issues: string[] = [];
+
+    for (const resourceType of ["pull_request", "pr_reviewer", "pr_comment", "pr_check", "pr_activity"]) {
+      const def = registry.getResource(resourceType);
+      const specs = [
+        ...Object.entries(def.operations),
+        ...Object.entries(def.executeActions ?? {}),
+      ] as [string, EndpointSpec][];
+
+      for (const [name, spec] of specs) {
+        if (!spec.paramsSchema || !spec.pathParams) continue;
+        const documented = new Set(spec.paramsSchema.fields.map((field) => field.name));
+        for (const pathParam of Object.keys(spec.pathParams)) {
+          if (!documented.has(pathParam)) {
+            issues.push(`${resourceType}.${name}: paramsSchema missing path param ${pathParam}`);
+          }
+        }
+      }
+    }
+
+    expect(issues, issues.join("\n")).toEqual([]);
+  });
 });
 
 describe("repo_identifier alias for pull request repo_id", () => {
