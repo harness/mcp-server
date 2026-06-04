@@ -101,6 +101,22 @@ describe("pull_request registry mappings", () => {
       body: { state: "closed" },
     }));
   });
+
+  it("requires repo_id for create instead of accepting repo_identifier", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { number: 1 } });
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "pull_request", "create", {
+        repo_identifier: "harness-ai-agent",
+        body: { title: "fix: redact secrets", source_branch: "fix/redact", target_branch: "main" },
+        org_id: "PROD",
+        project_id: "Data_Platform",
+      }),
+    ).rejects.toThrow(/repo_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("paramsSchema on pull_request operations", () => {
@@ -147,54 +163,6 @@ describe("paramsSchema on pull_request operations", () => {
       }
     }
     expect(issues, issues.join("\n")).toEqual([]);
-  });
-});
-
-describe("repo_identifier alias for pull_request", () => {
-  it("accepts repo_identifier in place of repo_id for create", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
-    const mockRequest = vi.fn().mockResolvedValue({ data: { number: 1 } });
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "pull_request", "create", {
-      repo_identifier: "harness-ai-agent",  // alias instead of repo_id
-      body: { title: "fix: redact secrets", source_branch: "fix/redact", target_branch: "main" },
-      org_id: "PROD",
-      project_id: "Data_Platform",
-    });
-
-    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
-      method: "POST",
-      path: "/code/api/v1/repos/harness-ai-agent/pullreq",
-    }));
-  });
-
-  it("accepts repo_identifier in place of repo_id for update (pathBuilder path)", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
-    const mockRequest = vi.fn().mockResolvedValue({ data: { number: 7, title: "updated" } });
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "pull_request", "update", {
-      repo_identifier: "harness-ai-agent",  // alias
-      pr_number: "7",
-      body: { title: "updated" },
-    });
-
-    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
-      method: "PATCH",
-      path: "/code/api/v1/repos/harness-ai-agent/pullreq/7",
-    }));
-  });
-
-  it("throws a clear error when both repo_id and repo_identifier are absent", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
-    const client = makeClient(vi.fn());
-
-    await expect(
-      registry.dispatch(client, "pull_request", "create", {
-        body: { title: "no repo", source_branch: "feat/x", target_branch: "main" },
-      }),
-    ).rejects.toThrow(/repo_id/);
   });
 });
 

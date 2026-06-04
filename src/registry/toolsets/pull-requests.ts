@@ -26,11 +26,8 @@ function pullRequestState(input: Record<string, unknown>): "open" | "closed" | u
   return state === "open" || state === "closed" ? state : undefined;
 }
 
-function requiredPathPart(input: Record<string, unknown>, field: string, ...aliases: string[]): string {
-  let value = input[field];
-  for (const alias of aliases) {
-    if (value === undefined || value === "") value = input[alias];
-  }
+function requiredPathPart(input: Record<string, unknown>, field: string): string {
+  const value = input[field];
   if (value === undefined || value === "") {
     throw new Error(`Missing required field "${field}" for pull_request.`);
   }
@@ -40,7 +37,7 @@ function requiredPathPart(input: Record<string, unknown>, field: string, ...alia
 const PR_METADATA_FIELDS = ["title", "description"];
 
 function pullRequestUpdatePath(input: Record<string, unknown>): string {
-  const repoIdentifier = requiredPathPart(input, "repo_id", "repo_identifier");
+  const repoIdentifier = requiredPathPart(input, "repo_id");
   const prNumber = requiredPathPart(input, "pr_number");
   const state = pullRequestState(input);
   if (state) {
