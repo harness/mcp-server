@@ -1409,6 +1409,32 @@ describe("harness_describe", () => {
     expect(data.scopeHint).toContain("resource_scope='account'");
   });
 
+  it("exposes paramsSchema for pull request operations and execute actions", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const pullRequestServer = makeMcpServer();
+    const { registerDescribeTool } = await import("../../src/tools/harness-describe.js");
+    registerDescribeTool(pullRequestServer, registry);
+
+    const result = await pullRequestServer.call("harness_describe", { resource_type: "pull_request" });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as {
+      operations: Array<{ operation: string; paramsSchema?: { fields: Array<{ name: string; required: boolean }> } }>;
+      executeActions?: Array<{ action: string; paramsSchema?: { fields: Array<{ name: string; required: boolean }> } }>;
+    };
+
+    const create = data.operations.find((operation) => operation.operation === "create");
+    expect(create?.paramsSchema?.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "repo_id", required: true }),
+    ]));
+
+    const merge = data.executeActions?.find((action) => action.action === "merge");
+    expect(merge?.paramsSchema?.fields).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: "repo_id", required: true }),
+      expect.objectContaining({ name: "pr_number", required: true }),
+    ]));
+  });
+
   it("returns error hint for unknown resource_type", async () => {
     const result = await server.call("harness_describe", { resource_type: "nonexistent" });
     expect(result.isError).toBeUndefined(); // describe intentionally doesn't set isError

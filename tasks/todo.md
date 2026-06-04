@@ -1,5 +1,23 @@
 # Harness MCP Server — Task Tracking
 
+## Slack Bug Triage: Pull Request Repo Param Discovery (2026-06-04)
+- [x] Read the Slack report thread and attached screenshot
+- [x] Trace pull request parameter discovery and path resolution
+- [ ] Add failing regression coverage for PR params metadata and `repo_identifier` alias behavior
+- [ ] Implement the minimal metadata/alias fix
+- [ ] Run focused and broader verification
+- [ ] Commit, push, open PR, and reply in the original Slack thread
+
+### Plan
+- Keep the fix scoped to Harness Code pull request metadata and generic path-param resolution.
+- Add a serializable `paramsSchema` alongside existing operation `bodySchema` so `harness_describe(resource_type="pull_request")` can tell agents to pass `repo_id` and `pr_number` through `params`.
+- Annotate `pull_request`, `pr_reviewer`, `pr_comment`, `pr_check`, and `pr_activity` operations/actions with the required PR params.
+- Add a narrow compatibility path so `repo_identifier` can satisfy a `repo_id` path parameter when an agent has already guessed that name.
+- Verify with focused pull-request/describe tests, typecheck, and broader tests where feasible.
+
+### Review
+- Pending.
+
 ## Vitest Security Upgrade (2026-06-03)
 - [x] Confirm the affected local Vitest version and patched target
 - [x] Upgrade `vitest` dev dependency to the patched 4.1 line

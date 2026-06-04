@@ -538,7 +538,7 @@ export class Registry {
       path = spec.path;
       if (spec.pathParams) {
         for (const [inputKey, pathPlaceholder] of Object.entries(spec.pathParams)) {
-          let value = input[inputKey];
+          let value = this.getInputValue(input, spec, inputKey);
           if (value === undefined || value === "") {
             // Default scope placeholders from config for project/org-scoped resources
             if (pathPlaceholder === "org" && shouldUseOrg(pathDefaultScope)) {
@@ -992,6 +992,19 @@ export class Registry {
     }
 
     return result;
+  }
+
+  private getInputValue(input: Record<string, unknown>, spec: EndpointSpec, inputKey: string): unknown {
+    let value = input[inputKey];
+    if (value !== undefined && value !== "") return value;
+
+    const param = spec.paramsSchema?.fields.find((field) => field.name === inputKey);
+    for (const alias of param?.aliases ?? []) {
+      value = input[alias];
+      if (value !== undefined && value !== "") return value;
+    }
+
+    return value;
   }
 
   private getBodySchemaValidationPayload(

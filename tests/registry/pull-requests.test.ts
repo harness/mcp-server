@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
+import type { EndpointSpec } from "../../src/registry/types.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -98,6 +99,92 @@ describe("pull_request registry mappings", () => {
       method: "POST",
       path: "/code/api/v1/repos/rc_tools/pullreq/42/state",
       body: { state: "closed" },
+    }));
+  });
+});
+
+describe("paramsSchema on pull request resources", () => {
+  const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+
+  it("documents repo_id for every pull_request operation and action", () => {
+    const def = registry.getResource("pull_request");
+    const issues: string[] = [];
+    const specs = [
+      ...Object.entries(def.operations),
+      ...Object.entries(def.executeActions ?? {}),
+    ] as [string, EndpointSpec][];
+
+    for (const [name, spec] of specs) {
+      const repoIdField = spec.paramsSchema?.fields.find((field) => field.name === "repo_id");
+      if (!repoIdField) {
+        issues.push(`pull_request.${name}: missing repo_id paramsSchema field`);
+      } else if (!repoIdField.required) {
+        issues.push(`pull_request.${name}: repo_id paramsSchema field should be required`);
+      }
+    }
+
+    expect(issues, issues.join("\n")).toEqual([]);
+  });
+
+  it("documents params for nested PR resources", () => {
+    const issues: string[] = [];
+
+    for (const resourceType of ["pr_reviewer", "pr_comment", "pr_check", "pr_activity"]) {
+      const def = registry.getResource(resourceType);
+      const specs = [
+        ...Object.entries(def.operations),
+        ...Object.entries(def.executeActions ?? {}),
+      ] as [string, EndpointSpec][];
+
+      for (const [name, spec] of specs) {
+        const fields = spec.paramsSchema?.fields.map((field) => field.name) ?? [];
+        if (!fields.includes("repo_id") || !fields.includes("pr_number")) {
+          issues.push(`${resourceType}.${name}: expected repo_id and pr_number paramsSchema fields`);
+        }
+      }
+    }
+
+    expect(issues, issues.join("\n")).toEqual([]);
+  });
+});
+
+describe("repo_identifier alias for pull request repo_id", () => {
+  it("accepts repo_identifier in place of repo_id for create", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { number: 1 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "create", {
+      repo_identifier: "harness-ai-agent",
+      body: {
+        title: "fix: redact secrets",
+        source_branch: "fix/redact",
+        target_branch: "main",
+      },
+      org_id: "PROD",
+      project_id: "Data_Platform",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/harness-ai-agent/pullreq",
+    }));
+  });
+
+  it("accepts repo_identifier in place of repo_id for update paths built dynamically", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { number: 7, title: "updated" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "update", {
+      repo_identifier: "harness-ai-agent",
+      pr_number: "7",
+      body: { title: "updated" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "PATCH",
+      path: "/code/api/v1/repos/harness-ai-agent/pullreq/7",
     }));
   });
 });

@@ -1,5 +1,27 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ParamsSchema, ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
+
+const REPO_PARAMS: ParamsSchema = {
+  fields: [
+    {
+      name: "repo_id",
+      required: true,
+      description: "Repository slug (for example, \"my-repo\"). Use repo_id, not repo_identifier.",
+      aliases: ["repo_identifier"],
+    },
+  ],
+};
+
+const REPO_PR_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_PARAMS.fields,
+    {
+      name: "pr_number",
+      required: true,
+      description: "Pull request number",
+    },
+  ],
+};
 
 function bodyRecord(input: Record<string, unknown>): Record<string, unknown> | undefined {
   const body = input.body;
@@ -13,8 +35,11 @@ function pullRequestState(input: Record<string, unknown>): "open" | "closed" | u
   return state === "open" || state === "closed" ? state : undefined;
 }
 
-function requiredPathPart(input: Record<string, unknown>, field: string): string {
-  const value = input[field];
+function requiredPathPart(input: Record<string, unknown>, field: string, aliases: string[] = []): string {
+  let value = input[field];
+  for (const alias of aliases) {
+    if (value === undefined || value === "") value = input[alias];
+  }
   if (value === undefined || value === "") {
     throw new Error(`Missing required field "${field}" for pull_request.`);
   }
@@ -24,7 +49,7 @@ function requiredPathPart(input: Record<string, unknown>, field: string): string
 const PR_METADATA_FIELDS = ["title", "description"];
 
 function pullRequestUpdatePath(input: Record<string, unknown>): string {
-  const repoIdentifier = requiredPathPart(input, "repo_id");
+  const repoIdentifier = requiredPathPart(input, "repo_id", ["repo_identifier"]);
   const prNumber = requiredPathPart(input, "pr_number");
   const state = pullRequestState(input);
   if (state) {
@@ -86,6 +111,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "List pull requests for a repository",
+          paramsSchema: REPO_PARAMS,
         },
         get: {
           method: "GET",
@@ -97,6 +123,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Get pull request details",
+          paramsSchema: REPO_PR_PARAMS,
         },
         create: {
           method: "POST",
@@ -105,6 +132,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           pathParams: { repo_id: "repoIdentifier" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
+          paramsSchema: REPO_PARAMS,
           description:
             "Create a pull request. Body fields: title (required), source_branch (required), target_branch (required), description.",
           bodySchema: {
@@ -130,6 +158,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: pullRequestUpdateBody,
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           description:
             "Update a pull request. Body fields: title, description, state (open/closed). State changes use the dedicated Harness Code PR state endpoint.",
           bodySchema: {
@@ -154,6 +183,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: () => ({ state: "closed" }),
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           actionDescription:
             "Close a pull request by setting its state to closed.",
           bodySchema: {
@@ -171,6 +201,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: (input) => input.body ?? {},
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           actionDescription:
             "Merge a pull request. Body fields: method (merge/squash/rebase/fast-forward), source_sha, delete_source_branch (boolean), dry_run (boolean).",
           bodySchema: {
@@ -205,6 +236,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "List reviewers assigned to a pull request",
+          paramsSchema: REPO_PR_PARAMS,
         },
         create: {
           method: "POST",
@@ -216,6 +248,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           description:
             "Add a reviewer to a pull request. Body fields: reviewer_id (required).",
           bodySchema: {
@@ -237,6 +270,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           actionDescription:
             "Submit a review decision. Body fields: decision (required — 'approved' or 'changereq'), commit_sha (optional — SHA reviewed against).",
           bodySchema: {
@@ -287,6 +321,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             return b;
           },
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           description:
             "Add a comment to a pull request. Body fields: text (required). For inline code comments, also include: path, line_new OR line_old (line number on the new or old side of the diff), source_commit_sha, target_commit_sha.",
           bodySchema: {
@@ -312,6 +347,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           description:
             "Update an existing pull request comment. Body fields: text (required).",
           bodySchema: {
@@ -331,6 +367,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             comment_id: "pullreqCommentId",
           },
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           description: "Delete a pull request comment",
         },
       },
@@ -353,6 +390,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             pr_number: "prNumber",
           },
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           description: "List status checks for a pull request",
         },
       },
@@ -391,6 +429,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             limit: "limit",
           },
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           description: "List activities for a pull request. Use kind=comment to get only comments. This is the only way to read PR comments (the /comments endpoint is POST-only).",
         },
       },

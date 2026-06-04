@@ -177,6 +177,25 @@ export interface BodySchema {
 }
 
 /**
+ * Schema for path/query params passed through a generic tool's `params` object.
+ * This is advisory metadata surfaced by harness_describe so agents know the
+ * exact field names required outside the request body.
+ */
+export interface ParamsSchema {
+  /** The params this operation requires or accepts */
+  fields: Array<{
+    /** Field name as used in the `params` argument (e.g. "repo_id", "pr_number") */
+    name: string;
+    /** Whether this param is required for the operation to succeed */
+    required: boolean;
+    /** Brief description shown to agents */
+    description: string;
+    /** Backward-compatible names accepted by the dispatcher when the canonical field is absent */
+    aliases?: string[];
+  }>;
+}
+
+/**
  * Descriptor for a filter field that can be used in list operations.
  */
 export interface FilterFieldSpec {
@@ -250,6 +269,11 @@ export interface EndpointSpec {
   description?: string;
   /** Optional body schema for write operations — exposed via harness_describe */
   bodySchema?: BodySchema;
+  /**
+   * Optional params schema for path/query identifiers — exposed via
+   * harness_describe so agents know what to pass in generic tool `params`.
+   */
+  paramsSchema?: ParamsSchema;
   /**
    * When the bodyBuilder wraps user fields inside a single key
    * (e.g. `{ project: { identifier, name } }`), set this to the wrapper key
