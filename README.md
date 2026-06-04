@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 207 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 208 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,8 +8,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 207 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 33 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
+- **11 tools, 208 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 34 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **32 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -1082,7 +1082,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-207 resource types organized across 33 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+208 resource types organized across 34 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1210,6 +1210,16 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 | `artifact`         | x    |     |        |        |        |                 |
 | `artifact_version` | x    |     |        |        |        |                 |
 | `artifact_file`    | x    |     |        |        |        |                 |
+
+
+### File Store
+
+
+| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
+| ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `file_store`  | x    | x   | x      | x      | x      | `list_children` |
+
+`file_store` create/update operations convert the JSON `body` into Harness File Store multipart form data. For files, pass `content` or valid `content_base64`; for folders, omit content fields. `list_children` accepts `resource_id` plus `folder_name`, or a full FileStoreNode `body`.
 
 
 ### Templates
@@ -1582,7 +1592,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, 33 of 34 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
+By default, 34 of 35 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 
@@ -1638,6 +1648,7 @@ Available toolset names:
 | `delegates`             | delegate, delegate_token                                                                                                                                                                                                                                                                        |
 | `repositories`          | repository, branch, commit, file_content, tag, repo_rule, space_rule                                                                                                                                                                                                                            |
 | `registries`            | registry, artifact, artifact_version, artifact_file                                                                                                                                                                                                                                             |
+| `file_store`            | file_store                                                                                                                                                                                                                                                                                      |
 | `templates`             | template                                                                                                                                                                                                                                                                                        |
 | `dashboards`            | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
 | `idp`                   | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc                                                                                                                                                                           |
@@ -1676,8 +1687,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  33 Toolsets      |      (data files, not code)
-                |  207 Resource Types|
+                |  34 Toolsets      |      (data files, not code)
+                |  208 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+

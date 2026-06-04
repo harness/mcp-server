@@ -52,6 +52,22 @@ describe("buildFileStoreMultipartBody", () => {
     expect(fd.get("content")).toBeInstanceOf(Blob);
   });
 
+  it("rejects malformed base64 content", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "bad.bin",
+            type: "FILE",
+            parent_identifier: "Root",
+            content_base64: "not-base64",
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/valid base64/);
+  });
+
   it("uses file_store_id from input for update identifier", () => {
     const fd = buildFileStoreMultipartBody(
       {
@@ -65,6 +81,21 @@ describe("buildFileStoreMultipartBody", () => {
       "update",
     );
     expect(fd.get("identifier")).toBe("node123");
+  });
+
+  it("requires an explicit parent identifier on update", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          file_store_id: "node123",
+          body: {
+            name: "renamed",
+            type: "FOLDER",
+          },
+        },
+        "update",
+      ),
+    ).toThrow(/parent_identifier/);
   });
 
   it("rejects oversized base64 content", () => {
@@ -111,6 +142,20 @@ describe("buildFolderNodesBody", () => {
 
   it("builds node from shorthand folder_identifier + folder_name", () => {
     const result = buildFolderNodesBody({ folder_identifier: "f1", folder_name: "scripts" }) as Record<string, unknown>;
+    expect(result.identifier).toBe("f1");
+    expect(result.name).toBe("scripts");
+    expect(result.type).toBe("FOLDER");
+  });
+
+  it("builds node from generic file_store_id mapping + folder_name", () => {
+    const result = buildFolderNodesBody({ file_store_id: "f1", folder_name: "scripts" }) as Record<string, unknown>;
+    expect(result.identifier).toBe("f1");
+    expect(result.name).toBe("scripts");
+    expect(result.type).toBe("FOLDER");
+  });
+
+  it("builds node from resource_id fallback + folder_name", () => {
+    const result = buildFolderNodesBody({ resource_id: "f1", folder_name: "scripts" }) as Record<string, unknown>;
     expect(result.identifier).toBe("f1");
     expect(result.name).toBe("scripts");
     expect(result.type).toBe("FOLDER");

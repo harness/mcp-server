@@ -22,6 +22,61 @@ function appendPart(fd: FormData, key: string, value: unknown): void {
   fd.append(key, JSON.stringify(value));
 }
 
+function normalizeBase64Content(value: string): string {
+  const normalized = value.replace(/\s+/g, "");
+  if (normalized.length === 0) {
+    throw new Error("body.content_base64 must not be empty.");
+  }
+  return normalized;
+}
+
+function isBase64Char(charCode: number): boolean {
+  return (
+    (charCode >= 65 && charCode <= 90) ||
+    (charCode >= 97 && charCode <= 122) ||
+    (charCode >= 48 && charCode <= 57) ||
+    charCode === 43 ||
+    charCode === 47
+  );
+}
+
+function assertValidBase64Content(normalizedBase64: string): void {
+  if (normalizedBase64.length % 4 !== 0) {
+    throw new Error("body.content_base64 must be valid base64.");
+  }
+
+  let paddingStart = normalizedBase64.length;
+  for (let i = 0; i < normalizedBase64.length; i += 1) {
+    const charCode = normalizedBase64.charCodeAt(i);
+    if (charCode === 61) {
+      paddingStart = i;
+      break;
+    }
+    if (!isBase64Char(charCode)) {
+      throw new Error("body.content_base64 must be valid base64.");
+    }
+  }
+
+  const paddingLength = normalizedBase64.length - paddingStart;
+  if (paddingLength > 2) {
+    throw new Error("body.content_base64 must be valid base64.");
+  }
+  for (let i = paddingStart; i < normalizedBase64.length; i += 1) {
+    if (normalizedBase64.charCodeAt(i) !== 61) {
+      throw new Error("body.content_base64 must be valid base64.");
+    }
+  }
+}
+
+function estimateBase64DecodedBytes(normalizedBase64: string): number {
+  const paddingBytes = normalizedBase64.endsWith("==")
+    ? 2
+    : normalizedBase64.endsWith("=")
+      ? 1
+      : 0;
+  return (normalizedBase64.length / 4) * 3 - paddingBytes;
+}
+
 /**
  * Harness POST/PUT /ng/api/file-store expects multipart/form-data (see API docs).
  * Pass a JSON `body` from harness_create / harness_update; this builder converts it to FormData.
@@ -51,10 +106,14 @@ export function buildFileStoreMultipartBody(
     throw new Error("body.type must be 'FILE' or 'FOLDER'.");
   }
 
-  const parentIdentifier =
-    (b.parent_identifier ?? b.parentIdentifier ?? "Root") as unknown;
+  const explicitParentIdentifier = (b.parent_identifier ?? b.parentIdentifier) as unknown;
+  const parentIdentifier = explicitParentIdentifier ?? (mode === "create" ? "Root" : undefined);
   if (typeof parentIdentifier !== "string" || parentIdentifier === "") {
-    throw new Error("body.parent_identifier is required (use 'Root' for the account/org/project root folder).");
+    throw new Error(
+      mode === "update"
+        ? "file_store update requires body.parent_identifier (use the existing parent node id; use 'Root' only when the current parent is the root)."
+        : "body.parent_identifier is required (use 'Root' for the account/org/project root folder).",
+    );
   }
 
   const fd = new FormData();
@@ -94,11 +153,16 @@ export function buildFileStoreMultipartBody(
       (typeof b.file_name === "string" && b.file_name) ||
       name;
     if (typeof b.content_base64 === "string" && b.content_base64 !== "") {
-      const estimatedBytes = Math.ceil(b.content_base64.length * 3 / 4);
+      const normalizedBase64 = normalizeBase64Content(b.content_base64);
+      const estimatedBytes = estimateBase64DecodedBytes(normalizedBase64);
       if (estimatedBytes > MAX_FILE_BYTES) {
         throw new Error(`File content exceeds maximum size of ${MAX_FILE_BYTES} bytes (estimated ${estimatedBytes} bytes from base64).`);
       }
-      const buf = Buffer.from(b.content_base64, "base64");
+      assertValidBase64Content(normalizedBase64);
+      const buf = Buffer.from(normalizedBase64, "base64");
+      if (buf.byteLength > MAX_FILE_BYTES) {
+        throw new Error(`File content exceeds maximum size of ${MAX_FILE_BYTES} bytes.`);
+      }
       fd.append("content", new Blob([buf], { type: mime }), filename);
     } else if (b.content !== undefined && b.content !== null) {
       const text = typeof b.content === "string" ? b.content : JSON.stringify(b.content);
@@ -126,19 +190,19 @@ function buildFileStoreUpdateBody(input: Record<string, unknown>): unknown {
 
 /**
  * POST /ng/api/file-store/folder expects a FileStoreNode-shaped JSON body.
- * Accept full `body` from the user, or shorthand folder_identifier + folder_name.
+ * Accept full `body` from the user, or shorthand folder id + folder_name.
  */
 export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
   const rawBody = input.body;
   if (rawBody !== undefined && typeof rawBody === "object" && rawBody !== null && !Array.isArray(rawBody)) {
     return rawBody;
   }
-  const id = input.folder_identifier ?? input.identifier;
+  const id = input.folder_identifier ?? input.identifier ?? input.file_store_id ?? input.resource_id;
   const name = input.folder_name ?? input.name;
   const nodeType = (input.node_type as string) || "FOLDER";
   if (typeof id !== "string" || id === "" || typeof name !== "string" || name === "") {
     throw new Error(
-      "file_store.list_children requires `body` (FileStoreNode JSON per Harness API) or `folder_identifier` plus `folder_name` (and optional `parent_identifier`, `node_type` FILE|FOLDER).",
+      "file_store.list_children requires `body` (FileStoreNode JSON per Harness API) or `resource_id`/`file_store_id`/`folder_identifier` plus `folder_name` (and optional `parent_identifier`, `node_type` FILE|FOLDER).",
     );
   }
   const node: Record<string, unknown> = {
@@ -175,8 +239,9 @@ const fileStoreWriteBodySchema: BodySchema = {
 
 const folderListChildrenBodySchema: BodySchema = {
   description:
-    "Either pass `body` as the Harness FileStoreNode object, or use shorthand: folder_identifier, folder_name, optional parent_identifier, optional node_type (FILE or FOLDER, default FOLDER).",
+    "Either pass `body` as the Harness FileStoreNode object, or use shorthand: resource_id/file_store_id/folder_identifier, folder_name, optional parent_identifier, optional node_type (FILE or FOLDER, default FOLDER).",
   fields: [
+    { name: "file_store_id", type: "string", required: false, description: "Folder node identifier supplied by generic resource_id mapping" },
     { name: "folder_identifier", type: "string", required: false, description: "Folder node identifier (when not using body)" },
     { name: "folder_name", type: "string", required: false, description: "Folder node display name (when not using body)" },
     { name: "parent_identifier", type: "string", required: false, description: "Parent File Store node identifier" },
@@ -282,7 +347,7 @@ export const fileStoreToolset: ToolsetDefinition = {
           skipScopeBodyInjection: true,
           responseExtractor: ngExtract,
           actionDescription:
-            "First-level child nodes under a folder (POST /ng/api/file-store/folder). Pass body as FileStoreNode or folder_identifier + folder_name. Optional file_usage query: MANIFEST_FILE | CONFIG | SCRIPT.",
+            "First-level child nodes under a folder (POST /ng/api/file-store/folder). Pass resource_id plus folder_name, body as FileStoreNode, or folder_identifier + folder_name. Optional file_usage query: MANIFEST_FILE | CONFIG | SCRIPT.",
           bodySchema: folderListChildrenBodySchema,
         },
       },

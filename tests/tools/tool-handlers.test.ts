@@ -991,6 +991,29 @@ describe("harness_execute", () => {
     expect(call.path).toContain("/agents/account.myagent/applications/my-app/operation");
   });
 
+  it("maps resource_id to file_store_id for File Store list_children", async () => {
+    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
+    const fileStoreClient = makeClient(fileStoreRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+
+    const result = await fileStoreServer.call("harness_execute", {
+      resource_type: "file_store",
+      action: "list_children",
+      resource_id: "folder123",
+      params: { folder_name: "scripts" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(fileStoreRequest).toHaveBeenCalledOnce();
+    const call = fileStoreRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/ng/api/file-store/folder");
+    expect(call.body).toEqual({ identifier: "folder123", name: "scripts", type: "FOLDER" });
+  });
+
   it.each([
     { action: "enable", method: "POST", expectedBody: {} },
     { action: "disable", method: "DELETE", expectedBody: undefined },
