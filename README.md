@@ -554,7 +554,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_AUTH_TOKEN`    | No       | --                          | Bearer token required on `/mcp` HTTP routes when set. Required by default when HTTP transport binds to a non-loopback host                                                                                                                             |
 | `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | No | `false`         | Explicitly allow unauthenticated HTTP transport on non-loopback binds. Use only behind another authenticated control                                                                                                                                    |
 | `HARNESS_MCP_LOG_FILE`      | No       | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available                                                                                                                                                               |
-| `HARNESS_AUDIT_FILE`        | No       | --                          | Append audit events to a newline-delimited JSON file in addition to stderr                                                                                                                                                                             |
+| `HARNESS_AUDIT_FILE`        | No       | --                          | Append audit events to a newline-delimited JSON file for durable local collection                                                                                                                                                                      |
 | `HARNESS_AUDIT_WEBHOOK_URL` | No       | --                          | HTTPS endpoint that receives batched audit events. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development                                                                                                                                   |
 | `HARNESS_AUDIT_WEBHOOK_TOKEN` | No     | --                          | Optional bearer token sent to the audit webhook                                                                                                                                                                                                        |
 | `HARNESS_AUDIT_WEBHOOK_BATCH_SIZE` | No | `10`                       | Number of audit events to batch before webhook flush                                                                                                                                                                                                   |
@@ -572,13 +572,13 @@ HARNESS_BASE_URL must use HTTPS (got "http://..."). If you need HTTP for local d
 
 ### Audit Logging
 
-All write operations (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) emit structured audit events. The stderr sink is always active; additional sinks are enabled by configuration:
+All registry-dispatched Harness API operations (`list`, `get`, `create`, `update`, `delete`, and `execute`) emit structured audit events when audit sinks are configured. Mutating events include the confirmation path used by elicitation or auto-approval when a confirmation context is present; read events currently omit confirmation metadata. Local metadata and schema discovery tools that bypass the registry, such as `harness_describe` and `harness_schema`, are not part of this audit stream. A stderr sink is registered by default but goes through the normal logger and obeys `LOG_LEVEL`; configure file or webhook sinks for durable audit collection:
 
 - `HARNESS_AUDIT_FILE` appends newline-delimited JSON events for local collection.
-- `HARNESS_AUDIT_WEBHOOK_URL` posts batched events to an HTTPS webhook, optionally with `HARNESS_AUDIT_WEBHOOK_TOKEN`.
-- `OTEL_EXPORTER_OTLP_ENDPOINT` enables audit spans when the optional OpenTelemetry packages are installed.
+- `HARNESS_AUDIT_WEBHOOK_URL` posts `{ "events": [...] }` batches to an HTTPS webhook, optionally with `HARNESS_AUDIT_WEBHOOK_TOKEN`. Failed batches are re-enqueued with bounded capacity and eventually dropped with a warning rather than blocking tool execution.
+- `OTEL_EXPORTER_OTLP_ENDPOINT` enables audit spans when the optional OpenTelemetry peer dependencies are installed. The sink reuses an existing tracer provider when one is registered, otherwise it bootstraps a standalone OTLP exporter.
 
-Each event includes the tool name, resource type, operation, identifiers, timestamp, and confirmation method. Audit sinks are best-effort telemetry; a webhook delivery issue is logged and does not retry or replay the mutating Harness operation.
+Each event includes the tool name, resource type, operation, identifiers, timestamp, risk, outcome, HTTP method/path, duration, and confirmation method when applicable. Audit sinks are best-effort telemetry; delivery issues are logged and never replay or change the underlying Harness API operation. For OTel setup details and span attributes, see [`specs/005-otel-audit-sink.md`](specs/005-otel-audit-sink.md).
 
 ## Tools Reference
 
@@ -600,7 +600,7 @@ Current multi-scope resources include `connector`, `service`, `environment`, `in
 | Tool               | Description                                                                                                                                                                                                                                                                                                           |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `harness_describe` | Discover available resource types, operations, and fields. No API call — returns local registry metadata.                                                                                                                                                                                                             |
-| `harness_schema`   | Fetch exact JSON Schema definitions for creating/updating resources. Supports deep drilling via `path` parameter.                                                                                                                                                                                                     |
+| `harness_schema`   | Fetch exact YAML/JSON Schema definitions and examples for creating/updating resources. Pipeline/template schemas are bundled; connector, environment, service, secret, and infrastructure schemas are scope-aware entity schemas fetched from bundled snapshots or NG `/yaml-schema`. Supports deep drilling via `path`. |
 | `harness_list`     | List resources of a given type with filtering, search, and pagination.                                                                                                                                                                                                                                                |
 | `harness_get`      | Get a single resource by its identifier.                                                                                                                                                                                                                                                                              |
 | `harness_create`   | Create a new resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation).                                                                                                                                                                              |
@@ -611,6 +611,32 @@ Current multi-scope resources include `connector`, `service`, `environment`, `in
 | `harness_diagnose` | Diagnose `pipeline`, `connector`, `delegate`, and `gitops_application` resources (aliases: `execution` -> `pipeline`, `gitops_app` -> `gitops_application`). For pipelines, returns stage/step timing and failure details; for connectors/delegates/GitOps apps, returns targeted health and troubleshooting signals. |
 | `harness_status`   | Get a real-time project health dashboard — recent executions, failure rates, and deep links.                                                                                                                                                                                                                          |
 
+
+### Schema Lookup Workflow
+
+Use `harness_schema` before creating or updating YAML-backed resources so agents can copy exact field names and constraints instead of guessing from prose.
+
+- Bundled schemas include `pipeline`, `template`, `trigger`, `pipeline_v1`, `template_v1`, `trigger_v1`, `inputSet_v1`, `overlayInputSet_v1`, `service_v1`, `infra_v1`, and `agent-pipeline`.
+- Entity schemas include `connector`, `environment`, `service`, `secret`, and `infrastructure`. They are scope-aware (`account`, `org`, or `project`) and require `org_id`/`project_id` when the selected scope requires them.
+- Vendored entity snapshots are used first when they match the runtime account; otherwise the tool falls back to the Harness NG `/yaml-schema` API and caches the result.
+- Omit `path` for a field/section summary, then pass a dot-separated `path` to inspect a nested definition.
+
+Examples:
+
+```json
+{ "resource_type": "pipeline", "path": "pipeline.stages" }
+```
+
+```json
+{
+  "resource_type": "connector",
+  "scope": "project",
+  "org_id": "default",
+  "project_id": "payments"
+}
+```
+
+Maintainers can refresh the vendored entity snapshots with `pnpm sync-entity-schemas` when Harness entity YAML schemas change.
 
 ### Tool Examples
 
@@ -1215,6 +1241,27 @@ Template operations use the Harness Template service paths (`/template/api/templ
 | `database_snapshot_object`        | x    | x   |        |        |        |                 |
 | `database_llm_authoring_pipeline` |      | x   |        |        |        |                 |
 
+
+### Infrastructure as Code Management (IaCM)
+
+IaCM resources are default-enabled and mostly project-scoped. Start with `iacm_workspace` to find workspace identifiers, then use that `workspace_id` for workspace resources, costs, and activity diffs. The module registry is account-scoped.
+
+| Resource Type                   | List | Get | Create | Update | Delete | Execute Actions |
+| ------------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `iacm_workspace`                | x    | x   |        |        |        |                 |
+| `iacm_resource`                 | x    |     |        |        |        |                 |
+| `iacm_module`                   | x    | x   |        |        |        |                 |
+| `iacm_workspace_costs`          | x    |     |        |        |        |                 |
+| `iacm_activity_resource_change` | x    |     |        |        |        |                 |
+
+Typical workflow:
+
+1. `harness_list(resource_type="iacm_workspace", org_id="...", project_id="...")` to find the workspace.
+2. `harness_list(resource_type="iacm_resource", org_id="...", project_id="...", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
+3. `harness_list(resource_type="iacm_workspace_costs", org_id="...", project_id="...", workspace_id="...")` to review per-execution cost entries.
+4. `harness_list(resource_type="iacm_activity_resource_change", org_id="...", project_id="...", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
+
+IaCM list responses expose `page_count` as the count for the current page only. When `has_more` is true, keep requesting the next 1-based page and sum page counts if you need a total.
 
 ### Internal Developer Portal (IDP)
 

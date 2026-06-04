@@ -52,3 +52,13 @@
 - **Issue**: GUI MCP clients may not inherit shell `PATH`, so examples using bare executable names can still fail with `spawn <command> ENOENT`.
 - **Fix**: For Cursor and similar GUI-client examples, show absolute executable paths and include the Node directory in `env.PATH`.
 - **Rule**: When documenting GUI-client stdio MCP configs, avoid PATH-dependent `command` values unless the surrounding text explicitly scopes them to shell-based clients.
+
+## Runtime Payload Documentation
+- **Issue**: Documentation can overstate a payload contract by describing intended fields that the current tool handlers do not populate.
+- **Fix**: Either wire the field through the runtime path in the same PR or document the current emitted shape precisely.
+- **Rule**: Before documenting audit, schema, or tool payload fields as guaranteed, verify the exact dispatch path and at least one focused runtime/test assertion.
+
+## Logger-Filtered Audit Sinks
+- **Issue**: Saying stderr audit output is always emitted hides that the stderr sink routes through the shared logger and respects `LOG_LEVEL`.
+- **Fix**: Document stderr as registered by default, and direct durable audit collection to file or webhook sinks.
+- **Rule**: For telemetry sinks built on shared logging, document both registration and filtering semantics.

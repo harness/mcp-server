@@ -87,6 +87,32 @@
 - Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.1` release.
 - Verification passed: `pnpm vitest run tests/release-metadata.test.ts` and `pnpm typecheck`.
 
+## Documentation Alignment Automation (2026-06-01)
+- [x] Identify recently changed subsystems with weak docs
+- [x] Update user-facing docs for entity schemas, IaCM, and audit telemetry
+- [x] Align contributor and agent-facing guidance
+- [x] Run docs verification and review the documentation-only diff
+- [x] Commit, push, and open/update the docs PR
+
+### Plan
+- Use source and recent merged commits as the source of truth; do not document behavior that is not present in code.
+- Keep the PR documentation-only and update existing surfaces instead of adding redundant pages.
+- Refresh `README.md` for `harness_schema` usage, IaCM resource workflows, and audit sink behavior.
+- Refresh `docs/gemini.md` for agent-facing parity around schema lookup, structured list output, IaCM, Ansible, and DbOps coverage.
+- Refresh `CONTRIBUTING.md` so maintainers see Ansible as the opt-in toolset example and know how to refresh vendored entity schemas.
+- Refresh `docs/architecture.md` where it currently describes audit coverage as mutating-only.
+
+### Review
+- README now documents the `harness_schema` workflow for bundled pipeline/template schemas and scope-aware entity YAML schemas, including example calls and the `pnpm sync-entity-schemas` maintainer path.
+- README now has a first-class IaCM resource table and workflow notes for workspace resources, costs, and activity resource changes; it also calls out IaCM `page_count` semantics.
+- README and `docs/architecture.md` now describe audit coverage as registry-dispatched list/get/create/update/delete/execute operations, with bounded webhook delivery and OTel setup pointers.
+- `docs/gemini.md` now covers `harness_schema`, structured `harness_list` output, IaCM workflow constraints, Ansible opt-in status, and DbOps capabilities.
+- `CONTRIBUTING.md` now uses Ansible as the opt-in toolset example and documents vendored entity schema maintenance.
+- Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `git diff --check HEAD~1..HEAD`, and targeted stale-language scans across README, docs, and CONTRIBUTING.
+- Opened PR: https://github.com/harness/mcp-server/pull/293
+- Review follow-up: relaxed audit confirmation wording to match current read event payloads, carried IaCM org/project scope through follow-up workflow examples, and rechecked the merged `harness_schema` runtime contract before pushing.
+- Review follow-up: narrowed stderr audit wording to say the sink is registered by default but filtered by `LOG_LEVEL`, and pointed durable audit collection at file/webhook sinks.
+
 ## Version Bump 3.1.0 (2026-05-29)
 - [x] Identify release metadata fields pinned to the previous version
 - [x] Update package and manifest versions to 3.1.0
