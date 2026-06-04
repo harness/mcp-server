@@ -33,6 +33,20 @@ describe("buildFileStoreMultipartBody", () => {
     ).toThrow(/content/);
   });
 
+  it("requires an explicit parent identifier on create", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "scripts",
+            type: "FOLDER",
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/parent_identifier/);
+  });
+
   it("appends base64 file content for FILE create", () => {
     const fd = buildFileStoreMultipartBody(
       {

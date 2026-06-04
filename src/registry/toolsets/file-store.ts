@@ -1,5 +1,5 @@
 import { Buffer } from "node:buffer";
-import type { ToolsetDefinition, BodySchema } from "../types.js";
+import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
 import { ngExtract, pageExtract } from "../extractors.js";
 
 // Matches server-side FileUploadLimit.fileStoreFileLimit (100 MB)
@@ -106,8 +106,7 @@ export function buildFileStoreMultipartBody(
     throw new Error("body.type must be 'FILE' or 'FOLDER'.");
   }
 
-  const explicitParentIdentifier = (b.parent_identifier ?? b.parentIdentifier) as unknown;
-  const parentIdentifier = explicitParentIdentifier ?? (mode === "create" ? "Root" : undefined);
+  const parentIdentifier = (b.parent_identifier ?? b.parentIdentifier) as unknown;
   if (typeof parentIdentifier !== "string" || parentIdentifier === "") {
     throw new Error(
       mode === "update"
@@ -239,14 +238,23 @@ const fileStoreWriteBodySchema: BodySchema = {
 
 const folderListChildrenBodySchema: BodySchema = {
   description:
-    "Either pass `body` as the Harness FileStoreNode object, or use shorthand: resource_id/file_store_id/folder_identifier, folder_name, optional parent_identifier, optional node_type (FILE or FOLDER, default FOLDER).",
+    "Full Harness FileStoreNode JSON sent directly to POST /ng/api/file-store/folder. Use top-level resource_id or params.file_store_id/folder_identifier plus params.folder_name instead when using shorthand.",
   fields: [
-    { name: "file_store_id", type: "string", required: false, description: "Folder node identifier supplied by generic resource_id mapping" },
-    { name: "folder_identifier", type: "string", required: false, description: "Folder node identifier (when not using body)" },
-    { name: "folder_name", type: "string", required: false, description: "Folder node display name (when not using body)" },
-    { name: "parent_identifier", type: "string", required: false, description: "Parent File Store node identifier" },
-    { name: "node_type", type: "string", required: false, description: "FILE or FOLDER (default FOLDER)" },
-    { name: "body", type: "object", required: false, description: "Full FileStoreNode JSON — overrides shorthand fields" },
+    { name: "identifier", type: "string", required: true, description: "Folder node identifier" },
+    { name: "name", type: "string", required: true, description: "Folder node display name" },
+    { name: "type", type: "string", required: true, description: "FILE or FOLDER" },
+    { name: "parentIdentifier", type: "string", required: false, description: "Parent File Store node identifier" },
+  ],
+};
+
+const folderListChildrenParamsSchema: ParamsSchema = {
+  fields: [
+    { name: "file_store_id", required: false, description: "Folder node identifier supplied by generic resource_id mapping. `harness_execute.resource_id` is also mapped here." },
+    { name: "folder_identifier", required: false, description: "Folder node identifier when not using resource_id/file_store_id or a full body" },
+    { name: "folder_name", required: false, description: "Folder node display name. Required with resource_id/file_store_id/folder_identifier shorthand." },
+    { name: "parent_identifier", required: false, description: "Parent File Store node identifier for shorthand expansion" },
+    { name: "node_type", required: false, description: "FILE or FOLDER for shorthand expansion (default FOLDER)" },
+    { name: "file_usage", required: false, description: "Optional fileUsage query: MANIFEST_FILE, CONFIG, or SCRIPT" },
   ],
 };
 
@@ -348,6 +356,7 @@ export const fileStoreToolset: ToolsetDefinition = {
           responseExtractor: ngExtract,
           actionDescription:
             "First-level child nodes under a folder (POST /ng/api/file-store/folder). Pass resource_id plus folder_name, body as FileStoreNode, or folder_identifier + folder_name. Optional file_usage query: MANIFEST_FILE | CONFIG | SCRIPT.",
+          paramsSchema: folderListChildrenParamsSchema,
           bodySchema: folderListChildrenBodySchema,
         },
       },

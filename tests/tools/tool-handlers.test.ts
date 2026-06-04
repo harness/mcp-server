@@ -1014,6 +1014,25 @@ describe("harness_execute", () => {
     expect(call.body).toEqual({ identifier: "folder123", name: "scripts", type: "FOLDER" });
   });
 
+  it("rejects File Store list_children shorthand fields inside body before dispatch", async () => {
+    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
+    const fileStoreClient = makeClient(fileStoreRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+
+    const result = await fileStoreServer.call("harness_execute", {
+      resource_type: "file_store",
+      action: "list_children",
+      body: { file_store_id: "folder123", folder_name: "scripts" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Missing required fields") });
+    expect(fileStoreRequest).not.toHaveBeenCalled();
+  });
+
   it.each([
     { action: "enable", method: "POST", expectedBody: {} },
     { action: "disable", method: "DELETE", expectedBody: undefined },
@@ -1459,6 +1478,43 @@ describe("harness_describe", () => {
         expect.objectContaining({ name: "pr_number", required: true }),
       ]),
     );
+  });
+
+  it("exposes File Store list_children shorthands as paramsSchema and only FileStoreNode fields as bodySchema", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    const fileStoreServer = makeMcpServer();
+    const { registerDescribeTool } = await import("../../src/tools/harness-describe.js");
+    registerDescribeTool(fileStoreServer, registry);
+
+    const result = await fileStoreServer.call("harness_describe", { resource_type: "file_store" });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as {
+      executeActions: Array<{
+        action: string;
+        paramsSchema?: { fields: Array<{ name: string; required: boolean }> };
+        bodySchema?: { fields: Array<{ name: string; required: boolean }> };
+      }>;
+    };
+    const listChildren = data.executeActions.find((action) => action.action === "list_children");
+    expect(listChildren?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "file_store_id" }),
+        expect.objectContaining({ name: "folder_identifier" }),
+        expect.objectContaining({ name: "folder_name" }),
+      ]),
+    );
+    expect(listChildren?.bodySchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "identifier", required: true }),
+        expect.objectContaining({ name: "name", required: true }),
+        expect.objectContaining({ name: "type", required: true }),
+      ]),
+    );
+    const bodyFieldNames = listChildren?.bodySchema?.fields.map((field) => field.name) ?? [];
+    expect(bodyFieldNames).not.toContain("file_store_id");
+    expect(bodyFieldNames).not.toContain("folder_identifier");
+    expect(bodyFieldNames).not.toContain("folder_name");
   });
 
   it("returns error hint for unknown resource_type", async () => {
