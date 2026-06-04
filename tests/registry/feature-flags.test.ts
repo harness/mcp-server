@@ -191,6 +191,28 @@ describe("FME auth", () => {
 
     expect(mockRequest).not.toHaveBeenCalled();
   });
+
+  it("uses multi-user remediation when session FME auth is missing", async () => {
+    const registry = new Registry(makeConfig({
+      HARNESS_MCP_MODE: "multi-user",
+      HARNESS_API_KEY: "dummy",
+      HARNESS_FME_API_KEY: undefined,
+    }));
+    const mockRequest = vi.fn().mockResolvedValue({ objects: [], totalCount: 0, offset: 0, limit: 20 });
+    const client = makeClient(mockRequest);
+
+    try {
+      await registry.dispatch(client, "fme_workspace", "list", {});
+      expect.fail("expected FME auth guard to throw");
+    } catch (err) {
+      const message = (err as Error).message;
+      expect(message).toContain("Ensure the session x-harness-api-key is an FME-entitled Harness PAT/SAT");
+      expect(message).toContain("Do not configure HARNESS_FME_API_KEY in multi-user mode");
+      expect(message).not.toContain("or set HARNESS_FME_API_KEY");
+    }
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("fme_identity create", () => {

@@ -42,6 +42,7 @@
       ],
       "env": {
         "HARNESS_API_KEY": "${user_config.HARNESS_API_KEY}",
+        "HARNESS_FME_API_KEY": "${user_config.HARNESS_FME_API_KEY}",
         "HARNESS_ACCOUNT_ID": "${user_config.HARNESS_ACCOUNT_ID}",
         "HARNESS_ORG": "${user_config.HARNESS_ORG}",
         "HARNESS_PROJECT": "${user_config.HARNESS_PROJECT}",
@@ -65,6 +66,13 @@
       "title": "Harness API Key",
       "description": "Personal access token or service account token used to authenticate with Harness.",
       "required": true,
+      "sensitive": true
+    },
+    "HARNESS_FME_API_KEY": {
+      "type": "string",
+      "title": "FME/Split Admin Credential",
+      "description": "Optional single-user/self-hosted FME/Split Admin credential for fme_ resources. This can be a legacy Split admin key or an FME-entitled Harness PAT/SAT. Do not set this for multi-user deployments.",
+      "required": false,
       "sensitive": true
     },
     "HARNESS_ACCOUNT_ID": {

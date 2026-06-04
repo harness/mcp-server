@@ -4,8 +4,18 @@ import { describe, expect, it } from "vitest";
 
 const root = process.cwd();
 
-function readJson(path: string): { version: string } {
-  return JSON.parse(readFileSync(join(root, path), "utf8")) as { version: string };
+interface BundleManifest {
+  version: string;
+  server: {
+    mcp_config: {
+      env: Record<string, string>;
+    };
+  };
+  user_config: Record<string, { sensitive?: boolean; required?: boolean }>;
+}
+
+function readJson(path: string): BundleManifest {
+  return JSON.parse(readFileSync(join(root, path), "utf8")) as BundleManifest;
 }
 
 describe("release metadata", () => {
@@ -17,5 +27,15 @@ describe("release metadata", () => {
     expect(packageJson.version).toBe("3.1.2");
     expect(rootManifest.version).toBe(packageJson.version);
     expect(directoryManifest.version).toBe(packageJson.version);
+  });
+
+  it("exposes FME credential config in packaged manifests", () => {
+    for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
+      expect(manifest.server.mcp_config.env.HARNESS_FME_API_KEY).toBe("${user_config.HARNESS_FME_API_KEY}");
+      expect(manifest.user_config.HARNESS_FME_API_KEY).toMatchObject({
+        required: false,
+        sensitive: true,
+      });
+    }
   });
 });
