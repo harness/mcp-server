@@ -216,10 +216,11 @@ Harness also supports a hosted MCP endpoint for accounts that have the managed s
       }
     },
     "harness-local": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -228,7 +229,9 @@ Harness also supports a hosted MCP endpoint for accounts that have the managed s
 
 > **Troubleshooting `npx ENOENT` or `node: No such file or directory`**
 >
-> GUI apps (Cursor, Claude Desktop, Windsurf, VS Code) don't inherit your shell's `PATH`, so they often can't find `npx` or `node`. Fix this by using absolute paths and explicitly setting `PATH` in the `env` block:
+> This is a client process-launch failure, not a Harness authentication failure. The MCP server has not started yet, so changing `HARNESS_API_KEY` will not affect `spawn npx ENOENT`.
+>
+> GUI apps (Cursor, Claude Desktop, Windsurf, VS Code) don't always inherit your shell's `PATH`, so they can fail to find `npx` or `node` after a config reload. Fix this by using absolute paths and explicitly setting `PATH` in the `env` block:
 >
 > ```json
 > {
@@ -259,10 +262,11 @@ npx (zero install)
 {
   "mcpServers": {
     "harness": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -279,9 +283,10 @@ npm install -g harness-mcp-v2
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-mcp-v2",
+      "command": "/absolute/path/to/harness-mcp-v2",
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -307,21 +312,24 @@ Then set `HARNESS_API_KEY` in your environment or `.env` file.
 
 #### Cursor (`.cursor/mcp.json`)
 
-npx (zero install)
+npx (zero install, recommended for local Cursor configs)
 
 ```json
 {
   "mcpServers": {
     "harness": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
 }
 ```
+
+Run `which npx` in a terminal and use that full path for `command`; include the directory from `which node` at the front of `PATH`.
 
 node (local install)
 
@@ -333,14 +341,17 @@ npm install -g harness-mcp-v2
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-mcp-v2",
+      "command": "/absolute/path/to/harness-mcp-v2",
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
 }
 ```
+
+Run `which harness-mcp-v2` after `npm install -g harness-mcp-v2` and use that full path for `command`; include the directory from `which node` at the front of `PATH`.
 
 #### Windsurf (`~/.windsurf/mcp.json`)
 
@@ -350,10 +361,11 @@ npx (zero install)
 {
   "mcpServers": {
     "harness": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -370,9 +382,10 @@ npm install -g harness-mcp-v2
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-mcp-v2",
+      "command": "/absolute/path/to/harness-mcp-v2",
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }

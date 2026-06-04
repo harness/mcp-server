@@ -164,6 +164,26 @@
 - Verified the customer-provided SAT sample was not written into the repo.
 - Verification passed: `pnpm vitest run tests/config.test.ts tests/utils/session-headers.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, and `pnpm test` outside the sandbox for local HTTP port binding.
 
+## Slack Bug Triage: Cursor `npx ENOENT` Startup Failure (2026-05-27)
+- [x] Read the triggered Slack thread and capture the complete report
+- [x] Trace the failure path through local MCP client configuration and docs
+- [x] Clarify GUI-client `npx` startup guidance to prevent auth misdiagnosis
+- [x] Run focused docs verification
+- [x] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Treat `spawn npx ENOENT` as a client process-launch failure because Cursor fails before the MCP server starts and before Harness auth can be used.
+- Keep the fix in public configuration guidance: make the Cursor/local examples point users toward absolute `npx`/`node` paths and explain that auth changes do not affect this error.
+- Verify the documentation remains generated/consistent before reporting back.
+
+### Review
+- The Slack thread contained only the Cursor output log; there were no screenshots or follow-up messages.
+- Root cause is client-side process launch: Cursor reports `spawn npx ENOENT` immediately after `config_server_modified`, before the Harness MCP server can start or read `HARNESS_API_KEY`.
+- Updated `README.md` local/Cursor examples to use an absolute `npx` path, `-y harness-mcp-v2@latest`, and explicit `PATH`, and expanded troubleshooting to state that `spawn npx ENOENT` is not an auth failure.
+- Verified with `pnpm install --frozen-lockfile`, `pnpm build`, and `pnpm docs:check`.
+- Opened PR #271 and replied in the original Slack thread.
+- Review follow-up: updated Cursor, Claude Desktop, and Windsurf examples to use absolute executable paths and explicit `PATH`, matching the GUI-client troubleshooting guidance.
+
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules
 - [x] Create Jira Feature Request spec drafting automation

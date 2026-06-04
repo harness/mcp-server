@@ -47,3 +47,8 @@
 - **Issue**: Adding or documenting an env var without updating packaged manifests leaves manifest-driven and MCPB installs unable to configure it.
 - **Fix**: Update `manifest.json`, `mcp-directory/manifest.json`, and release metadata tests for every public config knob exposed in source docs or `.env.example`.
 - **Rule**: Before finishing env config changes, search all public config surfaces and lock the expected manifest exposure in tests.
+
+## GUI MCP Client Executable Paths
+- **Issue**: GUI MCP clients may not inherit shell `PATH`, so examples using bare executable names can still fail with `spawn <command> ENOENT`.
+- **Fix**: For Cursor and similar GUI-client examples, show absolute executable paths and include the Node directory in `env.PATH`.
+- **Rule**: When documenting GUI-client stdio MCP configs, avoid PATH-dependent `command` values unless the surrounding text explicitly scopes them to shell-based clients.
