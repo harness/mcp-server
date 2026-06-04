@@ -182,7 +182,7 @@
 - Updated `README.md` local/Cursor examples to use an absolute `npx` path, `-y harness-mcp-v2@latest`, and explicit `PATH`, and expanded troubleshooting to state that `spawn npx ENOENT` is not an auth failure.
 - Verified with `pnpm install --frozen-lockfile`, `pnpm build`, and `pnpm docs:check`.
 - Opened PR #271 and replied in the original Slack thread.
-- Review follow-up: updated the Cursor local-install example to use an absolute `harness-mcp-v2` executable path and explicit `PATH`, matching the zero-install guidance.
+- Review follow-up: updated Cursor, Claude Desktop, and Windsurf examples to use absolute executable paths and explicit `PATH`, matching the GUI-client troubleshooting guidance.
 
 ## Jira Feature Request Spec Automation (2026-05-25)
 - [x] Inspect current automation registry and saved schedules

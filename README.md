@@ -262,10 +262,11 @@ npx (zero install)
 {
   "mcpServers": {
     "harness": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -282,9 +283,10 @@ npm install -g harness-mcp-v2
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-mcp-v2",
+      "command": "/absolute/path/to/harness-mcp-v2",
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -359,10 +361,11 @@ npx (zero install)
 {
   "mcpServers": {
     "harness": {
-      "command": "npx",
-      "args": ["harness-mcp-v2"],
+      "command": "/absolute/path/to/npx",
+      "args": ["-y", "harness-mcp-v2@latest"],
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
@@ -379,9 +382,10 @@ npm install -g harness-mcp-v2
 {
   "mcpServers": {
     "harness": {
-      "command": "harness-mcp-v2",
+      "command": "/absolute/path/to/harness-mcp-v2",
       "env": {
-        "HARNESS_API_KEY": "pat.xxx.xxx.xxx"
+        "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
+        "PATH": "/directory/containing/node:/usr/local/bin:/usr/bin:/bin"
       }
     }
   }
