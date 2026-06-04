@@ -3,9 +3,9 @@
 ## Slack Bug Triage: Pull Request Repo Param Discovery (2026-06-04)
 - [x] Read the Slack report thread and attached screenshot
 - [x] Trace pull request parameter discovery and path resolution
-- [ ] Add failing regression coverage for PR params metadata and `repo_identifier` alias behavior
-- [ ] Implement the minimal metadata/alias fix
-- [ ] Run focused and broader verification
+- [x] Add failing regression coverage for PR params metadata and `repo_identifier` alias behavior
+- [x] Implement the minimal metadata/alias fix
+- [x] Run focused and broader verification
 - [ ] Commit, push, open PR, and reply in the original Slack thread
 
 ### Plan
@@ -16,7 +16,10 @@
 - Verify with focused pull-request/describe tests, typecheck, and broader tests where feasible.
 
 ### Review
-- Pending.
+- Root cause: generic `harness_create`/`harness_update` calls route path identifiers through `params`, but `harness_describe` only exposed body schemas; agents could see PR body fields but not the required `repo_id` path param and guessed `repo_identifier`.
+- Added `EndpointSpec.paramsSchema`, surfaced it in `harness_describe`, and annotated Harness Code PR operations/actions with `repo_id` and `pr_number`.
+- Added scoped alias support so declared params can accept compatibility names; PR repo params accept `repo_identifier` only where the endpoint schema declares it.
+- Verification passed: red failures reproduced for missing metadata/alias behavior, then `pnpm test -- tests/registry/pull-requests.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, full `pnpm test` (70 files / 1775 tests), `pnpm build`, and `git diff --check`.
 
 ## Vitest Security Upgrade (2026-06-03)
 - [x] Confirm the affected local Vitest version and patched target
