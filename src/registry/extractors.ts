@@ -25,6 +25,90 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
 export const passthrough = (raw: unknown): unknown => raw;
 
 /**
+ * STO Global Exemptions extractor.
+ * API response: `{ exemptions: [...], pagination: { page, pageSize, totalPages, totalItems }, counts: {...} }`
+ * Projects each exemption to a clean, display-friendly shape (issue title, severity, requester name,
+ * target name, etc.) so the LLM picks the right columns and skips the opaque IDs. Normalized to the
+ * standard `{ items, total, page, pageSize, totalPages, counts }` shape used by all other paginated
+ * resources, with an explicit `_nextPageHint` so pagination can't be misinterpreted.
+ */
+export const stoExemptionsExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
+  type Exemption = {
+    id?: string;
+    status?: string;
+    reason?: string;
+    type?: string;
+    scope?: string;
+    expiration?: number;
+    created?: number;
+    targetName?: string;
+    requesterName?: string;
+    requesterEmail?: string;
+    approverName?: string;
+    approverEmail?: string;
+    numOccurrences?: number;
+    totalOccurrences?: number;
+    issueSummary?: { title?: string; severity?: number; severityCode?: string; lastDetected?: number };
+  };
+  const r = raw as {
+    exemptions?: Exemption[];
+    pagination?: { page?: number; pageSize?: number; totalPages?: number; totalItems?: number };
+    counts?: unknown;
+  };
+  const page = r.pagination?.page ?? 0;
+  const pageSize = r.pagination?.pageSize ?? 5;
+  const totalPages = r.pagination?.totalPages ?? 0;
+  const total = r.pagination?.totalItems ?? (r.exemptions?.length ?? 0);
+  const hasMore = page + 1 < totalPages;
+  const exemptions = r.exemptions ?? [];
+  const items = exemptions.map((e) => ({
+    issue_title: e.issueSummary?.title,
+    severity: e.issueSummary?.severityCode,
+    type: e.type,
+    status: e.status,
+    requested_by: e.requesterName,
+    target: e.targetName || undefined,
+    scope: e.scope,
+    reason: e.reason || undefined,
+    approved_by: e.approverName || undefined,
+    created_at: e.created,
+    expires_at: e.expiration,
+    occurrences: e.numOccurrences,
+  }));
+  // Keep IDs OUT of the items so the LLM can't accidentally render them as a column.
+  // Provide them in a separate lookup keyed by row index (1-based) for approve/reject actions.
+  const _action_id_by_row: Record<number, string> = {};
+  exemptions.forEach((e, idx) => { if (e.id) _action_id_by_row[idx + 1] = e.id; });
+
+  // Reconstruct the active filter set from the actual request input so the
+  // next-page hint paginates the SAME query. Dropping any of these would
+  // switch the underlying dataset on the next call (Cursor review feedback).
+  const filterKeys = ["status", "search"] as const;
+  const activeFilters: Record<string, unknown> = {};
+  if (input) {
+    for (const key of filterKeys) {
+      const v = input[key];
+      if (v !== undefined && v !== "" && v !== null) activeFilters[key] = v;
+    }
+  }
+  const filterJson = JSON.stringify({ ...activeFilters, page: page + 1, size: pageSize });
+
+  return {
+    items,
+    total,
+    page,
+    pageSize,
+    totalPages,
+    counts: r.counts,
+    _action_id_by_row,
+    _display_hint: "Render a compact table with columns: # | Issue Title | Severity | Type | Requested by | Target | Status. NEVER add an 'ID' column — the items contain no ID field by design. If the user asks to approve/reject row N, look up the ID in _action_id_by_row[N].",
+    _nextPageHint: hasMore
+      ? `For the next page, call harness_list with resource_type='security_exemption' and filters=${filterJson}. You MUST keep size=${pageSize} and ALL other filters identical — the backend computes offset = page × size, so changing size or dropping filters silently shifts the dataset. Pages remaining: ${totalPages - page - 1}.`
+      : "No more pages — all exemptions have been returned.",
+  };
+};
+
+/**
  * AI Evals control plane — paginated list: `{ data, page, limit, total_elements }`.
  */
 export const aiEvalsListExtract = (raw: unknown): { items: unknown[]; total: number } => {
@@ -322,6 +406,49 @@ export const chaosPageExtract = (raw: unknown): { items: unknown[]; total: numbe
 };
 
 /**
+ * Normalize chaos experiment variables response (RunTimeInputs shape):
+ * { experiment: [...] | null, tasks: { taskName: [...] } | null }
+ * → { items: [{ task, variables }], total }
+ * Groups variables by task name. Handles null/undefined gracefully.
+ */
+export const chaosRunTimeInputsExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { experiment?: unknown[] | null; tasks?: Record<string, unknown[]> | null } | null | undefined;
+  if (!r) return { items: [], total: 0 };
+  const items: unknown[] = [];
+  const expVars = r.experiment;
+  if (Array.isArray(expVars) && expVars.length > 0) {
+    items.push({ task: "experiment", variables: expVars });
+  }
+  const tasks = r.tasks;
+  if (tasks && typeof tasks === "object") {
+    for (const [taskName, vars] of Object.entries(tasks)) {
+      if (Array.isArray(vars) && vars.length > 0) {
+        items.push({ task: taskName, variables: vars });
+      }
+    }
+  }
+  return { items, total: items.length };
+};
+
+/**
+ * Extract chaos application-map (a.k.a. network map) list response:
+ * { data: [...], page: { index, limit, totalPages, totalItems } }
+ *
+ * Note: the JSON key is "page" (not "pagination" like other chaos
+ * resources), per ListTargetNetworkMapResponse in hce-saas
+ * pkg/networkmap/types.go. We don't widen chaosPageExtract because
+ * "page" also means a query param, and silently accepting both shapes
+ * could mask bugs in unrelated endpoints.
+ */
+export const chaosAppMapPageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: unknown[]; page?: { totalItems?: number } };
+  return {
+    items: r.data ?? [],
+    total: r.page?.totalItems ?? (Array.isArray(r.data) ? r.data.length : 0),
+  };
+};
+
+/**
  * Extract chaos probe list response: { totalNoOfProbes, data: [...] }
  */
 export const chaosProbeListExtract = (raw: unknown): { items: unknown[]; total: number } => {
@@ -366,11 +493,50 @@ export const chaosHubListExtract = (raw: unknown): { items: unknown[]; total: nu
   };
 };
 
-/** Extract chaos DR test list response: { drtests: [...] } */
+/** Extract chaos DR test list response: { items: [...], pagination: { totalItems } } */
 export const chaosDRTestListExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { drtests?: unknown[] };
-  const items = r.drtests ?? [];
-  return { items, total: items.length };
+  const r = raw as { items?: unknown[]; pagination?: { totalItems?: number } };
+  const items = r.items ?? [];
+  return { items, total: r.pagination?.totalItems ?? items.length };
+};
+
+// ---------------------------------------------------------------------------
+// Service Discovery extractors
+// ---------------------------------------------------------------------------
+
+/**
+ * Extract Service Discovery paginated list response — common envelope shape:
+ *   { correlationID, page: { totalItems, ... }, items: [...] }
+ * Used by namespaces, discoveredservices, workloads, connections, agents.
+ *
+ * Two server-side quirks are smoothed over here:
+ *   1. When the request uses `all=true` or `limit=0`, the SD server returns
+ *      `page: { all: true }` with no `totalItems` field — Go zero-values it
+ *      to 0. We compensate with `Math.max(reportedTotal, items.length)` so
+ *      `total` always reflects what was actually returned.
+ *   2. When `items` is empty, we attach a `_hint` covering the four most
+ *      common failure modes (wrong agent_identity, no sync yet, case-
+ *      sensitive exact `name` match, K8s-only `namespace` filter) so the
+ *      LLM can guide the user without an extra round trip.
+ */
+export const sdPageExtract = (raw: unknown): { items: unknown[]; total: number; _hint?: string } => {
+  const r = raw as { items?: unknown[]; page?: { totalItems?: number } };
+  const items = r.items ?? [];
+  const reported = r.page?.totalItems ?? 0;
+  const total = Math.max(reported, items.length);
+  if (items.length === 0) {
+    return {
+      items,
+      total,
+      _hint:
+        "Empty result. Common causes: " +
+        "(1) agent_identity is not a Service Discovery agent — a chaos infrastructure ID (chaos_k8s_infrastructure) is NOT an SD agent ID, they are separate; verify against the SD UI URL. " +
+        "(2) The agent has not completed a discovery sync yet (new agents take a few minutes to populate). " +
+        "(3) For discovered_namespace, the `name` filter is EXACT case-sensitive equality — for partial/case-insensitive matches, list with `all: true` and filter client-side. " +
+        "(4) For discovered_service, the `namespace` filter only matches Kubernetes-typed records (Lambda/EC2/VM/process records won't match).",
+    };
+  }
+  return { items, total };
 };
 
 // ---------------------------------------------------------------------------

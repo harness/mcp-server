@@ -1,13 +1,17 @@
+import { randomUUID } from "node:crypto";
 import type { ToolsetDefinition } from "../types.js";
 import {
   passthrough,
   ngExtract,
   chaosPageExtract,
+  chaosAppMapPageExtract,
   chaosProbeListExtract,
   chaosInfraListExtract,
   chaosK8sInfraListExtract,
   chaosHubListExtract,
   chaosDRTestListExtract,
+  sdPageExtract,
+  chaosRunTimeInputsExtract,
 } from "../extractors.js";
 import {
   descToolsetChaos,
@@ -18,17 +22,18 @@ import {
   descChaosHub, descChaosFault, descChaosFaultExperimentRun, descChaosFaultTemplate,
   descChaosProbeTemplate, descChaosActionTemplate,
   descChaosHubFault, descChaosEnvironment,
-  descChaosNetworkMap,
+  descChaosApplicationMap,
+  descDiscoveredNetworkMap,
   descChaosGuardCondition, descChaosGuardRule,
   descChaosRecommendation, descChaosRisk,
   descChaosAction, descChaosProbeInRun,
-  descChaosDRTest,
+  descChaosDRTest, descChaosComponentVariable,
   // Operation descriptions
   descListExperiments, descGetExperiment,
   descGetExperimentRun,
-  descListProbes, descGetProbe,
+  descListProbes, descGetProbe, descCreateProbe,
   descListExperimentTemplates, descGetExperimentTemplate, descDeleteExperimentTemplate,
-  descListExperimentVariables,
+  descListExperimentVariables, descGetComponentVariable, descCreateExperiment,
   descListLinuxInfra,
   descListLoadtests, descGetLoadtest, descCreateLoadtest, descDeleteLoadtest,
   descListK8sInfra, descGetK8sInfra,
@@ -38,7 +43,10 @@ import {
   descListProbeTemplates, descGetProbeTemplate, descDeleteProbeTemplate,
   descListActionTemplates, descGetActionTemplate, descDeleteActionTemplate,
   descListHubFaults, descListChaosEnvironments,
-  descListNetworkMaps, descGetNetworkMap,
+  descListApplicationMaps, descGetApplicationMap,
+  descAppMapSearch, descAppMapEnvironmentId, descAppMapInfraId,
+  descAppMapAll, descAppMapMinimal,
+  descListDiscoveredNetworkMaps, descSDNetworkMapSearch,
   descListGuardConditions, descGetGuardCondition, descDeleteGuardCondition,
   descListGuardRules, descGetGuardRule, descDeleteGuardRule,
   descListRecommendations, descGetRecommendation,
@@ -58,9 +66,9 @@ import {
   descGetProbeTemplateVariables,
   descListActionTemplateRevisions, descGetActionTemplateVariables, descCompareActionTemplateRevisions,
   // Body schema descriptions
-  descBodyExperimentRun, descBodyNoBody,
+  descBodyExperimentRun, descBodyNoBody, descBodyExperimentCreate,
   descBodyCreateFromTemplate, descBodyLoadtestDefinition,
-  descBodyProbeEnable, descBodyProbeVerify, descBodyProbesInRun,
+  descBodyProbeEnable, descBodyProbeVerify, descBodyProbesInRun, descBodyProbeCreate,
   // Field descriptions
   descInputsetIdentity, descRuntimeInputs,
   descHubIdentity, descInfraType,
@@ -86,6 +94,8 @@ import {
   descIsEnabledFlag, descIsBulkUpdate, descVerifyFlag,
   descExperimentRunIds, descNotifyIds,
   descFaultIdentityParam, descIsEnterpriseFilter,
+  descFaultSearch, descFaultListType, descFaultListInfraType, descFaultListInfrastructure,
+  descFaultListTags, descFaultListCategory, descFaultListSortField, descFaultListSortAscending,
   descIsEnterpriseYaml, descIsEnterpriseVars, descIsEnterpriseRuns,
   descActionIdentityParam, descSearchActionsParam, descHubIdentityActions,
   descExperimentVariablesParam, descTasksParam,
@@ -93,7 +103,9 @@ import {
   descAccountIdBody, descOrgIdBody, descProjectIdBody,
   descSearchExperiments, descExperimentInfraId, descExperimentEnvironmentId, descExperimentIds,
   descExperimentStartDate, descExperimentEndDate,
+  descExperimentTargetNetworkMapIds, descExperimentMyExperiments, descExperimentExcludeAutomation,
   descSearchProbes, descProbeIds, descProbeSortField,
+  descProbeIdField, descProbeNameField, descProbePropertiesField, descRunPropertiesField,
   descDRTestSort,
   descCreateDRTest,
   descBodyDRTestCreate,
@@ -107,6 +119,15 @@ import {
   descCreateInputSet, descUpdateInputSet, descDeleteInputSet,
   descInputSetIdentityField, descInputSetName, descInputSetDescription,
   descInputSetSpec, descIsIdentity,
+  // Component variable descriptions
+  descComponentType, descComponentIdentifier, descComponentHubReference,
+  // Experiment create field descriptions
+  descExperimentManifest, descExperimentInfraType, descExperimentInfraIdCreate, descExperimentCronSyntax,
+  descExperimentIdUUID,
+  // Service Discovery
+  descSDAgentIdentity, descSDEnvironmentId, descSDFetchAll, descSDAgentDiagnostic,
+  descDiscoveredNamespace, descListDiscoveredNamespaces, descSDNamespaceNameFilter,
+  descDiscoveredService, descListDiscoveredServices, descSDNamespaceFilter, descSDSearchFilter,
 } from "./chaos-descriptions.js";
 
 /**
@@ -119,8 +140,42 @@ const CHAOS = "/chaos/manager/api";
 /** Load test API uses a separate service path per v1 Go server. */
 const CHAOS_LOADTEST = "/loadTest/manager/api";
 
+/**
+ * Service Discovery API base path. SD is a Chaos sub-feature backed by a
+ * separate `servicediscovery` service behind the Harness gateway.
+ * Endpoints expose Kubernetes inventory + eBPF-derived network edges
+ * collected by an SD agent running inside the user's cluster.
+ */
+const SD = "/gateway/servicediscovery/api/v1";
+
 /** Chaos scope override — Chaos REST API uses organizationIdentifier (not orgIdentifier). */
 const CHAOS_SCOPE = { org: "organizationIdentifier" } as const;
+
+/** Unwrap single-item response from get-chaos-component-variable endpoint. */
+const chaosComponentVarExtract = (raw: unknown): unknown => {
+  const r = raw as { items?: Array<{ name: string; variables: unknown[] }> };
+  return r.items?.[0] ?? raw;
+};
+
+/**
+ * Parse input.body when LLMs double-serialize it as a JSON string instead of an object.
+ * Fails loudly on malformed JSON so callers' defaults can never silently produce a
+ * phantom write to Harness (see CLAUDE.md "Fail Loudly" rule).
+ */
+function coerceBody(input: Record<string, unknown>): Record<string, unknown> {
+  const raw = input.body ?? input;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `Invalid JSON in 'body': ${detail}. Pass 'body' as an object or a valid JSON-encoded string.`,
+      );
+    }
+  }
+  return raw as Record<string, unknown>;
+}
 
 export const chaosToolset: ToolsetDefinition = {
   name: "chaos",
@@ -137,10 +192,20 @@ export const chaosToolset: ToolsetDefinition = {
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["experiment_id"],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
-      // NOTE: hce-saas backend limitations for ListChaosV2Experiments:
-      // 1. infraName, status, infraActive are parsed but never applied in the MongoDB aggregation.
-      // 2. infra_id and environment_id ONLY work when BOTH are provided (composite match: "envId/infraId").
-      //    Sending just one is silently ignored by the repository layer.
+      searchAliases: [
+        "chaos test", "fault injection", "fault injection experiment",
+        "blast radius experiment", "resilience test", "chaos engineering test",
+      ],
+      // NOTE: hce-saas backend limitations for ListChaosV2Experiments
+      // (verified by reading repository.go ListChaosV2Experiments aggregation):
+      // 1. infraName, status, infraActive: parsed into ExperimentFilterInput
+      //    but NEVER applied in the Mongo aggregation (repository.go:684-770).
+      //    Do NOT expose them — agents would think they work and silently get
+      //    unfiltered results.
+      // 2. infra_id + environment_id ONLY work when BOTH are provided
+      //    (repository.go:712-714); either alone is silently dropped.
+      // 3. tags filter is AND substring match across the experiment's tag array
+      //    (substring per tag — tags=fault=gcp matches fault=gcp-vm-kill etc.).
       listFilterFields: [
         { name: "experiment_name", description: descSearchExperiments },
         { name: "infra_id", description: descExperimentInfraId },
@@ -149,10 +214,18 @@ export const chaosToolset: ToolsetDefinition = {
         { name: "environment_id", description: descExperimentEnvironmentId },
         { name: "start_date", description: descExperimentStartDate },
         { name: "end_date", description: descExperimentEndDate },
+        { name: "target_network_map_ids", description: descExperimentTargetNetworkMapIds },
+        { name: "my_experiments", description: descExperimentMyExperiments, type: "boolean" },
+        { name: "exclude_automation", description: descExperimentExcludeAutomation, type: "boolean" },
       ],
       relatedResources: [
         { resourceType: "chaos_experiment_variable", relationship: "child", description: "Runtime variables for the experiment. List these to discover required inputs before running." },
         { resourceType: "chaos_input_set", relationship: "child", description: "Saved collections of variable overrides. Create input sets to reuse runtime configurations across runs." },
+        { resourceType: "chaos_application_map", relationship: "scoped_by", description: "When an experiment is bound to a chaos_application_map, the backend auto-emits workload=<name> AND service=<name> system tags. To find every experiment that targets a workload/service inside a given app map, either filter chaos_experiment with target_network_map_ids=<map> (returns ALL experiments on that map) or list services via chaos_application_map.get and use tags=workload=<name> / tags=service=<name>." },
+        { resourceType: "chaos_fault", relationship: "uses", description: "Each fault step in the experiment manifest emits a fault=<faultName> system tag. Use chaos_fault to discover available fault identities, then filter chaos_experiment with tags=fault=<name>." },
+        { resourceType: "chaos_probe", relationship: "uses", description: "Each probe reference in the experiment manifest emits a probe=<probeID> system tag. Use chaos_probe to discover probe identities, then filter chaos_experiment with tags=probe=<probeID>." },
+        { resourceType: "chaos_k8s_infrastructure", relationship: "scoped_by", description: "Experiments execute on a chaos infrastructure (the chaos agent installed in a Kubernetes cluster). Filter list with infra_id + environment_id (BOTH required together — backend ignores either alone)." },
+        { resourceType: "discovered_network_map", relationship: "discovery_source", description: "When the user gives a high-level target (e.g. 'experiments for the payments app') without an app-map ID, the discovery path is: discovered_network_map → enumerate services/workloads → tags=workload=<name> on chaos_experiment. See descToolsetChaos REASONING PLAYBOOK for the full step-by-step." },
       ],
       operations: {
         list: {
@@ -171,6 +244,9 @@ export const chaosToolset: ToolsetDefinition = {
             environment_id: "environmentIdentifier",
             start_date: "startDate",
             end_date: "endDate",
+            target_network_map_ids: "targetNetworkMapIds",
+            my_experiments: "myExperiments",
+            exclude_automation: "excludeAutomation",
           },
           responseExtractor: chaosPageExtract,
           description: descListExperiments,
@@ -191,6 +267,52 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: descDeleteExperiment,
         },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/experiment`,
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            // Accept both snake_case (MCP convention) and camelCase (Harness API / manifest convention)
+            const infraId = b.infra_id ?? b.infraId;
+            const infraType = b.infra_type ?? b.infraType;
+            const cronSyntax = b.cron_syntax ?? b.cronSyntax;
+            const isSingleRunCron = b.is_single_run_cron ?? b.isSingleRunCronEnabled;
+            const experimentType = b.experiment_type ?? b.experimentType;
+            const tags = b.tags;
+            return {
+              id: (b.id as string) || randomUUID(),
+              ...(b.identity ? { identity: b.identity } : {}),
+              name: b.name,
+              ...(b.manifest ? { manifest: b.manifest } : {}),
+              ...(infraId ? { infraId, infra_id: infraId } : {}),
+              ...(infraType ? { infraType, infra_type: infraType } : {}),
+              ...(b.description ? { description: b.description } : {}),
+              ...(tags ? { tags: Array.isArray(tags) ? tags : (tags as string).split(",").map((t: string) => t.trim()).filter(Boolean) } : {}),
+              ...(cronSyntax !== undefined ? { cronSyntax } : {}),
+              ...(isSingleRunCron !== undefined ? { isSingleRunCronEnabled: isSingleRunCron } : {}),
+              ...(experimentType ? { experimentType } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: descCreateExperiment,
+          bodySchema: {
+            description: descBodyExperimentCreate,
+            fields: [
+              { name: "id", type: "string", required: false, description: descExperimentIdUUID },
+              { name: "name", type: "string", required: true, description: descExperimentName },
+              { name: "manifest", type: "string", required: true, description: descExperimentManifest },
+              { name: "infra_id", type: "string", required: true, description: descExperimentInfraIdCreate },
+              { name: "infra_type", type: "string", required: true, description: descExperimentInfraType },
+              { name: "identity", type: "string", required: false, description: descExperimentIdentity },
+              { name: "description", type: "string", required: false, description: descExperimentDescription },
+              { name: "tags", type: "array", required: false, description: descExperimentTags },
+              { name: "cron_syntax", type: "string", required: false, description: descExperimentCronSyntax },
+              { name: "is_single_run_cron", type: "boolean", required: false, description: "When true and cron_syntax is set, the cron job runs only once (LimitRunsTo(1)). Default: false (unlimited runs)." },
+              { name: "experiment_type", type: "string", required: false, description: "Experiment workflow type. Valid: Workflow, CronWorkflow, ChaosEngine, ChaosSchedule, GamedayWorkflow. Usually auto-determined — only GamedayWorkflow is special-cased. Default: NonCronExperimentV2 (or CronExperimentV2 if cron_syntax is set)." },
+            ],
+          },
+        },
       },
       executeActions: {
         run: {
@@ -198,30 +320,60 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS}/rest/v2/experiments/{experimentId}/run`,
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { experiment_id: "experimentId" },
-          staticQueryParams: { isIdentity: "false" },
+          queryParams: { is_identity: "isIdentity" },
+          defaultQueryParams: { isIdentity: "true" },
           bodyBuilder: (input) => {
+            // Unwrap input.body (object or JSON string) so the documented
+            // harness_execute(body={runtime_inputs|experiment_variables|tasks: ...})
+            // path flows through. coerceBody throws on malformed JSON (fail-loud).
+            const b = coerceBody(input);
             const body: Record<string, unknown> = {};
-            if (input.inputset_identity) {
-              body.inputsetIdentity = input.inputset_identity;
+
+            // is_identity is declared in BOTH queryParams (URL) and bodySchema.fields
+            // (so LLMs reasonably nest it inside `body`). The Registry's queryParam
+            // resolver only reads top-level input — see index.ts:633-652 — so we
+            // hoist body-nested is_identity back onto input here. The dispatcher
+            // builds the body BEFORE resolving queryParams (see index.ts:628-631),
+            // making this the sanctioned point to hoist. Top-level input wins on
+            // conflict; we only hoist when top-level is unset.
+            if (input.is_identity === undefined && b.is_identity !== undefined) {
+              (input as Record<string, unknown>).is_identity = b.is_identity;
             }
-            if (input.runtime_inputs) {
-              body.runtimeInputs = input.runtime_inputs;
+
+            if (b.inputset_identity) {
+              body.inputsetIdentity = b.inputset_identity;
             }
-            // Build runtimeInputs from experiment_variables and tasks if provided
-            const expVars = input.experiment_variables as Array<{ name: string; value?: unknown }> | undefined;
-            const taskVars = input.tasks as Record<string, Record<string, unknown>> | undefined;
-            if ((expVars && expVars.length > 0) || (taskVars && Object.keys(taskVars).length > 0)) {
-              const runtimeInputs: Record<string, unknown> = {};
-              if (expVars && expVars.length > 0) {
-                runtimeInputs.experiment = expVars.map(v => ({ name: v.name, value: v.value }));
-              }
-              if (taskVars && Object.keys(taskVars).length > 0) {
-                const tasks: Record<string, Array<{ name: string; value: unknown }>> = {};
-                for (const [taskName, vars] of Object.entries(taskVars)) {
-                  tasks[taskName] = Object.entries(vars as Record<string, unknown>).map(([n, v]) => ({ name: n, value: v }));
+
+            // Seed runtimeInputs from caller's raw runtime_inputs so we never
+            // silently drop it when experiment_variables / tasks are also passed.
+            // Defensive shallow clone — do not mutate the caller's input.
+            const seed = (b.runtime_inputs as Record<string, unknown>) ?? {};
+            const runtimeInputs: Record<string, unknown> = { ...seed };
+
+            const expVars = b.experiment_variables as Array<{ name: string; value?: unknown }> | undefined;
+            if (expVars && expVars.length > 0) {
+              const existing = (runtimeInputs.experiment as Array<{ name: string; value: unknown }>) ?? [];
+              // Top-level experiment_variables override runtime_inputs.experiment on name conflict.
+              const byName = new Map(existing.map(v => [v.name, v]));
+              for (const v of expVars) byName.set(v.name, { name: v.name, value: v.value });
+              runtimeInputs.experiment = Array.from(byName.values());
+            }
+
+            const taskVars = b.tasks as Record<string, Record<string, unknown>> | undefined;
+            if (taskVars && Object.keys(taskVars).length > 0) {
+              const existing = (runtimeInputs.tasks as Record<string, Array<{ name: string; value: unknown }>>) ?? {};
+              for (const [taskName, vars] of Object.entries(taskVars)) {
+                // Top-level tasks override runtime_inputs.tasks on (taskName, varName) conflict.
+                const byName = new Map((existing[taskName] ?? []).map(v => [v.name, v]));
+                for (const [n, v] of Object.entries(vars as Record<string, unknown>)) {
+                  byName.set(n, { name: n, value: v });
                 }
-                runtimeInputs.tasks = tasks;
+                existing[taskName] = Array.from(byName.values());
               }
+              runtimeInputs.tasks = existing;
+            }
+
+            if (Object.keys(runtimeInputs).length > 0) {
               body.runtimeInputs = runtimeInputs;
             }
             return Object.keys(body).length > 0 ? body : {};
@@ -235,6 +387,7 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "runtime_inputs", type: "object", required: false, description: descRuntimeInputs },
               { name: "experiment_variables", type: "array", required: false, description: descExperimentVariablesParam },
               { name: "tasks", type: "object", required: false, description: descTasksParam },
+              { name: "is_identity", type: "boolean", required: false, description: descIsIdentity },
             ],
           },
         },
@@ -301,8 +454,8 @@ export const chaosToolset: ToolsetDefinition = {
         { name: "start_date", description: descExperimentStartDate },
         { name: "end_date", description: descExperimentEndDate },
         { name: "probe_ids", description: descProbeIds },
-        { name: "infra_type", description: descInfraType },
-        { name: "sort_field", description: descProbeSortField },
+        { name: "infra_type", description: descInfraType, enum: ["Kubernetes", "KubernetesV2", "Linux", "Windows", "CloudFoundry", "Container"] },
+        { name: "sort_field", description: descProbeSortField, enum: ["NAME", "TIME", "ENABLED"] },
         { name: "sort_ascending", description: descSortAsc, type: "boolean" as const },
         { name: "entity_type", description: descEntityTypeProbe },
       ],
@@ -345,6 +498,417 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: descDeleteProbe,
         },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/probes`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const probeId = b.probe_id ?? b.probeId ?? b.identity;
+            const tags = b.tags;
+            const isEnabled = b.is_enabled ?? b.isEnabled;
+            const infrastructureType =
+              b.infrastructure_type ?? b.infrastructureType ?? "Kubernetes";
+            const type = b.type ?? "httpProbe";
+            const probeProperties = b.probe_properties ?? b.probeProperties;
+            const runProperties = b.run_properties ?? b.runProperties;
+            return {
+              probeId,
+              ...(probeId !== undefined ? { probe_id: probeId } : {}),
+              name: b.name ?? probeId,
+              ...(b.description ? { description: b.description } : {}),
+              ...(tags
+                ? {
+                    tags: Array.isArray(tags)
+                      ? tags
+                      : (tags as string).split(",").map((t: string) => t.trim()).filter(Boolean),
+                  }
+                : {}),
+              type,
+              infrastructureType,
+              infrastructure_type: infrastructureType,
+              ...(isEnabled !== undefined ? { isEnabled } : {}),
+              ...(probeProperties ? { probeProperties, probe_properties: probeProperties } : {}),
+              ...(runProperties ? { runProperties } : {}),
+              ...(b.variables ? { variables: b.variables } : {}),
+              ...(b.inputs ? { inputs: b.inputs } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: descCreateProbe,
+          bodySchema: {
+            description: descBodyProbeCreate,
+            fields: [
+              { name: "probe_id", type: "string", required: true, description: descProbeIdField },
+              { name: "name", type: "string", required: true, description: descProbeNameField },
+              {
+                name: "type",
+                type: "string",
+                required: true,
+                description: "Probe type discriminator: httpProbe | cmdProbe | promProbe | k8sProbe | sloProbe | datadogProbe | dynatraceProbe | apmProbe | containerProbe. NOTE: promProbe and apmProbe are DIFFERENT — promProbe queries a Prometheus endpoint URL directly (no connector); apmProbe.type=Prometheus uses a managed Harness Prometheus connector by ID. Pick promProbe for a raw URL; pick apmProbe (sub-type Prometheus) when you have a Harness Prometheus connector. httpProbe, cmdProbe, promProbe, k8sProbe, datadogProbe, dynatraceProbe, and apmProbe (Prometheus sub-type only) are fully documented below; sloProbe, containerProbe, and the other apmProbe sub-types pass through to the Harness API.",
+              },
+              {
+                name: "infrastructure_type",
+                type: "string",
+                required: true,
+                description: "Kubernetes | Linux | Windows. Default Kubernetes.",
+              },
+              { name: "description", type: "string", required: false, description: "Free-form probe description." },
+              { name: "tags", type: "array", required: false, description: "Tags array or comma-separated string. Each tag follows the 'key:value' convention." },
+              { name: "is_enabled", type: "boolean", required: false, description: "Whether the probe is enabled. Defaults to true server-side." },
+              {
+                name: "probe_properties",
+                type: "object",
+                required: true,
+                description: descProbePropertiesField,
+                fields: [
+                  {
+                    name: "httpProbe",
+                    type: "object",
+                    required: false,
+                    description: "Required when type=httpProbe. Defines URL, method, optional auth/tlsConfig/headers.",
+                    fields: [
+                      { name: "url", type: "string", required: true, description: "Target HTTP/HTTPS endpoint the probe sends requests to." },
+                      {
+                        name: "method",
+                        type: "object",
+                        required: true,
+                        description: "HTTP method. Set exactly one of: get (GET) | post (POST).",
+                        fields: [
+                          {
+                            name: "get",
+                            type: "object",
+                            required: false,
+                            description: "GET request method. Use either get OR post, not both.",
+                            fields: [
+                              { name: "criteria", type: "string", required: true, description: "Comparator. For responseCode (numeric): == | != | >= | <= | > | < | oneOf | between. For responseBody (string): contains | equal | notEqual | matches | notMatches | oneOf." },
+                              { name: "responseCode", type: "string", required: false, description: "Numeric response code as string, e.g. \"200\". Set this XOR responseBody." },
+                              { name: "responseBody", type: "string", required: false, description: "Expected substring/regex in response body. Set this XOR responseCode." },
+                            ],
+                          },
+                          {
+                            name: "post",
+                            type: "object",
+                            required: false,
+                            description: "POST request method. Use either get OR post, not both.",
+                            fields: [
+                              { name: "contentType", type: "string", required: false, description: "HTTP Content-Type header for the request body, e.g. \"application/json\"." },
+                              { name: "body", type: "string", required: false, description: "Inline request body. Set this XOR bodyPath." },
+                              { name: "bodyPath", type: "string", required: false, description: "Path to a file containing the request body. Set this XOR body." },
+                              { name: "criteria", type: "string", required: true, description: "Comparator. For responseCode (numeric): == | != | >= | <= | > | < | oneOf | between. For responseBody (string): contains | equal | notEqual | matches | notMatches | oneOf." },
+                              { name: "responseCode", type: "string", required: false, description: "Numeric response code as string, e.g. \"200\". Set this XOR responseBody." },
+                              { name: "responseBody", type: "string", required: false, description: "Expected substring/regex in response body. Set this XOR responseCode." },
+                            ],
+                          },
+                        ],
+                      },
+                      {
+                        name: "auth",
+                        type: "object",
+                        required: false,
+                        description: "Optional HTTP authorization (Bearer, Basic, etc.).",
+                        fields: [
+                          { name: "type", type: "string", required: false, description: "Auth scheme: Basic | Bearer. Omit auth entirely for no-auth." },
+                          { name: "credentials", type: "string", required: false, description: "Authentication credentials (base64-encoded username=password) required to access the URL. Plain text or secret reference." },
+                        ],
+                      },
+                      {
+                        name: "tlsConfig",
+                        type: "object",
+                        required: false,
+                        description: "Optional TLS configuration for mTLS / custom CA.",
+                        fields: [
+                          { name: "caFile", type: "string", required: false, description: "CA certificate file or file path used to validate the target's TLS certificate." },
+                          { name: "certFile", type: "string", required: false, description: "Client certificate file or file path required for mTLS." },
+                          { name: "keyFile", type: "string", required: false, description: "Client key file or file path required for mTLS." },
+                          { name: "insecureSkipVerify", type: "boolean", required: false, description: "If true, bypass SSL/TLS certificate verification (allows invalid/self-signed certs). Dev only." },
+                        ],
+                      },
+                      {
+                        name: "headers",
+                        type: "array",
+                        required: false,
+                        itemType: "object",
+                        description: "Extra request headers. Each item: { key, value }.",
+                      },
+                    ],
+                  },
+                  {
+                    name: "cmdProbe",
+                    type: "object",
+                    required: false,
+                    description: "Required when type=cmdProbe. Runs a shell command (sh -c) and asserts on its stdout via comparator.",
+                    fields: [
+                      { name: "command", type: "string", required: true, description: "Shell command to execute (sh -c). Pipes, redirects, &&, etc. supported. Example: \"redis-cli -h redis ping\"." },
+                      {
+                        name: "comparator",
+                        type: "object",
+                        required: true,
+                        description: "Stdout assertion. The runner casts stdout to `type` and compares against `value` using `criteria`.",
+                        fields: [
+                          { name: "type", type: "string", required: true, description: "Data type for comparison: int | float | string." },
+                          { name: "criteria", type: "string", required: true, description: "Operator. For type=int|float: == | != | >= | <= | > | <. For type=string: equal | notEqual | contains." },
+                          { name: "value", type: "string", required: true, description: "Expected value (always a string; cast to `type` before comparing)." },
+                        ],
+                      },
+                      {
+                        name: "source",
+                        type: "string",
+                        required: false,
+                        description: "Execution mode. OMIT for inline mode (command runs in the chaos runner pod). For source mode, provide a JSON-ENCODED STRING (NOT a structured object) — the Harness backend persists source as an opaque string and returns 'failed to convert cmd probe source to string' if passed as a JSON object. Build the spec object then JSON.stringify() it before assigning. Inner JSON shape is documented in `fields` below for reference (image required; optionally command, args, env, inheritInputs, hostNetwork, privileged, imagePullPolicy, imagePullSecrets, nodeSelector, tolerations, volumes, volumeMount, labels, annotations). Example: source: \"{\\\"image\\\":\\\"redis:7-alpine\\\",\\\"inheritInputs\\\":true}\". When source is set, top-level cmdProbe.env is ignored — put env vars in source.env (inside the JSON string).",
+                        fields: [
+                          { name: "image", type: "string", required: true, description: "Container image for the source pod, e.g. \"redis:7-alpine\". The only required field inside source." },
+                          { name: "command", type: "array", required: false, itemType: "string", description: "Override the image's ENTRYPOINT, e.g. [\"sh\", \"-c\"]." },
+                          { name: "args", type: "array", required: false, itemType: "string", description: "Override the image's CMD, e.g. [\"redis-cli -h redis ping\"]." },
+                          { name: "env", type: "array", required: false, itemType: "object", description: "Source-pod env vars. Each item is a Kubernetes corev1.EnvVar — supports {name, value} or {name, valueFrom: {secretKeyRef: {name, key}}} or {name, valueFrom: {configMapKeyRef: {name, key}}}." },
+                          { name: "inheritInputs", type: "boolean", required: false, description: "If true, source pod inherits experiment pod's env, volumes, and volumeMounts. Default false." },
+                          { name: "hostNetwork", type: "boolean", required: false, description: "Run source pod with hostNetwork: true. Required for node-level network probes. Default false." },
+                          { name: "privileged", type: "boolean", required: false, description: "Run source container as privileged. Default false. Use sparingly." },
+                          { name: "imagePullPolicy", type: "string", required: false, description: "IfNotPresent | Always | Never." },
+                          { name: "imagePullSecrets", type: "array", required: false, itemType: "object", description: "List of {name} for private-registry image pull, e.g. [{\"name\": \"regcred\"}]." },
+                          { name: "nodeSelector", type: "object", required: false, description: "Map of node-label selectors, e.g. {\"kubernetes.io/os\": \"linux\"}." },
+                          { name: "tolerations", type: "array", required: false, itemType: "object", description: "Kubernetes Toleration objects to schedule onto tainted nodes." },
+                          { name: "volumes", type: "array", required: false, itemType: "object", description: "Kubernetes Volume objects (configMap, secret, emptyDir, hostPath, persistentVolumeClaim, etc.)." },
+                          { name: "volumeMount", type: "array", required: false, itemType: "object", description: "Kubernetes VolumeMount objects. NOTE: JSON key is `volumeMount` (singular), not `volumeMounts`." },
+                          { name: "labels", type: "object", required: false, description: "Map of labels for the source pod." },
+                          { name: "annotations", type: "object", required: false, description: "Map of annotations for the source pod, e.g. {\"sidecar.istio.io/inject\": \"false\"}." },
+                        ],
+                      },
+                      { name: "env", type: "array", required: false, itemType: "object", description: "Inline-mode env vars (each {name, value}). IGNORED when `source` is set — put env vars in source.env instead." },
+                    ],
+                  },
+                  {
+                    name: "promProbe",
+                    type: "object",
+                    required: false,
+                    description: "Required when type=promProbe. Asserts a PromQL scalar result against a numeric comparator. Common pattern: bound a golden signal (error rate, latency, saturation) during chaos.",
+                    fields: [
+                      { name: "endpoint", type: "string", required: true, description: "Prometheus base URL. The probe appends /api/v1/query. In-cluster example: \"http://prometheus-server.monitoring.svc:9090\". Use a runtime expression (\"<+input>\") to parameterise per-env." },
+                      { name: "query", type: "string", required: false, description: "Inline PromQL. The first scalar of the result vector is compared via comparator. Set this XOR queryPath. Example: \"sum(rate(http_requests_total{status=~\\\"5..\\\"}[1m])) / sum(rate(http_requests_total[1m]))\"." },
+                      { name: "queryPath", type: "string", required: false, description: "Filesystem path inside the probe container that holds the PromQL query. Use for long queries managed via ConfigMap/volume. Set this XOR query." },
+                      {
+                        name: "comparator",
+                        type: "object",
+                        required: true,
+                        description: "Scalar assertion on the PromQL result. type MUST be \"float\" (Prometheus always returns numerics).",
+                        fields: [
+                          { name: "type", type: "string", required: true, description: "MUST be \"float\". The Harness UI enforces float-only for promProbe." },
+                          { name: "criteria", type: "string", required: true, description: "Numeric operator: == | != | >= | <= | > | <. String operators (equal/contains/...) are NOT supported for promProbe." },
+                          { name: "value", type: "string", required: true, description: "Threshold as a numeric string, e.g. \"0.05\" (5% error budget), \"500\" (latency ms), \"1\" (boolean up/down)." },
+                        ],
+                      },
+                      {
+                        name: "auth",
+                        type: "object",
+                        required: false,
+                        description: "Optional Prometheus authorization. Omit for unauthenticated in-cluster Prometheus.",
+                        fields: [
+                          { name: "type", type: "string", required: false, description: "Auth scheme: Basic | Bearer. Omit auth entirely for no-auth." },
+                          { name: "credentials", type: "string", required: false, description: "Plain credentials or a Harness secret reference (<+secrets.getValue('promToken')>)." },
+                        ],
+                      },
+                      {
+                        name: "tlsConfig",
+                        type: "object",
+                        required: false,
+                        description: "Optional TLS configuration for HTTPS Prometheus endpoints / mTLS / custom CA.",
+                        fields: [
+                          { name: "caFile", type: "string", required: false, description: "CA certificate file or path used to validate the Prometheus TLS cert." },
+                          { name: "certFile", type: "string", required: false, description: "Client certificate file or path for mTLS." },
+                          { name: "keyFile", type: "string", required: false, description: "Client key file or path for mTLS." },
+                          { name: "insecureSkipVerify", type: "boolean", required: false, description: "If true, skip TLS verification. Dev only." },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    name: "k8sProbe",
+                    type: "object",
+                    required: false,
+                    description: "Required when type=k8sProbe. Performs a Kubernetes API operation against a resource (or selector) and asserts on its lifecycle/existence. Kubernetes-infra ONLY (not Linux/Windows — the (infra, type) matrix enforces this). Common patterns: assert a Deployment/Pod/CR is `present` (or `absent`) during a chaos fault; verify an operator recreated a deleted ConfigMap.",
+                    fields: [
+                      { name: "group", type: "string", required: false, description: "Kubernetes API group of the resource. Examples: \"apps\" for Deployments/StatefulSets/DaemonSets, \"batch\" for Jobs/CronJobs, \"networking.k8s.io\" for Ingress, \"\" (empty) or omit for core resources like Pods/ConfigMaps/Services." },
+                      { name: "version", type: "string", required: true, description: "apiVersion of the resource (e.g. \"v1\", \"v1beta1\", \"v1alpha1\"). Combined with `group` and `resource` to form the GVR (Group/Version/Resource) for the Kubernetes API call." },
+                      { name: "resource", type: "string", required: true, description: "Plural resource name (lowercase). Examples: \"pods\", \"deployments\", \"configmaps\", \"services\", \"<crd-plural>\"." },
+                      { name: "operation", type: "string", required: true, description: "Operation to perform on the resource. One of: \"create\" | \"delete\" | \"present\" | \"absent\". Use \"present\"/\"absent\" for read-only liveness assertions during steady-state. Use \"create\"/\"delete\" only for action probes (rare — most chaos hypotheses are about steady state)." },
+                      { name: "namespace", type: "string", required: false, description: "Namespace scope, e.g. \"boutique\". Omit for cluster-scoped resources (e.g. Nodes, Namespaces themselves) or to operate cluster-wide on a namespaced resource." },
+                      { name: "resourceNames", type: "string", required: false, description: "Comma-separated list of specific resource names to target (e.g. \"checkout,payment\"). Omit to operate on all resources matching the selectors. Mutually compatible with fieldSelector and labelSelector — all provided constraints are AND-combined by the Kubernetes API." },
+                      { name: "fieldSelector", type: "string", required: false, description: "Kubernetes field selector to derive the target resource(s). Examples: \"metadata.name=checkout\", \"status.phase=Running\", \"spec.nodeName=node-1\"." },
+                      { name: "labelSelector", type: "string", required: false, description: "Kubernetes label selector. Examples: \"app=checkout\", \"app in (checkout,payment)\", \"tier=frontend,env=prod\"." },
+                    ],
+                  },
+                  {
+                    name: "datadogProbe",
+                    type: "object",
+                    required: false,
+                    description: "Required when type=datadogProbe. Queries Datadog (metrics or synthetics) and asserts on the result during chaos. Common patterns: bound a Datadog metric (CPU, latency, error rate) during a fault; ensure a Datadog synthetic API/browser test still passes during chaos. Mutually exclusive sub-selectors: set EXACTLY ONE of `metrics` XOR `syntheticsTest`.",
+                    fields: [
+                      { name: "datadogSite", type: "string", required: true, description: "Datadog site/region identifier. Valid values (per https://docs.datadoghq.com/getting_started/site/): \"datadoghq.com\" (US1), \"us3.datadoghq.com\" (US3), \"us5.datadoghq.com\" (US5), \"datadoghq.eu\" (EU1), \"ap1.datadoghq.com\" (AP1, Japan), \"ap2.datadoghq.com\" (AP2, Australia), \"ddog-gov.com\" (US1-FED), \"us2.ddog-gov.com\" (US2-FED). Pass just the host, NOT the full URL." },
+                      { name: "datadogCredentialsSecretName", type: "string", required: false, description: "Name of the Kubernetes secret in the chaos-runner namespace holding the Datadog API key and application key (keys: `dd-api-key`, `dd-app-key`). REQUIRED when infrastructure_type=Kubernetes; ignored on Linux (set blank or omit on Linux infra)." },
+                      {
+                        name: "syntheticsTest",
+                        type: "object",
+                        required: false,
+                        description: "Datadog synthetics-test assertion. Set this XOR `metrics`. The probe polls the test's most-recent result and passes iff the synthetic test passed.",
+                        fields: [
+                          { name: "testType", type: "string", required: true, description: "Synthetic-test kind. EXACTLY one of: \"api\" | \"browser\". Any other value is rejected." },
+                          { name: "publicId", type: "string", required: true, description: "Datadog synthetic-test Public ID (e.g. \"abc-123-xyz\"). Find under Datadog UI → Synthetics → <test> → Settings → Public ID." },
+                        ],
+                      },
+                      {
+                        name: "metrics",
+                        type: "object",
+                        required: false,
+                        description: "Datadog metrics assertion. Set this XOR `syntheticsTest`. The probe runs the Datadog metrics query over `timeFrame` and applies `comparator` to the scalar result.",
+                        fields: [
+                          { name: "query", type: "string", required: true, description: "Datadog metrics query string. Example: \"avg:system.cpu.user{service:checkout}\" or \"avg:trace.http.request.duration{service:checkout}.rollup(avg, 60)\". Use the same syntax as Datadog Metrics Explorer." },
+                          { name: "timeFrame", type: "string", required: true, description: "Relative time-range expression. MUST match the regex /^now-\\d+[smh]$/ — e.g. \"now-1m\", \"now-5m\", \"now-1h\". Plain \"now\" and absolute timestamps are NOT supported." },
+                          {
+                            name: "comparator",
+                            type: "object",
+                            required: true,
+                            description: "Scalar assertion on the Datadog metrics result. type MUST be \"float\" (Datadog metrics are numeric).",
+                            fields: [
+                              { name: "type", type: "string", required: true, description: "MUST be \"float\". The Harness UI enforces float-only for datadogProbe metrics." },
+                              { name: "criteria", type: "string", required: true, description: "Numeric operator: == | != | >= | <= | > | <. String operators (equal/contains/...) are NOT supported." },
+                              { name: "value", type: "string", required: true, description: "Threshold as a numeric string, e.g. \"80\" (CPU %), \"500\" (latency ms), \"0.05\" (error budget)." },
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    name: "dynatraceProbe",
+                    type: "object",
+                    required: false,
+                    description: "Required when type=dynatraceProbe. Queries the Dynatrace API for a metric over a timeframe and asserts on the numeric result. Supported on Kubernetes and Linux infra (NOT Windows — the (infra, type) matrix enforces this). Common pattern: bound a SaaS observability metric (CPU, latency, error count) during chaos.",
+                    fields: [
+                      { name: "endpoint", type: "string", required: true, description: "Dynatrace tenant endpoint URL. Examples: \"https://abc.live.dynatrace.com\" (SaaS), \"https://abc.dynatrace-managed.com/e/<env-id>\" (Managed). Use a runtime expression (\"<+input>\") to parameterise per-env." },
+                      { name: "timeFrame", type: "string", required: true, description: "Aggregation window in Dynatrace expression syntax: \"now-1m\" (last minute), \"now-5m\" (last 5 minutes), \"now-1h\", etc. The probe queries Dynatrace over this window and feeds the avg/min/max scalar to the comparator." },
+                      { name: "apiTokenSecretName", type: "string", required: false, description: "Kubernetes secret holding the Dynatrace API token. The probe runner reads the token from this secret to authenticate API calls. Omit only if your tenant doesn't require auth (rare)." },
+                      {
+                        name: "metrics",
+                        type: "object",
+                        required: true,
+                        description: "Dynatrace metric query. Selects which metric series to evaluate and which entities to scope. Both selectors are required.",
+                        fields: [
+                          { name: "metricsSelector", type: "string", required: true, description: "Dynatrace metric selector. Examples: \"builtin:host.cpu.usage\", \"builtin:service.errors.total.rate\", \"builtin:service.response.time:avg\"." },
+                          { name: "entitySelector", type: "string", required: true, description: "Dynatrace entity selector that scopes the metric to specific hosts/services/pods. Examples: \"type(HOST)\", \"type(SERVICE),tag(\\\"env:prod\\\")\", \"entityName(\\\"checkout\\\")\"." },
+                        ],
+                      },
+                      {
+                        name: "comparator",
+                        type: "object",
+                        required: true,
+                        description: "Numeric assertion on the Dynatrace metric result. Dynatrace metrics are numeric — comparator.type MUST be \"float\". String comparators are NOT supported for dynatraceProbe.",
+                        fields: [
+                          { name: "type", type: "string", required: true, description: "MUST be \"float\". The Harness UI enforces float-only for dynatraceProbe metrics." },
+                          { name: "criteria", type: "string", required: true, description: "Numeric operator: == | != | >= | <= | > | <. String operators (equal/contains/...) are NOT supported." },
+                          { name: "value", type: "string", required: true, description: "Threshold as a numeric string, e.g. \"80\" (CPU% upper bound), \"500\" (latency ms), \"0.05\" (error rate)." },
+                        ],
+                      },
+                    ],
+                  },
+                  {
+                    name: "apmProbe",
+                    type: "object",
+                    required: false,
+                    description: "Required when type=apmProbe. Wraps an APM/observability backend via a managed Harness connector (Prometheus, AppDynamics, SplunkObservability, Dynatrace, NewRelic, GcpCloudMonitoring, Datadog APM, SplunkEnterprise) and asserts on a metric/query result. apmProbe.type discriminates the sub-type; the matching <type>ProbeInputs object holds the connectorID (a Harness connector identifier) and per-backend inputs. NOT the same as promProbe — promProbe queries a Prometheus URL directly; apmProbe.type=Prometheus uses a Harness Prometheus connector. Phase 1: Prometheus sub-type is fully documented; the other 7 sub-types pass through.",
+                    fields: [
+                      {
+                        name: "comparator",
+                        type: "object",
+                        required: true,
+                        description: "Numeric assertion on the APM metric result. type MUST be \"float\" — the Harness UI enforces float-only for apmProbe.",
+                        fields: [
+                          { name: "type", type: "string", required: true, description: "MUST be \"float\". apmProbe metrics are numeric." },
+                          { name: "criteria", type: "string", required: true, description: "Numeric operator: == | != | >= | <= | > | <." },
+                          { name: "value", type: "string", required: true, description: "Threshold as a numeric string, e.g. \"90\", \"0.05\", \"500\"." },
+                        ],
+                      },
+                      {
+                        name: "type",
+                        type: "string",
+                        required: true,
+                        description: "APM backend discriminator. EXACTLY one of: Prometheus | AppDynamics | SplunkObservability | Dynatrace | NewRelic | GcpCloudMonitoring | Datadog | SplunkEnterprise. The matching <type>ProbeInputs object must be set.",
+                      },
+                      {
+                        name: "prometheusProbeInputs",
+                        type: "object",
+                        required: false,
+                        description: "Required when apmProbe.type=Prometheus. Holds the Harness Prometheus connector reference and the PromQL query/TLS config. The Prometheus URL/auth lives on the connector — do NOT pass an endpoint URL here (that's the promProbe shape, a different probe).",
+                        fields: [
+                          { name: "connectorID", type: "string", required: true, description: "Harness Prometheus connector identifier (NOT a connectorRef expression, NOT a URL — just the bare identifier, e.g. \"gcpmgrpromconnector\"). Discover via harness_list resource_type=connector with type=Prometheus and include_all_connectors_available_at_scope=true. Distinct from promProbe.endpoint, which is a raw Prometheus URL." },
+                          { name: "query", type: "string", required: true, description: "PromQL query whose scalar result is compared via comparator (e.g. \"sum(rate(http_requests_total[1m]))\"). Same query language as promProbe.query, but executed against the Prometheus endpoint resolved from the connectorID rather than a raw URL." },
+                          {
+                            name: "tlsConfig",
+                            type: "object",
+                            required: false,
+                            description: "Optional TLS config for the Prometheus endpoint. Shape DIFFERS from promProbe.tlsConfig (which uses caFile/certFile/keyFile string paths). Here each cert field is an object { identifier: \"secrets.getValue(\\\"<secretId>\\\")\" } pointing to a Harness secret — discover secrets via harness_list resource_type=secret type=SecretText include_all_secrets_accessible_at_scope=true.",
+                            fields: [
+                              {
+                                name: "caCrt",
+                                type: "object",
+                                required: false,
+                                description: "CA certificate secret reference. Shape: { identifier: \"secrets.getValue(\\\"<secretId>\\\")\" }.",
+                                fields: [{ name: "identifier", type: "string", required: true, description: "Wrapped secret expression: secrets.getValue(\"<secretId>\")." }],
+                              },
+                              {
+                                name: "clientCrt",
+                                type: "object",
+                                required: false,
+                                description: "Client certificate secret reference. Shape: { identifier: \"secrets.getValue(\\\"<secretId>\\\")\" }.",
+                                fields: [{ name: "identifier", type: "string", required: true, description: "Wrapped secret expression: secrets.getValue(\"<secretId>\")." }],
+                              },
+                              {
+                                name: "key",
+                                type: "object",
+                                required: false,
+                                description: "Client key secret reference. Shape: { identifier: \"secrets.getValue(\\\"<secretId>\\\")\" }.",
+                                fields: [{ name: "identifier", type: "string", required: true, description: "Wrapped secret expression: secrets.getValue(\"<secretId>\")." }],
+                              },
+                              { name: "insecureSkipVerify", type: "boolean", required: false, description: "If true, skip TLS verification (allows invalid/self-signed certs). Dev only." },
+                            ],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                name: "run_properties",
+                type: "object",
+                required: false,
+                description: descRunPropertiesField,
+                fields: [
+                  { name: "timeout", type: "string", required: false, description: "Time limit for the probe to execute the check and return output, e.g. \"10s\"." },
+                  { name: "interval", type: "string", required: false, description: "Duration the probe waits between subsequent attempts, e.g. \"2s\"." },
+                  { name: "attempt", type: "number", required: false, description: "Number of times the check is retried upon failure before declaring FAILED." },
+                  { name: "pollingInterval", type: "string", required: false, description: "Wait time between iterations for Continuous / OnChaos probe modes, e.g. \"30s\"." },
+                  { name: "initialDelay", type: "string", required: false, description: "Duration to wait before the probe begins execution, e.g. \"5s\"." },
+                  { name: "stopOnFailure", type: "boolean", required: false, description: "If true, stop experiment execution when the probe fails. Default false (continue)." },
+                  { name: "verbosity", type: "string", required: false, description: "Log level: info | debug. Default info." },
+                ],
+              },
+              {
+                name: "variables",
+                type: "array",
+                required: false,
+                itemType: "object",
+                description: "Probe-level template variables. Each item: { name, type, value, required, description }.",
+              },
+              {
+                name: "inputs",
+                type: "array",
+                required: false,
+                itemType: "object",
+                description: "Optional template inputs (advanced). Usually [].",
+              },
+            ],
+          },
+        },
       },
       executeActions: {
         enable: {
@@ -353,7 +917,7 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { probe_id: "probeId" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               isEnabled: b.is_enabled ?? true,
               ...(b.is_bulk_update !== undefined ? { isBulkUpdate: b.is_bulk_update } : {}),
@@ -375,7 +939,7 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { probe_id: "probeId" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return { verify: b.verify ?? true };
           },
           responseExtractor: passthrough,
@@ -521,7 +1085,7 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { template_id: "templateId" },
           queryParams: { hub_identity: "hubIdentity", revision: "revision" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             let infraRef = b.infra_ref as string | undefined;
             if (!infraRef && b.infra_id) {
               const envId = b.environment_id as string | undefined;
@@ -575,13 +1139,6 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           actionDescription: descListRevisions,
-          bodySchema: {
-            description: "No body required. Template identified by path parameter.",
-            fields: [
-              { name: "template_id", type: "string", required: true, description: descTemplateIdentity },
-              { name: "hub_identity", type: "string", required: true, description: descHubIdentity },
-            ],
-          },
         },
         get_variables: {
           method: "GET",
@@ -594,14 +1151,6 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           actionDescription: descGetVariables,
-          bodySchema: {
-            description: "No body required. Template identified by path parameter.",
-            fields: [
-              { name: "template_id", type: "string", required: true, description: descTemplateIdentity },
-              { name: "hub_identity", type: "string", required: true, description: descHubIdentity },
-              { name: "revision", type: "string", required: false, description: descRevision },
-            ],
-          },
         },
         get_yaml: {
           method: "GET",
@@ -614,14 +1163,6 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           actionDescription: descGetYaml,
-          bodySchema: {
-            description: "No body required. Template identified by path parameter.",
-            fields: [
-              { name: "template_id", type: "string", required: true, description: descTemplateIdentity },
-              { name: "hub_identity", type: "string", required: true, description: descHubIdentity },
-              { name: "revision", type: "string", required: false, description: descRevision },
-            ],
-          },
         },
         compare_revisions: {
           method: "GET",
@@ -635,15 +1176,6 @@ export const chaosToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           actionDescription: descCompareRevisions,
-          bodySchema: {
-            description: "No body required. Template identified by path parameter.",
-            fields: [
-              { name: "template_id", type: "string", required: true, description: descTemplateIdentity },
-              { name: "hub_identity", type: "string", required: true, description: descHubIdentity },
-              { name: "revision1", type: "string", required: true, description: descRevision1 },
-              { name: "revision2", type: "string", required: true, description: descRevision2 },
-            ],
-          },
         },
       },
     },
@@ -659,6 +1191,7 @@ export const chaosToolset: ToolsetDefinition = {
       identifierFields: ["experiment_id"],
       listFilterFields: [
         { name: "experiment_id", description: descExperimentId, required: true },
+        { name: "is_identity", description: descIsIdentity, type: "boolean" },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
       operations: {
@@ -667,9 +1200,60 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS}/rest/v2/experiments/{experimentId}/variables`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { experiment_id: "experimentId" },
-          staticQueryParams: { isIdentity: "false" },
-          responseExtractor: passthrough,
+          queryParams: { is_identity: "isIdentity" },
+          defaultQueryParams: { isIdentity: "true" },
+          responseExtractor: chaosRunTimeInputsExtract,
           description: descListExperimentVariables,
+        },
+      },
+    },
+
+    // ── Chaos Component Variables (unified v3) ─────────────────────────
+    {
+      resourceType: "chaos_component_variable",
+      displayName: "Chaos Component Variable",
+      description: descChaosComponentVariable,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["identifier"],
+      listFilterFields: [
+        { name: "type", description: descComponentType, required: true, enum: ["Fault", "Probe", "Action"] },
+        { name: "identifier", description: descComponentIdentifier, required: true },
+        { name: "hub_reference", description: descComponentHubReference },
+      ],
+      relatedResources: [
+        { resourceType: "chaos_probe", relationship: "parent", description: "The probe whose variables are being retrieved. Use harness_get with resource_type=chaos_probe to fetch the full probe definition." },
+        { resourceType: "chaos_fault", relationship: "parent", description: "The fault whose variables are being retrieved. Use harness_get with resource_type=chaos_fault to fetch the full fault definition." },
+        { resourceType: "chaos_action", relationship: "parent", description: "The action whose variables are being retrieved. Use harness_get with resource_type=chaos_action to fetch the full action definition." },
+      ],
+      operations: {
+        get: {
+          method: "GET",
+          path: `${CHAOS}/v3/integrations/get-chaos-component-variable`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            type: "type",
+            identifier: "identifier",
+            hub_reference: "hubReference",
+          },
+          // Registry only enforces listFilterFields.required for operation==="list"
+          // and this resource has only `get`, so we validate locally via preflight.
+          // Keeps the `required: true` flags on listFilterFields as accurate docs
+          // for harness_describe while also failing loudly before any HTTP call.
+          preflight: async ({ input }) => {
+            const missing: string[] = [];
+            if (input.type === undefined || input.type === "") missing.push("type");
+            if (input.identifier === undefined || input.identifier === "") missing.push("identifier");
+            if (missing.length > 0) {
+              throw new Error(
+                `Missing required field(s) for get on chaos_component_variable: ${missing.join(", ")}. ` +
+                `Both 'type' (Fault | Probe | Action) and 'identifier' must be provided.`,
+              );
+            }
+          },
+          responseExtractor: chaosComponentVarExtract,
+          description: descGetComponentVariable,
         },
       },
     },
@@ -720,7 +1304,7 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               identity: b.identity,
               name: b.name,
@@ -748,7 +1332,7 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               name: b.name,
               description: b.description,
@@ -1011,7 +1595,7 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS}/rest/hubs`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               identity: b.identity,
               name: b.name,
@@ -1043,7 +1627,7 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { hub_id: "hubId" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               name: b.name,
               ...(b.description !== undefined ? { description: b.description } : {}),
@@ -1082,7 +1666,15 @@ export const chaosToolset: ToolsetDefinition = {
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["fault_id"],
       listFilterFields: [
+        { name: "search", description: descFaultSearch },
+        { name: "type", description: descFaultListType },
+        { name: "infrastructure_type", description: descFaultListInfraType },
+        { name: "infrastructure", description: descFaultListInfrastructure },
+        { name: "tags", description: descFaultListTags },
+        { name: "category", description: descFaultListCategory },
         { name: "is_enterprise", description: descIsEnterpriseFilter, type: "boolean" },
+        { name: "sort_field", description: descFaultListSortField, enum: ["name", "lastUpdated"] },
+        { name: "sort_ascending", description: descFaultListSortAscending, type: "boolean" },
       ],
       operations: {
         list: {
@@ -1096,6 +1688,13 @@ export const chaosToolset: ToolsetDefinition = {
             search: "search",
             search_term: "search",
             is_enterprise: "isEnterprise",
+            type: "type",
+            infrastructure_type: "infrastructureType",
+            infrastructure: "infrastructure",
+            tags: "tags",
+            category: "category",
+            sort_field: "sortField",
+            sort_ascending: "sortAscending",
           },
           responseExtractor: chaosPageExtract,
           description: descListFaults,
@@ -1722,34 +2321,85 @@ export const chaosToolset: ToolsetDefinition = {
       },
     },
 
-    // ── Chaos Network Maps ──────────────────────────────────────────
+    // ── Chaos Application Maps ──────────────────────────────────────
     {
-      resourceType: "chaos_network_map",
-      displayName: "Chaos Network Map",
-      description: descChaosNetworkMap,
+      resourceType: "chaos_application_map",
+      displayName: "Chaos Application Map",
+      description: descChaosApplicationMap,
       toolset: "chaos",
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["map_id"],
+      searchAliases: [
+        "chaos_network_map",
+        "application map", "app map",
+        "network map", "chaos network map",
+        "blast radius",
+      ],
+      listFilterFields: [
+        { name: "search",         description: descAppMapSearch },
+        { name: "environment_id", description: descAppMapEnvironmentId },
+        { name: "infra_id",       description: descAppMapInfraId },
+        { name: "all",            description: descAppMapAll,     type: "boolean" },
+        { name: "minimal",        description: descAppMapMinimal, type: "boolean" },
+      ],
+      relatedResources: [
+        { resourceType: "chaos_k8s_infrastructure", relationship: "scoped_by", description: "Application maps are scoped by (environment, infrastructure). Use chaos_k8s_infrastructure to discover valid infra_id values." },
+        { resourceType: "chaos_environment",        relationship: "scoped_by", description: "Application maps are scoped by environment. Use chaos_environment to discover valid environment_id values." },
+        { resourceType: "discovered_network_map",   relationship: "backed-by", description: "The chaos application map wraps an underlying service-discovery network map. Use discovered_network_map to inspect the raw per-agent inventory." },
+        { resourceType: "chaos_experiment",         relationship: "scopes",    description: "Experiments bound to this application map auto-emit workload=<name> AND service=<name> system tags (one per workload/service in the manifest). Find them via chaos_experiment list with target_network_map_ids=<this map's identity> (broadest) or tags=workload=<name> / tags=service=<name> (narrower)." },
+      ],
       operations: {
         list: {
-          method: "GET",
+          method: "POST",
           path: `${CHAOS}/rest/v2/applicationmaps`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             page: "page",
             limit: "limit",
+            size: "limit",
+            search: "search",
+            search_term: "search",
+            environment_id: "environmentIdentifier",
+            infra_id: "infraId",
+            all: "all",
+            minimal: "minimal",
           },
-          responseExtractor: chaosPageExtract,
-          description: descListNetworkMaps,
+          bodyBuilder: () => ({}),
+          responseExtractor: chaosAppMapPageExtract,
+          description: descListApplicationMaps,
+          bodySchema: { description: descBodyNoBody, fields: [] },
         },
         get: {
           method: "GET",
           path: `${CHAOS}/rest/v2/applicationmaps/{mapId}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { map_id: "mapId" },
+          queryParams: {
+            environment_id: "environmentIdentifier",
+            infra_id: "infraId",
+          },
+          // The backend composes its Mongo lookup as {identity, infra_id,
+          // environment_ref} (composite key). Missing environment_id or
+          // infra_id yields HTTP 500 ("mongo: no documents in result")
+          // instead of a clean 404. Validate locally so the agent gets a
+          // clear, actionable error per the repo's fail-loud rule.
+          // Mirrors the preflight on chaos_component_variable.get.
+          preflight: async ({ input }) => {
+            const missing: string[] = [];
+            if (input.environment_id === undefined || input.environment_id === "") missing.push("environment_id");
+            if (input.infra_id === undefined || input.infra_id === "") missing.push("infra_id");
+            if (missing.length > 0) {
+              throw new Error(
+                `Missing required field(s) for get on chaos_application_map: ${missing.join(", ")}. ` +
+                `Both 'environment_id' (Harness environment identifier) and 'infra_id' ` +
+                `(chaos_k8s_infrastructure.identity) must be passed so the backend can resolve ` +
+                `the composite {identity, infra_id, environment_ref} key.`,
+              );
+            }
+          },
           responseExtractor: passthrough,
-          description: descGetNetworkMap,
+          description: descGetApplicationMap,
         },
       },
     },
@@ -2010,13 +2660,13 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS}/v3/dr-tests`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
-            const b = (input.body ?? input) as Record<string, unknown>;
+            const b = coerceBody(input);
             return {
               name: b.name,
               identifier: b.identifier,
               ...(b.description ? { description: b.description } : {}),
               ...(b.objective ? { objective: b.objective } : {}),
-              ...(b.tags ? { tags: b.tags } : {}),
+              tags: (b.tags as Record<string, string>) ?? {},
             };
           },
           responseExtractor: passthrough,
@@ -2031,6 +2681,157 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "tags", type: "object", required: false, description: descDRTestTags },
             ],
           },
+        },
+      },
+    },
+
+    // ── Service Discovery: Namespaces ──────────────────────────────────
+    {
+      resourceType: "discovered_namespace",
+      displayName: "Discovered Namespace",
+      description: descDiscoveredNamespace,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["agent_identity"],
+      searchAliases: ["namespace", "k8s namespace", "kubernetes namespace", "service discovery namespace"],
+      listFilterFields: [
+        { name: "agent_identity", description: descSDAgentIdentity, required: true },
+        { name: "environment_id", description: descSDEnvironmentId, required: true },
+        { name: "name", description: descSDNamespaceNameFilter },
+        { name: "all", type: "boolean", description: descSDFetchAll },
+      ],
+      diagnosticHint: descSDAgentDiagnostic,
+      relatedResources: [
+        {
+          resourceType: "discovered_service",
+          relationship: "scopes",
+          description: "Discovered services can be filtered by namespace; use this list to find valid namespace values for that filter.",
+        },
+        {
+          resourceType: "discovered_network_map",
+          relationship: "selected_by",
+          description: "Network maps select a subset of discovered services from one or more namespaces. Use this resource as the next step after picking which namespaces to chaos-test.",
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SD}/agents/{agentIdentity}/namespaces`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { agent_identity: "agentIdentity" },
+          queryParams: {
+            environment_id: "environmentIdentifier",
+            name: "name",
+            page: "page",
+            size: "limit",       // SD uses `limit`, not `size`
+            all: "all",
+          },
+          responseExtractor: sdPageExtract,
+          description: descListDiscoveredNamespaces,
+        },
+      },
+    },
+
+    // ── Service Discovery: Services ────────────────────────────────────
+    {
+      resourceType: "discovered_service",
+      displayName: "Discovered Service",
+      description: descDiscoveredService,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["agent_identity"],
+      searchAliases: [
+        "service discovery", "discovered service", "k8s service", "kubernetes service",
+        "workload", "service map", "topology", "service relationship",
+        "lambda", "ec2", "rds", "load balancer",
+      ],
+      listFilterFields: [
+        { name: "agent_identity", description: descSDAgentIdentity, required: true },
+        { name: "environment_id", description: descSDEnvironmentId, required: true },
+        { name: "namespace", description: descSDNamespaceFilter },
+        { name: "search", description: descSDSearchFilter },
+        { name: "all", type: "boolean", description: descSDFetchAll },
+      ],
+      diagnosticHint: descSDAgentDiagnostic,
+      relatedResources: [
+        {
+          resourceType: "discovered_namespace",
+          relationship: "scoped_by",
+          description: "Use discovered_namespace to discover valid namespace values before filtering services.",
+        },
+        {
+          resourceType: "discovered_network_map",
+          relationship: "selected_by",
+          description: "Network maps reference discovered services as their resources. Inspect a network map to see which of these services are in scope for chaos.",
+        },
+        {
+          resourceType: "chaos_application_map",
+          relationship: "promoted_to",
+          description: "Once selected into a network map and promoted to a chaos application map, the workloads behind these services become chaos targets and emit workload=<name> tags on experiments.",
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SD}/agents/{agentIdentity}/discoveredservices`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { agent_identity: "agentIdentity" },
+          queryParams: {
+            environment_id: "environmentIdentifier",
+            namespace: "namespace",
+            search: "search",
+            page: "page",
+            size: "limit",
+            all: "all",
+          },
+          responseExtractor: sdPageExtract,
+          description: descListDiscoveredServices,
+        },
+      },
+    },
+
+    // ── Service Discovery: Network Maps ────────────────────────────────
+    {
+      resourceType: "discovered_network_map",
+      displayName: "Discovered Network Map",
+      description: descDiscoveredNetworkMap,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["agent_identity"],
+      searchAliases: [
+        "service discovery network map", "sd network map", "raw network map",
+        "agent network map",
+      ],
+      listFilterFields: [
+        { name: "agent_identity", description: descSDAgentIdentity, required: true },
+        { name: "environment_id", description: descSDEnvironmentId, required: true },
+        { name: "search",         description: descSDNetworkMapSearch },
+        { name: "all", type: "boolean", description: descSDFetchAll },
+      ],
+      diagnosticHint: descSDAgentDiagnostic,
+      relatedResources: [
+        { resourceType: "chaos_application_map",  relationship: "promoted_to", description: "The chaos application map (chaos_application_map) is the project-scoped, chaos-augmented view of a discovered network map. Use chaos_application_map for blast-radius / experiment context." },
+        { resourceType: "discovered_service",     relationship: "contains",    description: "Network maps reference discovered services as their resources. Use discovered_service to inspect each entry." },
+        { resourceType: "discovered_namespace",   relationship: "scoped_by",   description: "Use discovered_namespace to discover valid namespace context for the agent." },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SD}/agents/{agentIdentity}/networkmaps`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { agent_identity: "agentIdentity" },
+          queryParams: {
+            environment_id: "environmentIdentifier",
+            search: "search",
+            page: "page",
+            size: "limit",       // SD uses `limit`, not `size`
+            all: "all",
+          },
+          responseExtractor: sdPageExtract,
+          description: descListDiscoveredNetworkMaps,
         },
       },
     },

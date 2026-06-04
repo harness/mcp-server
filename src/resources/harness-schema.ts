@@ -1,7 +1,8 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { createLogger } from "../utils/logger.js";
-import { SCHEMAS, VALID_SCHEMAS, type SchemaName, type SchemaEntry } from "../data/schemas/index.js";
+import { SCHEMAS, VALID_SCHEMAS, type SchemaName } from "../data/schemas/index.js";
+import type { SchemaEntry } from "../data/schemas/types.js";
 
 const log = createLogger("resource:harness-schema");
 
@@ -43,7 +44,10 @@ export function registerHarnessSchemaResource(
     template,
     {
       title: "Harness Schema",
-      description: `Harness JSON Schema definitions. Valid schema names: ${allSchemaNames.join(", ")}. Use these to understand the required body format for harness_create.`,
+      description:
+        `Harness JSON Schema definitions (bundled). Valid schema names: ${allSchemaNames.join(", ")}. ` +
+        "For connector, environment, service, secret, and infrastructure schemas, use the harness_schema tool " +
+        "(live fetch from NG /yaml-schema) — they are not available via schema:/// resources.",
       mimeType: "application/schema+json",
     },
     async (uri) => {

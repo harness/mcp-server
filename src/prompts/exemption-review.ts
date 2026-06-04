@@ -31,12 +31,12 @@ Steps:
 4. **Present review table**:
    - Exemption ID, vulnerability, severity, requestor, justification, recommendation
 5. **Batch actions**: Group exemptions by recommendation and target scope:
-   - **Approve at project scope**: Low-risk with valid justification and compensating controls. Use action="approve" only when the user explicitly wants project-level approval.
-   - **Promote**: If the user wants approval at ACCOUNT, ORG, PIPELINE, TARGET, or another non-project scope, use action="promote" directly. Do not call action="approve" first.
+   - **Approve at current scope**: Low-risk with valid justification and compensating controls. Use action="approve" with body.scope="CURRENT".
+   - **Approve at wider scope**: If the user wants approval at ACCOUNT, ORG, or PROJECT scope, use action="approve" with that body.scope; the server routes elevated scopes through STO promotion internally.
    - **Reject**: High-risk without adequate mitigation.
    - **Needs review**: Insufficient justification or missing context.
 
-To take action, I can use harness_execute with resource_type="security_exemption" and action="approve", "reject", or "promote" — but only after you confirm each decision. For promote, the body must include scope: "ACCOUNT" | "ORG" | "PROJECT" | "PIPELINE" | "TARGET"; PIPELINE also requires pipeline_id, and TARGET also requires target_id. approver_id is optional for approve/reject/promote because the server derives it from the authenticated user when omitted.
+To take action, I can use harness_execute with resource_type="security_exemption" and action="approve" or "reject" — but only after you confirm each decision. For approve, the body must include scope: "CURRENT" | "ACCOUNT" | "ORG" | "PROJECT". approver_id is optional for approve/reject because the server derives it from the authenticated user when omitted.
 
 ## Suggested next steps
 

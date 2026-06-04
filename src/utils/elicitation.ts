@@ -48,20 +48,32 @@ export async function confirmViaElicitation({
   toolName,
   message,
   risk,
+  autoApproveRisk,
+  callerConfirmed,
 }: {
   server: McpServer;
   toolName: string;
   message: string;
   /** The risk level of the operation (from operationPolicy). */
   risk: RiskLevel;
+  /** Optional per-session threshold. Falls back to the process default. */
+  autoApproveRisk?: AutoApproveRisk;
+  /** When true, the caller explicitly passed confirm=true — acts as confirmation
+   *  on clients that lack elicitation support (managed MCP, Cursor, etc.). */
+  callerConfirmed?: boolean;
 }): Promise<ElicitationResult> {
-  if (shouldAutoApprove(risk, _autoApproveRisk)) {
-    log.debug("Auto-approved (risk within autonomous threshold)", { toolName, risk, threshold: _autoApproveRisk });
+  const threshold = autoApproveRisk ?? _autoApproveRisk;
+  if (shouldAutoApprove(risk, threshold)) {
+    log.debug("Auto-approved (risk within autonomous threshold)", { toolName, risk, threshold });
     return { proceed: true, method: "auto_approved" };
   }
 
   if (!clientSupportsElicitation(server.server)) {
     if (requiresConfirmation(risk)) {
+      if (callerConfirmed) {
+        log.info("Client lacks elicitation, proceeding via explicit confirm param", { toolName, risk });
+        return { proceed: true, method: "elicited" };
+      }
       log.warn("Client does not support elicitation, blocking operation", { toolName, risk });
       return { proceed: false, reason: "declined", method: "blocked" };
     }
@@ -90,6 +102,10 @@ export async function confirmViaElicitation({
     return { proceed: false, reason: "cancelled", method: "elicited" };
   } catch (err) {
     if (requiresConfirmation(risk)) {
+      if (callerConfirmed) {
+        log.info("Elicitation failed but proceeding via explicit confirm param", { toolName, risk, error: String(err) });
+        return { proceed: true, method: "elicited" };
+      }
       log.warn("Elicitation failed, blocking operation", {
         toolName,
         risk,

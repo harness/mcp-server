@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { type Config, resolveProductBaseUrl } from "../config.js";
+import { type Config, resolveFmeApiKey, resolveProductBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { HarnessApiError } from "../utils/errors.js";
-import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec } from "./types.js";
+import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec, ResourceScope } from "./types.js";
 import type { AuditManager } from "../audit/manager.js";
 import type { AuditContext, AuditEvent } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
@@ -42,16 +42,81 @@ import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
 import { aiEvalsToolset } from "./toolsets/ai-evals.js";
+import { iacmToolset } from "./toolsets/iacm.js";
+import { ansibleToolset } from "./toolsets/ansible.js";
 
 const log = createLogger("registry");
 
 /** Keys under which different Harness APIs return list arrays. */
 const LIST_ARRAY_KEYS = ["items", "features", "content", "data", "objects"];
+const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
 
 /** Backward-compatible aliases for renamed public toolset names. */
 const TOOLSET_ALIASES: Record<string, string> = {
   "agent-pipelines": "agents",
 };
+
+function isResourceScope(value: unknown): value is ResourceScope {
+  return typeof value === "string" && RESOURCE_SCOPES.includes(value as ResourceScope);
+}
+
+function getSupportedScopes(def: ResourceDefinition): readonly ResourceScope[] {
+  if (def.supportedScopes?.length) {
+    return def.supportedScopes;
+  }
+  return [def.scope];
+}
+
+function getRequestedScope(def: ResourceDefinition, input: Record<string, unknown>): ResourceScope | undefined {
+  const value = input.resource_scope;
+  if (value === undefined || value === "") {
+    return undefined;
+  }
+  if (!isResourceScope(value)) {
+    throw new Error(`Invalid resource_scope "${String(value)}". Expected one of: ${RESOURCE_SCOPES.join(", ")}`);
+  }
+  const supported = getSupportedScopes(def);
+  if (!supported.includes(value)) {
+    throw new Error(
+      `${def.resourceType} does not support ${value} scope. Supported scopes: ${supported.join(", ")}`,
+    );
+  }
+  return value;
+}
+
+function shouldUseOrg(scope: ResourceScope): boolean {
+  return scope === "org" || scope === "project";
+}
+
+function shouldUseProject(scope: ResourceScope): boolean {
+  return scope === "project";
+}
+
+interface ExplicitScopeValues {
+  orgId?: string;
+  projectId?: string;
+}
+
+function resolveScopeString(value: unknown, fallback: string | undefined): string | undefined {
+  if (typeof value === "string" && value !== "") {
+    return value;
+  }
+  return fallback && fallback !== "" ? fallback : undefined;
+}
+
+function getExplicitScopeValues(scope: ResourceScope, input: Record<string, unknown>, config: Config): ExplicitScopeValues {
+  const orgId = resolveScopeString(input.org_id, config.HARNESS_ORG);
+  const projectId = resolveScopeString(input.project_id, config.HARNESS_PROJECT);
+
+  if (shouldUseOrg(scope) && !orgId) {
+    throw new Error(`resource_scope "${scope}" requires org_id or HARNESS_ORG.`);
+  }
+  if (shouldUseProject(scope) && !projectId) {
+    throw new Error(`resource_scope "${scope}" requires project_id or HARNESS_PROJECT.`);
+  }
+
+  return { orgId, projectId };
+}
 
 const ALL_TOOLSETS: ToolsetDefinition[] = [
   pipelinesToolset,
@@ -87,6 +152,8 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   freezeToolset,
   overridesToolset,
   aiEvalsToolset,
+  iacmToolset,
+  ansibleToolset,
 ];
 
 /** All available toolset names — used by docs generation to discover opt-in toolsets. */
@@ -241,6 +308,11 @@ export class Registry {
     return this.getAllResourceTypes().filter(rt => this.supportsOperation(rt, operation));
   }
 
+  /** Get scopes supported by a resource for explicit resource_scope selection. */
+  getSupportedScopes(resourceType: string): readonly ResourceScope[] {
+    return getSupportedScopes(this.getResource(resourceType));
+  }
+
   /** Get resource types that have at least one execute action. */
   getTypesWithExecuteActions(): string[] {
     return this.getAllResourceTypes().filter(rt => {
@@ -389,6 +461,7 @@ export class Registry {
     httpStatus?: number,
   ): void {
     if (!this.auditManager) return;
+    const auditScope = isResourceScope(input.resource_scope) ? input.resource_scope : undefined;
 
     // Resolve path using pathBuilder if present, otherwise use static path
     const resolvedPath = spec.pathBuilder
@@ -403,12 +476,20 @@ export class Registry {
       resource_type: resourceType,
       resource_id: auditCtx?.resource_id ?? (input.resource_id as string | undefined),
       action: auditCtx?.action,
-      org_id: def.scope === "account"
-        ? undefined
-        : (input.org_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_ORG),
-      project_id: def.scope === "account" || def.scope === "org"
-        ? undefined
-        : (input.project_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_PROJECT),
+      org_id: auditScope
+        ? shouldUseOrg(auditScope)
+          ? (input.org_id as string | undefined) ?? this.config.HARNESS_ORG
+          : undefined
+        : def.scope === "account"
+          ? undefined
+          : (input.org_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_ORG),
+      project_id: auditScope
+        ? shouldUseProject(auditScope)
+          ? (input.project_id as string | undefined) ?? this.config.HARNESS_PROJECT
+          : undefined
+        : def.scope === "account" || def.scope === "org"
+          ? undefined
+          : (input.project_id as string | undefined) ?? (def.scopeOptional ? undefined : this.config.HARNESS_PROJECT),
       account_id: this.getAccountId(),
       risk: spec.operationPolicy?.risk ?? "read",
       confirmation: auditCtx?.confirmation,
@@ -432,10 +513,21 @@ export class Registry {
   ): Promise<unknown> {
     const resolvedAccountId = this.getAccountId();
     const resolvedConfig: Config = { ...this.config, HARNESS_ACCOUNT_ID: resolvedAccountId };
+    const requestedScope = getRequestedScope(def, input);
+    const explicitScopeValues = requestedScope ? getExplicitScopeValues(requestedScope, input, this.config) : undefined;
+    const pathDefaultScope = requestedScope ?? def.scope;
 
     // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
     if (spec.preflight) {
       await spec.preflight({ client, input, registry: this, signal });
+    }
+
+    // When explicit resource_scope resolved org/project from config defaults,
+    // merge them into input so pathBuilder functions see the effective values.
+    // Only inject for scopes that actually use those params.
+    if (requestedScope && explicitScopeValues) {
+      if (shouldUseOrg(requestedScope) && explicitScopeValues.orgId && !input.org_id) input = { ...input, org_id: explicitScopeValues.orgId };
+      if (shouldUseProject(requestedScope) && explicitScopeValues.projectId && !input.project_id) input = { ...input, project_id: explicitScopeValues.projectId };
     }
 
     // Build path with substitutions (or pathBuilder when present)
@@ -449,15 +541,16 @@ export class Registry {
           let value = input[inputKey];
           if (value === undefined || value === "") {
             // Default scope placeholders from config for project/org-scoped resources
-            if (pathPlaceholder === "org" && (def.scope === "project" || def.scope === "org")) {
-              value = this.config.HARNESS_ORG;
-            } else if (pathPlaceholder === "project" && def.scope === "project") {
-              value = this.config.HARNESS_PROJECT;
+            if (pathPlaceholder === "org" && shouldUseOrg(pathDefaultScope)) {
+              value = explicitScopeValues?.orgId ?? this.config.HARNESS_ORG;
+            } else if (pathPlaceholder === "project" && shouldUseProject(pathDefaultScope)) {
+              value = explicitScopeValues?.projectId ?? this.config.HARNESS_PROJECT;
             }
           }
           if (value === undefined || value === "") {
-            const scopeHint = def.scopeOptional
-              ? ` This resource supports account/org/project scope — pass "${inputKey}" via params, or use a Harness URL.`
+            const supportedScopes = getSupportedScopes(def);
+            const scopeHint = supportedScopes.length > 1
+              ? ` This resource supports ${supportedScopes.join("/")} scope — pass "${inputKey}" via params, set resource_scope appropriately, or use a Harness URL.`
               : "";
             throw new Error(
               `Missing required field "${inputKey}" for ${def.resourceType}.${scopeHint}`,
@@ -476,8 +569,16 @@ export class Registry {
     // Otherwise, fall back to config defaults based on the resource's scope level.
     const orgParam = def.scopeParams?.org ?? "orgIdentifier";
     const projectParam = def.scopeParams?.project ?? "projectIdentifier";
-    if (def.scopeOptional) {
-      // Dynamic scoping: only inject when caller explicitly provides them
+    if (requestedScope) {
+      // Explicit resource scoping: account omits org/project, org injects org only, project injects both.
+      if (shouldUseOrg(requestedScope)) {
+        params[orgParam] = explicitScopeValues?.orgId;
+      }
+      if (shouldUseProject(requestedScope)) {
+        params[projectParam] = explicitScopeValues?.projectId;
+      }
+    } else if (def.scopeOptional) {
+      // Dynamic scoping: only inject when caller explicitly provides them.
       if (input.org_id) {
         params[orgParam] = input.org_id as string;
       }
@@ -557,8 +658,11 @@ export class Registry {
 
     // Inject orgIdentifier/projectIdentifier into the body for mutating operations (POST/PUT).
     // Harness NG APIs require these in the body (not just query params) to scope the resource correctly.
-    // If bodyWrapperKey is set (e.g., "connector"), inject inside the wrapper object.
-    if (body && typeof body === "object" && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
+    // Header-scoped APIs and explicit endpoint exceptions scope through headers/path/query and reject
+    // generic NG scope fields in their API-specific JSON bodies.
+    const shouldSkipScopeBodyInjection =
+      spec.skipScopeBodyInjection || spec.headerBasedScoping || def.headerBasedScoping;
+    if (body && typeof body === "object" && !shouldSkipScopeBodyInjection && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
       const bodyRecord = body as Record<string, unknown>;
       // Determine where to inject: inside wrapper if present, otherwise at top level
       const targetRecord = spec.bodyWrapperKey && 
@@ -584,16 +688,10 @@ export class Registry {
     }
 
     // Validate required fields if bodySchema is defined.
-    // When bodyWrapperKey is set, the bodyBuilder wraps user fields inside that
-    // key (e.g. { project: { identifier, name } }), so we validate the inner object.
+    // When the API body is transformed into a raw array, validate the caller's
+    // canonical object-shaped input body so registry behavior matches harness_describe.
     if (spec.bodySchema && body && typeof body === "object") {
-      const bodyRecord = body as Record<string, unknown>;
-      const payload =
-        spec.bodyWrapperKey &&
-        bodyRecord[spec.bodyWrapperKey] != null &&
-        typeof bodyRecord[spec.bodyWrapperKey] === "object"
-          ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
-          : bodyRecord;
+      const payload = this.getBodySchemaValidationPayload(spec, input, body);
       const missing = spec.bodySchema.fields
         .filter(f => f.required && payload[f.name] === undefined)
         .map(f => f.name);
@@ -610,7 +708,23 @@ export class Registry {
     const baseUrl = resolveProductBaseUrl(this.config, product);
     const productHeaders: Record<string, string> = { ...spec.headers };
     if (product === "fme") {
-      productHeaders["Authorization"] = `Bearer ${this.config.HARNESS_API_KEY}`;
+      const fmeApiKey = resolveFmeApiKey(this.config);
+      if (!fmeApiKey) {
+        const remediation = this.config.HARNESS_MCP_MODE === "multi-user"
+          ? "Ensure the session x-harness-api-key is an FME-entitled Harness PAT/SAT. " +
+            "Do not configure HARNESS_FME_API_KEY in multi-user mode."
+          : "Ask your Harness administrator to configure an FME/Split Admin credential for hosted MCP, " +
+            "or set HARNESS_FME_API_KEY to a legacy Split admin key or FME-entitled Harness PAT/SAT. " +
+            "Self-hosted sessions may also provide a non-placeholder HARNESS_API_KEY.";
+        throw new HarnessApiError(
+          "FME is not configured or authorized for this MCP session. " +
+          `${remediation} ` +
+          "Hosted OAuth placeholders such as \"dummy\" are not sent to api.split.io.",
+          401,
+          "FME_AUTH_MISSING",
+        );
+      }
+      productHeaders["Authorization"] = `Bearer ${fmeApiKey}`;
     }
 
     const requestOpts = {
@@ -624,6 +738,7 @@ export class Registry {
       ...(product !== "harness" ? { product } : {}),
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
+      ...(!spec.pathBuilder ? { tracing: { route: spec.path } } : {}),
       signal,
     };
 
@@ -661,6 +776,14 @@ export class Registry {
     // Tag ELK/Mongo data source on the response when fallback is active
     if (dataSource && result && typeof result === "object" && !Array.isArray(result)) {
       result = Object.assign({}, result, { _data_source: dataSource });
+    }
+
+    // Propagate spec.skipCompact as a non-enumerable marker so the tool layer
+    // can opt this result out of the global compactItems pass without leaking
+    // the flag into the user-visible JSON output. Must be set AFTER any
+    // Object.assign cloning so the marker survives.
+    if (spec.skipCompact && result && typeof result === "object" && !Array.isArray(result)) {
+      Object.defineProperty(result, "__skipCompact", { value: true, enumerable: false, configurable: true });
     }
 
     // Propagate storeType from the request query params into the result when
@@ -887,6 +1010,27 @@ export class Registry {
     return result;
   }
 
+  private getBodySchemaValidationPayload(
+    spec: EndpointSpec,
+    input: Record<string, unknown>,
+    body: object,
+  ): Record<string, unknown> {
+    if (Array.isArray(body)) {
+      const inputBody = input.body;
+      return inputBody && typeof inputBody === "object" && !Array.isArray(inputBody)
+        ? (inputBody as Record<string, unknown>)
+        : {};
+    }
+
+    const bodyRecord = body as Record<string, unknown>;
+    return spec.bodyWrapperKey &&
+      bodyRecord[spec.bodyWrapperKey] != null &&
+      typeof bodyRecord[spec.bodyWrapperKey] === "object" &&
+      !Array.isArray(bodyRecord[spec.bodyWrapperKey])
+        ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
+        : bodyRecord;
+  }
+
   /** Get describe metadata for all enabled resource types (full detail). */
   describe(): Record<string, unknown> {
     const toolsets: Record<string, unknown> = {};
@@ -899,6 +1043,7 @@ export class Registry {
           displayName: r.displayName,
           description: r.description,
           scope: r.scope,
+          supportedScopes: getSupportedScopes(r).length > 1 ? getSupportedScopes(r) : undefined,
           operations: Object.keys(r.operations),
           executeActions: r.executeActions ? Object.keys(r.executeActions) : undefined,
           identifierFields: r.identifierFields,

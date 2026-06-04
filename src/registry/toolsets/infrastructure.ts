@@ -9,9 +9,10 @@ export const infrastructureToolset: ToolsetDefinition = {
     {
       resourceType: "infrastructure",
       displayName: "Infrastructure Definition",
-      description: "Infrastructure definition within an environment. Supports full CRUD.",
+      description: "Infrastructure definition within an environment. Supports full CRUD. Use resource_scope='account' to list or get account-level infrastructure definitions.",
       toolset: "infrastructure",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["infrastructure_id"],
       listFilterFields: [
         { name: "environment_id", description: "**Required.** Environment identifier — infrastructure is always scoped to an environment" },

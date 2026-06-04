@@ -1,5 +1,308 @@
 # Harness MCP Server — Task Tracking
 
+## Vitest Security Upgrade (2026-06-03)
+- [x] Confirm the affected local Vitest version and patched target
+- [x] Upgrade `vitest` dev dependency to the patched 4.1 line
+- [x] Regenerate `pnpm-lock.yaml`
+- [x] Run focused and broad verification
+
+### Plan
+- Address GHSA-5xrq-8626-4rwp / Dependabot alert by moving from `vitest` 3.2.4 to `vitest` 4.1.0 or later.
+- Keep the change limited to test tooling metadata and lockfile updates unless v4 requires code/config changes.
+- Verify with the release metadata test, typecheck, and the full Vitest test suite.
+
+### Review
+- Updated `devDependencies.vitest` from `^3.0.6` to `^4.1.0`; `pnpm-lock.yaml` now resolves `vitest` to `4.1.8`.
+- `pnpm audit` also surfaced a moderate `qs` advisory through `express`; added a narrow `pnpm.overrides.qs >=6.15.2` entry and regenerated the lockfile to resolve `qs` to `6.15.2`.
+- Verification passed: `pnpm audit` reports no known vulnerabilities; `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, `pnpm test` (70 files / 1770 tests), `pnpm build`, and `git diff --check` all pass.
+
+## Version Bump 3.1.2 (2026-06-03)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.2
+- [x] Update release metadata regression test
+- [x] Run verification
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.2`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.2` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, and `git diff --check`.
+
+## PR 298 Header-Based Body Scope Follow-Up (2026-06-02)
+- [x] Move header-based body scope suppression into the dispatcher
+- [x] Remove redundant AI Evals per-endpoint suppression flags
+- [x] Add regressions for AI Evals and template v1 body payloads
+- [x] Run focused and broad verification
+- [x] Push updated PR branch
+
+### Plan
+- Treat `def.headerBasedScoping` and `spec.headerBasedScoping` as default body-scope suppression signals inside `Registry.executeSpec`, matching the documented `ResourceDefinition` contract.
+- Keep `skipScopeBodyInjection` for non-header-scoped exceptions such as DBOps path-scoped POST/PUT bodies.
+- Add a registry regression using `template_v1.create`, since that was the reviewer's concrete reproduction of the abstraction gap.
+
+### Review
+- `Registry.executeSpec` now treats `spec.skipScopeBodyInjection`, `spec.headerBasedScoping`, and `def.headerBasedScoping` as body-scope suppression signals before POST/PUT body injection.
+- Removed redundant AI Evals endpoint-level `skipScopeBodyInjection` flags; AI Evals relies on resource-level `headerBasedScoping` for the shared behavior.
+- Added regression coverage that AI Evals resources use header scoping without redundant endpoint flags and that `template_v1.create` no longer leaks `orgIdentifier`/`projectIdentifier` into its JSON body.
+- Verification passed: `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm test` (68 files / 1734 tests), `pnpm build`, and `git diff --check`.
+
+## Critical Bug Inspection (2026-06-02)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+- [x] Commit/push/open PR only if a fix is made
+
+### Plan
+- Compare this branch against `origin/main`; if empty, inspect recent `origin/main` commits since the last critical-bug run.
+- Prioritize behavioral changes with high blast radius: auth/session handling, request construction, write-operation safety, scoping, pagination/output contracts, and long-running execution semantics.
+- Require a concrete trigger scenario for data loss, crash, security bypass, or significant user-facing breakage before patching.
+
+### Review
+- Found that AI Evals path-scoped POST/PUT requests leaked generic NG `orgIdentifier` and `projectIdentifier` fields into API-specific JSON bodies whenever callers supplied explicit org/project IDs or a parsed Harness URL. This could make normal dataset/eval/metric/suite/target/model write workflows fail against the AI Evals API despite correct path scoping.
+- Fixed AI Evals mutating endpoint specs to opt out of generic body scope injection while preserving org/project in the REST path and account scoping via headers.
+- Found that `database_execute_llm_authoring_pipeline.create` read `schema_id`, `instance_id`, and `conversation_id` from top-level input even though `harness_create` sends user fields under `body`, then validated the transformed backend payload against the pre-transform alias names. This made the consolidated Accept & Commit endpoint fail before sending any request.
+- Fixed the DBOps LLM authoring body builder to read `input.body`, map caller aliases to backend fields, and skip generic body scope injection.
+- Review follow-up: also found two path-scoped DBOps POST read endpoints (`database_instance.list` and `database_snapshot_object.get`) that were still receiving generic body scope fields. They now opt out and have payload regression coverage.
+- Added an AI Evals structural regression so every current and future POST/PUT body builder in that toolset must opt out of generic NG scope body injection.
+- Verified focused coverage with `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/dbops.test.ts`, then broader verification with `pnpm typecheck`, full `pnpm test` (68 files / 1734 tests, rerun outside the sandbox after localhost bind tests hit `EPERM`), and `pnpm build`.
+
+## Version Bump 3.1.1 (2026-06-01)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.1
+- [x] Update release metadata regression test
+- [x] Run verification
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.1`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.1` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts` and `pnpm typecheck`.
+
+## Documentation Alignment Automation (2026-06-01)
+- [x] Identify recently changed subsystems with weak docs
+- [x] Update user-facing docs for entity schemas, IaCM, and audit telemetry
+- [x] Align contributor and agent-facing guidance
+- [x] Run docs verification and review the documentation-only diff
+- [x] Commit, push, and open/update the docs PR
+
+### Plan
+- Use source and recent merged commits as the source of truth; do not document behavior that is not present in code.
+- Keep the PR documentation-only and update existing surfaces instead of adding redundant pages.
+- Refresh `README.md` for `harness_schema` usage, IaCM resource workflows, and audit sink behavior.
+- Refresh `docs/gemini.md` for agent-facing parity around schema lookup, structured list output, IaCM, Ansible, and DbOps coverage.
+- Refresh `CONTRIBUTING.md` so maintainers see Ansible as the opt-in toolset example and know how to refresh vendored entity schemas.
+- Refresh `docs/architecture.md` where it currently describes audit coverage as mutating-only.
+
+### Review
+- README now documents the `harness_schema` workflow for bundled pipeline/template schemas and scope-aware entity YAML schemas, including example calls and the `pnpm sync-entity-schemas` maintainer path.
+- README now has a first-class IaCM resource table and workflow notes for workspace resources, costs, and activity resource changes; it also calls out IaCM `page_count` semantics.
+- README and `docs/architecture.md` now describe audit coverage as registry-dispatched list/get/create/update/delete/execute operations, with bounded webhook delivery and OTel setup pointers.
+- `docs/gemini.md` now covers `harness_schema`, structured `harness_list` output, IaCM workflow constraints, Ansible opt-in status, and DbOps capabilities.
+- `CONTRIBUTING.md` now uses Ansible as the opt-in toolset example and documents vendored entity schema maintenance.
+- Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `git diff --check HEAD~1..HEAD`, and targeted stale-language scans across README, docs, and CONTRIBUTING.
+- Opened PR: https://github.com/harness/mcp-server/pull/293
+- Review follow-up: relaxed audit confirmation wording to match current read event payloads, carried IaCM org/project scope through follow-up workflow examples, and rechecked the merged `harness_schema` runtime contract before pushing.
+- Review follow-up: narrowed stderr audit wording to say the sink is registered by default but filtered by `LOG_LEVEL`, and pointed durable audit collection at file/webhook sinks.
+
+## Version Bump 3.1.0 (2026-05-29)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.0
+- [x] Update release metadata regression test
+- [x] Run verification
+- [x] Open PR
+
+### Plan
+- Keep this as a metadata-only release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.0`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.0` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts` and `pnpm typecheck`.
+
+## PR 282 IaCM Activity Resource Changes (2026-05-29)
+- [x] Restore engineer's activity-scoped resource change endpoint
+- [x] Keep IaCM default-enabled and Ansible opt-in on current main
+- [x] Update generated docs plus config/Gemini guidance
+- [x] Run focused registry, build, and docs checks
+- [x] Push updated PR branch
+
+### Plan
+- Rebuild PR 282 on current `origin/main` so the change includes recent Ansible docs and registry updates.
+- Preserve the intended IaCM activity resource-changes contract: `/activities/{activityId}/resource-changes` with required `workspace_id`.
+- Preserve `operationPolicy` on the endpoint and keep IaCM default-enabled.
+- Update docs that previously described IaCM as opt-in.
+
+### Review
+- Updated `iacm_activity_resource_change` to use the activity-scoped endpoint and required `workspace_id` query mapping.
+- Updated IaCM registry tests for default-on loading and activity-scoped dispatch.
+- Updated README, `.env.example`, and Gemini docs so IaCM is documented as default-enabled and Ansible remains the only opt-in toolset.
+- Verification passed: `pnpm vitest run tests/registry/iacm.test.ts tests/registry/ansible.test.ts tests/registry/registry.test.ts tests/registry/structural-validation.test.ts`, `pnpm build`, and `pnpm docs:check`.
+
+## Version Bump 3.0.9 (2026-05-28)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.0.9
+- [x] Update release metadata regression test
+- [x] Run verification
+- [x] Open PR
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.0.9`.
+- Updated `tests/release-metadata.test.ts` so the package and bundle manifest versions remain locked together for the `3.0.9` patch release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts` and `pnpm typecheck`.
+
+## SAT Account Extraction (2026-05-28)
+- [x] Confirm SAT failure mode from config and session header handling
+- [x] Allow account ID extraction from SAT tokens
+- [x] Let multi-user sessions derive account ID from PAT/SAT when possible
+- [x] Update focused tests and user-facing guidance
+- [x] Run focused and full verification
+- [x] Document review results and lesson
+
+### Plan
+- Keep the token parser simple: account ID is the second dot-delimited segment for supported Harness API key prefixes.
+- Extend supported account-scoped prefixes from only `pat` to `pat` and `sat`, case-insensitively.
+- Preserve explicit account-ID overrides and continue rejecting mismatches when the token embeds an account ID.
+- Update single-user config tests, multi-user session header tests, HTTP initialize coverage, and docs.
+- Keep the PR scoped to the SAT bug.
+
+### Review
+- Updated `extractAccountIdFromToken` so supported account-scoped API key prefixes are `pat` and `sat`, case-insensitively.
+- Updated single-user config handling so `HARNESS_ACCOUNT_ID` is derived from SATs with an embedded account segment.
+- Updated multi-user HTTP session handling so `x-harness-account-id` can be omitted when `x-harness-api-key` embeds the account ID; explicit mismatched account headers still fail.
+- Updated focused tests for config parsing, session header merging, and HTTP initialize behavior.
+- Updated README, manifests, `.env.example`, and Gemini docs from PAT-only account extraction to PAT/SAT account extraction.
+- Verified the customer-provided SAT sample was not written into the repo.
+- Verification passed: `pnpm vitest run tests/config.test.ts tests/utils/session-headers.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, and `pnpm test` outside the sandbox for local HTTP port binding.
+
+## Slack Bug Triage: Cursor `npx ENOENT` Startup Failure (2026-05-27)
+- [x] Read the triggered Slack thread and capture the complete report
+- [x] Trace the failure path through local MCP client configuration and docs
+- [x] Clarify GUI-client `npx` startup guidance to prevent auth misdiagnosis
+- [x] Run focused docs verification
+- [x] Commit, push, open PR, and reply in the Slack thread
+
+### Plan
+- Treat `spawn npx ENOENT` as a client process-launch failure because Cursor fails before the MCP server starts and before Harness auth can be used.
+- Keep the fix in public configuration guidance: make the Cursor/local examples point users toward absolute `npx`/`node` paths and explain that auth changes do not affect this error.
+- Verify the documentation remains generated/consistent before reporting back.
+
+### Review
+- The Slack thread contained only the Cursor output log; there were no screenshots or follow-up messages.
+- Root cause is client-side process launch: Cursor reports `spawn npx ENOENT` immediately after `config_server_modified`, before the Harness MCP server can start or read `HARNESS_API_KEY`.
+- Updated `README.md` local/Cursor examples to use an absolute `npx` path, `-y harness-mcp-v2@latest`, and explicit `PATH`, and expanded troubleshooting to state that `spawn npx ENOENT` is not an auth failure.
+- Verified with `pnpm install --frozen-lockfile`, `pnpm build`, and `pnpm docs:check`.
+- Opened PR #271 and replied in the original Slack thread.
+- Review follow-up: updated Cursor, Claude Desktop, and Windsurf examples to use absolute executable paths and explicit `PATH`, matching the GUI-client troubleshooting guidance.
+
+## Jira Feature Request Spec Automation (2026-05-25)
+- [x] Inspect current automation registry and saved schedules
+- [x] Create Jira Feature Request spec drafting automation
+- [x] Update vault registry and TODO notes
+- [x] Verify saved automation TOML and document review
+
+### Plan
+- Add a weekday batch automation scoped to `/Users/rohangupta` so it can write vault files.
+- Target Jira issues with JQL equivalent to `project in (AIPLAT, AICODE) AND issuetype = "Feature Request"`.
+- Process a small batch per run, skipping issues with an existing Codex product-spec marker or up-to-date vault spec.
+- For each processed issue, write `/Users/rohangupta/.codex/vault/jira-specs/{ISSUEKEY}/spec.md` and post a Jira comment with the spec marker, vault path, and spec content or a compact fallback if Jira limits the comment size.
+
+### Review
+- Created active automation `jira-feature-request-spec-drafting`.
+- Schedule: weekdays at 10:30 AM.
+- Scope: `/Users/rohangupta`; Jira query equivalent to `project in (AIPLAT, AICODE) AND issuetype = "Feature Request" ORDER BY updated DESC`.
+- Batch behavior: up to 5 issues per run, prioritizing unprocessed or stale specs.
+- Safety: skips existing `<!-- codex-product-spec:` markers, only writes vault files and Jira comments, and does not mutate Jira fields.
+- Vault output path: `/Users/rohangupta/.codex/vault/jira-specs/{ISSUEKEY}/spec.md`; index at `/Users/rohangupta/.codex/vault/jira-specs/index.md`.
+
+## Starter Automation System (2026-05-25)
+- [x] Inspect existing Codex automations and confirm actual local paths
+- [x] Create or preserve the requested starter automations
+- [x] Update the automation registry and agent notes
+- [x] Verify automation TOML files were saved
+
+### Plan
+- Use `/Users/rohangupta` in place of `/Users/rohan` because `/Users/rohan` is not present on this machine.
+- Create a thread heartbeat for Chief of Staff pulse, returning to this conversation every 30 minutes.
+- Create standalone cron automations for the morning operating brief and weekly external monitoring.
+- Preserve existing automations; create a daily bug scan only if no matching active automation exists.
+- Record the active set in the local vault and summarize verification results here.
+
+### Review
+- Created active automations: `chief-of-staff-pulse`, `morning-operating-brief`, `weekly-external-monitoring`, and `daily-bug-scan`.
+- Left the existing `slack-updates-review` automation active and unchanged.
+- Used `/Users/rohangupta` and `/Users/rohangupta/code/mcp-server` because `/Users/rohan` is not present on this machine.
+- Wrote the registry and reusable prompts under `/Users/rohangupta/.codex/vault`.
+- Verified saved TOML files under `/Users/rohangupta/.codex/automations`.
+
+## harness_list structured output for array APIs (2026-05-22)
+- [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
+- [x] Add `normalizeHarnessListPayload` and call it from `harness_list` after dispatch; unit tests in `response-formatter.test.ts`.
+- [x] Typecheck and focused tests
+- [x] Commit, push, PR
+
+### Review
+- Normalizes top-level arrays to `{ items, total, page }` and hoists common wrapper keys (`body`, `content`, `data`, …) when `items` is missing; fills `total` when `items` exists without `total`.
+
+## Critical Bug Inspection (2026-05-21)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream behavior
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification for reviewed or changed behavior
+- [ ] Report the outcome in Slack; open a PR only for a confirmed critical fix
+
+### Plan
+- Review recent merged commits after the last critical-bug/documentation automation, prioritizing code changes over docs and version metadata.
+- Focus on high-blast-radius surfaces: MCP tool annotations/output contracts, IaCM resource registration, HTTP auth/session handling, request construction, and write-operation safety.
+- For each suspicious change, require a concrete trigger scenario that can cause data loss, crashes, security bypass, or significant user-facing breakage before patching.
+
+### Review
+- Found that the new `outputSchema` on `harness_list` required `items`, but many existing passthrough list APIs return object shapes such as `content`, `data`, or `resources`; SDK output validation could turn successful API calls into tool errors. Top-level array list responses also had no structured content despite the declared output schema.
+- Fixed `harness_list` to normalize array responses into object-shaped `{ items }` structured content and relaxed the list output schema to match actual registry list response shapes while preserving known fields.
+- Found `iacm_module.get` could not be called through normal `harness_get(resource_id=...)` because the resource identifier was `id` but the get path required `module_id`.
+- Found `iacm_activity_resource_change.list` targeted the non-documented `/activities/{activityId}/resource-changes` path, required an unused `workspace_id`, and truncated the documented execution resource-change response.
+- Fixed IaCM module get path parameter mapping and routed resource-change listing to the documented `/executions/{pipeline_execution_id}/resource-changes` endpoint while preserving the existing `activity_id` input as the execution ID.
+- Verified with red/green focused coverage, `pnpm typecheck`, `pnpm build`, full `pnpm test`, and `git diff --check`.
+
+## GPT App Tool Annotation Compliance (2026-05-20)
+- [x] Add explicit `destructiveHint: false` to all non-destructive read-only MCP tools flagged by the GPT App form
+- [x] Add regression coverage that every registered tool sets `readOnlyHint`, `openWorldHint`, and `destructiveHint` to explicit booleans with value assertions
+- [x] Run focused tests and typecheck
+- [x] Regenerate README for updated resource counts
+- [x] Fix smoke test for ai-evals no longer being opt-in
+- [x] Remove stale ai-evals opt-in references from README
+- [x] Document `harness_describe` as a local-only exception to `openWorldHint: true` policy
+- [x] Commit, push, and open PR
+
+### Plan
+- Add explicit boolean annotations to all tools for GPT App form compatibility.
+- Treat list/get/diagnose/search/describe/status/schema as non-destructive because they do not delete resources.
+- Verify at registration level so future tools cannot omit required GPT App annotation fields.
+- Document `harness_describe` as a local-only tool (openWorldHint: false) since it reads registry metadata without external API calls.
+- Fix collateral drift: ai-evals opt-in language, README counts, smoke test assertion.
+
+### Review
+- Added explicit `destructiveHint: false` to `harness_list`, `harness_get`, `harness_diagnose`, `harness_search`, `harness_describe`, `harness_status`, and `harness_schema`.
+- Regression test now asserts both type (boolean) and expected values: `openWorldHint: true` for API-calling tools, `openWorldHint: false` only for documented local-only tools (`harness_describe`).
+- Regenerated README to reflect current registry counts (187 resource types, 32 toolsets).
+- Fixed smoke test to allow additive (+) toolset filters that reference already-default toolsets.
+- Removed stale ai-evals "opt-in / excluded by default" language from README since it's been default-enabled since 31c119dd.
+
 ## Phase 1: Foundation ✅
 - [x] Project scaffolding (package.json, tsconfig, pnpm)
 - [x] Config validation with Zod
@@ -273,13 +576,256 @@
 
 ### Plan
 - Update `README.md` in place for the `security_exemption` execute workflow and the project structure tool inventory.
-- Update `src/prompts/exemption-review.ts` so the prompt explains project-only `approve`, `promote` for wider scopes, confirmation, and `scope` body requirements.
+- Update `src/prompts/exemption-review.ts` so the prompt explains `approve` with explicit approval scope, confirmation, and `scope` body requirements.
 - Update `docs/gemini.md` to remove the stale `HARNESS_ORG=default` example and include exemption promotion in the STO capability summary.
-- Update `docs/testing/security_exemption/` so test prompts and expected results match the current body schemas: `approver_id` is optional, while `promote` requires `scope` and may require `pipeline_id` or `target_id`.
+- Update `docs/testing/security_exemption/` so test prompts and expected results match the current body schemas: `approver_id` is optional, while `approve` requires `scope` and uses the promote endpoint internally for elevated scopes.
 - Update `CONTRIBUTING.md` for the current repository URL, 11-tool structure including `harness_schema`, and documentation/schema maintenance scripts.
 
 ### Review
-- Documented that `security_exemption.approve` is project-scope only, while `promote` approves and promotes in a single call for ACCOUNT, ORG, PROJECT, PIPELINE, or TARGET.
+- Documented that `security_exemption.approve` requires `body.scope`: `CURRENT` approves at the existing scope, while `ACCOUNT`, `ORG`, or `PROJECT` approve through the promote endpoint internally.
 - Updated Gemini setup examples to avoid implying a default org named `default`; org/project defaults are optional and may be supplied per request.
 - Aligned contributor and README tooling sections with the current 11 generic tool files and docs/schema maintenance scripts.
 - Verified with `pnpm build`, `pnpm docs:check`, and `pnpm typecheck`.
+## Slack Bug Triage: Account-Scope Resource Queries (2026-05-13)
+- [x] Trace current scope injection and URL parsing for account-level resources
+- [x] Add failing tests for explicit/account URL scope behavior
+- [x] Implement explicit account/org/project scope handling and describe metadata
+- [x] Mark connectors, services, environments, infrastructure, secrets, and templates as multi-scope queryable
+- [x] Run focused tests, typecheck, and broader verification
+- [x] Commit, push, and open/update PR
+
+### Plan
+- Preserve existing default behavior for project-scoped calls with no explicit resource scope so current users with `HARNESS_ORG`/`HARNESS_PROJECT` keep getting default project results.
+- Add a generic `resource_scope` selector accepted by `harness_list` and `harness_get`: `account` omits org/project, `org` injects only org, and `project` injects org+project.
+- Teach account-level Harness URLs (for example `/all/settings/connectors`) to set `resource_scope: "account"` so pasted account URLs do not get config defaults re-injected.
+- Surface multi-scope capability in `harness_describe` so agents know that account-level connectors, services, environments, infrastructure, secrets, and templates can be requested with `resource_scope: "account"`.
+
+### Review
+- Added explicit `resource_scope` support for list/get requests: account scope omits org/project query params, org scope omits project, and project/default behavior continues to use configured defaults.
+- Account-level Harness URLs now propagate `resource_scope: "account"` through `applyUrlDefaults`, preventing account settings URLs from being narrowed by `HARNESS_ORG`/`HARNESS_PROJECT`.
+- Marked connectors, services, environments, infrastructure, secrets, and templates as supporting `account`, `org`, and `project` scopes and surfaced that guidance through `harness_describe`.
+- Kept resource-specific `scope` filters available for APIs such as GitOps cluster links by reserving `resource_scope` for dispatcher-level scoping.
+- Added coverage that each supported entity resource can list at account, org, and project scope, and that `harness_search` forwards explicit and URL-derived `resource_scope`.
+- Limited URL-derived `resource_scope` to known multi-scope entity URLs so account-scoped APIs with org/project UI paths, such as FME feature flags, are not rejected as unsupported project scope.
+- Verified with focused red/green coverage, `pnpm typecheck`, full `pnpm test` (52 files / 1213 tests), and `pnpm build`.
+
+## PR 182 Scope Feedback Follow-up (2026-05-13)
+- [x] Reproduce explicit org/project `resource_scope` fail-open behavior with missing defaults
+- [x] Add regression coverage for broad `harness_search` with scoped mixed registries
+- [x] Add regression coverage that `resource_scope` Zod descriptions survive optional wrapping
+- [x] Fail loudly before dispatch when explicit org/project scope lacks required IDs/defaults
+- [x] Filter broad scoped searches to resource types that support the requested scope
+- [x] Fix `.describe()` ordering on `resource_scope` tool inputs
+- [x] Run focused tests, typecheck, build, and full tests
+- [x] Commit, push, open PR, and reply in Slack
+
+### Plan
+- Keep the fix within the existing scope-selector implementation from PR #182.
+- Validate only explicit `resource_scope` requests; preserve default project-scoped behavior for existing calls.
+- Avoid broad-search noise by skipping predictable unsupported-scope targets before dispatch.
+- Verify with focused registry/tool tests plus typecheck/build.
+
+### Review
+- Confirmed current PR head failed the new regression tests: explicit org/project scopes with missing defaults still dispatched, Zod descriptions were absent, and broad scoped search reported avoidable unsupported-scope errors.
+- Added central explicit-scope validation in `src/registry/index.ts` so org/project scope requires `org_id`/`HARNESS_ORG` and `project_id`/`HARNESS_PROJECT` before request construction.
+- Added `Registry.getSupportedScopes()` and used it in `src/tools/harness-search.ts` to filter broad scoped searches before fan-out.
+- Moved `resource_scope` Zod descriptions after `.optional()` in `src/tools/harness-get.ts`, `src/tools/harness-list.ts`, and `src/tools/harness-search.ts`.
+- Verified with `pnpm test tests/registry/registry.test.ts tests/tools/tool-handlers.test.ts tests/utils/url-parser.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
+
+## PR 185 Scope Review Follow-up (2026-05-13)
+- [x] Verify `scopeOptional` is not equivalent to explicit `resource_scope` support
+- [x] Add regression coverage for `scopeOptional` SCS resources rejecting unsupported explicit org scope
+- [x] Add regression coverage that URL-derived `resource_scope` is opt-in for tools
+- [x] Restrict URL-derived `resource_scope` merging to read tools that expose the field
+- [x] Run focused tests, typecheck, build, and full tests
+- [ ] Commit and push PR branch
+
+### Review
+- Changed explicit `resource_scope` support to come only from `supportedScopes`, not `scopeOptional`.
+- Updated `harness_describe` to surface `supportedScopes` only when the registry declares multi-scope support.
+- Made URL-derived `resource_scope` opt-in in `applyUrlDefaults()` and enabled it only for `harness_list`, `harness_get`, and `harness_search`.
+- Verified with focused scope/url/tool tests, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
+
+## PR 189 Blocking URL Builder Follow-up (2026-05-13)
+- [x] Add a failing regression test for `RequestOptions.path` values that already include query params
+- [x] Update `HarnessClient.buildUrl()` to merge existing path query params before appending scope params
+- [x] Run focused client tests, `pnpm typecheck`, `pnpm build`, and full `pnpm test`
+- [x] Commit, push, and open a PR
+
+### Plan
+- Keep the fix in `src/client/harness-client.ts` because both `request()` and `requestStream()` share `buildUrl()`.
+- Add coverage in `tests/client/harness-client.test.ts` using `requestStream()` with a log-service blob path containing `?token=abc`.
+- Preserve existing behavior where explicit `options.params` can override generated scoping params.
+
+### Review
+- Confirmed the regression test fails before the fix: `token` was parsed as `abc?accountIdentifier=test-account`.
+- Split query strings out of `RequestOptions.path` before base-path de-duplication and query assembly.
+- Merged path query params into the generated `URLSearchParams` before applying `options.params`, preserving explicit override behavior.
+- Verified with `pnpm test tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test`.
+
+## Slack Bug Triage: Pull Request Close Support (2026-05-14)
+- [x] Confirm whether PR close is available by design or missing from MCP v2 metadata
+- [x] Add a failing registry test for a first-class pull request close action
+- [x] Implement the minimal pull request close action against the existing Harness Code PR update endpoint
+- [x] Run focused tests, typecheck, build, and relevant broader verification
+- [x] Commit, push, and open/update PR
+
+### Plan
+- Keep the change scoped to the existing `pull_request` resource in `src/registry/toolsets/pull-requests.ts`.
+- Preserve the already-supported generic update path (`harness_update` with `body.state = "closed"`) and add a more discoverable `harness_execute` action named `close`.
+- Map `close` to the existing Harness Code PATCH endpoint `/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}` with a fixed `{ state: "closed" }` body.
+- Mark the action as `medium_write` and `do_not_retry`, matching a non-idempotent PR state transition that requires confirmation in clients with elicitation.
+
+### Review
+- Confirmed PR close was not blocked by MCP design: generic `harness_update` already documented `state: open/closed`, but no first-class `harness_execute` close action existed, so agents asking to "close a PR" saw only `merge`.
+- Added `pull_request.close` as a medium-risk execute action that PATCHes the PR update endpoint with `{ state: "closed" }`.
+- Added registry coverage for the close action and MCP-handler coverage for closing directly from a Harness PR URL.
+- Fixed `harness_execute` resource-id mapping so URL-derived parent identifiers like `repo_id` are preserved instead of being overwritten by the URL's `resource_id`.
+- Verified with `pnpm test tests/registry/registry.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (53 files / 1309 tests).
+
+## Slack Follow-up: Harness Code PR Close Endpoint (2026-05-14)
+- [x] Add regression coverage for closing a PR through `harness_update`
+- [x] Add regression coverage for `harness_execute` action `close`
+- [x] Route PR state changes through the dedicated Harness Code state endpoint
+- [x] Run focused tests, typecheck, build, and full tests
+- [x] Commit and push the fix
+
+### Plan
+- Keep metadata edits (`title`, `description`) on the existing PR PATCH endpoint.
+- Route state transitions (`state: "closed"` or `state: "open"`) to `POST /code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/state`.
+- Add an explicit `close` execute action so agents do not guess a missing action after update attempts fail.
+
+### Review
+- Confirmed the regression before implementation: `state: "closed"` used the generic PATCH endpoint, and `harness_execute` only exposed `merge`.
+- Added conditional PR update routing so state changes use the Harness Code state endpoint while title/description updates continue using PATCH.
+- Added `skipScopeBodyInjection` for endpoints that must not receive org/project fields in POST/PUT bodies, and applied it to PR state changes so the request body remains `{ state }`.
+- Verified with `pnpm test tests/registry/pull-requests.test.ts`, `pnpm typecheck`, `pnpm test`, and `pnpm build`.
+
+## Slack Bug Triage: v3.0.2 Release Idempotency (2026-05-15)
+- [x] Read the trigger thread and nearby channel context for the git tag report
+- [x] Confirm the v3.0.2 tag, GitHub Release, npm latest version, and failed release workflow run
+- [x] Add failing regression coverage for release workflow idempotency
+- [x] Make `release.yml` skip or tolerate already-published npm/GitHub release artifacts
+- [x] Run focused tests, typecheck/build, commit, push, open PR, and reply in Slack thread
+
+### Plan
+- Keep the fix in `.github/workflows/release.yml`; the package metadata and tag are already correct at `3.0.2`.
+- Add a workflow-structure regression test so future edits do not reintroduce unconditional `npm publish` or `gh release create`.
+- Make npm publishing idempotent by checking the package/version first and rechecking after publish failures before failing the job.
+- Make GitHub Release creation idempotent by skipping `gh release create` when the tag release already exists.
+
+### Review
+- Confirmed the release workflow failed at `npm publish` for `v3.0.2` because npm already had `harness-mcp-v2@3.0.2`; package metadata, the Git tag, GitHub Release, and npm `latest` were otherwise correct.
+- Added `tests/release-workflow.test.ts` to require idempotency guards for npm publish and GitHub Release creation.
+- Updated `.github/workflows/release.yml` to skip npm publish when the package version already exists, tolerate a publish race by rechecking npm after failure, and skip `gh release create` when the release already exists.
+- Verified with `pnpm test tests/release-workflow.test.ts tests/release-metadata.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, and full `pnpm test`.
+
+## Critical Bug Inspection (2026-05-16)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream behavior
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+
+### Plan
+- Review recent merged commits since the last critical bug inspection, prioritizing code-path changes over docs/schema churn.
+- Focus tracing on repository write actions, release workflow behavior, schema sync side effects, and any client/request construction changes.
+- If no data-loss, crash, security, or major user-facing breakage has a concrete trigger, do not open a PR; post a concise no-critical-findings summary instead.
+
+### Review
+- Found a safety regression from the per-session auto-approve header: any HTTP client starting a session could set `x-harness-auto-approve-risk: all` and widen the session beyond the deployment's configured `HARNESS_AUTO_APPROVE_RISK`, bypassing the server operator's confirmation threshold for writes and destructive operations.
+- Capped session header auto-approve values at the server-configured threshold while preserving the ability for a session to lower its own threshold.
+- Added focused regression coverage for capping and lowering behavior, and updated the architecture note to describe the cap.
+- Reviewed other recent changes (schema sync, commit create, STO pagination, pipeline branch loading, release workflow idempotency) and did not find another high-confidence critical issue to patch in this run.
+- Verified with `pnpm test tests/utils/session-headers.test.ts tests/utils/elicitation.test.ts`, `pnpm typecheck`, `pnpm build`, full `pnpm test`, `pnpm docs:check`, and `git diff --check`.
+
+## Documentation Alignment Automation (2026-05-18)
+- [x] Audit recent user-facing code changes against existing docs
+- [x] Update README public interface tables and operational workflow notes
+- [x] Align architecture/testing docs for STO exemptions and pull request state handling
+- [x] Run docs consistency checks and review the doc-only diff
+- [x] Commit, push, and open/update a documentation PR
+
+### Plan
+- Use recent merged commits and source files as the source of truth; do not document behavior that is not present in code.
+- Keep the updates in existing documentation surfaces (`README.md`, `docs/architecture.md`, and targeted `docs/testing/*` files) instead of creating redundant pages.
+- Prioritize recent public interfaces that agents rely on: commit creation, PR close, STO exemption create/promote behavior, pipeline `pipeline_branch`, template API paths, session auto-approve headers, and log download troubleshooting.
+
+### Review
+- README now reflects current public interfaces for commit create, pull request close, security exemption create, template service paths, pipeline `pipeline_branch`, per-session auto-approval headers, bulk exemption prompt usage, and execution-log download troubleshooting.
+- Supporting docs now align risk classification/testing expectations for STO exemption creation and derived approver IDs, PR state endpoint behavior, and template list/get/create/update paths.
+- Addressed review feedback by adding required STO promote `scope` examples and correcting refreshed testing examples to use current `filters`, `params`, and `resource_id` tool input shapes.
+- Verified with `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, and `git diff --check`.
+
+## HTTP MCP Auth Hardening (2026-05-17)
+- [x] Add config for optional HTTP bearer auth and explicit unauthenticated opt-out
+- [x] Add focused regression tests for auth parsing, route authentication, and non-loopback fail-closed behavior
+- [x] Gate all `/mcp` HTTP routes before session creation or session reuse
+- [x] Update README and env documentation so CORS/Host validation are not presented as authentication
+- [x] Run focused tests, typecheck, build, commit, and push
+
+### Plan
+- Keep stdio behavior unchanged.
+- Add `HARNESS_MCP_AUTH_TOKEN` as the HTTP transport bearer token. When set, `/mcp` requires `Authorization: Bearer <token>` for `POST`, `GET`, and `DELETE`.
+- Add `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` as an explicit escape hatch. If HTTP binds to a non-loopback host without `HARNESS_MCP_AUTH_TOKEN`, startup fails unless this escape hatch is true.
+- Preserve `/health` as unauthenticated for probes, because it returns only status and session count.
+- Keep Host-header validation and CORS as defense-in-depth controls, not auth controls.
+
+### Review
+- Added `HARNESS_MCP_AUTH_TOKEN` and `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` config fields.
+- Added `src/utils/http-auth.ts` to validate non-loopback binds, check exact Bearer tokens with timing-safe comparison, and reject unauthenticated `/mcp` requests before handlers run.
+- Wired the auth middleware after CORS/rate-limit middleware and before MCP session creation/reuse in `src/index.ts`; `/health` and CORS preflight remain unauthenticated.
+- Updated README and `.env.example` to document HTTP auth and clarify that CORS/Host validation are not authentication.
+- Verified with `pnpm test tests/utils/http-auth.test.ts tests/config.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, `pnpm build`, and full `pnpm test` (58 files / 1360 tests).
+
+## Critical Bug Inspection (2026-05-22)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+- [x] Commit/push/open PR only if a fix is made
+
+### Plan
+- Review commits and diffs since `origin/main`, plus recent merged history if this branch is empty.
+- Prioritize behavioral changes in request construction, auth/authorization, write actions, session lifecycle, and resource-scoping paths.
+- Require a concrete trigger scenario before patching; if no data-loss, crash, security, or major user-facing breakage is confirmed, post a concise no-critical-findings summary without opening a PR.
+
+### Review
+- Found a correctness bug in `harness_execute(wait=true)`: if the pipeline trigger succeeded but repeated `execution.get` polls failed, `pollExecutionToTerminal()` returned `timed_out=true` with `Unknown` status.
+- Impact: agents could interpret a polling outage as a still-running execution and retry the pipeline, causing duplicate deployments or other duplicate side effects.
+- Fixed the poller so only the configured wait deadline reports a timeout; persistent poll failures now throw and are surfaced by `harness_execute` as `_wait.error` while preserving the trigger response and execution ID.
+- Added unit coverage for the poller and boundary coverage that `harness_execute` preserves the trigger response, omits `execution_timed_out`, and returns `_wait.error` on persistent polling failures.
+- Verified with `pnpm test tests/utils/poll-execution.test.ts tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, full `pnpm test` (61 files / 1459 tests), `pnpm build`, and `git diff --check origin/main...HEAD`.
+
+## Hosted FME Auth Placeholder Bug (2026-06-04)
+- [x] Trace FME request auth from registry config to outgoing Split.io request
+- [x] Add explicit FME credential resolution that does not send hosted placeholders to Split.io
+- [x] Update tests for self-hosted fallback, explicit FME token, and hosted dummy rejection
+- [x] Update docs/env examples for FME auth configuration
+- [x] Run focused tests, typecheck, build, and record review notes
+
+### Plan
+- Keep existing FME resource paths and extraction behavior unchanged; the positive control shows the Split API mapping works.
+- Treat FME/Split auth as product-specific auth, because hosted OAuth/service-routing can authenticate Harness platform APIs without making `HARNESS_API_KEY` a valid external Split credential.
+- Prefer an explicit FME credential for Split.io requests; fall back to the session/server Harness API key only when it is not a known hosted placeholder so self-hosted PAT/SAT setups keep working.
+- Preserve Bearer auth for Split Admin API calls to avoid breaking legacy-token compatibility, and fail loudly before network I/O when no usable FME credential exists.
+
+### Review
+- Added optional `HARNESS_FME_API_KEY` config and a `resolveFmeApiKey()` helper that prefers the explicit FME credential, falls back to a non-placeholder Harness API key, and rejects hosted/internal placeholders such as `dummy` or `*.dummy`.
+- Changed FME registry request construction to send Bearer auth from the resolved FME credential instead of hard-coding `Authorization: Bearer HARNESS_API_KEY`.
+- Added regression tests for fallback auth, explicit FME credential override, placeholder rejection before network I/O, and client preservation of explicit FME Bearer headers.
+- Updated README and `.env.example` to document the direct Split.io credential requirement for FME resources.
+- Verified with `pnpm test tests/config.test.ts tests/registry/feature-flags.test.ts tests/client/harness-client.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+
+### Review Follow-up
+- Fixed review finding that a deployment-level `HARNESS_FME_API_KEY` could override per-session `x-harness-api-key` in shared multi-user HTTP mode.
+- `ConfigSchema` now rejects `HARNESS_FME_API_KEY` when `HARNESS_MCP_MODE=multi-user`, and `resolveFmeApiKey()` defensively ignores deployment-level FME keys in multi-user mode.
+- Added regression coverage for config rejection and the exact session merge path (`mergeConfigWithSessionHeaders` plus `resolveFmeApiKey`) so FME auth stays tied to the session credential.
+
+### Packaging Follow-up
+- Added `HARNESS_FME_API_KEY` to both bundle manifests (`manifest.json` and `mcp-directory/manifest.json`) so manifest-driven and MCPB installs can provide the dedicated FME credential in single-user/self-hosted mode.
+- Added release metadata coverage to keep the packaged FME credential surface aligned with config changes.
+- Made the FME missing-auth remediation mode-aware: single-user points at `HARNESS_FME_API_KEY`, while multi-user points at the session `x-harness-api-key` and explicitly says not to configure `HARNESS_FME_API_KEY`.
+
+### Manifest Base URL Follow-up
+- Added `HARNESS_FME_BASE_URL` to both bundle manifests so manifest-driven and MCPB installs can override the Split/FME Admin API base URL.
+- Extended release metadata coverage to require both FME credential and FME base URL config surfaces in packaged manifests.

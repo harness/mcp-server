@@ -10,6 +10,7 @@ import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { Registry } from "../../src/registry/index.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
+import { listOutputSchema } from "../../src/tools/output-schemas.js";
 
 // Top-level mocks for execution_log tests — must be before any imports that pull these in
 vi.mock("../../src/utils/log-resolver.js", () => ({
@@ -46,14 +47,14 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
 
 /** Minimal McpServer stub that captures registered tools. */
 function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept") {
-  const tools = new Map<string, { handler: (...args: unknown[]) => Promise<ToolResult> }>();
+  const tools = new Map<string, { schema: unknown; handler: (...args: unknown[]) => Promise<ToolResult> }>();
   return {
     server: {
       getClientCapabilities: () => ({ elicitation: { form: {} } }),
       elicitInput: vi.fn().mockResolvedValue({ action: elicitAction }),
     },
-    registerTool: vi.fn((name: string, _schema: unknown, handler: (...args: unknown[]) => Promise<ToolResult>) => {
-      tools.set(name, { handler });
+    registerTool: vi.fn((name: string, schema: unknown, handler: (...args: unknown[]) => Promise<ToolResult>) => {
+      tools.set(name, { schema, handler });
     }),
     _tools: tools,
     /** Invoke a registered tool handler by name. */
@@ -62,6 +63,12 @@ function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept")
       if (!tool) throw new Error(`Tool "${name}" not registered`);
       const defaultExtra = { signal: new AbortController().signal, sendNotification: vi.fn(), _meta: {} };
       return tool.handler(args, { ...defaultExtra, ...extra }) as Promise<ToolResult>;
+    },
+    /** Return the registration schema for assertions about agent-facing metadata. */
+    schema(name: string): unknown {
+      const tool = tools.get(name);
+      if (!tool) throw new Error(`Tool "${name}" not registered`);
+      return tool.schema;
     },
   } as any;
 }
@@ -106,6 +113,60 @@ describe("harness_list", () => {
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { items: unknown[]; total: number };
     expect(data.items).toBeDefined();
+  });
+
+  it("returns schema-valid structured content for passthrough list responses", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    mockRequest = vi.fn().mockResolvedValue({ content: [{ identifier: "repo-1" }], totalElements: 1 });
+    client = makeClient(mockRequest);
+    const repositoryServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(repositoryServer, registry, client);
+
+    const result = await repositoryServer.call("harness_list", { resource_type: "repository" });
+
+    expect(result.isError).toBeUndefined();
+    expect(listOutputSchema.safeParse(result.structuredContent).success).toBe(true);
+  });
+
+  it("wraps top-level array list responses so output schema validation can run", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    mockRequest = vi.fn().mockResolvedValue([{ identifier: "repo-1" }]);
+    client = makeClient(mockRequest);
+    const repositoryServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(repositoryServer, registry, client);
+
+    const result = await repositoryServer.call("harness_list", { resource_type: "repository" });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({ items: [{ identifier: "repo-1" }] });
+    expect(listOutputSchema.safeParse(result.structuredContent).success).toBe(true);
+  });
+
+  it("documents resource_scope in the registered input schema", () => {
+    const schema = server.schema("harness_list") as {
+      inputSchema: { resource_scope?: { description?: string | null } };
+    };
+    expect(schema.inputSchema.resource_scope?.description).toContain("Scope to query");
+  });
+
+  it("uses account scope from account-level connector URLs instead of config defaults", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+    client = makeClient(mockRequest);
+    const connectorServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(connectorServer, registry, client);
+
+    const result = await connectorServer.call("harness_list", {
+      url: "https://app.harness.io/ng/account/test-account/all/settings/connectors",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
   });
 
   it("propagates user-fixable API errors as errorResult", async () => {
@@ -153,6 +214,13 @@ describe("harness_get", () => {
     expect(data.identifier).toBe("my-pipeline");
   });
 
+  it("documents resource_scope in the registered input schema", () => {
+    const schema = server.schema("harness_get") as {
+      inputSchema: { resource_scope?: { description?: string | null } };
+    };
+    expect(schema.inputSchema.resource_scope?.description).toContain("Scope to query");
+  });
+
   it("propagates 404 as errorResult", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_get", { resource_type: "pipeline", resource_id: "missing" });
@@ -178,6 +246,26 @@ describe("harness_get", () => {
     expect(call.path).toBe("/template/api/templates/helmDeployAction");
     expect(call.params.accountIdentifier).toBe("__GLOBAL_TEMPLATES_ACCOUNT_ID__");
     expect(call.params.versionLabel).toBe("1.0.8");
+  });
+
+  it("does not infer resource_scope for account APIs with org/project UI URLs", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    mockRequest = vi.fn().mockResolvedValue({ id: "my_flag" });
+    client = makeClient(mockRequest);
+    const fmeServer = makeMcpServer();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(fmeServer, registry, client);
+
+    const result = await fmeServer.call("harness_get", {
+      url: "https://app.harness.io/ng/account/abc123/cf/orgs/default/projects/myProject/feature-flags/my_flag",
+      params: { workspace_id: "workspace-1" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(call.path).toBe("/internal/api/v2/splits/ws/workspace-1/my_flag");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
   });
 });
 
@@ -481,6 +569,31 @@ describe("harness_create", () => {
       name: "Engineering",
     });
   });
+
+  it("does not let URL-derived resource_scope change create scoping", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "account_conn" } });
+    client = makeClient(mockRequest);
+    const connectorServer = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(connectorServer, registry, client);
+
+    const result = await connectorServer.call("harness_create", {
+      resource_type: "connector",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/connectors",
+      body: {
+        identifier: "account_conn",
+        name: "Account Connector",
+        type: "Bitbucket",
+        spec: {},
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.orgIdentifier).toBe("default");
+    expect(callArgs.params.projectIdentifier).toBe("test-project");
+  });
 });
 
 describe("harness_update", () => {
@@ -560,6 +673,75 @@ describe("harness_update", () => {
   });
 });
 
+describe("harness_update — pull request", () => {
+  it("updates a PR title from a Harness URL via harness_update", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ number: 42, title: "New Title" });
+    const prClient = makeClient(prRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_update", {
+      resource_type: "pull_request",
+      resource_id: "42",
+      url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
+      body: { title: "New Title" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(prRequest).toHaveBeenCalledOnce();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("PATCH");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42");
+    expect(call.body).toEqual({ title: "New Title" });
+  });
+
+  it("closes a PR from a Harness URL via harness_update", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });
+    const prClient = makeClient(prRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_update", {
+      resource_type: "pull_request",
+      resource_id: "42",
+      url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
+      body: { state: "closed" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
+    expect(call.body).toEqual({ state: "closed" });
+  });
+
+  it("rejects mixed state + metadata via harness_update", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({});
+    const prClient = makeClient(prRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_update", {
+      resource_type: "pull_request",
+      resource_id: "42",
+      params: { repo_id: "my-repo" },
+      body: { state: "closed", title: "Nope" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Cannot combine state change"),
+    });
+    expect(prRequest).not.toHaveBeenCalled();
+  });
+});
+
 describe("harness_delete", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;
@@ -610,6 +792,42 @@ describe("harness_delete", () => {
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { deleted: boolean };
     expect(data.deleted).toBe(true);
+  });
+
+  it("returns structured delete payload without spreading API fields at top level", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    mockRequest.mockResolvedValue({
+      identifier: "my_tpl",
+      account: "acct",
+      scope: "project",
+      version_label: "1.0.0",
+    });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(templateServer, templateRegistry, client);
+
+    const result = await templateServer.call("harness_delete", {
+      resource_type: "template_v1",
+      resource_id: "my_tpl",
+      org_id: "default",
+      project_id: "proj",
+      params: { version_label: "1.0.0" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.structuredContent).toMatchObject({
+      deleted: true,
+      resource_type: "template_v1",
+      resource_id: "my_tpl",
+      version_label: "1.0.0",
+      details: {
+        identifier: "my_tpl",
+        account: "acct",
+        scope: "project",
+        version_label: "1.0.0",
+      },
+    });
+    expect(result.structuredContent).not.toHaveProperty("account");
+    expect(result.structuredContent).not.toHaveProperty("scope");
   });
 });
 
@@ -667,6 +885,138 @@ describe("harness_execute", () => {
     expect(mockRequest).toHaveBeenCalled();
   });
 
+  it("passes pipeline_branch from params as ?pipelineBranchName= query param", async () => {
+    await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      params: { pipeline_branch: "feature/my-fix" },
+    });
+    expect(mockRequest).toHaveBeenCalled();
+    // Find the POST execute call (pre-flight GET calls come first)
+    const postCall = mockRequest.mock.calls.find((c) => c[0].method === "POST");
+    expect(postCall).toBeDefined();
+    expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+  });
+
+  it("pipeline_branch coexists with other params without clobbering", async () => {
+    await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      params: { pipeline_branch: "feature/my-fix", module: "ci" },
+    });
+    const postCall = mockRequest.mock.calls.find((c) => c[0].method === "POST");
+    expect(postCall).toBeDefined();
+    expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix", module: "ci" });
+  });
+
+  it("closes a pull request from a Harness PR URL", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_execute", {
+      url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
+      action: "close",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(prRequest).toHaveBeenCalledOnce();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
+    expect(call.body).toEqual({ state: "closed" });
+  });
+
+  it("uses resource_id for the missing child identifier when parent params are provided", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_execute", {
+      resource_type: "pull_request",
+      action: "close",
+      resource_id: "42",
+      params: { repo_id: "my-repo" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = prRequest.mock.calls[0]![0] as { path?: string };
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
+  });
+
+  it("explicit resource_id overrides URL-derived pr_number", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ number: 43, state: "closed" });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_execute", {
+      url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
+      resource_id: "43",
+      action: "close",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = prRequest.mock.calls[0]![0] as { path?: string };
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/43/state");
+  });
+
+  it("does not remap resource_id to child field when primary matches (GitOps contract)", async () => {
+    const gitopsServer = makeMcpServer("accept");
+    const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsRequest = vi.fn().mockResolvedValue({});
+    const gitopsClient = makeClient(gitopsRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(gitopsServer, gitopsRegistry, gitopsClient);
+
+    const result = await gitopsServer.call("harness_execute", {
+      resource_type: "gitops_application",
+      action: "cancel_operation",
+      resource_id: "account.myagent",
+      params: { agent_id: "account.myagent", app_name: "my-app" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = gitopsRequest.mock.calls[0]![0] as { path?: string };
+    expect(call.path).toContain("/agents/account.myagent/applications/my-app/operation");
+  });
+
+  it.each([
+    { action: "enable", method: "POST", expectedBody: {} },
+    { action: "disable", method: "DELETE", expectedBody: undefined },
+  ])("maps resource_id to segment_name for FME rule-based segment $action", async ({ action, method, expectedBody }) => {
+    const fmeServer = makeMcpServer("accept");
+    const fmeRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    const fmeRequest = vi.fn().mockResolvedValue({});
+    const fmeClient = makeClient(fmeRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(fmeServer, fmeRegistry, fmeClient);
+
+    const result = await fmeServer.call("harness_execute", {
+      resource_type: "fme_rule_based_segment_definition",
+      action,
+      resource_id: "beta_users",
+      params: { environment_id: "env-prod" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(fmeRequest).toHaveBeenCalledOnce();
+    const call = fmeRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe(method);
+    expect(call.path).toBe("/internal/api/v2/rule-based-segments/env-prod/beta_users");
+    expect(call.body).toEqual(expectedBody);
+  });
+
   it("materializes input_set_ids by GETting each input set then POSTing merged pipeline YAML", async () => {
     const inputSetYaml = `inputSet:\n  pipeline:\n    identifier: mat_pipe\n    variables:\n      - name: x\n        type: String\n        value: "1"\n`;
     mockRequest
@@ -707,6 +1057,120 @@ describe("harness_execute", () => {
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { _note: string };
     expect(data._note).toContain("fresh pipeline run");
+  });
+
+  // Single-poll wait tests verify the wiring (extract execution_id, poll once,
+  // merge envelope fields). Multi-poll backoff and abort handling are covered
+  // by the unit tests in tests/utils/poll-execution.test.ts.
+  it("extracts execution_id from the live planExecution.uuid response shape", async () => {
+    // Real Harness response wraps the ID inside { planExecution: { uuid, metadata: { executionUuid } } }
+    mockRequest
+      .mockResolvedValueOnce({
+        data: {
+          planExecution: {
+            uuid: "exec-wait-uuid",
+            status: "RUNNING",
+            metadata: { executionUuid: "exec-wait-uuid", pipelineIdentifier: "wait_pipe" },
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            planExecutionId: "exec-wait-uuid",
+            status: "Success",
+            pipelineIdentifier: "wait_pipe",
+            startTs: 1_700_000_000_000,
+            endTs: 1_700_000_010_000,
+          },
+        },
+      });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "wait_pipe",
+      wait: true,
+      wait_poll_interval_seconds: 2,
+      wait_timeout_seconds: 10,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.execution_status).toBe("Success");
+    expect(data.execution_terminal).toBe(true);
+
+    // Confirm the extracted ID was used to build the poll URL
+    const pollCall = mockRequest.mock.calls[1]![0] as { path?: string };
+    expect(pollCall.path).toBe("/pipeline/api/pipelines/execution/v2/exec-wait-uuid");
+  });
+
+  it("attaches a diagnose hint when the awaited execution fails", async () => {
+    mockRequest
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-wait-fail" } })
+      .mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            planExecutionId: "exec-wait-fail",
+            status: "Failed",
+            name: "Failing Pipeline",
+            pipelineIdentifier: "fail_pipe",
+            startTs: 1_700_000_000_000,
+            endTs: 1_700_000_005_000,
+          },
+        },
+      });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "fail_pipe",
+      wait: true,
+      wait_poll_interval_seconds: 2,
+      wait_timeout_seconds: 10,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.execution_status).toBe("Failed");
+    expect(data._diagnose_hint).toEqual(expect.stringContaining("harness_diagnose"));
+    expect(data._diagnose_hint).toEqual(expect.stringContaining("exec-wait-fail"));
+  });
+
+  it("preserves trigger response and surfaces wait error when execution polling fails persistently", async () => {
+    vi.useFakeTimers();
+    try {
+      mockRequest
+        .mockResolvedValueOnce({ data: { planExecutionId: "exec-wait-error", status: "RUNNING" } })
+        .mockRejectedValue(new Error("503 Service Unavailable"));
+
+      const pending = server.call("harness_execute", {
+        resource_type: "pipeline",
+        action: "run",
+        resource_id: "error_pipe",
+        wait: true,
+        wait_poll_interval_seconds: 2,
+        wait_timeout_seconds: 60,
+      });
+
+      for (let i = 0; i < 100; i++) {
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+
+      const result = await pending;
+      expect(result.isError).toBeUndefined();
+
+      const data = parseResult(result) as Record<string, unknown>;
+      expect(data.planExecutionId).toBe("exec-wait-error");
+      expect(data.execution_id).toBe("exec-wait-error");
+      expect(data.execution_timed_out).toBeUndefined();
+      expect(data._wait).toEqual(expect.objectContaining({
+        error: expect.stringContaining("Polling execution exec-wait-error failed after 5 consecutive attempts"),
+      }));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("blocks when flat inputs have unmatchedRequired and no input_set_ids", async () => {
@@ -931,6 +1395,49 @@ describe("harness_describe", () => {
     expect(data.operations.length).toBeGreaterThan(0);
   });
 
+  it("describes account/org/project scope support for multi-scope resources", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    const connectorServer = makeMcpServer();
+    const { registerDescribeTool } = await import("../../src/tools/harness-describe.js");
+    registerDescribeTool(connectorServer, registry);
+
+    const result = await connectorServer.call("harness_describe", { resource_type: "connector" });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { supportedScopes?: string[]; scopeHint?: string };
+    expect(data.supportedScopes).toEqual(["account", "org", "project"]);
+    expect(data.scopeHint).toContain("resource_scope='account'");
+  });
+
+  it("exposes paramsSchema for pull request operations and execute actions", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const pullRequestServer = makeMcpServer();
+    const { registerDescribeTool } = await import("../../src/tools/harness-describe.js");
+    registerDescribeTool(pullRequestServer, registry);
+
+    const result = await pullRequestServer.call("harness_describe", { resource_type: "pull_request" });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as {
+      operations: Array<{ operation: string; paramsSchema?: { fields: Array<{ name: string; required: boolean }> } }>;
+      executeActions: Array<{ action: string; paramsSchema?: { fields: Array<{ name: string; required: boolean }> } }>;
+    };
+    const create = data.operations.find((op) => op.operation === "create");
+    expect(create?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "repo_id", required: true }),
+      ]),
+    );
+
+    const merge = data.executeActions.find((action) => action.action === "merge");
+    expect(merge?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "repo_id", required: true }),
+        expect.objectContaining({ name: "pr_number", required: true }),
+      ]),
+    );
+  });
+
   it("returns error hint for unknown resource_type", async () => {
     const result = await server.call("harness_describe", { resource_type: "nonexistent" });
     expect(result.isError).toBeUndefined(); // describe intentionally doesn't set isError
@@ -991,6 +1498,109 @@ describe("harness_search", () => {
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { searched_types: number };
     expect(data.searched_types).toBe(1);
+  });
+
+  it("documents resource_scope in the registered input schema", () => {
+    const schema = server.schema("harness_search") as {
+      inputSchema: { resource_scope?: { description?: string | null } };
+    };
+    expect(schema.inputSchema.resource_scope?.description).toContain("Scope to search");
+  });
+
+  it("passes explicit account resource_scope through to searched resources", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "bitbucket" }], totalElements: 1 },
+    });
+    client = makeClient(mockRequest);
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, registry, client);
+
+    const result = await searchServer.call("harness_search", {
+      query: "bitbucket",
+      resource_types: ["connector"],
+      resource_scope: "account",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("filters broad scoped searches to resource types that support the requested scope", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "github" }], totalElements: 1 },
+    });
+    client = makeClient(mockRequest);
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, registry, client);
+
+    const result = await searchServer.call("harness_search", {
+      query: "github",
+      resource_scope: "account",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { searched_types: number; errors?: Record<string, string> };
+    expect(data.searched_types).toBeGreaterThan(0);
+    expect(data.searched_types).toBeLessThan(registry.getTypesForOperation("list").length);
+    expect(data.errors).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(data.searched_types);
+    const paths = mockRequest.mock.calls.map((call) => (call[0] as { path: string }).path);
+    expect(paths).toContain("/ng/api/connectors/listV2");
+    expect(paths.some((path) => path.startsWith("/pipeline/api"))).toBe(false);
+  });
+
+  it("uses account resource_scope from account-level URLs during search", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "github" }], totalElements: 1 },
+    });
+    client = makeClient(mockRequest);
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, registry, client);
+
+    const result = await searchServer.call("harness_search", {
+      query: "github",
+      resource_types: ["connector"],
+      url: "https://app.harness.io/ng/account/test-account/all/settings/connectors",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("filters broad account-level URL searches to compatible resource types", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines,connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "github" }], totalElements: 1 },
+    });
+    client = makeClient(mockRequest);
+    const searchServer = makeMcpServer();
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(searchServer, registry, client);
+
+    const result = await searchServer.call("harness_search", {
+      query: "github",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/connectors",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { searched_types: number; errors?: Record<string, string> };
+    expect(data.searched_types).toBeGreaterThan(0);
+    expect(data.searched_types).toBeLessThan(registry.getTypesForOperation("list").length);
+    expect(data.errors).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(data.searched_types);
+    const paths = mockRequest.mock.calls.map((call) => (call[0] as { path: string }).path);
+    expect(paths).toContain("/ng/api/connectors/listV2");
+    expect(paths.some((path) => path.startsWith("/pipeline/api"))).toBe(false);
   });
 
   it("gracefully handles search failures for individual types", async () => {

@@ -2,14 +2,16 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
+import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
-import { resourceTypeSchema } from "./input-schemas.js";
+import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
+import { createOutputSchema } from "./output-schemas.js";
 
-export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
+export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
   const creatableTypes = registry.getTypesForOperation("create");
 
   server.registerTool(
@@ -23,10 +25,13 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           z.string(),
         ]).describe("The resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object). For other resources: pass a JSON object"),
         url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
+        resource_scope: resourceScopeSchema,
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        confirm: z.boolean().describe("Set to true to confirm the operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP).").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional parameters. For external Git pipelines: store_type='REMOTE', connector_ref, repo_name, branch, file_path, commit_msg. For Harness Code pipelines: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path.").optional(),
       },
+      outputSchema: createOutputSchema,
       annotations: {
         title: "Create Harness Resource",
         readOnlyHint: false,
@@ -37,7 +42,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
     },
     async (args) => {
       try {
-        const { params, body, ...rest } = args;
+        const { params, body, confirm: _confirm, ...rest } = args;
         const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
         const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url);
         const coercedParams = coerceRecord(params);
@@ -58,9 +63,13 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           toolName: "harness_create",
           message: `Create ${args.resource_type}?\n\n${bodyPreview}`,
           risk,
+          autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
+          callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
-          return errorResult(`Operation ${elicit.reason} by user.`);
+          return errorResult(
+            `Operation ${elicit.reason} by user. Hint: if your client does not support interactive confirmation, pass confirm: true to proceed.`,
+          );
         }
 
         const result = await registry.dispatch(client, args.resource_type, "create", input, { tool: "harness_create", confirmation: elicit.method });

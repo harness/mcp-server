@@ -6,7 +6,7 @@ import type { Config } from "../config.js";
 import { registerPipelineYamlResource } from "./pipeline-yaml.js";
 import { registerExecutionSummaryResource } from "./execution-summary.js";
 import { registerHarnessSchemaResource } from "./harness-schema.js";
-import type { SchemaEntry } from "../data/schemas/index.js";
+import type { SchemaEntry } from "../data/schemas/types.js";
 
 export function registerAllResources(server: McpServer, registry: Registry, client: HarnessClient, config: Config, additionalSchemas?: Record<string, SchemaEntry>): void {
   registerPipelineYamlResource(server, registry, client, config);

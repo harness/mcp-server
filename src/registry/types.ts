@@ -137,11 +137,14 @@ export type ToolsetName =
   | "governance"
   | "freeze"
   | "overrides"
-  | "ai-evals";
+  | "ai-evals"
+  | "iacm"
+  | "ansible";
 
 export type ProductName = "harness" | "fme";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
+export type ResourceScope = "project" | "org" | "account";
 
 /**
  * Lightweight field descriptor for body schemas.
@@ -171,6 +174,22 @@ export interface BodySchema {
   description: string;
   /** The fields the body expects */
   fields: BodyFieldSpec[];
+}
+
+/**
+ * Schema for path/query params passed via the `params` argument.
+ * Surfaced by harness_describe so agents know what identifiers to pass and under what names.
+ */
+export interface ParamsSchema {
+  /** The params this operation requires or accepts */
+  fields: Array<{
+    /** Field name as used in the `params` argument (e.g. "repo_id", "pr_number") */
+    name: string;
+    /** Whether this param is required for the operation to succeed */
+    required: boolean;
+    /** Brief description shown to agents */
+    description: string;
+  }>;
 }
 
 /**
@@ -248,11 +267,22 @@ export interface EndpointSpec {
   /** Optional body schema for write operations — exposed via harness_describe */
   bodySchema?: BodySchema;
   /**
+   * Optional schema for params (path/query identifiers) — exposed via harness_describe.
+   * Use this to document required path identifiers (e.g. repo_id, pr_number) so agents
+   * know the exact field names to pass via the `params` argument.
+   */
+  paramsSchema?: ParamsSchema;
+  /**
    * When the bodyBuilder wraps user fields inside a single key
    * (e.g. `{ project: { identifier, name } }`), set this to the wrapper key
    * so required-field validation checks the inner object, not the wrapper.
    */
   bodyWrapperKey?: string;
+  /**
+   * When true, do not inject orgIdentifier/projectIdentifier into POST/PUT
+   * bodies. Some APIs take scope only in query/path and reject extra body fields.
+   */
+  skipScopeBodyInjection?: boolean;
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**
@@ -298,6 +328,13 @@ export interface EndpointSpec {
    * Only applicable to ssca-manager endpoints that accept the `enforce_elasticsearch` query param.
    */
   elkFallback?: boolean;
+  /**
+   * When true, harness_list will NOT run the global compactItems whitelist pass
+   * on this response's `items`. Use this when `responseExtractor` already
+   * produces a minimal, hand-picked projection and further compaction would
+   * strip intentional display fields (e.g. `severity`, `requested_by`).
+   */
+  skipCompact?: boolean;
 }
 
 /**
@@ -312,8 +349,13 @@ export interface ResourceDefinition {
   description: string;
   /** Which toolset this resource belongs to (for HARNESS_TOOLSETS filtering) */
   toolset: string;
-  /** Scope level: "project" | "org" | "account" */
-  scope: "project" | "org" | "account";
+  /** Default scope level: "project" | "org" | "account" */
+  scope: ResourceScope;
+  /**
+   * Scopes this resource can query when the caller passes `resource_scope`.
+   * If omitted, the resource supports only its default `scope`.
+   */
+  supportedScopes?: readonly ResourceScope[];
   /**
    * When true, org/project params are only added if explicitly provided in input.
    * Use for resources that support multiple scopes (e.g., Harness Code repos/PRs

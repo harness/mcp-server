@@ -34,9 +34,10 @@ export const connectorsToolset: ToolsetDefinition = {
     {
       resourceType: "connector",
       displayName: "Connector",
-      description: "External integration connector. Supports full CRUD and test_connection.",
+      description: "External integration connector. Supports full CRUD and test_connection. Use resource_scope='account' to list or get account-level connectors.",
       toolset: "connectors",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["connector_id"],
       diagnosticHint: "Use harness_diagnose with resource_id set to the connector identifier to run a live connectivity test and get auth method, status history, and error details.",
       listFilterFields: [
@@ -50,6 +51,7 @@ export const connectorsToolset: ToolsetDefinition = {
         { name: "description", description: "Filter by connector description" },
         { name: "inheriting_credentials_from_delegate", description: "Filter connectors inheriting credentials from delegate", type: "boolean" },
         { name: "tags", description: "Filter by tags as key:value pairs (JSON object)" },
+        { name: "include_all_connectors_available_at_scope", type: "boolean", description: "When true, also return connectors inherited from parent scopes (org/account). Default: false. Set to true when picking an APM/observability connector for chaos_probe apmProbe." },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/connectors/{connectorIdentifier}",
       operations: {
@@ -61,6 +63,7 @@ export const connectorsToolset: ToolsetDefinition = {
             search_term: "searchTerm",
             page: "pageIndex",
             size: "pageSize",
+            include_all_connectors_available_at_scope: "includeAllConnectorsAvailableAtScope",
           },
           bodyBuilder: (input) => {
             const csv = (v: unknown): string[] | undefined => {
