@@ -47,6 +47,38 @@ describe("buildFileStoreMultipartBody", () => {
     ).toThrow(/parent_identifier/);
   });
 
+  it("rejects FOLDER multipart with text content", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "scripts",
+            type: "FOLDER",
+            parent_identifier: "Root",
+            content: "unexpected",
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/FOLDER; omit body\.content and body\.content_base64/);
+  });
+
+  it("rejects FOLDER multipart with base64 content", () => {
+    expect(() =>
+      buildFileStoreMultipartBody(
+        {
+          body: {
+            name: "scripts",
+            type: "FOLDER",
+            parent_identifier: "Root",
+            content_base64: Buffer.from("unexpected").toString("base64"),
+          },
+        },
+        "create",
+      ),
+    ).toThrow(/FOLDER; omit body\.content and body\.content_base64/);
+  });
+
   it("appends base64 file content for FILE create", () => {
     const fd = buildFileStoreMultipartBody(
       {
@@ -235,6 +267,19 @@ describe("buildFolderNodesBody", () => {
     const body = { identifier: "f1", name: "scripts", type: "FOLDER" };
     const result = buildFolderNodesBody({ body });
     expect(result).toBe(body);
+  });
+
+  it("passes through a full body object when resource_id matches body.identifier", () => {
+    const body = { identifier: "f1", name: "scripts", type: "FOLDER" };
+    const result = buildFolderNodesBody({ resource_id: "f1", body });
+    expect(result).toBe(body);
+  });
+
+  it("rejects a full body object when resource_id conflicts with body.identifier", () => {
+    expect(() => buildFolderNodesBody({
+      resource_id: "folder-a",
+      body: { identifier: "folder-b", name: "scripts", type: "FOLDER" },
+    })).toThrow(/resource_id\/file_store_id must match body\.identifier/);
   });
 
   it("rejects a full body with an invalid node type", () => {

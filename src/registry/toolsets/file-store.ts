@@ -137,6 +137,12 @@ export function buildFileStoreMultipartBody(
   const mimeType = optionalStringField(b, ["mime_type", "mimeType"], "body.mime_type");
   const path = optionalStringField(b, ["path"], "body.path");
   const tags = optionalStringField(b, ["tags"], "body.tags");
+  const hasContent = b.content !== undefined && b.content !== null;
+  const hasContentBase64 = b.content_base64 !== undefined && b.content_base64 !== null;
+  if (hasContentBase64 && typeof b.content_base64 !== "string") {
+    throw new Error("body.content_base64 must be a string.");
+  }
+  const contentBase64 = hasContentBase64 ? (b.content_base64 as string) : undefined;
 
   const pathId =
     mode === "update"
@@ -158,10 +164,12 @@ export function buildFileStoreMultipartBody(
   appendPart(fd, "path", path);
   appendPart(fd, "tags", tags);
 
-  if (nodeType === "FILE") {
+  if (nodeType === "FOLDER") {
+    if (hasContent || hasContentBase64) {
+      throw new Error("body.type is FOLDER; omit body.content and body.content_base64.");
+    }
+  } else {
     const filename = optionalStringField(b, ["filename", "file_name"], "body.filename") ?? name;
-    const contentBase64 = optionalStringField(b, ["content_base64"], "body.content_base64");
-    const hasContent = b.content !== undefined && b.content !== null;
     if (contentBase64 !== undefined && hasContent) {
       throw new Error("Provide either body.content or body.content_base64, not both.");
     }
@@ -236,9 +244,20 @@ function resolveFolderNodeIdentifier(input: Record<string, unknown>): string | u
 export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
   const rawBody = input.body;
   if (rawBody !== undefined && typeof rawBody === "object" && rawBody !== null && !Array.isArray(rawBody)) {
-    const bodyType = (rawBody as Record<string, unknown>).type;
+    const body = rawBody as Record<string, unknown>;
+    const bodyType = body.type;
     if (bodyType !== undefined) {
       assertFileStoreNodeType(bodyType, "body.type");
+    }
+    const genericIdentifier = resolveFolderNodeIdentifier(input);
+    if (genericIdentifier !== undefined) {
+      const bodyIdentifier = optionalStringField(body, ["identifier"], "body.identifier");
+      if (bodyIdentifier === undefined) {
+        throw new Error("file_store.list_children full body must include body.identifier when resource_id/file_store_id is provided.");
+      }
+      if (bodyIdentifier !== genericIdentifier) {
+        throw new Error("Conflicting folder identifiers for file_store.list_children: resource_id/file_store_id must match body.identifier.");
+      }
     }
     return rawBody;
   }
