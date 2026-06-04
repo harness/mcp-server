@@ -11,7 +11,7 @@ interface BundleManifest {
       env: Record<string, string>;
     };
   };
-  user_config: Record<string, { sensitive?: boolean; required?: boolean }>;
+  user_config: Record<string, { default?: string; sensitive?: boolean; required?: boolean }>;
 }
 
 function readJson(path: string): BundleManifest {
@@ -29,12 +29,20 @@ describe("release metadata", () => {
     expect(directoryManifest.version).toBe(packageJson.version);
   });
 
-  it("exposes FME credential config in packaged manifests", () => {
+  it("exposes FME config in packaged manifests", () => {
     for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
       expect(manifest.server.mcp_config.env.HARNESS_FME_API_KEY).toBe("${user_config.HARNESS_FME_API_KEY}");
       expect(manifest.user_config.HARNESS_FME_API_KEY).toMatchObject({
         required: false,
         sensitive: true,
+      });
+      expect(manifest.server.mcp_config.env.HARNESS_FME_BASE_URL).toBe(
+        "${user_config.HARNESS_FME_BASE_URL}",
+      );
+      expect(manifest.user_config.HARNESS_FME_BASE_URL).toMatchObject({
+        default: "https://api.split.io",
+        required: false,
+        sensitive: false,
       });
     }
   });

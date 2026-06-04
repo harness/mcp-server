@@ -42,3 +42,8 @@
 - **Issue**: A deployment-level product credential can silently override the per-session credential after `mergeConfigWithSessionHeaders()` injects the user's API key, breaking shared HTTP auth isolation.
 - **Fix**: Reject server-held product credentials in `HARNESS_MCP_MODE=multi-user` unless there is an explicit per-session credential channel, and defensively ignore shared product credentials in auth resolvers for multi-user configs.
 - **Rule**: For any product-specific auth config, test the full multi-user path: base config → session header merge → product auth resolver. The resolved product credential must remain tied to the session user or fail closed.
+
+## Public Config Surface Alignment
+- **Issue**: Adding or documenting an env var without updating packaged manifests leaves manifest-driven and MCPB installs unable to configure it.
+- **Fix**: Update `manifest.json`, `mcp-directory/manifest.json`, and release metadata tests for every public config knob exposed in source docs or `.env.example`.
+- **Rule**: Before finishing env config changes, search all public config surfaces and lock the expected manifest exposure in tests.

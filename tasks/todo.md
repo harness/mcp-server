@@ -760,3 +760,7 @@
 - Added `HARNESS_FME_API_KEY` to both bundle manifests (`manifest.json` and `mcp-directory/manifest.json`) so manifest-driven and MCPB installs can provide the dedicated FME credential in single-user/self-hosted mode.
 - Added release metadata coverage to keep the packaged FME credential surface aligned with config changes.
 - Made the FME missing-auth remediation mode-aware: single-user points at `HARNESS_FME_API_KEY`, while multi-user points at the session `x-harness-api-key` and explicitly says not to configure `HARNESS_FME_API_KEY`.
+
+### Manifest Base URL Follow-up
+- Added `HARNESS_FME_BASE_URL` to both bundle manifests so manifest-driven and MCPB installs can override the Split/FME Admin API base URL.
+- Extended release metadata coverage to require both FME credential and FME base URL config surfaces in packaged manifests.
