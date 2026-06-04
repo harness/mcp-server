@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
+import type { EndpointSpec } from "../../src/registry/types.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -99,6 +100,101 @@ describe("pull_request registry mappings", () => {
       path: "/code/api/v1/repos/rc_tools/pullreq/42/state",
       body: { state: "closed" },
     }));
+  });
+});
+
+describe("paramsSchema on pull_request operations", () => {
+  const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+  const def = registry.getResource("pull_request");
+
+  it("every operation on pull_request has a paramsSchema with repo_id", () => {
+    const issues: string[] = [];
+    const allSpecs = [
+      ...Object.entries(def.operations),
+      ...Object.entries(def.executeActions ?? {}),
+    ] as [string, EndpointSpec][];
+
+    for (const [opName, spec] of allSpecs) {
+      if (!spec.paramsSchema) {
+        issues.push(`pull_request.${opName}: missing paramsSchema`);
+        continue;
+      }
+      const hasRepoId = spec.paramsSchema.fields.some((f) => f.name === "repo_id");
+      if (!hasRepoId) {
+        issues.push(`pull_request.${opName}: paramsSchema missing repo_id field`);
+      }
+      const repoIdField = spec.paramsSchema.fields.find((f) => f.name === "repo_id");
+      if (repoIdField && !repoIdField.required) {
+        issues.push(`pull_request.${opName}: repo_id paramsSchema field should be required`);
+      }
+    }
+
+    expect(issues, issues.join("\n")).toEqual([]);
+  });
+
+  it("paramsSchema is present on pr_reviewer, pr_comment, pr_check, pr_activity", () => {
+    const issues: string[] = [];
+    for (const type of ["pr_reviewer", "pr_comment", "pr_check", "pr_activity"]) {
+      const d = registry.getResource(type);
+      const allSpecs = [
+        ...Object.entries(d.operations),
+        ...Object.entries(d.executeActions ?? {}),
+      ] as [string, EndpointSpec][];
+      for (const [opName, spec] of allSpecs) {
+        if (!spec.paramsSchema) {
+          issues.push(`${type}.${opName}: missing paramsSchema`);
+        }
+      }
+    }
+    expect(issues, issues.join("\n")).toEqual([]);
+  });
+});
+
+describe("repo_identifier alias for pull_request", () => {
+  it("accepts repo_identifier in place of repo_id for create", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { number: 1 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "create", {
+      repo_identifier: "harness-ai-agent",  // alias instead of repo_id
+      body: { title: "fix: redact secrets", source_branch: "fix/redact", target_branch: "main" },
+      org_id: "PROD",
+      project_id: "Data_Platform",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/harness-ai-agent/pullreq",
+    }));
+  });
+
+  it("accepts repo_identifier in place of repo_id for update (pathBuilder path)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { number: 7, title: "updated" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "update", {
+      repo_identifier: "harness-ai-agent",  // alias
+      pr_number: "7",
+      body: { title: "updated" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "PATCH",
+      path: "/code/api/v1/repos/harness-ai-agent/pullreq/7",
+    }));
+  });
+
+  it("throws a clear error when both repo_id and repo_identifier are absent", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "pull_request", "create", {
+        body: { title: "no repo", source_branch: "feat/x", target_branch: "main" },
+      }),
+    ).rejects.toThrow(/repo_id/);
   });
 });
 

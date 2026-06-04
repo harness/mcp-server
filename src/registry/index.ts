@@ -540,6 +540,13 @@ export class Registry {
         for (const [inputKey, pathPlaceholder] of Object.entries(spec.pathParams)) {
           let value = input[inputKey];
           if (value === undefined || value === "") {
+            // Accept repo_identifier as an alias for repo_id — agents sometimes use
+            // the GitOps/Repositories naming convention instead of the Code PR convention.
+            if (inputKey === "repo_id" && input["repo_identifier"] !== undefined && input["repo_identifier"] !== "") {
+              value = input["repo_identifier"];
+            }
+          }
+          if (value === undefined || value === "") {
             // Default scope placeholders from config for project/org-scoped resources
             if (pathPlaceholder === "org" && shouldUseOrg(pathDefaultScope)) {
               value = explicitScopeValues?.orgId ?? this.config.HARNESS_ORG;
