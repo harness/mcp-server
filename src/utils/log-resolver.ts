@@ -439,6 +439,7 @@ async function downloadBlobContent(
     // already matches our base URL (rewrite would be a no-op). When hostnames differ
     // (self-managed deployment), rewrite regardless — the original hostname (app.harness.io)
     // may not be reachable from the client's network.
+    // Invariant A: rewrite when hosts differ. Invariant B: skip only when they already match (rewrite is a no-op).
     if (signedHeadersIncludeHost(blobUrl) && blobUrl.hostname === baseUrl.hostname) {
       log.debug("Downloading log blob (direct, host-bound presigned CDN)", {
         prefix,

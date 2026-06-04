@@ -1,5 +1,319 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, BodyFieldSpec } from "../types.js";
 import { passthrough } from "../extractors.js";
+
+// ── Validation helpers for conditional nested fields ──────────────────────
+
+/**
+ * Validates database_schema create body for conditionally required nested fields.
+ * - type='Repository' requires changelog with connector and location
+ * - type='Script' requires changeLogScript with location, image, shell, and command
+ */
+function validateDatabaseSchemaCreate(body: Record<string, unknown>): void {
+  const schemaType = body.type as string | undefined;
+
+  if (schemaType === "Repository") {
+    const changelog = body.changelog as Record<string, unknown> | undefined;
+    if (!changelog) {
+      throw new Error("changelog object is required when type='Repository'");
+    }
+    if (!changelog.connector) {
+      throw new Error("changelog.connector is required when type='Repository'");
+    }
+    if (!changelog.location) {
+      throw new Error("changelog.location is required when type='Repository'");
+    }
+  } else if (schemaType === "Script") {
+    const script = body.changeLogScript as Record<string, unknown> | undefined;
+    if (!script) {
+      throw new Error("changeLogScript object is required when type='Script'");
+    }
+    const missing: string[] = [];
+    if (!script.location) missing.push("location");
+    if (!script.image) missing.push("image");
+    if (!script.shell) missing.push("shell");
+    if (!script.command) missing.push("command");
+    if (missing.length > 0) {
+      throw new Error(`changeLogScript.{${missing.join(", ")}} required when type='Script'`);
+    }
+  }
+}
+
+// ── Body Schema Fields for Database Schema ────────────────────────────────
+// Note: Create and Update have different required fields per OpenAPI spec.
+// - Create requires: identifier, name, migrationType, type
+// - Update: all fields optional (partial update), migrationType not supported
+
+const databaseSchemaCreateSchema = {
+  description:
+    "Database schema definition. Use type='Repository' for git-based changelogs (requires changelog object), " +
+    "type='Script' for custom script-based migrations (requires changeLogScript object). " +
+    "Only include changelog OR changeLogScript based on type — not both.",
+  fields: [
+    {
+      name: "identifier",
+      type: "string",
+      required: true,
+      description:
+        "Unique schema identifier (required on create). Must start with letter/underscore, " +
+        "may contain letters, numbers, underscores, and $. Max 128 chars. " +
+        "Pattern: ^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$",
+    },
+    {
+      name: "name",
+      type: "string",
+      required: true,
+      description: "Schema display name (max 128 chars)",
+    },
+    {
+      name: "migrationType",
+      type: "string",
+      required: true,
+      description: "Migration tool: 'Liquibase' or 'Flyway'",
+    },
+    {
+      name: "type",
+      type: "string",
+      required: true,
+      description:
+        "Source type: 'Repository' (git-based changelog) or 'Script' (custom script)",
+    },
+    {
+      name: "tags",
+      type: "object",
+      required: false,
+      description: "Key-value tag map (max 128 keys, each value max 128 chars)",
+    },
+    {
+      name: "changelog",
+      type: "object",
+      required: false,
+      description:
+        "Required when type='Repository': git repository details. OMIT this field entirely if type='Script'.",
+      fields: [
+        { name: "connector", type: "string", required: true, description: "Git connector identifier" },
+        { name: "location", type: "string", required: true, description: "Path to changelog file (e.g. 'db/changelog.xml')" },
+        { name: "repo", type: "string", required: false, description: "Repository name (if connector doesn't specify)" },
+        { name: "archivePath", type: "string", required: false, description: "Archive path for migration files" },
+        { name: "toml", type: "string", required: false, description: "Flyway TOML configuration path" },
+      ],
+    },
+    {
+      name: "changeLogScript",
+      type: "object",
+      required: false,
+      description:
+        "Required when type='Script': custom script configuration. OMIT this field entirely if type='Repository'.",
+      fields: [
+        { name: "location", type: "string", required: true, description: "Script path" },
+        { name: "image", type: "string", required: true, description: "Docker image (e.g. 'liquibase/liquibase:4.25')" },
+        { name: "shell", type: "string", required: true, description: "Shell type: 'Bash' or 'Sh'" },
+        { name: "command", type: "string", required: true, description: "Shell command to run" },
+        { name: "toml", type: "string", required: false, description: "Flyway TOML configuration path" },
+      ],
+    },
+    {
+      name: "usePercona",
+      type: "boolean",
+      required: false,
+      description: "Liquibase only: enable Percona toolkit for online schema changes",
+    },
+    {
+      name: "service",
+      type: "string",
+      required: false,
+      description: "Optional Harness service reference",
+    },
+  ] as BodyFieldSpec[],
+};
+
+// Update schema: all fields optional, migrationType not supported per OpenAPI DBSchemaUpdateRequest
+const databaseSchemaUpdateSchema = {
+  description:
+    "Database schema update. Identifier cannot be changed (comes from path). " +
+    "All fields are optional — only include fields you want to update. " +
+    "Note: migrationType cannot be changed after creation.",
+  fields: [
+    {
+      name: "name",
+      type: "string",
+      required: false,
+      description: "Schema display name (max 128 chars)",
+    },
+    {
+      name: "tags",
+      type: "object",
+      required: false,
+      description: "Key-value tag map (max 128 keys, each value max 128 chars)",
+    },
+    {
+      name: "type",
+      type: "string",
+      required: false,
+      description:
+        "Source type: 'Repository' (git-based changelog) or 'Script' (custom script)",
+    },
+    {
+      name: "changelog",
+      type: "object",
+      required: false,
+      description: "For type='Repository': git repository details.",
+      fields: [
+        { name: "connector", type: "string", required: false, description: "Git connector identifier" },
+        { name: "location", type: "string", required: false, description: "Path to changelog file" },
+        { name: "repo", type: "string", required: false, description: "Repository name" },
+        { name: "archivePath", type: "string", required: false, description: "Archive path for migration files" },
+        { name: "toml", type: "string", required: false, description: "Flyway TOML configuration path" },
+      ],
+    },
+    {
+      name: "changeLogScript",
+      type: "object",
+      required: false,
+      description: "For type='Script': custom script configuration.",
+      fields: [
+        { name: "location", type: "string", required: false, description: "Script path" },
+        { name: "image", type: "string", required: false, description: "Docker image" },
+        { name: "shell", type: "string", required: false, description: "Shell type: 'Bash' or 'Sh'" },
+        { name: "command", type: "string", required: false, description: "Shell command to run" },
+        { name: "toml", type: "string", required: false, description: "Flyway TOML configuration path" },
+      ],
+    },
+    {
+      name: "usePercona",
+      type: "boolean",
+      required: false,
+      description: "Liquibase only: enable Percona toolkit for online schema changes",
+    },
+    {
+      name: "service",
+      type: "string",
+      required: false,
+      description: "Optional Harness service reference",
+    },
+    {
+      name: "primaryDbInstanceId",
+      type: "string",
+      required: false,
+      description:
+        "Primary DB instance identifier for LLM authoring and related features",
+    },
+  ] as BodyFieldSpec[],
+};
+
+// ── Body Schema Fields for Database Instance ────────────────────────────────
+// Note: OpenAPI DBInstanceIn marks only identifier and connector in `required`, but server-side
+// validation enforces name as well. We mark all three as required here for safer agent behavior.
+// Update has all fields optional.
+
+const databaseInstanceCreateSchema = {
+  description:
+    "Database instance definition. Links a schema's migration scripts to a specific database via a JDBC connector. " +
+    "The connector determines the database engine type and connection details.",
+  fields: [
+    {
+      name: "identifier",
+      type: "string",
+      required: true,
+      description:
+        "Unique instance identifier. Must start with letter/underscore, " +
+        "may contain letters, numbers, underscores, and $. Max 128 chars. " +
+        "Pattern: ^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$",
+    },
+    {
+      name: "name",
+      type: "string",
+      required: true,
+      description: "Instance display name (max 128 chars).",
+    },
+    {
+      name: "connector",
+      type: "string",
+      required: true,
+      description:
+        "JDBC connector identifier (required). The connector defines the database engine type (MySQL, PostgreSQL, etc.) " +
+        "and connection details including the target database. " +
+        "Use harness_list(resource_type='connector', filters={type: 'Jdbc'}) to find available JDBC connectors.",
+    },
+    {
+      name: "branch",
+      type: "string",
+      required: false,
+      description:
+        "Git branch for this instance. **REQUIRED when parent schema uses GIT or Harness Code source**. " +
+        "Specifies which branch to pull migration scripts from. Not needed for Script-based schemas. " +
+        "Check the parent schema's source type via harness_get before creating the instance.",
+    },
+    {
+      name: "context",
+      type: "string",
+      required: false,
+      description:
+        "Liquibase/Flyway context filter. Allows you to filter which changesets run for this instance. " +
+        "For example, 'dev', 'staging', 'release' — only changesets tagged with matching contexts will execute. " +
+        "Leave empty to run all changesets.",
+    },
+    {
+      name: "tags",
+      type: "object",
+      required: false,
+      description:
+        "Optional key-value pairs for tagging/labeling the instance. Format: { \"key1\": \"value1\", \"key2\": \"value2\" }",
+    },
+    {
+      name: "substituteProperties",
+      type: "object",
+      required: false,
+      description:
+        "Optional key-value pairs for Liquibase property substitution. These values replace ${property} placeholders in changesets. " +
+        "Format: { \"schemaName\": \"myschema\", \"tablespace\": \"users_ts\" }",
+    },
+  ] as BodyFieldSpec[],
+};
+
+// Update schema: all fields optional for partial updates
+const databaseInstanceUpdateSchema = {
+  description:
+    "Database instance update. Identifier cannot be changed (comes from path). " +
+    "All fields are optional — only include fields you want to update.",
+  fields: [
+    {
+      name: "name",
+      type: "string",
+      required: false,
+      description: "Instance display name",
+    },
+    {
+      name: "connector",
+      type: "string",
+      required: false,
+      description: "JDBC connector identifier",
+    },
+    {
+      name: "branch",
+      type: "string",
+      required: false,
+      description: "Git branch for Repository-type schemas",
+    },
+    {
+      name: "context",
+      type: "string",
+      required: false,
+      description: "Liquibase/Flyway context filter",
+    },
+    {
+      name: "tags",
+      type: "object",
+      required: false,
+      description: "Key-value pairs for tagging/labeling",
+    },
+    {
+      name: "substituteProperties",
+      type: "object",
+      required: false,
+      description: "Liquibase property substitution values",
+    },
+  ] as BodyFieldSpec[],
+};
 
 export const dbopsToolset: ToolsetDefinition = {
   name: "dbops",
@@ -12,7 +326,8 @@ export const dbopsToolset: ToolsetDefinition = {
       resourceType: "database_schema",
       displayName: "Database Schema",
       description:
-        "Harness DBOPS schema entity. Defines how database migrations are managed (Liquibase or Flyway), " +
+        "Harness DBOPS schema entity — supports full CRUD (list, get, create, update, delete). " +
+        "Defines how database migrations are managed (Liquibase or Flyway), " +
         "the source of migration scripts, and the set of linked instances. " +
         "NOTE: 'type' field is the schema source type (Repository/Script), NOT the database engine. " +
         "The DB engine type (MySQL, PostgreSQL, etc.) is NOT stored on the schema — it is on the JDBC " +
@@ -67,6 +382,59 @@ export const dbopsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: "Get a single database schema by identifier",
         },
+        create: {
+          method: "POST",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema",
+          pathParams: { org_id: "org", project_id: "project" },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          // DBOPS API expects flat DBSchemaIn shape at root (no wrapper object)
+          // Validates conditionally required nested fields based on type
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown>;
+            validateDatabaseSchemaCreate(body);
+            return body;
+          },
+          responseExtractor: passthrough,
+          description:
+            "Create a new database schema. Requires name, identifier, migrationType (Liquibase/Flyway), " +
+            "and type (Repository for git-based or Script for custom). " +
+            "For Repository type, provide changelog object with connector and location (OMIT changeLogScript). " +
+            "For Script type, provide changeLogScript object with location, image, shell, and command (OMIT changelog).",
+          bodySchema: databaseSchemaCreateSchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          // DBOPS API expects flat DBSchemaUpdateRequest shape at root (no wrapper object)
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description:
+            "Update an existing database schema. All fields are optional — only include what you want to change. " +
+            "Identifier cannot be changed (comes from path). Note: migrationType cannot be changed after creation.",
+          bodySchema: databaseSchemaUpdateSchema,
+        },
+        delete: {
+          method: "DELETE",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description:
+            "Delete a database schema. WARNING: This will also delete all linked instances and migration history. " +
+            "This action cannot be undone.",
+        },
       },
     },
 
@@ -75,8 +443,8 @@ export const dbopsToolset: ToolsetDefinition = {
       resourceType: "database_instance",
       displayName: "Database Instance",
       description:
-        "A database instance linked to a schema. Connects the schema's migration scripts " +
-        "to a specific database via a Harness connector. " +
+        "A database instance linked to a schema — supports full CRUD (list, get, create, update, delete). " +
+        "Connects the schema's migration scripts to a specific database via a Harness JDBC connector. " +
         "The 'connector' field holds the connector identifier — the DB engine type " +
         "(MySQL, PostgreSQL, etc.) is determined by that connector. " +
         "Use the connectors toolset to look up the connector when you need the exact engine type or JDBC details.",
@@ -107,7 +475,10 @@ export const dbopsToolset: ToolsetDefinition = {
       ],
       diagnosticHint:
         "If listing fails with 400 or 404, verify the schema identifier (dbschema_id) is correct " +
-        "by first calling harness_list(resource_type='database_schema').",
+        "by first calling harness_list(resource_type='database_schema'). " +
+        "All instance operations require dbschema_id to identify the parent schema. " +
+        "For create: if the API returns 400 about 'branch', the parent schema uses GIT/Harness Code source — " +
+        "call harness_get on the schema to check its source type, then retry with branch specified.",
       operations: {
         list: {
           method: "POST",
@@ -118,6 +489,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbschema_id: "dbschema",
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           queryParams: {
             search_term: "search_term",
             page: "page",
@@ -141,6 +513,63 @@ export const dbopsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get a single database instance by identifier",
+        },
+        create: {
+          method: "POST",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}/instance",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          // DBOPS API expects flat DBInstanceIn shape at root (no wrapper object)
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description:
+            "Create a new database instance under a schema. Links the schema's migration scripts to a specific database. " +
+            "Required: identifier, name, connector (JDBC connector ID). " +
+            "For Git-based schemas (GIT or Harness Code source), branch is REQUIRED. " +
+            "Optional: context (Liquibase context filter), tags, substituteProperties. " +
+            "TIP: Call harness_get on the parent schema first to check its source type and determine if branch is needed. " +
+            "The dbschema_id must be provided in params to specify the parent schema.",
+          bodySchema: databaseInstanceCreateSchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}/instance/{dbinstance}",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+            dbinstance_id: "dbinstance",
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          // DBOPS API expects flat DBInstanceUpdateRequest shape at root (no wrapper object)
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description:
+            "Update an existing database instance. All fields are optional — only include what you want to change. " +
+            "Identifier cannot be changed (comes from dbinstance_id in path).",
+          bodySchema: databaseInstanceUpdateSchema,
+        },
+        delete: {
+          method: "DELETE",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}/instance/{dbinstance}",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+            dbinstance_id: "dbinstance",
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description:
+            "Delete a database instance. WARNING: This removes the instance and its migration execution history. " +
+            "The underlying database is NOT affected — only Harness's record of applied migrations. " +
+            "This action cannot be undone.",
         },
       },
     },
@@ -222,6 +651,7 @@ export const dbopsToolset: ToolsetDefinition = {
             dbinstance_id: "dbinstance",
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const names = input.object_names;
             if (!Array.isArray(names) || names.length === 0) {
@@ -344,6 +774,61 @@ export const dbopsToolset: ToolsetDefinition = {
             "Returns the product default unless overridden in project Database DevOps settings. " +
             "Returns PipelineStatusOutput: {status, response, metadata}. " +
             "The metadata map may contain 'pipelineIdentifier' or similar — inspect the response.",
+        },
+      },
+    },
+
+    // ── Execute LLM Authoring Pipeline (consolidated endpoint) ────────────
+    {
+      resourceType: "database_execute_llm_authoring_pipeline",
+      displayName: "Execute LLM Authoring Pipeline",
+      description:
+        "Consolidated endpoint for LLM change authoring Accept & Commit. " +
+        "Resolves the pipeline (settings override or default), fills runtime inputs " +
+        "(schema, instance, changeset, K8s connector), executes the pipeline, and " +
+        "records the billing event — all in one call. " +
+        "Returns { pipelineExecutionId, pipelineIdentifier }. " +
+        "Poll status with harness_get(resource_type='execution', execution_id='<returned_id>'). " +
+        "Use this INSTEAD of separate database_llm_authoring_pipeline + pipeline execution calls.",
+      toolset: "dbops",
+      scope: "project",
+      identifierFields: [],
+      operations: {
+        create: {
+          method: "POST",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/execute-llm-authoring-pipeline",
+          pathParams: { org_id: "org", project_id: "project" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input: Record<string, unknown>) => {
+            const body = ((input.body ?? input) as Record<string, unknown>) ?? {};
+            return {
+              schemaIdentifier: body.schemaIdentifier ?? body.schema_id,
+              instanceIdentifier: body.instanceIdentifier ?? body.instance_id,
+              conversationId: body.conversationId ?? body.conversation_id,
+              changeset: body.changeset,
+            };
+          },
+          responseExtractor: passthrough,
+          description:
+            "Execute the LLM changeset pipeline with integrated billing tracking. " +
+            "Required body fields: schema_id (database schema identifier), " +
+            "instance_id (database instance identifier), " +
+            "conversation_id (chat conversation ID), " +
+            "changeset (Liquibase changeset YAML). " +
+            "The backend resolves the correct pipeline, fills all runtime inputs " +
+            "(including K8s connector), executes it, and records the billing event. " +
+            "Returns { pipelineExecutionId, pipelineIdentifier }.",
+          bodySchema: {
+            description:
+              "Changeset execution parameters. Caller aliases schema_id, instance_id, and conversation_id are accepted and mapped to backend field names.",
+            fields: [
+              { name: "schemaIdentifier", type: "string", required: true, description: "Database schema identifier" },
+              { name: "instanceIdentifier", type: "string", required: true, description: "Database instance identifier" },
+              { name: "conversationId", type: "string", required: true, description: "Chat conversation ID" },
+              { name: "changeset", type: "string", required: true, description: "Liquibase changeset YAML content" },
+            ],
+          },
         },
       },
     },

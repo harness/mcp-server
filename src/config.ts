@@ -37,15 +37,26 @@ function validateAllowedHosts(rawHosts: string | undefined): string | undefined 
   return hosts.join(",");
 }
 
+const ACCOUNT_SCOPED_API_KEY_PREFIXES = new Set(["pat", "sat"]);
+
 /**
- * Extract the account ID from a Harness PAT token.
- * PAT format: pat.<accountId>.<tokenId>.<secret>
- * Returns undefined if the token doesn't match the expected format.
+ * Extract the account ID from a Harness account-scoped API key.
+ * Supported formats:
+ * - pat.<accountId>.<tokenId>.<secret>
+ * - sat.<accountId>.<tokenId>.<secret>
+ * Returns undefined if the token doesn't match a supported format.
  */
 export function extractAccountIdFromToken(apiKey: string): string | undefined {
   const parts = apiKey.split(".");
+  const prefix = parts[0]?.toLowerCase();
   const accountId = parts[1];
-  if (parts.length >= 3 && parts[0] === "pat" && accountId && accountId.length > 0) {
+  if (
+    parts.length >= 3 &&
+    prefix &&
+    ACCOUNT_SCOPED_API_KEY_PREFIXES.has(prefix) &&
+    accountId &&
+    accountId.length > 0
+  ) {
     return accountId;
   }
   return undefined;
@@ -84,6 +95,7 @@ const RawConfigSchema = z.object({
   HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
   HARNESS_MCP_AUTH_TOKEN: optionalStringFromEnv,
   HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: booleanFromEnv.default(false),
+  HARNESS_FME_API_KEY: optionalStringFromEnv,
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
@@ -104,6 +116,13 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
+  if (isMultiUser && data.HARNESS_FME_API_KEY) {
+    throw new Error(
+      "HARNESS_FME_API_KEY must not be set in multi-user mode. " +
+      "FME calls must use the session user's x-harness-api-key credential.",
+    );
+  }
+
   if (!isMultiUser && !data.HARNESS_API_KEY) {
     throw new Error(
       "HARNESS_API_KEY is required in single-user mode.",
@@ -117,7 +136,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     accountId = data.HARNESS_ACCOUNT_ID ?? extractAccountIdFromToken(data.HARNESS_API_KEY!);
     if (!accountId) {
       throw new Error(
-        "HARNESS_ACCOUNT_ID is required when the API key is not a PAT (pat.<accountId>.<tokenId>.<secret>)",
+        "HARNESS_ACCOUNT_ID is required when the API key does not include an account ID segment (pat.<accountId>... or sat.<accountId>...)",
       );
     }
   }
@@ -170,6 +189,40 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
+
+/**
+ * Hosted/internal MCP deployments use literal placeholder credentials (for
+ * example "dummy") while platform auth is handled by service routing. Those
+ * placeholders are not valid external Split/FME API credentials.
+ */
+export function isPlaceholderCredential(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized === "dummy" || normalized.endsWith(".dummy");
+}
+
+/**
+ * Resolve the token used for Split/FME product APIs.
+ * FME talks directly to api.split.io, so hosted OAuth/proxy auth for Harness
+ * platform APIs cannot be reused there.
+ */
+export function resolveFmeApiKey(
+  config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_FME_API_KEY" | "HARNESS_API_KEY">,
+): string | undefined {
+  const explicitFmeKey = config.HARNESS_MCP_MODE === "multi-user"
+    ? undefined
+    : config.HARNESS_FME_API_KEY?.trim();
+  if (explicitFmeKey && !isPlaceholderCredential(explicitFmeKey)) {
+    return explicitFmeKey;
+  }
+
+  const fallbackHarnessKey = config.HARNESS_API_KEY?.trim();
+  if (fallbackHarnessKey && !isPlaceholderCredential(fallbackHarnessKey)) {
+    return fallbackHarnessKey;
+  }
+
+  return undefined;
+}
 
 /**
  * Resolve the base URL for a given product backend.

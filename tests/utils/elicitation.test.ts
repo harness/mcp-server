@@ -283,4 +283,54 @@ describe("confirmViaElicitation", () => {
     expect(result).toEqual({ proceed: true, method: "auto_approved" });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
+
+  it("proceeds with callerConfirmed when client lacks elicitation (destructive)", async () => {
+    const mcpServer = makeServerStub(undefined);
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      risk: "destructive",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
+  });
+
+  it("proceeds with callerConfirmed when client lacks elicitation (medium_write)", async () => {
+    const mcpServer = makeServerStub(undefined);
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_create",
+      message: "Create repo rule?",
+      risk: "medium_write",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: true, method: "elicited" });
+  });
+
+  it("proceeds with callerConfirmed when elicitInput throws (destructive)", async () => {
+    const mcpServer = makeServerStub({ elicitation: { form: {} } });
+    mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete service?",
+      risk: "destructive",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: true, method: "elicited" });
+  });
+
+  it("still blocks without callerConfirmed when client lacks elicitation (destructive)", async () => {
+    const mcpServer = makeServerStub(undefined);
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      risk: "destructive",
+      callerConfirmed: false,
+    });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
+  });
 });
