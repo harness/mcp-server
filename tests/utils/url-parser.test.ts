@@ -96,6 +96,18 @@ describe("parseHarnessUrl", () => {
     expect(result.project_id).toBeUndefined();
   });
 
+  it("handles account-level File Store URLs", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/lnFZRF6jQO6tQnB9znMALw/all/settings/file-store/folder123",
+    );
+    expect(result.account_id).toBe("lnFZRF6jQO6tQnB9znMALw");
+    expect(result.resource_type).toBe("file_store");
+    expect(result.resource_id).toBe("folder123");
+    expect(result.resource_scope).toBe("account");
+    expect(result.org_id).toBeUndefined();
+    expect(result.project_id).toBeUndefined();
+  });
+
   it("extracts execution ID and pipeline ID from execution URL", () => {
     const result = parseHarnessUrl(
       "https://ancestry.harness.io/ng/account/cetPGmqTQ22qdnkyMdP_9A/all/orgs/Genomics/projects/ga_ethnicity/pipelines/stack_ecs_docker_deploy/executions/GsHdrBCwR4ah3rwN9W_DMg/pipeline",
@@ -324,6 +336,18 @@ describe("applyUrlDefaults", () => {
 
     expect(result.resource_type).toBe("template");
     expect(result.resource_id).toBe("my-template");
+    expect(result.resource_scope).toBe("account");
+  });
+
+  it("injects resource_scope='account' for account-level File Store URLs", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/all/settings/file-store/folder123",
+      { includeResourceScope: true },
+    );
+
+    expect(result.resource_type).toBe("file_store");
+    expect(result.resource_id).toBe("folder123");
     expect(result.resource_scope).toBe("account");
   });
 

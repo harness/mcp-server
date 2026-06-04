@@ -271,6 +271,10 @@ export function buildFolderNodesBody(input: Record<string, unknown>): unknown {
     if (bodyType !== undefined) {
       assertFileStoreNodeType(bodyType, "body.type");
     }
+    if (body.parent_identifier !== undefined && body.parent_identifier !== null && body.parent_identifier !== "") {
+      throw new Error("file_store.list_children full body uses FileStoreNode JSON: use body.parentIdentifier, not body.parent_identifier.");
+    }
+    optionalStringField(body, ["parentIdentifier"], "body.parentIdentifier");
     const genericIdentifier = resolveFolderNodeIdentifier(input);
     if (genericIdentifier !== undefined) {
       if (bodyIdentifier !== genericIdentifier) {

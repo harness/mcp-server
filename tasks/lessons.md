@@ -5,6 +5,11 @@
 - **Fix**: Validate encoded content before `Buffer.from`, enforce documented scalar/enum types inside multipart builders, reject disallowed or mutually exclusive payload variants when present, require parent IDs explicitly when the API needs location context, accept the registry's mapped primary identifier in execute body builders, reject conflicting resource-specific aliases in shorthand and full-body modes, and document operation-specific body contracts via `paramsSchema`/`bodySchema`.
 - **Rule**: For multipart resources, fail loudly before network I/O and add regressions for generic tool paths (`resource_id` -> resource identifier), alias conflicts in every accepted input shape, direct helper inputs, and `harness_describe` body/params metadata. If create and update have different one-of requirements, split the body schemas instead of relying on one ambiguous shared schema.
 
+## Execute Action Scope and Read-Only Semantics
+- **Issue**: A read-like endpoint modeled as an execute action can drift from the generic read/list/get contract: `resource_scope` may be unavailable on the public execute tool, URL-derived scope may not be merged, and read-only mode may block the action solely because it is under `harness_execute`.
+- **Fix**: Expose `resource_scope` on execute when execute actions use multi-scope resources, opt the handler into URL-derived resource scope, and gate read-only mode by the action's `operationPolicy.risk` instead of the tool family alone.
+- **Rule**: For any execute action with `risk: "read"` or multi-scope support, add regressions for the registered tool input schema, explicit and URL-derived `resource_scope`, and read-only mode behavior.
+
 ## Harness SAT Account Extraction
 - **Issue**: Service account tokens can use the same account-scoped segment shape as PATs, but the parser only recognized the `pat` prefix.
 - **Fix**: Extract account IDs from both `pat` and `sat` prefixes, and let multi-user HTTP sessions derive `HARNESS_ACCOUNT_ID` from either prefix when `x-harness-account-id` is omitted.

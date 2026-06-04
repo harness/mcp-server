@@ -334,6 +334,18 @@ describe("buildFolderNodesBody", () => {
     })).toThrow(/body\.type must be 'FILE' or 'FOLDER'/);
   });
 
+  it("rejects full body snake_case parent_identifier", () => {
+    expect(() => buildFolderNodesBody({
+      body: { identifier: "f1", name: "scripts", type: "FOLDER", parent_identifier: "Root" },
+    })).toThrow(/use body\.parentIdentifier, not body\.parent_identifier/);
+  });
+
+  it("rejects full body non-string parentIdentifier", () => {
+    expect(() => buildFolderNodesBody({
+      body: { identifier: "f1", name: "scripts", type: "FOLDER", parentIdentifier: 123 },
+    })).toThrow(/body\.parentIdentifier must be a string/);
+  });
+
   it("builds node from shorthand folder_identifier + folder_name", () => {
     const result = buildFolderNodesBody({ folder_identifier: "f1", folder_name: "scripts" }) as Record<string, unknown>;
     expect(result.identifier).toBe("f1");

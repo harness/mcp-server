@@ -861,6 +861,13 @@ describe("harness_execute", () => {
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("no execute action") });
   });
 
+  it("documents resource_scope in the registered input schema", () => {
+    const schema = server.schema("harness_execute") as {
+      inputSchema: { resource_scope?: { description?: string | null } };
+    };
+    expect(schema.inputSchema.resource_scope?.description).toContain("Scope for the operation");
+  });
+
   it("returns error when user declines", async () => {
     const declineServer = makeMcpServer("decline");
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
@@ -1011,6 +1018,49 @@ describe("harness_execute", () => {
     const call = fileStoreRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/ng/api/file-store/folder");
+    expect(call.body).toEqual({ identifier: "folder123", name: "scripts", type: "FOLDER" });
+  });
+
+  it("passes resource_scope through for File Store list_children", async () => {
+    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
+    const fileStoreClient = makeClient(fileStoreRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+
+    const result = await fileStoreServer.call("harness_execute", {
+      resource_type: "file_store",
+      action: "list_children",
+      resource_id: "folder123",
+      resource_scope: "account",
+      params: { folder_name: "scripts" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = fileStoreRequest.mock.calls[0]![0] as { params?: Record<string, unknown> };
+    expect(call.params?.orgIdentifier).toBeUndefined();
+    expect(call.params?.projectIdentifier).toBeUndefined();
+  });
+
+  it("uses URL-derived account scope for File Store list_children", async () => {
+    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
+    const fileStoreClient = makeClient(fileStoreRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+
+    const result = await fileStoreServer.call("harness_execute", {
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store/folder123",
+      action: "list_children",
+      params: { folder_name: "scripts" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = fileStoreRequest.mock.calls[0]![0] as { params?: Record<string, unknown>; body?: unknown };
+    expect(call.params?.orgIdentifier).toBeUndefined();
+    expect(call.params?.projectIdentifier).toBeUndefined();
     expect(call.body).toEqual({ identifier: "folder123", name: "scripts", type: "FOLDER" });
   });
 

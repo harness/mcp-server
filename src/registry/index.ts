@@ -408,15 +408,15 @@ export class Registry {
     const auditCtx = signalOrAudit instanceof AbortSignal ? undefined : signalOrAudit;
     const abortSignal = signalOrAudit instanceof AbortSignal ? signalOrAudit : signal;
 
-    if (this.config.HARNESS_READ_ONLY) {
-      throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute actions are not allowed.`);
-    }
-
     const def = this.getResource(resourceType);
     const actionSpec = def.executeActions?.[action];
     if (!actionSpec) {
       const available = def.executeActions ? Object.keys(def.executeActions).join(", ") : "none";
       throw new Error(`Resource "${resourceType}" has no execute action "${action}". Available: ${available}`);
+    }
+
+    if (this.config.HARNESS_READ_ONLY && actionSpec.operationPolicy.risk !== "read") {
+      throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${action}" is not allowed.`);
     }
 
     return this.executeSpecWithAudit(client, def, actionSpec, "execute", resourceType, input, { ...auditCtx, tool: auditCtx?.tool ?? "harness_execute", action }, abortSignal);
