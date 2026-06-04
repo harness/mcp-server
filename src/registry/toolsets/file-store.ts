@@ -331,12 +331,12 @@ const fileStoreCreateBodySchema: BodySchema = {
 const fileStoreUpdateBodySchema: BodySchema = {
   description:
     "JSON consumed by the server and converted to multipart/form-data for Harness update. Required: name, type (FILE|FOLDER), parent_identifier (current parent node id). "
-    + "Pass resource_id/file_store_id as the node identifier. For FILE update, content or content_base64 is optional for metadata-only updates; if replacing content, provide exactly one. For FOLDER update: omit both content fields.",
+    + "Pass top-level resource_id (or params.file_store_id) as the existing node identifier. For FILE update, content or content_base64 is optional for metadata-only updates; if replacing content, provide exactly one. For FOLDER update: omit both content fields.",
   fields: [
     { name: "name", type: "string", required: true, description: "Display name of the file or folder" },
     { name: "type", type: "string", required: true, description: "FILE or FOLDER" },
     { name: "parent_identifier", type: "string", required: true, description: "Current parent node id; use 'Root' only when the current parent is root" },
-    { name: "identifier", type: "string", required: false, description: "Existing node id fallback when resource_id/file_store_id is not supplied; must match when both are supplied" },
+    { name: "identifier", type: "string", required: false, description: "Optional existing node id echo; must match top-level resource_id or params.file_store_id when supplied" },
     { name: "content", type: "string", required: false, description: "Optional replacement file contents as UTF-8 text (FILE only); omit for metadata-only update or FOLDER" },
     { name: "content_base64", type: "string", required: false, description: "Optional replacement file contents as base64 (FILE only); omit for metadata-only update or FOLDER" },
     { name: "filename", type: "string", required: false, description: "Upload filename for the content part" },

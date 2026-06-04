@@ -15,6 +15,11 @@
 - **Fix**: Add endpoint-specific validators and schema descriptions when an API accepts only one value from a broader shared model.
 - **Rule**: If an endpoint path names a subtype such as `/folder`, do not surface the full shared enum unless that exact endpoint accepts every enum value. Add helper and `harness_describe` metadata regressions for rejected enum values.
 
+## URL-Derived Scope Must Match Tool Surfaces
+- **Issue**: URL parsing can synthesize `resource_scope`, but a tool that exposes `resource_scope` still ignores URL-derived scope unless it opts into `applyUrlDefaults(..., { includeResourceScope: true })`.
+- **Fix**: Keep URL-derived scope behavior aligned across every public tool that accepts `resource_scope`, including create/update/delete paths, and test scoped URLs at the tool-handler level.
+- **Rule**: When adding a resource type to the URL-derived scope allowlist, audit every tool that accepts both `url` and `resource_scope`; either opt the tool in or avoid advertising URL-derived scope for that resource.
+
 ## Harness SAT Account Extraction
 - **Issue**: Service account tokens can use the same account-scoped segment shape as PATs, but the parser only recognized the `pat` prefix.
 - **Fix**: Extract account IDs from both `pat` and `sat` prefixes, and let multi-user HTTP sessions derive `HARNESS_ACCOUNT_ID` from either prefix when `x-harness-account-id` is omitted.

@@ -570,7 +570,7 @@ describe("harness_create", () => {
     });
   });
 
-  it("does not let URL-derived resource_scope change create scoping", async () => {
+  it("uses account scope from account-level connector URLs during create", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "account_conn" } });
     client = makeClient(mockRequest);
@@ -591,8 +591,33 @@ describe("harness_create", () => {
 
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
-    expect(callArgs.params.orgIdentifier).toBe("default");
-    expect(callArgs.params.projectIdentifier).toBe("test-project");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("uses account scope from account-level File Store URLs during create", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "scripts" } });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(fileStoreServer, registry, client);
+
+    const result = await fileStoreServer.call("harness_create", {
+      resource_type: "file_store",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store",
+      body: {
+        name: "scripts",
+        type: "FOLDER",
+        parent_identifier: "Root",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; body: FormData };
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+    expect(callArgs.body).toBeInstanceOf(FormData);
   });
 });
 
@@ -670,6 +695,33 @@ describe("harness_update", () => {
       name: "Project One",
       identifier: "proj1",
     });
+  });
+
+  it("uses account scope from account-level File Store URLs during update", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "scripts" } });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(fileStoreServer, registry, client);
+
+    const result = await fileStoreServer.call("harness_update", {
+      resource_type: "file_store",
+      resource_id: "scripts",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store/scripts",
+      body: {
+        name: "scripts",
+        type: "FOLDER",
+        parent_identifier: "Root",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string; body: FormData };
+    expect(callArgs.path).toBe("/ng/api/file-store/scripts");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+    expect(callArgs.body).toBeInstanceOf(FormData);
   });
 });
 
@@ -828,6 +880,27 @@ describe("harness_delete", () => {
     });
     expect(result.structuredContent).not.toHaveProperty("account");
     expect(result.structuredContent).not.toHaveProperty("scope");
+  });
+
+  it("uses account scope from account-level File Store URLs during delete", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: true });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(fileStoreServer, registry, client);
+
+    const result = await fileStoreServer.call("harness_delete", {
+      resource_type: "file_store",
+      resource_id: "scripts",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store/scripts",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string };
+    expect(callArgs.path).toBe("/ng/api/file-store/scripts");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
   });
 });
 

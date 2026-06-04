@@ -21,7 +21,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
       inputSchema: {
         resource_type: resourceTypeSchema(deletableTypes).describe("The type of resource to delete"),
         resource_id: z.string().describe("The identifier of the resource to delete"),
-        url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
+        url: z.string().describe("A Harness UI URL — org, project, resource type, ID, and supported resource_scope are extracted automatically").optional(),
         resource_scope: resourceScopeSchema,
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
@@ -59,7 +59,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
           );
         }
         const { params, confirm: _confirm, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
         const identFields = def.identifierFields;

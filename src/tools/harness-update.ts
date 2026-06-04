@@ -21,7 +21,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
       inputSchema: {
         resource_type: resourceTypeSchema(updatableTypes).describe("The type of resource to update"),
         resource_id: z.string().describe("The identifier of the resource to update"),
-        url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
+        url: z.string().describe("A Harness UI URL — org, project, resource type, ID, and supported resource_scope are extracted automatically").optional(),
         resource_scope: resourceScopeSchema,
         body: z.union([
           z.record(z.string(), z.unknown()),
@@ -68,7 +68,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         }
         const { params, body, confirm: _confirm, ...rest } = args;
         const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
-        const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url);
+        const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
         const identFields = def.identifierFields;

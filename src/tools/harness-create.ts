@@ -24,7 +24,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           z.record(z.string(), z.unknown()),
           z.string(),
         ]).describe("The resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object). For other resources: pass a JSON object"),
-        url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
+        url: z.string().describe("A Harness UI URL — org, project, and supported resource_scope are extracted automatically").optional(),
         resource_scope: resourceScopeSchema,
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
@@ -44,7 +44,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
       try {
         const { params, body, confirm: _confirm, ...rest } = args;
         const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
-        const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url);
+        const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
 

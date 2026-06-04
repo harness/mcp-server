@@ -435,6 +435,9 @@ describe("file_store bodySchema metadata", () => {
   it("documents metadata-only FILE updates separately from create", () => {
     const schema = fileStoreResource.operations.update?.bodySchema;
     expect(schema?.description).toContain("optional for metadata-only updates");
-    expect(schema?.fields.find((field) => field.name === "identifier")?.description).toContain("must match when both are supplied");
+    expect(schema?.description).toContain("Pass top-level resource_id");
+    const identifierDescription = schema?.fields.find((field) => field.name === "identifier")?.description ?? "";
+    expect(identifierDescription).toContain("must match top-level resource_id");
+    expect(identifierDescription).not.toContain("fallback");
   });
 });

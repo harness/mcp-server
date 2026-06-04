@@ -13,6 +13,7 @@
 - [x] Re-run focused and broad verification for scope/read-only follow-up
 - [x] Fix read-only CI smoke expectation for read-risk execute actions
 - [x] Restrict File Store list_children to folder nodes only
+- [x] Align write-tool URL-derived scope and File Store update metadata
 - [ ] Push final PR #211 update and re-check status
 
 ### Plan
@@ -43,6 +44,8 @@
 - CI smoke follow-up: `scripts/smoke-test.js` now checks read-only mode with a real write-risk execute action (`pipeline.run`) and a real read-risk execute action (`file_store.list_children`), matching the updated registry contract. Verification passed: `env HARNESS_READ_ONLY=true node scripts/smoke-test.js`, `pnpm build`, `pnpm typecheck`, focused Vitest run, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
 - Seventh follow-up review fix: `file_store.list_children` now rejects `FILE` in full-body and shorthand inputs, and its surfaced body/params schema metadata describes `FOLDER` only.
 - Seventh follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Eighth follow-up review fix: generic write tools now opt into URL-derived `resource_scope`, and File Store update metadata no longer advertises `body.identifier` as a replacement for the required top-level `resource_id`.
+- Eighth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts tests/utils/url-parser.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
 
 ## PR 172 Conflict Resolution (2026-06-04)
 - [x] Inspect PR status and identify conflicted documentation files
