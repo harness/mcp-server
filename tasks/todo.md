@@ -5,7 +5,7 @@
 - [x] Merge current `origin/main` into PR branch
 - [x] Resolve documentation and task-log conflicts
 - [x] Run docs/build/test verification
-- [ ] Push resolved branch and re-check PR status
+- [x] Push resolved branch and re-check PR status
 
 ### Plan
 - Preserve current public docs as source of truth where main has newer runtime-facing guidance.
