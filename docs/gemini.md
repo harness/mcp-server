@@ -54,7 +54,7 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - Track commitment coverage, utilisation, and savings
 
 ### Security & Compliance
-- Security Test Orchestration (STO): manage issues, approve/reject exemptions
+- Security Test Orchestration (STO): manage issues, create exemptions, and approve or reject exemptions with explicit approval scope
 - Supply Chain Security (SCS): track artifacts, compliance, SBOMs, chain of custody
 - Audit trail: registry-dispatched list/get/create/update/delete/execute operations can emit structured events through the default logger-filtered stderr sink, optional durable JSONL/webhook sinks, and optional OpenTelemetry spans
 
@@ -146,8 +146,8 @@ Multi-scope resources such as connectors, services, environments, infrastructure
    ```
    HARNESS_API_KEY=pat.xxxxx.xxxxx.xxxxx
    HARNESS_ACCOUNT_ID=your_account_id   # Optional for PAT/SAT keys with embedded account ID
-   HARNESS_ORG=default
-   HARNESS_PROJECT=your_project
+   HARNESS_ORG=your_org_id              # Optional default; omit to pass org_id per request
+   HARNESS_PROJECT=your_project_id      # Optional default; omit to pass project_id per request
    HARNESS_RATE_LIMIT_RPS=10            # Optional: client-side throttling
    HARNESS_MAX_BODY_SIZE_MB=10          # Optional: HTTP mode request size limit
    ```

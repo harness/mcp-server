@@ -1,5 +1,22 @@
 # Harness MCP Server — Task Tracking
 
+## PR 172 Conflict Resolution (2026-06-04)
+- [x] Inspect PR status and identify conflicted documentation files
+- [x] Merge current `origin/main` into PR branch
+- [x] Resolve documentation and task-log conflicts
+- [x] Run docs/build/test verification
+- [x] Push resolved branch and re-check PR status
+
+### Plan
+- Preserve current public docs as source of truth where main has newer runtime-facing guidance.
+- Keep the security exemption workflow documentation from the PR where it still matches current files.
+- Treat this as a docs-focused conflict resolution unless verification exposes a runtime contract mismatch.
+
+### Review
+- Merged current `origin/main` into PR #172 and resolved conflicts in contributor docs, Gemini docs, security exemption test docs, and task history.
+- Updated security exemption docs and prompt guidance to match the current execute surface: `approve` and `reject` are the available actions, while elevated approval uses `approve` with `body.scope`.
+- Verification passed: `pnpm docs:check`, `pnpm typecheck`, `pnpm build`, focused STO/registry/tool tests, full `pnpm test`, and `git diff --check`.
+
 ## Vitest Security Upgrade (2026-06-03)
 - [x] Confirm the affected local Vitest version and patched target
 - [x] Upgrade `vitest` dev dependency to the patched 4.1 line
@@ -567,6 +584,25 @@
 - Updated MCPB manifest descriptions so `HARNESS_BASE_URL` covers private SaaS hosts such as `https://harness0.harness.io`, not just self-managed installs.
 - Verified with `pnpm build` and `pnpm docs:check`.
 
+## Documentation Alignment Automation (2026-05-11)
+- [x] Audit recent registry, prompt, and config changes against existing docs
+- [x] Align STO security exemption docs and prompt guidance with execute action semantics
+- [x] Update stale setup/tooling references in existing user and contributor docs
+- [x] Verify generated docs consistency and TypeScript prompt changes
+- [x] Commit, push, and open/update docs-only PR
+
+### Plan
+- Update `README.md` in place for the `security_exemption` execute workflow and the project structure tool inventory.
+- Update `src/prompts/exemption-review.ts` so the prompt explains `approve` with explicit approval scope, confirmation, and `scope` body requirements.
+- Update `docs/gemini.md` to remove the stale `HARNESS_ORG=default` example and include exemption promotion in the STO capability summary.
+- Update `docs/testing/security_exemption/` so test prompts and expected results match the current body schemas: `approver_id` is optional, while `approve` requires `scope` and uses the promote endpoint internally for elevated scopes.
+- Update `CONTRIBUTING.md` for the current repository URL, 11-tool structure including `harness_schema`, and documentation/schema maintenance scripts.
+
+### Review
+- Documented that `security_exemption.approve` requires `body.scope`: `CURRENT` approves at the existing scope, while `ACCOUNT`, `ORG`, or `PROJECT` approve through the promote endpoint internally.
+- Updated Gemini setup examples to avoid implying a default org named `default`; org/project defaults are optional and may be supplied per request.
+- Aligned contributor and README tooling sections with the current 11 generic tool files and docs/schema maintenance scripts.
+- Verified with `pnpm build`, `pnpm docs:check`, and `pnpm typecheck`.
 ## Slack Bug Triage: Account-Scope Resource Queries (2026-05-13)
 - [x] Trace current scope injection and URL parsing for account-level resources
 - [x] Add failing tests for explicit/account URL scope behavior

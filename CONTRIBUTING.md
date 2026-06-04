@@ -9,8 +9,8 @@
 ## Setup
 
 ```bash
-git clone https://github.com/thisrohangupta/harness-mcp-v2.git
-cd harness-mcp-v2
+git clone https://github.com/harness/mcp-server.git
+cd mcp-server
 pnpm install
 pnpm build
 ```
@@ -24,6 +24,10 @@ pnpm typecheck      # Type-check without emitting
 pnpm test           # Run all tests
 pnpm test:watch     # Run tests in watch mode
 pnpm inspect        # Launch MCP Inspector for interactive testing
+pnpm docs:generate  # Refresh generated README counts from the built registry
+pnpm docs:check     # Verify README counts and clone instructions are current
+pnpm sync-schemas   # Refresh checked-in JSON Schemas for harness_schema
+pnpm check-schema-coverage # Verify schema examples cover registered schemas
 ```
 
 ## Project Structure
@@ -38,7 +42,7 @@ src/
     index.ts                  # Registry class + dispatch logic
     types.ts                  # ResourceDefinition, ToolsetDefinition, etc.
     toolsets/                  # One file per toolset (declarative data)
-  tools/                      # 11 generic MCP tools (thin dispatch wrappers)
+  tools/                      # 11 generic MCP tools (thin dispatch wrappers, including harness_schema)
   resources/                  # MCP resource providers
   prompts/                    # MCP prompt templates
   utils/                      # Errors, logger, rate limiter, deep links, etc.

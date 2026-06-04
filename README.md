@@ -1430,9 +1430,16 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 | ----------------------- | ---- | --- | ------ | ------ | ------ | ------------------------------ |
 | `security_issue`        | x    |     |        |        |        |                                |
 | `security_issue_filter` | x    |     |        |        |        |                                |
-| `security_exemption`    | x    |     | x      |        |        | `approve`, `reject`, `promote` |
+| `security_exemption`    | x    |     | x      |        |        | `approve`, `reject` |
 
 `security_exemption` create is a `high_write` operation. The server derives `requester_id` from the authenticated PAT, sets `exemptFutureOccurrences=true`, and defaults `duration_days` to 30 when not provided. For listing exemptions, pass a small explicit page size (for example `filters: { "status": "Pending", "size": 5 }`) and follow the `_nextPageHint` returned in each response.
+
+Security exemption execute workflow:
+
+- Use `harness_list` with `resource_type="security_exemption"` and an explicit `status` such as `Pending`, `Approved`, `Rejected`, `Expired`, or `Canceled`.
+- Use `harness_execute` with `action="approve"` and a required `body.scope`: `CURRENT`, `ACCOUNT`, `ORG`, or `PROJECT`. `CURRENT` approves at the exemption's existing scope; the other scopes use the STO promote endpoint internally. The server auto-fills `body.approver_id` from the authenticated user when omitted; `body.comment` is optional.
+- Use `action="reject"` to reject an exemption. `body.approver_id` is also auto-filled when omitted.
+- There is no separate `promote` execute action. Use `action="approve"` with a non-`CURRENT` `body.scope` when the requested outcome is approval at account, organization, or project scope.
 
 
 ### Access Control
@@ -1756,6 +1763,16 @@ pnpm test:watch
 
 # Interactive MCP Inspector
 pnpm inspect
+
+# Refresh generated README counts from the built registry
+pnpm docs:generate
+
+# Verify README counts and clone instructions are current
+pnpm docs:check
+
+# Sync and verify JSON Schemas used by harness_schema
+pnpm sync-schemas
+pnpm check-schema-coverage
 ```
 
 ### Project Structure
