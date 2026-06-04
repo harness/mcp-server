@@ -1,5 +1,18 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ParamsSchema, ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
+
+const REPO_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\"). Use repo_id, not repo_identifier." },
+  ],
+};
+
+const REPO_PR_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\"). Use repo_id, not repo_identifier." },
+    { name: "pr_number", required: true, description: "Pull request number" },
+  ],
+};
 
 function bodyRecord(input: Record<string, unknown>): Record<string, unknown> | undefined {
   const body = input.body;
@@ -86,6 +99,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "List pull requests for a repository",
+          paramsSchema: REPO_PARAMS,
         },
         get: {
           method: "GET",
@@ -97,6 +111,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Get pull request details",
+          paramsSchema: REPO_PR_PARAMS,
         },
         create: {
           method: "POST",
@@ -105,8 +120,8 @@ export const pullRequestsToolset: ToolsetDefinition = {
           pathParams: { repo_id: "repoIdentifier" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
-          description:
-            "Create a pull request. Body fields: title (required), source_branch (required), target_branch (required), description.",
+          description: "Create a pull request",
+          paramsSchema: REPO_PARAMS,
           bodySchema: {
             description: "New pull request",
             fields: [
@@ -131,7 +146,8 @@ export const pullRequestsToolset: ToolsetDefinition = {
           bodyBuilder: pullRequestUpdateBody,
           responseExtractor: passthrough,
           description:
-            "Update a pull request. Body fields: title, description, state (open/closed). State changes use the dedicated Harness Code PR state endpoint.",
+            "Update a pull request. State changes use the dedicated Harness Code PR state endpoint.",
+          paramsSchema: REPO_PR_PARAMS,
           bodySchema: {
             description: "Pull request update fields",
             fields: [
@@ -154,6 +170,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: () => ({ state: "closed" }),
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           actionDescription:
             "Close a pull request by setting its state to closed.",
           bodySchema: {
@@ -171,6 +188,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: (input) => input.body ?? {},
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           actionDescription:
             "Merge a pull request. Body fields: method (merge/squash/rebase/fast-forward), source_sha, delete_source_branch (boolean), dry_run (boolean).",
           bodySchema: {
@@ -205,6 +223,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "List reviewers assigned to a pull request",
+          paramsSchema: REPO_PR_PARAMS,
         },
         create: {
           method: "POST",
@@ -218,6 +237,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description:
             "Add a reviewer to a pull request. Body fields: reviewer_id (required).",
+          paramsSchema: REPO_PR_PARAMS,
           bodySchema: {
             description: "Reviewer to add",
             fields: [
@@ -237,6 +257,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
+          paramsSchema: REPO_PR_PARAMS,
           actionDescription:
             "Submit a review decision. Body fields: decision (required — 'approved' or 'changereq'), commit_sha (optional — SHA reviewed against).",
           bodySchema: {
@@ -289,6 +310,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description:
             "Add a comment to a pull request. Body fields: text (required). For inline code comments, also include: path, line_new OR line_old (line number on the new or old side of the diff), source_commit_sha, target_commit_sha.",
+          paramsSchema: REPO_PR_PARAMS,
           bodySchema: {
             description: "PR comment content",
             fields: [
@@ -314,6 +336,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description:
             "Update an existing pull request comment. Body fields: text (required).",
+          paramsSchema: REPO_PR_PARAMS,
           bodySchema: {
             description: "Updated comment content",
             fields: [
@@ -332,6 +355,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Delete a pull request comment",
+          paramsSchema: REPO_PR_PARAMS,
         },
       },
     },
@@ -354,6 +378,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "List status checks for a pull request",
+          paramsSchema: REPO_PR_PARAMS,
         },
       },
     },
@@ -392,6 +417,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "List activities for a pull request. Use kind=comment to get only comments. This is the only way to read PR comments (the /comments endpoint is POST-only).",
+          paramsSchema: REPO_PR_PARAMS,
         },
       },
     },
