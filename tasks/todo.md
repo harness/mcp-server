@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-05)
+- [x] Baseline branch against `origin/main` and inspect recent behavioral commits
+- [x] Trace File Store create/update upload handling through MCP confirmation and registry dispatch
+- [x] Add failing prompt-redaction regression coverage for File Store uploads
+- [x] Implement minimal confirmation body preview redaction and bounding
+- [x] Run focused and broad verification
+- [ ] Open PR and report outcome in Slack
+
+### Plan
+- Treat this branch as a recent-main scan because it initially matched `origin/main`.
+- Prioritize high-blast-radius behavior in the new File Store multipart support and recent auth/config changes.
+- Patch only a concrete crash/data-exposure scenario with a narrow helper used by the affected write confirmation path.
+
+### Review
+- Found that `harness_create` and `harness_update` built confirmation prompts by directly `JSON.stringify`-ing object bodies. File Store uploads can include large `content` or `content_base64` payloads, so a valid upload could allocate and send the full file body in the elicitation prompt before the multipart builder's size validation ran.
+- Fixed confirmation previews to redact upload content fields and bound long string/object previews before calling elicitation.
+- Added public tool-handler regressions for File Store create/update confirmation messages so raw upload content is not exposed.
+- Verification passed: focused red/green prompt tests, `pnpm typecheck`, full `tests/tools/tool-handlers.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check HEAD~1..HEAD`, and full `pnpm test`.
+
 ## PR 211 File Store Review Follow-up (2026-06-04)
 - [x] Inspect PR state and Cursor review findings
 - [x] Merge current `origin/main` into PR branch
