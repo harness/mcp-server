@@ -637,6 +637,31 @@ describe("harness_create", () => {
     expect(callArgs.params.projectIdentifier).toBeUndefined();
     expect(callArgs.body).toBeInstanceOf(FormData);
   });
+
+  it("redacts File Store upload content from create confirmation prompts", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(fileStoreServer, registry, client);
+    const contentBase64 = Buffer.from("sensitive file payload").toString("base64");
+
+    const result = await fileStoreServer.call("harness_create", {
+      resource_type: "file_store",
+      body: {
+        name: "script.sh",
+        type: "FILE",
+        parent_identifier: "Root",
+        content_base64: contentBase64,
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
+    expect(elicitationCall.message).toContain("[redacted");
+    expect(elicitationCall.message).not.toContain(contentBase64);
+  });
 });
 
 describe("harness_update", () => {
@@ -766,6 +791,32 @@ describe("harness_update", () => {
     expect(callArgs.params.orgIdentifier).toBeUndefined();
     expect(callArgs.params.projectIdentifier).toBeUndefined();
     expect(callArgs.body).toBeInstanceOf(FormData);
+  });
+
+  it("redacts File Store upload content from update confirmation prompts", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(fileStoreServer, registry, client);
+    const content = "sensitive replacement file payload";
+
+    const result = await fileStoreServer.call("harness_update", {
+      resource_type: "file_store",
+      resource_id: "script-file",
+      body: {
+        name: "script.sh",
+        type: "FILE",
+        parent_identifier: "Root",
+        content,
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
+    expect(elicitationCall.message).toContain("[redacted");
+    expect(elicitationCall.message).not.toContain(content);
   });
 
   it("fails loudly when update has neither resource_id nor URL id", async () => {

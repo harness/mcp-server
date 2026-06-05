@@ -8,6 +8,7 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
+import { formatBodyPreview } from "../utils/body-preview.js";
 import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { createOutputSchema } from "./output-schemas.js";
 
@@ -55,9 +56,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         }
 
         const risk = def.operations.create!.operationPolicy.risk;
-        const bodyPreview = typeof args.body === "string"
-          ? (args.body.length > 500 ? args.body.slice(0, 500) + "\n...(truncated)" : args.body)
-          : JSON.stringify(args.body, null, 2);
+        const bodyPreview = formatBodyPreview(args.body);
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_create",
