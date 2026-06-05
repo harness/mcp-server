@@ -467,6 +467,24 @@ describe("harness_create", () => {
     registerCreateTool(server, registry, client);
   });
 
+  it("keeps optional input descriptions visible in the registered schema", () => {
+    const schema = server.schema("harness_create") as {
+      inputSchema: {
+        url?: { description?: string | null };
+        org_id?: { description?: string | null };
+        project_id?: { description?: string | null };
+        confirm?: { description?: string | null };
+        params?: { description?: string | null };
+      };
+    };
+
+    expect(schema.inputSchema.url?.description).toContain("supported resource_scope");
+    expect(schema.inputSchema.org_id?.description).toContain("Organization identifier");
+    expect(schema.inputSchema.project_id?.description).toContain("Project identifier");
+    expect(schema.inputSchema.confirm?.description).toContain("Set to true");
+    expect(schema.inputSchema.params?.description).toContain("Additional parameters");
+  });
+
   it("returns error for resource with no create operation", async () => {
     // execution only supports list/get, not create
     const fullRegistry = new Registry(makeConfig());
@@ -570,7 +588,7 @@ describe("harness_create", () => {
     });
   });
 
-  it("does not let URL-derived resource_scope change create scoping", async () => {
+  it("uses account scope from account-level connector URLs during create", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "account_conn" } });
     client = makeClient(mockRequest);
@@ -591,8 +609,33 @@ describe("harness_create", () => {
 
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
-    expect(callArgs.params.orgIdentifier).toBe("default");
-    expect(callArgs.params.projectIdentifier).toBe("test-project");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("uses account scope from account-level File Store URLs during create", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "scripts" } });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(fileStoreServer, registry, client);
+
+    const result = await fileStoreServer.call("harness_create", {
+      resource_type: "file_store",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store",
+      body: {
+        name: "scripts",
+        type: "FOLDER",
+        parent_identifier: "Root",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; body: FormData };
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+    expect(callArgs.body).toBeInstanceOf(FormData);
   });
 });
 
@@ -670,6 +713,103 @@ describe("harness_update", () => {
       name: "Project One",
       identifier: "proj1",
     });
+  });
+
+  it("uses account scope from account-level File Store URLs during update", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "scripts" } });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(fileStoreServer, registry, client);
+
+    const result = await fileStoreServer.call("harness_update", {
+      resource_type: "file_store",
+      resource_id: "scripts",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store/scripts",
+      body: {
+        name: "scripts",
+        type: "FOLDER",
+        parent_identifier: "Root",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string; body: FormData };
+    expect(callArgs.path).toBe("/ng/api/file-store/scripts");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+    expect(callArgs.body).toBeInstanceOf(FormData);
+  });
+
+  it("uses resource id from account-level File Store URLs during update", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "scripts" } });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(fileStoreServer, registry, client);
+
+    const result = await fileStoreServer.call("harness_update", {
+      resource_type: "file_store",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store/scripts",
+      body: {
+        name: "scripts",
+        type: "FOLDER",
+        parent_identifier: "Root",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string; body: FormData };
+    expect(callArgs.path).toBe("/ng/api/file-store/scripts");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+    expect(callArgs.body).toBeInstanceOf(FormData);
+  });
+
+  it("fails loudly when update has neither resource_id nor URL id", async () => {
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      body: { yamlPipeline: "pipeline:\n  name: Updated" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("resource_id is required") });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("keeps optional input descriptions visible in the registered update schema", () => {
+    const schema = server.schema("harness_update") as {
+      inputSchema: {
+        resource_id?: { description?: string | null };
+        url?: { description?: string | null };
+        org_id?: { description?: string | null };
+        project_id?: { description?: string | null };
+        confirm?: { description?: string | null };
+        params?: { description?: string | null };
+      };
+    };
+
+    expect(schema.inputSchema.resource_id?.description).toContain("Optional when url contains");
+    expect(schema.inputSchema.url?.description).toContain("supported resource_scope");
+    expect(schema.inputSchema.org_id?.description).toContain("Organization identifier");
+    expect(schema.inputSchema.project_id?.description).toContain("Project identifier");
+    expect(schema.inputSchema.confirm?.description).toContain("Set to true");
+    expect(schema.inputSchema.params?.description).toContain("Additional identifiers");
+  });
+
+  it("rejects conflicting resource_id from URL vs params", async () => {
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      url: "https://app.harness.io/ng/account/acc/module/ci/orgs/default/projects/proj/pipelines/pipe-from-url",
+      params: { pipeline_id: "pipe-from-params" },
+      body: { name: "test" },
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
   });
 });
 
@@ -829,6 +969,95 @@ describe("harness_delete", () => {
     expect(result.structuredContent).not.toHaveProperty("account");
     expect(result.structuredContent).not.toHaveProperty("scope");
   });
+
+  it("uses account scope from account-level File Store URLs during delete", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: true });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(fileStoreServer, registry, client);
+
+    const result = await fileStoreServer.call("harness_delete", {
+      resource_type: "file_store",
+      resource_id: "scripts",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store/scripts",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string };
+    expect(callArgs.path).toBe("/ng/api/file-store/scripts");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("uses resource id from account-level File Store URLs during delete", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: true });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(fileStoreServer, registry, client);
+
+    const result = await fileStoreServer.call("harness_delete", {
+      resource_type: "file_store",
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store/scripts",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string };
+    expect(callArgs.path).toBe("/ng/api/file-store/scripts");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("fails loudly when delete has neither resource_id nor URL id", async () => {
+    const result = await server.call("harness_delete", {
+      resource_type: "pipeline",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("resource_id is required") });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("keeps optional input descriptions visible in the registered delete schema", () => {
+    const schema = server.schema("harness_delete") as {
+      inputSchema: {
+        resource_id?: { description?: string | null };
+        url?: { description?: string | null };
+        org_id?: { description?: string | null };
+        project_id?: { description?: string | null };
+        confirm?: { description?: string | null };
+        params?: { description?: string | null };
+      };
+    };
+
+    expect(schema.inputSchema.resource_id?.description).toContain("Optional when url contains");
+    expect(schema.inputSchema.url?.description).toContain("supported resource_scope");
+    expect(schema.inputSchema.org_id?.description).toContain("Organization identifier");
+    expect(schema.inputSchema.project_id?.description).toContain("Project identifier");
+    expect(schema.inputSchema.confirm?.description).toContain("Set to true");
+    expect(schema.inputSchema.params?.description).toContain("Additional identifiers");
+  });
+
+  it("rejects conflicting resource_id from URL vs params", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const conflictServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(conflictServer, registry, client);
+
+    const result = await conflictServer.call("harness_delete", {
+      resource_type: "pipeline",
+      url: "https://app.harness.io/ng/account/acc/module/ci/orgs/default/projects/proj/pipelines/pipe-from-url",
+      params: { pipeline_id: "pipe-from-params" },
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("harness_execute", () => {
@@ -859,6 +1088,13 @@ describe("harness_execute", () => {
     });
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("no execute action") });
+  });
+
+  it("documents resource_scope in the registered input schema", () => {
+    const schema = server.schema("harness_execute") as {
+      inputSchema: { resource_scope?: { description?: string | null } };
+    };
+    expect(schema.inputSchema.resource_scope?.description).toContain("Scope for the operation");
   });
 
   it("returns error when user declines", async () => {
@@ -989,6 +1225,91 @@ describe("harness_execute", () => {
     expect(result.isError).toBeUndefined();
     const call = gitopsRequest.mock.calls[0]![0] as { path?: string };
     expect(call.path).toContain("/agents/account.myagent/applications/my-app/operation");
+  });
+
+  it("maps resource_id to file_store_id for File Store list_children", async () => {
+    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
+    const fileStoreClient = makeClient(fileStoreRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+
+    const result = await fileStoreServer.call("harness_execute", {
+      resource_type: "file_store",
+      action: "list_children",
+      resource_id: "folder123",
+      params: { folder_name: "scripts" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(fileStoreRequest).toHaveBeenCalledOnce();
+    const call = fileStoreRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/ng/api/file-store/folder");
+    expect(call.body).toEqual({ identifier: "folder123", name: "scripts", type: "FOLDER" });
+  });
+
+  it("passes resource_scope through for File Store list_children", async () => {
+    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
+    const fileStoreClient = makeClient(fileStoreRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+
+    const result = await fileStoreServer.call("harness_execute", {
+      resource_type: "file_store",
+      action: "list_children",
+      resource_id: "folder123",
+      resource_scope: "account",
+      params: { folder_name: "scripts" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = fileStoreRequest.mock.calls[0]![0] as { params?: Record<string, unknown> };
+    expect(call.params?.orgIdentifier).toBeUndefined();
+    expect(call.params?.projectIdentifier).toBeUndefined();
+  });
+
+  it("uses URL-derived account scope for File Store list_children", async () => {
+    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
+    const fileStoreClient = makeClient(fileStoreRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+
+    const result = await fileStoreServer.call("harness_execute", {
+      url: "https://app.harness.io/ng/account/test-account/all/settings/file-store/folder123",
+      action: "list_children",
+      params: { folder_name: "scripts" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = fileStoreRequest.mock.calls[0]![0] as { params?: Record<string, unknown>; body?: unknown };
+    expect(call.params?.orgIdentifier).toBeUndefined();
+    expect(call.params?.projectIdentifier).toBeUndefined();
+    expect(call.body).toEqual({ identifier: "folder123", name: "scripts", type: "FOLDER" });
+  });
+
+  it("rejects File Store list_children shorthand fields inside body before dispatch", async () => {
+    const fileStoreServer = makeMcpServer("accept");
+    const fileStoreRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
+    const fileStoreClient = makeClient(fileStoreRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+
+    const result = await fileStoreServer.call("harness_execute", {
+      resource_type: "file_store",
+      action: "list_children",
+      body: { file_store_id: "folder123", folder_name: "scripts" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("body.identifier as a string") });
+    expect(fileStoreRequest).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -1436,6 +1757,44 @@ describe("harness_describe", () => {
         expect.objectContaining({ name: "pr_number", required: true }),
       ]),
     );
+  });
+
+  it("exposes File Store list_children shorthands as paramsSchema and only FileStoreNode fields as bodySchema", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    const fileStoreServer = makeMcpServer();
+    const { registerDescribeTool } = await import("../../src/tools/harness-describe.js");
+    registerDescribeTool(fileStoreServer, registry);
+
+    const result = await fileStoreServer.call("harness_describe", { resource_type: "file_store" });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as {
+      executeActions: Array<{
+        action: string;
+        paramsSchema?: { fields: Array<{ name: string; required: boolean; description?: string }> };
+        bodySchema?: { fields: Array<{ name: string; required: boolean; description?: string }> };
+      }>;
+    };
+    const listChildren = data.executeActions.find((action) => action.action === "list_children");
+    expect(listChildren?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "file_store_id" }),
+        expect.objectContaining({ name: "folder_identifier" }),
+        expect.objectContaining({ name: "folder_name" }),
+        expect.objectContaining({ name: "node_type", description: expect.stringContaining("FOLDER only") }),
+      ]),
+    );
+    expect(listChildren?.bodySchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "identifier", required: true }),
+        expect.objectContaining({ name: "name", required: true }),
+        expect.objectContaining({ name: "type", required: true, description: expect.stringContaining("FOLDER only") }),
+      ]),
+    );
+    const bodyFieldNames = listChildren?.bodySchema?.fields.map((field) => field.name) ?? [];
+    expect(bodyFieldNames).not.toContain("file_store_id");
+    expect(bodyFieldNames).not.toContain("folder_identifier");
+    expect(bodyFieldNames).not.toContain("folder_name");
   });
 
   it("returns error hint for unknown resource_type", async () => {

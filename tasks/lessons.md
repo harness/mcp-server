@@ -1,5 +1,30 @@
 # Lessons Learned
 
+## Multipart Tool Contracts
+- **Issue**: Multipart body builders can hide unsafe defaults or malformed encoded inputs until after request construction, and execute shorthands can drift from generic `resource_id` mapping.
+- **Fix**: Validate encoded content before `Buffer.from`, enforce documented scalar/enum types inside multipart builders, reject disallowed or mutually exclusive payload variants when present, require parent IDs explicitly when the API needs location context, accept the registry's mapped primary identifier in execute body builders, reject conflicting resource-specific aliases in shorthand and full-body modes, and document operation-specific body contracts via `paramsSchema`/`bodySchema`.
+- **Rule**: For multipart resources, fail loudly before network I/O and add regressions for generic tool paths (`resource_id` -> resource identifier), alias conflicts in every accepted input shape, direct helper inputs, and `harness_describe` body/params metadata. If create and update have different one-of requirements, split the body schemas instead of relying on one ambiguous shared schema.
+
+## Execute Action Scope and Read-Only Semantics
+- **Issue**: A read-like endpoint modeled as an execute action can drift from the generic read/list/get contract: `resource_scope` may be unavailable on the public execute tool, URL-derived scope may not be merged, and read-only mode may block the action solely because it is under `harness_execute`.
+- **Fix**: Expose `resource_scope` on execute when execute actions use multi-scope resources, opt the handler into URL-derived resource scope, and gate read-only mode by the action's `operationPolicy.risk` instead of the tool family alone.
+- **Rule**: For any execute action with `risk: "read"` or multi-scope support, add regressions for the registered tool input schema, explicit and URL-derived `resource_scope`, and read-only mode behavior.
+
+## Endpoint-Specific Node Type Constraints
+- **Issue**: Reusing a general FileStoreNode enum for a folder-only endpoint let agents construct `FILE` requests that the backend endpoint should reject.
+- **Fix**: Add endpoint-specific validators and schema descriptions when an API accepts only one value from a broader shared model.
+- **Rule**: If an endpoint path names a subtype such as `/folder`, do not surface the full shared enum unless that exact endpoint accepts every enum value. Add helper and `harness_describe` metadata regressions for rejected enum values.
+
+## URL-Derived Scope Must Match Tool Surfaces
+- **Issue**: URL parsing can synthesize `resource_scope`, but a tool that exposes `resource_scope` still ignores URL-derived scope unless it opts into `applyUrlDefaults(..., { includeResourceScope: true })`.
+- **Fix**: Keep URL-derived scope behavior aligned across every public tool that accepts `resource_scope`, including create/update/delete paths, and test scoped URLs at the tool-handler level.
+- **Rule**: When adding a resource type to the URL-derived scope allowlist, audit every tool that accepts both `url` and `resource_scope`; either opt the tool in or avoid advertising URL-derived scope for that resource.
+
+## URL-Derived IDs Must Match Tool Schemas
+- **Issue**: A tool can advertise URL-derived IDs while its schema still requires an explicit `resource_id`, so strict MCP clients reject URL-only calls before handler defaulting can run.
+- **Fix**: If URL copy says an ID is extracted, make the public schema accept URL-only input and map the resolved URL/defaulted `resource_id` into the resource-specific identifier field before dispatch.
+- **Rule**: For any write tool that advertises URL ID extraction, add handler-level regressions that omit `resource_id` and prove the URL-derived ID reaches the backend path.
+
 ## Harness SAT Account Extraction
 - **Issue**: Service account tokens can use the same account-scoped segment shape as PATs, but the parser only recognized the `pat` prefix.
 - **Fix**: Extract account IDs from both `pat` and `sat` prefixes, and let multi-user HTTP sessions derive `HARNESS_ACCOUNT_ID` from either prefix when `x-harness-account-id` is omitted.

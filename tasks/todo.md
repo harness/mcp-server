@@ -1,5 +1,55 @@
 # Harness MCP Server — Task Tracking
 
+## PR 211 File Store Review Follow-up (2026-06-04)
+- [x] Inspect PR state and Cursor review findings
+- [x] Merge current `origin/main` into PR branch
+- [x] Fix file-store update/list/multipart validation contract
+- [x] Align README resource/toolset discoverability
+- [x] Run focused and broad verification
+- [x] Push branch and re-check PR status
+- [x] Tighten latest File Store validation review feedback
+- [x] Re-run focused and broad verification for the follow-up
+- [x] Fix File Store execute scope/read-only/full-body review feedback
+- [x] Re-run focused and broad verification for scope/read-only follow-up
+- [x] Fix read-only CI smoke expectation for read-risk execute actions
+- [x] Restrict File Store list_children to folder nodes only
+- [x] Align write-tool URL-derived scope and File Store update metadata
+- [x] Fix URL-only write IDs, Zod metadata ordering, and File Store file_usage validation
+- [ ] Push final PR #211 update and re-check status
+
+### Plan
+- Keep multipart client plumbing intact unless verification shows it is implicated.
+- Make unsafe File Store inputs fail loudly before request construction.
+- Preserve generic tool contracts: `harness_execute(resource_id=...)` should work without duplicate params.
+- Keep generated README counts and hand-authored resource/toolset tables aligned with the registry.
+- Latest follow-up: validate multipart scalar metadata as strings, reject dual `content`/`content_base64` inputs, and reject conflicting folder identifiers instead of letting stale aliases override the generic resource id.
+- Scope/read-only follow-up: expose `resource_scope` on `harness_execute`, allow read-risk execute actions under read-only mode, and reject API-shaped `parent_identifier` in File Store full-body `list_children`.
+
+### Review
+- Merged current `origin/main` into PR #211 and resolved conflicts in `README.md`, `src/registry/index.ts`, and task history.
+- Hardened File Store multipart input handling: update requires explicit `body.parent_identifier`, malformed `content_base64` is rejected before `Buffer.from`, and `list_children` accepts the generic `resource_id` -> `file_store_id` path.
+- Follow-up review fix: create also requires explicit `body.parent_identifier`; `list_children` shorthand identifiers are documented through `paramsSchema`, while `bodySchema` now describes only a real FileStoreNode body.
+- Second follow-up review fix: multipart `body.content` must be a string, and `list_children` rejects invalid File Store node `type`/`node_type` values before dispatch.
+- Added helper and `harness_execute` regression coverage, documented `file_store` in README resource/toolset tables, and extended `docs:check` coverage for the File Store README section.
+- Verification passed: `pnpm typecheck`, focused File Store/client and `harness_execute` Vitest runs, `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+- Follow-up verification passed: `pnpm typecheck`, focused File Store/helper and tool-handler Vitest runs, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+- Second follow-up verification passed: `pnpm typecheck`, focused File Store/helper and tool-handler Vitest runs, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+- Third follow-up review fix: multipart scalar metadata is string-validated before FormData construction, FILE uploads reject simultaneous `content` and `content_base64`, and `list_children` rejects conflicting folder identifiers instead of letting stale aliases override the generic resource id.
+- Third follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts`, `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "File Store"`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Fourth follow-up review fix: FOLDER multipart bodies now reject `content`/`content_base64` instead of silently dropping them, and full-body `list_children` rejects top-level generic IDs that conflict with `body.identifier`.
+- Fourth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts`, `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "File Store"`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Fifth follow-up review fix: create/update body schemas now document their different FILE content requirements, update rejects path/body identifier conflicts, and full-body `list_children` validates `identifier`/`name` scalar types before dispatch.
+- Fifth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts`, `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "File Store"`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Sixth follow-up review fix: `harness_execute` now exposes and URL-derives `resource_scope`, read-only mode permits execute actions whose operation policy is `risk: "read"`, and full-body File Store `list_children` rejects snake_case `parent_identifier`.
+- Sixth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts tests/registry/registry.test.ts tests/utils/url-parser.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- CI smoke follow-up: `scripts/smoke-test.js` now checks read-only mode with a real write-risk execute action (`pipeline.run`) and a real read-risk execute action (`file_store.list_children`), matching the updated registry contract. Verification passed: `env HARNESS_READ_ONLY=true node scripts/smoke-test.js`, `pnpm build`, `pnpm typecheck`, focused Vitest run, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Seventh follow-up review fix: `file_store.list_children` now rejects `FILE` in full-body and shorthand inputs, and its surfaced body/params schema metadata describes `FOLDER` only.
+- Seventh follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Eighth follow-up review fix: generic write tools now opt into URL-derived `resource_scope`, and File Store update metadata no longer advertises `body.identifier` as a replacement for the required top-level `resource_id`.
+- Eighth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts tests/utils/url-parser.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Ninth follow-up review fix: URL-only `harness_update`/`harness_delete` calls now resolve the primary ID from the parsed URL, edited optional Zod fields keep `.describe()` last, and File Store `file_usage` rejects values outside `MANIFEST_FILE`, `CONFIG`, or `SCRIPT` before dispatch.
+- Ninth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts tests/utils/url-parser.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+
 ## PR 172 Conflict Resolution (2026-06-04)
 - [x] Inspect PR status and identify conflicted documentation files
 - [x] Merge current `origin/main` into PR branch

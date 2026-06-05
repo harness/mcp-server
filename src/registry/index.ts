@@ -7,6 +7,7 @@ import type { AuditManager } from "../audit/manager.js";
 import type { AuditContext, AuditEvent } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
+import { isFormDataBody } from "../utils/type-guards.js";
 
 // Import all toolsets
 import { pipelinesToolset } from "./toolsets/pipelines.js";
@@ -36,6 +37,7 @@ import { dbopsToolset } from "./toolsets/dbops.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
+import { fileStoreToolset } from "./toolsets/file-store.js";
 
 import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
@@ -146,6 +148,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   accessControlToolset,
   settingsToolset,
   platformToolset,
+  fileStoreToolset,
 
   visualizationsToolset,
   governanceToolset,
@@ -405,15 +408,15 @@ export class Registry {
     const auditCtx = signalOrAudit instanceof AbortSignal ? undefined : signalOrAudit;
     const abortSignal = signalOrAudit instanceof AbortSignal ? signalOrAudit : signal;
 
-    if (this.config.HARNESS_READ_ONLY) {
-      throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute actions are not allowed.`);
-    }
-
     const def = this.getResource(resourceType);
     const actionSpec = def.executeActions?.[action];
     if (!actionSpec) {
       const available = def.executeActions ? Object.keys(def.executeActions).join(", ") : "none";
       throw new Error(`Resource "${resourceType}" has no execute action "${action}". Available: ${available}`);
+    }
+
+    if (this.config.HARNESS_READ_ONLY && actionSpec.operationPolicy.risk !== "read") {
+      throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${action}" is not allowed.`);
     }
 
     return this.executeSpecWithAudit(client, def, actionSpec, "execute", resourceType, input, { ...auditCtx, tool: auditCtx?.tool ?? "harness_execute", action }, abortSignal);
@@ -659,10 +662,17 @@ export class Registry {
     // Inject orgIdentifier/projectIdentifier into the body for mutating operations (POST/PUT).
     // Harness NG APIs require these in the body (not just query params) to scope the resource correctly.
     // Header-scoped APIs and explicit endpoint exceptions scope through headers/path/query and reject
-    // generic NG scope fields in their API-specific JSON bodies.
+    // generic NG scope fields in their API-specific JSON bodies. Multipart bodies carry scope in
+    // query params and must not be mutated as plain JSON.
     const shouldSkipScopeBodyInjection =
       spec.skipScopeBodyInjection || spec.headerBasedScoping || def.headerBasedScoping;
-    if (body && typeof body === "object" && !shouldSkipScopeBodyInjection && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
+    if (
+      body &&
+      typeof body === "object" &&
+      !isFormDataBody(body) &&
+      !shouldSkipScopeBodyInjection &&
+      (resolvedMethod === "POST" || resolvedMethod === "PUT")
+    ) {
       const bodyRecord = body as Record<string, unknown>;
       // Determine where to inject: inside wrapper if present, otherwise at top level
       const targetRecord = spec.bodyWrapperKey && 
@@ -690,7 +700,8 @@ export class Registry {
     // Validate required fields if bodySchema is defined.
     // When the API body is transformed into a raw array, validate the caller's
     // canonical object-shaped input body so registry behavior matches harness_describe.
-    if (spec.bodySchema && body && typeof body === "object") {
+    // Multipart validation is enforced inside the resource bodyBuilder.
+    if (spec.bodySchema && body && typeof body === "object" && !isFormDataBody(body)) {
       const payload = this.getBodySchemaValidationPayload(spec, input, body);
       const missing = spec.bodySchema.fields
         .filter(f => f.required && payload[f.name] === undefined)

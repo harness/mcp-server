@@ -84,6 +84,7 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "resource-groups":  { type: "resource_group",      contextField: "resource_id" },
   "audit-trail":      { type: "audit_log",           contextField: "resource_id" },
   "dashboards":       { type: "dashboard",           contextField: "resource_id" },
+  "file-store":       { type: "file_store",          contextField: "resource_id" },
   "pullrequests":     { type: "pull_request",        contextField: "pr_number" },
   "pulls":            { type: "pull_request",        contextField: "pr_number" },
   "pull-requests":    { type: "pull_request",        contextField: "pr_number" },
@@ -97,6 +98,7 @@ const URL_RESOURCE_SCOPE_TYPES = new Set([
   "infrastructure",
   "secret",
   "template",
+  "file_store",
 ]);
 
 /** Structural segments that should never be treated as resource IDs */
@@ -180,8 +182,7 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     if (
       next &&
       !RESOURCE_SEGMENTS[next] &&
-      !STRUCTURAL.has(next) &&
-      !MODULES.has(next)
+      !STRUCTURAL.has(next)
     ) {
       id = decodeURIComponent(next);
       i++; // skip past the ID segment

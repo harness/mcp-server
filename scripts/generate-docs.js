@@ -18,6 +18,7 @@ const README_PATH = join(ROOT, "README.md");
 // Other README sections have historical drift; expand this set as those tables are normalized.
 const README_COVERAGE_TOOLSETS = new Map([
   ["feature-flags", { sectionTitle: "Feature Flags" }],
+  ["file_store", { sectionTitle: "File Store" }],
 ]);
 const CRUD_OPERATIONS = ["list", "get", "create", "update", "delete"];
 const CRUD_COLUMN_INDEX = { list: 1, get: 2, create: 3, update: 4, delete: 5 };
@@ -126,10 +127,10 @@ function findReadmeSection(readme, sectionTitle) {
   return nextHeadingMatch ? rest.slice(0, nextHeadingMatch.index) : rest;
 }
 
-function findMarkdownTableRow(readme, firstCell) {
+function findMarkdownTableRow(readme, firstCell, expectedCellCount) {
   for (const line of readme.split(/\r?\n/)) {
     const cells = parseMarkdownRow(line);
-    if (cells?.[0] === firstCell) {
+    if (cells?.[0] === firstCell && (expectedCellCount === undefined || cells.length === expectedCellCount)) {
       return cells;
     }
   }
@@ -197,7 +198,7 @@ function validateReadmeCoverage(readme, counts) {
 
   for (const toolset of counts.coverageToolsetResources) {
     const expectedResourceTypes = new Set(toolset.resourceTypes);
-    const rowCells = findMarkdownTableRow(readme, `\`${toolset.name}\``);
+    const rowCells = findMarkdownTableRow(readme, `\`${toolset.name}\``, 2);
     if (!rowCells) {
       errors.push(`README.md Toolset Filtering table is missing a row for toolset: ${toolset.name}`);
       continue;
@@ -226,10 +227,14 @@ const REPLACEMENTS = [
   { pattern: /\b\d+ resource types?\b/g, replacement: (c) => `${c.resourceTypes} resource types` },
   // "27 prompt templates"
   { pattern: /\b\d+ prompt templates?\b/g, replacement: (c) => `${c.promptCount} prompt templates` },
+  // "31 default toolsets"
+  { pattern: /\b\d+ default toolsets?\b/g, replacement: (c) => `${c.defaultToolsets} default toolsets` },
   // "30 of 31 toolsets" — specific compound pattern
   { pattern: /\b\d+ of \d+ toolsets?\b/g, replacement: (c) => `${c.defaultToolsets} of ${c.totalToolsets} toolsets` },
   // "31 toolsets" — only when NOT preceded by "of " (avoids double-replacing "N of M toolsets")
   { pattern: /(?<!of )\b\d+ toolsets?\b/g, replacement: (c) => `${c.defaultToolsets} toolsets` },
+  // Architecture diagram: |  31 Toolsets      |
+  { pattern: /\|\s+\d+ Toolsets\s+\|/g, replacement: (c) => `|  ${c.defaultToolsets} Toolsets      |` },
   // Architecture diagram: |  163 Resource Types|
   { pattern: /\|\s+\d+ Resource Types\|/g, replacement: (c) => `|  ${c.resourceTypes} Resource Types|` },
   // Clone instructions: cd harness-mcp-v2 -> cd mcp-server

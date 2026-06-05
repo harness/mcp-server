@@ -1252,6 +1252,23 @@ describe("Registry", () => {
         registry.dispatchExecute(client, "pipeline", "run", { pipeline_id: "p1" }),
       ).rejects.toThrow(/Read-only mode/);
     });
+
+    it("allows read-risk execute actions", async () => {
+      const readRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store", HARNESS_READ_ONLY: true }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
+      const client = makeClient(mockRequest);
+
+      await readRegistry.dispatchExecute(client, "file_store", "list_children", {
+        file_store_id: "folder123",
+        folder_name: "scripts",
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/ng/api/file-store/folder");
+      expect(call.body).toEqual({ identifier: "folder123", name: "scripts", type: "FOLDER" });
+    });
   });
 
   describe("trigger pipelineIdentifier extraction", () => {

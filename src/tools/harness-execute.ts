@@ -12,7 +12,7 @@ import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
-import { resourceTypeSchema } from "./input-schemas.js";
+import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
 import { executeOutputSchema } from "./output-schemas.js";
@@ -61,6 +61,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         resource_id: z.string().describe("Primary resource identifier").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        resource_scope: resourceScopeSchema,
         inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Pipeline runtime inputs: key-value pairs like {branch: 'main'} (auto-resolved), or full YAML string. Check runtime_input_template first via harness_get.").optional(),
         input_set_ids: z.array(z.string()).describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'}).").optional(),
         body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
@@ -82,7 +83,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
     async (args, extra) => {
       try {
         const { params, wait, wait_timeout_seconds, wait_poll_interval_seconds, confirm: _confirm, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
         log.debug("Execute input after params merge", { input: JSON.stringify(input), params: JSON.stringify(params) });
