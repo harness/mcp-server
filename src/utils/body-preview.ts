@@ -40,6 +40,11 @@ function previewReplacer(key: string, value: unknown): unknown {
 
 export function formatBodyPreview(body: unknown): string {
   if (typeof body === "string") {
+    try {
+      return formatBodyPreview(JSON.parse(body));
+    } catch {
+      // YAML and other free-form string bodies are previewed as bounded text.
+    }
     return truncateString(body, MAX_STRING_PREVIEW_CHARS);
   }
 
