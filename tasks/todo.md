@@ -5,7 +5,7 @@
 - [x] Select File Store multipart workflows as the focused documentation gap
 - [x] Update README and testing docs with verified File Store usage, constraints, and pitfalls
 - [x] Run docs verification and review the documentation-only diff
-- [ ] Commit, push, and open/update the docs PR
+- [x] Commit, push, and open/update the docs PR
 
 ### Plan
 - Use `src/registry/toolsets/file-store.ts`, `src/utils/body-preview.ts`, and focused File Store tests as the source of truth.
@@ -18,6 +18,7 @@
 - README now spells out multipart constraints from `src/registry/toolsets/file-store.ts`: required `name`/`type`/`parent_identifier`, `FILE` content one-of rules, metadata-only update behavior, folder content rejection, `file_usage` enum values, 100 MB upload limit, and confirmation preview redaction.
 - Added `docs/testing/file_store/test_plan.md` with File Store list/get/create/update/delete/execute coverage, URL-derived scope/ID cases, read-only `list_children`, validation failures, and redaction checks.
 - Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts -t "File Store|file_store"`, and `git diff --check HEAD~1..HEAD`.
+- Opened PR: https://github.com/harness/mcp-server/pull/311
 
 ## Critical Bug Inspection (2026-06-05)
 - [x] Baseline branch against `origin/main` and inspect recent behavioral commits
