@@ -592,7 +592,7 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
 - `resource_scope: "org"` sends `accountIdentifier` and `orgIdentifier`.
 - `resource_scope: "project"` sends account, org, and project identifiers.
 
-Current multi-scope resources include `connector`, `service`, `environment`, `infrastructure`, `secret`, and `template`. If `resource_scope` is omitted, the registry uses the resource's default scope and configured defaults, except resources marked as optional scope may omit org/project unless explicitly passed. Harness URLs can also set the scope automatically when the path contains account-level or project-level context.
+Current multi-scope resources include `connector`, `service`, `environment`, `infrastructure`, `secret`, `file_store`, and `template`. If `resource_scope` is omitted, the registry uses the resource's default scope and configured defaults, except resources marked as optional scope may omit org/project unless explicitly passed. Harness URLs can also set the scope automatically when the path contains account-level or project-level context.
 
 **Structured output:** Every tool declares an MCP `outputSchema`. `harness_list` normalizes list-like Harness responses into object-shaped structured content so strict clients can validate it: top-level arrays become `{ "items": [...], "total": <count>, "page": <page> }`, and common wrapper keys such as `content`, `data`, `body`, `objects`, or `features` are hoisted to `items` when needed. The text response still contains the compact JSON payload returned to all clients.
 
@@ -1219,7 +1219,53 @@ Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_P
 | ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `file_store`  | x    | x   | x      | x      | x      | `list_children` |
 
-`file_store` create/update operations convert the JSON `body` into Harness File Store multipart form data. For files, pass `content` or valid `content_base64`; for folders, omit content fields. `list_children` accepts `resource_id` plus `folder_name`, or a full FileStoreNode `body`.
+`file_store` manages Harness File Store files and folders through the generic tools. It supports account, org, and project scope; pass `resource_scope="account"|"org"|"project"` or paste a Harness File Store URL so the server can derive scope and IDs.
+
+Common calls:
+
+```text
+# List the account-level File Store.
+harness_list(resource_type="file_store", resource_scope="account")
+
+# Create a folder at the current scope root.
+harness_create(resource_type="file_store", body={
+  name: "scripts",
+  type: "FOLDER",
+  parent_identifier: "Root"
+})
+
+# Upload a UTF-8 script file. Use content_base64 instead for binary data.
+harness_create(resource_type="file_store", body={
+  name: "deploy.sh",
+  type: "FILE",
+  parent_identifier: "Root",
+  content: "#!/usr/bin/env bash\n./deploy",
+  mime_type: "text/x-shellscript",
+  file_usage: "SCRIPT"
+})
+
+# Rename metadata without replacing file content.
+harness_update(resource_type="file_store", resource_id="deploy_script", body={
+  name: "deploy-prod.sh",
+  type: "FILE",
+  parent_identifier: "Root"
+})
+
+# List first-level children of a folder. This is a read-risk execute action.
+harness_execute(resource_type="file_store", action="list_children",
+  resource_id="scripts_folder", params={folder_name: "scripts"})
+```
+
+Multipart body constraints:
+
+- Create/update accept JSON `body`, then convert it to `multipart/form-data` for `/ng/api/file-store`.
+- `name`, `type` (`FILE` or `FOLDER`), and `parent_identifier` are required; use the literal `"Root"` only for the root of the selected scope.
+- `FILE` create requires exactly one of `content` (UTF-8 string) or `content_base64` (valid non-empty base64). `FILE` update can omit content for metadata-only updates, or provide exactly one content field to replace content.
+- `FOLDER` create/update must omit `content` and `content_base64`.
+- Optional `file_usage` must be `MANIFEST_FILE`, `CONFIG`, or `SCRIPT`; optional scalar metadata such as `description`, `mime_type`, `path`, and `tags` must be strings.
+- Upload content is capped at 100 MB. Confirmation prompts redact `content`, `content_base64`, and `contentBase64` previews before elicitation.
+
+`list_children` accepts either shorthand (`resource_id` plus `params.folder_name`, or `params.file_store_id`/`params.folder_identifier` plus `params.folder_name`) or a full FileStoreNode `body` with `identifier`, `name`, and `type: "FOLDER"`. Full bodies use Harness camelCase `parentIdentifier`; shorthand may use `params.parent_identifier`.
 
 
 ### Templates

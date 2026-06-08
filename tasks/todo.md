@@ -1,5 +1,18 @@
 # Harness MCP Server — Task Tracking
 
+## Documentation Alignment Automation (2026-06-08)
+- [x] Audit recent commits and existing docs for weakly documented subsystems
+- [x] Select File Store multipart workflows as the focused documentation gap
+- [ ] Update README and testing docs with verified File Store usage, constraints, and pitfalls
+- [ ] Run docs verification and review the documentation-only diff
+- [ ] Commit, push, and open/update the docs PR
+
+### Plan
+- Use `src/registry/toolsets/file-store.ts`, `src/utils/body-preview.ts`, and focused File Store tests as the source of truth.
+- Keep the public README update concise and colocated with the existing File Store resource table.
+- Add a targeted `docs/testing/file_store/test_plan.md` because File Store has new multipart/write semantics and no existing test-plan page.
+- Cover create/update multipart bodies, account/org/project scope, URL-derived IDs, read-only `list_children`, confirmation redaction, and common validation failures without documenting behavior not present in source.
+
 ## Critical Bug Inspection (2026-06-05)
 - [x] Baseline branch against `origin/main` and inspect recent behavioral commits
 - [x] Trace File Store create/update upload handling through MCP confirmation and registry dispatch
