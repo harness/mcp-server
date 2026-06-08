@@ -783,50 +783,130 @@ export const dbopsToolset: ToolsetDefinition = {
       resourceType: "database_execute_llm_authoring_pipeline",
       displayName: "Execute LLM Authoring Pipeline",
       description:
-        "Consolidated endpoint for LLM change authoring Accept & Commit. " +
-        "Resolves the pipeline (settings override or default), fills runtime inputs " +
-        "(schema, instance, changeset, K8s connector), executes the pipeline, and " +
-        "records the billing event — all in one call. " +
-        "Returns { pipelineExecutionId, pipelineIdentifier }. " +
-        "Poll status with harness_get(resource_type='execution', execution_id='<returned_id>'). " +
-        "Use this INSTEAD of separate database_llm_authoring_pipeline + pipeline execution calls.",
+        "Trigger an LLM-authoring validate-and-preview pipeline and record the " +
+        "billable execution event in one transactional call. " +
+        "Two branches: " +
+        "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill " +
+        "from NG setting `dbops_llm_authoring_pipeline_id`) plus optional " +
+        "runtime_inputs collected from the user via AskUserQuestion; " +
+        "(b) default-pipeline — pass use_default_pipeline=true and the server " +
+        "performs get-or-create of the canonical default pipeline. " +
+        "Exactly one of pipeline_identifier OR use_default_pipeline must be set. " +
+        "Reserved runtime-input keys (schemaId, instanceId, changeset, k8sConnectorRef) " +
+        "are rejected by the server. " +
+        "Returns { executionId, pipelineIdentifier, openInHarness }. " +
+        "The chat-side polling block in the dbops_changeset skill is dead code — " +
+        "show the user the openInHarness link and let the existing changeauthoring " +
+        "billing job reconcile execution status server-side.",
       toolset: "dbops",
       scope: "project",
       identifierFields: [],
       operations: {
         create: {
           method: "POST",
-          path: "/dbops/v1/orgs/{org}/projects/{project}/execute-llm-authoring-pipeline",
+          path: "/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
           bodyBuilder: (input: Record<string, unknown>) => {
-            const body = ((input.body ?? input) as Record<string, unknown>) ?? {};
-            return {
-              schemaIdentifier: body.schemaIdentifier ?? body.schema_id,
-              instanceIdentifier: body.instanceIdentifier ?? body.instance_id,
-              conversationId: body.conversationId ?? body.conversation_id,
-              changeset: body.changeset,
+            const src = ((input.body ?? input) as Record<string, unknown>) ?? {};
+            // Required fields: accept either snake_case or camelCase from the caller.
+            const body: Record<string, unknown> = {
+              conversationId: src.conversationId ?? src.conversation_id,
+              schemaId: src.schemaId ?? src.schema_id,
+              instanceId: src.instanceId ?? src.instance_id,
+              changeset: src.changeset,
+              k8sConnectorRef: src.k8sConnectorRef ?? src.k8s_connector_ref,
             };
+            // Branch fields: forward only the populated branch.
+            const useDefault = (src.useDefaultPipeline ?? src.use_default_pipeline) as
+              | boolean
+              | undefined;
+            const pipelineId = (src.pipelineIdentifier ?? src.pipeline_identifier) as
+              | string
+              | undefined;
+            const runtimeInputs = (src.runtimeInputs ?? src.runtime_inputs) as
+              | Record<string, unknown>
+              | undefined;
+            if (useDefault === true) {
+              body.useDefaultPipeline = true;
+            } else if (pipelineId) {
+              body.pipelineIdentifier = pipelineId;
+              if (runtimeInputs && Object.keys(runtimeInputs).length > 0) {
+                body.runtimeInputs = runtimeInputs;
+              }
+            }
+            return body;
           },
           responseExtractor: passthrough,
           description:
-            "Execute the LLM changeset pipeline with integrated billing tracking. " +
-            "Required body fields: schema_id (database schema identifier), " +
-            "instance_id (database instance identifier), " +
-            "conversation_id (chat conversation ID), " +
-            "changeset (Liquibase changeset YAML). " +
-            "The backend resolves the correct pipeline, fills all runtime inputs " +
-            "(including K8s connector), executes it, and records the billing event. " +
-            "Returns { pipelineExecutionId, pipelineIdentifier }.",
+            "Execute the LLM-authoring change-authoring validate-and-preview pipeline. " +
+            "Use this INSTEAD of separate database_llm_authoring_pipeline + pipeline execution calls. " +
+            "Body must specify exactly one of pipeline_identifier or use_default_pipeline=true.",
           bodySchema: {
             description:
-              "Changeset execution parameters. Caller aliases schema_id, instance_id, and conversation_id are accepted and mapped to backend field names.",
+              "ExecuteLlmAuthoringPipelineRequestBody. Caller may pass any field as " +
+              "snake_case (conversation_id, schema_id, instance_id, k8s_connector_ref, " +
+              "pipeline_identifier, runtime_inputs, use_default_pipeline) or camelCase — " +
+              "the bodyBuilder normalizes both to the camelCase keys expected by the API.",
             fields: [
-              { name: "schemaIdentifier", type: "string", required: true, description: "Database schema identifier" },
-              { name: "instanceIdentifier", type: "string", required: true, description: "Database instance identifier" },
-              { name: "conversationId", type: "string", required: true, description: "Chat conversation ID" },
-              { name: "changeset", type: "string", required: true, description: "Liquibase changeset YAML content" },
+              {
+                name: "conversationId",
+                type: "string",
+                required: true,
+                description:
+                  "Idempotency key — chat conversation id (alias: conversation_id).",
+              },
+              {
+                name: "schemaId",
+                type: "string",
+                required: true,
+                description: "DBOps schema identifier (alias: schema_id).",
+              },
+              {
+                name: "instanceId",
+                type: "string",
+                required: true,
+                description: "DBOps instance identifier (alias: instance_id).",
+              },
+              {
+                name: "changeset",
+                type: "string",
+                required: true,
+                description: "Liquibase YAML changeset body.",
+              },
+              {
+                name: "k8sConnectorRef",
+                type: "string",
+                required: true,
+                description:
+                  "Prefixed K8s connector identifier resolved by the skill from " +
+                  "instance.connector (alias: k8s_connector_ref).",
+              },
+              {
+                name: "pipelineIdentifier",
+                type: "string",
+                required: false,
+                description:
+                  "Custom-pipeline branch — value of NG setting `dbops_llm_authoring_pipeline_id` " +
+                  "(alias: pipeline_identifier). Mutually exclusive with useDefaultPipeline.",
+              },
+              {
+                name: "runtimeInputs",
+                type: "object",
+                required: false,
+                description:
+                  "Custom runtime inputs collected via AskUserQuestion (alias: runtime_inputs). " +
+                  "Reserved keys (schemaId, instanceId, changeset, k8sConnectorRef) are rejected by the server.",
+              },
+              {
+                name: "useDefaultPipeline",
+                type: "boolean",
+                required: false,
+                description:
+                  "Default-pipeline branch — server performs get-or-create of dbops_default_pipeline " +
+                  "(alias: use_default_pipeline). Mutually exclusive with pipelineIdentifier.",
+              },
             ],
           },
         },
