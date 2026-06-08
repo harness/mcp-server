@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { parse as parseYaml } from "yaml";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
@@ -147,6 +148,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         // (grpc-gateway array style). Comma-joined single param is ignored by pipeline execute.
         if (args.input_set_ids && args.input_set_ids.length > 0) {
           input.input_set_ids = [...args.input_set_ids];
+        }
+
+        if (resourceType === "pipeline" && args.action === "run") {
+          normalizeRemotePipelineRunParams(input);
         }
 
         // When only input_set_ids are provided, fetch each input set and build runtime YAML.
@@ -411,6 +416,66 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
       }
     },
   );
+}
+
+function normalizeRemotePipelineRunParams(input: Record<string, unknown>): void {
+  input.store_type ??= input.storeType;
+  input.connector_ref ??= input.connectorRef;
+  input.repo_name ??= input.repoName;
+
+  const runtimeCodebase = extractRuntimeYamlCodebase(input.inputs);
+  if (runtimeCodebase?.repoName && input.repo_name === undefined) {
+    input.repo_name = runtimeCodebase.repoName;
+  }
+  if (runtimeCodebase?.branch && input.branch === undefined) {
+    input.branch = runtimeCodebase.branch;
+  }
+  if (runtimeCodebase?.branch && input.pipeline_branch === undefined) {
+    input.pipeline_branch = runtimeCodebase.branch;
+  }
+  if (
+    input.store_type === undefined &&
+    (runtimeCodebase?.branch !== undefined || runtimeCodebase?.repoName !== undefined)
+  ) {
+    input.store_type = "REMOTE";
+  }
+
+  const storeType = asString(input.store_type)?.toUpperCase();
+  const hasRemoteGitParams = storeType === "REMOTE" || input.connector_ref !== undefined || input.repo_name !== undefined;
+
+  if (
+    hasRemoteGitParams &&
+    input.pipeline_branch === undefined &&
+    typeof input.branch === "string" &&
+    input.branch.length > 0
+  ) {
+    input.pipeline_branch = input.branch;
+  }
+}
+
+function extractRuntimeYamlCodebase(inputs: unknown): { branch?: string; repoName?: string } | undefined {
+  if (typeof inputs !== "string" || inputs.trim().length === 0) {
+    return undefined;
+  }
+
+  try {
+    const root = asRecord(parseYaml(inputs));
+    const pipeline = asRecord(root?.pipeline);
+    const properties = asRecord(pipeline?.properties);
+    const ci = asRecord(properties?.ci);
+    const codebase = asRecord(ci?.codebase);
+    if (!codebase) return undefined;
+
+    const build = asRecord(codebase.build);
+    const spec = asRecord(build?.spec);
+    const branch = asString(spec?.branch);
+    const repoName = asString(codebase.repoName);
+
+    if (!branch && !repoName) return undefined;
+    return { branch, repoName };
+  } catch {
+    return undefined;
+  }
 }
 
 const STRUCTURAL_FIELDS = new Set([

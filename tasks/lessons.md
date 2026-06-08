@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Read Cache Signals Must Not Block Execute Paths
+- **Issue**: A remote pipeline `pipeline.get` response can report `cacheResponse.cacheState=STALE_CACHE` and old YAML from the read/UI cache, while pipeline execution is documented to fetch entities from Git for the selected pipeline branch.
+- **Fix**: Do not fail-close `harness_execute` based on `pipeline.get` cache metadata. Preserve explicit branch selection by sending `pipelineBranchName` for remote executions, and only block execution on signals from the execute path itself.
+- **Rule**: A preflight may only block an operation when it proves the same backend path the operation will use. If a check observes a read-model/cache path, surface it as diagnostic context at most, not as execution authority.
+
 ## Multipart Tool Contracts
 - **Issue**: Multipart body builders can hide unsafe defaults or malformed encoded inputs until after request construction, and execute shorthands can drift from generic `resource_id` mapping.
 - **Fix**: Validate encoded content before `Buffer.from`, enforce documented scalar/enum types inside multipart builders, reject disallowed or mutually exclusive payload variants when present, require parent IDs explicitly when the API needs location context, accept the registry's mapped primary identifier in execute body builders, reject conflicting resource-specific aliases in shorthand and full-body modes, and document operation-specific body contracts via `paramsSchema`/`bodySchema`.
