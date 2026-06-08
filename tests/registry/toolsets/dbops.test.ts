@@ -27,7 +27,6 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
       instance_id: "i",
       conversation_id: "c",
       changeset: "cs",
-      k8s_connector_ref: "k8s",
       pipeline_identifier: "my-pipe",
       runtime_inputs: { releaseCodename: "phoenix" },
     }) as Record<string, unknown>;
@@ -36,7 +35,6 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
       instanceId: "i",
       conversationId: "c",
       changeset: "cs",
-      k8sConnectorRef: "k8s",
       pipelineIdentifier: "my-pipe",
       runtimeInputs: { releaseCodename: "phoenix" },
     });
@@ -49,7 +47,6 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
       instance_id: "i",
       conversation_id: "c",
       changeset: "cs",
-      k8s_connector_ref: "k8s",
       use_default_pipeline: true,
     }) as Record<string, unknown>;
     expect(body).toMatchObject({
@@ -57,7 +54,6 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
       instanceId: "i",
       conversationId: "c",
       changeset: "cs",
-      k8sConnectorRef: "k8s",
       useDefaultPipeline: true,
     });
     expect(body).not.toHaveProperty("pipelineIdentifier");
@@ -71,7 +67,6 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
         instance_id: "i",
         conversation_id: "c",
         changeset: "cs",
-        k8s_connector_ref: "k8s",
         use_default_pipeline: true,
       },
     }) as Record<string, unknown>;
@@ -88,7 +83,6 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
       instanceId: "i",
       conversationId: "c",
       changeset: "cs",
-      k8sConnectorRef: "k8s",
       pipelineIdentifier: "my-pipe",
     }) as Record<string, unknown>;
     expect(body).toMatchObject({

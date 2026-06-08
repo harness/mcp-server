@@ -716,7 +716,6 @@ describe("database_execute_llm_authoring_pipeline create", () => {
         instance_id: "instance_1",
         conversation_id: "conversation-1",
         changeset: "databaseChangeLog: []",
-        k8s_connector_ref: "account.k8s_connector",
         use_default_pipeline: true,
       },
     });
@@ -731,7 +730,6 @@ describe("database_execute_llm_authoring_pipeline create", () => {
       schemaId: "schema_1",
       instanceId: "instance_1",
       changeset: "databaseChangeLog: []",
-      k8sConnectorRef: "account.k8s_connector",
       useDefaultPipeline: true,
     });
     expect(call.body).not.toHaveProperty("orgIdentifier");
@@ -756,7 +754,6 @@ describe("database_execute_llm_authoring_pipeline create", () => {
         instance_id: "instance_1",
         conversation_id: "conversation-1",
         changeset: "databaseChangeLog: []",
-        k8s_connector_ref: "account.k8s_connector",
         pipeline_identifier: "my-pipe",
         runtime_inputs: { releaseCodename: "phoenix" },
       },
@@ -772,7 +769,6 @@ describe("database_execute_llm_authoring_pipeline create", () => {
       schemaId: "schema_1",
       instanceId: "instance_1",
       changeset: "databaseChangeLog: []",
-      k8sConnectorRef: "account.k8s_connector",
       pipelineIdentifier: "my-pipe",
       runtimeInputs: { releaseCodename: "phoenix" },
     });

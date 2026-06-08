@@ -792,7 +792,7 @@ export const dbopsToolset: ToolsetDefinition = {
         "(b) default-pipeline — pass use_default_pipeline=true and the server " +
         "performs get-or-create of the canonical default pipeline. " +
         "Exactly one of pipeline_identifier OR use_default_pipeline must be set. " +
-        "Reserved runtime-input keys (schemaId, instanceId, changeset, k8sConnectorRef) " +
+        "Reserved runtime-input keys (schemaId, instanceId, changeset) " +
         "are rejected by the server. " +
         "Returns { executionId, pipelineIdentifier, openInHarness }. " +
         "The chat-side polling block in the dbops_changeset skill is dead code — " +
@@ -816,7 +816,6 @@ export const dbopsToolset: ToolsetDefinition = {
               schemaId: src.schemaId ?? src.schema_id,
               instanceId: src.instanceId ?? src.instance_id,
               changeset: src.changeset,
-              k8sConnectorRef: src.k8sConnectorRef ?? src.k8s_connector_ref,
             };
             // Branch fields: forward only the populated branch.
             const useDefault = (src.useDefaultPipeline ?? src.use_default_pipeline) as
@@ -846,7 +845,7 @@ export const dbopsToolset: ToolsetDefinition = {
           bodySchema: {
             description:
               "ExecuteLlmAuthoringPipelineRequestBody. Caller may pass any field as " +
-              "snake_case (conversation_id, schema_id, instance_id, k8s_connector_ref, " +
+              "snake_case (conversation_id, schema_id, instance_id, " +
               "pipeline_identifier, runtime_inputs, use_default_pipeline) or camelCase — " +
               "the bodyBuilder normalizes both to the camelCase keys expected by the API.",
             fields: [
@@ -876,14 +875,6 @@ export const dbopsToolset: ToolsetDefinition = {
                 description: "Liquibase YAML changeset body.",
               },
               {
-                name: "k8sConnectorRef",
-                type: "string",
-                required: true,
-                description:
-                  "Prefixed K8s connector identifier resolved by the skill from " +
-                  "instance.connector (alias: k8s_connector_ref).",
-              },
-              {
                 name: "pipelineIdentifier",
                 type: "string",
                 required: false,
@@ -897,7 +888,7 @@ export const dbopsToolset: ToolsetDefinition = {
                 required: false,
                 description:
                   "Custom runtime inputs collected via AskUserQuestion (alias: runtime_inputs). " +
-                  "Reserved keys (schemaId, instanceId, changeset, k8sConnectorRef) are rejected by the server.",
+                  "Reserved keys (schemaId, instanceId, changeset) are rejected by the server.",
               },
               {
                 name: "useDefaultPipeline",
