@@ -662,6 +662,31 @@ describe("harness_create", () => {
     expect(elicitationCall.message).toContain("[redacted");
     expect(elicitationCall.message).not.toContain(contentBase64);
   });
+
+  it("redacts File Store upload content from JSON-string create confirmation prompts", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(fileStoreServer, registry, client);
+    const contentBase64 = Buffer.from("sensitive json body payload").toString("base64");
+
+    const result = await fileStoreServer.call("harness_create", {
+      resource_type: "file_store",
+      body: JSON.stringify({
+        name: "script.sh",
+        type: "FILE",
+        parent_identifier: "Root",
+        content_base64: contentBase64,
+      }),
+    });
+
+    expect(result.isError).toBeUndefined();
+    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
+    expect(elicitationCall.message).toContain("[redacted");
+    expect(elicitationCall.message).not.toContain(contentBase64);
+  });
 });
 
 describe("harness_update", () => {
@@ -811,6 +836,32 @@ describe("harness_update", () => {
         parent_identifier: "Root",
         content,
       },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
+    expect(elicitationCall.message).toContain("[redacted");
+    expect(elicitationCall.message).not.toContain(content);
+  });
+
+  it("redacts File Store upload content from JSON-string update confirmation prompts", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "script-file" } });
+    client = makeClient(mockRequest);
+    const fileStoreServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(fileStoreServer, registry, client);
+    const content = "sensitive json replacement file payload";
+
+    const result = await fileStoreServer.call("harness_update", {
+      resource_type: "file_store",
+      resource_id: "script-file",
+      body: JSON.stringify({
+        name: "script.sh",
+        type: "FILE",
+        parent_identifier: "Root",
+        content,
+      }),
     });
 
     expect(result.isError).toBeUndefined();

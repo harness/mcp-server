@@ -40,6 +40,14 @@ function previewReplacer(key: string, value: unknown): unknown {
 
 export function formatBodyPreview(body: unknown): string {
   if (typeof body === "string") {
+    try {
+      const parsed = JSON.parse(body) as unknown;
+      if (parsed !== body) {
+        return formatBodyPreview(parsed);
+      }
+    } catch {
+      // Non-JSON strings are valid bodies for YAML/text resources; preview them as-is.
+    }
     return truncateString(body, MAX_STRING_PREVIEW_CHARS);
   }
 
