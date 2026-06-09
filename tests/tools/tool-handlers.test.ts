@@ -1180,7 +1180,7 @@ describe("harness_execute", () => {
       params: { pipeline_branch: "feature/my-fix" },
     });
     expect(mockRequest).toHaveBeenCalled();
-    // Find the POST execute call (pre-flight GET calls come first)
+    // Find the POST execute call.
     const postCall = mockRequest.mock.calls.find((c) => c[0].method === "POST");
     expect(postCall).toBeDefined();
     expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
@@ -1196,6 +1196,79 @@ describe("harness_execute", () => {
     const postCall = mockRequest.mock.calls.find((c) => c[0].method === "POST");
     expect(postCall).toBeDefined();
     expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix", module: "ci" });
+  });
+
+  it("defaults remote pipeline_branch from branch and runs without read-cache preflight", async () => {
+    mockRequest.mockImplementation((request: { method?: string }) => {
+      if (request.method === "GET") {
+        throw new Error("pipeline.get read-cache preflight should not run");
+      }
+      return Promise.resolve({ data: { planExecutionId: "exec-remote" } });
+    });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      params: {
+        storeType: "REMOTE",
+        connectorRef: "account.github",
+        repoName: "testdataserv",
+        branch: "feature/my-fix",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledOnce();
+
+    const postCall = mockRequest.mock.calls[0]![0] as { method?: string; params?: Record<string, unknown> };
+    expect(postCall.method).toBe("POST");
+    expect(postCall.params).toMatchObject({
+      branch: "feature/my-fix",
+      pipelineBranchName: "feature/my-fix",
+      storeType: "REMOTE",
+      connectorRef: "account.github",
+      repoName: "testdataserv",
+    });
+  });
+
+  it("defaults remote pipeline branch from full runtime YAML codebase branch", async () => {
+    mockRequest.mockImplementation((request: { method?: string }) => {
+      if (request.method === "GET") {
+        throw new Error("pipeline.get read-cache preflight should not run");
+      }
+      return Promise.resolve({ data: { planExecutionId: "exec-yaml" } });
+    });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: `
+pipeline:
+  identifier: my-pipe
+  properties:
+    ci:
+      codebase:
+        repoName: testdataserv
+        build:
+          type: branch
+          spec:
+            branch: feature/from-yaml
+`,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledOnce();
+
+    const postCall = mockRequest.mock.calls[0]![0] as { method?: string; params?: Record<string, unknown> };
+    expect(postCall.method).toBe("POST");
+    expect(postCall.params).toMatchObject({
+      branch: "feature/from-yaml",
+      pipelineBranchName: "feature/from-yaml",
+      storeType: "REMOTE",
+      repoName: "testdataserv",
+    });
   });
 
   it("closes a pull request from a Harness PR URL", async () => {
