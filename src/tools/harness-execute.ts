@@ -442,6 +442,14 @@ function normalizeRemotePipelineRunParams(input: Record<string, unknown>): void 
 
   const storeType = asString(input.store_type)?.toUpperCase();
   const hasRemoteGitParams = storeType === "REMOTE" || input.connector_ref !== undefined || input.repo_name !== undefined;
+  const runtimeInputBranch = extractRuntimeInputBranch(input.inputs);
+  if (
+    hasRemoteGitParams &&
+    input.branch === undefined &&
+    runtimeInputBranch
+  ) {
+    input.branch = runtimeInputBranch;
+  }
 
   if (
     hasRemoteGitParams &&
@@ -451,6 +459,24 @@ function normalizeRemotePipelineRunParams(input: Record<string, unknown>): void 
   ) {
     input.pipeline_branch = input.branch;
   }
+}
+
+function extractRuntimeInputBranch(inputs: unknown): string | undefined {
+  const record = asRecord(inputs);
+  if (!record) return undefined;
+
+  const shorthandBranch = asString(record.branch);
+  if (shorthandBranch && shorthandBranch.length > 0) {
+    return shorthandBranch;
+  }
+
+  const build = asRecord(record.build);
+  if (!build || asString(build.type)?.toLowerCase() !== "branch") {
+    return undefined;
+  }
+
+  const branch = asString(asRecord(build.spec)?.branch);
+  return branch && branch.length > 0 ? branch : undefined;
 }
 
 function extractRuntimeYamlCodebase(inputs: unknown): { branch?: string; repoName?: string } | undefined {

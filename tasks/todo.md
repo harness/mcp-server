@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-09)
+- [x] Baseline current branch against `origin/main` and list recent behavioral commits
+- [x] Inspect high-blast-radius runtime/auth/tool-dispatch changes for concrete severe failure modes
+- [x] Trace any candidate through callers, inputs, validation, and downstream Harness requests
+- [x] If a critical bug is confirmed, add focused regression coverage and a minimal fix
+- [x] Run targeted verification and report the outcome in Slack
+
+### Plan
+- Treat this branch as a recent-main scan because it currently matches fetched `origin/main`.
+- Prioritize commits touching runtime behavior, request construction, auth/session handling, confirmation previews, and shared registry dispatch over documentation-only changes.
+- Only patch if there is a concrete trigger scenario that can cause data loss, crashes, security exposure, or major user-facing breakage.
+
+### Review
+- Found a wrong-branch execution bug for remote pipelines: `harness_execute` documented `inputs: { branch: "..." }` as the CI codebase shorthand, but remote pipeline branch normalization ran before runtime input expansion and only handled top-level `params.branch` or full YAML-string inputs.
+- Impact: a remote pipeline run with `params.storeType="REMOTE"`/`connectorRef`/`repoName` plus `inputs.branch` could resolve and send runtime YAML for the feature branch while omitting `pipelineBranchName`, causing Harness to load the pipeline definition from the default branch.
+- Fixed `normalizeRemotePipelineRunParams` to derive the branch from object-form runtime inputs when remote git context is present, before runtime template fetch and execute dispatch.
+- Added a regression covering remote git params plus `inputs: { branch: "feature/from-shorthand" }` and asserting the execute request includes `pipelineBranchName`.
+- Verification passed: focused red/green regression, `pnpm typecheck`, `pnpm exec vitest run tests/tools/tool-handlers.test.ts`, `pnpm build`, `pnpm test`, and reviewer-agent diff review.
+
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select File Store multipart workflows as the focused documentation gap

@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Remote Pipeline Branch Shorthands
+- **Issue**: Remote pipeline runs can carry the desired codebase branch inside object-form runtime inputs (`inputs: { branch: "..." }`) while top-level execute params only carry remote git context. If `pipelineBranchName` is defaulted before input shorthand handling, Harness may load pipeline YAML from the default branch while the runtime YAML points at the feature branch.
+- **Fix**: When remote git context is present, derive the pipeline definition branch from branch-shaped runtime inputs before fetching runtime templates and before execute dispatch, while avoiding remote-store inference from branch shorthand alone.
+- **Rule**: Any fix that defaults `pipelineBranchName` must cover all public branch surfaces: `params.pipeline_branch`, `params.branch`, YAML-string codebase inputs, object-form `{ branch }`, and expanded `build.type=branch` inputs.
+
 ## Read Cache Signals Must Not Block Execute Paths
 - **Issue**: A remote pipeline `pipeline.get` response can report `cacheResponse.cacheState=STALE_CACHE` and old YAML from the read/UI cache, while pipeline execution is documented to fetch entities from Git for the selected pipeline branch.
 - **Fix**: Do not fail-close `harness_execute` based on `pipeline.get` cache metadata. Preserve explicit branch selection by sending `pipelineBranchName` for remote executions, and only block execution on signals from the execute path itself.

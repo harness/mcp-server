@@ -1322,6 +1322,55 @@ pipeline:
     });
   });
 
+  it("defaults remote pipeline_branch from runtime input branch shorthand", async () => {
+    mockRequest.mockImplementation((request: { method?: string; path?: string }) => {
+      if (request.method === "GET") {
+        throw new Error("pipeline.get read-cache preflight should not run");
+      }
+      if (request.path === "/pipeline/api/inputSets/template") {
+        return Promise.resolve({
+          data: {
+            inputSetTemplateYaml: `
+pipeline:
+  identifier: my-pipe
+  properties:
+    ci:
+      codebase:
+        build: <+input>
+`,
+          },
+        });
+      }
+      return Promise.resolve({ data: { planExecutionId: "exec-branch-shorthand" } });
+    });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      params: {
+        storeType: "REMOTE",
+        connectorRef: "account.github",
+        repoName: "testdataserv",
+      },
+      inputs: { branch: "feature/from-shorthand" },
+    });
+
+    expect(result.isError).toBeUndefined();
+
+    const postCall = mockRequest.mock.calls.find((c) => String(c[0].path).startsWith("/pipeline/api/pipeline/execute/"))![0] as {
+      method?: string;
+      params?: Record<string, unknown>;
+    };
+    expect(postCall.method).toBe("POST");
+    expect(postCall.params).toMatchObject({
+      storeType: "REMOTE",
+      connectorRef: "account.github",
+      repoName: "testdataserv",
+      pipelineBranchName: "feature/from-shorthand",
+    });
+  });
+
   it("closes a pull request from a Harness PR URL", async () => {
     const prServer = makeMcpServer("accept");
     const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
