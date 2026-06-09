@@ -9,7 +9,7 @@
 | **Operations** | list, get, create, update, delete |
 | **Execute Actions** | list_children |
 | **Identifier Fields** | file_store_id |
-| **Filter Fields** | search_term, identifiers, page_token |
+| **Filter Fields** | identifiers |
 | **Deep Link** | URL parsing supported for `/settings/file-store` paths |
 
 ## Test Cases
@@ -19,7 +19,7 @@
 | TC-fs-001 | List | List File Store nodes with default project scope | `harness_list(resource_type="file_store")` | Returns paginated file/folder metadata |
 | TC-fs-002 | List | List File Store nodes at account scope | `harness_list(resource_type="file_store", resource_scope="account")` | Dispatch omits org/project scope params and returns account-level nodes |
 | TC-fs-003 | List | List with search term | `harness_list(resource_type="file_store", search_term="deploy")` | Sends `searchTerm=deploy` and returns matching nodes |
-| TC-fs-004 | List | List by identifiers | `harness_list(resource_type="file_store", filters={identifiers: "deploy_script,scripts_folder"})` | Sends identifier filter and returns matching nodes |
+| TC-fs-004 | List | List by identifiers | `harness_list(resource_type="file_store", filters={identifiers: ["deploy_script", "scripts_folder"]})` | Sends repeated `identifiers=` query params and returns matching nodes |
 | TC-fs-005 | Get | Get node metadata by generic resource id | `harness_get(resource_type="file_store", resource_id="deploy_script")` | Calls `/ng/api/file-store/deploy_script` and returns node metadata |
 | TC-fs-006 | Get | Get node metadata from a File Store URL | `harness_get(url="https://app.harness.io/ng/account/acct/all/settings/file-store/deploy_script")` | Derives `resource_type`, `resource_id`, and account scope from the URL |
 | TC-fs-007 | Create | Create a folder at scope root | `harness_create(resource_type="file_store", body={name: "scripts", type: "FOLDER", parent_identifier: "Root"})` | Converts body to multipart form data without content and creates a folder |
@@ -48,6 +48,7 @@
 ## Notes
 
 - File Store list/get use `/ng/api/file-store`; create/update convert caller JSON into `multipart/form-data` for the same API family.
+- `filters.identifiers` must be an array so the client emits repeated `identifiers=` query params. `search_term` and pagination (`page`, `size`, `page_token`) are generic `harness_list` inputs, not File Store-specific filter metadata.
 - Create and update require `body.name`, `body.type`, and `body.parent_identifier`. Use the literal `"Root"` only for the root of the selected account/org/project scope.
 - `FILE` create requires exactly one of `body.content` or `body.content_base64`. `FILE` update can omit content for metadata-only updates; if replacing content, provide exactly one content field.
 - `FOLDER` create/update must not include `body.content` or `body.content_base64`.
