@@ -104,6 +104,15 @@ const RawConfigSchema = z.object({
   HARNESS_AUDIT_WEBHOOK_TOKEN: optionalStringFromEnv,
   HARNESS_AUDIT_WEBHOOK_BATCH_SIZE: z.preprocess(emptyStringAsUndefined, z.coerce.number().min(1).default(10)),
   HARNESS_AUDIT_WEBHOOK_FLUSH_MS: z.preprocess(emptyStringAsUndefined, z.coerce.number().min(1).default(5000)),
+  // Maximum number of concurrent log-blob downloads issued by harness_diagnose
+  // when fetching logs for failed steps. Default 3 keeps peak memory bounded
+  // while still parallelising the common case (1–3 failed steps). Increase
+  // only if diagnose latency is dominated by log-fetch wall-clock and the
+  // pod has memory headroom (AIDEVOPS-2200).
+  HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: z.preprocess(
+    emptyStringAsUndefined,
+    z.coerce.number().min(1).max(20).default(3),
+  ),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {

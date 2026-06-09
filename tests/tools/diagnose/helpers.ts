@@ -17,6 +17,7 @@ export function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_READ_ONLY: false,
     HARNESS_MAX_BODY_SIZE_MB: 10,
     HARNESS_RATE_LIMIT_RPS: 10,
+    HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: 3,
     ...overrides,
   } as Config;
 }
