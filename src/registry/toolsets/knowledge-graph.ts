@@ -163,7 +163,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
         "Lightweight summaries of types queryable via HQL. Returns identifier (type_id for " +
         "HQL queries), name, description, kind (OBJECT_KIND_*), connectorId, tags. No field " +
         "metadata. Use this FIRST to select types, then fetch field details per type via " +
-        "harness_get(resource_type='kg_type', type_id=<identifier>, kind=<kind>). " +
+        "harness_get(resource_type='kg_type', resource_id='<identifier>', params={kind: '<kind>'}). " +
         "Types sharing the same non-empty connectorId can be JOINed. Empty connectorId means " +
         "no shared backing connector—do not infer JOIN eligibility from connector alone. " +
         "Pass 'kinds' to filter.",
@@ -224,7 +224,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
       executeHint:
         "1. Learn grammar: harness_get(resource_type='kg_grammar'). " +
         "2. Discover types: harness_list(resource_type='kg_queryable_type_summary') — note the 'identifier' and 'kind' fields. " +
-        "3. Get fields per type: harness_get(resource_type='kg_type', type_id='<identifier>', kind='<kind>'). " +
+        "3. Get fields per type: harness_get(resource_type='kg_type', resource_id='<identifier>', params={kind: '<kind>'}). " +
         "4. Validate: harness_execute(resource_type='hql_query', action='validate', " +
         "body={query_string: 'find view \"ci:pipeline_execution_summary_ci\" | select {count()}'}). " +
         "5. Run: harness_execute(resource_type='hql_query', action='run', body={query_string: '...'}). ",

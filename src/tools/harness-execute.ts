@@ -75,7 +75,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             timeout_ms: z.number().optional().describe("Per-query timeout in milliseconds"),
             max_results: z.number().optional().describe("Maximum rows to return"),
           })
-        ).max(20).describe("Batch HQL queries — use with resource_type='hql_query' and action='validate' or 'run'. Fans out in parallel, returns per-query results.").optional(),
+        ).max(20).optional().describe("Batch HQL queries — use with resource_type='hql_query' and action='validate' or 'run'. Fans out in parallel, returns per-query results."),
       },
       outputSchema: executeOutputSchema,
       annotations: {
@@ -137,32 +137,21 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
           const auditCtxBatch = { tool: "harness_execute" as const, confirmation: elicit.method, action: args.action };
 
-          // Run a single preflight dispatch with the first query to surface any
-          // registry-level policy errors (unknown action, toolset disabled) before
-          // committing to the full fan-out.
           try {
-            const firstQuery = batchQueries[0]!;
-            await registry.dispatchExecute(client, "hql_query", args.action, { body: { query_string: firstQuery.query_string } }, auditCtxBatch, extra.signal);
-
-            // First query succeeded — fan out the rest in parallel and collect per-item results
-            const remainingResults = await Promise.allSettled(
-              batchQueries.slice(1).map((q) =>
+            const allResults = await Promise.allSettled(
+              batchQueries.map((q) =>
                 registry.dispatchExecute(client, "hql_query", args.action, { body: { query_string: q.query_string, ...(q.timeout_ms != null ? { timeout_ms: q.timeout_ms } : {}), ...(q.max_results != null ? { max_results: q.max_results } : {}) } }, auditCtxBatch, extra.signal),
               ),
             );
 
-            const results = [
-              { query_string: firstQuery.query_string, success: true },
-              ...remainingResults.map((r, i) => {
-                const query_string = batchQueries[i + 1]!.query_string;
-                if (r.status === "fulfilled") return { query_string, success: true, ...((r.value as Record<string, unknown>) ?? {}) };
-                return { query_string, success: false, error: r.reason instanceof Error ? r.reason.message : String(r.reason) };
-              }),
-            ];
+            const results = allResults.map((r, i) => {
+              const query_string = batchQueries[i]!.query_string;
+              if (r.status === "fulfilled") return { query_string, success: true, ...((r.value as Record<string, unknown>) ?? {}) };
+              return { query_string, success: false, error: r.reason instanceof Error ? r.reason.message : String(r.reason) };
+            });
             const succeeded = results.filter((r) => r.success).length;
             return jsonResult({ results, summary: { total: results.length, succeeded, failed: results.length - succeeded } });
           } catch (err) {
-            // Policy/registry error from the preflight — surface as a hard failure, not a per-item result
             if (isUserError(err) || isUserFixableApiError(err)) return errorResult((err as Error).message);
             throw toMcpError(err);
           }
