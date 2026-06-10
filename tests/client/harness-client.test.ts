@@ -285,6 +285,28 @@ describe("HarnessClient", () => {
       expect(headers.has("x-api-key")).toBe(false);
     });
 
+    it("drops x-api-key when preserving caller-provided Authorization for FME requests", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({
+        HARNESS_API_KEY: "pat.internal.internal.dummy",
+        HARNESS_FME_API_KEY: undefined,
+      }));
+
+      await client.request({
+        path: "/internal/api/v2/workspaces",
+        product: "fme",
+        headers: {
+          Authorization: "PlatformService service-jwt",
+          "x-api-key": "pat.internal.internal.dummy",
+        },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("PlatformService service-jwt");
+      expect(headers.has("x-api-key")).toBe(false);
+    });
+
     it("fails before sending placeholder credentials to Split.io", async () => {
       const client = new HarnessClient(makeConfig({
         HARNESS_API_KEY: "pat.internal.internal.dummy",
