@@ -1,4 +1,4 @@
-import type { ToolsetDefinition, FilterFieldSpec } from "../types.js";
+import type { ToolsetDefinition, FilterFieldSpec, ParamsSchema } from "../types.js";
 import { stripInternalMeta } from "../../utils/strip-meta.js";
 
 const SCHEMA_SVC =
@@ -81,11 +81,13 @@ const schemaTypeExtract = (raw: unknown): unknown => {
           (a) => (a.key as string) === "dcs_enrichment",
         );
         if (hasDcsEnrichment) {
+          // Re-strip each reattached field — the raw relObj values may carry
+          // nested columnMappingMeta that the earlier strip would otherwise miss.
           cleaned.dcs_enrichment = true;
-          cleaned.join_predicates = relObj.join_predicates;
-          cleaned.left_reference = relObj.left_reference;
-          cleaned.right_reference = relObj.right_reference;
-          if (relObj.fields) cleaned.enrichment_fields = relObj.fields;
+          cleaned.join_predicates = stripInternalMeta(relObj.join_predicates);
+          cleaned.left_reference = stripInternalMeta(relObj.left_reference);
+          cleaned.right_reference = stripInternalMeta(relObj.right_reference);
+          if (relObj.fields) cleaned.enrichment_fields = stripInternalMeta(relObj.fields);
         }
       }
 
@@ -112,14 +114,16 @@ const relatedTypesExtract = (raw: unknown): unknown => {
         (a) => (a.key as string) === "dcs_enrichment",
       );
       if (hasDcsEnrichment) {
+        // Strip each reattached field — raw relObj values may carry nested
+        // columnMappingMeta that must not leak back into the cleaned response.
         enrichments.push({
           id: relObj.id,
           description: relObj.description,
           annotations: annotations?.map((a) => a.key),
-          left_reference: relObj.left_reference,
-          right_reference: relObj.right_reference,
-          join_predicates: relObj.join_predicates,
-          fields: relObj.fields,
+          left_reference: stripInternalMeta(relObj.left_reference),
+          right_reference: stripInternalMeta(relObj.right_reference),
+          join_predicates: stripInternalMeta(relObj.join_predicates),
+          fields: stripInternalMeta(relObj.fields),
         });
       }
     }
@@ -140,10 +144,21 @@ function schemaTypesBody(input: Record<string, unknown>) {
   return { filter: { objectKind: kinds } };
 }
 
+function requireTypeId(input: Record<string, unknown>): string {
+  const id = input.type_id;
+  if (id === undefined || id === "") {
+    throw new Error(
+      "Missing required identifier for kg_type/kg_related_type. Pass the type id as resource_id " +
+        "(e.g. harness_get(resource_type='kg_type', resource_id='<id>', params={kind: '<kind>'})).",
+    );
+  }
+  return String(id);
+}
+
 function schemaTypeGetBody(input: Record<string, unknown>) {
   return {
     kind: (input.kind as string) ?? "OBJECT_KIND_ENTITY",
-    id: input.type_id as string,
+    id: requireTypeId(input),
   };
 }
 
@@ -151,7 +166,7 @@ function relatedTypesBody(input: Record<string, unknown>) {
   return {
     type_reference: {
       object_kind: (input.kind as string) ?? "OBJECT_KIND_ENTITY",
-      id: input.type_id as string,
+      id: requireTypeId(input),
     },
     include_transitive: input.include_transitive === true,
   };
@@ -179,6 +194,33 @@ const KG_RELATED_FILTERS: FilterFieldSpec[] = [
     type: "boolean",
   },
 ];
+
+// ─── Params schemas (surfaced via harness_describe) ──────────────────────────
+
+const KG_TYPE_GET_PARAMS: ParamsSchema = {
+  fields: [
+    {
+      name: "kind",
+      required: false,
+      description: "Object kind of the type (default: OBJECT_KIND_ENTITY). One of OBJECT_KIND_*.",
+    },
+  ],
+};
+
+const KG_RELATED_GET_PARAMS: ParamsSchema = {
+  fields: [
+    {
+      name: "kind",
+      required: false,
+      description: "Object kind of the source type (default: OBJECT_KIND_ENTITY). One of OBJECT_KIND_*.",
+    },
+    {
+      name: "include_transitive",
+      required: false,
+      description: "Include transitive relationships (default: false).",
+    },
+  ],
+};
 
 // ─── Toolset definition ─────────────────────────────────────────────────────
 
@@ -220,7 +262,8 @@ export const semanticLayerToolset: ToolsetDefinition = {
           responseExtractor: schemaTypeExtract,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           description:
-            "Get a single schema type by kind and ID. Pass kind via params (default: OBJECT_KIND_ENTITY).",
+            "Get a single schema type by kind and ID. Pass the type id as resource_id and kind via params (default: OBJECT_KIND_ENTITY).",
+          paramsSchema: KG_TYPE_GET_PARAMS,
         },
       },
     },
@@ -245,8 +288,9 @@ export const semanticLayerToolset: ToolsetDefinition = {
           responseExtractor: relatedTypesExtract,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           description:
-            "Get types related to a source type. Pass type_id (resource_id) and optionally " +
-            "kind (default: OBJECT_KIND_ENTITY) and include_transitive (default: false).",
+            "Get types related to a source type. Pass the type id as resource_id and optionally " +
+            "kind (default: OBJECT_KIND_ENTITY) and include_transitive (default: false) via params.",
+          paramsSchema: KG_RELATED_GET_PARAMS,
         },
       },
     },

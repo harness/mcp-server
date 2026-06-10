@@ -187,4 +187,93 @@ describe("kg_related_type get extractor", () => {
       },
     ]);
   });
+
+  it("strips nested columnMappingMeta from reattached dcs_enrichment fields", async () => {
+    // Regression: reattaching raw relObj.* values used to re-introduce nested
+    // columnMappingMeta that the earlier strip had removed.
+    const mockRequest = vi.fn().mockResolvedValue({
+      relationship_types: [
+        {
+          id: "rel",
+          annotations: [{ key: "dcs_enrichment" }],
+          left_reference: { id: "a", columnMappingMeta: { hidden: true } },
+          right_reference: { id: "b" },
+          join_predicates: [{ left: "id", right: "a_id", columnMappingMeta: { internal: true } }],
+          fields: [
+            { name: "f1", columnMappingMeta: { x: 1 } },
+            { columnMappingMeta: { only: true } },
+          ],
+        },
+      ],
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "kg_related_type", "get", {
+      type_id: "service",
+    })) as Record<string, unknown>;
+
+    expect(result.dcs_enrichments).toEqual([
+      {
+        id: "rel",
+        description: undefined,
+        annotations: ["dcs_enrichment"],
+        left_reference: { id: "a" },
+        right_reference: { id: "b" },
+        join_predicates: [{ left: "id", right: "a_id" }],
+        // The metadata-only field row is pruned; the real field keeps only clean keys.
+        fields: [{ name: "f1" }],
+      },
+    ]);
+  });
+
+  it("fails locally with a clear error when type_id is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "kg_related_type", "get", { kind: "OBJECT_KIND_ENTITY" }),
+    ).rejects.toThrow(/Missing required identifier/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// kg_type get — local required-field validation
+// ---------------------------------------------------------------------------
+
+describe("kg_type get body validation", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("fails locally with a clear error when type_id is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "kg_type", "get", { kind: "OBJECT_KIND_ENTITY" }),
+    ).rejects.toThrow(/Missing required identifier/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hql_query run — read-only mode policy
+// ---------------------------------------------------------------------------
+
+describe("hql_query run policy", () => {
+  it("is allowed in read-only mode because HQL run is read-risk", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_READ_ONLY: true }));
+    const mockRequest = vi.fn().mockResolvedValue({ columns: [], rows: [] });
+    const client = makeClient(mockRequest);
+
+    // Should NOT throw — risk:"read" actions pass the read-only gate.
+    await registry.dispatchExecute(client, "hql_query", "run", {
+      body: { query_string: "find view \"x\"" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
 });

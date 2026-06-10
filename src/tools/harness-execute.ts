@@ -131,9 +131,11 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             return errorResult(`queries batch parameter is only supported for resource_type='hql_query'. Got: ${resourceType}`);
           }
 
-          // Fail fast on policy errors before fan-out — mirrors registry.dispatchExecute() enforcement.
-          if (config?.HARNESS_READ_ONLY) {
-            return errorResult(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute actions are not allowed.`);
+          // Fail fast on policy errors before fan-out — mirrors registry.dispatchExecute()
+          // risk-based enforcement: read-safe actions (e.g. hql validate/run) are allowed in
+          // read-only mode; write actions are blocked before any query is dispatched.
+          if (config?.HARNESS_READ_ONLY && risk !== "read") {
+            return errorResult(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${args.action}" is not allowed.`);
           }
 
           const auditCtxBatch = { tool: "harness_execute" as const, confirmation: elicit.method, action: args.action };

@@ -1863,14 +1863,16 @@ pipeline:
     expect(callArgs.params.connectorRef).toBeUndefined();
   });
 
-  it("batch HQL validate returns an error envelope in read-only mode (not a successful summary)", async () => {
-    // Regression: the batched queries=[...] path must fail loudly with
-    // isError=true in read-only mode, matching the single-query contract —
-    // not fall through to Promise.allSettled() and report a success summary
-    // full of failed items.
+  it("batch HQL validate is allowed in read-only mode (read-risk action), matching the single-query contract", async () => {
+    // Regression: the batch read-only gate must be risk-based — mirroring
+    // registry.dispatchExecute() — so a read-safe action (hql validate, which
+    // is risk:"read") still fans out in read-only mode instead of being blocked
+    // by a tool-family check. Write-risk actions are gated by the same `risk`
+    // comparison before any query is dispatched.
     const roServer = makeMcpServer("accept");
     const roRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "knowledge-graph", HARNESS_READ_ONLY: true }));
-    const roClient = makeClient(vi.fn());
+    const roRequest = vi.fn().mockResolvedValue({ is_valid: true, errors: [] });
+    const roClient = makeClient(roRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
     registerExecuteTool(roServer, roRegistry, roClient, makeConfig({ HARNESS_READ_ONLY: true }));
 
@@ -1881,10 +1883,10 @@ pipeline:
       confirm: true,
     });
 
-    expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Read-only mode") });
-    // The API must never be reached when the policy blocks the action.
-    expect(roClient.request).not.toHaveBeenCalled();
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { summary: { total: number; succeeded: number } };
+    expect(data.summary).toMatchObject({ total: 1, succeeded: 1 });
+    expect(roRequest).toHaveBeenCalledTimes(1);
   });
 
   it("batch HQL validate fans out and returns a per-query summary when allowed", async () => {

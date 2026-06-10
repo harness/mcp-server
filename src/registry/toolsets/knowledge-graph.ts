@@ -262,7 +262,9 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
           headers: {},
           bodyBuilder: hqlRunBody,
           responseExtractor: passthrough,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          // HQL is a read-only query language (find/filter/select/join — no mutations),
+          // so running a query is read-risk: allowed in read-only mode, no confirmation.
+          operationPolicy: { risk: "read", retryPolicy: "do_not_retry" },
           actionDescription:
             "Execute an HQL query and return results. Returns columns, rows, stats. " +
             "Optionally pass timeout_ms and max_results in body.",
