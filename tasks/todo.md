@@ -1,11 +1,11 @@
 # Harness MCP Server — Task Tracking
 
 ## PR 318 Connector Create Raw YAML Triage (2026-06-10)
-- [ ] Read Slack thread and referenced PR context
-- [ ] Trace `harness_create` request body flow for connector creation
-- [ ] Add failing regression for raw YAML connector create payloads
-- [ ] Implement the minimal fix if the local branch lacks it
-- [ ] Run focused and broad verification
+- [x] Read Slack thread and referenced PR context
+- [x] Trace `harness_create` request body flow for connector creation
+- [x] Add failing regression for raw YAML connector create payloads
+- [x] Implement the minimal fix if the local branch lacks it
+- [x] Run focused and broad verification
 - [ ] Commit, push, open PR if code changed, and report in Slack
 
 ### Plan
@@ -13,6 +13,12 @@
 - Verify root cause in the generic create handler/body preview path and connector endpoint expectations instead of assuming the PR diff is complete.
 - Prefer a focused tool-handler regression that proves raw YAML passed to `harness_create(resource_type="connector")` reaches the registry as a JSON object body instead of a top-level string.
 - Keep changes scoped to body normalization and contract tests; do not alter connector schema or unrelated resource behavior.
+
+### Review
+- Confirmed the bug: `harness_create` allows string bodies for all resources, but `connector.create` uses `buildBodyNormalized`; before this change, a string body stayed a string, skipped object validation/wrapping, and `HarnessClient` sent it as `application/yaml`, producing connector API HTTP 415.
+- Fixed `src/utils/body-normalizer.ts` so normalized JSON resource builders parse YAML string bodies to objects and reject scalar/array YAML before network I/O. Pipeline create still preserves raw YAML through its separate body builder path.
+- Added regressions in `tests/integration/mock-harness-api.test.ts` for connector raw YAML conversion to `application/json` and local rejection of non-object YAML.
+- Verification passed: focused red/green `pnpm exec vitest run tests/integration/mock-harness-api.test.ts -t "body building"`, then `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, `pnpm typecheck`, and `pnpm test` (73 files / 1892 tests).
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
