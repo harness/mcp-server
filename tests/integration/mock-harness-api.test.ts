@@ -275,6 +275,59 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       // Body is the raw YAML string
       expect(init.body).toBe(yaml);
     });
+
+    it("connector create converts raw YAML string bodies to JSON objects", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({ status: "SUCCESS", data: { connector: { identifier: "k8s" } } }),
+      );
+
+      const config = makeConfig();
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      await registry.dispatch(client, "connector", "create", {
+        body: [
+          "connector:",
+          "  name: K8s",
+          "  identifier: k8s",
+          "  type: K8sCluster",
+          "  spec:",
+          "    credential:",
+          "      type: InheritFromDelegate",
+        ].join("\n"),
+      });
+
+      const [, options] = fetchSpy.mock.calls[0]!;
+      const init = options as RequestInit;
+      const headers = init.headers as Record<string, string>;
+      expect(headers["Content-Type"]).toBe("application/json");
+      expect(JSON.parse(init.body as string)).toMatchObject({
+        connector: {
+          name: "K8s",
+          identifier: "k8s",
+          type: "K8sCluster",
+          spec: {
+            credential: {
+              type: "InheritFromDelegate",
+            },
+          },
+        },
+      });
+    });
+
+    it("connector create rejects raw YAML string bodies that do not parse to objects", async () => {
+      const config = makeConfig();
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      await expect(
+        registry.dispatch(client, "connector", "create", {
+          body: "- just\n- a\n- list",
+        }),
+      ).rejects.toThrow(/body must be a JSON object or YAML object/);
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe("execution lifecycle", () => {

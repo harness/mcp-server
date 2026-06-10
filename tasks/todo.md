@@ -1,5 +1,19 @@
 # Harness MCP Server — Task Tracking
 
+## PR 318 Connector Create Raw YAML Triage (2026-06-10)
+- [ ] Read Slack thread and referenced PR context
+- [ ] Trace `harness_create` request body flow for connector creation
+- [ ] Add failing regression for raw YAML connector create payloads
+- [ ] Implement the minimal fix if the local branch lacks it
+- [ ] Run focused and broad verification
+- [ ] Commit, push, open PR if code changed, and report in Slack
+
+### Plan
+- Use the Slack thread and GitHub PR #318 as the bug report since the thread has no replies or screenshots.
+- Verify root cause in the generic create handler/body preview path and connector endpoint expectations instead of assuming the PR diff is complete.
+- Prefer a focused tool-handler regression that proves raw YAML passed to `harness_create(resource_type="connector")` reaches the registry as a JSON object body instead of a top-level string.
+- Keep changes scoped to body normalization and contract tests; do not alter connector schema or unrelated resource behavior.
+
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select File Store multipart workflows as the focused documentation gap
