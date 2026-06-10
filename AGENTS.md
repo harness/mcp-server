@@ -57,6 +57,16 @@
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
 
+### 7. Pre-Push Architecture-Review Pass (avoid the Cursor-bot round-trip)
+The "Sunil On Demand Architecture Review" bot reviews every PR and reliably catches the same public-contract gaps. Self-review against these BEFORE pushing — each round-trip costs a full review cycle. For every new/changed resource or endpoint, confirm:
+- **No raw passthrough.** Every `responseExtractor` projects a stable, documented shape — never `passthrough` on a real endpoint. Backend envelope/debug/meta must not cross the tool boundary.
+- **Docs match implementation.** Every field the description/`bodySchema`/`paramsSchema` promises is actually what the extractor emits, sourced from the field it claims (identifier-named field → stable id, not a display label).
+- **Metadata matches operations.** `listFilterFields` only on resources with `list`; get-only params go in the `get` op's `paramsSchema`. Don't leak get params into the global filter catalog.
+- **Policy is consistent, not ad-hoc.** Read-only/confirmation gating keys off `operationPolicy.risk`, mirroring `registry.dispatchExecute()` — never gate by tool family or hardcode an action allowlist. Classify `risk` by what the endpoint actually does (a no-mutation query is `risk: "read"`).
+- **No silent data loss.** Body builders use `!= null` (not truthiness) so `0`/`false` survive; metadata strippers preserve meaningful empty collections but prune `{}` placeholder rows; reattached raw fields are re-stripped.
+- **Tests cover the contract, not just the request.** Add a response-shape/extractor test (envelope dropped, empty/edge cases) and a request-shape test for every new extractor and body builder — "no focused coverage" is itself a review finding.
+- **Guardrails are green locally.** Run `pnpm build` THEN `pnpm docs:generate`, plus `pnpm typecheck` and `pnpm test`, before pushing. `docs:check` reads from `build/`.
+
 ---
 
 ## Task Management
@@ -530,7 +540,7 @@ The MCP server exposes an `instructions` string (in `src/index.ts`) that is sent
 |---------|-----|
 | `console.log()` in stdio mode | Use `console.error()` or stderr logger ONLY |
 | Forgetting `accountIdentifier` param | Inject from config in HarnessClient automatically |
-| Raw API response passthrough | Always map to clean, typed output objects |
+| Raw API response passthrough (`responseExtractor: passthrough`) | Map to a stable, projected shape (`{columns, rows, stats}`, `{items, total}`). Passthrough leaks backend envelope/debug/meta fields across the public tool boundary |
 | Exposing secret values | Only return secret metadata (name, type, scope) |
 | Unbounded list queries | Always paginate, default size=20, max=100 |
 | No retry on rate limits | Implement exponential backoff on HTTP 429 |
@@ -544,6 +554,13 @@ The MCP server exposes an `instructions` string (in `src/index.ts`) that is sent
 | `message` param for custom errors | Zod 4 uses unified `error` param: `z.string().min(5, { error: "Too short" })` |
 | Adding docs to server `instructions` | Put resource-specific guidance in `actionDescription`, `executeHint`, `bodySchema`, or `inputExpansions` instead |
 | Hardcoding input transformations | Use declarative `inputExpansions` on `EndpointSpec` — data, not code |
+| Reattaching raw `obj.*` fields after `stripInternalMeta()` | Re-run the stripper on each reattached field — raw values can re-introduce nested `columnMappingMeta`/internal keys the earlier strip removed |
+| Published field name ≠ its source (e.g. `connectorId` filled from `connector_name`) | Fill identifier-named fields from a stable identifier; fall back to display names only if that is all the API returns. A name is not a JOIN key |
+| `listFilterFields` on a get-only resource | `kind`/`include_transitive`-style get params belong in the `get` op's `paramsSchema`, not the global `harness_list` filter catalog `harness_describe` aggregates |
+| Read-only / confirmation gating by tool family | Gate by the action's `operationPolicy.risk`, mirroring `registry.dispatchExecute()` — `risk: "read"` actions (e.g. a query language with no mutations) must pass in read-only mode |
+| Stripping non-empty array values, or leaving `{}` placeholder rows | Preserve explicitly-empty collections (meaningful), but prune array elements that collapse to `{}` after stripping — recurse first, then decide |
+| Truthiness checks dropping `0`/`false` from body builders | Use `!= null` checks so zero-valued options (`timeout_ms: 0`) reach the API instead of being silently rewritten |
+| Running `pnpm docs:generate` without `pnpm build` first | `docs:generate` reads from `build/` — a stale build produces wrong counts and `docs:check` fails in CI. Build, then generate |
 
 ---
 
