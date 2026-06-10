@@ -1,5 +1,209 @@
 # Harness MCP Server — Task Tracking
 
+## Vitest Security Upgrade (2026-06-03)
+- [x] Confirm the affected local Vitest version and patched target
+- [x] Upgrade `vitest` dev dependency to the patched 4.1 line
+- [x] Regenerate `pnpm-lock.yaml`
+- [x] Run focused and broad verification
+
+### Plan
+- Address GHSA-5xrq-8626-4rwp / Dependabot alert by moving from `vitest` 3.2.4 to `vitest` 4.1.0 or later.
+- Keep the change limited to test tooling metadata and lockfile updates unless v4 requires code/config changes.
+- Verify with the release metadata test, typecheck, and the full Vitest test suite.
+
+### Review
+- Updated `devDependencies.vitest` from `^3.0.6` to `^4.1.0`; `pnpm-lock.yaml` now resolves `vitest` to `4.1.8`.
+- `pnpm audit` also surfaced a moderate `qs` advisory through `express`; added a narrow `pnpm.overrides.qs >=6.15.2` entry and regenerated the lockfile to resolve `qs` to `6.15.2`.
+- Verification passed: `pnpm audit` reports no known vulnerabilities; `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, `pnpm test` (70 files / 1770 tests), `pnpm build`, and `git diff --check` all pass.
+
+## Version Bump 3.1.2 (2026-06-03)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.2
+- [x] Update release metadata regression test
+- [x] Run verification
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.2`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.2` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, and `git diff --check`.
+
+## PR 298 Header-Based Body Scope Follow-Up (2026-06-02)
+- [x] Move header-based body scope suppression into the dispatcher
+- [x] Remove redundant AI Evals per-endpoint suppression flags
+- [x] Add regressions for AI Evals and template v1 body payloads
+- [x] Run focused and broad verification
+- [x] Push updated PR branch
+
+### Plan
+- Treat `def.headerBasedScoping` and `spec.headerBasedScoping` as default body-scope suppression signals inside `Registry.executeSpec`, matching the documented `ResourceDefinition` contract.
+- Keep `skipScopeBodyInjection` for non-header-scoped exceptions such as DBOps path-scoped POST/PUT bodies.
+- Add a registry regression using `template_v1.create`, since that was the reviewer's concrete reproduction of the abstraction gap.
+
+### Review
+- `Registry.executeSpec` now treats `spec.skipScopeBodyInjection`, `spec.headerBasedScoping`, and `def.headerBasedScoping` as body-scope suppression signals before POST/PUT body injection.
+- Removed redundant AI Evals endpoint-level `skipScopeBodyInjection` flags; AI Evals relies on resource-level `headerBasedScoping` for the shared behavior.
+- Added regression coverage that AI Evals resources use header scoping without redundant endpoint flags and that `template_v1.create` no longer leaks `orgIdentifier`/`projectIdentifier` into its JSON body.
+- Verification passed: `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm test` (68 files / 1734 tests), `pnpm build`, and `git diff --check`.
+
+## Critical Bug Inspection (2026-06-02)
+- [x] Inspect recent commits for high-severity behavioral regressions
+- [x] Trace suspicious changes through caller chains and downstream effects
+- [x] Implement a minimal fix only if a concrete critical bug is confirmed
+- [x] Run focused verification and report the outcome
+- [x] Commit/push/open PR only if a fix is made
+
+### Plan
+- Compare this branch against `origin/main`; if empty, inspect recent `origin/main` commits since the last critical-bug run.
+- Prioritize behavioral changes with high blast radius: auth/session handling, request construction, write-operation safety, scoping, pagination/output contracts, and long-running execution semantics.
+- Require a concrete trigger scenario for data loss, crash, security bypass, or significant user-facing breakage before patching.
+
+### Review
+- Found that AI Evals path-scoped POST/PUT requests leaked generic NG `orgIdentifier` and `projectIdentifier` fields into API-specific JSON bodies whenever callers supplied explicit org/project IDs or a parsed Harness URL. This could make normal dataset/eval/metric/suite/target/model write workflows fail against the AI Evals API despite correct path scoping.
+- Fixed AI Evals mutating endpoint specs to opt out of generic body scope injection while preserving org/project in the REST path and account scoping via headers.
+- Found that `database_execute_llm_authoring_pipeline.create` read `schema_id`, `instance_id`, and `conversation_id` from top-level input even though `harness_create` sends user fields under `body`, then validated the transformed backend payload against the pre-transform alias names. This made the consolidated Accept & Commit endpoint fail before sending any request.
+- Fixed the DBOps LLM authoring body builder to read `input.body`, map caller aliases to backend fields, and skip generic body scope injection.
+- Review follow-up: also found two path-scoped DBOps POST read endpoints (`database_instance.list` and `database_snapshot_object.get`) that were still receiving generic body scope fields. They now opt out and have payload regression coverage.
+- Added an AI Evals structural regression so every current and future POST/PUT body builder in that toolset must opt out of generic NG scope body injection.
+- Verified focused coverage with `pnpm vitest run tests/registry/ai-evals.test.ts tests/registry/dbops.test.ts`, then broader verification with `pnpm typecheck`, full `pnpm test` (68 files / 1734 tests, rerun outside the sandbox after localhost bind tests hit `EPERM`), and `pnpm build`.
+
+## Version Bump 3.1.1 (2026-06-01)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.1
+- [x] Update release metadata regression test
+- [x] Run verification
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.1`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.1` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts` and `pnpm typecheck`.
+
+## Version Bump 3.1.0 (2026-05-29)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.0
+- [x] Update release metadata regression test
+- [x] Run verification
+- [x] Open PR
+
+### Plan
+- Keep this as a metadata-only release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.0`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.0` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts` and `pnpm typecheck`.
+
+## PR 282 IaCM Activity Resource Changes (2026-05-29)
+- [x] Restore engineer's activity-scoped resource change endpoint
+- [x] Keep IaCM default-enabled and Ansible opt-in on current main
+- [x] Update generated docs plus config/Gemini guidance
+- [x] Run focused registry, build, and docs checks
+- [x] Push updated PR branch
+
+### Plan
+- Rebuild PR 282 on current `origin/main` so the change includes recent Ansible docs and registry updates.
+- Preserve the intended IaCM activity resource-changes contract: `/activities/{activityId}/resource-changes` with required `workspace_id`.
+- Preserve `operationPolicy` on the endpoint and keep IaCM default-enabled.
+- Update docs that previously described IaCM as opt-in.
+
+### Review
+- Updated `iacm_activity_resource_change` to use the activity-scoped endpoint and required `workspace_id` query mapping.
+- Updated IaCM registry tests for default-on loading and activity-scoped dispatch.
+- Updated README, `.env.example`, and Gemini docs so IaCM is documented as default-enabled and Ansible remains the only opt-in toolset.
+- Verification passed: `pnpm vitest run tests/registry/iacm.test.ts tests/registry/ansible.test.ts tests/registry/registry.test.ts tests/registry/structural-validation.test.ts`, `pnpm build`, and `pnpm docs:check`.
+
+## Version Bump 3.0.9 (2026-05-28)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.0.9
+- [x] Update release metadata regression test
+- [x] Run verification
+- [x] Open PR
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.0.9`.
+- Updated `tests/release-metadata.test.ts` so the package and bundle manifest versions remain locked together for the `3.0.9` patch release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts` and `pnpm typecheck`.
+
+## SAT Account Extraction (2026-05-28)
+- [x] Confirm SAT failure mode from config and session header handling
+- [x] Allow account ID extraction from SAT tokens
+- [x] Let multi-user sessions derive account ID from PAT/SAT when possible
+- [x] Update focused tests and user-facing guidance
+- [x] Run focused and full verification
+- [x] Document review results and lesson
+
+### Plan
+- Keep the token parser simple: account ID is the second dot-delimited segment for supported Harness API key prefixes.
+- Extend supported account-scoped prefixes from only `pat` to `pat` and `sat`, case-insensitively.
+- Preserve explicit account-ID overrides and continue rejecting mismatches when the token embeds an account ID.
+- Update single-user config tests, multi-user session header tests, HTTP initialize coverage, and docs.
+- Keep the PR scoped to the SAT bug.
+
+### Review
+- Updated `extractAccountIdFromToken` so supported account-scoped API key prefixes are `pat` and `sat`, case-insensitively.
+- Updated single-user config handling so `HARNESS_ACCOUNT_ID` is derived from SATs with an embedded account segment.
+- Updated multi-user HTTP session handling so `x-harness-account-id` can be omitted when `x-harness-api-key` embeds the account ID; explicit mismatched account headers still fail.
+- Updated focused tests for config parsing, session header merging, and HTTP initialize behavior.
+- Updated README, manifests, `.env.example`, and Gemini docs from PAT-only account extraction to PAT/SAT account extraction.
+- Verified the customer-provided SAT sample was not written into the repo.
+- Verification passed: `pnpm vitest run tests/config.test.ts tests/utils/session-headers.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, and `pnpm test` outside the sandbox for local HTTP port binding.
+
+## Jira Feature Request Spec Automation (2026-05-25)
+- [x] Inspect current automation registry and saved schedules
+- [x] Create Jira Feature Request spec drafting automation
+- [x] Update vault registry and TODO notes
+- [x] Verify saved automation TOML and document review
+
+### Plan
+- Add a weekday batch automation scoped to `/Users/rohangupta` so it can write vault files.
+- Target Jira issues with JQL equivalent to `project in (AIPLAT, AICODE) AND issuetype = "Feature Request"`.
+- Process a small batch per run, skipping issues with an existing Codex product-spec marker or up-to-date vault spec.
+- For each processed issue, write `/Users/rohangupta/.codex/vault/jira-specs/{ISSUEKEY}/spec.md` and post a Jira comment with the spec marker, vault path, and spec content or a compact fallback if Jira limits the comment size.
+
+### Review
+- Created active automation `jira-feature-request-spec-drafting`.
+- Schedule: weekdays at 10:30 AM.
+- Scope: `/Users/rohangupta`; Jira query equivalent to `project in (AIPLAT, AICODE) AND issuetype = "Feature Request" ORDER BY updated DESC`.
+- Batch behavior: up to 5 issues per run, prioritizing unprocessed or stale specs.
+- Safety: skips existing `<!-- codex-product-spec:` markers, only writes vault files and Jira comments, and does not mutate Jira fields.
+- Vault output path: `/Users/rohangupta/.codex/vault/jira-specs/{ISSUEKEY}/spec.md`; index at `/Users/rohangupta/.codex/vault/jira-specs/index.md`.
+
+## Starter Automation System (2026-05-25)
+- [x] Inspect existing Codex automations and confirm actual local paths
+- [x] Create or preserve the requested starter automations
+- [x] Update the automation registry and agent notes
+- [x] Verify automation TOML files were saved
+
+### Plan
+- Use `/Users/rohangupta` in place of `/Users/rohan` because `/Users/rohan` is not present on this machine.
+- Create a thread heartbeat for Chief of Staff pulse, returning to this conversation every 30 minutes.
+- Create standalone cron automations for the morning operating brief and weekly external monitoring.
+- Preserve existing automations; create a daily bug scan only if no matching active automation exists.
+- Record the active set in the local vault and summarize verification results here.
+
+### Review
+- Created active automations: `chief-of-staff-pulse`, `morning-operating-brief`, `weekly-external-monitoring`, and `daily-bug-scan`.
+- Left the existing `slack-updates-review` automation active and unchanged.
+- Used `/Users/rohangupta` and `/Users/rohangupta/code/mcp-server` because `/Users/rohan` is not present on this machine.
+- Wrote the registry and reusable prompts under `/Users/rohangupta/.codex/vault`.
+- Verified saved TOML files under `/Users/rohangupta/.codex/automations`.
+
 ## harness_list structured output for array APIs (2026-05-22)
 - [x] Root cause: Harness Code `pr_activity` returns a top-level JSON array; `jsonResult` only sets `structuredContent` for objects, so strict MCP clients (Cursor) fail with output schema validation (-32602).
 - [x] Add `normalizeHarnessListPayload` and call it from `harness_list` after dispatch; unit tests in `response-formatter.test.ts`.

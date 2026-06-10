@@ -101,3 +101,85 @@ describe("pull_request registry mappings", () => {
     }));
   });
 });
+
+describe("pr_comment bodyBuilder translation", () => {
+  it("translates line_new to line_start/line_end with line_start_new=true", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { id: 1 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_comment", "create", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      body: {
+        text: "inline comment",
+        path: "main.ts",
+        line_new: 8,
+        source_commit_sha: "abc123",
+        target_commit_sha: "def456",
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/my_repo/pullreq/5/comments",
+      body: {
+        text: "inline comment",
+        path: "main.ts",
+        line_start: 8,
+        line_end: 8,
+        line_start_new: true,
+        line_end_new: true,
+        source_commit_sha: "abc123",
+        target_commit_sha: "def456",
+      },
+    }));
+  });
+
+  it("translates line_old to line_start/line_end with line_start_new=false", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { id: 2 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_comment", "create", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      body: {
+        text: "old side comment",
+        path: "removed.ts",
+        line_old: 12,
+        source_commit_sha: "abc123",
+        target_commit_sha: "def456",
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: {
+        text: "old side comment",
+        path: "removed.ts",
+        line_start: 12,
+        line_end: 12,
+        line_start_new: false,
+        line_end_new: false,
+        source_commit_sha: "abc123",
+        target_commit_sha: "def456",
+      },
+    }));
+  });
+
+  it("passes general comments through without translation", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { id: 3 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_comment", "create", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      body: { text: "general comment" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: { text: "general comment" },
+    }));
+  });
+});

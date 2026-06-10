@@ -37,15 +37,26 @@ function validateAllowedHosts(rawHosts: string | undefined): string | undefined 
   return hosts.join(",");
 }
 
+const ACCOUNT_SCOPED_API_KEY_PREFIXES = new Set(["pat", "sat"]);
+
 /**
- * Extract the account ID from a Harness PAT token.
- * PAT format: pat.<accountId>.<tokenId>.<secret>
- * Returns undefined if the token doesn't match the expected format.
+ * Extract the account ID from a Harness account-scoped API key.
+ * Supported formats:
+ * - pat.<accountId>.<tokenId>.<secret>
+ * - sat.<accountId>.<tokenId>.<secret>
+ * Returns undefined if the token doesn't match a supported format.
  */
 export function extractAccountIdFromToken(apiKey: string): string | undefined {
   const parts = apiKey.split(".");
+  const prefix = parts[0]?.toLowerCase();
   const accountId = parts[1];
-  if (parts.length >= 3 && parts[0] === "pat" && accountId && accountId.length > 0) {
+  if (
+    parts.length >= 3 &&
+    prefix &&
+    ACCOUNT_SCOPED_API_KEY_PREFIXES.has(prefix) &&
+    accountId &&
+    accountId.length > 0
+  ) {
     return accountId;
   }
   return undefined;
@@ -117,7 +128,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     accountId = data.HARNESS_ACCOUNT_ID ?? extractAccountIdFromToken(data.HARNESS_API_KEY!);
     if (!accountId) {
       throw new Error(
-        "HARNESS_ACCOUNT_ID is required when the API key is not a PAT (pat.<accountId>.<tokenId>.<secret>)",
+        "HARNESS_ACCOUNT_ID is required when the API key does not include an account ID segment (pat.<accountId>... or sat.<accountId>...)",
       );
     }
   }

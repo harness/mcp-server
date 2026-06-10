@@ -65,6 +65,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         input_set_ids: z.array(z.string()).describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'}).").optional(),
         body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
         params: z.record(z.string(), z.unknown()).describe("Action-specific parameters. Call harness_describe for available fields per resource_type.").optional(),
+        confirm: z.boolean().describe("Set to true to confirm the operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP).").optional(),
         wait: z.boolean().describe("For pipeline run/retry actions: block until the execution reaches a terminal status (Success/Failed/Aborted/Errored/Expired). Server-side polling — a single tool call gives the agent the final outcome instead of an LLM polling loop. Ignored for other actions.").optional(),
         wait_timeout_seconds: z.number().min(10).max(7200).describe("Max seconds to wait when wait=true. Default 600 (10 min). Max 7200 (2 h). When the timeout fires, returns execution_timed_out=true with the last observed status.").optional(),
         wait_poll_interval_seconds: z.number().min(2).max(60).describe("Initial poll interval when wait=true (seconds). Default 3. Backoff multiplier 1.5x, capped at 30s.").optional(),
@@ -87,7 +88,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
     },
     async (args, extra) => {
       try {
-        const { params, wait, wait_timeout_seconds, wait_poll_interval_seconds, queries: batchQueries, ...rest } = args;
+        const { params, wait, wait_timeout_seconds, wait_poll_interval_seconds, confirm: _confirm, queries: batchQueries, ...rest } = args;
         const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
@@ -114,9 +115,12 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           message: `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
           risk,
           autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
+          callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
-          return errorResult(`Operation ${elicit.reason} by user.`);
+          return errorResult(
+            `Operation ${elicit.reason} by user. Hint: if your client does not support interactive confirmation, pass confirm: true to proceed.`,
+          );
         }
 
         // Batch HQL path — fan out queries in parallel through the registry
@@ -164,23 +168,29 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           }
         }
 
-        // Map resource_id → identifierFields[0] (the documented primary field).
-        // For multi-identifier resources where the primary field is already
-        // populated with a DIFFERENT value (e.g. URL filled repo_id while
-        // resource_id is the pr_number), fall through to the child (last)
-        // identifier field instead — preserving the parent context.
-        // When the primary field holds the SAME value as resource_id (e.g.
-        // GitOps agent_id supplied via both resource_id and params), just
-        // overwrite — no fallthrough.
+        // Map resource_id to the execute action's target identifier. Most
+        // resources use identifierFields[0], but some execute endpoints omit
+        // the parent identifier used by get/update/delete and target a child
+        // path field directly.
         const primaryField = def.identifierFields[0];
         if (primaryField && resourceId) {
-          const existing = input[primaryField];
-          const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
-          if (primaryAlreadySet && def.identifierFields.length > 1) {
-            const childField = def.identifierFields[def.identifierFields.length - 1]!;
-            input[childField] = resourceId;
+          const actionPathFields = new Set(Object.keys(actionSpec?.pathParams ?? {}));
+          const primaryUsedByAction = actionPathFields.has(primaryField);
+          const actionTargetField = primaryUsedByAction
+            ? undefined
+            : [...def.identifierFields].reverse().find((field) => actionPathFields.has(field));
+
+          if (actionTargetField) {
+            input[actionTargetField] = resourceId;
           } else {
-            input[primaryField] = resourceId;
+            const existing = input[primaryField];
+            const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
+            if (primaryAlreadySet && def.identifierFields.length > 1) {
+              const childField = def.identifierFields[def.identifierFields.length - 1]!;
+              input[childField] = resourceId;
+            } else {
+              input[primaryField] = resourceId;
+            }
           }
         }
 

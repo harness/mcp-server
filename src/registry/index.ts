@@ -45,6 +45,7 @@ import { aiEvalsToolset } from "./toolsets/ai-evals.js";
 import { iacmToolset } from "./toolsets/iacm.js";
 import { knowledgeGraphToolset } from "./toolsets/knowledge-graph.js";
 import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
+import { ansibleToolset } from "./toolsets/ansible.js";
 
 const log = createLogger("registry");
 
@@ -156,6 +157,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   iacmToolset,
   knowledgeGraphToolset,
   semanticLayerToolset,
+  ansibleToolset,
 ];
 
 /** All available toolset names — used by docs generation to discover opt-in toolsets. */
@@ -660,8 +662,11 @@ export class Registry {
 
     // Inject orgIdentifier/projectIdentifier into the body for mutating operations (POST/PUT).
     // Harness NG APIs require these in the body (not just query params) to scope the resource correctly.
-    // If bodyWrapperKey is set (e.g., "connector"), inject inside the wrapper object.
-    if (body && typeof body === "object" && !spec.skipScopeBodyInjection && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
+    // Header-scoped APIs and explicit endpoint exceptions scope through headers/path/query and reject
+    // generic NG scope fields in their API-specific JSON bodies.
+    const shouldSkipScopeBodyInjection =
+      spec.skipScopeBodyInjection || spec.headerBasedScoping || def.headerBasedScoping;
+    if (body && typeof body === "object" && !shouldSkipScopeBodyInjection && (resolvedMethod === "POST" || resolvedMethod === "PUT")) {
       const bodyRecord = body as Record<string, unknown>;
       // Determine where to inject: inside wrapper if present, otherwise at top level
       const targetRecord = spec.bodyWrapperKey && 
@@ -687,16 +692,10 @@ export class Registry {
     }
 
     // Validate required fields if bodySchema is defined.
-    // When bodyWrapperKey is set, the bodyBuilder wraps user fields inside that
-    // key (e.g. { project: { identifier, name } }), so we validate the inner object.
+    // When the API body is transformed into a raw array, validate the caller's
+    // canonical object-shaped input body so registry behavior matches harness_describe.
     if (spec.bodySchema && body && typeof body === "object") {
-      const bodyRecord = body as Record<string, unknown>;
-      const payload =
-        spec.bodyWrapperKey &&
-        bodyRecord[spec.bodyWrapperKey] != null &&
-        typeof bodyRecord[spec.bodyWrapperKey] === "object"
-          ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
-          : bodyRecord;
+      const payload = this.getBodySchemaValidationPayload(spec, input, body);
       const missing = spec.bodySchema.fields
         .filter(f => f.required && payload[f.name] === undefined)
         .map(f => f.name);
@@ -727,6 +726,7 @@ export class Registry {
       ...(product !== "harness" ? { product } : {}),
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
+      ...(!spec.pathBuilder ? { tracing: { route: spec.path } } : {}),
       signal,
     };
 
@@ -996,6 +996,27 @@ export class Registry {
     }
 
     return result;
+  }
+
+  private getBodySchemaValidationPayload(
+    spec: EndpointSpec,
+    input: Record<string, unknown>,
+    body: object,
+  ): Record<string, unknown> {
+    if (Array.isArray(body)) {
+      const inputBody = input.body;
+      return inputBody && typeof inputBody === "object" && !Array.isArray(inputBody)
+        ? (inputBody as Record<string, unknown>)
+        : {};
+    }
+
+    const bodyRecord = body as Record<string, unknown>;
+    return spec.bodyWrapperKey &&
+      bodyRecord[spec.bodyWrapperKey] != null &&
+      typeof bodyRecord[spec.bodyWrapperKey] === "object" &&
+      !Array.isArray(bodyRecord[spec.bodyWrapperKey])
+        ? (bodyRecord[spec.bodyWrapperKey] as Record<string, unknown>)
+        : bodyRecord;
   }
 
   /** Get describe metadata for all enabled resource types (full detail). */

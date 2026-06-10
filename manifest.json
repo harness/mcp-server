@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "harness-mcp-server",
   "display_name": "Harness",
-  "version": "3.0.6",
+  "version": "3.1.2",
   "description": "Connect AI agents to Harness for CI/CD, code repositories, pull requests, services, environments, and feature flags.",
   "long_description": "The Harness MCP Server gives MCP-compatible clients access to Harness platform workflows through consolidated tools, resources, and prompts. It supports local stdio usage and can be bundled as a Node-based MCPB extension.",
   "author": {
@@ -70,7 +70,7 @@
     "HARNESS_ACCOUNT_ID": {
       "type": "string",
       "title": "Harness Account ID",
-      "description": "Harness account identifier. Optional when using a PAT because the server can extract the account ID from pat.<accountId>.<tokenId>.<secret>.",
+      "description": "Harness account identifier. Optional when using a PAT or SAT because the server can extract the account ID from pat.<accountId>.<tokenId>.<secret> or sat.<accountId>.<tokenId>.<secret>.",
       "required": false,
       "sensitive": false
     },

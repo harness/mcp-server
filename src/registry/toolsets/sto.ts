@@ -121,6 +121,215 @@ export const stoToolset: ToolsetDefinition = {
       },
     },
 
+    // ── Pipeline Security Issues (per-execution view) ─────────────────
+    {
+      resourceType: "pipeline_security_issue",
+      displayName: "Pipeline Security Issue",
+      description:
+        "Security issues from STO's per-execution **Pipeline Security view** — the issues shown on a "
+        + "specific pipeline execution's Security tab. Keyed by REQUIRED `execution_id`. Use this "
+        + "(not `security_issue`, which is the cross-execution Issues page) when the user asks about "
+        + "issues that caused a specific pipeline run to fail, or when correlating to a policy "
+        + "evaluation. Response merges `existing` + `new` issue summaries into a single `items[]` "
+        + "(each row tagged with `_partition`) and exposes per-partition counts + matching-step "
+        + "metadata as side-channels. PAGINATION: this endpoint uses DIFF pagination — not standard "
+        + "`page`/`size`. Use `page_existing` / `page_size_existing` (for the 'existing' partition) "
+        + "and `page_new` / `page_size_new` (for the 'new' partition) independently. Each defaults to "
+        + "page 0, size 50 (max 100). For most chat-driven workflows, calling once with both sizes "
+        + "set to 100 returns the full page of each partition.",
+      searchAliases: ["pipeline security", "execution issues", "security tab", "issues for execution", "issues that failed pipeline"],
+      relatedResources: [
+        { resourceType: "pipeline_security_step", relationship: "sibling", description: "REQUIRED when creating target-scoped exemptions: issue rows here only carry `targetVariantName` (a display string like 'repo:branch'), NOT a raw `target_id`. List pipeline_security_step for the same execution_id and join on `targetName:targetVariant === issue.targetVariantName` to resolve the raw `target_id` you need for harness_create body.target_id. Also used to attribute an issue to its source scanner." },
+        { resourceType: "security_exemption", relationship: "child", description: "Create exemptions for issues from this view (one per issue_id). For target-scope, first resolve target_id via pipeline_security_step (see sibling above)." },
+        { resourceType: "security_exemption_bulk", relationship: "child", description: "Bulk-create exemptions for many issues from this view in a single all-or-none transaction (≤100 items). For target-scope, pre-resolve target_id via pipeline_security_step." },
+        { resourceType: "policy_evaluation", relationship: "sibling", description: "Find OPA policy evaluations that ran on the same execution_id to learn why the pipeline was denied." },
+      ],
+      toolset: "sto",
+      scope: "project",
+      scopeParams: STO_SCOPE,
+      identifierFields: ["issue_id"],
+      listFilterFields: [
+        { name: "execution_id", description: "REQUIRED. Pipeline plan execution ID (e.g. 'ehsPKtczTRO5CUDAt-NR'). Identifies which execution's Pipeline Security view to read.", required: true },
+        { name: "stages", description: "Comma-separated stage identifiers (or parent.stage). Narrows issues to specific pipeline stages." },
+        { name: "steps", description: "Comma-separated step identifiers as 'stage.step' or 'parent.stage.step'. Narrows issues to specific scan steps (Trivy / Semgrep / …)." },
+        { name: "target_ids", description: "Comma-separated 22-char target IDs." },
+        { name: "target_types", description: "Comma-separated target types.", enum: ["repository", "container", "instance", "configuration"] },
+        { name: "product_names", description: "Comma-separated scanner product names (e.g. 'owasp,zap')." },
+        { name: "severity_codes", description: "Comma-separated severities.", enum: ["Critical", "High", "Medium", "Low", "Info"] },
+        { name: "include_exempted", type: "boolean", description: "Include already-exempted issues. Defaults to true on the API; pass false when looking for unexempted candidates." },
+        { name: "search", description: "Free-text search across issue title / CWE / CVE." },
+        { name: "issue_types", description: "Comma-separated issue types.", enum: ["SAST", "DAST", "SCA", "IAC", "SECRET", "MISCONFIG", "BUG_SMELLS", "CODE_SMELLS", "CODE_COVERAGE", "EXTERNAL_POLICY", "UNKNOWN"] },
+        { name: "status", description: "Comma-separated issue statuses.", enum: ["ACTIVE", "REMEDIATED", "PENDING_EXEMPTION", "EXEMPTED", "PARTIALLY_EXEMPTED", "REJECTED"] },
+        { name: "origins", description: "Comma-separated origin layers.", enum: ["app", "base", "no_layer"] },
+        { name: "origin_statuses", description: "Comma-separated origin statuses.", enum: ["approved", "unapproved"] },
+        { name: "epss", description: "EPSS probability bucket (single select).", enum: ["all", "gte_15", "gte_5", "gte_1", "na"] },
+        { name: "epss_percentile", description: "EPSS percentile bucket (single select).", enum: ["all", "gte_99", "gte_90", "gte_80", "na"] },
+        { name: "severity_overridden", description: "Filter by whether severity was manually overridden.", enum: ["Yes", "No"] },
+        { name: "reachability", description: "Reachability filter.", enum: ["reachable", "unknown-reachability"] },
+        { name: "exploitability", description: "Exploitability filter.", enum: ["yes", "no"] },
+        // Diff pagination — this endpoint paginates `existing` and `new` partitions independently.
+        // See DiffPaginationRequestParams in sto-core/design/frontend.go.
+        { name: "page_existing", type: "number", description: "0-indexed page number for the 'existing' issue partition (defaults to 0). The endpoint paginates existing and new issues independently — NOT a single combined cursor." },
+        { name: "page_size_existing", type: "number", description: "Page size for the 'existing' partition (1–100, default 50)." },
+        { name: "page_new", type: "number", description: "0-indexed page number for the 'new' issue partition (defaults to 0)." },
+        { name: "page_size_new", type: "number", description: "Page size for the 'new' partition (1–100, default 50)." },
+      ],
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/sto/executions/{executionId}/pipeline",
+      operations: {
+        list: {
+          method: "GET",
+          path: "/sto/api/v2/frontend/pipeline-security/issues",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            execution_id: "executionId",
+            stages: "stages",
+            steps: "steps",
+            target_ids: "targetIds",
+            target_types: "targetTypes",
+            product_names: "productNames",
+            severity_codes: "severityCodes",
+            include_exempted: "includeExempted",
+            search: "search",
+            issue_types: "issueTypes",
+            status: "status",
+            origins: "origins",
+            origin_statuses: "originStatuses",
+            epss: "epss",
+            epss_percentile: "epssPercentile",
+            severity_overridden: "severityOverridden",
+            reachability: "reachability",
+            exploitability: "exploitability",
+            // Diff pagination — NOT standard page/pageSize. This endpoint splits
+            // pagination between the 'existing' and 'new' partitions.
+            page_existing: "pageExisting",
+            page_size_existing: "pageSizeExisting",
+            page_new: "pageNew",
+            page_size_new: "pageSizeNew",
+          },
+          responseExtractor: (raw: unknown): unknown => {
+            // Pipeline Security endpoint (sto-core PipelineSecurityIssuesResult) returns:
+            //   { existing: { issues: [...], pagination: { totalItems, ... } },
+            //     new:      { issues: [...], pagination: { totalItems, ... } },
+            //     counts: {...}, matchingSteps: [...] }
+            // NOTE: the partition payload key is `issues` (not `items`) and totals live
+            // under `pagination.totalItems` (not a top-level `totalItems`). We flatten
+            // existing+new into a single items[] for prompt consumption and preserve
+            // the partitioned counts + matchingSteps as side-channels.
+            if (raw === null || raw === undefined || typeof raw !== "object") return raw;
+            type Partition = {
+              issues?: unknown[];
+              items?: unknown[]; // defensive: handle older or alternate shapes
+              pagination?: { totalItems?: number };
+              totalItems?: number; // defensive
+            };
+            const r = raw as {
+              existing?: Partition;
+              new?: Partition;
+              counts?: unknown;
+              matchingSteps?: unknown;
+            };
+            const partitionItems = (p: Partition | undefined): unknown[] => {
+              if (!p) return [];
+              if (Array.isArray(p.issues)) return p.issues;
+              if (Array.isArray(p.items)) return p.items;
+              return [];
+            };
+            const partitionTotal = (p: Partition | undefined, fallback: number): number => {
+              if (!p) return fallback;
+              if (typeof p.pagination?.totalItems === "number") return p.pagination.totalItems;
+              if (typeof p.totalItems === "number") return p.totalItems;
+              return fallback;
+            };
+            const existingItems = partitionItems(r.existing);
+            const newItems = partitionItems(r.new);
+            // Tag each row so the prompt can tell which partition it came from.
+            const tagged = [
+              ...existingItems.map(it => (typeof it === "object" && it !== null ? { ...it, _partition: "existing" } : it)),
+              ...newItems.map(it => (typeof it === "object" && it !== null ? { ...it, _partition: "new" } : it)),
+            ];
+            const existingTotal = partitionTotal(r.existing, existingItems.length);
+            const newTotal = partitionTotal(r.new, newItems.length);
+            // Surface one-line breadcrumbs for the two IDs that are NOT on the
+            // issue row but ARE required for narrower-scope exemptions. Without
+            // these hints, agents spend multiple turns chasing the raw IDs
+            // through unrelated endpoints (security_issue_filter, harness_get
+            // on the issue, etc).
+            const targetIdHint =
+              "Each row carries `targetVariantName` (display string like 'repo:branch') but NOT a raw `target_id`. " +
+              "For target-scoped exemptions, also call harness_list(resource_type='pipeline_security_step', " +
+              "filters={execution_id:<same id>}) and join on `targetName:targetVariant === issue.targetVariantName` " +
+              "to resolve the `target_id` you pass to harness_create body.target_id.";
+            const pipelineIdHint =
+              "Issue rows do NOT carry `pipeline_id` either. For pipeline-scoped exemptions: " +
+              "(1) if a Harness pipeline execution URL was pasted, `pipeline_id` is already auto-extracted from the URL path; " +
+              "(2) otherwise call harness_get(resource_type='execution', resource_id=<execution_id>) once and read `pipelineIdentifier`. " +
+              "Do NOT iterate through harness_list(resource_type='pipeline') — the execution-to-pipeline link is 1:1.";
+            return {
+              items: tagged,
+              total: existingTotal + newTotal,
+              existing_total: existingTotal,
+              new_total: newTotal,
+              counts: r.counts,
+              matching_steps: r.matchingSteps,
+              _target_id_lookup_hint: targetIdHint,
+              _pipeline_id_lookup_hint: pipelineIdHint,
+            };
+          },
+          skipCompact: true,
+          description: "List the security issues shown on a specific pipeline execution's Security tab. Requires execution_id. Flattens existing + new partitions into items[]; each item is tagged with _partition.",
+        },
+      },
+    },
+
+    // ── Pipeline Security Steps (scan steps for an execution) ─────────
+    {
+      resourceType: "pipeline_security_step",
+      displayName: "Pipeline Security Scan Step",
+      description:
+        "STO scan steps (Trivy / Semgrep / Snyk / …) that ran inside a specific pipeline execution. "
+        + "Use to attribute Pipeline Security issues to their source scanner, or to narrow a "
+        + "`pipeline_security_issue` query by `steps`. Keyed by REQUIRED `execution_id`. Response also "
+        + "carries `reachabilityFlag` / `exploitabilityFlag` indicating whether reachability or "
+        + "exploitability analysis is available for this execution.",
+      searchAliases: ["scan steps", "sto steps", "pipeline scan steps", "execution scan steps"],
+      relatedResources: [
+        { resourceType: "pipeline_security_issue", relationship: "sibling", description: "List issues for the same execution; filter by 'steps' to scope to one scanner." },
+        { resourceType: "security_exemption", relationship: "sibling", description: "Use this resource to look up `target_id` when creating target-scoped exemptions: pipeline_security_issue rows expose `targetVariantName` (a display string) but not the raw `target_id`. Build a `{targetName:targetVariant → targetId}` map from this response and join against each issue row's `targetVariantName`." },
+        { resourceType: "security_exemption_bulk", relationship: "sibling", description: "Same target_id lookup pattern when bulk-exempting from a specific execution." },
+      ],
+      toolset: "sto",
+      scope: "project",
+      scopeParams: STO_SCOPE,
+      identifierFields: [],
+      listFilterFields: [
+        { name: "execution_id", description: "REQUIRED. Pipeline plan execution ID.", required: true },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/sto/api/v2/frontend/pipeline-security/steps",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            execution_id: "executionId",
+          },
+          responseExtractor: (raw: unknown): unknown => {
+            // Response: { steps: [...], reachabilityFlag: bool, exploitabilityFlag: bool }
+            if (raw === null || raw === undefined || typeof raw !== "object") return raw;
+            const r = raw as { steps?: unknown[]; reachabilityFlag?: boolean; exploitabilityFlag?: boolean };
+            const steps = Array.isArray(r.steps) ? r.steps : [];
+            return {
+              items: steps,
+              total: steps.length,
+              reachability_flag: r.reachabilityFlag ?? false,
+              exploitability_flag: r.exploitabilityFlag ?? false,
+            };
+          },
+          skipCompact: true,
+          description: "List STO scan steps that ran in a given pipeline execution. Use to map issues back to their source scanner.",
+        },
+      },
+    },
+
     // ── Security Exemptions ────────────────────────────────────────────
     {
       resourceType: "security_exemption",
@@ -377,6 +586,185 @@ export const stoToolset: ToolsetDefinition = {
             fields: [
               { name: "approver_id", type: "string", required: false, description: "User UUID of the rejector. Auto-derived from the authenticated PAT via /ng/api/user/currentUser if omitted." },
               { name: "comment",     type: "string", required: false, description: "Optional rejection comment" },
+            ],
+          },
+        },
+      },
+    },
+
+    // ── Bulk Security Exemption Creation ───────────────────────────────
+    // Wraps POST /sto/api/v2/exemptions/bulk. Modeled as its own resource
+    // (rather than an executeAction on `security_exemption`) so the standard
+    // `harness_create` dispatcher handles it without a new MCP tool.
+    //
+    // Semantics (per sto-core/docs/STO-8977-bulk-exemption-api.md): the bulk
+    // endpoint is ALL-OR-NONE. If any item fails validation or insertion, the
+    // whole batch is rolled back and every item in the response carries the
+    // same error message. We document this loudly so the LLM does not retry
+    // partial batches assuming per-item independence.
+    {
+      resourceType: "security_exemption_bulk",
+      displayName: "Security Exemption (Bulk)",
+      searchAliases: ["bulk exempt", "bulk waiver", "exempt many", "exempt multiple", "batch exemption"],
+      description:
+        "Create up to 100 security exemptions in a single ALL-OR-NONE transaction. " +
+        "Use this instead of looping `harness_create resource_type=security_exemption` when the user wants " +
+        "to exempt multiple issues at once — it produces one audit row and one DB transaction for the whole batch. " +
+        "ALL-OR-NONE: if any single item fails validation or insert (e.g. unknown issue_id, target/pipeline " +
+        "mutual-exclusion violation, latest-scan lookup miss), the entire batch is rolled back and every item in " +
+        "the response is marked failed with the same error. Never retry a partial batch — re-send the full corrected list. " +
+        "Per-item fields: `issue_id` (required), and optionally `target_id` XOR `pipeline_id` (mutually exclusive), " +
+        "`scan_id`, `occurrences[]`, `search`. Top-level fields apply to every item: `type`, `reason`, `duration_days` (default 30), " +
+        "`link`, `expiration`. `requester_id` is auto-derived from the authenticated PAT.",
+      toolset: "sto",
+      scope: "project",
+      scopeParams: STO_SCOPE,
+      identifierFields: [],
+      relatedResources: [
+        { resourceType: "security_exemption", relationship: "sibling", description: "Single-item create path. Use this when exempting just one issue, or when you need per-item independence (the bulk endpoint is all-or-none)." },
+        { resourceType: "pipeline_security_issue", relationship: "parent", description: "Source of issue_ids when exempting from the Vuln tab of a specific execution." },
+        { resourceType: "security_issue", relationship: "parent", description: "Source of issue_ids when exempting from the All Issues / baseline page (Project scope only)." },
+      ],
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/sto/exemptions",
+      operations: {
+        create: {
+          method: "POST",
+          path: "/sto/api/v2/exemptions/bulk",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          preflight: async ({ client, input }) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+
+            // Top-level required fields. Validated against raw snake_case input
+            // (not the built body) so the error message points at the field the
+            // caller passed.
+            const requiredFields = ["type", "reason", "items"] as const;
+            const missing = requiredFields.filter(f => body[f] === undefined);
+            if (missing.length > 0) {
+              throw new Error(
+                `Missing required fields for security_exemption_bulk: ${missing.join(", ")}. ` +
+                `Use harness_describe(resource_type="security_exemption_bulk") to see the schema.`,
+              );
+            }
+
+            // Items array sanity — matches the API contract (1..100).
+            const items = body.items;
+            if (!Array.isArray(items) || items.length < 1) {
+              throw new Error("security_exemption_bulk: 'items' must be a non-empty array.");
+            }
+            if (items.length > 100) {
+              throw new Error(
+                `security_exemption_bulk: 'items' must contain at most 100 entries (got ${items.length}). ` +
+                `Split the request into multiple bulk calls.`,
+              );
+            }
+
+            // Per-item validation. Fail loudly with the offending index so the
+            // LLM can surface "item 3 is missing issue_id" to the user instead
+            // of getting an opaque 400 from the server.
+            items.forEach((raw, idx) => {
+              if (raw === null || typeof raw !== "object") {
+                throw new Error(`security_exemption_bulk: items[${idx}] must be an object.`);
+              }
+              const it = raw as Record<string, unknown>;
+              if (typeof it.issue_id !== "string" || it.issue_id.length === 0) {
+                throw new Error(`security_exemption_bulk: items[${idx}].issue_id is required (string).`);
+              }
+              const hasTarget = typeof it.target_id === "string" && it.target_id.length > 0;
+              const hasPipeline = typeof it.pipeline_id === "string" && it.pipeline_id.length > 0;
+              if (hasTarget && hasPipeline) {
+                throw new Error(
+                  `security_exemption_bulk: items[${idx}] sets both target_id and pipeline_id — they are mutually exclusive. ` +
+                  `Pick exactly one scope per item.`,
+                );
+              }
+            });
+
+            // Auto-derive requester from the authenticated PAT, same as the
+            // single-create path.
+            const harnessClient = client as unknown as HarnessClient;
+            body.requester_id = await harnessClient.getCurrentUserId();
+            input.body = body;
+          },
+          bodyBuilder: (input) => {
+            const b = (input.body as Record<string, unknown> | undefined) ?? {};
+            const items = (b.items as Array<Record<string, unknown>>).map((it) => ({
+              issueId: it.issue_id,
+              ...(it.target_id   ? { targetId:    it.target_id }   : {}),
+              ...(it.pipeline_id ? { pipelineId:  it.pipeline_id } : {}),
+              ...(it.scan_id     ? { scanId:      it.scan_id }     : {}),
+              ...(it.occurrences ? { occurrences: it.occurrences } : {}),
+              ...(it.search      ? { search:      it.search }      : {}),
+            }));
+            return {
+              type: b.type,
+              reason: b.reason,
+              requesterId: b.requester_id,
+              exemptFutureOccurrences: true,
+              pendingChanges: { durationDays: b.duration_days ?? 30 },
+              ...(b.link       ? { link:       b.link }       : {}),
+              ...(b.expiration ? { expiration: b.expiration } : {}),
+              items,
+            };
+          },
+          responseExtractor: (raw: unknown): unknown => {
+            // Surface the all-or-none outcome at the top level so the LLM
+            // doesn't have to inspect every item to know what happened.
+            // Server returns: { results: [{issueId, id?, error?, statusCode}], succeeded, failed }
+            if (raw === null || typeof raw !== "object") return raw;
+            const r = raw as { results?: unknown[]; succeeded?: number; failed?: number };
+            const succeeded = typeof r.succeeded === "number" ? r.succeeded : 0;
+            const failed = typeof r.failed === "number" ? r.failed : 0;
+            const total = succeeded + failed;
+            const allOrNone =
+              total === 0
+                ? "EMPTY"
+                : failed === 0
+                  ? "ALL_SUCCEEDED"
+                  : succeeded === 0
+                    ? "ALL_FAILED"
+                    : "MIXED_UNEXPECTED";
+            return {
+              status: allOrNone,
+              succeeded,
+              failed,
+              total,
+              results: r.results ?? [],
+              ...(allOrNone === "ALL_FAILED"
+                ? {
+                    _action_hint:
+                      "The entire bulk request was rolled back. Inspect results[0].error for the cause, " +
+                      "fix the offending item(s), and re-send the FULL corrected list — never retry only the failed items.",
+                  }
+                : {}),
+              ...(allOrNone === "MIXED_UNEXPECTED"
+                ? {
+                    _action_hint:
+                      "Bulk endpoint returned a mixed succeeded/failed result, which violates the all-or-none contract. " +
+                      "Treat this as a server-side bug and surface the raw results[] to the user.",
+                  }
+                : {}),
+            };
+          },
+          description:
+            "Bulk-create security exemptions (1..100 items) in a single all-or-none transaction. " +
+            "Auto-derives requesterId from the authenticated PAT and always sets exemptFutureOccurrences=true.",
+          bodySchema: {
+            description:
+              "Bulk exemption creation. Top-level fields apply to every item. Required: type, reason, items. " +
+              "Per-item: issue_id (required); optionally one of target_id XOR pipeline_id, plus scan_id, occurrences, search.",
+            fields: [
+              { name: "type",          type: "string", required: true,  description: "REQUIRED. Applies to every item. One of: Compensating Controls | Acceptable Use | Acceptable Risk | False Positive | Fix Unavailable | Other." },
+              { name: "reason",        type: "string", required: true,  description: "REQUIRED. Applies to every item. Max 1024 chars." },
+              { name: "duration_days", type: "number", required: false, description: "Applies to every item. Default 30." },
+              { name: "link",          type: "string", required: false, description: "Optional ticket / reference URL applied to every item." },
+              { name: "expiration",    type: "number", required: false, description: "Optional unix timestamp at which every item expires." },
+              {
+                name: "items",
+                type: "array",
+                required: true,
+                description: "REQUIRED. 1..100 per-item entries. Each item: { issue_id (required), target_id? XOR pipeline_id?, scan_id?, occurrences?, search? }. target_id and pipeline_id are mutually exclusive per item.",
+                itemType: "object",
+              },
             ],
           },
         },

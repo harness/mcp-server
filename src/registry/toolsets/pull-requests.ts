@@ -269,19 +269,35 @@ export const pullRequestsToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: (input) => {
+            const b = { ...(input.body as Record<string, unknown>) };
+            if (typeof b.line_new === "number") {
+              b.line_start = b.line_new;
+              b.line_end = b.line_new;
+              b.line_start_new = true;
+              b.line_end_new = true;
+              delete b.line_new;
+            } else if (typeof b.line_old === "number") {
+              b.line_start = b.line_old;
+              b.line_end = b.line_old;
+              b.line_start_new = false;
+              b.line_end_new = false;
+              delete b.line_old;
+            }
+            return b;
+          },
           responseExtractor: passthrough,
           description:
-            "Add a comment to a pull request. Body fields: text (required). For inline code comments, also include: path, line_new/line_old, source_commit_sha, target_commit_sha.",
+            "Add a comment to a pull request. Body fields: text (required). For inline code comments, also include: path, line_new OR line_old (line number on the new or old side of the diff), source_commit_sha, target_commit_sha.",
           bodySchema: {
             description: "PR comment content",
             fields: [
               { name: "text", type: "string", required: true, description: "Comment text (markdown supported)" },
               { name: "path", type: "string", required: false, description: "File path for inline code comment" },
-              { name: "line_new", type: "number", required: false, description: "Line number in new file for inline comment" },
-              { name: "line_old", type: "number", required: false, description: "Line number in old file for inline comment" },
-              { name: "source_commit_sha", type: "string", required: false, description: "Source commit SHA for code comment context" },
-              { name: "target_commit_sha", type: "string", required: false, description: "Target commit SHA for code comment context" },
+              { name: "line_new", type: "number", required: false, description: "Line number in the new file version for inline comment (mutually exclusive with line_old)" },
+              { name: "line_old", type: "number", required: false, description: "Line number in the old file version for inline comment (mutually exclusive with line_new)" },
+              { name: "source_commit_sha", type: "string", required: false, description: "Source commit SHA (HEAD of source branch) for code comment context" },
+              { name: "target_commit_sha", type: "string", required: false, description: "Target/merge-base commit SHA for code comment context" },
             ],
           },
         },

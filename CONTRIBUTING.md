@@ -38,7 +38,7 @@ src/
     index.ts                  # Registry class + dispatch logic
     types.ts                  # ResourceDefinition, ToolsetDefinition, etc.
     toolsets/                  # One file per toolset (declarative data)
-  tools/                      # 10 generic MCP tools (thin dispatch wrappers)
+  tools/                      # 11 generic MCP tools (thin dispatch wrappers)
   resources/                  # MCP resource providers
   prompts/                    # MCP prompt templates
   utils/                      # Errors, logger, rate limiter, deep links, etc.
@@ -75,6 +75,7 @@ export const myModuleToolset: ToolsetDefinition = {
       description: "What this resource represents",
       toolset: "my-module",
       scope: "project",                      // "project" | "org" | "account"
+      supportedScopes: ["project"],           // optional; use multiple values for multi-scope APIs
       identifierFields: ["resource_id"],     // maps to harness_get's resource_id param
       listFilterFields: ["search_term"],
       operations: {
@@ -83,6 +84,7 @@ export const myModuleToolset: ToolsetDefinition = {
           path: "/my-module/api/resources",
           queryParams: { search_term: "search", page: "page", size: "size" },
           responseExtractor: pageExtract,    // use shared extractor — don't inline lambdas
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           description: "List resources",
         },
         get: {
@@ -90,6 +92,7 @@ export const myModuleToolset: ToolsetDefinition = {
           path: "/my-module/api/resources/{resourceId}",
           pathParams: { resource_id: "resourceId" },
           responseExtractor: ngExtract,      // use shared extractor — don't inline lambdas
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           description: "Get resource details",
         },
       },
@@ -113,6 +116,8 @@ In `src/registry/index.ts`:
 - `"org"` — adds `accountIdentifier`, `orgIdentifier`
 - `"account"` — adds `accountIdentifier` only
 
+Use `supportedScopes` when one Harness resource type can operate at multiple levels. For example, connectors, services, environments, infrastructure, secrets, and templates support `["account", "org", "project"]`. Tool callers select the level with `resource_scope`, and `harness_describe` surfaces both `supportedScopes` and a `scopeHint`. If `resource_scope` is omitted, the registry uses the resource's default `scope`; `scopeOptional: true` resources may omit org/project unless explicitly passed.
+
 **pathParams** maps tool input field names to URL placeholders. For `path: "/api/things/{thingId}"` and `pathParams: { resource_id: "thingId" }`, the user's `resource_id` value replaces `{thingId}`.
 
 **responseExtractor** unwraps the Harness API response envelope. Most endpoints return `{ data: ... }` or `{ data: { content: [...] } }`. Extract just the useful part.
@@ -120,6 +125,12 @@ In `src/registry/index.ts`:
 **deepLinkTemplate** generates clickable Harness UI URLs in responses. Use `{accountId}` (auto-filled) and path param placeholders.
 
 **executeActions** add non-CRUD operations like "run pipeline" or "toggle feature flag". They work like operations but are dispatched via `harness_execute`.
+
+**operationPolicy** is required on every `EndpointSpec` and every execute action. Use `risk: "read"` for list/get, classify writes by blast radius, and set `retryPolicy` to `safe` only for idempotent operations. See `docs/architecture.md` for the risk contract and confirmation behavior.
+
+**outputSchema and structured content** live on the 11 generic tool wrappers, not individual resource definitions. Keep resource list responses object-friendly where possible; `harness_list` normalizes top-level arrays and common wrappers (`content`, `data`, `body`, `objects`, `features`) into `{ items, total?, page? }` for strict MCP clients.
+
+**opt-in toolsets** should set `optIn: true` on the `ToolsetDefinition` when the resource family is specialized or noisy enough that most users should not see it by default. The current opt-in example is `iacm`; users enable it with `HARNESS_TOOLSETS=+iacm`.
 
 ### 5. bodySchema — required for create/update operations
 
@@ -142,6 +153,7 @@ operations: {
     method: "POST",
     path: "/api/resources",
     bodySchema: createSchema,
+    operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
     description: "Create a resource",
   },
 },
@@ -215,6 +227,8 @@ Tests mirror the source structure under `tests/`. Each test file tests one sourc
 ### What to test for a new toolset
 
 New toolsets are declarative data, so they're covered by the existing registry dispatch tests. You don't need to write tests unless your toolset has custom `responseExtractor` or `bodyBuilder` logic that warrants verification.
+
+Structural tests also enforce registry-wide invariants: every endpoint has `operationPolicy`, read operations are classified as `read`, delete operations are `destructive`, and every MCP tool declares explicit annotation booleans plus an `outputSchema`. Add focused tests when you introduce custom pagination, required filters, multi-scope behavior, or opt-in toolset filtering.
 
 ## Error Handling Convention
 
