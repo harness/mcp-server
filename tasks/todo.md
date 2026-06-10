@@ -6,7 +6,7 @@
 - [x] Add failing regression for raw YAML connector create payloads
 - [x] Implement the minimal fix if the local branch lacks it
 - [x] Run focused and broad verification
-- [ ] Commit, push, open PR if code changed, and report in Slack
+- [x] Commit, push, open PR if code changed, and report Slack outcome
 
 ### Plan
 - Use the Slack thread and GitHub PR #318 as the bug report since the thread has no replies or screenshots.
@@ -19,6 +19,7 @@
 - Fixed `src/utils/body-normalizer.ts` so normalized JSON resource builders parse YAML string bodies to objects and reject scalar/array YAML before network I/O. Pipeline create still preserves raw YAML through its separate body builder path.
 - Added regressions in `tests/integration/mock-harness-api.test.ts` for connector raw YAML conversion to `application/json` and local rejection of non-object YAML.
 - Verification passed: focused red/green `pnpm exec vitest run tests/integration/mock-harness-api.test.ts -t "body building"`, then `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, `pnpm typecheck`, and `pnpm test` (73 files / 1892 tests).
+- Opened PR #319. Slack report to the original thread was blocked because `SendSlackMessage` does not allow posting to channel `C08SYT1FWJD`; no message was posted to any other channel.
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
