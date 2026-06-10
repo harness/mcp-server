@@ -285,7 +285,7 @@ describe("HarnessClient", () => {
       expect(headers.has("x-api-key")).toBe(false);
     });
 
-    it("fails before sending hosted placeholder credentials to Split.io", async () => {
+    it("fails before sending placeholder credentials to Split.io", async () => {
       const client = new HarnessClient(makeConfig({
         HARNESS_API_KEY: "pat.internal.internal.dummy",
         HARNESS_FME_API_KEY: undefined,
@@ -293,7 +293,7 @@ describe("HarnessClient", () => {
 
       await expect(
         client.request({ path: "/internal/api/v2/workspaces", product: "fme" }),
-      ).rejects.toThrow("Hosted OAuth placeholders");
+      ).rejects.toThrow("Placeholder credentials");
 
       expect(fetchSpy).not.toHaveBeenCalled();
     });

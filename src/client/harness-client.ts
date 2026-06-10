@@ -155,12 +155,11 @@ export class HarnessClient {
   }
 
   private applyDefaultAuth(headers: Record<string, string>, isFme: boolean): void {
-    // Hosted/internal MCP wrappers may already provide service-to-service auth.
-    // Preserve it instead of layering the configured PAT/SAT on top.
+    // Preserve caller-provided auth instead of layering fallback credentials on top.
     if (headers["Authorization"]) return;
 
     if (isFme) {
-      // FME/Split Admin APIs expect Bearer auth. Drop x-api-key here so hosted
+      // FME/Split Admin APIs expect Bearer auth. Drop x-api-key here so
       // placeholder credentials are never forwarded to api.split.io.
       const headerApiKey = headers["x-api-key"]?.trim();
       delete headers["x-api-key"];
@@ -173,13 +172,13 @@ export class HarnessClient {
         const remediation = this.mcpMode === "multi-user"
           ? "Ensure the session x-harness-api-key is an FME-entitled Harness PAT/SAT. " +
             "Do not configure HARNESS_FME_API_KEY in multi-user mode."
-          : "Ask your Harness administrator to configure an FME/Split Admin credential for hosted MCP, " +
+          : "Configure an FME/Split Admin credential, " +
             "or set HARNESS_FME_API_KEY to a legacy Split admin key or FME-entitled Harness PAT/SAT. " +
-            "Self-hosted sessions may also provide a non-placeholder HARNESS_API_KEY.";
+            "A non-placeholder HARNESS_API_KEY may also be used when it is FME-entitled.";
         throw new HarnessApiError(
           "FME is not configured or authorized for this MCP session. " +
           `${remediation} ` +
-          "Hosted OAuth placeholders such as \"dummy\" are not sent to api.split.io.",
+          "Placeholder credentials such as \"dummy\" are not sent to api.split.io.",
           401,
           "FME_AUTH_MISSING",
         );

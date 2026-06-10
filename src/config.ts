@@ -200,9 +200,8 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
 export type Config = z.infer<typeof ConfigSchema>;
 
 /**
- * Hosted/internal MCP deployments use literal placeholder credentials (for
- * example "dummy") while platform auth is handled by service routing. Those
- * placeholders are not valid external Split/FME API credentials.
+ * Some integrations use literal placeholder credentials (for example "dummy").
+ * Those placeholders are not valid external Split/FME API credentials.
  */
 export function isPlaceholderCredential(value: string | undefined): boolean {
   const normalized = value?.trim().toLowerCase();
@@ -212,8 +211,8 @@ export function isPlaceholderCredential(value: string | undefined): boolean {
 
 /**
  * Resolve the token used for Split/FME product APIs.
- * FME talks directly to api.split.io, so hosted OAuth/proxy auth for Harness
- * platform APIs cannot be reused there.
+ * FME talks directly to api.split.io, so a Harness platform auth placeholder
+ * cannot be reused there.
  */
 export function resolveFmeApiKey(
   config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_FME_API_KEY" | "HARNESS_API_KEY">,
