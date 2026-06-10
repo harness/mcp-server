@@ -1862,6 +1862,59 @@ pipeline:
     // No connectorRef for Harness Code
     expect(callArgs.params.connectorRef).toBeUndefined();
   });
+
+  it("batch HQL validate returns an error envelope in read-only mode (not a successful summary)", async () => {
+    // Regression: the batched queries=[...] path must fail loudly with
+    // isError=true in read-only mode, matching the single-query contract —
+    // not fall through to Promise.allSettled() and report a success summary
+    // full of failed items.
+    const roServer = makeMcpServer("accept");
+    const roRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "knowledge-graph", HARNESS_READ_ONLY: true }));
+    const roClient = makeClient(vi.fn());
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(roServer, roRegistry, roClient, makeConfig({ HARNESS_READ_ONLY: true }));
+
+    const result = await roServer.call("harness_execute", {
+      resource_type: "hql_query",
+      action: "validate",
+      queries: [{ query_string: "find view \"x\"" }],
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Read-only mode") });
+    // The API must never be reached when the policy blocks the action.
+    expect(roClient.request).not.toHaveBeenCalled();
+  });
+
+  it("batch HQL validate fans out and returns a per-query summary when allowed", async () => {
+    const kgServer = makeMcpServer("accept");
+    const kgRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "knowledge-graph" }));
+    const kgRequest = vi.fn().mockResolvedValue({ is_valid: true, errors: [] });
+    const kgClient = makeClient(kgRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(kgServer, kgRegistry, kgClient, makeConfig());
+
+    const result = await kgServer.call("harness_execute", {
+      resource_type: "hql_query",
+      action: "validate",
+      queries: [
+        { query_string: "find view \"a\"" },
+        { query_string: "find view \"b\"" },
+      ],
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as {
+      results: { query_string: string; success: boolean }[];
+      summary: { total: number; succeeded: number; failed: number };
+    };
+    expect(data.summary).toEqual({ total: 2, succeeded: 2, failed: 0 });
+    expect(data.results.map((r) => r.query_string)).toEqual(["find view \"a\"", "find view \"b\""]);
+    expect(data.results.every((r) => r.success)).toBe(true);
+    expect(kgRequest).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("harness_describe", () => {
