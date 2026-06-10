@@ -155,9 +155,13 @@ export class HarnessClient {
   }
 
   private applyDefaultAuth(headers: Record<string, string>, isFme: boolean): void {
+    // Hosted/internal MCP wrappers may already provide service-to-service auth.
+    // Preserve it instead of layering the configured PAT/SAT on top.
     if (headers["Authorization"]) return;
 
     if (isFme) {
+      // FME/Split Admin APIs expect Bearer auth. Drop x-api-key here so hosted
+      // placeholder credentials are never forwarded to api.split.io.
       const headerApiKey = headers["x-api-key"]?.trim();
       delete headers["x-api-key"];
 
@@ -185,6 +189,7 @@ export class HarnessClient {
       return;
     }
 
+    // Non-FME Harness services continue to use the standard API-key header.
     if (!headers["x-api-key"]) {
       headers["x-api-key"] = this.token;
     }
