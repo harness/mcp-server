@@ -182,19 +182,6 @@ const KG_TYPE_FILTERS: FilterFieldSpec[] = [
   },
 ];
 
-const KG_RELATED_FILTERS: FilterFieldSpec[] = [
-  {
-    name: "kind",
-    description: "Object kind of the source type (default: OBJECT_KIND_ENTITY)",
-    enum: OBJECT_KINDS,
-  },
-  {
-    name: "include_transitive",
-    description: "Include transitive relationships (default: false)",
-    type: "boolean",
-  },
-];
-
 // ─── Params schemas (surfaced via harness_describe) ──────────────────────────
 
 const KG_TYPE_GET_PARAMS: ParamsSchema = {
@@ -278,7 +265,9 @@ export const semanticLayerToolset: ToolsetDefinition = {
       toolset: "semantic-layer",
       scope: "account",
       identifierFields: ["type_id"],
-      listFilterFields: KG_RELATED_FILTERS,
+      // No listFilterFields: kg_related_type only supports `get`. `kind` and
+      // `include_transitive` are documented via the get operation's paramsSchema,
+      // not as list filters (which harness_list would otherwise advertise globally).
       operations: {
         get: {
           method: "POST",

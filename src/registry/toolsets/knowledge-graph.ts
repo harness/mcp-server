@@ -25,7 +25,14 @@ const queryableTypeSummaryExtract = (raw: unknown): { items: unknown[]; total: n
     const objectKind = (typeRef?.object_kind as string) ?? "";
 
     const connectorRef = connectorMapping?.connector_reference as Record<string, unknown> | undefined;
-    const connectorName = (connectorRef?.connector_name as string) ?? "";
+    // Prefer a stable connector identifier for the join/discovery hint; the
+    // display name is only a last-resort fallback. Two connectors can share a
+    // name, so the name alone is not a reliable JOIN key.
+    const connectorId =
+      (connectorRef?.connector_identifier as string) ??
+      (connectorRef?.identifier as string) ??
+      (connectorRef?.connector_name as string) ??
+      "";
 
     const oneofKeys: Record<string, string> = {
       entity_type: "OBJECT_KIND_ENTITY",
@@ -62,7 +69,7 @@ const queryableTypeSummaryExtract = (raw: unknown): { items: unknown[]; total: n
       identifier: id,
       name: actualType.name ?? "Unknown",
       kind: objectKind,
-      connectorId: connectorName,
+      connectorId,
     };
     if (desc) item.description = desc;
     if (annotationKeys.length > 0) item.tags = annotationKeys;
@@ -78,7 +85,26 @@ const grammarExtract = (raw: unknown): unknown => {
   return r.grammar ?? raw;
 };
 
-const passthrough = (raw: unknown): unknown => raw;
+/**
+ * Map an HQL executeQuery response to a stable {columns, rows, stats} contract.
+ * The query-service may wrap the payload in `data`/`result`; we unwrap it and
+ * project only the actionable fields so backend envelope/debug/meta fields do
+ * not leak across the public tool boundary.
+ */
+const hqlRunExtract = (raw: unknown): unknown => {
+  const top = (raw ?? {}) as Record<string, unknown>;
+  const inner =
+    (top.data as Record<string, unknown> | undefined) ??
+    (top.result as Record<string, unknown> | undefined) ??
+    top;
+
+  const out: Record<string, unknown> = {
+    columns: inner.columns ?? [],
+    rows: inner.rows ?? [],
+  };
+  if (inner.stats != null) out.stats = inner.stats;
+  return out;
+};
 
 // ─── Body builders ───────────────────────────────────────────────────────────
 
@@ -261,7 +287,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
           path: `${QUERY_SVC}/executeQuery`,
           headers: {},
           bodyBuilder: hqlRunBody,
-          responseExtractor: passthrough,
+          responseExtractor: hqlRunExtract,
           // HQL is a read-only query language (find/filter/select/join — no mutations),
           // so running a query is read-risk: allowed in read-only mode, no confirmation.
           operationPolicy: { risk: "read", retryPolicy: "do_not_retry" },

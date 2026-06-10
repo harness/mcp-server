@@ -92,6 +92,134 @@ describe("hql_query run body", () => {
 });
 
 // ---------------------------------------------------------------------------
+// hql_query — run response shape
+// ---------------------------------------------------------------------------
+
+describe("hql_query run response extractor", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("projects a stable {columns, rows, stats} shape and drops backend envelope fields", async () => {
+    // Regression: run used a raw passthrough, so query-service envelope/debug
+    // fields leaked across the public tool boundary.
+    const mockRequest = vi.fn().mockResolvedValue({
+      columns: [{ name: "count" }],
+      rows: [[42]],
+      stats: { scanned_rows: 100 },
+      trace_id: "internal-abc",
+      debug: { plan: "..." },
+      correlationId: "leak-me",
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(client, "hql_query", "run", {
+      body: { query_string: "find view \"x\" | select {count()}" },
+    });
+
+    expect(result).toEqual({
+      columns: [{ name: "count" }],
+      rows: [[42]],
+      stats: { scanned_rows: 100 },
+    });
+  });
+
+  it("unwraps a data-wrapped payload and defaults missing columns/rows", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: { columns: [{ name: "id" }] } });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(client, "hql_query", "run", {
+      body: { query_string: "find entity \"service\"" },
+    });
+
+    expect(result).toEqual({ columns: [{ name: "id" }], rows: [] });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// kg_queryable_type_summary — list extractor
+// ---------------------------------------------------------------------------
+
+describe("kg_queryable_type_summary list extractor", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("prefers a stable connector identifier over the display name", async () => {
+    // Regression: connectorId used to be filled from connector_name (a display
+    // label), making the JOIN/discovery hint unstable. Prefer the identifier.
+    const mockRequest = vi.fn().mockResolvedValue({
+      queryable_types: [
+        {
+          type: {
+            entity_type: { id: "service", name: "Service", description: "A service" },
+          },
+          type_reference: { object_kind: "OBJECT_KIND_ENTITY" },
+          connector_mapping_config: {
+            connector_reference: { connector_identifier: "my_connector_id", connector_name: "My Connector" },
+          },
+        },
+      ],
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "kg_queryable_type_summary", "list", {})) as {
+      items: Record<string, unknown>[];
+      total: number;
+    };
+
+    expect(result.total).toBe(1);
+    expect(result.items[0]).toMatchObject({
+      identifier: "service",
+      name: "Service",
+      kind: "OBJECT_KIND_ENTITY",
+      connectorId: "my_connector_id",
+    });
+  });
+
+  it("falls back to the connector name only when no identifier is present", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      queryable_types: [
+        {
+          type: { view_type: { id: "v1", name: "View 1" } },
+          type_reference: { object_kind: "OBJECT_KIND_VIEW" },
+          connector_mapping_config: { connector_reference: { connector_name: "Only Name" } },
+        },
+      ],
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "kg_queryable_type_summary", "list", {})) as {
+      items: Record<string, unknown>[];
+    };
+
+    expect(result.items[0]!.connectorId).toBe("Only Name");
+  });
+
+  it("emits an empty connectorId when no connector mapping exists", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      queryable_types: [
+        {
+          type: { entity_type: { id: "e1", name: "E1" } },
+          type_reference: { object_kind: "OBJECT_KIND_ENTITY" },
+        },
+      ],
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "kg_queryable_type_summary", "list", {})) as {
+      items: Record<string, unknown>[];
+    };
+
+    expect(result.items[0]!.connectorId).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // kg_type / kg_related_type — extractor behavior
 // ---------------------------------------------------------------------------
 
