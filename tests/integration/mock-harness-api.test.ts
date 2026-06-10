@@ -315,19 +315,22 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       });
     });
 
-    it("connector create rejects raw YAML string bodies that do not parse to objects", async () => {
-      const config = makeConfig();
-      const client = new HarnessClient(config);
-      const registry = new Registry(config);
+    it.each(["- just\n- a\n- list", "", "null", "~", "---", "   "])(
+      "connector create rejects invalid raw YAML string bodies (%j)",
+      async (yamlBody) => {
+        const config = makeConfig();
+        const client = new HarnessClient(config);
+        const registry = new Registry(config);
 
-      await expect(
-        registry.dispatch(client, "connector", "create", {
-          body: "- just\n- a\n- list",
-        }),
-      ).rejects.toThrow(/body must be a JSON object or YAML object/);
+        await expect(
+          registry.dispatch(client, "connector", "create", {
+            body: yamlBody,
+          }),
+        ).rejects.toThrow(/body must be a JSON object or YAML object/);
 
-      expect(fetchSpy).not.toHaveBeenCalled();
-    });
+        expect(fetchSpy).not.toHaveBeenCalled();
+      },
+    );
   });
 
   describe("execution lifecycle", () => {

@@ -38,6 +38,12 @@ function parseYamlBody(body: string): unknown {
   }
 }
 
+function assertObjectBody(body: unknown): void {
+  if (body == null || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error("body must be a JSON object or YAML object for this resource.");
+  }
+}
+
 /**
  * Options for the standardized body builder factory.
  */
@@ -62,10 +68,9 @@ export function buildBodyNormalized(opts: BodyBuilderOptions = {}): (input: Reco
 
     if (typeof body === "string") {
       body = parseYamlBody(body);
-    }
-
-    if (body !== undefined && body !== null && (typeof body !== "object" || Array.isArray(body))) {
-      throw new Error("body must be a JSON object or YAML object for this resource.");
+      assertObjectBody(body);
+    } else if (body != null && (typeof body !== "object" || Array.isArray(body))) {
+      assertObjectBody(body);
     }
 
     // Step 1a: Unwrap wrapper key if configured
