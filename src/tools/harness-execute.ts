@@ -130,8 +130,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           }
 
           // Fail fast on policy errors before fan-out — mirrors registry.dispatchExecute() enforcement.
-          // read-only check: validate is risk:"read" (allowed), run is risk:"low_write" (blocked).
-          if (config?.HARNESS_READ_ONLY && args.action !== "validate") {
+          if (config?.HARNESS_READ_ONLY) {
             return errorResult(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute actions are not allowed.`);
           }
 

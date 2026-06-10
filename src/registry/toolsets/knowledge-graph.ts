@@ -137,8 +137,8 @@ function hqlRunBody(input: Record<string, unknown>) {
   const result: Record<string, unknown> = { query_string: extractQueryString(input) };
   if (timeoutMs != null || maxResults != null) {
     result.options = {
-      ...(timeoutMs ? { timeout_ms: Number(timeoutMs) } : {}),
-      ...(maxResults ? { max_results: Number(maxResults) } : {}),
+      ...(timeoutMs != null ? { timeout_ms: Number(timeoutMs) } : {}),
+      ...(maxResults != null ? { max_results: Number(maxResults) } : {}),
       include_stats: true,
     };
   }

@@ -11,7 +11,6 @@ export function stripInternalMeta(obj: unknown): unknown {
       if (value === "") continue;
       if (key === "columnMappingMeta") continue;
       if (key === "column_mapping_meta") continue;
-      if (Array.isArray(value) && value.length === 0) continue;
       result[key] = stripInternalMeta(value);
     }
     return result;
