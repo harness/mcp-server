@@ -978,4 +978,57 @@ describe("pipelineHandler", () => {
     expect(stepLog.error).toContain("Download timeout");
     expect(stepLog.log).toBeUndefined();
   });
+
+  it("bounds concurrent log fetches by HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY (AIDEVOPS-2200)", async () => {
+    // Track how many resolveLogContent calls are in flight at once.
+    const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+    const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+    mockFn.mockClear();
+
+    let inFlight = 0;
+    let peakInFlight = 0;
+    mockFn.mockImplementation(async () => {
+      inFlight++;
+      peakInFlight = Math.max(peakInFlight, inFlight);
+      // Yield to other resolveLogContent calls so several can pile up before any resolves.
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return "log line 1\nlog line 2";
+    });
+
+    // 6 failed steps so concurrency=2 forces 3 batches.
+    const stepEntries: Record<string, Record<string, unknown>> = {};
+    for (let i = 1; i <= 6; i++) {
+      stepEntries[`st${i}`] = {
+        uuid: `st${i}`, identifier: `st${i}`, name: `ST${i}`,
+        baseFqn: `pipeline.stages.s1.spec.execution.steps.st${i}`,
+        status: "Failed",
+        failureInfo: { message: `err${i}` },
+        logBaseKey: `log/st${i}`,
+      };
+    }
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{
+        id: "s1", name: "S1", status: "Failed",
+        steps: Array.from({ length: 6 }, (_, i) => ({ id: `st${i + 1}`, name: `ST${i + 1}`, status: "Failed" })),
+      }],
+      nodeMapEntries: stepEntries,
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: false, include_logs: true, max_failed_steps: 6 },
+      config: makeConfig({ HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: 2 }),
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(mockFn).toHaveBeenCalledTimes(6);
+    expect(peakInFlight).toBeLessThanOrEqual(2);
+    expect(peakInFlight).toBeGreaterThan(0);
+    expect(Object.keys(result.failed_step_logs as Record<string, unknown>)).toHaveLength(6);
+  });
 });

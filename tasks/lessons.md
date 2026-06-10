@@ -1,5 +1,35 @@
 # Lessons Learned
 
+## Read Cache Signals Must Not Block Execute Paths
+- **Issue**: A remote pipeline `pipeline.get` response can report `cacheResponse.cacheState=STALE_CACHE` and old YAML from the read/UI cache, while pipeline execution is documented to fetch entities from Git for the selected pipeline branch.
+- **Fix**: Do not fail-close `harness_execute` based on `pipeline.get` cache metadata. Preserve explicit branch selection by sending `pipelineBranchName` for remote executions, and only block execution on signals from the execute path itself.
+- **Rule**: A preflight may only block an operation when it proves the same backend path the operation will use. If a check observes a read-model/cache path, surface it as diagnostic context at most, not as execution authority.
+
+## Multipart Tool Contracts
+- **Issue**: Multipart body builders can hide unsafe defaults or malformed encoded inputs until after request construction, and execute shorthands can drift from generic `resource_id` mapping.
+- **Fix**: Validate encoded content before `Buffer.from`, enforce documented scalar/enum types inside multipart builders, reject disallowed or mutually exclusive payload variants when present, require parent IDs explicitly when the API needs location context, accept the registry's mapped primary identifier in execute body builders, reject conflicting resource-specific aliases in shorthand and full-body modes, and document operation-specific body contracts via `paramsSchema`/`bodySchema`.
+- **Rule**: For multipart resources, fail loudly before network I/O and add regressions for generic tool paths (`resource_id` -> resource identifier), alias conflicts in every accepted input shape, direct helper inputs, and `harness_describe` body/params metadata. If create and update have different one-of requirements, split the body schemas instead of relying on one ambiguous shared schema.
+
+## Execute Action Scope and Read-Only Semantics
+- **Issue**: A read-like endpoint modeled as an execute action can drift from the generic read/list/get contract: `resource_scope` may be unavailable on the public execute tool, URL-derived scope may not be merged, and read-only mode may block the action solely because it is under `harness_execute`.
+- **Fix**: Expose `resource_scope` on execute when execute actions use multi-scope resources, opt the handler into URL-derived resource scope, and gate read-only mode by the action's `operationPolicy.risk` instead of the tool family alone.
+- **Rule**: For any execute action with `risk: "read"` or multi-scope support, add regressions for the registered tool input schema, explicit and URL-derived `resource_scope`, and read-only mode behavior.
+
+## Endpoint-Specific Node Type Constraints
+- **Issue**: Reusing a general FileStoreNode enum for a folder-only endpoint let agents construct `FILE` requests that the backend endpoint should reject.
+- **Fix**: Add endpoint-specific validators and schema descriptions when an API accepts only one value from a broader shared model.
+- **Rule**: If an endpoint path names a subtype such as `/folder`, do not surface the full shared enum unless that exact endpoint accepts every enum value. Add helper and `harness_describe` metadata regressions for rejected enum values.
+
+## URL-Derived Scope Must Match Tool Surfaces
+- **Issue**: URL parsing can synthesize `resource_scope`, but a tool that exposes `resource_scope` still ignores URL-derived scope unless it opts into `applyUrlDefaults(..., { includeResourceScope: true })`.
+- **Fix**: Keep URL-derived scope behavior aligned across every public tool that accepts `resource_scope`, including create/update/delete paths, and test scoped URLs at the tool-handler level.
+- **Rule**: When adding a resource type to the URL-derived scope allowlist, audit every tool that accepts both `url` and `resource_scope`; either opt the tool in or avoid advertising URL-derived scope for that resource.
+
+## URL-Derived IDs Must Match Tool Schemas
+- **Issue**: A tool can advertise URL-derived IDs while its schema still requires an explicit `resource_id`, so strict MCP clients reject URL-only calls before handler defaulting can run.
+- **Fix**: If URL copy says an ID is extracted, make the public schema accept URL-only input and map the resolved URL/defaulted `resource_id` into the resource-specific identifier field before dispatch.
+- **Rule**: For any write tool that advertises URL ID extraction, add handler-level regressions that omit `resource_id` and prove the URL-derived ID reaches the backend path.
+
 ## Harness SAT Account Extraction
 - **Issue**: Service account tokens can use the same account-scoped segment shape as PATs, but the parser only recognized the `pat` prefix.
 - **Fix**: Extract account IDs from both `pat` and `sat` prefixes, and let multi-user HTTP sessions derive `HARNESS_ACCOUNT_ID` from either prefix when `x-harness-account-id` is omitted.
@@ -37,3 +67,28 @@
 - **Pass criteria**: If the first element of page 2 matches across both servers → pagination parity ✓
 - **Fail criteria**: If they differ (same scope) → investigate (API params, sort order, date filters, etc.)
 - **Rule**: Apply this pattern to all tools when testing pagination across MCP v1 and v2.
+
+## Product Credentials in Multi-User Mode
+- **Issue**: A deployment-level product credential can silently override the per-session credential after `mergeConfigWithSessionHeaders()` injects the user's API key, breaking shared HTTP auth isolation.
+- **Fix**: Reject server-held product credentials in `HARNESS_MCP_MODE=multi-user` unless there is an explicit per-session credential channel, and defensively ignore shared product credentials in auth resolvers for multi-user configs.
+- **Rule**: For any product-specific auth config, test the full multi-user path: base config → session header merge → product auth resolver. The resolved product credential must remain tied to the session user or fail closed.
+
+## Public Config Surface Alignment
+- **Issue**: Adding or documenting an env var without updating packaged manifests leaves manifest-driven and MCPB installs unable to configure it.
+- **Fix**: Update `manifest.json`, `mcp-directory/manifest.json`, and release metadata tests for every public config knob exposed in source docs or `.env.example`.
+- **Rule**: Before finishing env config changes, search all public config surfaces and lock the expected manifest exposure in tests.
+
+## GUI MCP Client Executable Paths
+- **Issue**: GUI MCP clients may not inherit shell `PATH`, so examples using bare executable names can still fail with `spawn <command> ENOENT`.
+- **Fix**: For Cursor and similar GUI-client examples, show absolute executable paths and include the Node directory in `env.PATH`.
+- **Rule**: When documenting GUI-client stdio MCP configs, avoid PATH-dependent `command` values unless the surrounding text explicitly scopes them to shell-based clients.
+
+## Runtime Payload Documentation
+- **Issue**: Documentation can overstate a payload contract by describing intended fields that the current tool handlers do not populate.
+- **Fix**: Either wire the field through the runtime path in the same PR or document the current emitted shape precisely.
+- **Rule**: Before documenting audit, schema, or tool payload fields as guaranteed, verify the exact dispatch path and at least one focused runtime/test assertion.
+
+## Logger-Filtered Audit Sinks
+- **Issue**: Saying stderr audit output is always emitted hides that the stderr sink routes through the shared logger and respects `LOG_LEVEL`.
+- **Fix**: Document stderr as registered by default, and direct durable audit collection to file or webhook sinks.
+- **Rule**: For telemetry sinks built on shared logging, document both registration and filtering semantics.

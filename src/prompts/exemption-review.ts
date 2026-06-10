@@ -30,12 +30,13 @@ Steps:
    - **Recommendation**: Approve, Reject, or Request more info
 4. **Present review table**:
    - Exemption ID, vulnerability, severity, requestor, justification, recommendation
-5. **Batch actions**: Group exemptions by recommendation:
-   - **Approve**: Low-risk with valid justification and compensating controls
-   - **Reject**: High-risk without adequate mitigation
-   - **Needs review**: Insufficient justification or missing context
+5. **Batch actions**: Group exemptions by recommendation and target scope:
+   - **Approve at current scope**: Low-risk with valid justification and compensating controls. Use action="approve" with body.scope="CURRENT".
+   - **Approve at wider scope**: If the user wants approval at ACCOUNT, ORG, or PROJECT scope, use action="approve" with that body.scope; the server routes elevated scopes through STO promotion internally.
+   - **Reject**: High-risk without adequate mitigation.
+   - **Needs review**: Insufficient justification or missing context.
 
-To take action, I can use harness_execute with resource_type="security_exemption" and action="approve", "reject", or "promote" — but only after you confirm each decision.
+To take action, I can use harness_execute with resource_type="security_exemption" and action="approve" or "reject" — but only after you confirm each decision. For approve, the body must include scope: "CURRENT" | "ACCOUNT" | "ORG" | "PROJECT". approver_id is optional for approve/reject because the server derives it from the authenticated user when omitted.
 
 ## Suggested next steps
 
@@ -49,10 +50,10 @@ across multiple exemptions.
 Format: a markdown bullet list of complete, send-as-is sentences.
 
 Example shape (use real titles/types/targets from your output, not these literals):
-- Approve: SQL injection in payment-api (Critical, mitigation in place)
+- Approve at project scope: SQL injection in payment-api (Critical, mitigation in place)
 - Reject: Hardcoded API key in auth-service (no justification)
 - Reject all Pending SECRET-type exemptions for target payment-api
-- Approve all Pending Low-severity SCA exemptions for target shared-libs
+- Approve all Pending Low-severity SCA exemptions for target shared-libs at ORG scope
 - Show all Approved exemptions for target auth-service
 
 Rules:

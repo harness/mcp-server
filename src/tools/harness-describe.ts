@@ -52,6 +52,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
               operation: op,
               method: spec.method,
               description: spec.description,
+              paramsSchema: spec.paramsSchema ?? undefined,
               bodySchema: spec.bodySchema ?? undefined,
             })),
             executeActions: def.executeActions
@@ -59,6 +60,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
                   action,
                   method: spec.method,
                   description: spec.actionDescription,
+                  paramsSchema: spec.paramsSchema ?? undefined,
                   bodySchema: spec.bodySchema ?? undefined,
                   ...(spec.inputExpansions?.length
                     ? { inputShorthands: buildShorthands(spec.inputExpansions) }

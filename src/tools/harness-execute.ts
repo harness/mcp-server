@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { parse as parseYaml } from "yaml";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
@@ -12,7 +13,7 @@ import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
-import { resourceTypeSchema } from "./input-schemas.js";
+import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
 import { executeOutputSchema } from "./output-schemas.js";
@@ -61,6 +62,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         resource_id: z.string().describe("Primary resource identifier").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        resource_scope: resourceScopeSchema,
         inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Pipeline runtime inputs: key-value pairs like {branch: 'main'} (auto-resolved), or full YAML string. Check runtime_input_template first via harness_get.").optional(),
         input_set_ids: z.array(z.string()).describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'}).").optional(),
         body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
@@ -89,7 +91,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
     async (args, extra) => {
       try {
         const { params, wait, wait_timeout_seconds, wait_poll_interval_seconds, confirm: _confirm, queries: batchQueries, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
         log.debug("Execute input after params merge", { input: JSON.stringify(input), params: JSON.stringify(params) });
@@ -186,6 +188,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         // (grpc-gateway array style). Comma-joined single param is ignored by pipeline execute.
         if (args.input_set_ids && args.input_set_ids.length > 0) {
           input.input_set_ids = [...args.input_set_ids];
+        }
+
+        if (resourceType === "pipeline" && args.action === "run") {
+          normalizeRemotePipelineRunParams(input);
         }
 
         // When only input_set_ids are provided, fetch each input set and build runtime YAML.
@@ -450,6 +456,66 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
       }
     },
   );
+}
+
+function normalizeRemotePipelineRunParams(input: Record<string, unknown>): void {
+  input.store_type ??= input.storeType;
+  input.connector_ref ??= input.connectorRef;
+  input.repo_name ??= input.repoName;
+
+  const runtimeCodebase = extractRuntimeYamlCodebase(input.inputs);
+  if (runtimeCodebase?.repoName && input.repo_name === undefined) {
+    input.repo_name = runtimeCodebase.repoName;
+  }
+  if (runtimeCodebase?.branch && input.branch === undefined) {
+    input.branch = runtimeCodebase.branch;
+  }
+  if (runtimeCodebase?.branch && input.pipeline_branch === undefined) {
+    input.pipeline_branch = runtimeCodebase.branch;
+  }
+  if (
+    input.store_type === undefined &&
+    (runtimeCodebase?.branch !== undefined || runtimeCodebase?.repoName !== undefined)
+  ) {
+    input.store_type = "REMOTE";
+  }
+
+  const storeType = asString(input.store_type)?.toUpperCase();
+  const hasRemoteGitParams = storeType === "REMOTE" || input.connector_ref !== undefined || input.repo_name !== undefined;
+
+  if (
+    hasRemoteGitParams &&
+    input.pipeline_branch === undefined &&
+    typeof input.branch === "string" &&
+    input.branch.length > 0
+  ) {
+    input.pipeline_branch = input.branch;
+  }
+}
+
+function extractRuntimeYamlCodebase(inputs: unknown): { branch?: string; repoName?: string } | undefined {
+  if (typeof inputs !== "string" || inputs.trim().length === 0) {
+    return undefined;
+  }
+
+  try {
+    const root = asRecord(parseYaml(inputs));
+    const pipeline = asRecord(root?.pipeline);
+    const properties = asRecord(pipeline?.properties);
+    const ci = asRecord(properties?.ci);
+    const codebase = asRecord(ci?.codebase);
+    if (!codebase) return undefined;
+
+    const build = asRecord(codebase.build);
+    const spec = asRecord(build?.spec);
+    const branch = asString(spec?.branch);
+    const repoName = asString(codebase.repoName);
+
+    if (!branch && !repoName) return undefined;
+    return { branch, repoName };
+  } catch {
+    return undefined;
+  }
 }
 
 const STRUCTURAL_FIELDS = new Set([

@@ -335,7 +335,7 @@ export const stoToolset: ToolsetDefinition = {
       resourceType: "security_exemption",
       displayName: "Security Exemption",
       searchAliases: ["approve", "reject", "promote", "waiver", "exception", "exempt", "approval"],
-      description: "Security issue exemption/waiver. THIS is the resource for ALL approve/reject/promote operations — even when the user mentions a vulnerability title like 'SQL Injection'. Supports list (POST with status filter) with approve/reject/promote actions. " +
+      description: "Security issue exemption/waiver. THIS is the resource for exemption approval/rejection workflows — even when the user mentions a vulnerability title like 'SQL Injection'. Supports list (POST with status filter), create, and approve/reject actions. Approval with body.scope='ACCOUNT', 'ORG', or 'PROJECT' routes through STO promotion internally. " +
         "CRITICAL SCOPE DISTINCTION: There are TWO different scope concepts that must NOT be confused: " +
         "(1) LISTING scope — security_exemption ALWAYS lists at project scope. NEVER pass resource_scope='account' or resource_scope='org' to harness_list — it will fail. Always list using project defaults. " +
         "(2) APPROVAL scope — the scope the exemption is approved AT, passed as body.scope to harness_execute. This CAN be 'ACCOUNT', 'ORG', 'PROJECT', or 'CURRENT'. " +
