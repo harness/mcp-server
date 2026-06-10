@@ -1862,6 +1862,61 @@ pipeline:
     // No connectorRef for Harness Code
     expect(callArgs.params.connectorRef).toBeUndefined();
   });
+
+  it("batch HQL validate is allowed in read-only mode (read-risk action), matching the single-query contract", async () => {
+    // Regression: the batch read-only gate must be risk-based — mirroring
+    // registry.dispatchExecute() — so a read-safe action (hql validate, which
+    // is risk:"read") still fans out in read-only mode instead of being blocked
+    // by a tool-family check. Write-risk actions are gated by the same `risk`
+    // comparison before any query is dispatched.
+    const roServer = makeMcpServer("accept");
+    const roRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "knowledge-graph", HARNESS_READ_ONLY: true }));
+    const roRequest = vi.fn().mockResolvedValue({ is_valid: true, errors: [] });
+    const roClient = makeClient(roRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(roServer, roRegistry, roClient, makeConfig({ HARNESS_READ_ONLY: true }));
+
+    const result = await roServer.call("harness_execute", {
+      resource_type: "hql_query",
+      action: "validate",
+      queries: [{ query_string: "find view \"x\"" }],
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { summary: { total: number; succeeded: number } };
+    expect(data.summary).toMatchObject({ total: 1, succeeded: 1 });
+    expect(roRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("batch HQL validate fans out and returns a per-query summary when allowed", async () => {
+    const kgServer = makeMcpServer("accept");
+    const kgRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "knowledge-graph" }));
+    const kgRequest = vi.fn().mockResolvedValue({ is_valid: true, errors: [] });
+    const kgClient = makeClient(kgRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(kgServer, kgRegistry, kgClient, makeConfig());
+
+    const result = await kgServer.call("harness_execute", {
+      resource_type: "hql_query",
+      action: "validate",
+      queries: [
+        { query_string: "find view \"a\"" },
+        { query_string: "find view \"b\"" },
+      ],
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as {
+      results: { query_string: string; success: boolean }[];
+      summary: { total: number; succeeded: number; failed: number };
+    };
+    expect(data.summary).toEqual({ total: 2, succeeded: 2, failed: 0 });
+    expect(data.results.map((r) => r.query_string)).toEqual(["find view \"a\"", "find view \"b\""]);
+    expect(data.results.every((r) => r.success)).toBe(true);
+    expect(kgRequest).toHaveBeenCalledTimes(2);
+  });
 });
 
 describe("harness_describe", () => {
