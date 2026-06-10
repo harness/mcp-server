@@ -139,6 +139,83 @@ describe("hql_query run response extractor", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Query-service envelope unwrapping
+// ---------------------------------------------------------------------------
+
+describe("query-service response extractors", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("unwraps data-wrapped queryable type summaries", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: {
+        queryable_types: [
+          {
+            type: {
+              entity_type: { id: "service", name: "Service" },
+            },
+            type_reference: { object_kind: "OBJECT_KIND_ENTITY" },
+          },
+        ],
+      },
+      trace_id: "internal",
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "kg_queryable_type_summary", "list", {})) as {
+      items: Record<string, unknown>[];
+      total: number;
+    };
+
+    expect(result).toEqual({
+      items: [
+        {
+          identifier: "service",
+          name: "Service",
+          kind: "OBJECT_KIND_ENTITY",
+          connectorId: "",
+        },
+      ],
+      total: 1,
+    });
+  });
+
+  it("unwraps result-wrapped HQL grammar responses", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      result: {
+        grammar: "grammar HQL;",
+      },
+      debug: { plan: "internal" },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "kg_grammar", "get", {});
+
+    expect(result).toBe("grammar HQL;");
+  });
+
+  it("unwraps data-wrapped HQL validation responses", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: {
+        is_valid: true,
+        errors: [],
+      },
+      correlationId: "internal",
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(client, "hql_query", "validate", {
+      body: { query_string: "find entity \"service\"" },
+    });
+
+    expect(result).toEqual({ is_valid: true, errors: [] });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // kg_queryable_type_summary — list extractor
 // ---------------------------------------------------------------------------
 

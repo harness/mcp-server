@@ -7,6 +7,18 @@ const QUERY_SVC =
 
 const MAX_DESC_LEN = 80;
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+function unwrapQueryServiceEnvelope(raw: unknown): unknown {
+  const top = asRecord(raw);
+  if (!top) return raw;
+  return asRecord(top.data) ?? asRecord(top.result) ?? top;
+}
+
 /**
  * Summary-only extractor for queryable types.
  *
@@ -14,7 +26,7 @@ const MAX_DESC_LEN = 80;
  * No field metadata.
  */
 const queryableTypeSummaryExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { queryable_types?: Record<string, unknown>[] };
+  const r = unwrapQueryServiceEnvelope(raw) as { queryable_types?: Record<string, unknown>[] };
   const items: unknown[] = [];
 
   for (const qt of r.queryable_types ?? []) {
@@ -81,8 +93,9 @@ const queryableTypeSummaryExtract = (raw: unknown): { items: unknown[]; total: n
 };
 
 const grammarExtract = (raw: unknown): unknown => {
-  const r = raw as { grammar?: string };
-  return r.grammar ?? raw;
+  const inner = unwrapQueryServiceEnvelope(raw);
+  const r = inner as { grammar?: string };
+  return r.grammar ?? inner;
 };
 
 /**
@@ -92,11 +105,7 @@ const grammarExtract = (raw: unknown): unknown => {
  * not leak across the public tool boundary.
  */
 const hqlRunExtract = (raw: unknown): unknown => {
-  const top = (raw ?? {}) as Record<string, unknown>;
-  const inner =
-    (top.data as Record<string, unknown> | undefined) ??
-    (top.result as Record<string, unknown> | undefined) ??
-    top;
+  const inner = (asRecord(unwrapQueryServiceEnvelope(raw)) ?? {}) as Record<string, unknown>;
 
   const out: Record<string, unknown> = {
     columns: inner.columns ?? [],
@@ -262,7 +271,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
           headers: {},
           bodyBuilder: hqlValidateBody,
           responseExtractor: (raw: unknown) => {
-            const r = raw as { is_valid?: boolean; errors?: unknown[] };
+            const r = unwrapQueryServiceEnvelope(raw) as { is_valid?: boolean; errors?: unknown[] };
             return { is_valid: r.is_valid, errors: r.errors ?? [] };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
