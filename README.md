@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 213 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 214 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,7 +8,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 213 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 214 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 36 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **32 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -1082,7 +1082,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-213 resource types organized across 36 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+214 resource types organized across 36 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1101,6 +1101,7 @@ Harness pipelines can be stored in three ways:
 | `pipeline`                | x    | x   | x      | x      | x      | `run`, `retry`      |
 | `pipeline_v1` **(Alpha)** | x    | x   | x      | x      | x      | `run`               |
 | `execution`               | x    | x   |        |        |        | `interrupt`         |
+| `execution_inputs`        |      | x   |        |        |        |                     |
 | `trigger`                 | x    | x   | x      | x      | x      |                     |
 | `pipeline_summary`        |      | x   |        |        |        |                     |
 | `input_set`               | x    | x   | x      | x      | x      |                     |
@@ -1682,7 +1683,7 @@ Available toolset names:
 | Toolset                 | Resource Types                                                                                                                                                                                                                                                                                  |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `platform`              | organization, project                                                                                                                                                                                                                                                                           |
-| `pipelines`             | pipeline, pipeline_v1, execution, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                                                                                       |
+| `pipelines`             | pipeline, pipeline_v1, execution, execution_inputs, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                                                                     |
 | `agents`                | agent, agent_run                                                                                                                                                                                                                                                                                |
 | `services`              | service                                                                                                                                                                                                                                                                                         |
 | `environments`          | environment                                                                                                                                                                                                                                                                                     |
@@ -1736,7 +1737,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  36 Toolsets      |      (data files, not code)
-                |  213 Resource Types|
+                |  214 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
