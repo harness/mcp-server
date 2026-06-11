@@ -1214,6 +1214,43 @@ describe("harness_update", () => {
     expect(parsed.operations_applied).toBe(1);
   });
 
+  it("rejects conflicting resource_id from URL vs params in patch mode", async () => {
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      url: "https://app.harness.io/ng/account/acc/module/ci/orgs/default/projects/proj/pipelines/pipe-from-url",
+      params: { pipeline_id: "pipe-from-params" },
+      operations: [{ op: "replace", path: "/pipeline/name", value: "X" }],
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the params-resolved id in the patch confirmation prompt", async () => {
+    mockRequest.mockResolvedValueOnce({
+      data: {
+        identifier: "my-pipe",
+        yamlPipeline: "pipeline:\n  name: Old Pipeline\n  identifier: my-pipe\n  stages: []\n",
+      },
+    });
+
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      params: { pipeline_id: "my-pipe" },
+      operations: [{ op: "replace", path: "/pipeline/name", value: "New Pipeline" }],
+    });
+
+    expect(result.isError).toBeUndefined();
+    const elicitationCall = server.server.elicitInput.mock.calls[0]![0] as { message: string };
+    expect(elicitationCall.message).toContain("my-pipe");
+    expect(elicitationCall.message).not.toContain("undefined");
+    const getCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toBe("/pipeline/api/pipelines/my-pipe");
+  });
+
   it("uses account scope from account-level File Store URLs during update", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "scripts" } });

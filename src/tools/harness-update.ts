@@ -93,17 +93,41 @@ function getPatchableResourceTypes(registry: Registry): string[] {
     .map((resource) => resource.resourceType);
 }
 
-function applyUpdateInputDefaults(input: Record<string, unknown>, def: ResourceDefinition, args: UpdateToolArgs): void {
+interface ResolvedIdentifier {
+  primaryField?: string;
+  resolvedResourceId?: string;
+  error?: string;
+}
+
+// Resolves the canonical resource id for an update from the already-merged input
+// (url defaults + resource_id + params). Shared by full-body and JSON Patch modes
+// so both fail loudly on conflicting identifiers and resolve params-only ids the
+// same way.
+function resolveUpdateIdentifier(input: Record<string, unknown>, def: ResourceDefinition): ResolvedIdentifier {
   const identFields = def.identifierFields;
   const primaryField = identFields.length > 1
     ? identFields[identFields.length - 1]!
     : identFields[0];
-  if (primaryField && args.resource_id) {
-    input[primaryField] = args.resource_id;
+  const fromResourceId = asString(input.resource_id);
+  const fromPrimaryField = primaryField ? asString(input[primaryField]) : undefined;
+  if (fromResourceId && fromPrimaryField && fromResourceId !== fromPrimaryField) {
+    return {
+      primaryField,
+      error: `Conflicting identifiers: resource_id/url gives "${fromResourceId}" but params.${primaryField} gives "${fromPrimaryField}". Provide one or ensure they match.`,
+    };
   }
+  const resolvedResourceId = fromResourceId ?? fromPrimaryField;
+  if (!resolvedResourceId) {
+    return {
+      primaryField,
+      error: "resource_id is required for harness_update unless url contains the resource ID or params includes the resource-specific ID field.",
+    };
+  }
+  return { primaryField, resolvedResourceId };
+}
 
-  const versionLabel = asString(input.version_label);
-  if (versionLabel) return;
+function applyVersionLabelDefault(input: Record<string, unknown>, args: UpdateToolArgs): void {
+  if (asString(input.version_label)) return;
   if (isRecord(args.body) && "version_label" in args.body) {
     input.version_label = args.body.version_label;
   } else if (args.resource_type === "template") {
@@ -209,21 +233,8 @@ async function handleFullBodyUpdate(server: McpServer, registry: Registry, clien
   const coercedParams = coerceRecord(params);
   if (coercedParams) Object.assign(input, coercedParams);
 
-  const identFields = def.identifierFields;
-  const primaryField = identFields.length > 1
-    ? identFields[identFields.length - 1]!
-    : identFields[0];
-  const fromResourceId = asString(input.resource_id);
-  const fromPrimaryField = primaryField ? asString(input[primaryField]) : undefined;
-  if (fromResourceId && fromPrimaryField && fromResourceId !== fromPrimaryField) {
-    return errorResult(
-      `Conflicting identifiers: resource_id/url gives "${fromResourceId}" but params.${primaryField} gives "${fromPrimaryField}". Provide one or ensure they match.`,
-    );
-  }
-  const resolvedResourceId = fromResourceId ?? fromPrimaryField;
-  if (!resolvedResourceId) {
-    return errorResult("resource_id is required for harness_update unless url contains the resource ID or params includes the resource-specific ID field.");
-  }
+  const { primaryField, resolvedResourceId, error } = resolveUpdateIdentifier(input, def);
+  if (error) return errorResult(error);
 
   const risk = def.operations.update!.operationPolicy.risk;
   const bodyPreview = formatBodyPreview(args.body);
@@ -243,14 +254,7 @@ async function handleFullBodyUpdate(server: McpServer, registry: Registry, clien
   if (primaryField) {
     input[primaryField] = resolvedResourceId;
   }
-  const versionLabel = asString(input.version_label);
-  if (!versionLabel) {
-    if (isRecord(args.body) && "version_label" in args.body) {
-      input.version_label = args.body.version_label;
-    } else if (args.resource_type === "template") {
-      input.version_label = "v1";
-    }
-  }
+  applyVersionLabelDefault(input, args);
 
   const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation: elicit.method, resource_id: resolvedResourceId });
   return jsonResult(result);
@@ -259,6 +263,19 @@ async function handleFullBodyUpdate(server: McpServer, registry: Registry, clien
 async function handlePatchUpdate(server: McpServer, registry: Registry, client: HarnessClient, config: Config | undefined, def: ResourceDefinition, args: UpdateToolArgs) {
   const operations = args.operations as PatchOperation[];
   const dryRun = args.dry_run === true;
+
+  const { params, operations: _ops, dry_run: _dry, confirm: _confirm, ...rest } = args;
+  const getInput = applyUrlDefaults({ ...rest } as Record<string, unknown>, args.url);
+  const coercedParams = coerceRecord(params);
+  if (coercedParams) Object.assign(getInput, coercedParams);
+
+  // Resolve the identifier up front so patch mode fails loudly on conflicting
+  // identifiers and surfaces the resolved id in the confirmation/audit path —
+  // matching full-body update behavior.
+  const { primaryField, resolvedResourceId, error } = resolveUpdateIdentifier(getInput, def);
+  if (error) return errorResult(error);
+  if (primaryField) getInput[primaryField] = resolvedResourceId;
+  applyVersionLabelDefault(getInput, args);
 
   const opsJson = JSON.stringify(operations, null, 2);
   const opsPreview = opsJson.length > 1000 ? opsJson.slice(0, 1000) + "\n...(truncated)" : opsJson;
@@ -269,7 +286,7 @@ async function handlePatchUpdate(server: McpServer, registry: Registry, client: 
     const elicit = await confirmViaElicitation({
       server,
       toolName: "harness_update",
-      message: `Apply ${operations.length} JSON Patch operation(s) to ${args.resource_type} "${args.resource_id}"?\n\n${opsPreview}`,
+      message: `Apply ${operations.length} JSON Patch operation(s) to ${args.resource_type} "${resolvedResourceId}"?\n\n${opsPreview}`,
       risk,
       autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
       callerConfirmed: args.confirm === true,
@@ -281,12 +298,6 @@ async function handlePatchUpdate(server: McpServer, registry: Registry, client: 
     }
     confirmation = elicit.method;
   }
-
-  const { params, operations: _ops, dry_run: _dry, confirm: _confirm, ...rest } = args;
-  const getInput = applyUrlDefaults({ ...rest } as Record<string, unknown>, args.url);
-  const coercedParams = coerceRecord(params);
-  if (coercedParams) Object.assign(getInput, coercedParams);
-  applyUpdateInputDefaults(getInput, def, args);
 
   const getResult = await registry.dispatch(client, args.resource_type, "get", getInput);
   const { document, yamlSource } = extractMutableBody(getResult, def);
@@ -309,6 +320,6 @@ async function handlePatchUpdate(server: McpServer, registry: Registry, client: 
   // passed already flowed into getInput, so it carries through here unchanged.
   const updateInput: Record<string, unknown> = { ...getInput, body: serialized };
 
-  const result = await registry.dispatch(client, args.resource_type, "update", updateInput, { tool: "harness_update", confirmation, resource_id: args.resource_id });
+  const result = await registry.dispatch(client, args.resource_type, "update", updateInput, { tool: "harness_update", confirmation, resource_id: resolvedResourceId });
   return jsonResult(result);
 }
