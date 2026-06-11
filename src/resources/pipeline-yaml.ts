@@ -82,6 +82,22 @@ export function registerPipelineYamlResource(server: McpServer, registry: Regist
 
       log.info("Fetching pipeline YAML", { pipelineId, orgId, projectId });
 
+      try {
+        registry.getResource(pipelineResourceType);
+      } catch (err) {
+        log.debug("Skipping pipeline YAML read: resource unavailable", {
+          resourceType: pipelineResourceType,
+          error: String(err),
+        });
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: "application/x-yaml",
+            text: "# Pipeline resource unavailable\nresource unavailable: pipeline toolset is not enabled\n",
+          }],
+        };
+      }
+
       const result = await registry.dispatch(client, pipelineResourceType, "get", {
         pipeline_id: pipelineId,
         org_id: orgId,
