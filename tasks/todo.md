@@ -1,5 +1,18 @@
 # Harness MCP Server — Task Tracking
 
+## Execution Inputs Resource (2026-06-11)
+- [x] Confirm endpoint contract and existing pipeline registry patterns
+- [x] Add failing registry tests for `execution_inputs.get` request construction and response projection
+- [x] Implement the `execution_inputs` resource and stable extractor
+- [ ] Run focused tests, build, docs generation/check, typecheck, and full tests
+- [ ] Commit, push, open PR, and report back in the Slack thread
+
+### Plan
+- Add a get-only `execution_inputs` resource to `src/registry/toolsets/pipelines.ts`, scoped to project and identified by `execution_id`.
+- Use the documented read endpoint `GET /pipeline/api/pipelines/execution/{planExecutionId}/inputsetV2`, with optional `resolve_expressions` mapped to `resolveExpressions`.
+- Add a dedicated extractor in `src/registry/extractors.ts` that unwraps the Harness `data` envelope and returns only stable fields: `inputSetTemplateYaml`, `inputSetYaml`, `inputSetDetails`, `inputSetBranchName`, `resolvedYaml`, plus a concise hint.
+- Cover the request shape and response shape in `tests/registry/registry.test.ts`.
+
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select File Store multipart workflows as the focused documentation gap

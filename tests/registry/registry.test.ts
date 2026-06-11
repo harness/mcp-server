@@ -956,6 +956,86 @@ describe("Registry", () => {
       expect(call.path).toBe("/pipeline/api/pipelines/my-pipeline");
     });
 
+    it("fetches execution inputs by execution id with optional expression resolution", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: {
+          inputSetYaml: "pipeline:\n  variables:\n    - name: env\n      value: prod\n",
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "execution_inputs", "get", {
+        execution_id: "exec-123",
+        resolve_expressions: true,
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("GET");
+      expect(call.path).toBe("/pipeline/api/pipelines/execution/exec-123/inputsetV2");
+      expect(call.params).toMatchObject({
+        orgIdentifier: "default",
+        projectIdentifier: "test-project",
+        resolveExpressions: true,
+      });
+      expect(call.body).toBeUndefined();
+    });
+
+    it("projects execution inputs response without backend envelope metadata", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        correlationId: "corr-123",
+        metaData: { debug: true },
+        data: {
+          inputSetTemplateYaml: "template: <+input>\n",
+          inputSetYaml: "pipeline:\n  variables:\n    - name: env\n      value: prod\n",
+          inputSetDetails: [{ identifier: "prod-inputs", name: "Prod Inputs" }],
+          inputSetBranchName: "main",
+          resolvedYaml: "pipeline:\n  variables:\n    - name: env\n      value: prod\n",
+          extraServerField: "ignored",
+        },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "execution_inputs", "get", {
+        execution_id: "exec-123",
+      }) as Record<string, unknown>;
+
+      expect(result).toEqual({
+        inputSetTemplateYaml: "template: <+input>\n",
+        inputSetYaml: "pipeline:\n  variables:\n    - name: env\n      value: prod\n",
+        inputSetDetails: [{ identifier: "prod-inputs", name: "Prod Inputs" }],
+        inputSetBranchName: "main",
+        resolvedYaml: "pipeline:\n  variables:\n    - name: env\n      value: prod\n",
+        _hint: "inputSetYaml contains the runtime inputs used for this execution. Pass resolve_expressions=true to also request resolvedYaml from Harness.",
+      });
+      expect(result).not.toHaveProperty("status");
+      expect(result).not.toHaveProperty("correlationId");
+      expect(result).not.toHaveProperty("metaData");
+      expect(result).not.toHaveProperty("extraServerField");
+    });
+
+    it("returns an explicit empty execution inputs shape when the API has no data", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: {},
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "execution_inputs", "get", {
+        execution_id: "exec-empty",
+      }) as Record<string, unknown>;
+
+      expect(result).toEqual({
+        inputSetTemplateYaml: null,
+        inputSetYaml: null,
+        inputSetDetails: [],
+        inputSetBranchName: null,
+        resolvedYaml: null,
+        _hint: "No runtime input YAML was returned for this execution.",
+      });
+    });
+
     it("throws on unsupported operation", async () => {
       const client = makeClient();
       await expect(

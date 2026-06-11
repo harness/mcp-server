@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract } from "../extractors.js";
 import YAML from "yaml";
 
 /**
@@ -557,6 +557,38 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodySchema: { description: "No body required. Interrupt type is specified via the interrupt_type query parameter (IMPORTANT: do not pass this as a body parameter, otherwise the request will fail)", fields: [] },
           responseExtractor: ngExtract,
           actionDescription: "Interrupt a running execution. Pass interrupt_type as a param: AbortAll (abort all stages), Pause, Resume, StageRollback, Abort (abort current retry), ExpireAll, or Retry.",
+        },
+      },
+    },
+    {
+      resourceType: "execution_inputs",
+      displayName: "Pipeline Execution Inputs",
+      description: "Runtime input YAML and input set details used for a specific pipeline execution. Supports get by execution_id.",
+      toolset: "pipelines",
+      scope: "project",
+      identifierFields: ["execution_id"],
+      relatedResources: [
+        {
+          resourceType: "execution",
+          relationship: "details-for",
+          description: "Use execution_inputs with the execution_id from an execution get/list response to retrieve the runtime inputs used for that run.",
+        },
+      ],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/pipeline/api/pipelines/execution/{planExecutionId}/inputsetV2",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { execution_id: "planExecutionId" },
+          queryParams: { resolve_expressions: "resolveExpressions" },
+          responseExtractor: executionInputsExtract,
+          description: "Get the runtime input YAML used for a pipeline execution. Pass resolve_expressions=true to request resolvedYaml from Harness.",
+          paramsSchema: {
+            fields: [
+              { name: "execution_id", required: true, description: "Pipeline plan execution ID whose runtime inputs should be retrieved." },
+              { name: "resolve_expressions", required: false, description: "When true, request resolvedYaml with runtime inputs and expressions resolved by Harness." },
+            ],
+          },
         },
       },
     },

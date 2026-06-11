@@ -297,6 +297,27 @@ export const runtimeInputExtract = (raw: unknown): unknown => {
 };
 
 /**
+ * Extracts the runtime input YAML that was used for a specific execution.
+ * Unwraps the NG response envelope and keeps only the documented input fields.
+ */
+export const executionInputsExtract = (raw: unknown): unknown => {
+  const data = isRecord(raw) && isRecord(raw.data) ? raw.data : {};
+  const inputSetYaml = typeof data.inputSetYaml === "string" ? data.inputSetYaml : null;
+  const resolvedYaml = typeof data.resolvedYaml === "string" ? data.resolvedYaml : null;
+
+  return {
+    inputSetTemplateYaml: typeof data.inputSetTemplateYaml === "string" ? data.inputSetTemplateYaml : null,
+    inputSetYaml,
+    inputSetDetails: Array.isArray(data.inputSetDetails) ? data.inputSetDetails : [],
+    inputSetBranchName: typeof data.inputSetBranchName === "string" ? data.inputSetBranchName : null,
+    resolvedYaml,
+    _hint: inputSetYaml
+      ? "inputSetYaml contains the runtime inputs used for this execution. Pass resolve_expressions=true to also request resolvedYaml from Harness."
+      : "No runtime input YAML was returned for this execution.",
+  };
+};
+
+/**
  * Extracts CCM list responses with views/totalCount structure.
  * Maps `data.views` → `items` and `data.totalCount` → `total`.
  * Used by multiple CCM APIs that return this response pattern.
