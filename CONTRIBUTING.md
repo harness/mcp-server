@@ -9,8 +9,8 @@
 ## Setup
 
 ```bash
-git clone https://github.com/thisrohangupta/harness-mcp-v2.git
-cd harness-mcp-v2
+git clone https://github.com/harness/mcp-server.git
+cd mcp-server
 pnpm install
 pnpm build
 ```
@@ -24,6 +24,10 @@ pnpm typecheck      # Type-check without emitting
 pnpm test           # Run all tests
 pnpm test:watch     # Run tests in watch mode
 pnpm inspect        # Launch MCP Inspector for interactive testing
+pnpm docs:generate  # Refresh generated README counts from the built registry
+pnpm docs:check     # Verify README counts and clone instructions are current
+pnpm sync-schemas   # Refresh checked-in JSON Schemas for harness_schema
+pnpm check-schema-coverage # Verify schema examples cover registered schemas
 ```
 
 ## Project Structure
@@ -38,7 +42,7 @@ src/
     index.ts                  # Registry class + dispatch logic
     types.ts                  # ResourceDefinition, ToolsetDefinition, etc.
     toolsets/                  # One file per toolset (declarative data)
-  tools/                      # 11 generic MCP tools (thin dispatch wrappers)
+  tools/                      # 11 generic MCP tools (thin dispatch wrappers, including harness_schema)
   resources/                  # MCP resource providers
   prompts/                    # MCP prompt templates
   utils/                      # Errors, logger, rate limiter, deep links, etc.
@@ -130,7 +134,9 @@ Use `supportedScopes` when one Harness resource type can operate at multiple lev
 
 **outputSchema and structured content** live on the 11 generic tool wrappers, not individual resource definitions. Keep resource list responses object-friendly where possible; `harness_list` normalizes top-level arrays and common wrappers (`content`, `data`, `body`, `objects`, `features`) into `{ items, total?, page? }` for strict MCP clients.
 
-**opt-in toolsets** should set `optIn: true` on the `ToolsetDefinition` when the resource family is specialized or noisy enough that most users should not see it by default. The current opt-in example is `iacm`; users enable it with `HARNESS_TOOLSETS=+iacm`.
+**opt-in toolsets** should set `optIn: true` on the `ToolsetDefinition` when the resource family is specialized or noisy enough that most users should not see it by default. The current opt-in example is `ansible`; users enable it with `HARNESS_TOOLSETS=+ansible`. IaCM is default-enabled (`optIn: false`), so do not use it as an opt-in example.
+
+**Entity YAML schemas** for `connector`, `environment`, `service`, `secret`, and `infrastructure` live under `src/data/schemas/entities/` as vendored snapshots. Refresh them with `pnpm sync-entity-schemas` when Harness NG `/yaml-schema` changes, then run schema coverage and docs checks. `harness_schema` serves matching bundled snapshots first and falls back to live NG schema fetches when the runtime account does not match the vendored metadata.
 
 ### 5. bodySchema — required for create/update operations
 

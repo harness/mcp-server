@@ -409,7 +409,7 @@ describe("HTTP /mcp route-level auth", () => {
     });
   });
 
-  it("returns 401 when PAT account ID mismatches x-harness-account-id", async () => {
+  it("returns 401 when API key account ID mismatches x-harness-account-id", async () => {
     const app = buildAuthTestApp({ multiUser: true });
     await withListeningApp(app, async (baseUrl) => {
       const res = await postMcp(baseUrl, {
@@ -424,6 +424,20 @@ describe("HTTP /mcp route-level auth", () => {
         jsonrpc: "2.0",
         error: { code: -32001 },
       });
+    });
+  });
+
+  it("succeeds with SAT account ID extraction when x-harness-account-id is omitted", async () => {
+    const app = buildAuthTestApp({ multiUser: true });
+    await withListeningApp(app, async (baseUrl) => {
+      const res = await postMcp(baseUrl, {
+        body: buildInitializeBody(),
+        headers: {
+          "x-harness-api-key": "sat.myaccount.token.secret",
+        },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ jsonrpc: "2.0", id: 1, result: { ok: true } });
     });
   });
 

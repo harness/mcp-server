@@ -58,8 +58,8 @@ describe("iacmToolset structure", () => {
     expect(iacmToolset.name).toBe("iacm");
   });
 
-  it("is opt-in (not loaded by default)", () => {
-    expect(iacmToolset.optIn).toBe(true);
+  it("is loaded by default (not opt-in)", () => {
+    expect(iacmToolset.optIn).toBe(false);
   });
 
   it("registers all 5 resource types", () => {
@@ -95,12 +95,12 @@ describe("iacmToolset structure", () => {
   });
 });
 
-// ─── Registry opt-in behaviour ───────────────────────────────────────────────
+// ─── Registry default-on behaviour ───────────────────────────────────────────
 
-describe("iacm opt-in with Registry", () => {
-  it("is NOT present when HARNESS_TOOLSETS is unset (all defaults)", () => {
+describe("iacm default-on with Registry", () => {
+  it("IS present when HARNESS_TOOLSETS is unset (all defaults)", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: undefined }));
-    expect(registry.getAllResourceTypes()).not.toContain("iacm_workspace");
+    expect(registry.getAllResourceTypes()).toContain("iacm_workspace");
   });
 
   it("IS present when explicitly enabled with HARNESS_TOOLSETS=iacm", () => {
@@ -353,9 +353,9 @@ describe("endpoint paths", () => {
     expect(getOp("iacm_module", "get").path).toBe("/iacm/api/modules/{moduleId}");
   });
 
-  it("iacm_activity_resource_change list uses the execution resource-changes endpoint", () => {
+  it("iacm_activity_resource_change list uses the activity resource-changes endpoint", () => {
     expect(getOp("iacm_activity_resource_change", "list").path).toContain(
-      "/executions/{pipelineExecutionId}/resource-changes",
+      "/activities/{activityId}/resource-changes",
     );
   });
 });
@@ -373,7 +373,7 @@ describe("iacm registry dispatch", () => {
     expect(request.path).toBe("/iacm/api/modules/4640");
   });
 
-  it("dispatches activity resource changes by execution id", async () => {
+  it("dispatches activity resource changes by activity id", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ planned_changes: [] });
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
 
@@ -381,10 +381,11 @@ describe("iacm registry dispatch", () => {
       org_id: "default",
       project_id: "Testim",
       activity_id: "exec-123",
+      workspace_id: "ws-1",
     });
 
     const request = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
-    expect(request.path).toBe("/iacm/api/orgs/default/projects/Testim/executions/exec-123/resource-changes");
-    expect(request.params.workspace).toBeUndefined();
+    expect(request.path).toBe("/iacm/api/orgs/default/projects/Testim/activities/exec-123/resource-changes");
+    expect(request.params.workspace).toBe("ws-1");
   });
 });

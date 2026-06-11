@@ -1,6 +1,6 @@
 # Harness MCP Server — Gemini CLI Context
 
-This extension connects Gemini CLI to the Harness Platform through 11 consolidated MCP tools that cover 190 resource types across 32 default toolsets.
+This extension connects Gemini CLI to the Harness Platform through 11 consolidated MCP tools that cover 202 resource types across 33 default toolsets.
 
 ## How This Server Works
 
@@ -23,6 +23,9 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - `harness_search` — Search across multiple resource types at once
 - `harness_diagnose` — Diagnose pipelines, connectors, delegates, and GitOps applications
 - `harness_status` — Project health overview: failed, running, and recent executions
+- `harness_schema` — Fetch bundled pipeline/template schemas, named YAML examples, and scope-aware entity schemas for connectors, environments, services, secrets, and infrastructure
+
+`harness_list` returns strict structured content for MCP clients: array-like Harness responses are normalized into `{ "items": [...], "total": <count>, "page": <page> }`, while the text payload still contains compact JSON.
 
 ## Available Capabilities
 
@@ -51,9 +54,9 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - Track commitment coverage, utilisation, and savings
 
 ### Security & Compliance
-- Security Test Orchestration (STO): manage issues, approve/reject exemptions
+- Security Test Orchestration (STO): manage issues, create exemptions, and approve or reject exemptions with explicit approval scope
 - Supply Chain Security (SCS): track artifacts, compliance, SBOMs, chain of custody
-- Audit trail: comprehensive audit logs for governance
+- Audit trail: registry-dispatched list/get/create/update/delete/execute operations can emit structured events through the default logger-filtered stderr sink, optional durable JSONL/webhook sinks, and optional OpenTelemetry spans
 
 ### GitOps
 - Manage agents, applications, clusters, repositories
@@ -80,8 +83,19 @@ Unlike traditional MCP servers with one tool per API endpoint, this server uses 
 - Access custom dashboards and data exports
 
 ### Infrastructure as Code Management (IaCM)
-- Opt-in toolset for Terraform workspaces, resources, module registry entries, workspace costs, and activity resource changes
-- Enable with `HARNESS_TOOLSETS=+iacm`; IaCM APIs require org/project scope
+- Default-enabled toolset for Terraform workspaces, resources, module registry entries, workspace costs, and activity resource changes
+- Workspace, resource, cost, and activity-change APIs require org/project scope; the module registry is account-scoped
+- Use `iacm_workspace` to find `workspace_id`; `iacm_activity_resource_change` requires both `activity_id` and `workspace_id`
+- IaCM `page_count` values count the current page only; paginate while `has_more` is true when a total is needed
+
+### Ansible
+- Opt-in toolset for Ansible inventories, playbooks, hosts, and activity history
+- Enable with `HARNESS_TOOLSETS=+ansible`; Ansible APIs require org/project scope
+
+### Database DevOps (DbOps)
+- Manage database schemas and instances with create/update/delete support
+- List snapshot object names and fetch full snapshot metadata for schema instances
+- Resolve the default LLM authoring pipeline with `database_llm_authoring_pipeline`
 
 ### Access Control
 - Manage users, user groups, service accounts
@@ -131,9 +145,9 @@ Multi-scope resources such as connectors, services, environments, infrastructure
 2. **Configure environment variables** in the project's `.env` file:
    ```
    HARNESS_API_KEY=pat.xxxxx.xxxxx.xxxxx
-   HARNESS_ACCOUNT_ID=your_account_id   # Optional for PATs, required for non-PAT API keys
-   HARNESS_ORG=default
-   HARNESS_PROJECT=your_project
+   HARNESS_ACCOUNT_ID=your_account_id   # Optional for PAT/SAT keys with embedded account ID
+   HARNESS_ORG=your_org_id              # Optional default; omit to pass org_id per request
+   HARNESS_PROJECT=your_project_id      # Optional default; omit to pass project_id per request
    HARNESS_RATE_LIMIT_RPS=10            # Optional: client-side throttling
    HARNESS_MAX_BODY_SIZE_MB=10          # Optional: HTTP mode request size limit
    ```
@@ -154,4 +168,9 @@ Multi-scope resources such as connectors, services, environments, infrastructure
 **Toolset filtering:**
 - Set `HARNESS_TOOLSETS=pipelines,services,connectors` in `.env` to limit which resource types are available
 - Leave empty to enable all default toolsets
-- Add opt-in IaCM alongside defaults with `HARNESS_TOOLSETS=+iacm`
+- Add opt-in toolsets alongside defaults: `HARNESS_TOOLSETS=+ansible`
+
+**Schema lookup:**
+- Use `harness_schema(resource_type="pipeline")` or a nested `path` before authoring pipeline YAML
+- Use `harness_schema(resource_type="connector", scope="project", org_id="...", project_id="...")` for scoped entity YAML schemas
+- Maintainers refresh vendored entity schema snapshots with `pnpm sync-entity-schemas`

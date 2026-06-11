@@ -4,6 +4,8 @@
  * - Unwrap common wrapper keys (environment, service, connector) when APIs expect the entity at top level.
  */
 
+import { parse as parseYaml } from "yaml";
+
 /** Recursively remove null and undefined so they are omitted from JSON. */
 export function stripNulls(obj: unknown): unknown {
   if (obj === null || obj === undefined) return undefined;
@@ -27,6 +29,21 @@ export function unwrapBody(body: unknown, wrapperKey: string): unknown {
   return body;
 }
 
+function parseYamlBody(body: string): unknown {
+  try {
+    return parseYaml(body);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    throw new Error(`body must be a JSON object or YAML object for this resource. Failed to parse YAML body: ${detail}`);
+  }
+}
+
+function assertObjectBody(body: unknown): void {
+  if (body == null || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error("body must be a JSON object or YAML object for this resource.");
+  }
+}
+
 /**
  * Options for the standardized body builder factory.
  */
@@ -48,6 +65,13 @@ export interface BodyBuilderOptions {
 export function buildBodyNormalized(opts: BodyBuilderOptions = {}): (input: Record<string, unknown>) => unknown {
   return (input: Record<string, unknown>) => {
     let body = input.body;
+
+    if (typeof body === "string") {
+      body = parseYamlBody(body);
+      assertObjectBody(body);
+    } else if (body != null && (typeof body !== "object" || Array.isArray(body))) {
+      assertObjectBody(body);
+    }
 
     // Step 1a: Unwrap wrapper key if configured
     if (opts.unwrapKey) {

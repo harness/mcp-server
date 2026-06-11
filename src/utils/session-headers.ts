@@ -81,7 +81,9 @@ export function mergeConfigWithSessionHeaders(
   // Identity headers are only accepted in multi-user mode.
   // In single-user mode, the operator's config is authoritative.
   const sessionApiKey = isMultiUser ? getHeader(headers, API_KEY_HEADER) : undefined;
-  const sessionAccountId = isMultiUser ? getHeader(headers, ACCOUNT_ID_HEADER) : undefined;
+  const rawSessionAccountId = isMultiUser ? getHeader(headers, ACCOUNT_ID_HEADER) : undefined;
+  const tokenAccountId = sessionApiKey ? extractAccountIdFromToken(sessionApiKey) : undefined;
+  const sessionAccountId = rawSessionAccountId ?? tokenAccountId;
   const sessionOrg = getHeader(headers, ORG_HEADER);
   const sessionProject = getHeader(headers, PROJECT_HEADER);
 
@@ -93,10 +95,9 @@ export function mergeConfigWithSessionHeaders(
       throw new MissingSessionCredentialsError(missing);
     }
 
-    const patAccountId = extractAccountIdFromToken(sessionApiKey!);
-    if (patAccountId && patAccountId !== sessionAccountId) {
+    if (tokenAccountId && rawSessionAccountId && tokenAccountId !== rawSessionAccountId) {
       throw new MissingSessionCredentialsError([
-        `${ACCOUNT_ID_HEADER} (value "${sessionAccountId}" does not match PAT account "${patAccountId}")`,
+        `${ACCOUNT_ID_HEADER} (value "${rawSessionAccountId}" does not match API key account "${tokenAccountId}")`,
       ]);
     }
   }

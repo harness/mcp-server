@@ -10,6 +10,7 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { confirmViaElicitation } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
+import { formatBodyPreview } from "../utils/body-preview.js";
 import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { updateOutputSchema } from "./output-schemas.js";
 import { applyJsonPatch, extractMutableBody, serializeBody, computeDiff, supportsJsonPatch, type PatchOperation } from "../utils/json-patch.js";
@@ -119,8 +120,8 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
       description: "Update an existing Harness resource. For pipelines/input sets: pass body as a YAML string directly, or use body.yamlPipeline/body.pipeline. You can pass a Harness URL to auto-extract identifiers. Response includes openInHarness link to the updated resource when applicable. For large YAML-backed pipelines and templates, you can do targeted JSON Patch via 'operations' mode (mutually exclusive with 'body') to change specific fields without resending the whole definition.",
       inputSchema: {
         resource_type: resourceTypeSchema(updatableTypes).describe("The type of resource to update"),
-        resource_id: z.string().describe("The identifier of the resource to update. Auto-extracted from url when omitted.").optional(),
-        url: z.string().describe("A Harness UI URL — org, project, resource type, and ID are extracted automatically").optional(),
+        resource_id: z.string().optional().describe("The identifier of the resource to update. Optional when url contains the resource ID."),
+        url: z.string().optional().describe("A Harness UI URL — org, project, resource type, ID, and supported resource_scope are extracted automatically"),
         resource_scope: resourceScopeSchema,
         body: z.union([
           z.record(z.string(), z.unknown()),
@@ -128,10 +129,10 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         ]).optional().describe("Full resource definition body (mutually exclusive with operations). For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object)"),
         operations: patchOperationsSchema.optional().describe("RFC 6902 JSON Patch operations for large YAML-backed pipelines, templates, and input sets (mutually exclusive with body, max 100). Array paths use numeric indices per RFC 6901 (e.g. /pipeline/stages/0/stage/spec). To safely target an array element (stage, step, variable), precede the replace/remove with a `test` op asserting that element's identifier or name at the index. For REMOTE (git-backed) resources, still pass git details in params (branch, store_type, connector_ref, repo_name, file_path, last_object_id, last_commit_id, commit_msg)."),
         dry_run: z.boolean().default(false).optional().describe("When true with operations, validates the patch and returns a preview of changes without actually updating the resource"),
-        org_id: z.string().describe("Organization identifier (overrides default)").optional(),
-        project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        confirm: z.boolean().describe("Set to true to confirm the operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP).").optional(),
-        params: z.record(z.string(), z.unknown()).describe("Additional identifiers (e.g. pipeline_id for triggers/input sets, version_label for templates).").optional(),
+        org_id: z.string().optional().describe("Organization identifier (overrides default)"),
+        project_id: z.string().optional().describe("Project identifier (overrides default)"),
+        confirm: z.boolean().optional().describe("Set to true to confirm the operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP)."),
+        params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers (e.g. pipeline_id for triggers/input sets, version_label for templates)."),
       },
       outputSchema: updateOutputSchema,
       annotations: {
@@ -145,14 +146,11 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
     async (args) => {
       try {
         // Resolve resource_id from the URL when not passed explicitly, mirroring
-        // harness_get. Do this before any confirmation/GET/network so we can fail
-        // loud and early if the id is still unresolved.
+        // harness_get. The handlers below own the final "required"/"conflicting"
+        // identifier errors so params-only id resolution still works.
         if (!args.resource_id && args.url) {
           const fromUrl = asString(applyUrlDefaults({}, args.url).resource_id);
           if (fromUrl) args.resource_id = fromUrl;
-        }
-        if (!args.resource_id) {
-          return errorResult("resource_id is required (pass it directly or provide a url that contains it).");
         }
 
         if (args.body !== undefined && args.operations !== undefined) {
@@ -205,14 +203,34 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
 }
 
 async function handleFullBodyUpdate(server: McpServer, registry: Registry, client: HarnessClient, config: Config | undefined, def: ResourceDefinition, args: UpdateToolArgs) {
+  const { params, body, confirm: _confirm, ...rest } = args;
+  const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
+  const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url, { includeResourceScope: true });
+  const coercedParams = coerceRecord(params);
+  if (coercedParams) Object.assign(input, coercedParams);
+
+  const identFields = def.identifierFields;
+  const primaryField = identFields.length > 1
+    ? identFields[identFields.length - 1]!
+    : identFields[0];
+  const fromResourceId = asString(input.resource_id);
+  const fromPrimaryField = primaryField ? asString(input[primaryField]) : undefined;
+  if (fromResourceId && fromPrimaryField && fromResourceId !== fromPrimaryField) {
+    return errorResult(
+      `Conflicting identifiers: resource_id/url gives "${fromResourceId}" but params.${primaryField} gives "${fromPrimaryField}". Provide one or ensure they match.`,
+    );
+  }
+  const resolvedResourceId = fromResourceId ?? fromPrimaryField;
+  if (!resolvedResourceId) {
+    return errorResult("resource_id is required for harness_update unless url contains the resource ID or params includes the resource-specific ID field.");
+  }
+
   const risk = def.operations.update!.operationPolicy.risk;
-  const bodyPreview = typeof args.body === "string"
-    ? (args.body.length > 500 ? args.body.slice(0, 500) + "\n...(truncated)" : args.body)
-    : JSON.stringify(args.body, null, 2);
+  const bodyPreview = formatBodyPreview(args.body);
   const elicit = await confirmViaElicitation({
     server,
     toolName: "harness_update",
-    message: `Update ${args.resource_type} "${args.resource_id}"?\n\n${bodyPreview}`,
+    message: `Update ${args.resource_type} "${resolvedResourceId}"?\n\n${bodyPreview}`,
     risk,
     autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
     callerConfirmed: args.confirm === true,
@@ -222,14 +240,19 @@ async function handleFullBodyUpdate(server: McpServer, registry: Registry, clien
       `Operation ${elicit.reason} by user. Hint: if your client does not support interactive confirmation, pass confirm: true to proceed.`,
     );
   }
-  const { params, body, confirm: _confirm, ...rest } = args;
-  const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
-  const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url);
-  const coercedParams = coerceRecord(params);
-  if (coercedParams) Object.assign(input, coercedParams);
-  applyUpdateInputDefaults(input, def, args);
+  if (primaryField) {
+    input[primaryField] = resolvedResourceId;
+  }
+  const versionLabel = asString(input.version_label);
+  if (!versionLabel) {
+    if (isRecord(args.body) && "version_label" in args.body) {
+      input.version_label = args.body.version_label;
+    } else if (args.resource_type === "template") {
+      input.version_label = "v1";
+    }
+  }
 
-  const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation: elicit.method, resource_id: args.resource_id });
+  const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation: elicit.method, resource_id: resolvedResourceId });
   return jsonResult(result);
 }
 

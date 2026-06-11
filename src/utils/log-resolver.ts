@@ -7,7 +7,11 @@ const log = createLogger("log-resolver");
 
 const DEFAULT_POLL_ATTEMPTS = 3;
 const DEFAULT_POLL_INTERVAL_MS = 3000;
-const DEFAULT_MAX_LOG_BYTES = 10 * 1024 * 1024; // 10 MB
+// Tightened from 10 MB to 2 MB. Diagnose callers truncate output to a few
+// hundred lines anyway; buffering 10 MB per concurrent log fetch into the V8
+// heap was a contributor to the prod2 mcp-server-internal cgroup OOMs
+// (AIDEVOPS-2200). Callers needing more can still pass maxLogSizeBytes.
+const DEFAULT_MAX_LOG_BYTES = 2 * 1024 * 1024; // 2 MB
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
 
 export interface LogResolveOptions {
@@ -439,6 +443,7 @@ async function downloadBlobContent(
     // already matches our base URL (rewrite would be a no-op). When hostnames differ
     // (self-managed deployment), rewrite regardless — the original hostname (app.harness.io)
     // may not be reachable from the client's network.
+    // Invariant A: rewrite when hosts differ. Invariant B: skip only when they already match (rewrite is a no-op).
     if (signedHeadersIncludeHost(blobUrl) && blobUrl.hostname === baseUrl.hostname) {
       log.debug("Downloading log blob (direct, host-bound presigned CDN)", {
         prefix,

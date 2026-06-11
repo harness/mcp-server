@@ -132,13 +132,15 @@ export type ToolsetName =
   | "access_control"
   | "settings"
   | "platform"
+  | "file_store"
 
   | "visualizations"
   | "governance"
   | "freeze"
   | "overrides"
   | "ai-evals"
-  | "iacm";
+  | "iacm"
+  | "ansible";
 
 export type ProductName = "harness" | "fme";
 
@@ -173,6 +175,22 @@ export interface BodySchema {
   description: string;
   /** The fields the body expects */
   fields: BodyFieldSpec[];
+}
+
+/**
+ * Schema for path/query params passed via the `params` argument.
+ * Surfaced by harness_describe so agents know what identifiers to pass and under what names.
+ */
+export interface ParamsSchema {
+  /** The params this operation requires or accepts */
+  fields: Array<{
+    /** Field name as used in the `params` argument (e.g. "repo_id", "pr_number") */
+    name: string;
+    /** Whether this param is required for the operation to succeed */
+    required: boolean;
+    /** Brief description shown to agents */
+    description: string;
+  }>;
 }
 
 /**
@@ -249,6 +267,12 @@ export interface EndpointSpec {
   description?: string;
   /** Optional body schema for write operations — exposed via harness_describe */
   bodySchema?: BodySchema;
+  /**
+   * Optional schema for params (path/query identifiers) — exposed via harness_describe.
+   * Use this to document required path identifiers (e.g. repo_id, pr_number) so agents
+   * know the exact field names to pass via the `params` argument.
+   */
+  paramsSchema?: ParamsSchema;
   /**
    * When the bodyBuilder wraps user fields inside a single key
    * (e.g. `{ project: { identifier, name } }`), set this to the wrapper key

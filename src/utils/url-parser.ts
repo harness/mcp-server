@@ -23,6 +23,10 @@ export interface ParsedHarnessUrl {
   step_id?: string;
   stage_id?: string;
   stage_execution_id?: string;
+  branch?: string;
+  store_type?: string;
+  connector_ref?: string;
+  repo_name?: string;
 }
 
 /** Union of ParsedHarnessUrl fields that RESOURCE_SEGMENTS can write to. */
@@ -80,6 +84,7 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "resource-groups":  { type: "resource_group",      contextField: "resource_id" },
   "audit-trail":      { type: "audit_log",           contextField: "resource_id" },
   "dashboards":       { type: "dashboard",           contextField: "resource_id" },
+  "file-store":       { type: "file_store",          contextField: "resource_id" },
   "pullrequests":     { type: "pull_request",        contextField: "pr_number" },
   "pulls":            { type: "pull_request",        contextField: "pr_number" },
   "pull-requests":    { type: "pull_request",        contextField: "pr_number" },
@@ -93,6 +98,7 @@ const URL_RESOURCE_SCOPE_TYPES = new Set([
   "infrastructure",
   "secret",
   "template",
+  "file_store",
 ]);
 
 /** Structural segments that should never be treated as resource IDs */
@@ -176,8 +182,7 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     if (
       next &&
       !RESOURCE_SEGMENTS[next] &&
-      !STRUCTURAL.has(next) &&
-      !MODULES.has(next)
+      !STRUCTURAL.has(next)
     ) {
       id = decodeURIComponent(next);
       i++; // skip past the ID segment
@@ -224,6 +229,18 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
   const commentId = url.searchParams.get("commentId");
   if (commentId) result.comment_id = commentId;
 
+  const branch = url.searchParams.get("branch");
+  if (branch) result.branch = branch;
+
+  const storeType = url.searchParams.get("storeType");
+  if (storeType) result.store_type = storeType;
+
+  const connectorRef = url.searchParams.get("connectorRef");
+  if (connectorRef) result.connector_ref = connectorRef;
+
+  const repoName = url.searchParams.get("repoName");
+  if (repoName) result.repo_name = repoName;
+
   return result;
 }
 
@@ -246,6 +263,10 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "step_id",
   "stage_id",
   "stage_execution_id",
+  "branch",
+  "store_type",
+  "connector_ref",
+  "repo_name",
 ];
 
 export interface ApplyUrlDefaultsOptions {

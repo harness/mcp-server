@@ -1,4 +1,5 @@
 import * as z from "zod/v4";
+import { parse as parseYaml } from "yaml";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
@@ -12,7 +13,7 @@ import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
-import { resourceTypeSchema } from "./input-schemas.js";
+import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
 import { executeOutputSchema } from "./output-schemas.js";
@@ -53,7 +54,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
   server.registerTool(
     "harness_execute",
     {
-      description: "Execute an action on a Harness resource: run/retry/interrupt pipelines, kill/restore FME feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers. Pass `wait: true` for pipeline run/retry to block until the execution reaches a terminal status — single tool call instead of an LLM polling loop.",
+      description: "Execute an action on a Harness resource: run/retry/interrupt pipelines, kill/restore FME feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers. Pass `wait: true` for pipeline run/retry to block until the execution reaches a terminal status — single tool call instead of an LLM polling loop. For HQL batch operations pass `queries` with resource_type='hql_query' and action='validate' or 'run'.",
       inputSchema: {
         resource_type: resourceTypeSchema(executableTypes).optional().describe("Resource type with executable actions. Auto-detected from url."),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
@@ -61,6 +62,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         resource_id: z.string().describe("Primary resource identifier").optional(),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        resource_scope: resourceScopeSchema,
         inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Pipeline runtime inputs: key-value pairs like {branch: 'main'} (auto-resolved), or full YAML string. Check runtime_input_template first via harness_get.").optional(),
         input_set_ids: z.array(z.string()).describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'}).").optional(),
         body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
@@ -69,6 +71,13 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         wait: z.boolean().describe("For pipeline run/retry actions: block until the execution reaches a terminal status (Success/Failed/Aborted/Errored/Expired). Server-side polling — a single tool call gives the agent the final outcome instead of an LLM polling loop. Ignored for other actions.").optional(),
         wait_timeout_seconds: z.number().min(10).max(7200).describe("Max seconds to wait when wait=true. Default 600 (10 min). Max 7200 (2 h). When the timeout fires, returns execution_timed_out=true with the last observed status.").optional(),
         wait_poll_interval_seconds: z.number().min(2).max(60).describe("Initial poll interval when wait=true (seconds). Default 3. Backoff multiplier 1.5x, capped at 30s.").optional(),
+        queries: z.array(
+          z.object({
+            query_string: z.string().describe("HQL query string"),
+            timeout_ms: z.number().optional().describe("Per-query timeout in milliseconds"),
+            max_results: z.number().optional().describe("Maximum rows to return"),
+          })
+        ).max(20).optional().describe("Batch HQL queries — use with resource_type='hql_query' and action='validate' or 'run'. Fans out in parallel, returns per-query results."),
       },
       outputSchema: executeOutputSchema,
       annotations: {
@@ -81,8 +90,8 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
     },
     async (args, extra) => {
       try {
-        const { params, wait, wait_timeout_seconds, wait_poll_interval_seconds, confirm: _confirm, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        const { params, wait, wait_timeout_seconds, wait_poll_interval_seconds, confirm: _confirm, queries: batchQueries, ...rest } = args;
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
         log.debug("Execute input after params merge", { input: JSON.stringify(input), params: JSON.stringify(params) });
@@ -116,23 +125,64 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           );
         }
 
-        // Map resource_id → identifierFields[0] (the documented primary field).
-        // For multi-identifier resources where the primary field is already
-        // populated with a DIFFERENT value (e.g. URL filled repo_id while
-        // resource_id is the pr_number), fall through to the child (last)
-        // identifier field instead — preserving the parent context.
-        // When the primary field holds the SAME value as resource_id (e.g.
-        // GitOps agent_id supplied via both resource_id and params), just
-        // overwrite — no fallthrough.
+        // Batch HQL path — fan out queries in parallel through the registry
+        if (batchQueries && batchQueries.length > 0) {
+          if (resourceType !== "hql_query") {
+            return errorResult(`queries batch parameter is only supported for resource_type='hql_query'. Got: ${resourceType}`);
+          }
+
+          // Fail fast on policy errors before fan-out — mirrors registry.dispatchExecute()
+          // risk-based enforcement: read-safe actions (e.g. hql validate/run) are allowed in
+          // read-only mode; write actions are blocked before any query is dispatched.
+          if (config?.HARNESS_READ_ONLY && risk !== "read") {
+            return errorResult(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${args.action}" is not allowed.`);
+          }
+
+          const auditCtxBatch = { tool: "harness_execute" as const, confirmation: elicit.method, action: args.action };
+
+          try {
+            const allResults = await Promise.allSettled(
+              batchQueries.map((q) =>
+                registry.dispatchExecute(client, "hql_query", args.action, { body: { query_string: q.query_string, ...(q.timeout_ms != null ? { timeout_ms: q.timeout_ms } : {}), ...(q.max_results != null ? { max_results: q.max_results } : {}) } }, auditCtxBatch, extra.signal),
+              ),
+            );
+
+            const results = allResults.map((r, i) => {
+              const query_string = batchQueries[i]!.query_string;
+              if (r.status === "fulfilled") return { query_string, success: true, ...((r.value as Record<string, unknown>) ?? {}) };
+              return { query_string, success: false, error: r.reason instanceof Error ? r.reason.message : String(r.reason) };
+            });
+            const succeeded = results.filter((r) => r.success).length;
+            return jsonResult({ results, summary: { total: results.length, succeeded, failed: results.length - succeeded } });
+          } catch (err) {
+            if (isUserError(err) || isUserFixableApiError(err)) return errorResult((err as Error).message);
+            throw toMcpError(err);
+          }
+        }
+
+        // Map resource_id to the execute action's target identifier. Most
+        // resources use identifierFields[0], but some execute endpoints omit
+        // the parent identifier used by get/update/delete and target a child
+        // path field directly.
         const primaryField = def.identifierFields[0];
         if (primaryField && resourceId) {
-          const existing = input[primaryField];
-          const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
-          if (primaryAlreadySet && def.identifierFields.length > 1) {
-            const childField = def.identifierFields[def.identifierFields.length - 1]!;
-            input[childField] = resourceId;
+          const actionPathFields = new Set(Object.keys(actionSpec?.pathParams ?? {}));
+          const primaryUsedByAction = actionPathFields.has(primaryField);
+          const actionTargetField = primaryUsedByAction
+            ? undefined
+            : [...def.identifierFields].reverse().find((field) => actionPathFields.has(field));
+
+          if (actionTargetField) {
+            input[actionTargetField] = resourceId;
           } else {
-            input[primaryField] = resourceId;
+            const existing = input[primaryField];
+            const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
+            if (primaryAlreadySet && def.identifierFields.length > 1) {
+              const childField = def.identifierFields[def.identifierFields.length - 1]!;
+              input[childField] = resourceId;
+            } else {
+              input[primaryField] = resourceId;
+            }
           }
         }
 
@@ -140,6 +190,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         // (grpc-gateway array style). Comma-joined single param is ignored by pipeline execute.
         if (args.input_set_ids && args.input_set_ids.length > 0) {
           input.input_set_ids = [...args.input_set_ids];
+        }
+
+        if (resourceType === "pipeline" && args.action === "run") {
+          normalizeRemotePipelineRunParams(input);
         }
 
         // When only input_set_ids are provided, fetch each input set and build runtime YAML.
@@ -404,6 +458,66 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
       }
     },
   );
+}
+
+function normalizeRemotePipelineRunParams(input: Record<string, unknown>): void {
+  input.store_type ??= input.storeType;
+  input.connector_ref ??= input.connectorRef;
+  input.repo_name ??= input.repoName;
+
+  const runtimeCodebase = extractRuntimeYamlCodebase(input.inputs);
+  if (runtimeCodebase?.repoName && input.repo_name === undefined) {
+    input.repo_name = runtimeCodebase.repoName;
+  }
+  if (runtimeCodebase?.branch && input.branch === undefined) {
+    input.branch = runtimeCodebase.branch;
+  }
+  if (runtimeCodebase?.branch && input.pipeline_branch === undefined) {
+    input.pipeline_branch = runtimeCodebase.branch;
+  }
+  if (
+    input.store_type === undefined &&
+    (runtimeCodebase?.branch !== undefined || runtimeCodebase?.repoName !== undefined)
+  ) {
+    input.store_type = "REMOTE";
+  }
+
+  const storeType = asString(input.store_type)?.toUpperCase();
+  const hasRemoteGitParams = storeType === "REMOTE" || input.connector_ref !== undefined || input.repo_name !== undefined;
+
+  if (
+    hasRemoteGitParams &&
+    input.pipeline_branch === undefined &&
+    typeof input.branch === "string" &&
+    input.branch.length > 0
+  ) {
+    input.pipeline_branch = input.branch;
+  }
+}
+
+function extractRuntimeYamlCodebase(inputs: unknown): { branch?: string; repoName?: string } | undefined {
+  if (typeof inputs !== "string" || inputs.trim().length === 0) {
+    return undefined;
+  }
+
+  try {
+    const root = asRecord(parseYaml(inputs));
+    const pipeline = asRecord(root?.pipeline);
+    const properties = asRecord(pipeline?.properties);
+    const ci = asRecord(properties?.ci);
+    const codebase = asRecord(ci?.codebase);
+    if (!codebase) return undefined;
+
+    const build = asRecord(codebase.build);
+    const spec = asRecord(build?.spec);
+    const branch = asString(spec?.branch);
+    const repoName = asString(codebase.repoName);
+
+    if (!branch && !repoName) return undefined;
+    return { branch, repoName };
+  } catch {
+    return undefined;
+  }
 }
 
 const STRUCTURAL_FIELDS = new Set([

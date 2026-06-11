@@ -158,7 +158,7 @@ export const iacmToolset: ToolsetDefinition = {
     "Use iacm_workspace to list and get workspaces, iacm_resource for Terraform resources and outputs, " +
     "iacm_module for the module registry, iacm_workspace_costs for cost breakdown, " +
     "and iacm_activity_resource_change for activity diffs.",
-  optIn: true,
+  optIn: false,
   resources: [
     // ─── Workspace ─────────────────────────────────────────────────────────
     {
@@ -456,34 +456,29 @@ export const iacmToolset: ToolsetDefinition = {
       resourceType: "iacm_activity_resource_change",
       displayName: "IaCM Activity Resource Change",
       description:
-        "Resource attribute diffs from a specific IaCM pipeline execution. " +
-        "Each response can include resources, planned_changes, drift_changes, outputs, data_sources, " +
-        "and the pipeline execution/stage/workspace identifiers. activity_id is treated as the pipeline execution ID.",
+        "Resource attribute diffs from a specific IaCM activity (plan, apply, or destroy execution). " +
+        "Each entry has resource_name, resource_type, provider, action (add/change/destroy/no-op), " +
+        "and changed_attributes with before/after values. " +
+        "Response also includes summary counts: total_added, total_changed, total_destroyed, total_unchanged. " +
+        "Both activity_id and workspace_id are required. " +
+        "Activity IDs appear in the workspace execution history in the Harness UI.",
       toolset: "iacm",
       scope: "project",
-      identifierFields: ["activity_id"],
+      identifierFields: ["activity_id", "workspace_id"],
       listFilterFields: [
         {
           name: "activity_id",
           required: true,
           description:
-            "The IaCM pipeline execution ID whose resource changes should be listed.",
+            "The UUID of the IaCM activity (e.g. 'd2487e0d-a0a4-40ee-b502-7e6e8fb3fd0a'). " +
+            "Found in workspace execution history in the Harness UI.",
           type: "string",
         },
         {
-          name: "pipeline_stage_id",
-          description: "Optional pipeline stage execution ID to narrow resource changes.",
+          name: "workspace_id",
+          required: true,
+          description: "The workspace identifier the activity belongs to.",
           type: "string",
-        },
-        {
-          name: "path_id",
-          description: "Optional Terragrunt path identifier for filtering module-specific resources.",
-          type: "string",
-        },
-        {
-          name: "exclude_state",
-          description: "When true, exclude values from state in the response.",
-          type: "boolean",
         },
       ],
       relatedResources: [
@@ -501,24 +496,23 @@ export const iacmToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/iacm/api/orgs/{org}/projects/{project}/executions/{pipelineExecutionId}/resource-changes",
+          path: "/iacm/api/orgs/{org}/projects/{project}/activities/{activityId}/resource-changes",
           pathParams: {
             org_id: "org",
             project_id: "project",
-            activity_id: "pipelineExecutionId",
+            activity_id: "activityId",
           },
           queryParams: {
-            exclude_state: "exclude_state",
-            pipeline_stage_id: "pipeline_stage_id",
-            path_id: "path_id",
+            workspace_id: "workspace",
           },
           preflight: requireProjectScope,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: activityChangesExtract,
           description:
-            "List resource changes for a specific IaCM pipeline execution. " +
-            "Returns the documented resources, planned_changes, drift_changes, outputs, and data_sources sections. " +
-            "Requires activity_id, which is used as the pipeline_execution_id path parameter.",
+            "List resource changes for a specific IaCM activity (plan, apply, or destroy). " +
+            "Returns per-resource before/after attribute diffs, action (add/change/destroy/no-op), " +
+            "and summary counts (total_added, total_changed, total_destroyed, total_unchanged). " +
+            "Requires activity_id (path) and workspace_id (query param).",
         },
       },
     },

@@ -167,7 +167,8 @@ describe("Registry", () => {
 
       expect(server.registerTool).toHaveBeenCalled();
 
-      const LOCAL_ONLY_TOOLS = new Set(["harness_describe", "harness_schema"]);
+      // harness_schema may call NG /yaml-schema for entity types when a client is configured.
+      const LOCAL_ONLY_TOOLS = new Set(["harness_describe"]);
 
       for (const [toolName, definition] of server.registerTool.mock.calls) {
         const annotations = (definition as { annotations?: Record<string, unknown> }).annotations;
@@ -752,6 +753,8 @@ describe("Registry", () => {
         label: "1.0.0",
         git_details: { store_type: "INLINE" },
       });
+      expect(call.body).not.toHaveProperty("orgIdentifier");
+      expect(call.body).not.toHaveProperty("projectIdentifier");
       expect(typeof call.body.template_yaml).toBe("string");
     });
 
@@ -812,6 +815,54 @@ describe("Registry", () => {
 
       const call = mockRequest.mock.calls[0][0];
       expect(call.path).toBe("/v1/templates");
+    });
+
+    it("template_v1 account scope overrides incidental org and project path inputs", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "acc_explicit", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "update", {
+        resource_scope: "account",
+        org_id: "AI_Devops",
+        project_id: "AICHAT",
+        template_id: "acc_explicit",
+        version_label: "1.0.0",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  identifier: acc_explicit\n  name: Account Explicit\n  step:\n    run:\n      script: echo hi\n",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/templates/acc_explicit/versions/1.0.0");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    });
+
+    it("template_v1 org scope overrides incidental project path inputs", async () => {
+      const templateRegistry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "templates",
+        HARNESS_ORG: "AI_Devops",
+        HARNESS_PROJECT: "AICHAT",
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "org_explicit", label: "1.0.0" });
+      const client = makeClient(mockRequest);
+
+      await templateRegistry.dispatch(client, "template_v1", "delete", {
+        resource_scope: "org",
+        org_id: "AI_Devops",
+        project_id: "AICHAT",
+        template_id: "org_explicit",
+        version_label: "1.0.0",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/v1/orgs/AI_Devops/templates/org_explicit/versions/1.0.0");
+      expect(call.params.projectIdentifier).toBeUndefined();
     });
 
     it("template_v1 update uses versioned v1 REST path at account scope", async () => {
@@ -1248,6 +1299,23 @@ describe("Registry", () => {
       await expect(
         registry.dispatchExecute(client, "pipeline", "run", { pipeline_id: "p1" }),
       ).rejects.toThrow(/Read-only mode/);
+    });
+
+    it("allows read-risk execute actions", async () => {
+      const readRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store", HARNESS_READ_ONLY: true }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
+      const client = makeClient(mockRequest);
+
+      await readRegistry.dispatchExecute(client, "file_store", "list_children", {
+        file_store_id: "folder123",
+        folder_name: "scripts",
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/ng/api/file-store/folder");
+      expect(call.body).toEqual({ identifier: "folder123", name: "scripts", type: "FOLDER" });
     });
   });
 

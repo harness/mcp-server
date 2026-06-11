@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { ConfigSchema, loadConfig, extractAccountIdFromToken } from "../src/config.js";
+import {
+  ConfigSchema,
+  extractAccountIdFromToken,
+  isPlaceholderCredential,
+  loadConfig,
+  resolveFmeApiKey,
+} from "../src/config.js";
 
 describe("extractAccountIdFromToken", () => {
   it("extracts account ID from a valid PAT", () => {
@@ -10,8 +16,16 @@ describe("extractAccountIdFromToken", () => {
     expect(extractAccountIdFromToken("pat.acct123.tokenId.secret.extra")).toBe("acct123");
   });
 
-  it("returns undefined for non-PAT tokens", () => {
-    expect(extractAccountIdFromToken("sat.acct123.tokenId.secret")).toBeUndefined();
+  it("extracts account ID from a valid SAT", () => {
+    expect(extractAccountIdFromToken("sat.acct123.tokenId.secret")).toBe("acct123");
+  });
+
+  it("extracts account ID from token prefixes case-insensitively", () => {
+    expect(extractAccountIdFromToken("SAT.acct123.tokenId.secret")).toBe("acct123");
+  });
+
+  it("returns undefined for unsupported token prefixes", () => {
+    expect(extractAccountIdFromToken("api.acct123.tokenId.secret")).toBeUndefined();
   });
 
   it("returns undefined for tokens with too few segments", () => {
@@ -63,6 +77,17 @@ describe("ConfigSchema", () => {
   it("HARNESS_ACCOUNT_ID is optional in schema", () => {
     const result = ConfigSchema.safeParse({ HARNESS_API_KEY: "pat.acct123.tok.sec" });
     expect(result.success).toBe(true);
+  });
+
+  it("extracts HARNESS_ACCOUNT_ID from service account API keys", () => {
+    const result = ConfigSchema.safeParse({
+      HARNESS_API_KEY: "sat.acct123.tokenId.secret",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_ACCOUNT_ID).toBe("acct123");
+    }
   });
 
   it("fails when HARNESS_API_KEY is empty", () => {
@@ -197,6 +222,16 @@ describe("ConfigSchema", () => {
         HARNESS_MCP_MODE: "multi-user",
       }),
     ).toThrow("HARNESS_API_KEY must not be set in multi-user mode");
+  });
+
+  it("rejects multi-user mode when HARNESS_FME_API_KEY is set", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        HARNESS_MCP_MODE: "multi-user",
+        HARNESS_ACCOUNT_ID: "acct123",
+        HARNESS_FME_API_KEY: "shared-fme-key",
+      }),
+    ).toThrow("HARNESS_FME_API_KEY must not be set in multi-user mode");
   });
 
   it("requires HARNESS_API_KEY in single-user mode", () => {
@@ -351,6 +386,64 @@ describe("ConfigSchema — HTTPS enforcement", () => {
       expect(result.data.HARNESS_FME_BASE_URL).toBe("https://custom.split.io");
     }
   });
+
+  it("parses explicit FME API key config", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_FME_API_KEY: "fme-admin-key",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_FME_API_KEY).toBe("fme-admin-key");
+    }
+  });
+
+  it("treats empty FME API key config as unset", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_FME_API_KEY: "",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_FME_API_KEY).toBeUndefined();
+    }
+  });
+
+  it("resolves FME auth from explicit key before Harness API key", () => {
+    expect(resolveFmeApiKey({
+      HARNESS_MCP_MODE: "single-user",
+      HARNESS_FME_API_KEY: "fme-admin-key",
+      HARNESS_API_KEY: "pat.acct123.tokenId.secret",
+    })).toBe("fme-admin-key");
+  });
+
+  it("falls back to non-placeholder Harness API key for FME auth", () => {
+    expect(resolveFmeApiKey({
+      HARNESS_MCP_MODE: "single-user",
+      HARNESS_FME_API_KEY: undefined,
+      HARNESS_API_KEY: "pat.acct123.tokenId.secret",
+    })).toBe("pat.acct123.tokenId.secret");
+  });
+
+  it("does not resolve hosted placeholder credentials for FME auth", () => {
+    expect(isPlaceholderCredential("dummy")).toBe(true);
+    expect(isPlaceholderCredential("pat.internal.internal.dummy")).toBe(true);
+    expect(resolveFmeApiKey({
+      HARNESS_MCP_MODE: "single-user",
+      HARNESS_FME_API_KEY: undefined,
+      HARNESS_API_KEY: "dummy",
+    })).toBeUndefined();
+  });
+
+  it("does not prefer a deployment-level FME key in multi-user mode", () => {
+    expect(resolveFmeApiKey({
+      HARNESS_MCP_MODE: "multi-user",
+      HARNESS_FME_API_KEY: "shared-fme-key",
+      HARNESS_API_KEY: "pat.session-account.token.secret",
+    })).toBe("pat.session-account.token.secret");
+  });
 });
 
 describe("loadConfig — account ID extraction", () => {
@@ -390,10 +483,17 @@ describe("loadConfig — account ID extraction", () => {
     });
   });
 
-  it("throws when HARNESS_ACCOUNT_ID missing and API key is not a PAT", () => {
-    withEnv({ HARNESS_API_KEY: "sat.notapat.tok.sec" }, () => {
+  it("extracts account ID from SAT when HARNESS_ACCOUNT_ID is not set", () => {
+    withEnv({ HARNESS_API_KEY: "sat.extracted123.tok.sec" }, () => {
+      const config = loadConfig();
+      expect(config.HARNESS_ACCOUNT_ID).toBe("extracted123");
+    });
+  });
+
+  it("throws when HARNESS_ACCOUNT_ID missing and API key has no account segment", () => {
+    withEnv({ HARNESS_API_KEY: "opaque-token" }, () => {
       expect(() => loadConfig()).toThrow(
-        "HARNESS_ACCOUNT_ID is required when the API key is not a PAT",
+        "HARNESS_ACCOUNT_ID is required when the API key does not include an account ID segment",
       );
     });
   });
