@@ -510,7 +510,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         {
           resourceType: "execution_inputs",
           relationship: "produced-from",
-          description: "The merged input set YAML that produced this execution. Use harness_get(resource_type='execution_inputs', execution_id=...) to see what runtime inputs the run actually used (post-run forensics).",
+          description: "The merged input set YAML that produced this execution. Use harness_get(resource_type='execution_inputs', resource_id=<planExecutionId>) to see what runtime inputs the run actually used (post-run forensics).",
         },
       ],
       listFilterFields: [
@@ -579,7 +579,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         {
           resourceType: "execution",
           relationship: "produced-by",
-          description: "The pipeline execution this input set was used for. Use harness_get(resource_type='execution', execution_id=...) for status/stage details.",
+          description: "The pipeline execution this input set was used for. Use harness_get(resource_type='execution', resource_id=<planExecutionId>) for status/stage details.",
         },
         {
           resourceType: "input_set",
@@ -599,7 +599,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           },
           responseExtractor: executionInputsExtract,
           description:
-            "Get the merged input set YAML for a pipeline execution. Returns inputSetYaml (merged inputs used at runtime), inputSetTemplateYaml (template at execution time), resolvedYaml (only when resolve_expressions=true), inputSetDetails (saved input sets that contributed), and inputSetBranchName (source branch for git-backed input sets). Pass execution_id (planExecutionId). Optional params: resolve_expressions (bool), resolve_expressions_type (enum: RESOLVE_ALL_EXPRESSIONS | RESOLVE_TRIGGER_EXPRESSIONS | UNKNOWN — default UNKNOWN means no resolution).",
+            "Get the merged input set YAML for a pipeline execution. Returns inputSetYaml (merged inputs used at runtime), inputSetTemplateYaml (template at execution time), resolvedYaml (only when resolve_expressions=true), inputSetDetails (saved input sets that contributed), and inputSetBranchName (source branch for git-backed input sets). Call as harness_get(resource_type='execution_inputs', resource_id=<planExecutionId>) — resource_id is mapped to the execution_id path identifier. Optional params (pass via the params argument): resolve_expressions (bool), resolve_expressions_type (enum: RESOLVE_ALL_EXPRESSIONS | RESOLVE_TRIGGER_EXPRESSIONS | UNKNOWN — default UNKNOWN means no resolution).",
           paramsSchema: {
             fields: [
               {
