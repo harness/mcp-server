@@ -297,6 +297,44 @@ export const runtimeInputExtract = (raw: unknown): unknown => {
 };
 
 /**
+ * Extracts merged input set data for a pipeline execution from
+ * GET /pipeline/api/pipelines/execution/{planExecutionId}/inputsetV2.
+ *
+ * Projects to a stable shape: { inputSetYaml, inputSetTemplateYaml, resolvedYaml,
+ * inputSetDetails, inputSetBranchName, executionId } so the public tool boundary
+ * never leaks the NG response envelope or unrelated debug fields. `inputSetDetails`
+ * is normalized to `[{identifier, name}]` even when the upstream returns a richer
+ * object — agents only need those two fields per the spec.
+ */
+export const executionInputsExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
+  const r = raw as {
+    data?: {
+      inputSetYaml?: string;
+      inputSetTemplateYaml?: string;
+      resolvedYaml?: string;
+      inputSetDetails?: Array<{ identifier?: string; name?: string }>;
+      inputSetBranchName?: string;
+    };
+  };
+  const data = r?.data ?? {};
+  const details = Array.isArray(data.inputSetDetails)
+    ? data.inputSetDetails.map((d) => ({
+      identifier: d?.identifier ?? null,
+      name: d?.name ?? null,
+    }))
+    : [];
+  const executionId = (input?.execution_id as string | undefined) ?? null;
+  return {
+    executionId,
+    inputSetYaml: data.inputSetYaml ?? null,
+    inputSetTemplateYaml: data.inputSetTemplateYaml ?? null,
+    resolvedYaml: data.resolvedYaml ?? null,
+    inputSetDetails: details,
+    inputSetBranchName: data.inputSetBranchName ?? null,
+  };
+};
+
+/**
  * Extracts CCM list responses with views/totalCount structure.
  * Maps `data.views` → `items` and `data.totalCount` → `total`.
  * Used by multiple CCM APIs that return this response pattern.

@@ -1,5 +1,5 @@
-import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract } from "../extractors.js";
+import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract } from "../extractors.js";
 import YAML from "yaml";
 
 /**
@@ -557,6 +557,56 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodySchema: { description: "No body required. Interrupt type is specified via the interrupt_type query parameter (IMPORTANT: do not pass this as a body parameter, otherwise the request will fail)", fields: [] },
           responseExtractor: ngExtract,
           actionDescription: "Interrupt a running execution. Pass interrupt_type as a param: AbortAll (abort all stages), Pause, Resume, StageRollback, Abort (abort current retry), ExpireAll, or Retry.",
+        },
+      },
+    },
+    {
+      resourceType: "execution_inputs",
+      displayName: "Pipeline Execution Inputs",
+      description:
+        "Merged input set YAML for a pipeline execution — the inputs that produced a given run. Supports get only. Use to answer 'what inputs triggered this execution?' without leaving the MCP tool chain.",
+      toolset: "pipelines",
+      scope: "project",
+      identifierFields: ["execution_id"],
+      relatedResources: [
+        {
+          resourceType: "execution",
+          relationship: "produced-by",
+          description: "The pipeline execution this input set was used for. Use harness_get(resource_type='execution', execution_id=...) for status/stage details.",
+        },
+        {
+          resourceType: "input_set",
+          relationship: "merged-from",
+          description: "Saved input sets that contributed to this execution's merged YAML. inputSetDetails lists their identifiers/names.",
+        },
+      ],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/pipeline/api/pipelines/execution/{planExecutionId}/inputsetV2",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { execution_id: "planExecutionId" },
+          queryParams: {
+            resolve_expressions: "resolveExpressions",
+            resolve_expressions_type: "resolveExpressionsType",
+          },
+          responseExtractor: executionInputsExtract,
+          description:
+            "Get the merged input set YAML for a pipeline execution. Returns inputSetYaml (merged inputs used at runtime), inputSetTemplateYaml (template at execution time), resolvedYaml (only when resolve_expressions=true), inputSetDetails (saved input sets that contributed), and inputSetBranchName (source branch for git-backed input sets). Pass execution_id (planExecutionId). Optional params: resolve_expressions (bool), resolve_expressions_type (enum: RESOLVE_ALL_EXPRESSIONS | RESOLVE_TRIGGER_EXPRESSIONS | UNKNOWN — default UNKNOWN means no resolution).",
+          paramsSchema: {
+            fields: [
+              {
+                name: "resolve_expressions",
+                required: false,
+                description: "When true, resolve `<+...>` expressions in the YAML. The resolved output is returned in the resolvedYaml field. Defaults to false.",
+              },
+              {
+                name: "resolve_expressions_type",
+                required: false,
+                description: "Which expressions to resolve. One of: RESOLVE_ALL_EXPRESSIONS, RESOLVE_TRIGGER_EXPRESSIONS, UNKNOWN. Defaults to UNKNOWN (no resolution), matching the upstream API default.",
+              },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },
