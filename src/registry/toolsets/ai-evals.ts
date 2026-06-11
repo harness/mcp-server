@@ -175,7 +175,7 @@ const createMetricSchema: BodySchema = {
       description:
         "Metric config — structure depends on type/kind. " +
         "Heuristic: { kind, threshold?, case_sensitive?, ... }. " +
-        "LLM: { rubric?, criteria?, judge_model_id? (eval_model UUID) }. " +
+        "LLM: { rubric?, criteria?, judge_llm_connector_ref? (Harness LLM connector identifier) }. " +
         "Composite: { metrics: [{ metric_id, weight }], aggregation: 'average'|'weighted_average'|'min'|'max'|'all_pass' }. " +
         "Use harness_execute(resource_type='eval_metric', action='suggestions') to discover appropriate metrics for a target type.",
     },
@@ -402,38 +402,6 @@ const uploadOutputsSchema: BodySchema = {
   ],
 };
 
-const createModelSchema: BodySchema = {
-  description: "Register AI model",
-  fields: [
-    { name: "name", type: "string", required: true, description: "Display name" },
-    { name: "provider", type: "string", required: true, description: "openai | anthropic | google | azure | custom" },
-    { name: "model_id", type: "string", required: true, description: "Provider model id" },
-    { name: "description", type: "string", required: false, description: "Description" },
-    { name: "api_key_secret_ref", type: "string", required: false, description: "Harness secret ref for API key" },
-    { name: "connector_ref", type: "string", required: false, description: "Harness connector identifier for LLM credentials" },
-    { name: "default_temperature", type: "number", required: false, description: "Default temperature 0-2" },
-    { name: "default_max_tokens", type: "number", required: false, description: "Default max tokens (min 1)" },
-    { name: "default_top_p", type: "number", required: false, description: "Default top_p 0-1" },
-    { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "provider_config", type: "object", required: false, description: "Provider-specific config" },
-    { name: "is_active", type: "boolean", required: false, description: "Active (default true)" },
-  ],
-};
-
-const updateModelSchema: BodySchema = {
-  description: "Update model (PATCH)",
-  fields: [
-    { name: "name", type: "string", required: false, description: "Name" },
-    { name: "description", type: "string", required: false, description: "Description" },
-    { name: "connector_ref", type: "string", required: false, description: "Harness connector identifier for LLM credentials" },
-    { name: "default_temperature", type: "number", required: false, description: "Temperature 0-2" },
-    { name: "default_max_tokens", type: "number", required: false, description: "Max tokens (min 1)" },
-    { name: "default_top_p", type: "number", required: false, description: "Top_p 0-1" },
-    { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "provider_config", type: "object", required: false, description: "Provider-specific config" },
-    { name: "is_active", type: "boolean", required: false, description: "Active" },
-  ],
-};
 
 const createAnnotationSchema: BodySchema = {
   description: "Create annotation",
@@ -508,7 +476,7 @@ const generateDatasetItemsSchema: BodySchema = {
       description: "Generation strategy: use_case | rephrase | adversarial | complexity_ladder",
     },
     { name: "count", type: "number", required: true, description: "Number of items to generate (1-200)" },
-    { name: "model_id", type: "string", required: true, description: "UUID of registered AI model" },
+    { name: "llm_connector_ref", type: "string", required: true, description: "Harness LLM connector identifier for the generation model" },
     {
       name: "description",
       type: "string",
@@ -1578,68 +1546,6 @@ export const aiEvalsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: "Summary metrics and per-eval health trend (total_evals, total_runs, last_run_at, overall_pass_rate, per-eval pass rates).",
           bodySchema: { description: "No body", fields: [] },
-        },
-      },
-    },
-    {
-      resourceType: "eval_model",
-      displayName: "AI Evals Model (Legacy)",
-      description: "DEPRECATED — use Harness LLM connectors (llm_connector_ref) instead. Legacy registered model entities. Create requires connector_ref.",
-      toolset: "ai-evals",
-      scope: "project",
-      scopeOptional: true,
-      headerBasedScoping: true,
-      identifierFields: ["model_id"],
-      relatedResources: [],
-      listFilterFields: [
-        { name: "active_only", description: "Only active models", type: "boolean" },
-        { name: "search", description: "Search by name, provider, or model ID" },
-      ],
-      operations: {
-        list: {
-          method: "GET",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/models`,
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { ...listQ, active_only: "active_only", search: "search" },
-          responseExtractor: aiEvalsListExtract,
-          description: "List models",
-        },
-        get: {
-          method: "GET",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/models/${input.model_id as string}`,
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
-          description: "Get model",
-        },
-        create: {
-          method: "POST",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/models`,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input) => input.body ?? {},
-          bodySchema: createModelSchema,
-          responseExtractor: passthrough,
-          description: "Register model",
-        },
-        update: {
-          method: "PATCH",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/models/${input.model_id as string}`,
-          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
-          bodyBuilder: (input) => input.body ?? {},
-          bodySchema: updateModelSchema,
-          responseExtractor: passthrough,
-          description: "Update model",
-        },
-        delete: {
-          method: "DELETE",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/models/${input.model_id as string}`,
-          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          responseExtractor: passthrough,
-          description: "Delete model",
         },
       },
     },
