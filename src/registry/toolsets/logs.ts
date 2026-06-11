@@ -9,7 +9,7 @@ export const logsToolset: ToolsetDefinition = {
     {
       resourceType: "execution_log",
       displayName: "Execution Log",
-      description: "Pipeline execution logs. Returns readable log text (not just a URL). Accepts a raw Harness logBaseKey prefix, or an execution_id to auto-resolve the real log key from the execution graph. When a Harness execution URL includes step/stage query params, the MCP uses them to resolve the matching step log key. Use harness_diagnose with include_logs=true for the best failure analysis experience.",
+      description: "Pipeline execution logs. Returns readable log text by default for backward compatibility. Set return_download_url=true to return only a signed download URL without downloading log content. Accepts a raw Harness logBaseKey prefix, or an execution_id to auto-resolve the real log key from the execution graph. When a Harness execution URL includes step/stage query params, the MCP uses them to resolve the matching step log key. Use harness_diagnose with include_logs=true for the best failure analysis experience.",
       toolset: "logs",
       scope: "project",
       identifierFields: ["prefix"],
@@ -25,7 +25,7 @@ export const logsToolset: ToolsetDefinition = {
             prefix: "prefix",
           },
           responseExtractor: passthrough,
-          description: "Download and return execution log content by prefix",
+          description: "Download and return execution log content by prefix, or return a signed download URL when return_download_url=true",
         },
       },
     },
