@@ -5,7 +5,7 @@
 - [x] Add failing registry tests for `execution_inputs.get` request construction and response projection
 - [x] Implement the `execution_inputs` resource and stable extractor
 - [x] Run focused tests, build, docs generation/check, typecheck, and full tests
-- [ ] Commit, push, open PR, and report back in the Slack thread
+- [x] Commit, push, open PR, and attempt to report back in the Slack thread
 
 ### Plan
 - Add a get-only `execution_inputs` resource to `src/registry/toolsets/pipelines.ts`, scoped to project and identified by `execution_id`.
@@ -18,6 +18,7 @@
 - Added `executionInputsExtract` to drop the Harness response envelope/debug metadata and return only stable execution-input fields plus an empty-result hint.
 - Added focused registry coverage for request construction, envelope stripping, and empty data.
 - Verification passed: focused red/green `execution inputs` tests, `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, `pnpm typecheck`, `pnpm test`, and `git diff --check`.
+- Opened PR #332. Slack thread reply was attempted but blocked because the trigger channel is not configured in the automation's Slack posting allowlist.
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
