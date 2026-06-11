@@ -4,7 +4,7 @@
 - [x] Confirm endpoint contract and existing pipeline registry patterns
 - [x] Add failing registry tests for `execution_inputs.get` request construction and response projection
 - [x] Implement the `execution_inputs` resource and stable extractor
-- [ ] Run focused tests, build, docs generation/check, typecheck, and full tests
+- [x] Run focused tests, build, docs generation/check, typecheck, and full tests
 - [ ] Commit, push, open PR, and report back in the Slack thread
 
 ### Plan
@@ -12,6 +12,12 @@
 - Use the documented read endpoint `GET /pipeline/api/pipelines/execution/{planExecutionId}/inputsetV2`, with optional `resolve_expressions` mapped to `resolveExpressions`.
 - Add a dedicated extractor in `src/registry/extractors.ts` that unwraps the Harness `data` envelope and returns only stable fields: `inputSetTemplateYaml`, `inputSetYaml`, `inputSetDetails`, `inputSetBranchName`, `resolvedYaml`, plus a concise hint.
 - Cover the request shape and response shape in `tests/registry/registry.test.ts`.
+
+### Review
+- Added `execution_inputs` as a project-scoped get-only pipelines resource that calls the documented `inputsetV2` execution-inputs endpoint by `execution_id`.
+- Added `executionInputsExtract` to drop the Harness response envelope/debug metadata and return only stable execution-input fields plus an empty-result hint.
+- Added focused registry coverage for request construction, envelope stripping, and empty data.
+- Verification passed: focused red/green `execution inputs` tests, `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, `pnpm typecheck`, `pnpm test`, and `git diff --check`.
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
