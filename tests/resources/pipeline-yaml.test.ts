@@ -117,6 +117,18 @@ describe("pipeline-yaml resource", () => {
     expect(registry.dispatch).not.toHaveBeenCalled();
   });
 
+  it("skips discovery when the pipeline toolset is disabled", async () => {
+    const { registry, template } = setupResource();
+    registry.getResource.mockImplementation(() => {
+      throw new Error("Unknown resource_type: pipeline");
+    });
+
+    const result = await template.list();
+
+    expect(result).toEqual({ resources: [] });
+    expect(registry.dispatch).not.toHaveBeenCalled();
+  });
+
   it("lists pipeline resources when org and project defaults are available", async () => {
     const { client, registry, template } = setupResource({
       HARNESS_ORG: "org",
