@@ -58,6 +58,23 @@ export interface BodyBuilderOptions {
   injectFields?: Array<{ from: string; to: string; onlyIfMissing?: boolean }>;
 }
 
+function getInjectionTarget(body: unknown, wrapKey?: string): Record<string, unknown> | undefined {
+  if (body == null || typeof body !== "object" || Array.isArray(body)) return undefined;
+  const rec = body as Record<string, unknown>;
+  const wrapped = wrapKey ? rec[wrapKey] : undefined;
+  return wrapped != null && typeof wrapped === "object" && !Array.isArray(wrapped)
+    ? wrapped as Record<string, unknown>
+    : rec;
+}
+
+function scalarIdentifier(value: unknown): string | undefined {
+  if (value == null || value === "") return undefined;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return undefined;
+}
+
 /**
  * Factory: returns a bodyBuilder function that handles unwrap, stripNulls, and field injection.
  * Replaces repetitive inline bodyBuilder patterns across toolsets.
@@ -87,17 +104,26 @@ export function buildBodyNormalized(opts: BodyBuilderOptions = {}): (input: Reco
     }
 
     // Step 2: Inject identifier if configured and missing
-    if (opts.injectIdentifier && typeof body === "object" && body !== null) {
-      const rec = body as Record<string, unknown>;
-      if (rec[opts.injectIdentifier.bodyField] == null && input[opts.injectIdentifier.inputField]) {
+    if (opts.injectIdentifier) {
+      const rec = getInjectionTarget(body, opts.wrapKey);
+      const inputIdentifier = scalarIdentifier(input[opts.injectIdentifier.inputField]);
+      const bodyIdentifier = scalarIdentifier(rec?.[opts.injectIdentifier.bodyField]);
+      if (rec && inputIdentifier && bodyIdentifier && inputIdentifier !== bodyIdentifier) {
+        throw new Error(
+          `Conflicting identifiers: input.${opts.injectIdentifier.inputField} gives "${inputIdentifier}" ` +
+          `but body.${opts.injectIdentifier.bodyField} gives "${bodyIdentifier}". Ensure body matches resource_id/url/params.`,
+        );
+      }
+      if (rec && rec[opts.injectIdentifier.bodyField] == null && inputIdentifier) {
         rec[opts.injectIdentifier.bodyField] = input[opts.injectIdentifier.inputField];
       }
     }
 
     // Step 3: Inject additional fields
-    if (opts.injectFields && typeof body === "object" && body !== null) {
-      const rec = body as Record<string, unknown>;
+    if (opts.injectFields) {
+      const rec = getInjectionTarget(body, opts.wrapKey);
       for (const f of opts.injectFields) {
+        if (!rec) continue;
         if (f.onlyIfMissing && rec[f.to] != null) continue;
         if (input[f.from] != null) rec[f.to] = input[f.from];
       }
