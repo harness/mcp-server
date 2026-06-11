@@ -1,5 +1,20 @@
 # Harness MCP Server — Task Tracking
 
+## PR 320 FME Auth Bug Triage (2026-06-11)
+- [x] Read Slack thread and PR context
+- [x] Trace current FME auth data flow
+- [ ] Add failing regression coverage for client-side FME auth routing
+- [ ] Move FME fallback auth into `HarnessClient`
+- [ ] Run focused and broad verification
+- [ ] Commit, push, and open PR
+- [ ] Report outcome in the original Slack thread if posting is available
+
+### Plan
+- Treat PR #320 as the actionable bug context because the Slack thread only contains the PR link and an automation reply.
+- Reproduce the current multi-user/FME issue at the client layer: FME requests must use Bearer auth, must not receive Harness account scoping headers/params, and must not forward placeholder API keys.
+- Keep registry dispatch focused on product/base-url routing, so the session-specific client config can choose the effective FME credential.
+- Preserve explicit caller `Authorization` headers and strip `x-api-key` for FME requests.
+
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select File Store multipart workflows as the focused documentation gap
