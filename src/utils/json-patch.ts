@@ -128,6 +128,7 @@ export function applyJsonPatch(
 
   const cloned = deepClone(document) as Record<string, unknown>;
 
+  let newDocument: unknown;
   try {
     const result = applyPatch(
       cloned,
@@ -136,9 +137,26 @@ export function applyJsonPatch(
       true,   // mutateDocument (we already cloned)
       true,   // banPrototypeModifications
     );
-    return result.newDocument as Record<string, unknown>;
+    newDocument = result.newDocument;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(`JSON Patch failed: ${msg}`);
   }
+
+  // RFC 6901 allows path "" to target the document root, and fast-json-patch
+  // honors root-level replace/remove. That would let a "targeted" patch collapse
+  // the whole resource into a scalar, array, or null — which serializeBody() would
+  // then forward as an unsafe full-body overwrite. Reject anything that is not a
+  // plain (non-array) object so a patch can never escalate into a destructive write.
+  if (newDocument === null || typeof newDocument !== "object" || Array.isArray(newDocument)) {
+    const got = newDocument === null ? "null" : Array.isArray(newDocument) ? "array" : typeof newDocument;
+    const article = /^[aeiou]/.test(got) ? "an" : "a";
+    throw new Error(
+      `JSON Patch failed: operations would replace the resource body with ${article} ${got} ` +
+      "instead of an object (e.g. a root-level replace/remove with path \"\"). " +
+      "JSON Patch is for targeted field edits — use a full body update to replace the entire resource.",
+    );
+  }
+
+  return newDocument as Record<string, unknown>;
 }

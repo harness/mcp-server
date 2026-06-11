@@ -158,6 +158,35 @@ describe("applyJsonPatch", () => {
     ];
     expect(() => applyJsonPatch(baseDoc, ops)).toThrow();
   });
+
+  it("rejects root replacement with a scalar (path \"\")", () => {
+    const ops: PatchOperation[] = [
+      { op: "replace", path: "", value: 1 },
+    ];
+    expect(() => applyJsonPatch(baseDoc, ops)).toThrow(/would replace the resource body with a number/);
+  });
+
+  it("rejects root replacement with an array (path \"\")", () => {
+    const ops: PatchOperation[] = [
+      { op: "replace", path: "", value: [1, 2, 3] },
+    ];
+    expect(() => applyJsonPatch(baseDoc, ops)).toThrow(/would replace the resource body with an array/);
+  });
+
+  it("rejects root removal that empties the document (path \"\")", () => {
+    const ops: PatchOperation[] = [
+      { op: "remove", path: "" },
+    ];
+    expect(() => applyJsonPatch(baseDoc, ops)).toThrow(/would replace the resource body with a null/);
+  });
+
+  it("allows root replacement with an object (path \"\")", () => {
+    const ops: PatchOperation[] = [
+      { op: "replace", path: "", value: { pipeline: { name: "Fully Replaced" } } },
+    ];
+    const result = applyJsonPatch(baseDoc, ops);
+    expect((result.pipeline as any).name).toBe("Fully Replaced");
+  });
 });
 
 describe("extractMutableBody", () => {
