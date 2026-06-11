@@ -1,4 +1,4 @@
-import type { Config } from "../config.js";
+import { type Config, isPlaceholderCredential, resolveFmeApiKey } from "../config.js";
 import type { RequestOptions } from "./types.js";
 import { HarnessApiError } from "../utils/errors.js";
 import { RateLimiter } from "../utils/rate-limiter.js";
@@ -115,6 +115,8 @@ export class HarnessClient {
   private readonly maxRetries: number;
   private readonly rateLimiter: RateLimiter;
   private readonly logUnsafeBodies: boolean;
+  private readonly fmeApiKey: string | undefined;
+  private readonly mcpMode: Config["HARNESS_MCP_MODE"];
   private accountIdResolver?: AccountIdResolver;
   private currentUserId?: string;
   private currentUserPromise?: Promise<string>;
@@ -127,6 +129,8 @@ export class HarnessClient {
     this.maxRetries = config.HARNESS_MAX_RETRIES;
     this.rateLimiter = new RateLimiter(config.HARNESS_RATE_LIMIT_RPS);
     this.logUnsafeBodies = config.HARNESS_LOG_UNSAFE_BODIES;
+    this.fmeApiKey = resolveFmeApiKey(config);
+    this.mcpMode = config.HARNESS_MCP_MODE;
   }
 
   /**
@@ -148,6 +152,49 @@ export class HarnessClient {
 
   get baseURL(): string {
     return this.baseUrl;
+  }
+
+  private applyDefaultAuth(headers: Record<string, string>, isFme: boolean): void {
+    if (isFme) {
+      // FME/Split Admin APIs expect Bearer auth. Drop x-api-key here so
+      // placeholder credentials are never forwarded to api.split.io.
+      const headerApiKey = headers["x-api-key"]?.trim();
+      delete headers["x-api-key"];
+
+      // Preserve caller-provided auth instead of layering fallback credentials on top.
+      if (headers["Authorization"]) return;
+
+      const fmeApiKey = headerApiKey && !isPlaceholderCredential(headerApiKey)
+        ? headerApiKey
+        : this.fmeApiKey;
+
+      if (!fmeApiKey) {
+        const remediation = this.mcpMode === "multi-user"
+          ? "Ensure the session x-harness-api-key is an FME-entitled Harness PAT/SAT. " +
+            "Do not configure HARNESS_FME_API_KEY in multi-user mode."
+          : "Configure an FME/Split Admin credential, " +
+            "or set HARNESS_FME_API_KEY to a legacy Split admin key or FME-entitled Harness PAT/SAT. " +
+            "A non-placeholder HARNESS_API_KEY may also be used when it is FME-entitled.";
+        throw new HarnessApiError(
+          "FME is not configured or authorized for this MCP session. " +
+          `${remediation} ` +
+          "Placeholder credentials such as \"dummy\" are not sent to api.split.io.",
+          401,
+          "FME_AUTH_MISSING",
+        );
+      }
+
+      headers["Authorization"] = `Bearer ${fmeApiKey}`;
+      return;
+    }
+
+    // Preserve caller-provided auth instead of layering fallback credentials on top.
+    if (headers["Authorization"]) return;
+
+    // Non-FME Harness services continue to use the standard API-key header.
+    if (!headers["x-api-key"]) {
+      headers["x-api-key"] = this.token;
+    }
   }
 
   /**
@@ -198,13 +245,11 @@ export class HarnessClient {
       ...options.headers,
     };
 
-    // Only inject x-api-key when the caller hasn't already set auth.
+    // Only inject default auth when the caller hasn't already set auth.
     // When service-routing handles auth (bearer-jwt, remote-mcp), it sets
     // Authorization directly — sending x-api-key alongside would cause
     // downstream services to attempt API-key validation on the dummy token.
-    if (!headers["Authorization"] && !headers["x-api-key"]) {
-      headers["x-api-key"] = this.token;
-    }
+    this.applyDefaultAuth(headers, isFme);
 
     if (hasExplicitBody(options.body)) {
       if (isFormDataBody(options.body)) {
@@ -375,9 +420,7 @@ export class HarnessClient {
     };
 
     // Same auth-header guard as request() — see comment there.
-    if (!headers["Authorization"] && !headers["x-api-key"]) {
-      headers["x-api-key"] = this.token;
-    }
+    this.applyDefaultAuth(headers, isFme);
 
     if (hasExplicitBody(options.body)) {
       if (isFormDataBody(options.body)) {

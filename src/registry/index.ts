@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type Config, resolveFmeApiKey, resolveProductBaseUrl } from "../config.js";
+import { type Config, resolveProductBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { HarnessApiError } from "../utils/errors.js";
 import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec, ResourceScope } from "./types.js";
@@ -722,25 +722,6 @@ export class Registry {
     const product = def.product ?? "harness";
     const baseUrl = resolveProductBaseUrl(this.config, product);
     const productHeaders: Record<string, string> = { ...spec.headers };
-    if (product === "fme") {
-      const fmeApiKey = resolveFmeApiKey(this.config);
-      if (!fmeApiKey) {
-        const remediation = this.config.HARNESS_MCP_MODE === "multi-user"
-          ? "Ensure the session x-harness-api-key is an FME-entitled Harness PAT/SAT. " +
-            "Do not configure HARNESS_FME_API_KEY in multi-user mode."
-          : "Ask your Harness administrator to configure an FME/Split Admin credential for hosted MCP, " +
-            "or set HARNESS_FME_API_KEY to a legacy Split admin key or FME-entitled Harness PAT/SAT. " +
-            "Self-hosted sessions may also provide a non-placeholder HARNESS_API_KEY.";
-        throw new HarnessApiError(
-          "FME is not configured or authorized for this MCP session. " +
-          `${remediation} ` +
-          "Hosted OAuth placeholders such as \"dummy\" are not sent to api.split.io.",
-          401,
-          "FME_AUTH_MISSING",
-        );
-      }
-      productHeaders["Authorization"] = `Bearer ${fmeApiKey}`;
-    }
 
     const requestOpts = {
       method: resolvedMethod,
