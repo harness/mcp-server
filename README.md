@@ -1101,6 +1101,7 @@ Harness pipelines can be stored in three ways:
 | `pipeline`                | x    | x   | x      | x      | x      | `run`, `retry`      |
 | `pipeline_v1` **(Alpha)** | x    | x   | x      | x      | x      | `run`               |
 | `execution`               | x    | x   |        |        |        | `interrupt`         |
+| `execution_inputs`        |      | x   |        |        |        |                     |
 | `trigger`                 | x    | x   | x      | x      | x      |                     |
 | `pipeline_summary`        |      | x   |        |        |        |                     |
 | `input_set`               | x    | x   | x      | x      | x      |                     |
@@ -1682,7 +1683,7 @@ Available toolset names:
 | Toolset                 | Resource Types                                                                                                                                                                                                                                                                                  |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `platform`              | organization, project                                                                                                                                                                                                                                                                           |
-| `pipelines`             | pipeline, pipeline_v1, execution, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                                                                                       |
+| `pipelines`             | pipeline, pipeline_v1, execution, execution_inputs, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                                                                     |
 | `agents`                | agent, agent_run                                                                                                                                                                                                                                                                                |
 | `services`              | service                                                                                                                                                                                                                                                                                         |
 | `environments`          | environment                                                                                                                                                                                                                                                                                     |

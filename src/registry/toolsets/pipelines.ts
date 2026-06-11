@@ -506,6 +506,13 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["execution_id"],
       diagnosticHint: "Use harness_diagnose with execution_id to analyze a failed execution — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
+      relatedResources: [
+        {
+          resourceType: "execution_inputs",
+          relationship: "produced-from",
+          description: "The merged input set YAML that produced this execution. Use harness_get(resource_type='execution_inputs', execution_id=...) to see what runtime inputs the run actually used (post-run forensics).",
+        },
+      ],
       listFilterFields: [
         { name: "search_term", description: "Filter executions by name or keyword" },
         { name: "pipeline_id", description: "Pipeline identifier to filter executions" },

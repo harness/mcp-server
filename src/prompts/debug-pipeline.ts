@@ -37,7 +37,8 @@ Then analyze the diagnostic payload:
 - **child_pipeline section**: if present, the failure is in a chained pipeline — focus on the child's failure details
 - **failed_step_logs**: actual log output from the failed steps — look for error patterns, stack traces, and exit codes
 - **runtime input issues**: if the error mentions unresolved \`<+input>\` expressions or missing variables, check:
-  - Call harness_get with resource_type="runtime_input_template" and resource_id=<pipeline_id> to see which inputs the pipeline expects
+  - For **post-run forensics** (what values *actually* ran?): call harness_get with resource_type="execution_inputs" and execution_id=<execution_id> to see the merged input set YAML used at runtime — this is the source of truth for what the failed run received
+  - For **pre-run expectations** (what does the pipeline expect?): call harness_get with resource_type="runtime_input_template" and resource_id=<pipeline_id> to see which inputs the pipeline declares
   - Call harness_list with resource_type="input_set", pipeline_id=<pipeline_id> to see available input sets that could provide the missing values
   - Suggest the user either pass the missing values as \`inputs\` or use \`input_set_ids\` referencing a saved input set
 
