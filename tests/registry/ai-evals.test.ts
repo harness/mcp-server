@@ -233,6 +233,100 @@ describe("AI Evals diagnosticHint on key entities", () => {
   }
 });
 
+// ─── eval_model removed ────────────────────────────────────────────────────
+
+describe("AI Evals eval_model removed", () => {
+  it("eval_model resource does not exist in the toolset", () => {
+    const res = aiEvalsToolset.resources.find((r) => r.resourceType === "eval_model");
+    expect(res).toBeUndefined();
+  });
+
+  it("no resource references eval_model in relatedResources", () => {
+    for (const resource of aiEvalsToolset.resources) {
+      const related = resource.relatedResources ?? [];
+      expect(related).not.toContain("eval_model");
+    }
+  });
+});
+
+// ─── eval_git_registration resource ────────────────────────────────────────
+
+describe("AI Evals eval_git_registration resource", () => {
+  it("exists in the toolset", () => {
+    expect(() => findResource("eval_git_registration")).not.toThrow();
+  });
+
+  it("has register execute action with POST method", () => {
+    const res = findResource("eval_git_registration");
+    const action = res.executeActions?.register;
+    expect(action).toBeDefined();
+    expect(action!.method).toBe("POST");
+  });
+
+  it("register action has low_write risk policy", () => {
+    const res = findResource("eval_git_registration");
+    const action = res.executeActions!.register;
+    expect(action.operationPolicy?.risk).toBe("low_write");
+  });
+
+  it("has diagnosticHint mentioning manifest", () => {
+    const res = findResource("eval_git_registration");
+    expect(res.diagnosticHint).toBeDefined();
+    expect(res.diagnosticHint).toContain("manifest");
+  });
+});
+
+// ─── eval_target test action risk level ────────────────────────────────────
+
+describe("AI Evals eval_target test action", () => {
+  it("test action has low_write risk (not read)", () => {
+    const res = findResource("eval_target");
+    const action = res.executeActions?.test;
+    expect(action).toBeDefined();
+    expect(action!.operationPolicy?.risk).toBe("low_write");
+  });
+
+  it("test action has do_not_retry policy", () => {
+    const res = findResource("eval_target");
+    const action = res.executeActions!.test;
+    expect(action.operationPolicy?.retryPolicy).toBe("do_not_retry");
+  });
+});
+
+// ─── LLM connector ref in body schemas ─────────────────────────────────────
+
+describe("AI Evals LLM connector ref migration", () => {
+  it("metric set create body schema uses judge_llm_connector_ref not judge_model_id", () => {
+    const res = findResource("eval_metric_set");
+    const createOp = res.operations.create!;
+    const fields = createOp.bodySchema!.fields;
+    const hasConnectorRef = fields.some((f) => f.name === "judge_llm_connector_ref");
+    const hasModelId = fields.some((f) => f.name === "judge_model_id");
+    expect(hasConnectorRef).toBe(true);
+    expect(hasModelId).toBe(false);
+  });
+
+  it("dataset generate body schema uses llm_connector_ref not model_id", () => {
+    const res = findResource("eval_dataset");
+    const action = res.executeActions?.generate;
+    expect(action).toBeDefined();
+    const fields = action!.bodySchema!.fields;
+    const hasConnectorRef = fields.some((f) => f.name === "llm_connector_ref");
+    const hasModelId = fields.some((f) => f.name === "model_id");
+    expect(hasConnectorRef).toBe(true);
+    expect(hasModelId).toBe(false);
+  });
+});
+
+// ─── dataset export removed ────────────────────────────────────────────────
+
+describe("AI Evals dataset export removed", () => {
+  it("eval_dataset has no export execute action (NDJSON incompatible)", () => {
+    const res = findResource("eval_dataset");
+    expect(res.executeActions?.export).toBeUndefined();
+  });
+});
+
 // ─── Extractors ─────────────────────────────────────────────────────────────
 
 describe("AI Evals extractors", () => {
