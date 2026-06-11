@@ -1,5 +1,5 @@
 /**
- * AI Evals control plane — datasets, evals, runs, metrics, suites, targets, models, etc.
+ * AI Evals control plane — datasets, evals, runs, metrics, suites, targets, git registration, online eval.
  * Base path: /ai-evals/api/v1/orgs/{org}/projects/{project}/...
  * Uses Harness-Account header; no accountIdentifier query param (headerBasedScoping).
  */
@@ -1438,7 +1438,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       identifierFields: ["target_id"],
       diagnosticHint:
         "When creating a prompt target, use an LLM connector reference (config.llm_connector_ref) " +
-        "to specify the model credentials. List connectors via harness_list(resource_type='connector', filters={category:'AI'}).",
+        "to specify the model credentials. List connectors via harness_list(resource_type='connector', filters={type:'OpenAI'}) (also type:'Anthropic').",
       relatedResources: [
         { resourceType: "evaluation", relationship: "used_by", description: "Evals reference targets via target_id" },
       ],
