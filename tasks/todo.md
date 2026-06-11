@@ -3,17 +3,23 @@
 ## PR 320 FME Auth Bug Triage (2026-06-11)
 - [x] Read Slack thread and PR context
 - [x] Trace current FME auth data flow
-- [ ] Add failing regression coverage for client-side FME auth routing
-- [ ] Move FME fallback auth into `HarnessClient`
-- [ ] Run focused and broad verification
-- [ ] Commit, push, and open PR
-- [ ] Report outcome in the original Slack thread if posting is available
+- [x] Add failing regression coverage for client-side FME auth routing
+- [x] Move FME fallback auth into `HarnessClient`
+- [x] Run focused and broad verification
+- [x] Commit and push fix branch
+- [ ] Open PR and report outcome in the original Slack thread if posting is available
 
 ### Plan
 - Treat PR #320 as the actionable bug context because the Slack thread only contains the PR link and an automation reply.
 - Reproduce the current multi-user/FME issue at the client layer: FME requests must use Bearer auth, must not receive Harness account scoping headers/params, and must not forward placeholder API keys.
 - Keep registry dispatch focused on product/base-url routing, so the session-specific client config can choose the effective FME credential.
 - Preserve explicit caller `Authorization` headers and strip `x-api-key` for FME requests.
+
+### Review
+- Confirmed the previous behavior with a RED client test: an FME product request with a non-placeholder API key did not emit `Authorization: Bearer ...`.
+- Moved FME fallback auth selection into `HarnessClient`, where session-specific config and caller headers are available, while keeping registry dispatch limited to product/base-url routing.
+- Added regressions for HARNESS_API_KEY fallback, HARNESS_FME_API_KEY preference, caller-provided Authorization preservation with `x-api-key` stripping, and placeholder credential rejection before network I/O.
+- Verification passed: focused FME Vitest run, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm test` (73 files / 1898 tests), `pnpm docs:check`, and `git diff --check`.
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
