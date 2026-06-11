@@ -71,7 +71,7 @@ const createDatasetItemSchema: BodySchema = {
   fields: [
     { name: "id", type: "string", required: false, description: "Business id for the row (required for CLI/backend run correlation)" },
     { name: "input", type: "object", required: true, description: "Model input (JSON)" },
-    { name: "expected_output", type: "object", required: false, description: "Expected output" },
+    { name: "expected_output", type: "object", required: false, description: "Expected output (string, object, or array)" },
     { name: "precomputed_output", type: "object", required: false, description: "Precomputed target output for offline/metrics-only scoring" },
     { name: "context", type: "array", required: false, description: "Retrieved chunks for RAG evaluation", itemType: "string" },
     { name: "expected_tools", type: "array", required: false, description: "Expected tool names for agent evaluation", itemType: "string" },
@@ -86,7 +86,7 @@ const updateDatasetItemSchema: BodySchema = {
   description: "Update dataset item",
   fields: [
     { name: "input", type: "object", required: false, description: "Input" },
-    { name: "expected_output", type: "object", required: false, description: "Expected output" },
+    { name: "expected_output", type: "object", required: false, description: "Expected output (string, object, or array)" },
     { name: "precomputed_output", type: "object", required: false, description: "Precomputed target output for offline/metrics-only scoring" },
     { name: "context", type: "array", required: false, description: "Retrieved chunks for RAG evaluation", itemType: "string" },
     { name: "expected_tools", type: "array", required: false, description: "Expected tool names for agent evaluation", itemType: "string" },
@@ -147,7 +147,7 @@ const triggerEvalRunSchema: BodySchema = {
       name: "run_inputs",
       type: "object",
       required: false,
-      description: "RunInputs overrides: { model_id?, target_id?, dataset_id?, metric_set_id?, variables? }",
+      description: "RunInputs overrides: { llm_connector_ref?, target_id?, dataset_id?, metric_set_id?, variables? }",
     },
     { name: "input_set_id", type: "string", required: false, description: "Saved input set id" },
     { name: "branch", type: "string", required: false, description: "Override git branch (e.g. run against a PR branch)" },
@@ -175,7 +175,7 @@ const createMetricSchema: BodySchema = {
       description:
         "Metric config — structure depends on type/kind. " +
         "Heuristic: { kind, threshold?, case_sensitive?, ... }. " +
-        "LLM: { rubric?, criteria?, judge_model_id? (eval_model UUID) }. " +
+        "LLM: { rubric?, criteria?, judge_llm_connector_ref? (Harness LLM connector identifier) }. " +
         "Composite: { metrics: [{ metric_id, weight }], aggregation: 'average'|'weighted_average'|'min'|'max'|'all_pass' }. " +
         "Use harness_execute(resource_type='eval_metric', action='suggestions') to discover appropriate metrics for a target type.",
     },
@@ -203,7 +203,7 @@ const createMetricSetSchema: BodySchema = {
     { name: "name", type: "string", required: true, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "judge_model_id", type: "string", required: false, description: "Default judge model UUID for LLM metrics (list with harness_list resource_type=eval_model)" },
+    { name: "judge_llm_connector_ref", type: "string", required: false, description: "Harness LLM connector identifier for judge model" },
     {
       name: "entries",
       type: "array",
@@ -222,7 +222,7 @@ const updateMetricSetSchema: BodySchema = {
     { name: "name", type: "string", required: false, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "judge_model_id", type: "string", required: false, description: "Default judge model UUID for LLM metrics (list with harness_list resource_type=eval_model)" },
+    { name: "judge_llm_connector_ref", type: "string", required: false, description: "Harness LLM connector identifier for judge model" },
   ],
 };
 
@@ -233,7 +233,7 @@ const addMetricSetEntrySchema: BodySchema = {
     { name: "threshold", type: "number", required: true, description: "Pass threshold 0-1" },
     { name: "weight", type: "number", required: false, description: "Weight" },
     { name: "position", type: "number", required: false, description: "Order" },
-    { name: "config", type: "object", required: false, description: "Per-use-site config override (merged over metric's base config at eval time)" },
+    { name: "config", type: "object", required: false, description: "Per-use-site config override (merged over metric's base config at eval time). Get valid fields from the metric's config_schema via harness_get(resource_type='eval_metric')" },
   ],
 };
 
@@ -243,7 +243,7 @@ const updateMetricSetEntrySchema: BodySchema = {
     { name: "threshold", type: "number", required: false, description: "Threshold" },
     { name: "weight", type: "number", required: false, description: "Weight" },
     { name: "position", type: "number", required: false, description: "Position" },
-    { name: "config", type: "object", required: false, description: "Per-use-site config override (merged over metric's base config at eval time)" },
+    { name: "config", type: "object", required: false, description: "Per-use-site config override (merged over metric's base config at eval time). Get valid fields from the metric's config_schema via harness_get(resource_type='eval_metric')" },
   ],
 };
 
@@ -319,7 +319,7 @@ const triggerSuiteRunSchema: BodySchema = {
       name: "run_inputs",
       type: "object",
       required: false,
-      description: "RunInputs: { model_id?, target_id?, dataset_id?, metric_set_id?, variables? }",
+      description: "RunInputs overrides: { llm_connector_ref?, target_id?, dataset_id?, metric_set_id?, variables? }",
     },
     { name: "input_set_id", type: "string", required: false, description: "Saved input set id" },
     {
@@ -342,8 +342,8 @@ const createTargetSchema: BodySchema = {
       required: false,
       description:
         "Target config (required when storage_type='managed', omit for git). " +
-        "For type='prompt': { model_id: '<eval_model UUID — list with harness_list resource_type=eval_model>', " +
-        "system_message?: string, temperature?: 0-2, max_tokens?: int, top_p?: 0-1, " +
+        "For type='prompt': { llm_connector_ref: '<Harness LLM connector identifier>', " +
+        "prompt_version_id?: string, system_message?: string, temperature?: 0-2, max_tokens?: int, top_p?: 0-1, " +
         "frequency_penalty?: -2 to 2, presence_penalty?: -2 to 2 }. " +
         "For type='agent': { endpoint: '<agent HTTP URL>' }. " +
         "For type='precomputed': { dataset_id?: string, model_name?: string, model_version?: string }.",
@@ -369,7 +369,7 @@ const updateTargetSchema: BodySchema = {
       type: "object",
       required: false,
       description:
-        "Target config. For type='prompt': { model_id, system_message?, temperature?, max_tokens?, top_p?, frequency_penalty?, presence_penalty? }. " +
+        "Target config. For type='prompt': { llm_connector_ref, prompt_version_id?, system_message?, temperature?, max_tokens?, top_p?, frequency_penalty?, presence_penalty? }. " +
         "For type='agent': { endpoint }. For type='precomputed': { dataset_id?, model_name?, model_version? }.",
     },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
@@ -402,38 +402,6 @@ const uploadOutputsSchema: BodySchema = {
   ],
 };
 
-const createModelSchema: BodySchema = {
-  description: "Register AI model",
-  fields: [
-    { name: "name", type: "string", required: true, description: "Display name" },
-    { name: "provider", type: "string", required: true, description: "openai | anthropic | google | azure | custom" },
-    { name: "model_id", type: "string", required: true, description: "Provider model id" },
-    { name: "description", type: "string", required: false, description: "Description" },
-    { name: "api_key_secret_ref", type: "string", required: false, description: "Harness secret ref for API key" },
-    { name: "connector_ref", type: "string", required: false, description: "Harness connector identifier for LLM credentials" },
-    { name: "default_temperature", type: "number", required: false, description: "Default temperature 0-2" },
-    { name: "default_max_tokens", type: "number", required: false, description: "Default max tokens (min 1)" },
-    { name: "default_top_p", type: "number", required: false, description: "Default top_p 0-1" },
-    { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "provider_config", type: "object", required: false, description: "Provider-specific config" },
-    { name: "is_active", type: "boolean", required: false, description: "Active (default true)" },
-  ],
-};
-
-const updateModelSchema: BodySchema = {
-  description: "Update model (PATCH)",
-  fields: [
-    { name: "name", type: "string", required: false, description: "Name" },
-    { name: "description", type: "string", required: false, description: "Description" },
-    { name: "connector_ref", type: "string", required: false, description: "Harness connector identifier for LLM credentials" },
-    { name: "default_temperature", type: "number", required: false, description: "Temperature 0-2" },
-    { name: "default_max_tokens", type: "number", required: false, description: "Max tokens (min 1)" },
-    { name: "default_top_p", type: "number", required: false, description: "Top_p 0-1" },
-    { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "provider_config", type: "object", required: false, description: "Provider-specific config" },
-    { name: "is_active", type: "boolean", required: false, description: "Active" },
-  ],
-};
 
 const createAnnotationSchema: BodySchema = {
   description: "Create annotation",
@@ -508,7 +476,7 @@ const generateDatasetItemsSchema: BodySchema = {
       description: "Generation strategy: use_case | rephrase | adversarial | complexity_ladder",
     },
     { name: "count", type: "number", required: true, description: "Number of items to generate (1-200)" },
-    { name: "model_id", type: "string", required: true, description: "UUID of registered AI model" },
+    { name: "llm_connector_ref", type: "string", required: true, description: "Harness LLM connector identifier for the generation model" },
     {
       name: "description",
       type: "string",
@@ -580,6 +548,21 @@ const evaluateTraceSchema: BodySchema = {
       type: "object",
       required: false,
       description: "Evaluation options: { include_trajectory?: boolean (default false) }",
+    },
+  ],
+};
+
+const gitRegisterSchema: BodySchema = {
+  description: "Register entities from git (eval, suite, or manifest)",
+  fields: [
+    { name: "type", type: "string", required: true, description: "eval | suite | manifest — determines what to register from file_path" },
+    {
+      name: "git_source",
+      type: "object",
+      required: true,
+      description:
+        "Git coordinate: { connector_ref: string (Harness connector), repo: string, branch?: string (default repo default), " +
+        "file_path: string (path to root entity YAML), base_path?: string (prepended to relative paths) }",
     },
   ],
 };
@@ -682,19 +665,6 @@ export const aiEvalsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription:
             "Get dataset by its unique identifier slug (not UUID). Pass identifier via params.identifier.",
-          bodySchema: { description: "No body", fields: [] },
-        },
-        export: {
-          method: "GET",
-          path: "",
-          pathBuilder: (input, config) =>
-            `${base(input, config)}/dataset/${input.dataset_id as string}/export`,
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { format: "format" },
-          defaultQueryParams: { format: "jsonl" },
-          responseExtractor: passthrough,
-          actionDescription:
-            "Export dataset as JSONL (harness-evals Golden format). Returns newline-delimited JSON.",
           bodySchema: { description: "No body", fields: [] },
         },
         generate: {
@@ -950,6 +920,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription:
             "Compare 2–10 runs. Pass run_ids as comma-separated UUIDs (params.run_ids or input.run_ids). No request body.",
+          bodySchema: { description: "No body", fields: [] },
         },
         rescore: {
           method: "POST",
@@ -1021,10 +992,11 @@ export const aiEvalsToolset: ToolsetDefinition = {
       identifierFields: ["metric_id"],
       diagnosticHint:
         "Use the 'suggestions' execute action to discover appropriate metrics for a given target type and dataset shape. " +
-        "Metrics are added to metric sets (eval_metric_set) via eval_metric_set_entry, then referenced by evaluations.",
+        "Metrics are added to metric sets (eval_metric_set) via eval_metric_set_entry, then referenced by evaluations. " +
+        "Each metric response includes a 'config_schema' field (JSON Schema) describing available config options for that metric kind — " +
+        "use harness_get to inspect a metric's config_schema before setting config on a metric set entry.",
       relatedResources: [
         { resourceType: "eval_metric_set_entry", relationship: "used_by", description: "Metrics are added to metric sets via entries" },
-        { resourceType: "eval_model", relationship: "uses", description: "LLM metrics can reference a judge model via config.judge_model_id" },
       ],
       listFilterFields: [
         { name: "type", description: "Filter by metric type (e.g. heuristic, llm)" },
@@ -1110,11 +1082,10 @@ export const aiEvalsToolset: ToolsetDefinition = {
       diagnosticHint:
         "Before creating a metric set, list available metrics with harness_list(resource_type='eval_metric'). " +
         "Use harness_execute(resource_type='eval_metric', action='suggestions') to discover metrics appropriate for a target type. " +
-        "If using LLM metrics (llm-as-judge), set judge_model_id to an eval_model UUID.",
+        "If using LLM metrics (llm-as-judge), set judge_llm_connector_ref to a Harness LLM connector identifier.",
       relatedResources: [
         { resourceType: "eval_metric_set_entry", relationship: "contains", description: "Metric membership entries with thresholds" },
         { resourceType: "eval_metric", relationship: "uses", description: "Entries reference metrics by metric_id" },
-        { resourceType: "eval_model", relationship: "uses", description: "Optional judge model for LLM metrics via judge_model_id" },
         { resourceType: "evaluation", relationship: "used_by", description: "Evals reference metric sets via metric_set_id" },
       ],
       listFilterFields: [
@@ -1459,17 +1430,16 @@ export const aiEvalsToolset: ToolsetDefinition = {
     {
       resourceType: "eval_target",
       displayName: "AI Evals Target",
-      description: "Invocation target (prompt, agent, or precomputed). Prompt targets reference a registered eval_model via config.model_id.",
+      description: "Invocation target (prompt, agent, or precomputed). Prompt targets use an LLM connector via config.llm_connector_ref.",
       toolset: "ai-evals",
       scope: "project",
       scopeOptional: true,
       headerBasedScoping: true,
       identifierFields: ["target_id"],
       diagnosticHint:
-        "When creating a prompt target, first list available models with harness_list(resource_type='eval_model') " +
-        "so you can reference the correct model_id in config. The config.model_id must be a UUID from an existing eval_model.",
+        "When creating a prompt target, use an LLM connector reference (config.llm_connector_ref) " +
+        "to specify the model credentials. List connectors via harness_list(resource_type='connector', filters={category:'AI'}).",
       relatedResources: [
-        { resourceType: "eval_model", relationship: "uses", description: "Prompt targets reference a model via config.model_id" },
         { resourceType: "evaluation", relationship: "used_by", description: "Evals reference targets via target_id" },
       ],
       listFilterFields: [
@@ -1529,7 +1499,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) =>
             `${base(input, config)}/targets/${input.target_id as string}/test`,
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: bodyFromInput,
           bodySchema: testTargetSchema,
           responseExtractor: passthrough,
@@ -1576,70 +1546,6 @@ export const aiEvalsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: "Summary metrics and per-eval health trend (total_evals, total_runs, last_run_at, overall_pass_rate, per-eval pass rates).",
           bodySchema: { description: "No body", fields: [] },
-        },
-      },
-    },
-    {
-      resourceType: "eval_model",
-      displayName: "AI Evals Model",
-      description: "Registered LLM model (provider + model_id + credentials) for eval runs. Prompt targets reference models via config.model_id.",
-      toolset: "ai-evals",
-      scope: "project",
-      scopeOptional: true,
-      headerBasedScoping: true,
-      identifierFields: ["model_id"],
-      relatedResources: [
-        { resourceType: "eval_target", relationship: "used_by", description: "Prompt targets reference models via config.model_id" },
-      ],
-      listFilterFields: [
-        { name: "active_only", description: "Only active models", type: "boolean" },
-        { name: "search", description: "Search by name, provider, or model ID" },
-      ],
-      operations: {
-        list: {
-          method: "GET",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/models`,
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { ...listQ, active_only: "active_only", search: "search" },
-          responseExtractor: aiEvalsListExtract,
-          description: "List models",
-        },
-        get: {
-          method: "GET",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/models/${input.model_id as string}`,
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
-          description: "Get model",
-        },
-        create: {
-          method: "POST",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/models`,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input) => input.body ?? {},
-          bodySchema: createModelSchema,
-          responseExtractor: passthrough,
-          description: "Register model",
-        },
-        update: {
-          method: "PATCH",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/models/${input.model_id as string}`,
-          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
-          bodyBuilder: (input) => input.body ?? {},
-          bodySchema: updateModelSchema,
-          responseExtractor: passthrough,
-          description: "Update model",
-        },
-        delete: {
-          method: "DELETE",
-          path: "",
-          pathBuilder: (input, config) => `${base(input, config)}/models/${input.model_id as string}`,
-          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          responseExtractor: passthrough,
-          description: "Delete model",
         },
       },
     },
@@ -1813,6 +1719,51 @@ export const aiEvalsToolset: ToolsetDefinition = {
           bodySchema: upsertGitSettingsSchema,
           responseExtractor: passthrough,
           description: "Upsert git settings",
+        },
+      },
+    },
+    {
+      resourceType: "eval_git_registration",
+      displayName: "AI Evals Git Registration",
+      description:
+        "Register evals, suites, or manifests from a git repo. Creates the full sub-entity tree (target, dataset, metric_set, eval) with deduplication.",
+      toolset: "ai-evals",
+      scope: "project",
+      scopeOptional: true,
+      headerBasedScoping: true,
+      identifierFields: [],
+      diagnosticHint:
+        "Use this to onboard git-backed evaluations. Provide a connector_ref for the git repo, the repo name, " +
+        "and the file_path to the root YAML. Type 'eval' registers one eval + sub-entities, 'suite' registers a suite + all evals, " +
+        "'manifest' registers everything listed in a manifest file. Deduplicates by (scope, repo, file_path).\n\n" +
+        "Manifest YAML format: { evals: ['evals/qa.yaml'], suites: ['suites/pr-gate.yaml'] } — lists of relative paths.\n\n" +
+        "Eval YAML format: { identifier, name, description?, target: 'targets/foo.yaml', dataset: 'datasets/bar.jsonl', " +
+        "metric_set: 'metric-sets/baz.yaml', timeout_per_item_ms?, concurrency?, sampling_strategy?, sample_size? }.\n\n" +
+        "Suite YAML format: { identifier, name, description?, pass_strategy: 'all_must_pass'|'threshold', pass_threshold?, " +
+        "is_blocking?, evaluations: [{ eval: 'evals/foo.yaml', required: true }] }.\n\n" +
+        "Target YAML format: { identifier, name, type: 'prompt'|'agent'|'precomputed', description?, config: {...}, env_secrets?: {...} }.\n\n" +
+        "Metric set YAML format: { identifier, name, description?, entries: [{ metric: { name, kind, type, dimension? }, threshold, weight? }] }.\n\n" +
+        "All file path references (target, dataset, metric_set, eval) are relative to base_path in git_source.",
+      relatedResources: [
+        { resourceType: "evaluation", relationship: "produces", description: "Registers evaluations with storage_type=git" },
+        { resourceType: "eval_suite", relationship: "produces", description: "Registers suites with storage_type=git" },
+      ],
+      operations: {},
+      executeActions: {
+        register: {
+          method: "POST",
+          path: "",
+          pathBuilder: (input, config) => `${base(input, config)}/git/register`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: bodyFromInput,
+          bodySchema: gitRegisterSchema,
+          responseExtractor: passthrough,
+          actionDescription:
+            "Register entities from a git coordinate. Returns the registered entity tree with IDs, " +
+            "dedup status (created vs reused), and any warnings. " +
+            "Body: { type: 'eval'|'suite'|'manifest', git_source: { connector_ref, repo, branch?, file_path, base_path? } }. " +
+            "For type='manifest', file_path points to a YAML with keys: evals (list of eval YAML paths) and/or suites (list of suite YAML paths). " +
+            "All paths are relative to base_path.",
         },
       },
     },

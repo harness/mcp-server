@@ -35,7 +35,7 @@ ${org_id ? `org_id=${org_id}` : "Use default HARNESS_ORG"}; ${project_id ? `proj
    - Datasets: \`harness_list(resource_type="eval_dataset")\` — create with \`harness_create\` if needed (body: name, identifier, ...).
    - Targets: \`harness_list(resource_type="eval_target")\`
    - Metric sets: \`harness_list(resource_type="eval_metric_set")\`
-   - Models (optional): \`harness_list(resource_type="eval_model")\`
+   - LLM connectors (for prompt targets / judge models): \`harness_list(resource_type="connector", filters={category:"AI"})\`
 
 3. **Create an evaluation** — \`harness_create(resource_type="evaluation", body={ name, dataset_id, target_id, metric_set_id, ... })\`
 
