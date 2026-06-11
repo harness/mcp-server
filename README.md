@@ -12,7 +12,7 @@ This server is built differently:
 - **Full platform coverage.** 36 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **32 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
-- **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Windsurf), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
+- **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
 - **Zero-config start.** Just provide a Harness API key. Account ID is auto-extracted from PAT and SAT tokens, org/project defaults are optional, and toolset filtering lets you expose only what you need.
 - **Extensible by design.** Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
 
@@ -48,7 +48,7 @@ HARNESS_API_KEY=pat.xxx.xxx.xxx npx harness-mcp-v2@latest
 Or configure the API key in your AI client (see [Client Configuration](#client-configuration) below).
 
 ```bash
-# Stdio transport (default — for Claude Desktop, Cursor, Windsurf, etc.)
+# Stdio transport (default — for Claude Desktop, Cursor, Devin Desktop, etc.)
 HARNESS_API_KEY=pat.xxx npx harness-mcp-v2
 
 # HTTP transport (for remote/shared deployments)
@@ -231,7 +231,7 @@ Harness also supports a hosted MCP endpoint for accounts that have the managed s
 >
 > This is a client process-launch failure, not a Harness authentication failure. The MCP server has not started yet, so changing `HARNESS_API_KEY` will not affect `spawn npx ENOENT`.
 >
-> GUI apps (Cursor, Claude Desktop, Windsurf, VS Code) don't always inherit your shell's `PATH`, so they can fail to find `npx` or `node` after a config reload. Fix this by using absolute paths and explicitly setting `PATH` in the `env` block:
+> GUI apps (Cursor, Claude Desktop, Devin Desktop, VS Code) don't always inherit your shell's `PATH`, so they can fail to find `npx` or `node` after a config reload. Fix this by using absolute paths and explicitly setting `PATH` in the `env` block:
 >
 > ```json
 > {
@@ -353,7 +353,7 @@ npm install -g harness-mcp-v2
 
 Run `which harness-mcp-v2` after `npm install -g harness-mcp-v2` and use that full path for `command`; include the directory from `which node` at the front of `PATH`.
 
-#### Windsurf (`~/.windsurf/mcp.json`)
+#### Devin Desktop (`~/.windsurf/mcp.json`)
 
 npx (zero install)
 
@@ -1934,7 +1934,7 @@ Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_exec
 | Cursor            | Yes                 |
 | VS Code (Copilot) | Yes                 |
 | Claude Desktop    | Not yet             |
-| Windsurf          | Not yet             |
+| Devin Desktop | Not yet             |
 | MCP Inspector     | Yes                 |
 
 
