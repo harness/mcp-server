@@ -144,6 +144,9 @@ describe("pipeline-yaml resource", () => {
     registry.getResource.mockImplementation(() => {
       throw new Error("Unknown resource_type: pipeline");
     });
+    registry.dispatch.mockImplementation(() => {
+      throw new Error("Unknown resource_type: pipeline");
+    });
 
     const result = await readHandler(new URL("pipeline:///pipeline_one"));
 
