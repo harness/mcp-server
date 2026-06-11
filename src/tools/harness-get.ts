@@ -6,10 +6,14 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint, HarnessApiError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, coerceRecord } from "../utils/type-guards.js";
-import { resolveLogContent } from "../utils/log-resolver.js";
+import { resolveLogContent, resolveLogDownloadUrl } from "../utils/log-resolver.js";
 import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
 import { resourceTypeSchema } from "./input-schemas.js";
 import { getOutputSchema } from "./output-schemas.js";
+
+function isTrue(value: unknown): boolean {
+  return value === true || value === "true";
+}
 
 export function registerGetTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   const gettableTypes = registry.getTypesForOperation("get");
@@ -79,7 +83,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
           delete input.global;
         }
 
-        // execution_log: resolve full log content instead of returning a download URL
+        // execution_log: preserve legacy content by default; opt into URL-only mode with return_download_url=true.
         if (resourceType === "execution_log") {
           try {
             let prefix = asString(input.prefix);
@@ -91,11 +95,15 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
               }
               prefix = await buildLogPrefixFromExecution(client, registry, executionId, input);
             }
+            if (isTrue(input.return_download_url)) {
+              const downloadUrl = await resolveLogDownloadUrl(client, prefix);
+              return jsonResult({ download_url: downloadUrl });
+            }
             const logText = await resolveLogContent(client, prefix);
             return jsonResult({ log_content: logText });
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            return errorResult(`Failed to fetch execution logs: ${msg}. Try harness_diagnose with include_logs=true for better failure analysis.`);
+            return errorResult(`Failed to resolve execution logs: ${msg}. Try harness_diagnose with include_logs=true for better failure analysis.`);
           }
         }
 
