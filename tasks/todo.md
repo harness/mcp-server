@@ -7,7 +7,8 @@
 - [x] Move FME fallback auth into `HarnessClient`
 - [x] Run focused and broad verification
 - [x] Commit and push fix branch
-- [ ] Open PR and report outcome in the original Slack thread if posting is available
+- [x] Open PR
+- [x] Attempt original-thread Slack reply
 
 ### Plan
 - Treat PR #320 as the actionable bug context because the Slack thread only contains the PR link and an automation reply.
@@ -20,6 +21,7 @@
 - Moved FME fallback auth selection into `HarnessClient`, where session-specific config and caller headers are available, while keeping registry dispatch limited to product/base-url routing.
 - Added regressions for HARNESS_API_KEY fallback, HARNESS_FME_API_KEY preference, caller-provided Authorization preservation with `x-api-key` stripping, and placeholder credential rejection before network I/O.
 - Verification passed: focused FME Vitest run, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm test` (73 files / 1898 tests), `pnpm docs:check`, and `git diff --check`.
+- Opened PR #323. Attempted to report in the original Slack thread, but `SendSlackMessage` rejected channel `C08SYT1FWJD`; no message was posted elsewhere per the trigger instructions.
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
