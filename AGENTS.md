@@ -66,6 +66,7 @@ The "Sunil On Demand Architecture Review" bot reviews every PR and reliably catc
 - **No silent data loss.** Body builders use `!= null` (not truthiness) so `0`/`false` survive; metadata strippers preserve meaningful empty collections but prune `{}` placeholder rows; reattached raw fields are re-stripped.
 - **Tests cover the contract, not just the request.** Add a response-shape/extractor test (envelope dropped, empty/edge cases) and a request-shape test for every new extractor and body builder — "no focused coverage" is itself a review finding.
 - **Guardrails are green locally.** Run `pnpm build` THEN `pnpm docs:generate`, plus `pnpm typecheck` and `pnpm test`, before pushing. `docs:check` reads from `build/`.
+- **No internal Jira IDs in external PRs.** This is a public OSS repo — do not put Harness-internal ticket IDs (e.g. `AIDEVOPS-1234`, `AIDEVOSP-1830`) in PR titles, descriptions, or commit messages. Describe the user-facing problem and fix instead; link internal tickets only in private channels or the internal tracker.
 
 ---
 
@@ -560,6 +561,7 @@ The MCP server exposes an `instructions` string (in `src/index.ts`) that is sent
 | Read-only / confirmation gating by tool family | Gate by the action's `operationPolicy.risk`, mirroring `registry.dispatchExecute()` — `risk: "read"` actions (e.g. a query language with no mutations) must pass in read-only mode |
 | Stripping non-empty array values, or leaving `{}` placeholder rows | Preserve explicitly-empty collections (meaningful), but prune array elements that collapse to `{}` after stripping — recurse first, then decide |
 | Truthiness checks dropping `0`/`false` from body builders | Use `!= null` checks so zero-valued options (`timeout_ms: 0`) reach the API instead of being silently rewritten |
+| Internal Jira IDs in PR title, description, or commit message | Describe the user-facing problem/fix in plain language; reserve ticket IDs for internal trackers and Slack, not the public GitHub history |
 | Running `pnpm docs:generate` without `pnpm build` first | `docs:generate` reads from `build/` — a stale build produces wrong counts and `docs:check` fails in CI. Build, then generate |
 
 ---
