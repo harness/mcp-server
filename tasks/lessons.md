@@ -104,3 +104,8 @@
   - **List-only metadata on get-only resources misleads discovery.** `kg_related_type` (get-only) set `listFilterFields`, so `harness_describe`/`harness_list` advertised `kind`/`include_transitive` as list filters. Fix: drop `listFilterFields`; document get params via the get op's `paramsSchema`. Add local required-field validation (throw a plain `Error` from the body builder → surfaces as a clean `errorResult` via `isUserError`) so a missing id fails locally instead of sending an id-less body.
 - **Rule**: For every new/changed resource, run the **Pre-Push Architecture-Review Pass** in `AGENTS.md` §Workflow 7 before pushing, and pair every new extractor/body builder with both a response-shape test (envelope dropped, empty/edge cases) and a request-shape test. "No focused coverage" is itself a recurring review finding.
 - **Build/docs gotcha**: `pnpm docs:generate` and `docs:check` read from `build/`. Always `pnpm build` first or counts go stale and CI `docs:check` fails.
+
+## External PR Hygiene (Sunil review, PR #325)
+- **Issue**: Commit message `fix: [AIDEVOSP-1830]: …` exposed an internal Jira ID in the public `mcp-server` repo.
+- **Fix**: Use user-facing commit/PR text (e.g. `fix: skip resource discovery when org/project defaults are missing`) with no ticket prefix.
+- **Rule**: Never put Harness-internal ticket IDs in external PR titles, descriptions, or commit messages — see **Pre-Push Architecture-Review Pass** in `AGENTS.md` §Workflow 7.
