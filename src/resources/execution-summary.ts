@@ -3,6 +3,7 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { createLogger } from "../utils/logger.js";
+import { hasRequiredDiscoveryScope } from "./scope-check.js";
 
 const log = createLogger("resource:execution-summary");
 
@@ -16,6 +17,20 @@ export function registerExecutionSummaryResource(server: McpServer, registry: Re
       mimeType: "application/json",
     },
     async (uri) => {
+      const executionDef = registry.getResource("execution");
+      if (!executionDef.scopeOptional && !hasRequiredDiscoveryScope(executionDef.scope, config)) {
+        log.debug("Skipping execution summary: missing required scope", {
+          scope: executionDef.scope,
+        });
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify({ items: [], total: 0, skipped: "missing org/project scope" }, null, 2),
+          }],
+        };
+      }
+
       try {
         log.info("Fetching recent executions");
 
