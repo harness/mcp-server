@@ -5,7 +5,7 @@
 - [x] Reproduce the missing remote template Git params with a failing registry dispatch test
 - [x] Map v0 template get/create/update Git query params to Harness API names
 - [x] Verify focused tests, build/docs/typecheck/test guardrails
-- [ ] Commit, push, open/update PR, and reply in the original Slack thread
+- [x] Commit, push, open/update PR, and attempt original Slack thread reply
 
 ### Plan
 - Treat v0 `template` remote writes like existing v0 `pipeline` and `input_set` remote writes: public snake_case params (`store_type`, `branch`, `connector_ref`, `repo_name`, `file_path`, conflict IDs, etc.) must be translated into Harness API query params before the client request.
@@ -16,6 +16,7 @@
 - Added `tests/registry/templates.test.ts` coverage through `Registry.dispatch()` for v0 template remote `get`, `create`, and `update` request params. The regression failed before the fix because only scope params reached `client.request()`.
 - Updated `src/registry/toolsets/templates.ts` so v0 template operations map remote Git params to Harness API query keys: `storeType`, `connectorRef`, `repoName`, `branch`, `filePath`, branch/commit metadata, Harness Code flag, and update conflict IDs.
 - Verification passed: `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, `pnpm typecheck`, `pnpm exec vitest run tests/registry/templates.test.ts`, `pnpm test`, and `git diff --check`.
+- Opened PR #330. Slack reply to the original thread was attempted but blocked by the automation tool allowlist: original channel `C08SYT1FWJD` was not one of the configured sendable channels.
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
