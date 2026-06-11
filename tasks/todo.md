@@ -1,10 +1,10 @@
 # Harness MCP Server — Task Tracking
 
 ## Remote v0 Template Git Param Fix (2026-06-11)
-- [ ] Confirm Slack thread and PR #329 context
-- [ ] Reproduce the missing remote template Git params with a failing registry dispatch test
-- [ ] Map v0 template get/create/update Git query params to Harness API names
-- [ ] Verify focused tests, build/docs/typecheck/test guardrails
+- [x] Confirm Slack thread and PR #329 context
+- [x] Reproduce the missing remote template Git params with a failing registry dispatch test
+- [x] Map v0 template get/create/update Git query params to Harness API names
+- [x] Verify focused tests, build/docs/typecheck/test guardrails
 - [ ] Commit, push, open/update PR, and reply in the original Slack thread
 
 ### Plan
@@ -13,7 +13,9 @@
 - Keep the production change scoped to `src/registry/toolsets/templates.ts` query-param metadata and matching agent-facing operation/body descriptions.
 
 ### Review
-- Pending.
+- Added `tests/registry/templates.test.ts` coverage through `Registry.dispatch()` for v0 template remote `get`, `create`, and `update` request params. The regression failed before the fix because only scope params reached `client.request()`.
+- Updated `src/registry/toolsets/templates.ts` so v0 template operations map remote Git params to Harness API query keys: `storeType`, `connectorRef`, `repoName`, `branch`, `filePath`, branch/commit metadata, Harness Code flag, and update conflict IDs.
+- Verification passed: `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, `pnpm typecheck`, `pnpm exec vitest run tests/registry/templates.test.ts`, `pnpm test`, and `git diff --check`.
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
