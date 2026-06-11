@@ -1,5 +1,20 @@
 # Harness MCP Server — Task Tracking
 
+## Remote v0 Template Git Param Fix (2026-06-11)
+- [ ] Confirm Slack thread and PR #329 context
+- [ ] Reproduce the missing remote template Git params with a failing registry dispatch test
+- [ ] Map v0 template get/create/update Git query params to Harness API names
+- [ ] Verify focused tests, build/docs/typecheck/test guardrails
+- [ ] Commit, push, open/update PR, and reply in the original Slack thread
+
+### Plan
+- Treat v0 `template` remote writes like existing v0 `pipeline` and `input_set` remote writes: public snake_case params (`store_type`, `branch`, `connector_ref`, `repo_name`, `file_path`, conflict IDs, etc.) must be translated into Harness API query params before the client request.
+- Add focused request-shape tests in `tests/registry/templates.test.ts` through `Registry.dispatch()` so coverage exercises the public registry contract.
+- Keep the production change scoped to `src/registry/toolsets/templates.ts` query-param metadata and matching agent-facing operation/body descriptions.
+
+### Review
+- Pending.
+
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select File Store multipart workflows as the focused documentation gap

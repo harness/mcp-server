@@ -170,7 +170,7 @@ const templateV1ListFilterFields = [
 
 const templateV0CreateSchema: BodySchema = {
   description:
-    "Classic (v0) template YAML for NG API create. Root key `template` with identifier, name, versionLabel, type, and spec.",
+    "Classic (v0) template YAML for NG API create. Root key `template` with identifier, name, versionLabel, type, and spec. Storage options via params: Inline (default), External Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path), Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path).",
   fields: [
     {
       name: "template_yaml",
@@ -187,7 +187,8 @@ const templateV0CreateSchema: BodySchema = {
 };
 
 const templateV0UpdateSchema: BodySchema = {
-  description: "Classic (v0) template YAML for NG API update (full version replacement).",
+  description:
+    "Classic (v0) template YAML for NG API update (full version replacement). For remote templates, pass store_type='REMOTE' with git details via params. Include last_object_id and last_commit_id from the GET response for conflict detection.",
   fields: [
     {
       name: "template_yaml",
@@ -289,9 +290,14 @@ export const templatesToolset: ToolsetDefinition = {
           queryParams: {
             version_label: "versionLabel",
             account_id: "accountIdentifier",
+            branch: "branch",
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
           },
           responseExtractor: ngExtract,
-          description: "Get template details and YAML. Use global=true for global templates account.",
+          description:
+            "Get template details and YAML. Use global=true for global templates account. For remote/git-backed templates, pass branch to specify which branch to read from.",
         },
         create: {
           method: "POST",
@@ -303,12 +309,21 @@ export const templatesToolset: ToolsetDefinition = {
             is_stable: "setDefaultTemplate",
             is_new_template: "isNewTemplate",
             enable_dag: "enableDAG",
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+            branch: "branch",
+            file_path: "filePath",
+            base_branch: "baseBranch",
+            commit_msg: "commitMsg",
+            is_new_branch: "isNewBranch",
+            is_harness_code_repo: "isHarnessCodeRepo",
           },
           bodyBuilder: (input) => buildTemplateYamlBody(input),
           bodySchema: templateV0CreateSchema,
           responseExtractor: ngExtract,
           description:
-            "Create a v0 template via NG API. Body is raw YAML (application/yaml). Scope via org_id/project_id query params; omit both for account scope.",
+            "Create a v0 template via NG API. Body is raw YAML (application/yaml). Scope via org_id/project_id query params; omit both for account scope. For external Git: store_type='REMOTE' + connector_ref, repo_name, branch, file_path. For Harness Code: store_type='REMOTE' + is_harness_code_repo=true, repo_name, branch, file_path.",
         },
         update: {
           method: "PUT",
@@ -319,12 +334,23 @@ export const templatesToolset: ToolsetDefinition = {
           queryParams: {
             comments: "comments",
             is_stable: "setDefaultTemplate",
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+            branch: "branch",
+            file_path: "filePath",
+            base_branch: "baseBranch",
+            commit_msg: "commitMsg",
+            is_new_branch: "isNewBranch",
+            is_harness_code_repo: "isHarnessCodeRepo",
+            last_object_id: "lastObjectId",
+            last_commit_id: "lastCommitId",
           },
           bodyBuilder: (input) => buildTemplateYamlBody(input),
           bodySchema: templateV0UpdateSchema,
           responseExtractor: ngExtract,
           description:
-            "Update a v0 template version via NG API. Requires template_id and version_label. Body is full v0 template YAML.",
+            "Update a v0 template version via NG API. Requires template_id and version_label. Body is full v0 template YAML. For remote/git-backed templates, pass store_type='REMOTE' with git details and last_object_id/last_commit_id from the GET response. For Harness Code: add is_harness_code_repo=true (no connector_ref needed).",
         },
         delete: {
           method: "DELETE",
