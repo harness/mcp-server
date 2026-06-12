@@ -15,6 +15,7 @@ import { listOutputSchema } from "../../src/tools/output-schemas.js";
 // Top-level mocks for execution_log tests — must be before any imports that pull these in
 vi.mock("../../src/utils/log-resolver.js", () => ({
   resolveLogContent: vi.fn().mockResolvedValue("[2026-03-09T17:01:23Z] info: mvn clean install\n[2026-03-09T17:01:45Z] error: BUILD FAILURE"),
+  resolveLogDownloadUrl: vi.fn().mockResolvedValue("https://logs.example.com/download.zip?sig=abc"),
 }));
 vi.mock("../../src/utils/log-prefix.js", () => ({
   buildLogPrefixFromExecution: vi.fn().mockResolvedValue("acct1/pipeline/my-pipe/42/-exec-123"),
@@ -275,6 +276,7 @@ describe("harness_get — execution_log", () => {
   let client: HarnessClient;
   let mockRequest: ReturnType<typeof vi.fn>;
   let resolveLogContentMock: ReturnType<typeof vi.fn>;
+  let resolveLogDownloadUrlMock: ReturnType<typeof vi.fn>;
   let buildLogPrefixMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -282,10 +284,12 @@ describe("harness_get — execution_log", () => {
     const logPrefix = await import("../../src/utils/log-prefix.js");
 
     resolveLogContentMock = logResolver.resolveLogContent as ReturnType<typeof vi.fn>;
+    resolveLogDownloadUrlMock = logResolver.resolveLogDownloadUrl as ReturnType<typeof vi.fn>;
     buildLogPrefixMock = logPrefix.buildLogPrefixFromExecution as ReturnType<typeof vi.fn>;
 
     // Reset to default behavior each test
     resolveLogContentMock.mockReset().mockResolvedValue("[2026-03-09T17:01:23Z] info: mvn clean install\n[2026-03-09T17:01:45Z] error: BUILD FAILURE");
+    resolveLogDownloadUrlMock.mockReset().mockResolvedValue("https://logs.example.com/download.zip?sig=abc");
     buildLogPrefixMock.mockReset().mockResolvedValue("acct1/pipeline/my-pipe/42/-exec-123");
 
     server = makeMcpServer();
@@ -308,6 +312,30 @@ describe("harness_get — execution_log", () => {
     expect(data.log_content).toContain("BUILD FAILURE");
     expect(resolveLogContentMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
     expect(buildLogPrefixMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps top-level return_download_url in the public schema and skips log content download", async () => {
+    const schema = server.schema("harness_get") as {
+      inputSchema: Record<string, { description?: string | null }>;
+    };
+    expect(schema.inputSchema.return_download_url?.description).toContain("execution_log");
+
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      resource_id: "exec-123",
+      return_download_url: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toEqual({ download_url: "https://logs.example.com/download.zip?sig=abc" });
+    expect(buildLogPrefixMock).toHaveBeenCalledWith(
+      client,
+      registry,
+      "exec-123",
+      expect.objectContaining({ execution_id: "exec-123", return_download_url: true }),
+    );
+    expect(resolveLogDownloadUrlMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+    expect(resolveLogContentMock).not.toHaveBeenCalled();
   });
 
   it("maps resource_id to execution_id and auto-builds prefix", async () => {
