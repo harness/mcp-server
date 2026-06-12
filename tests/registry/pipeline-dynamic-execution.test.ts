@@ -102,22 +102,6 @@ describe("pipeline_dynamic_execution.run — request shape", () => {
     );
   });
 
-  it("accepts body as a raw YAML string", async () => {
-    const registry = new Registry(makeConfig());
-    const mockRequest = vi.fn().mockResolvedValue({
-      execution_details: { execution_id: "exec-2", status: "RUNNING" },
-    });
-    const client = makeClient(mockRequest);
-
-    await registry.dispatchExecute(client, "pipeline_dynamic_execution", "run", {
-      pipeline_id: "p1",
-      body: "pipeline:\n  identifier: from-string\n",
-    });
-
-    const call = mockRequest.mock.calls[0]![0] as { body: unknown };
-    expect(call.body).toEqual({ yaml: "pipeline:\n  identifier: from-string\n" });
-  });
-
   it("serializes a JSON pipeline object inside body.yaml to a YAML string", async () => {
     const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({

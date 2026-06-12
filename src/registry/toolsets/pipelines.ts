@@ -508,7 +508,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       headerBasedScoping: true,
       identifierFields: ["pipeline_id"],
       executeHint:
-        "Targets v0 pipelines (resource_type='pipeline'). Pre-conditions: (1) account-level Allow Dynamic Execution setting on; (2) pipeline-level Allow Dynamic Execution toggle on; (3) caller has Edit + Execute on the pipeline. Runtime `<+input>` placeholders are NOT resolved at execution time — the agent must fully resolve all values in the YAML before submitting. Input sets, selective stage execution, retry, and triggers are not supported by this API. Call as harness_execute(resource_type='pipeline_dynamic_execution', action='run', resource_id='<pipeline_id>', body={yaml: '<full v0 pipeline yaml>'}).",
+        "Targets v0 pipelines (resource_type='pipeline'). Pre-conditions: (1) account-level Allow Dynamic Execution setting on; (2) pipeline-level Allow Dynamic Execution toggle on; (3) caller has Edit + Execute on the pipeline. Runtime `<+input>` placeholders are NOT resolved at execution time — the agent must fully resolve all values in the YAML before submitting. Input sets, selective stage execution, retry, and triggers are not supported by this API. Call as harness_execute(resource_type='pipeline_dynamic_execution', action='run', resource_id='<pipeline_id>', body={yaml: '<full v0 pipeline yaml string>'}). The body argument must be an object — pass the YAML inside `body.yaml`, not as a top-level string.",
       diagnosticHint:
         "If the run is rejected with a 'dynamic execution not enabled' error, verify the account-level Allow Dynamic Execution setting and the pipeline-level toggle (Pipeline → Advanced Options → Dynamic Execution Settings). Invalid YAML errors include a parse location — re-generate the YAML and resubmit.",
       relatedResources: [
@@ -538,32 +538,28 @@ export const pipelinesToolset: ToolsetDefinition = {
             notify_only_user: "notify_only_user",
           },
           bodyBuilder: (input) => {
-            const body = input.body as Record<string, unknown> | string | undefined;
-            // Accept three shapes:
-            //   1. Raw YAML string at body
-            //   2. { yaml: '<string>' }
-            //   3. { yaml: <object> } — auto-serialize to YAML
+            // Public contract: body must be an object with a `yaml` field
+            // (string or JSON pipeline object). harness_execute.body is
+            // typed as z.record(...) and rejects raw string bodies before
+            // the registry sees them, so we mirror that shape here.
+            const body = input.body as Record<string, unknown> | undefined;
+            const yamlField = body?.yaml;
             let yaml: string | undefined;
-            if (typeof body === "string") {
-              yaml = body;
-            } else if (body && typeof body === "object") {
-              const yamlField = body.yaml;
-              if (typeof yamlField === "string") {
-                yaml = yamlField;
-              } else if (yamlField && typeof yamlField === "object") {
-                yaml = YAML.stringify(yamlField);
-              }
+            if (typeof yamlField === "string") {
+              yaml = yamlField;
+            } else if (yamlField && typeof yamlField === "object") {
+              yaml = YAML.stringify(yamlField);
             }
             if (!yaml) {
-              throw new Error("body must be a YAML string, or an object with a yaml field (string or object). Pass the full pipeline YAML to execute dynamically.");
+              throw new Error("body.yaml is required and must be a YAML string or a JSON pipeline object (auto-serialized to YAML). Pass the full v0 pipeline YAML inside body.yaml — raw string bodies are not supported by harness_execute.");
             }
             return { yaml };
           },
           responseExtractor: dynamicExecutionExtract,
           actionDescription:
-            "Execute a v0 Harness pipeline using YAML provided at runtime. Targets the v0 pipeline shell identified by resource_id. Pass body as either a raw YAML string or an object with a yaml field. Optional params: module_type (e.g. CI, CD), notes (free-form notes attached to the run), notify_only_user (boolean). Returns { execution_id, status } and an openInHarness deep link to the execution. Pre-conditions: account- and pipeline-level Allow Dynamic Execution must be enabled and the caller must have Edit + Execute on the pipeline.",
+            "Execute a v0 Harness pipeline using YAML provided at runtime. Targets the v0 pipeline shell identified by resource_id. Pass body as an object with a `yaml` field — either body={yaml: '<yaml string>'} or body={yaml: <JSON pipeline object>} (auto-serialized to YAML). Raw string bodies are not accepted. Optional params: module_type (e.g. CI, CD), notes (free-form notes attached to the run), notify_only_user (boolean). Returns { execution_id, status } and an openInHarness deep link to the execution. Pre-conditions: account- and pipeline-level Allow Dynamic Execution must be enabled and the caller must have Edit + Execute on the pipeline.",
           bodySchema: {
-            description: "Full v0 pipeline YAML to execute. Three options: (1) Pass body as a raw YAML string. (2) Pass {yaml: '<yaml string>'}. (3) Pass {yaml: {<JSON pipeline>}} — auto-serialized to YAML. Must conform to the v0 Harness pipeline YAML schema (the same schema accepted by harness_create with resource_type='pipeline'). All `<+input>` placeholders must be fully resolved before submission — runtime input prompts are not supported by the dynamic execution API.",
+            description: "Full v0 pipeline YAML to execute. Two options: (1) body={yaml: '<yaml string>'} — pass the YAML as a string under the `yaml` key. (2) body={yaml: {<JSON pipeline>}} — pass the pipeline as a JSON object, auto-serialized to YAML. The body itself must be an object (harness_execute does not accept raw string bodies). Must conform to the v0 Harness pipeline YAML schema (the same schema accepted by harness_create with resource_type='pipeline'). All `<+input>` placeholders must be fully resolved before submission — runtime input prompts are not supported by the dynamic execution API.",
             fields: [
               { name: "yaml", type: "yaml", required: true, description: "Full v0 pipeline YAML string (or JSON object that will be serialized to YAML). Must conform to the v0 Harness pipeline YAML schema." },
             ],

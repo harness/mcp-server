@@ -1917,6 +1917,84 @@ pipeline:
     expect(data.results.every((r) => r.success)).toBe(true);
     expect(kgRequest).toHaveBeenCalledTimes(2);
   });
+
+  describe("pipeline_dynamic_execution.run — public tool contract", () => {
+    it("validates body must be an object — strict clients sending a string body are rejected", async () => {
+      const schema = server.schema("harness_execute") as { inputSchema: Record<string, { safeParse: (v: unknown) => { success: boolean } }> };
+      const bodySchema = schema.inputSchema.body!;
+      // The shared harness_execute tool types `body` as a record. Strict MCP
+      // clients enforce this — a raw YAML string fails Zod parsing before the
+      // registry/bodyBuilder ever runs. The describe surface must not advertise
+      // a shape strict clients cannot use.
+      expect(bodySchema.safeParse("pipeline:\n  identifier: x").success).toBe(false);
+      expect(bodySchema.safeParse({ yaml: "pipeline: {}" }).success).toBe(true);
+      expect(bodySchema.safeParse({ yaml: { pipeline: { identifier: "x" } } }).success).toBe(true);
+    });
+
+    it("end-to-end: harness_execute(action='run') sends body.yaml as the API body", async () => {
+      mockRequest.mockResolvedValueOnce({
+        execution_details: { execution_id: "exec-tool-1", status: "RUNNING" },
+      });
+
+      const result = await server.call("harness_execute", {
+        resource_type: "pipeline_dynamic_execution",
+        action: "run",
+        resource_id: "Deploy_Web_Application",
+        org_id: "myorg",
+        project_id: "myproj",
+        body: { yaml: "pipeline:\n  identifier: dynamic\n" },
+      });
+
+      expect(result.isError).toBeUndefined();
+      const data = parseResult(result) as { execution_id: string; status: string; openInHarness?: string };
+      expect(data.execution_id).toBe("exec-tool-1");
+      expect(data.status).toBe("RUNNING");
+      expect(data.openInHarness).toContain("/orgs/myorg/projects/myproj/pipelines/Deploy_Web_Application/");
+      expect(data.openInHarness).toContain("/deployments/exec-tool-1/pipeline");
+
+      const postCall = mockRequest.mock.calls.find((c) => (c[0] as { method?: string }).method === "POST" && (c[0] as { path?: string }).path?.includes("/execute/dynamic"));
+      expect(postCall, "expected a POST to /execute/dynamic").toBeDefined();
+      const req = postCall![0] as { path: string; body: unknown; params?: Record<string, unknown> };
+      expect(req.path).toBe("/v1/orgs/myorg/projects/myproj/pipelines/Deploy_Web_Application/execute/dynamic");
+      expect(req.body).toEqual({ yaml: "pipeline:\n  identifier: dynamic\n" });
+    });
+
+    it("end-to-end: passes module_type / notes / notify_only_user via params", async () => {
+      mockRequest.mockResolvedValueOnce({
+        execution_details: { execution_id: "exec-tool-2", status: "RUNNING" },
+      });
+
+      const result = await server.call("harness_execute", {
+        resource_type: "pipeline_dynamic_execution",
+        action: "run",
+        resource_id: "p1",
+        body: { yaml: "pipeline: {}\n" },
+        params: { module_type: "CI", notes: "agent run", notify_only_user: true },
+      });
+
+      expect(result.isError).toBeUndefined();
+      const postCall = mockRequest.mock.calls.find((c) => (c[0] as { method?: string }).method === "POST" && (c[0] as { path?: string }).path?.includes("/execute/dynamic"));
+      expect(postCall).toBeDefined();
+      const req = postCall![0] as { params?: Record<string, unknown> };
+      expect(req.params).toMatchObject({
+        moduleType: "CI",
+        notes: "agent run",
+        notify_only_user: true,
+      });
+    });
+
+    it("returns a clear error when body.yaml is missing", async () => {
+      const result = await server.call("harness_execute", {
+        resource_type: "pipeline_dynamic_execution",
+        action: "run",
+        resource_id: "p1",
+        body: { somethingElse: "wrong" },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("body.yaml") });
+    });
+  });
 });
 
 describe("harness_describe", () => {
