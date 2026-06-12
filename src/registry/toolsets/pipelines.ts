@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
-import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract, dynamicExecutionExtract } from "../extractors.js";
 import YAML from "yaml";
 
 /**
@@ -495,6 +495,86 @@ export const pipelinesToolset: ToolsetDefinition = {
               { name: "inputs_yaml", type: "string", required: false, description: "YAML-formatted runtime inputs for the pipeline" },
             ],
           },
+        },
+      },
+    },
+    {
+      resourceType: "pipeline_dynamic_execution",
+      displayName: "Pipeline Dynamic Execution",
+      description:
+        "Execute a Harness pipeline with a dynamically-provided pipeline YAML — wraps POST /v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/execute/dynamic. The pipeline shell must already exist in Harness with 'Allow Dynamic Execution' enabled at both the account and pipeline level (gated by the PIPE_DYNAMIC_PIPELINES_EXECUTION feature flag). Use when an agent or external system generates the full pipeline YAML at runtime instead of running a saved configuration. Supports the run execute action only.",
+      toolset: "pipelines",
+      scope: "project",
+      headerBasedScoping: true,
+      identifierFields: ["pipeline_id"],
+      executeHint:
+        "Pre-conditions: (1) account-level Allow Dynamic Execution setting on; (2) pipeline-level Allow Dynamic Execution toggle on; (3) caller has Edit + Execute on the pipeline. Runtime `<+input>` placeholders are NOT resolved at execution time — the agent must fully resolve all values in the YAML before submitting. Input sets, selective stage execution, retry, and triggers are not supported by this API. Call as harness_execute(resource_type='pipeline_dynamic_execution', action='run', resource_id='<pipeline_id>', body={yaml: '<full pipeline yaml>'}).",
+      diagnosticHint:
+        "If the run is rejected with a 'dynamic execution not enabled' error, verify the account-level Allow Dynamic Execution setting and the pipeline-level toggle (Pipeline → Advanced Options → Dynamic Execution Settings). Invalid YAML errors include a parse location — re-generate the YAML and resubmit.",
+      relatedResources: [
+        {
+          resourceType: "execution",
+          relationship: "produces",
+          description: "The plan execution started by this run. After a successful response, use harness_get(resource_type='execution', resource_id=<execution_id>) to monitor stage/step status.",
+        },
+        {
+          resourceType: "pipeline_v1",
+          relationship: "executes",
+          description: "The v1 pipeline shell that hosts the dynamic execution. Use harness_get(resource_type='pipeline_v1', resource_id=<pipeline_id>) for the saved shell definition.",
+        },
+      ],
+      deepLinkTemplate:
+        "/ng/account/{accountId}/all/orgs/{org}/projects/{project}/pipelines/{pipeline}/deployments/{execution_id}/pipeline",
+      operations: {},
+      executeActions: {
+        run: {
+          method: "POST",
+          path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/execute/dynamic",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
+          queryParams: {
+            module_type: "moduleType",
+            notes: "notes",
+            notify_only_user: "notify_only_user",
+          },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | string | undefined;
+            // Accept three shapes:
+            //   1. Raw YAML string at body
+            //   2. { yaml: '<string>' }
+            //   3. { yaml: <object> } — auto-serialize to YAML
+            let yaml: string | undefined;
+            if (typeof body === "string") {
+              yaml = body;
+            } else if (body && typeof body === "object") {
+              const yamlField = body.yaml;
+              if (typeof yamlField === "string") {
+                yaml = yamlField;
+              } else if (yamlField && typeof yamlField === "object") {
+                yaml = YAML.stringify(yamlField);
+              }
+            }
+            if (!yaml) {
+              throw new Error("body must be a YAML string, or an object with a yaml field (string or object). Pass the full pipeline YAML to execute dynamically.");
+            }
+            return { yaml };
+          },
+          responseExtractor: dynamicExecutionExtract,
+          actionDescription:
+            "Execute a Harness pipeline using YAML provided at runtime. Pass body as either a raw YAML string or an object with a yaml field. Optional params: module_type (e.g. CI, CD), notes (free-form notes attached to the run), notify_only_user (boolean). Returns { execution_id, status } and an openInHarness deep link to the execution. Pre-conditions: account- and pipeline-level Allow Dynamic Execution must be enabled and the caller must have Edit + Execute on the pipeline.",
+          bodySchema: {
+            description: "Full pipeline YAML to execute. Three options: (1) Pass body as a raw YAML string. (2) Pass {yaml: '<yaml string>'}. (3) Pass {yaml: {<JSON pipeline>}} — auto-serialized to YAML. All `<+input>` placeholders must be fully resolved before submission — runtime input prompts are not supported by the dynamic execution API.",
+            fields: [
+              { name: "yaml", type: "yaml", required: true, description: "Full pipeline YAML string (or JSON object that will be serialized to YAML). Must conform to the Harness pipeline YAML schema." },
+            ],
+          },
+          paramsSchema: {
+            fields: [
+              { name: "module_type", required: false, description: "Harness module the execution is associated with (e.g. CI, CD)." },
+              { name: "notes", required: false, description: "Free-form notes attached to the pipeline execution run." },
+              { name: "notify_only_user", required: false, description: "When true, execution notifications are sent only to the triggering user." },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },

@@ -297,6 +297,27 @@ export const runtimeInputExtract = (raw: unknown): unknown => {
 };
 
 /**
+ * Extracts the dynamic-execution response for
+ * POST /v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/execute/dynamic.
+ *
+ * The upstream returns `{ execution_details: { execution_id, status } }`.
+ * Project to a flat, stable public shape — `{ execution_id, status }` — and
+ * preserve any other top-level fields the API may add (without leaking the
+ * original `execution_details` envelope). Returning a flat shape mirrors
+ * how `pipeline.run` surfaces the planExecutionId so chained tools
+ * (`harness_get(resource_type='execution', ...)`) work without re-mapping.
+ */
+export const dynamicExecutionExtract = (raw: unknown): unknown => {
+  if (raw === null || raw === undefined) return raw;
+  const r = raw as { execution_details?: { execution_id?: string; status?: string } };
+  const details = r.execution_details ?? {};
+  return {
+    execution_id: details.execution_id ?? null,
+    status: details.status ?? null,
+  };
+};
+
+/**
  * Extracts merged input set data for a pipeline execution from
  * GET /pipeline/api/pipelines/execution/{planExecutionId}/inputsetV2.
  *
