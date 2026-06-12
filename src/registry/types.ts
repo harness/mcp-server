@@ -416,6 +416,15 @@ export interface ResourceDefinition {
    * Used by SEI APIs which scope entirely via headers and query params.
    */
   headerBasedScoping?: boolean;
+  /**
+   * Declares whether harness_update JSON Patch mode can safely derive a mutable
+   * update body from the resource's GET response. Omit this for resources whose
+   * read shape differs from their write shape.
+   */
+  patchSupport?: {
+    kind: "yaml";
+    bodyFields: readonly string[];
+  };
 }
 
 /**

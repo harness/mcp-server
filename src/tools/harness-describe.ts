@@ -1,6 +1,6 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { Registry } from "../registry/index.js";
+import { describePatchSupport, type Registry } from "../registry/index.js";
 import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
 import { getExamplesForResource } from "../data/examples/index.js";
@@ -48,6 +48,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
               : undefined,
             identifierFields: def.identifierFields,
             listFilterFields: def.listFilterFields,
+            patchSupport: describePatchSupport(def),
             operations: Object.entries(def.operations).map(([op, spec]) => ({
               operation: op,
               method: spec.method,
