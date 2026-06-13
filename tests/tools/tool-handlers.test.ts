@@ -15,6 +15,7 @@ import { listOutputSchema } from "../../src/tools/output-schemas.js";
 // Top-level mocks for execution_log tests — must be before any imports that pull these in
 vi.mock("../../src/utils/log-resolver.js", () => ({
   resolveLogContent: vi.fn().mockResolvedValue("[2026-03-09T17:01:23Z] info: mvn clean install\n[2026-03-09T17:01:45Z] error: BUILD FAILURE"),
+  resolveLogDownloadUrl: vi.fn().mockResolvedValue("https://storage.googleapis.com/harness-logs/run.zip?X-Goog-Signature=sig"),
 }));
 vi.mock("../../src/utils/log-prefix.js", () => ({
   buildLogPrefixFromExecution: vi.fn().mockResolvedValue("acct1/pipeline/my-pipe/42/-exec-123"),
@@ -275,6 +276,7 @@ describe("harness_get — execution_log", () => {
   let client: HarnessClient;
   let mockRequest: ReturnType<typeof vi.fn>;
   let resolveLogContentMock: ReturnType<typeof vi.fn>;
+  let resolveLogDownloadUrlMock: ReturnType<typeof vi.fn>;
   let buildLogPrefixMock: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -282,10 +284,12 @@ describe("harness_get — execution_log", () => {
     const logPrefix = await import("../../src/utils/log-prefix.js");
 
     resolveLogContentMock = logResolver.resolveLogContent as ReturnType<typeof vi.fn>;
+    resolveLogDownloadUrlMock = logResolver.resolveLogDownloadUrl as ReturnType<typeof vi.fn>;
     buildLogPrefixMock = logPrefix.buildLogPrefixFromExecution as ReturnType<typeof vi.fn>;
 
     // Reset to default behavior each test
     resolveLogContentMock.mockReset().mockResolvedValue("[2026-03-09T17:01:23Z] info: mvn clean install\n[2026-03-09T17:01:45Z] error: BUILD FAILURE");
+    resolveLogDownloadUrlMock.mockReset().mockResolvedValue("https://storage.googleapis.com/harness-logs/run.zip?X-Goog-Signature=sig");
     buildLogPrefixMock.mockReset().mockResolvedValue("acct1/pipeline/my-pipe/42/-exec-123");
 
     server = makeMcpServer();
@@ -449,6 +453,28 @@ describe("harness_get — execution_log", () => {
         execution_id: "exec-xyz",
       }),
     );
+  });
+
+  it("documents return_download_url in the registered input schema", () => {
+    const schema = server.schema("harness_get") as {
+      inputSchema: { return_download_url?: { description?: string | null } };
+    };
+    expect(schema.inputSchema.return_download_url?.description).toContain("download URL");
+  });
+
+  it("returns a direct log download URL when top-level return_download_url is true", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_log",
+      resource_id: "exec-123",
+      return_download_url: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({
+      download_url: "https://storage.googleapis.com/harness-logs/run.zip?X-Goog-Signature=sig",
+    });
+    expect(resolveLogDownloadUrlMock).toHaveBeenCalledWith(client, "acct1/pipeline/my-pipe/42/-exec-123");
+    expect(resolveLogContentMock).not.toHaveBeenCalled();
   });
 });
 

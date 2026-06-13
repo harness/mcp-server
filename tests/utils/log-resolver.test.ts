@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { resolveLogContent } from "../../src/utils/log-resolver.js";
+import { resolveLogContent, resolveLogDownloadUrl } from "../../src/utils/log-resolver.js";
 import { gzipSync, deflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 
@@ -45,6 +45,23 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+});
+
+describe("resolveLogDownloadUrl", () => {
+  it("throws for Harness blob URLs that require client-authenticated proxying", async () => {
+    const blobLink = "https://app.harness.io/gateway/log-service/blob/some-path?token=abc";
+    const streamFn = vi.fn();
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://app.harness.io", requestStream: streamFn },
+    );
+
+    await expect(
+      resolveLogDownloadUrl(client, "prefix", { maxPollAttempts: 1, pollIntervalMs: 0 }),
+    ).rejects.toThrow(/requires MCP server authentication/i);
+    expect(streamFn).not.toHaveBeenCalled();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
 
 describe("resolveLogContent", () => {
