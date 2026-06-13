@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-13)
+- [ ] Baseline branch against `origin/main` and identify recent behavior-changing commits
+- [ ] Trace high-blast-radius changes for concrete critical trigger scenarios
+- [ ] Validate any candidate critical bug with focused evidence before fixing
+- [ ] Fix only high-confidence critical bugs; otherwise report no critical bugs found in Slack
+
+### Plan
+- Treat this as a recent-main audit because the automation branch currently matches `origin/main`.
+- Prioritize commits that changed execution, runtime input resolution, log retrieval, auth/config, or generic registry behavior.
+- Ignore style and low-severity issues unless a concrete path causes data loss, crashes, security exposure, or major user-facing breakage.
+- If a real critical bug is found, write a focused regression, implement the minimal fix, run verification, commit/push, and open a PR.
+
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select File Store multipart workflows as the focused documentation gap

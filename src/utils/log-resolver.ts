@@ -531,7 +531,13 @@ async function requestLogBlobLink(
 
 function rewriteDownloadUrlIfNeeded(client: HarnessClient, blobLink: string): string {
   const blobUrl = safeParseUrl(blobLink);
-  if (!blobUrl || isExternalStorageHost(blobUrl.hostname)) {
+  if (!blobUrl) {
+    throw new Error(
+      "Log blob link requires MCP server authentication and cannot be returned as a direct download URL. Retry without return_download_url to retrieve the log content through the MCP server.",
+    );
+  }
+
+  if (isExternalStorageHost(blobUrl.hostname)) {
     return blobLink;
   }
 
@@ -549,7 +555,9 @@ function rewriteDownloadUrlIfNeeded(client: HarnessClient, blobLink: string): st
     return blobUrl.toString();
   }
 
-  return blobLink;
+  throw new Error(
+    "Log blob link requires MCP server authentication and cannot be returned as a direct download URL. Retry without return_download_url to retrieve the log content through the MCP server.",
+  );
 }
 
 export async function resolveLogDownloadUrl(
