@@ -1,16 +1,23 @@
 # Harness MCP Server — Task Tracking
 
 ## Critical Bug Inspection (2026-06-13)
-- [ ] Baseline branch against `origin/main` and identify recent behavior-changing commits
-- [ ] Trace high-blast-radius changes for concrete critical trigger scenarios
-- [ ] Validate any candidate critical bug with focused evidence before fixing
-- [ ] Fix only high-confidence critical bugs; otherwise report no critical bugs found in Slack
+- [x] Baseline branch against `origin/main` and identify recent behavior-changing commits
+- [x] Trace high-blast-radius changes for concrete critical trigger scenarios
+- [x] Validate any candidate critical bug with focused evidence before fixing
+- [x] Fix only high-confidence critical bugs; otherwise report no critical bugs found in Slack
 
 ### Plan
 - Treat this as a recent-main audit because the automation branch currently matches `origin/main`.
 - Prioritize commits that changed execution, runtime input resolution, log retrieval, auth/config, or generic registry behavior.
 - Ignore style and low-severity issues unless a concrete path causes data loss, crashes, security exposure, or major user-facing breakage.
 - If a real critical bug is found, write a focused regression, implement the minimal fix, run verification, commit/push, and open a PR.
+
+### Review
+- Found a high-confidence breakage in the new `execution_log` URL-only path: `harness_get` read `return_download_url`, but the public schema did not expose it, so schema-driven MCP clients could reject or drop the opt-in and fall back to buffering large logs.
+- Found the same path could return Harness log-service links that only work through `HarnessClient.requestStream()` auth injection, giving callers a non-fetchable URL.
+- Fixed `harness_get` to expose top-level `return_download_url`, and made `resolveLogDownloadUrl()` fail fast unless the blob link is independently fetchable or safely rewritten as a presigned storage URL.
+- Added focused regressions for the public schema/handler path and non-exportable Harness blob links.
+- Verification passed: `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, `pnpm typecheck`, focused Vitest run for `resolveLogDownloadUrl|return_download_url`, and full `pnpm test` (78 files / 1949 tests).
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
