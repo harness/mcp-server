@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-14)
+- [x] Baseline branch against `origin/main` and inspect recent behavioral commits
+- [x] Prioritize high-blast-radius changes from the diff and recent task memories
+- [x] Trace suspicious paths end-to-end until a concrete trigger is proven or ruled out
+- [x] If critical: add focused regression, implement minimal fix, verify, commit, push, and open PR
+- [ ] If not critical: report no critical bugs found in Slack without opening a PR
+
+### Plan
+- Fetch `origin/main` and compare `origin/main...HEAD` plus recent commit summaries.
+- Use parallel read-only review where the diff is large enough to benefit from independent scrutiny.
+- Focus only on data loss, crashes, security/auth bypasses, significant user-facing breakage, or silent truncation.
+- Avoid PR creation unless there is a reproducible critical trigger and a narrow validated fix.
+
+### Review
+- Found a high-confidence public contract break in the recent AI Evals toolset: `eval_metric_set.replace_metrics` requires `harness_execute` callers to pass `body` as a raw JSON array, but the registered `harness_execute` input schema only accepted object bodies. Strict MCP clients reject the call before `Registry.dispatchExecute()` reaches the action body builder, making full metric-set replacement unreachable through the public tool.
+- Added a failing tool-schema regression proving array bodies were rejected, then changed `harness_execute.body` to accept either an object payload or a raw array payload. Added an end-to-end tool-handler regression proving `eval_metric_set.replace_metrics` sends the array unchanged to `PUT /gateway/ai-evals/api/v1/orgs/{org}/projects/{project}/metric-sets/{set_id}/metrics`.
+- Parallel review passes did not find other critical issues in pipeline dynamic execution, execution inputs, remote template git params, log download URL handling, missing-scope resource discovery, FME auth preservation, or raw YAML normalized body handling.
+- Verification passed: focused red/green regression, `pnpm exec vitest run tests/tools/tool-handlers.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, `pnpm test`, and `git diff --check HEAD~3..HEAD`.
+
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select File Store multipart workflows as the focused documentation gap
