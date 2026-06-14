@@ -1947,7 +1947,7 @@ pipeline:
     expect(aiEvalsRequest).toHaveBeenCalledOnce();
     const request = aiEvalsRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
     expect(request.method).toBe("PUT");
-    expect(request.path).toBe("/v1/accounts/test-account/ai/evaluations/metric-sets/metric-set-1/metrics");
+    expect(request.path).toBe("/gateway/ai-evals/api/v1/orgs/default/projects/test-project/metric-sets/metric-set-1/metrics");
     expect(request.body).toEqual([{ metric_id: "toxicity", threshold: 0.75 }]);
   });
 
