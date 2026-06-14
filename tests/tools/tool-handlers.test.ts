@@ -1199,6 +1199,15 @@ describe("harness_execute", () => {
     expect(schema.inputSchema.resource_scope?.description).toContain("Scope for the operation");
   });
 
+  it("accepts array bodies for execute actions that require raw arrays", () => {
+    const schema = server.schema("harness_execute") as {
+      inputSchema: Record<string, { safeParse: (v: unknown) => { success: boolean } }>;
+    };
+    const bodySchema = schema.inputSchema.body!;
+
+    expect(bodySchema.safeParse([{ metric_id: "toxicity", threshold: 0.75 }]).success).toBe(true);
+  });
+
   it("returns error when user declines", async () => {
     const declineServer = makeMcpServer("decline");
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
@@ -1916,6 +1925,30 @@ pipeline:
     expect(data.results.map((r) => r.query_string)).toEqual(["find view \"a\"", "find view \"b\""]);
     expect(data.results.every((r) => r.success)).toBe(true);
     expect(kgRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it("passes eval_metric_set.replace_metrics array body through to the API", async () => {
+    const aiEvalsServer = makeMcpServer("accept");
+    const aiEvalsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ai-evals" }));
+    const aiEvalsRequest = vi.fn().mockResolvedValue([{ metric_id: "toxicity", threshold: 0.75 }]);
+    const aiEvalsClient = makeClient(aiEvalsRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(aiEvalsServer, aiEvalsRegistry, aiEvalsClient);
+
+    const result = await aiEvalsServer.call("harness_execute", {
+      resource_type: "eval_metric_set",
+      action: "replace_metrics",
+      resource_id: "metric-set-1",
+      body: [{ metric_id: "toxicity", threshold: 0.75 }],
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(aiEvalsRequest).toHaveBeenCalledOnce();
+    const request = aiEvalsRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(request.method).toBe("PUT");
+    expect(request.path).toBe("/v1/accounts/test-account/ai/evaluations/metric-sets/metric-set-1/metrics");
+    expect(request.body).toEqual([{ metric_id: "toxicity", threshold: 0.75 }]);
   });
 
   describe("pipeline_dynamic_execution.run — public tool contract", () => {
