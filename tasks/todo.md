@@ -5,7 +5,7 @@
 - [x] Prioritize high-blast-radius changes from the diff and recent task memories
 - [x] Trace suspicious paths end-to-end until a concrete trigger is proven or ruled out
 - [x] If critical: add focused regression, implement minimal fix, verify, commit, push, and open PR
-- [ ] If not critical: report no critical bugs found in Slack without opening a PR
+- [x] Report confirmed fix outcome in Slack
 
 ### Plan
 - Fetch `origin/main` and compare `origin/main...HEAD` plus recent commit summaries.
