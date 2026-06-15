@@ -3,8 +3,8 @@
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap
-- [ ] Update README and testing docs with verified usage, constraints, and pitfalls
-- [ ] Run docs verification and review the documentation-only diff
+- [x] Update README and testing docs with verified usage, constraints, and pitfalls
+- [x] Run docs verification and review the documentation-only diff
 - [ ] Commit, push, and open/update the docs PR
 
 ### Plan
@@ -15,7 +15,12 @@
 - Cover dynamic execution preconditions, object-only `body.yaml`, unsupported runtime-input behaviors, optional params, high-write confirmation, execution input response shape, expression resolution params, and common troubleshooting cases without documenting behavior not present in source.
 
 ### Review
-- Pending.
+- README now documents `pipeline_dynamic_execution.run` with a concrete `harness_execute` example, preconditions, `body.yaml` constraints, unsupported runtime-input behaviors, high-write confirmation semantics, response shape, and troubleshooting for disabled dynamic execution.
+- README now documents `execution_inputs` as a post-run forensics workflow, including expression-resolution params and the stable projected response fields.
+- Added `docs/testing/pipeline_dynamic_execution/test_plan.md` and `test_report.md` with pending QA coverage for request shape, object-only body validation, optional params, high-write gating, response envelope stripping, and dynamic-execution enablement failures.
+- Added `docs/testing/execution_inputs/test_plan.md` and `test_report.md` with pending QA coverage for expression resolution, read-only behavior, response projection, input set detail normalization, missing fields, and chain-from-run workflows.
+- Updated the CD/CI section of `docs/testing/README.md` to link the new resource plans and to correct the touched pipeline-related paths to the existing singular resource directories.
+- Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `pnpm typecheck`, `pnpm exec vitest run tests/registry/pipeline-dynamic-execution.test.ts tests/registry/execution-inputs.test.ts tests/tools/tool-handlers.test.ts -t "pipeline_dynamic_execution|execution_inputs"`, `git diff --check HEAD`, and `pnpm test` (78 files / 1946 tests).
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
