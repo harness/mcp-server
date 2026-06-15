@@ -23,6 +23,20 @@
 - Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `pnpm typecheck`, `pnpm exec vitest run tests/registry/pipeline-dynamic-execution.test.ts tests/registry/execution-inputs.test.ts tests/tools/tool-handlers.test.ts -t "pipeline_dynamic_execution|execution_inputs"`, `git diff --check HEAD`, and `pnpm test` (78 files / 1946 tests).
 - Opened PR: https://github.com/harness/mcp-server/pull/344
 
+## Cursor MCP Confirmation Prompt Regression (2026-06-15)
+- [ ] Read Slack report and confirm screenshot/thread context
+- [ ] Trace MCP elicitation/write confirmation behavior and identify root cause
+- [ ] Add failing regression coverage for a visible confirmation field and rejected incomplete accepts
+- [ ] Implement minimal elicitation confirmation schema fix
+- [ ] Run focused tests, build, docs generation/check, typecheck, and full test suite
+- [ ] Commit, push, open/update PR, and reply in Slack thread
+
+### Plan
+- Keep the fix in the generic elicitation helper so `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` share the behavior.
+- Preserve existing safety semantics: explicit `decline`/`cancel` still block, `confirm: true` remains the fallback for clients without working elicitation, and auto-approve thresholds still bypass prompts.
+- Use a flat primitive MCP form schema with a required boolean confirmation field so clients have concrete UI to render instead of an empty form.
+- Validate accepted elicitation content so an `accept` without `confirm: true` does not execute a write.
+
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select File Store multipart workflows as the focused documentation gap
