@@ -191,6 +191,7 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["agent_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter GitOps agents by name or keyword" },
@@ -569,6 +570,7 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["agent_id", "cluster_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter clusters by name or keyword" },
@@ -614,6 +616,7 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["agent_id", "repo_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter repositories by name or URL" },
@@ -863,6 +866,7 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["agent_id", "credential_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter repository credentials by name or keyword" },
