@@ -124,7 +124,7 @@ describe("confirmViaElicitation", () => {
   it("proceeds when user accepts", async () => {
     const mcpServer = makeServerStub(
       { elicitation: { form: {} } },
-      { action: "accept" },
+      { action: "accept", content: { confirm: true } },
     );
     const result = await confirmViaElicitation({
       server: mcpServer,

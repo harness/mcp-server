@@ -49,7 +49,8 @@ function makeMcpServer(opts: {
   if (opts.elicitThrows) {
     elicitInput.mockRejectedValue(new Error("Elicitation not supported"));
   } else {
-    elicitInput.mockResolvedValue({ action: opts.elicitAction ?? "accept" });
+    const action = opts.elicitAction ?? "accept";
+    elicitInput.mockResolvedValue(action === "accept" ? { action, content: { confirm: true } } : { action });
   }
 
   return {
