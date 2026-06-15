@@ -1,5 +1,16 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-15)
+- [ ] Baseline branch and select recent behavioral commits for inspection
+- [ ] Trace high-risk code paths for concrete critical trigger scenarios
+- [ ] Run targeted verification for any suspected issue
+- [ ] Report outcome in Slack; open PR only for a confirmed critical fix
+
+### Plan
+- Inspect the latest merged commits on `origin/main`, with emphasis on runtime execution, merged input retrieval, log retrieval, template query mapping, and ai-evals API behavior.
+- For each high-risk change, trace caller input schema, registry dispatch, request/body construction, response extraction, and downstream tool result shape.
+- Fix only a concrete issue that can cause data loss, crashes, security exposure, or significant user-facing breakage; otherwise report no critical bugs found.
+
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select File Store multipart workflows as the focused documentation gap
