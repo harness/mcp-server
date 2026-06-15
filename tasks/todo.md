@@ -1,5 +1,22 @@
 # Harness MCP Server — Task Tracking
 
+## Documentation Alignment Automation (2026-06-15)
+- [x] Audit recent commits and existing docs for weakly documented subsystems
+- [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap
+- [ ] Update README and testing docs with verified usage, constraints, and pitfalls
+- [ ] Run docs verification and review the documentation-only diff
+- [ ] Commit, push, and open/update the docs PR
+
+### Plan
+- Use `src/registry/toolsets/pipelines.ts`, `src/registry/extractors.ts`, `tests/registry/pipeline-dynamic-execution.test.ts`, and `tests/registry/execution-inputs.test.ts` as the source of truth.
+- Keep the public README update concise and colocated with the existing Pipeline Run Workflow and Input Set examples.
+- Add targeted `docs/testing/pipeline_dynamic_execution/test_plan.md` and `docs/testing/execution_inputs/test_plan.md` pages because both resource types are public in the pipelines toolset but missing from the testing catalog.
+- Update `docs/testing/README.md` so QA can find the new resource-level test plans.
+- Cover dynamic execution preconditions, object-only `body.yaml`, unsupported runtime-input behaviors, optional params, high-write confirmation, execution input response shape, expression resolution params, and common troubleshooting cases without documenting behavior not present in source.
+
+### Review
+- Pending.
+
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select File Store multipart workflows as the focused documentation gap
