@@ -4,7 +4,7 @@
 - [x] Baseline branch and select recent behavioral commits for inspection
 - [x] Trace high-risk code paths for concrete critical trigger scenarios
 - [x] Run targeted verification for any suspected issue
-- [ ] Report outcome in Slack; open PR only for a confirmed critical fix
+- [x] Report outcome in Slack; open PR only for a confirmed critical fix
 
 ### Plan
 - Inspect the latest merged commits on `origin/main`, with emphasis on runtime execution, merged input retrieval, log retrieval, template query mapping, and ai-evals API behavior.
@@ -17,6 +17,7 @@
 - Fixed `harness_get` to expose top-level `return_download_url` while preserving the existing `params.return_download_url` path.
 - Added regressions proving the field is advertised in the registered schema and that top-level `return_download_url` calls `resolveLogDownloadUrl` without calling `resolveLogContent`.
 - Verification passed: red regression failed before the fix; then `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "return_download_url"`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, full `tests/tools/tool-handlers.test.ts`, full `pnpm test`, and `pnpm docs:check`.
+- Opened PR #343 and reported the fix in Slack.
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
