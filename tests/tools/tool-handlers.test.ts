@@ -51,7 +51,9 @@ function makeMcpServer(elicitAction: "accept" | "decline" | "cancel" = "accept")
   return {
     server: {
       getClientCapabilities: () => ({ elicitation: { form: {} } }),
-      elicitInput: vi.fn().mockResolvedValue({ action: elicitAction }),
+      elicitInput: vi.fn().mockResolvedValue(
+        elicitAction === "accept" ? { action: elicitAction, content: { confirm: true } } : { action: elicitAction },
+      ),
     },
     registerTool: vi.fn((name: string, schema: unknown, handler: (...args: unknown[]) => Promise<ToolResult>) => {
       tools.set(name, { schema, handler });
