@@ -1,15 +1,22 @@
 # Harness MCP Server — Task Tracking
 
 ## Critical Bug Inspection (2026-06-15)
-- [ ] Baseline branch and select recent behavioral commits for inspection
-- [ ] Trace high-risk code paths for concrete critical trigger scenarios
-- [ ] Run targeted verification for any suspected issue
+- [x] Baseline branch and select recent behavioral commits for inspection
+- [x] Trace high-risk code paths for concrete critical trigger scenarios
+- [x] Run targeted verification for any suspected issue
 - [ ] Report outcome in Slack; open PR only for a confirmed critical fix
 
 ### Plan
 - Inspect the latest merged commits on `origin/main`, with emphasis on runtime execution, merged input retrieval, log retrieval, template query mapping, and ai-evals API behavior.
 - For each high-risk change, trace caller input schema, registry dispatch, request/body construction, response extraction, and downstream tool result shape.
 - Fix only a concrete issue that can cause data loss, crashes, security exposure, or significant user-facing breakage; otherwise report no critical bugs found.
+
+### Review
+- Found that `execution_log` documented `return_download_url=true`, and `harness_get` handled it when present, but the registered top-level input schema omitted the field. Schema-driven MCP clients can drop unknown top-level fields before the handler runs, so a caller asking for URL-only logs can silently fall back to downloading and decompressing log content.
+- Impact: URL-only log retrieval was added to avoid buffering large execution logs, but the missing public schema field could reintroduce the content path for valid callers and risk log retrieval failures or memory pressure on large/compressible logs.
+- Fixed `harness_get` to expose top-level `return_download_url` while preserving the existing `params.return_download_url` path.
+- Added regressions proving the field is advertised in the registered schema and that top-level `return_download_url` calls `resolveLogDownloadUrl` without calling `resolveLogContent`.
+- Verification passed: red regression failed before the fix; then `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "return_download_url"`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, full `tests/tools/tool-handlers.test.ts`, full `pnpm test`, and `pnpm docs:check`.
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
