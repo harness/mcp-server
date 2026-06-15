@@ -5,7 +5,7 @@
 - [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap
 - [x] Update README and testing docs with verified usage, constraints, and pitfalls
 - [x] Run docs verification and review the documentation-only diff
-- [ ] Commit, push, and open/update the docs PR
+- [x] Commit, push, and open/update the docs PR
 
 ### Plan
 - Use `src/registry/toolsets/pipelines.ts`, `src/registry/extractors.ts`, `tests/registry/pipeline-dynamic-execution.test.ts`, and `tests/registry/execution-inputs.test.ts` as the source of truth.
@@ -21,6 +21,7 @@
 - Added `docs/testing/execution_inputs/test_plan.md` and `test_report.md` with pending QA coverage for expression resolution, read-only behavior, response projection, input set detail normalization, missing fields, and chain-from-run workflows.
 - Updated the CD/CI section of `docs/testing/README.md` to link the new resource plans and to correct the touched pipeline-related paths to the existing singular resource directories.
 - Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `pnpm typecheck`, `pnpm exec vitest run tests/registry/pipeline-dynamic-execution.test.ts tests/registry/execution-inputs.test.ts tests/tools/tool-handlers.test.ts -t "pipeline_dynamic_execution|execution_inputs"`, `git diff --check HEAD`, and `pnpm test` (78 files / 1946 tests).
+- Opened PR: https://github.com/harness/mcp-server/pull/344
 
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
