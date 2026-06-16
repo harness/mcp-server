@@ -252,6 +252,23 @@ describe("Registry audit emission", () => {
     expect(event.risk).toBe("high_write");
   });
 
+  it("legacy logAudit() accepts outcome=\"blocked\" (compat surface widened to match AuditOutcome)", async () => {
+    // Cursor PR #351 finding: AuditOutcome widened to "success" | "error"
+    // | "blocked" but the deprecated logger.AuditEntry stayed two-state,
+    // breaking any TS consumer trying to log a blocked row through the
+    // legacy API. The compat type is widened additively.
+    const { logAudit } = await import("../../src/utils/logger.js");
+    expect(() =>
+      logAudit({
+        operation: "delete",
+        resource_type: "pipeline",
+        resource_id: "p1",
+        outcome: "blocked",
+        error: "Operation blocked pre-dispatch: client could not surface a confirmation prompt",
+      }),
+    ).not.toThrow();
+  });
+
   it("backward compatible — dispatch still works with AbortSignal", async () => {
     const sink = collectingSink();
     const auditManager = new AuditManager();
