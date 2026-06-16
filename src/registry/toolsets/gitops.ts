@@ -233,6 +233,8 @@ export const gitopsToolset: ToolsetDefinition = {
         "- Project-scoped agent: 'myagent' (no prefix)",
       toolset: "gitops",
       scope: "project",
+      scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       diagnosticHint: "Use harness_diagnose with resource_type='gitops_application', agent_id, and resource_id (app name) to analyze sync failures, health issues, and unhealthy K8s resources. Combines app status, resource tree, and recent events.",
       executeHint:
         "SYNC: action='sync' for single app, action='bulk_sync' for multiple. " +
@@ -659,6 +661,8 @@ export const gitopsToolset: ToolsetDefinition = {
         "    Then use: harness_get(resource_type='gitops_applicationset', resource_id='<uuid>', params={agent_id:'...'})",
       toolset: "gitops",
       scope: "project",
+      scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["agent_id", "appset_id"],
       executeHint:
         "GET/UPDATE requires the ApplicationSet UUID, NOT its name. The API uses UUID as the identifier.\n" +

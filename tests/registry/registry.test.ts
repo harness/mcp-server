@@ -669,6 +669,25 @@ describe("Registry", () => {
       expect(projectCall.params.projectIdentifier).toBe("proj-level");
     });
 
+    it.each([
+      ["gitops_application", { applications: [] }],
+      ["gitops_applicationset", { applicationsets: [] }],
+    ])("supports org-scope listing for %s", async (resourceType, response) => {
+      const scopedRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+      const mockRequest = vi.fn().mockResolvedValue(response);
+      const client = makeClient(mockRequest);
+
+      await scopedRegistry.dispatch(client, resourceType, "list", {
+        resource_scope: "org",
+        org_id: "AI_Devops",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.orgIdentifier).toBe("AI_Devops");
+      expect(call.params.projectIdentifier).toBeUndefined();
+      expect(call.body.accountIdentifier).toBe("test-account");
+    });
+
     it("omits default org/project query params for explicit account-scope secret get", async () => {
       const accountRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "secrets" }));
       const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "acctSecret" } });
