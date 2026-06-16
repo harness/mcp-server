@@ -5,7 +5,7 @@
 - [x] Review recent elicitation, GitOps scope, dynamic execution, execution input, auth, resources, AI eval, and log-download changes
 - [x] Reproduce a high-severity execution-log schema bug with focused regression coverage
 - [x] Implement minimal `harness_get` schema fix for URL-only log retrieval
-- [ ] Run focused and broad verification
+- [x] Run focused and broad verification
 - [ ] Commit, push, open PR, and report outcome in Slack
 
 ### Plan
@@ -17,6 +17,7 @@
 - Confirmed critical bug: `execution_log` documents `return_download_url=true` to avoid downloading log content, but `harness_get` did not expose the flag in its registered input schema. Strict MCP clients can strip the undocumented top-level flag, causing the handler to call `resolveLogContent()` and buffer/decompress logs instead of returning the signed URL. Large logs with missing or unreliable `Content-Length` can exhaust memory before the resolver's post-buffer size check runs.
 - Root cause: the execution-log special case reads `input.return_download_url`, while the public tool schema only allowed generic fields plus `params`.
 - Fix: added `return_download_url` to the `harness_get` input schema and added focused tests that prove schema-driven top-level URL mode reaches `resolveLogDownloadUrl()` and does not call `resolveLogContent()`.
+- Verification passed: `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "harness_get — execution_log"` and full `pnpm build && pnpm docs:generate && pnpm typecheck && pnpm docs:check && pnpm test` (78 files / 1957 tests).
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
