@@ -151,7 +151,11 @@ describe("execution_inputs resource — request shape", () => {
     );
   });
 
-  it("maps resolve_expressions and resolve_expressions_type to the API query params", async () => {
+  it.each([
+    "RESOLVE_ALL_EXPRESSIONS",
+    "RESOLVE_TRIGGER_EXPRESSIONS",
+    "UNKNOWN",
+  ])("maps resolve_expressions=true and resolve_expressions_type=%s to the API query params", async (mode) => {
     const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({ data: { resolvedYaml: "ok" } });
     const client = makeClient(mockRequest);
@@ -159,7 +163,7 @@ describe("execution_inputs resource — request shape", () => {
     await registry.dispatch(client, "execution_inputs", "get", {
       execution_id: "exec-1",
       resolve_expressions: true,
-      resolve_expressions_type: "RESOLVE_ALL_EXPRESSIONS",
+      resolve_expressions_type: mode,
     });
 
     expect(mockRequest).toHaveBeenCalledWith(
@@ -168,7 +172,7 @@ describe("execution_inputs resource — request shape", () => {
         path: "/pipeline/api/pipelines/execution/exec-1/inputsetV2",
         params: expect.objectContaining({
           resolveExpressions: true,
-          resolveExpressionsType: "RESOLVE_ALL_EXPRESSIONS",
+          resolveExpressionsType: mode,
         }),
       }),
     );

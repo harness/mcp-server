@@ -2111,6 +2111,29 @@ pipeline:
       expect(result.isError).toBe(true);
       expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("body.yaml") });
     });
+
+    it("is blocked in read-only mode because run is risk:'high_write'", async () => {
+      // Mirrors registry.dispatchExecute()'s risk-based gate: a high_write
+      // action must NOT execute under HARNESS_READ_ONLY=true. This guards the
+      // policy contract documented in TC-pdyn-005.
+      const roServer = makeMcpServer("accept");
+      const roRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines", HARNESS_READ_ONLY: true }));
+      const roRequest = vi.fn();
+      const roClient = makeClient(roRequest);
+      const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+      registerExecuteTool(roServer, roRegistry, roClient, makeConfig({ HARNESS_READ_ONLY: true }));
+
+      const result = await roServer.call("harness_execute", {
+        resource_type: "pipeline_dynamic_execution",
+        action: "run",
+        resource_id: "p1",
+        body: { yaml: "pipeline: {}\n" },
+      });
+
+      expect(result.isError).toBe(true);
+      expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Read-only mode") });
+      expect(roRequest).not.toHaveBeenCalled();
+    });
   });
 });
 
