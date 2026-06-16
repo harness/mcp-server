@@ -117,6 +117,24 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const actionSpec = def.executeActions?.[args.action];
         const risk = actionSpec?.operationPolicy.risk ?? "low_write";
 
+        // Fail fast on HARNESS_READ_ONLY before elicitation. Mirrors
+        // registry.dispatchExecute()'s gate (risk !== "read"): read-safe
+        // actions like hql_query.run/validate stay allowed in read-only
+        // mode. For everything else we don't ask the user to approve a
+        // write that can never run, AND we capture the rejection as a
+        // pre-dispatch "blocked" audit row.
+        if (config?.HARNESS_READ_ONLY && risk !== "read") {
+          const reason = `Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${args.action}" is not allowed.`;
+          registry.auditBlockedAttempt(
+            resourceType,
+            "execute",
+            input,
+            { tool: "harness_execute", confirmation: "blocked", resource_id: resourceId, action: args.action },
+            reason,
+          );
+          return errorResult(reason);
+        }
+
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_execute",

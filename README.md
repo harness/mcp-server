@@ -2062,7 +2062,7 @@ HARNESS_AUTO_APPROVE_RISK=high_write
 ## Safety
 
 - **Secrets are never exposed.** The `secret` resource type returns metadata only (name, type, scope) — secret values are never included in any response.
-- **Write operations use elicitation when available.** `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` attempt MCP elicitation before proceeding (see [Elicitation](#elicitation)).
+- **Confirmation-requiring operations use elicitation when available.** When a write or execute action has `medium_write`, `high_write`, or `destructive` risk, `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` attempt MCP elicitation before proceeding (see [Elicitation](#elicitation)). Low-risk actions (`read`, `low_write` — e.g. `pipeline.create`, `pipeline.update`, `hql_query.run`) proceed silently with no prompt.
 - **Medium-risk and above fail closed.** If confirmation cannot be obtained for `medium_write`, `high_write`, or `destructive` operations, they are blocked instead of executing blindly. Override with `HARNESS_AUTO_APPROVE_RISK` for autonomous workflows.
 - **CORS restricted to same-origin.** The HTTP transport only allows same-origin requests, preventing CSRF attacks from malicious websites targeting the MCP server on localhost.
 - **HTTP rate limiting.** The HTTP transport enforces 60 requests per minute per IP to prevent request flooding.

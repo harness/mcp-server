@@ -601,6 +601,47 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     expect(events[0]!.confirmation).toBe("caller_confirmed");
   });
 
+  it("HARNESS_READ_ONLY blocks BEFORE elicitation and emits a blocked audit row", async () => {
+    // Regression for Cursor PR #351 finding: the registry's read-only gate
+    // throws inside dispatch, AFTER elicitation has already prompted the
+    // user and BEFORE auditBlockedAttempt is called. That's two contract
+    // violations: users get asked to approve operations that can never run,
+    // and the read-only rejection escapes the pre-dispatch blocked audit
+    // surface. The handlers must mirror the gate before elicit and emit
+    // the row themselves.
+    const { AuditManager } = await import("../../src/audit/manager.js");
+    const events: import("../../src/audit/types.js").AuditEvent[] = [];
+    const manager = new AuditManager();
+    manager.addSink({
+      name: "test",
+      emit(e) { events.push(e); },
+    });
+    const roConfig = { ...makeConfig(), HARNESS_READ_ONLY: true };
+    const roRegistry = new Registry(roConfig, { auditManager: manager });
+
+    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(server, roRegistry, client, roConfig);
+
+    const result = await server.call("harness_delete", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Read-only mode") });
+    // No prompt surfaced — the user is not asked to approve a write that
+    // can never run.
+    expect(server._elicitInput).not.toHaveBeenCalled();
+    // The rejection lives in the audit log as a first-class blocked row.
+    expect(events).toHaveLength(1);
+    expect(events[0]!.tool).toBe("harness_delete");
+    expect(events[0]!.outcome).toBe("blocked");
+    expect(events[0]!.confirmation).toBe("blocked");
+    expect(events[0]!.error).toContain("Read-only mode");
+  });
+
   it("blocked audit row from no-elicitation path does NOT misattribute to user", async () => {
     // Regression: confirmViaElicitation returns reason:"declined" for the
     // no-elicitation-capability branch. The audit row's error string must

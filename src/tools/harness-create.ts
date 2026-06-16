@@ -56,6 +56,23 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         }
 
         const risk = def.operations.create!.operationPolicy.risk;
+        // Fail fast on HARNESS_READ_ONLY before elicitation. The registry
+        // re-checks at dispatch time and is the source of truth, but we
+        // mirror the gate here so users aren't asked to approve a write
+        // that can never run, AND so the rejection is captured as a
+        // pre-dispatch "blocked" audit row. `create` is never in
+        // READ_OPERATIONS, so any read-only deployment blocks.
+        if (config?.HARNESS_READ_ONLY) {
+          const reason = `Read-only mode is enabled (HARNESS_READ_ONLY=true). "create" operations are not allowed.`;
+          registry.auditBlockedAttempt(
+            args.resource_type,
+            "create",
+            input,
+            { tool: "harness_create", confirmation: "blocked" },
+            reason,
+          );
+          return errorResult(reason);
+        }
         const bodyPreview = formatBodyPreview(args.body);
         const elicit = await confirmViaElicitation({
           server,

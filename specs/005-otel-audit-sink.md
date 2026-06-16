@@ -102,7 +102,7 @@ Every audit span carries these attributes:
 | `audit.account_id` | Harness account identifier | Yes |
 | `audit.resource_id` | Specific resource identifier | When available |
 | `audit.action` | Execute action (e.g. `run`, `stop`) | Execute operations |
-| `audit.confirmation` | `auto_approved`, `elicited`, `caller_confirmed`, `blocked`, `not_required` | Write operations (and `blocked` rows from `Registry.auditBlockedAttempt()`) |
+| `audit.confirmation` | `auto_approved`, `elicited`, `caller_confirmed`, `blocked`, `not_required` | Whenever a tool handler resolved a confirmation method — includes pre-dispatch `blocked` rows and read-risk execute actions (`hql_query.run` / `validate` carry `not_required`). Absent on operations that did not flow through `confirmViaElicitation` (e.g. `harness_list` / `harness_get`) |
 | `audit.error` | Error message | On failure |
 | `audit.http_method` | `GET`, `POST`, `PUT`, `DELETE` | When available |
 | `audit.http_path` | API path | When available |

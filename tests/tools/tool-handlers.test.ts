@@ -2141,10 +2141,15 @@ pipeline:
       expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("body.yaml") });
     });
 
-    it("is blocked in read-only mode because run is risk:'high_write'", async () => {
+    it("is blocked in read-only mode because run is risk:'high_write' (and does NOT prompt the user)", async () => {
       // Mirrors registry.dispatchExecute()'s risk-based gate: a high_write
       // action must NOT execute under HARNESS_READ_ONLY=true. This guards the
       // policy contract documented in TC-pdyn-005.
+      //
+      // Regression for Cursor PR #351 finding: the read-only gate must fire
+      // BEFORE elicitation, otherwise users get prompted to approve writes
+      // that can never run, AND the rejection escapes the new
+      // outcome:"blocked" audit surface.
       const roServer = makeMcpServer("accept");
       const roRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines", HARNESS_READ_ONLY: true }));
       const roRequest = vi.fn();
@@ -2162,6 +2167,7 @@ pipeline:
       expect(result.isError).toBe(true);
       expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Read-only mode") });
       expect(roRequest).not.toHaveBeenCalled();
+      expect(roServer.server.elicitInput).not.toHaveBeenCalled();
     });
   });
 });

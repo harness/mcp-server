@@ -65,6 +65,19 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
           return errorResult("resource_id is required for harness_delete unless url contains the resource ID or params includes the resource-specific ID field.");
         }
 
+        // Fail fast on HARNESS_READ_ONLY before elicitation — see
+        // harness_create.ts for the rationale. Mirrors registry.dispatch().
+        if (config?.HARNESS_READ_ONLY) {
+          const reason = `Read-only mode is enabled (HARNESS_READ_ONLY=true). "delete" operations are not allowed.`;
+          registry.auditBlockedAttempt(
+            args.resource_type,
+            "delete",
+            input,
+            { tool: "harness_delete", confirmation: "blocked", resource_id: resolvedResourceId },
+            reason,
+          );
+          return errorResult(reason);
+        }
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_delete",

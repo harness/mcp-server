@@ -99,6 +99,10 @@ describe("confirmViaElicitation", () => {
   });
 
   it("blocks when client does not support elicitation (destructive)", async () => {
+    // No-capability blocked path returns reason:"cancelled" rather than
+    // "declined" — no human declined; the client never surfaced a prompt.
+    // method:"blocked" is the load-bearing signal; reason stays consistent
+    // across every blocked branch.
     const mcpServer = makeServerStub(undefined);
     const result = await confirmViaElicitation({
       server: mcpServer,
@@ -106,7 +110,7 @@ describe("confirmViaElicitation", () => {
       message: "Delete pipeline?",
       risk: "destructive",
     });
-    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
@@ -118,7 +122,7 @@ describe("confirmViaElicitation", () => {
       message: "Create repo rule?",
       risk: "medium_write",
     });
-    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
   it("proceeds when user accepts (destructive risk surfaces a real prompt)", async () => {
@@ -351,7 +355,7 @@ describe("confirmViaElicitation", () => {
       message: "Run pipeline?",
       risk: "high_write",
     });
-    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
   it("skips elicitation for non-destructive ops when auto-approve is 'all'", async () => {
@@ -414,7 +418,7 @@ describe("confirmViaElicitation", () => {
       risk: "destructive",
       callerConfirmed: false,
     });
-    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
   it("does NOT override an explicit decline even with callerConfirmed=true (destructive)", async () => {
@@ -577,10 +581,10 @@ describe("describeBlockedAudit attribution", () => {
     expect(reason).not.toContain("(declined)");
   });
 
-  it("blocked path with reason=declined (no-elicitation branch) does NOT echo `declined`", () => {
-    // confirmViaElicitation returns `{reason: "declined", method: "blocked"}`
-    // when the client lacks elicitation capability and confirm:true wasn't
-    // set. The audit string must NOT surface "declined" — no human declined.
+  it("blocked path is reason-token agnostic — never echoes declined or cancelled", () => {
+    // Defensive: even if a future caller passes a stale reason="declined"
+    // on a blocked result (the legacy shape), the audit string must still
+    // attribute correctly to the client.
     const reason = describeBlockedAudit({ proceed: false, reason: "declined", method: "blocked" });
     expect(reason).toContain("blocked pre-dispatch");
     expect(reason).toContain("client could not surface");

@@ -54,11 +54,12 @@ export function describeElicitationFailure(result: ElicitationResult): string {
  * surface a prompt, not a human decline, and the audit row must say so.
  *
  * For the `blocked` branch we deliberately do NOT echo the internal
- * `reason` token — `reason` is set to `"declined"` for the
- * no-elicitation-capability path and `"cancelled"` for the throws /
- * accept-without-confirm paths, and either token would falsely imply a
- * human action when surfaced. The fact that the operation never reached
- * dispatch is captured by `outcome: "blocked"` on the audit row instead.
+ * `reason` token. confirmViaElicitation always sets `reason: "cancelled"`
+ * on blocked results today, but the function is defensive against any
+ * residual `reason: "declined"` shape — either token would falsely imply
+ * a human action when surfaced on a client-capability failure. The fact
+ * that the operation never reached dispatch is captured by
+ * `outcome: "blocked"` on the audit row instead.
  */
 export function describeBlockedAudit(result: ElicitationResult): string {
   if (result.method === "blocked") {
@@ -160,7 +161,11 @@ export async function confirmViaElicitation({
       return { proceed: true, method: "caller_confirmed" };
     }
     log.warn("Client does not support elicitation, blocking operation", { toolName, risk });
-    return { proceed: false, reason: "declined", method: "blocked" };
+    // Use `reason: "cancelled"` rather than `"declined"`: no human declined —
+    // the client never surfaced a prompt at all. `method: "blocked"` is the
+    // load-bearing signal; the reason field stays consistent across every
+    // blocked branch (no-capability, throws, accept-without-confirm).
+    return { proceed: false, reason: "cancelled", method: "blocked" };
   }
 
   try {

@@ -72,6 +72,19 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         }
 
         const risk = def.operations.update!.operationPolicy.risk;
+        // Fail fast on HARNESS_READ_ONLY before elicitation — see
+        // harness_create.ts for the rationale. Mirrors registry.dispatch().
+        if (config?.HARNESS_READ_ONLY) {
+          const reason = `Read-only mode is enabled (HARNESS_READ_ONLY=true). "update" operations are not allowed.`;
+          registry.auditBlockedAttempt(
+            args.resource_type,
+            "update",
+            input,
+            { tool: "harness_update", confirmation: "blocked", resource_id: resolvedResourceId },
+            reason,
+          );
+          return errorResult(reason);
+        }
         const bodyPreview = formatBodyPreview(args.body);
         const elicit = await confirmViaElicitation({
           server,
