@@ -358,4 +358,65 @@ describe("confirmViaElicitation", () => {
     });
     expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
   });
+
+  it("proceeds with callerConfirmed when elicitation returns decline (destructive)", async () => {
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "decline" },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete connector?",
+      risk: "destructive",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(mcpServer.server.elicitInput).toHaveBeenCalledOnce();
+  });
+
+  it("proceeds with callerConfirmed when elicitation returns cancel (high_write)", async () => {
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "cancel" },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_execute",
+      message: "Run pipeline?",
+      risk: "high_write",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: true, method: "elicited" });
+  });
+
+  it("proceeds with callerConfirmed when elicitation accepts without confirm=true", async () => {
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "accept", content: {} },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      risk: "destructive",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: true, method: "elicited" });
+  });
+
+  it("still returns declined without callerConfirmed when elicitation returns decline", async () => {
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "decline" },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete connector?",
+      risk: "destructive",
+      callerConfirmed: false,
+    });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "elicited" });
+  });
 });

@@ -55,6 +55,10 @@ export function clientSupportsElicitation(server: Server): boolean {
  *  3. If the client lacks elicitation:
  *     - `read` / `low_write` → proceed silently.
  *     - `medium_write` / `high_write` / `destructive` → BLOCK.
+ *  4. `callerConfirmed` (caller passed `confirm: true`) overrides a negative
+ *     elicitation result, an `accept` missing `confirm=true`, and an
+ *     `elicitInput` failure. This lets non-interactive automation clients that
+ *     advertise elicitation but resolve prompts to decline/cancel still opt in.
  */
 export async function confirmViaElicitation({
   server,
@@ -109,10 +113,18 @@ export async function confirmViaElicitation({
         && content !== null
         && "confirm" in content
         && content.confirm === true;
-      if (!confirmed) {
-        log.warn("Elicitation accept missing confirm=true", { toolName, risk });
-        return { proceed: false, reason: "cancelled", method: "elicited" };
+      if (confirmed) {
+        return { proceed: true, method: "elicited" };
       }
+      if (callerConfirmed) {
+        log.info("Elicitation accept missing confirm=true; proceeding via explicit confirm param", { toolName, risk });
+        return { proceed: true, method: "elicited" };
+      }
+      log.warn("Elicitation accept missing confirm=true", { toolName, risk });
+      return { proceed: false, reason: "cancelled", method: "elicited" };
+    }
+    if (callerConfirmed) {
+      log.info("Elicitation returned negative; proceeding via explicit confirm param", { toolName, risk, action: result.action });
       return { proceed: true, method: "elicited" };
     }
     if (result.action === "decline") {
