@@ -214,6 +214,74 @@ describe("harness_get", () => {
     expect(data.identifier).toBe("my-pipeline");
   });
 
+  it("maps execution_inputs resource_id to execution_id through the public get handler", async () => {
+    mockRequest.mockResolvedValueOnce({
+      status: "SUCCESS",
+      data: {
+        inputSetYaml: "pipeline:\n  identifier: p1\n",
+        inputSetTemplateYaml: "pipeline:\n  variables: <+input>\n",
+        resolvedYaml: "pipeline:\n  variables: value\n",
+        inputSetDetails: [{ identifier: "is1", name: "Input Set One", internal: "strip" }],
+        inputSetBranchName: "main",
+      },
+    });
+
+    const result = await server.call("harness_get", {
+      resource_type: "execution_inputs",
+      resource_id: "exec-abc",
+      org_id: "org1",
+      project_id: "proj1",
+      params: {
+        resolve_expressions: true,
+        resolve_expressions_type: "RESOLVE_ALL_EXPRESSIONS",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/pipeline/api/pipelines/execution/exec-abc/inputsetV2",
+        params: expect.objectContaining({
+          orgIdentifier: "org1",
+          projectIdentifier: "proj1",
+          resolveExpressions: true,
+          resolveExpressionsType: "RESOLVE_ALL_EXPRESSIONS",
+        }),
+      }),
+    );
+    expect(parseResult(result)).toEqual({
+      executionId: "exec-abc",
+      inputSetYaml: "pipeline:\n  identifier: p1\n",
+      inputSetTemplateYaml: "pipeline:\n  variables: <+input>\n",
+      resolvedYaml: "pipeline:\n  variables: value\n",
+      inputSetDetails: [{ identifier: "is1", name: "Input Set One" }],
+      inputSetBranchName: "main",
+    });
+  });
+
+  it("allows execution_inputs get in read-only mode", async () => {
+    registry = new Registry(makeConfig({ HARNESS_READ_ONLY: true, HARNESS_TOOLSETS: "pipelines" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { inputSetYaml: "yaml" } });
+    client = makeClient(mockRequest);
+    const readOnlyServer = makeMcpServer();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(readOnlyServer, registry, client);
+
+    const result = await readOnlyServer.call("harness_get", {
+      resource_type: "execution_inputs",
+      resource_id: "exec-read",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/pipeline/api/pipelines/execution/exec-read/inputsetV2",
+      }),
+    );
+  });
+
   it("documents resource_scope in the registered input schema", () => {
     const schema = server.schema("harness_get") as {
       inputSchema: { resource_scope?: { description?: string | null } };

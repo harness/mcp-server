@@ -22,7 +22,7 @@
 | TC-einp-007 | Normalize contributing input set details | Mock upstream `inputSetDetails` with extra fields | Public details contain only `{identifier, name}` pairs | Pending | | Covered by unit regression |
 | TC-einp-008 | Missing optional fields | Mock upstream `data:{}` | Returns `null` YAML/branch fields and empty `inputSetDetails` | Pending | | Covered by unit regression |
 | TC-einp-009 | Verify read-risk behavior | Run TC-einp-001 with `HARNESS_READ_ONLY=true` | Request is allowed because the operation is read-only | Pending | | |
-| TC-einp-010 | Missing execution ID | `harness_get(resource_type="execution_inputs")` | Tool validation fails before dispatch | Pending | | |
+| TC-einp-010 | Missing execution ID | `harness_get(resource_type="execution_inputs")` | Tool call is accepted, then registry path-param resolution fails with `Missing required field "execution_id" for execution_inputs` | Pending | | |
 | TC-einp-011 | Unknown execution ID | `harness_get(resource_type="execution_inputs", resource_id="nonexistent_exec")` | Harness not-found error is surfaced | Pending | | |
 | TC-einp-012 | Chain from a pipeline run | Run a pipeline, then `harness_get(resource_type="execution_inputs", resource_id="<execution_id>")` | Returned YAML explains the inputs that produced the execution | Pending | | |
 
