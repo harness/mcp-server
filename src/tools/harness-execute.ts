@@ -124,7 +124,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             resourceType,
             "execute",
             input,
-            { tool: "harness_execute", confirmation: "blocked", resource_id: resourceId, action: args.action },
+            { tool: "harness_execute", confirmation: elicit.method, resource_id: resourceId, action: args.action },
             `Operation ${elicit.reason} by user (${elicit.method})`,
           );
           return errorResult(describeElicitationFailure(elicit));

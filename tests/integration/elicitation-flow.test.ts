@@ -553,8 +553,11 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     expect(events[0]!.operation).toBe("delete");
     expect(events[0]!.resource_type).toBe("pipeline");
     expect(events[0]!.resource_id).toBe("my-pipe");
-    expect(events[0]!.confirmation).toBe("blocked");
-    expect(events[0]!.outcome).toBe("error");
+    // confirmation reflects the actual elicitation outcome (the user
+    // declined a real prompt) — distinct from `outcome: "blocked"` which
+    // signals the operation never ran.
+    expect(events[0]!.confirmation).toBe("elicited");
+    expect(events[0]!.outcome).toBe("blocked");
     expect(events[0]!.error).toContain("declined");
   });
 });

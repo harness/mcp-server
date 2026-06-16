@@ -248,6 +248,40 @@ describe("confirmViaElicitation", () => {
     });
   });
 
+  it("blocks when elicitation accept includes confirm=false (user unchecked the box)", async () => {
+    // confirm:false is an explicit user choice — the user accepted the
+    // prompt but unchecked the confirmation box. Authoritative; not
+    // bypassable by callerConfirmed.
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "accept", content: { confirm: false } },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      risk: "destructive",
+    });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "elicited" });
+  });
+
+  it("does NOT override accept with confirm=false even when callerConfirmed=true", async () => {
+    // The model passing confirm:true must not bypass the human unchecking
+    // the elicitation prompt's confirm box.
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "accept", content: { confirm: false } },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      risk: "destructive",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "elicited" });
+  });
+
   it("blocks when an elicitation accept does not include confirm=true (treated as no usable prompt)", async () => {
     // A degenerate `accept` (no confirm field) is treated as the client
     // failing to surface a usable prompt — `method: "blocked"` routes the

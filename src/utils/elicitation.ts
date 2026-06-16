@@ -76,10 +76,13 @@ export function clientSupportsElicitation(server: Server): boolean {
  *     `requiresConfirmation(risk)` is the single threshold that decides
  *     whether a prompt is surfaced; it kicks in at `medium_write`.
  *  3. If the client supports elicitation, prompt the user. The prompt
- *     contains a `confirm` checkbox (default `true`); only `accept` with
- *     `content.confirm === true` proceeds. An `accept` missing the confirm
- *     field is treated as a non-interactive degenerate response (handled
- *     under callerConfirmed below).
+ *     contains a `confirm` checkbox (default `true`):
+ *       - `accept` + `confirm === true` → proceed
+ *       - `accept` + `confirm === false` (user unchecked the box) → BLOCK
+ *         (authoritative; not bypassable by callerConfirmed)
+ *       - `accept` missing the `confirm` field → degenerate non-interactive
+ *         response (handled under callerConfirmed below)
+ *       - `decline` / `cancel` → BLOCK (authoritative; not bypassable)
  *  4. If the client lacks elicitation:
  *     - `medium_write` / `high_write` / `destructive` → BLOCK.
  *  5. `callerConfirmed` (caller passed `confirm: true`) overrides:
@@ -151,23 +154,26 @@ export async function confirmViaElicitation({
 
     if (result.action === "accept") {
       const content = result.content;
-      const confirmed = typeof content === "object"
-        && content !== null
-        && "confirm" in content
-        && content.confirm === true;
-      if (confirmed) {
+      const isContentObject = typeof content === "object" && content !== null;
+      const hasConfirmField = isContentObject && "confirm" in content;
+      const confirmValue = hasConfirmField ? (content as Record<string, unknown>).confirm : undefined;
+      if (confirmValue === true) {
         return { proceed: true, method: "elicited" };
       }
+      // `confirm: false` is an explicit user choice (they unchecked the
+      // confirmation box) — authoritative, not bypassable by callerConfirmed.
+      if (hasConfirmField && confirmValue === false) {
+        log.info("Elicitation accept with confirm=false (user unchecked the box)", { toolName, risk });
+        return { proceed: false, reason: "declined", method: "elicited" };
+      }
+      // From here: `accept` arrived without the confirm field — a degenerate
+      // shape from a non-interactive client that did not actually surface a
+      // usable prompt. callerConfirmed is the explicit opt-in.
       if (callerConfirmed) {
-        log.info("Elicitation accept missing confirm=true; proceeding via explicit confirm param", { toolName, risk });
+        log.info("Elicitation accept missing confirm field; proceeding via explicit confirm param", { toolName, risk });
         return { proceed: true, method: "caller_confirmed" };
       }
-      // Treat a degenerate `accept` (no confirm field) as the client failing
-      // to surface a usable prompt rather than an explicit decline. Returning
-      // `method: "blocked"` routes the caller to the "retry with confirm:true"
-      // recovery hint and matches the documented contract — confirm:true is
-      // an opt-in for non-interactive automation that produced this shape.
-      log.warn("Elicitation accept missing confirm=true; treating as blocked (no usable prompt surfaced)", { toolName, risk });
+      log.warn("Elicitation accept missing confirm field; treating as blocked (no usable prompt surfaced)", { toolName, risk });
       return { proceed: false, reason: "cancelled", method: "blocked" };
     }
     // An explicit decline / cancel from a client that completed the

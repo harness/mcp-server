@@ -96,7 +96,7 @@ Every audit span carries these attributes:
 | `audit.tool` | `harness_list`, `harness_create`, etc. | Yes |
 | `audit.operation` | `list`, `get`, `create`, `update`, `delete`, `execute` | Yes |
 | `audit.resource_type` | e.g. `pipeline`, `service`, `connector` | Yes |
-| `audit.outcome` | `success` or `error` | Yes |
+| `audit.outcome` | `success`, `error`, or `blocked` (pre-dispatch elicitation block) | Yes |
 | `audit.risk` | `read`, `low_write`, `medium_write`, `high_write`, `destructive` | Yes |
 | `audit.duration_ms` | End-to-end API call duration | Yes |
 | `audit.account_id` | Harness account identifier | Yes |

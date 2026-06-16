@@ -86,7 +86,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
             args.resource_type,
             "update",
             input,
-            { tool: "harness_update", confirmation: "blocked", resource_id: resolvedResourceId },
+            { tool: "harness_update", confirmation: elicit.method, resource_id: resolvedResourceId },
             `Operation ${elicit.reason} by user (${elicit.method})`,
           );
           return errorResult(describeElicitationFailure(elicit));

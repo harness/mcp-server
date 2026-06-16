@@ -78,7 +78,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
             args.resource_type,
             "delete",
             input,
-            { tool: "harness_delete", confirmation: "blocked", resource_id: resolvedResourceId },
+            { tool: "harness_delete", confirmation: elicit.method, resource_id: resolvedResourceId },
             `Operation ${elicit.reason} by user (${elicit.method})`,
           );
           return errorResult(describeElicitationFailure(elicit));

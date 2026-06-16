@@ -57,7 +57,7 @@ interface AuditEvent {
   account_id: string;
   risk: RiskLevel;
   confirmation?: ConfirmationMethod;
-  outcome: "success" | "error";
+  outcome: "success" | "error" | "blocked";
   error?: string;
   duration_ms: number;
   http_status?: number;
@@ -68,8 +68,11 @@ interface AuditEvent {
 type ConfirmationMethod = "auto_approved" | "elicited" | "caller_confirmed" | "blocked" | "not_required";
 //
 // - auto_approved:    risk was at or below HARNESS_AUTO_APPROVE_RISK
-// - elicited:         user explicitly accepted an MCP elicitation prompt
-//                     with content.confirm === true
+// - elicited:         the client completed an MCP elicitation handshake
+//                     and the user either accepted with content.confirm===true
+//                     (proceed) or explicitly declined / cancelled / unchecked
+//                     the confirm box (block). Pair the latter with
+//                     outcome="blocked" on the pre-dispatch audit row
 // - caller_confirmed: caller passed confirm: true and the client could not
 //                     surface a usable elicitation prompt (no capability,
 //                     elicitInput failed, or degenerate accept). Used by
@@ -77,10 +80,17 @@ type ConfirmationMethod = "auto_approved" | "elicited" | "caller_confirmed" | "b
 //                     so audits can tell automation overrides apart from
 //                     genuine human consents
 // - not_required:     risk was read or low_write — no confirmation needed
-// - blocked:          pre-dispatch audit row emitted by Registry.auditBlockedAttempt()
-//                     when an operation is gated by elicitation. The
-//                     operation itself does NOT run; the row exists for
-//                     record-keeping so operators can see blocked attempts
+// - blocked:          client could not surface a usable confirmation prompt
+//                     and no confirm:true was supplied. Paired with
+//                     outcome="blocked" on the pre-dispatch audit row
+
+type AuditOutcome = "success" | "error" | "blocked";
+//
+// - success: the dispatched API call returned successfully
+// - error:   the dispatched API call failed (network/HTTP/etc.)
+// - blocked: pre-dispatch audit row emitted by Registry.auditBlockedAttempt()
+//            when an operation was gated by elicitation. Distinct from `error`
+//            so consumers can filter pre-dispatch blocks from real API failures
 ```
 
 ## AuditSink Interface

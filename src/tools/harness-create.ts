@@ -70,7 +70,7 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
             args.resource_type,
             "create",
             input,
-            { tool: "harness_create", confirmation: "blocked" },
+            { tool: "harness_create", confirmation: elicit.method },
             `Operation ${elicit.reason} by user (${elicit.method})`,
           );
           return errorResult(describeElicitationFailure(elicit));

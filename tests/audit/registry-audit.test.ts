@@ -126,7 +126,38 @@ describe("Registry audit emission", () => {
     expect(event.confirmation).toBe("elicited");
   });
 
-  it("auditBlockedAttempt emits a pre-dispatch audit row with confirmation=blocked", async () => {
+  it("auditBlockedAttempt emits a pre-dispatch audit row with outcome=blocked and the caller's confirmation method", async () => {
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig();
+    const registry = new Registry(config as any, { auditManager });
+
+    // The caller passes the actual elicitation method (here "elicited" for an
+    // explicit user decline) — the audit row's outcome="blocked" is what
+    // signals "operation did not run", not the confirmation value.
+    registry.auditBlockedAttempt(
+      "pipeline",
+      "delete",
+      { resource_id: "my-pipe" },
+      { tool: "harness_delete", confirmation: "elicited", resource_id: "my-pipe" },
+      "Operation declined by user (elicited)",
+    );
+
+    expect(sink.events).toHaveLength(1);
+    const event = sink.events[0]!;
+    expect(event.tool).toBe("harness_delete");
+    expect(event.operation).toBe("delete");
+    expect(event.resource_type).toBe("pipeline");
+    expect(event.confirmation).toBe("elicited");
+    expect(event.outcome).toBe("blocked");
+    expect(event.error).toContain("declined");
+    expect(event.duration_ms).toBe(0);
+    expect(event.risk).toBe("destructive");
+  });
+
+  it("auditBlockedAttempt records confirmation=blocked when the client failed to surface a prompt", async () => {
     const sink = collectingSink();
     const auditManager = new AuditManager();
     auditManager.addSink(sink);
@@ -139,19 +170,14 @@ describe("Registry audit emission", () => {
       "delete",
       { resource_id: "my-pipe" },
       { tool: "harness_delete", confirmation: "blocked", resource_id: "my-pipe" },
-      "Operation declined by user (elicited)",
+      "Operation cancelled by user (blocked)",
     );
 
     expect(sink.events).toHaveLength(1);
     const event = sink.events[0]!;
-    expect(event.tool).toBe("harness_delete");
-    expect(event.operation).toBe("delete");
-    expect(event.resource_type).toBe("pipeline");
     expect(event.confirmation).toBe("blocked");
-    expect(event.outcome).toBe("error");
-    expect(event.error).toContain("declined");
-    expect(event.duration_ms).toBe(0);
-    expect(event.risk).toBe("destructive");
+    expect(event.outcome).toBe("blocked");
+    expect(event.error).toContain("cancelled");
   });
 
   it("auditBlockedAttempt is a no-op when auditManager is not configured", () => {

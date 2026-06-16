@@ -4,7 +4,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import { HarnessApiError } from "../utils/errors.js";
 import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec, ResourceScope } from "./types.js";
 import type { AuditManager } from "../audit/manager.js";
-import type { AuditContext, AuditEvent } from "../audit/types.js";
+import type { AuditContext, AuditEvent, AuditOutcome } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 import { isFormDataBody } from "../utils/type-guards.js";
@@ -504,7 +504,7 @@ export class Registry {
       }
     }
     try {
-      this.emitAuditEvent(def, safeSpec, operation, resourceType, input, auditCtx, "error", 0, blockReason);
+      this.emitAuditEvent(def, safeSpec, operation, resourceType, input, auditCtx, "blocked", 0, blockReason);
     } catch (err) {
       log.warn("Failed to emit blocked-attempt audit event", { resourceType, operation, error: String(err) });
     }
@@ -517,7 +517,7 @@ export class Registry {
     resourceType: string,
     input: Record<string, unknown>,
     auditCtx: AuditContext | undefined,
-    outcome: "success" | "error",
+    outcome: AuditOutcome,
     durationMs: number,
     error?: string,
     httpStatus?: number,
