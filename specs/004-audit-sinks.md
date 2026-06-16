@@ -65,7 +65,22 @@ interface AuditEvent {
   http_path?: string;
 }
 
-type ConfirmationMethod = "auto_approved" | "elicited" | "skipped" | "blocked" | "not_required";
+type ConfirmationMethod = "auto_approved" | "elicited" | "caller_confirmed" | "blocked" | "not_required";
+//
+// - auto_approved:    risk was at or below HARNESS_AUTO_APPROVE_RISK
+// - elicited:         user explicitly accepted an MCP elicitation prompt
+//                     with content.confirm === true
+// - caller_confirmed: caller passed confirm: true and the client could not
+//                     surface a usable elicitation prompt (no capability,
+//                     elicitInput failed, or degenerate accept). Used by
+//                     non-interactive automation; distinct from `elicited`
+//                     so audits can tell automation overrides apart from
+//                     genuine human consents
+// - not_required:     risk was read or low_write — no confirmation needed
+// - blocked:          pre-dispatch audit row emitted by Registry.auditBlockedAttempt()
+//                     when an operation is gated by elicitation. The
+//                     operation itself does NOT run; the row exists for
+//                     record-keeping so operators can see blocked attempts
 ```
 
 ## AuditSink Interface

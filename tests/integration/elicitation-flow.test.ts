@@ -502,6 +502,29 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("retry with confirm: true") });
   });
 
+  it("error hint on accept-without-confirm tells caller to retry with confirm:true (recoverable)", async () => {
+    // Regression: a degenerate accept (no confirm field) is the classic
+    // non-interactive-automation shape. The error message must NOT tell the
+    // caller "confirm: true does not bypass an explicit decline" — there
+    // was no explicit decline. Routing this through method:"blocked" gives
+    // them the recovery hint matching the documented contract.
+    const server = makeMcpServer({ supportsElicitation: true });
+    server._elicitInput.mockResolvedValue({ action: "accept", content: {} });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(server, registry, client);
+
+    const result = await server.call("harness_delete", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      // no confirm — should be told it's recoverable
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("retry with confirm: true") });
+    // Must NOT carry the explicit-decline copy.
+    expect(parseResult(result)).not.toMatchObject({ error: expect.stringContaining("does not bypass an explicit decline") });
+  });
+
   it("blocked operations emit a pre-dispatch audit event with confirmation=blocked", async () => {
     // End-to-end coverage that the tool handlers actually call
     // registry.auditBlockedAttempt — the user reviewer surfaced this as a

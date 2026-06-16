@@ -248,7 +248,11 @@ describe("confirmViaElicitation", () => {
     });
   });
 
-  it("blocks when an elicitation accept does not include confirm=true", async () => {
+  it("blocks when an elicitation accept does not include confirm=true (treated as no usable prompt)", async () => {
+    // A degenerate `accept` (no confirm field) is treated as the client
+    // failing to surface a usable prompt — `method: "blocked"` routes the
+    // caller to the "retry with confirm: true" recovery hint, matching the
+    // documented contract for non-interactive automation.
     const mcpServer = makeServerStub(
       { elicitation: { form: {} } },
       { action: "accept", content: {} },
@@ -259,7 +263,7 @@ describe("confirmViaElicitation", () => {
       message: "Delete pipeline?",
       risk: "destructive",
     });
-    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "elicited" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
   it("auto-approves when risk is within AUTO_APPROVE_RISK threshold", async () => {
@@ -460,7 +464,7 @@ describe("confirmViaElicitation", () => {
     expect(result).toEqual({ proceed: false, reason: "cancelled", method: "elicited" });
   });
 
-  it("still returns cancelled without callerConfirmed on accept missing confirm=true", async () => {
+  it("returns blocked (recoverable via confirm:true) on accept missing confirm=true with no callerConfirmed", async () => {
     const mcpServer = makeServerStub(
       { elicitation: { form: {} } },
       { action: "accept", content: {} },
@@ -472,7 +476,7 @@ describe("confirmViaElicitation", () => {
       risk: "destructive",
       callerConfirmed: false,
     });
-    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "elicited" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
   it("still blocks without callerConfirmed when elicitInput throws (destructive)", async () => {

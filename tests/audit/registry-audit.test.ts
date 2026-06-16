@@ -168,6 +168,38 @@ describe("Registry audit emission", () => {
     ).not.toThrow();
   });
 
+  it("auditBlockedAttempt does not throw when a pathBuilder requires unset identifiers", async () => {
+    // Regression for the case where the blocked attempt happens before the
+    // tool handler has populated identifier fields on the input map.
+    // template.delete's pathBuilder throws "template_id is required" if
+    // input.template_id is unset — auditBlockedAttempt must swallow that
+    // and still emit a row with the static path (placeholders intact).
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig({ HARNESS_TOOLSETS: "templates" });
+    const registry = new Registry(config as any, { auditManager });
+
+    expect(() =>
+      registry.auditBlockedAttempt(
+        "template",
+        "delete",
+        { resource_id: "tmpl-1" }, // template_id intentionally not set
+        { tool: "harness_delete", confirmation: "blocked", resource_id: "tmpl-1" },
+        "Operation declined by user (blocked)",
+      ),
+    ).not.toThrow();
+
+    expect(sink.events).toHaveLength(1);
+    const event = sink.events[0]!;
+    expect(event.tool).toBe("harness_delete");
+    expect(event.resource_type).toBe("template");
+    expect(event.confirmation).toBe("blocked");
+    // Falls back to the static path template since pathBuilder threw.
+    expect(event.http_path).toBe("/template/api/templates/{templateIdentifier}/{versionLabel}");
+  });
+
   it("auditBlockedAttempt resolves the spec for execute actions", async () => {
     const sink = collectingSink();
     const auditManager = new AuditManager();

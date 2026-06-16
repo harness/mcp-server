@@ -32,11 +32,12 @@ export interface ElicitationResult {
  * `ElicitationResult`. Branches on `method` so the recovery hint matches
  * what actually happened:
  *
- *  - `elicited` → the client completed the handshake and the user declined
- *    or cancelled. Authoritative; `confirm: true` does NOT bypass this.
- *  - `blocked` → the client did not surface a prompt (no elicitation
- *    capability, or `elicitInput` failed). Caller can retry with
- *    `confirm: true` to opt in for non-interactive automation.
+ *  - `elicited` → the client completed the handshake and the user explicitly
+ *    declined or cancelled. Authoritative; `confirm: true` does NOT bypass.
+ *  - `blocked` → the client did not surface a usable prompt (no elicitation
+ *    capability, `elicitInput` failed, or accept arrived without
+ *    `confirm=true`). Caller can retry with `confirm: true` to opt in for
+ *    non-interactive automation.
  */
 export function describeElicitationFailure(result: ElicitationResult): string {
   const reason = result.reason ?? "declined";
@@ -161,8 +162,13 @@ export async function confirmViaElicitation({
         log.info("Elicitation accept missing confirm=true; proceeding via explicit confirm param", { toolName, risk });
         return { proceed: true, method: "caller_confirmed" };
       }
-      log.warn("Elicitation accept missing confirm=true", { toolName, risk });
-      return { proceed: false, reason: "cancelled", method: "elicited" };
+      // Treat a degenerate `accept` (no confirm field) as the client failing
+      // to surface a usable prompt rather than an explicit decline. Returning
+      // `method: "blocked"` routes the caller to the "retry with confirm:true"
+      // recovery hint and matches the documented contract — confirm:true is
+      // an opt-in for non-interactive automation that produced this shape.
+      log.warn("Elicitation accept missing confirm=true; treating as blocked (no usable prompt surfaced)", { toolName, risk });
+      return { proceed: false, reason: "cancelled", method: "blocked" };
     }
     // An explicit decline / cancel from a client that completed the
     // elicitation handshake is authoritative — `callerConfirmed` does NOT

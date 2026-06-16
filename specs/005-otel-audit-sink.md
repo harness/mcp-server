@@ -102,7 +102,7 @@ Every audit span carries these attributes:
 | `audit.account_id` | Harness account identifier | Yes |
 | `audit.resource_id` | Specific resource identifier | When available |
 | `audit.action` | Execute action (e.g. `run`, `stop`) | Execute operations |
-| `audit.confirmation` | `auto_approved`, `elicited`, `skipped`, `blocked`, `not_required` | Write operations |
+| `audit.confirmation` | `auto_approved`, `elicited`, `caller_confirmed`, `blocked`, `not_required` | Write operations (and `blocked` rows from `Registry.auditBlockedAttempt()`) |
 | `audit.error` | Error message | On failure |
 | `audit.http_method` | `GET`, `POST`, `PUT`, `DELETE` | When available |
 | `audit.http_path` | API path | When available |
