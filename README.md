@@ -840,6 +840,62 @@ Use this sequence to reduce execution-time input errors:
 
 If required fields are unresolved, the tool returns a pre-flight error with expected keys and suggested input sets. You can inspect available shorthand mappings with `harness_describe(resource_type="pipeline")` (`executeActions.run.inputShorthands`).
 
+### Dynamic Pipeline Execution
+
+Use `pipeline_dynamic_execution.run` when an agent or external system generates the full v0 pipeline YAML at runtime and needs to run it against an existing Harness pipeline shell. This is not a replacement for normal `pipeline.run`: the saved v0 pipeline must already exist, account-level and pipeline-level **Allow Dynamic Execution** must be enabled, and the caller needs Edit plus Execute permissions on the pipeline.
+
+```json
+{
+  "resource_type": "pipeline_dynamic_execution",
+  "action": "run",
+  "resource_id": "deploy_app",
+  "body": {
+    "yaml": "pipeline:\n  identifier: deploy_app\n  name: Deploy App\n  stages: []"
+  },
+  "params": {
+    "module_type": "CD",
+    "notes": "agent-generated dynamic run",
+    "notify_only_user": true
+  }
+}
+```
+
+Constraints:
+
+- `body` must be an object with a `yaml` field. Raw string bodies are rejected by the public `harness_execute` schema.
+- `body.yaml` may be a YAML string or a JSON pipeline object; JSON is serialized to YAML before the request.
+- Runtime `<+input>` placeholders are not resolved by this API. Submit fully resolved YAML.
+- Input sets, selective stage execution, retry, and triggers are not supported by the dynamic execution endpoint.
+- The action is `high_write` and uses the normal confirmation/auto-approval path. The response projects the API envelope to `{ "execution_id": "...", "status": "..." }` and includes an `openInHarness` execution link when scope data is available.
+
+If Harness rejects the run as not enabled, check both the account-level Allow Dynamic Execution setting and the pipeline-level toggle under Pipeline -> Advanced Options -> Dynamic Execution Settings.
+
+### Execution Input Forensics
+
+Use `execution_inputs` after a run to inspect the merged input YAML that produced a specific execution. This is useful when a failure depends on input-set merging, Git-backed input set branches, or trigger/runtime values that are hard to reconstruct from the execution page alone.
+
+```json
+{
+  "resource_type": "execution_inputs",
+  "resource_id": "PLAN_EXECUTION_ID",
+  "params": {
+    "resolve_expressions": true,
+    "resolve_expressions_type": "RESOLVE_ALL_EXPRESSIONS"
+  }
+}
+```
+
+The get response is projected to:
+
+- `executionId` - the plan execution ID from `resource_id`.
+- `inputSetYaml` - merged runtime input YAML used for the run, or `null`.
+- `inputSetTemplateYaml` - input template at execution time, or `null`.
+- `resolvedYaml` - expression-resolved YAML when `resolve_expressions=true`, otherwise usually `null`.
+- `inputSetDetails` - contributing saved input sets as `{ identifier, name }` pairs.
+- `inputSetBranchName` - source branch for Git-backed input sets, or `null`.
+
+`execution_inputs` is get-only and read-risk. If `resolve_expressions` is omitted, the server omits the API query parameters and Harness uses its default `UNKNOWN` resolution mode.
+
 ### Pipeline Execute Wait Mode
 
 For `pipeline.run`, `pipeline.retry`, and `pipeline_v1.run`, pass `wait: true` to let the server poll until the execution reaches a terminal status. This keeps a pipeline launch and status check in one tool call instead of asking the client or LLM to run a polling loop.
