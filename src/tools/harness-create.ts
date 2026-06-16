@@ -66,6 +66,13 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
+          registry.auditBlockedAttempt(
+            args.resource_type,
+            "create",
+            input,
+            { tool: "harness_create", confirmation: "blocked" },
+            `Operation ${elicit.reason} by user (${elicit.method})`,
+          );
           return errorResult(describeElicitationFailure(elicit));
         }
 

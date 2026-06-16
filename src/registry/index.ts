@@ -455,6 +455,33 @@ export class Registry {
     }
   }
 
+  /**
+   * Emit a pre-dispatch audit event for an operation that was blocked
+   * (e.g. by elicitation when the client could not surface a confirmation
+   * prompt). The blocked attempt does not run; this exists so operators can
+   * see in audit logs that the LLM tried to execute something that was
+   * gated. Safe to call when no audit manager is configured (no-ops).
+   */
+  auditBlockedAttempt(
+    resourceType: string,
+    operation: string,
+    input: Record<string, unknown>,
+    auditCtx: AuditContext | undefined,
+    blockReason: string,
+  ): void {
+    if (!this.auditManager) return;
+    const def = this.resourceMap.get(resourceType);
+    if (!def) return;
+    let spec: EndpointSpec | undefined;
+    if (operation === "execute") {
+      spec = auditCtx?.action ? def.executeActions?.[auditCtx.action] : undefined;
+    } else {
+      spec = def.operations[operation as OperationName];
+    }
+    if (!spec) return;
+    this.emitAuditEvent(def, spec, operation, resourceType, input, auditCtx, "error", 0, blockReason);
+  }
+
   private emitAuditEvent(
     def: ResourceDefinition,
     spec: EndpointSpec,

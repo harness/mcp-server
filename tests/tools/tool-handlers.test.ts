@@ -619,7 +619,11 @@ describe("harness_create", () => {
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("does not support") });
   });
 
-  it("returns error when user declines confirmation", async () => {
+  it("does not surface elicitation prompt for low_write create even when client declines", async () => {
+    // pipeline.create is low_write — confirmation is gated on
+    // requiresConfirmation(risk) which kicks in at medium_write. The
+    // simulated decline below should be ignored entirely (elicitInput
+    // is never called).
     const declineServer = makeMcpServer("decline");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
     registerCreateTool(declineServer, registry, client);
@@ -628,8 +632,7 @@ describe("harness_create", () => {
       resource_type: "pipeline",
       body: { pipeline: { name: "Test", identifier: "test", stages: [] } },
     });
-    expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
+    expect(result.isError).toBeUndefined();
   });
 
   it("creates resource when user confirms", async () => {
@@ -838,7 +841,9 @@ describe("harness_update", () => {
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("does not support") });
   });
 
-  it("returns error when user declines", async () => {
+  it("does not surface elicitation prompt for low_write update even when client declines", async () => {
+    // pipeline.update is low_write — confirmation is gated on
+    // requiresConfirmation(risk) which kicks in at medium_write.
     const declineServer = makeMcpServer("decline");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
     registerUpdateTool(declineServer, registry, client);
@@ -848,8 +853,7 @@ describe("harness_update", () => {
       resource_id: "my-pipe",
       body: { yamlPipeline: "pipeline:\n  name: Updated" },
     });
-    expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
+    expect(result.isError).toBeUndefined();
   });
 
   it("updates resource when confirmed", async () => {

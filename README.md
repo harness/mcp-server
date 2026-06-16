@@ -1979,10 +1979,10 @@ Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_exec
 
 **How it works:**
 
-1. The LLM calls a write tool (e.g. `harness_create` with a pipeline body)
-2. The server sends an elicitation request to the client with a summary of the operation
-3. The user sees the details and clicks **Accept** or **Decline**
-4. If accepted, the operation proceeds. If declined, it's blocked and the LLM is told
+1. The LLM calls a write tool with `medium_write`+ risk (e.g. `harness_delete`, `harness_execute pipeline.run`). Low-risk creates / updates / reads do not surface a prompt.
+2. The server sends an elicitation request to the client with a summary of the operation and a `confirm` checkbox (default checked).
+3. The user sees the details and clicks **Accept** (with `confirm` checked) or **Decline / Cancel**.
+4. If accepted with `confirm: true`, the operation proceeds. If accepted with `confirm` unchecked, declined, or cancelled, it's blocked and the LLM is told (an explicit decline is **authoritative** and not bypassed by `confirm: true` on the tool call).
 
 **Client support:**
 
@@ -2001,14 +2001,14 @@ Elicitation behavior varies by operation risk when client support is missing:
 
 | Risk Level                                    | Client supports elicitation | `confirm: true` passed | Behavior                                          |
 | --------------------------------------------- | --------------------------- | ---------------------- | ------------------------------------------------- |
-| `read`, `low_write`                           | any                         | any                    | Proceed silently (no confirmation needed)         |
-| `medium_write`, `high_write`, `destructive`   | Yes                         | any                    | Prompt user — proceed on accept, block on decline (an explicit decline/cancel is **authoritative** and is not bypassed by `confirm: true`) |
+| `read`, `low_write`                           | any                         | any                    | Proceed silently — no prompt is surfaced (`confirm` has no effect at this risk tier) |
+| `medium_write`, `high_write`, `destructive`   | Yes                         | any                    | Prompt user. Proceed only if user accepts **with** `confirm` checked (the schema's default). An accept without `confirm`, a decline, or a cancel blocks the operation. An explicit decline/cancel is **authoritative** and is not bypassed by `confirm: true` on the tool call |
 | `medium_write`, `high_write`, `destructive`   | No                          | No                     | **BLOCK** (return error with hint to retry with `confirm: true`) |
 | `medium_write`, `high_write`, `destructive`   | No                          | Yes                    | Proceed (explicit opt-in for non-interactive automation) |
 | any (at or below `HARNESS_AUTO_APPROVE_RISK`) | any                         | any                    | Auto-approve without prompting                    |
 
 
-If elicitation fails at runtime (transport error, unsupported method), operations at `medium_write` or above are blocked unless the caller passes `confirm: true`. `confirm: true` is honored when the client could not surface the prompt, but it does **not** override an explicit decline/cancel from a client that completed the elicitation handshake.
+If `elicitInput` fails at runtime (transport error, unsupported method) for a `medium_write`+ operation, the call is blocked unless the caller passes `confirm: true`. `confirm: true` is honored as a fallback when the client could not surface a prompt or returned a degenerate accept (`{action: "accept"}` without the confirm field), but it does **not** override an explicit decline/cancel from a client that completed the elicitation handshake.
 
 ### Autonomous Mode
 

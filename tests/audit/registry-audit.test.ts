@@ -126,6 +126,72 @@ describe("Registry audit emission", () => {
     expect(event.confirmation).toBe("elicited");
   });
 
+  it("auditBlockedAttempt emits a pre-dispatch audit row with confirmation=blocked", async () => {
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig();
+    const registry = new Registry(config as any, { auditManager });
+
+    registry.auditBlockedAttempt(
+      "pipeline",
+      "delete",
+      { resource_id: "my-pipe" },
+      { tool: "harness_delete", confirmation: "blocked", resource_id: "my-pipe" },
+      "Operation declined by user (elicited)",
+    );
+
+    expect(sink.events).toHaveLength(1);
+    const event = sink.events[0]!;
+    expect(event.tool).toBe("harness_delete");
+    expect(event.operation).toBe("delete");
+    expect(event.resource_type).toBe("pipeline");
+    expect(event.confirmation).toBe("blocked");
+    expect(event.outcome).toBe("error");
+    expect(event.error).toContain("declined");
+    expect(event.duration_ms).toBe(0);
+    expect(event.risk).toBe("destructive");
+  });
+
+  it("auditBlockedAttempt is a no-op when auditManager is not configured", () => {
+    const config = makeConfig();
+    const registry = new Registry(config as any);
+    expect(() =>
+      registry.auditBlockedAttempt(
+        "pipeline",
+        "delete",
+        {},
+        { tool: "harness_delete", confirmation: "blocked" },
+        "blocked",
+      ),
+    ).not.toThrow();
+  });
+
+  it("auditBlockedAttempt resolves the spec for execute actions", async () => {
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig();
+    const registry = new Registry(config as any, { auditManager });
+
+    registry.auditBlockedAttempt(
+      "pipeline",
+      "execute",
+      { pipeline_id: "p1" },
+      { tool: "harness_execute", confirmation: "blocked", action: "run", resource_id: "p1" },
+      "Operation declined by user (blocked)",
+    );
+
+    expect(sink.events).toHaveLength(1);
+    const event = sink.events[0]!;
+    expect(event.operation).toBe("execute");
+    expect(event.action).toBe("run");
+    expect(event.confirmation).toBe("blocked");
+    expect(event.risk).toBe("high_write");
+  });
+
   it("backward compatible — dispatch still works with AbortSignal", async () => {
     const sink = collectingSink();
     const auditManager = new AuditManager();

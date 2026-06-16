@@ -74,6 +74,13 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
           callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
+          registry.auditBlockedAttempt(
+            args.resource_type,
+            "delete",
+            input,
+            { tool: "harness_delete", confirmation: "blocked", resource_id: resolvedResourceId },
+            `Operation ${elicit.reason} by user (${elicit.method})`,
+          );
           return errorResult(describeElicitationFailure(elicit));
         }
         if (primaryField) {

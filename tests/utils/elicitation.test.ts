@@ -121,7 +121,24 @@ describe("confirmViaElicitation", () => {
     expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
   });
 
-  it("proceeds when user accepts", async () => {
+  it("proceeds when user accepts (destructive risk surfaces a real prompt)", async () => {
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "accept", content: { confirm: true } },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete service?",
+      risk: "destructive",
+    });
+    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(mcpServer.server.elicitInput).toHaveBeenCalledOnce();
+  });
+
+  it("does not call elicitInput for low_write even when client supports it", async () => {
+    // Low-risk creates should not surface a prompt — confirmation is gated on
+    // requiresConfirmation(risk), which kicks in at medium_write.
     const mcpServer = makeServerStub(
       { elicitation: { form: {} } },
       { action: "accept", content: { confirm: true } },
@@ -132,8 +149,8 @@ describe("confirmViaElicitation", () => {
       message: "Create service?",
       risk: "low_write",
     });
-    expect(result).toEqual({ proceed: true, method: "elicited" });
-    expect(mcpServer.server.elicitInput).toHaveBeenCalledOnce();
+    expect(result).toEqual({ proceed: true, method: "not_required" });
+    expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
   it("returns declined when user declines", async () => {
@@ -164,7 +181,9 @@ describe("confirmViaElicitation", () => {
     expect(result).toEqual({ proceed: false, reason: "cancelled", method: "elicited" });
   });
 
-  it("proceeds when elicitInput throws (low_write)", async () => {
+  it("does not call elicitInput for low_write (no confirmation required)", async () => {
+    // Low-risk operations short-circuit before calling elicitInput, so a
+    // mocked failure should never be reached.
     const mcpServer = makeServerStub({ elicitation: { form: {} } });
     mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
     const result = await confirmViaElicitation({
@@ -173,7 +192,8 @@ describe("confirmViaElicitation", () => {
       message: "Create service?",
       risk: "low_write",
     });
-    expect(result).toEqual({ proceed: true, method: "skipped" });
+    expect(result).toEqual({ proceed: true, method: "not_required" });
+    expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
   it("blocks when elicitInput throws (destructive)", async () => {

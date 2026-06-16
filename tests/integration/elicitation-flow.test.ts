@@ -101,7 +101,9 @@ describe("Elicitation flow: harness_create", () => {
     expect(server._elicitInput).not.toHaveBeenCalled();
   });
 
-  it("calls elicitInput when supported and proceeds on accept", async () => {
+  it("does not call elicitInput for low_write create even when client supports it", async () => {
+    // pipeline.create is low_write — confirmation is gated on
+    // requiresConfirmation(risk), which kicks in at medium_write.
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
     registerCreateTool(server, registry, client);
@@ -112,38 +114,10 @@ describe("Elicitation flow: harness_create", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(server._elicitInput).not.toHaveBeenCalled();
   });
 
-  it("stops on decline", async () => {
-    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
-    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(server, registry, client);
-
-    const result = await server.call("harness_create", {
-      resource_type: "pipeline",
-      body: { yamlPipeline: "pipeline:\n  name: Test" },
-    });
-
-    expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
-  });
-
-  it("stops on cancel", async () => {
-    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "cancel" });
-    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(server, registry, client);
-
-    const result = await server.call("harness_create", {
-      resource_type: "pipeline",
-      body: { yamlPipeline: "pipeline:\n  name: Test" },
-    });
-
-    expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("cancelled") });
-  });
-
-  it("proceeds when elicitInput throws (non-destructive)", async () => {
+  it("proceeds when elicitInput throws (low-risk create silently bypasses)", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitThrows: true });
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
     registerCreateTool(server, registry, client);
@@ -153,8 +127,9 @@ describe("Elicitation flow: harness_create", () => {
       body: { yamlPipeline: "pipeline:\n  name: Test" },
     });
 
-    // Non-destructive → proceeds even when elicitation fails
+    // low_write short-circuits before elicitInput is even called.
     expect(result.isError).toBeUndefined();
+    expect(server._elicitInput).not.toHaveBeenCalled();
   });
 });
 
@@ -329,7 +304,9 @@ describe("Elicitation flow: harness_update", () => {
     expect(server._elicitInput).not.toHaveBeenCalled();
   });
 
-  it("stops on decline when elicitation available", async () => {
+  it("does not call elicitInput for low_write update even when client supports it", async () => {
+    // pipeline.update is low_write — no prompt is surfaced. The decline below
+    // would only matter for medium_write+ updates.
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
     registerUpdateTool(server, registry, client);
@@ -340,8 +317,8 @@ describe("Elicitation flow: harness_update", () => {
       body: { yamlPipeline: "pipeline:\n  name: Updated" },
     });
 
-    expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
+    expect(result.isError).toBeUndefined();
+    expect(server._elicitInput).not.toHaveBeenCalled();
   });
 });
 
@@ -456,36 +433,24 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     expect(server._elicitInput).not.toHaveBeenCalled();
   });
 
-  it("harness_update proceeds with confirm:true when elicitInput throws", async () => {
-    const server = makeMcpServer({ supportsElicitation: true, elicitThrows: true });
-    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(server, registry, client);
-
-    const result = await server.call("harness_update", {
-      resource_type: "pipeline",
-      resource_id: "my-pipe",
-      body: { yamlPipeline: "pipeline:\n  name: Updated" },
-      confirm: true,
-    });
-
-    expect(result.isError).toBeUndefined();
-  });
-
-  it("harness_create proceeds with confirm:true on accept missing confirm flag", async () => {
+  it("harness_delete proceeds with confirm:true on accept missing confirm flag", async () => {
     // Non-interactive client that advertises elicitation but returns a
     // degenerate accept (no confirm field). callerConfirmed is the opt-in.
+    // Using a destructive resource so the elicitation prompt is actually
+    // surfaced (low_write resources short-circuit before elicitInput runs).
     const server = makeMcpServer({ supportsElicitation: true });
     server._elicitInput.mockResolvedValue({ action: "accept", content: {} });
-    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(server, registry, client);
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(server, registry, client);
 
-    const result = await server.call("harness_create", {
+    const result = await server.call("harness_delete", {
       resource_type: "pipeline",
-      body: { yamlPipeline: "pipeline:\n  name: Test" },
+      resource_id: "my-pipe",
       confirm: true,
     });
 
     expect(result.isError).toBeUndefined();
+    expect(server._elicitInput).toHaveBeenCalledOnce();
   });
 
   it("harness_delete still blocks on explicit decline EVEN with confirm:true (authoritative human decline)", async () => {
@@ -535,5 +500,38 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
 
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("retry with confirm: true") });
+  });
+
+  it("blocked operations emit a pre-dispatch audit event with confirmation=blocked", async () => {
+    // End-to-end coverage that the tool handlers actually call
+    // registry.auditBlockedAttempt — the user reviewer surfaced this as a
+    // promised-but-unwired contract.
+    const { AuditManager } = await import("../../src/audit/manager.js");
+    const events: import("../../src/audit/types.js").AuditEvent[] = [];
+    const manager = new AuditManager();
+    manager.addSink({
+      name: "test",
+      emit(e) { events.push(e); },
+    });
+    const auditedRegistry = new Registry(makeConfig(), { auditManager: manager });
+
+    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(server, auditedRegistry, client);
+
+    const result = await server.call("harness_delete", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.tool).toBe("harness_delete");
+    expect(events[0]!.operation).toBe("delete");
+    expect(events[0]!.resource_type).toBe("pipeline");
+    expect(events[0]!.resource_id).toBe("my-pipe");
+    expect(events[0]!.confirmation).toBe("blocked");
+    expect(events[0]!.outcome).toBe("error");
+    expect(events[0]!.error).toContain("declined");
   });
 });

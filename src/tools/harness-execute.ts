@@ -120,6 +120,13 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
+          registry.auditBlockedAttempt(
+            resourceType,
+            "execute",
+            input,
+            { tool: "harness_execute", confirmation: "blocked", resource_id: resourceId, action: args.action },
+            `Operation ${elicit.reason} by user (${elicit.method})`,
+          );
           return errorResult(describeElicitationFailure(elicit));
         }
 

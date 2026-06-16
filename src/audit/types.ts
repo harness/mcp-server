@@ -11,17 +11,17 @@ import type { RiskLevel } from "../registry/types.js";
  *   `elicitInput` failed, or the client returned a degenerate accept). Used
  *   by non-interactive automation. Distinct from `elicited` so audits can
  *   tell automation overrides apart from genuine human consents
- * - `not_required`: low-risk operation that did not need confirmation
- * - `skipped`: elicitation was attempted but failed for a low-risk operation
- * - `blocked`: operation was prevented because confirmation could not be
- *   obtained (this only appears in audit context for record-keeping; the
- *   operation itself does not run when blocked)
+ * - `not_required`: low-risk operation (`read` / `low_write`) that did not
+ *   need confirmation
+ * - `blocked`: emitted as a pre-dispatch audit event when the operation was
+ *   prevented because confirmation could not be obtained. The operation
+ *   itself does NOT run; this row exists in the audit log for record-keeping
+ *   so operators can see blocked attempts
  */
 export type ConfirmationMethod =
   | "auto_approved"
   | "elicited"
   | "caller_confirmed"
-  | "skipped"
   | "blocked"
   | "not_required";
 

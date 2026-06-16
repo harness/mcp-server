@@ -82,6 +82,13 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
+          registry.auditBlockedAttempt(
+            args.resource_type,
+            "update",
+            input,
+            { tool: "harness_update", confirmation: "blocked", resource_id: resolvedResourceId },
+            `Operation ${elicit.reason} by user (${elicit.method})`,
+          );
           return errorResult(describeElicitationFailure(elicit));
         }
         if (primaryField) {
