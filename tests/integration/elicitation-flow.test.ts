@@ -565,4 +565,39 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     expect(events[0]!.outcome).toBe("blocked");
     expect(events[0]!.error).toContain("declined");
   });
+
+  it("confirm:true fallback reaches sinks as confirmation=caller_confirmed (success path)", async () => {
+    // Pre-existing tests proved confirmViaElicitation returns
+    // method:"caller_confirmed" for the override branches, but the public
+    // audit contract (a dispatched call carrying confirmation:"caller_confirmed")
+    // was not exercised end-to-end. This locks the success path.
+    const { AuditManager } = await import("../../src/audit/manager.js");
+    const events: import("../../src/audit/types.js").AuditEvent[] = [];
+    const manager = new AuditManager();
+    manager.addSink({
+      name: "test",
+      emit(e) { events.push(e); },
+    });
+    const auditedRegistry = new Registry(makeConfig(), { auditManager: manager });
+
+    const server = makeMcpServer({ supportsElicitation: false });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(server, auditedRegistry, client);
+
+    const result = await server.call("harness_delete", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(events).toHaveLength(1);
+    expect(events[0]!.tool).toBe("harness_delete");
+    expect(events[0]!.operation).toBe("delete");
+    expect(events[0]!.outcome).toBe("success");
+    // The non-interactive opt-in must reach sinks with the distinct
+    // confirmation method — auditors and operators rely on this to tell
+    // automation overrides apart from genuine human consents.
+    expect(events[0]!.confirmation).toBe("caller_confirmed");
+  });
 });

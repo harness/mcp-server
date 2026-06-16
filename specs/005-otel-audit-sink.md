@@ -98,7 +98,7 @@ Every audit span carries these attributes:
 | `audit.resource_type` | e.g. `pipeline`, `service`, `connector` | Yes |
 | `audit.outcome` | `success`, `error`, or `blocked` (pre-dispatch elicitation block) | Yes |
 | `audit.risk` | `read`, `low_write`, `medium_write`, `high_write`, `destructive` | Yes |
-| `audit.duration_ms` | End-to-end API call duration | Yes |
+| `audit.duration_ms` | End-to-end API call duration for dispatched events; `0` for `outcome: "blocked"` rows (no API call runs) | Yes |
 | `audit.account_id` | Harness account identifier | Yes |
 | `audit.resource_id` | Specific resource identifier | When available |
 | `audit.action` | Execute action (e.g. `run`, `stop`) | Execute operations |

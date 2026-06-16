@@ -35,9 +35,12 @@ Tool Handler                    Registry                     AuditManager
      |                             |                              |-- emit() --> OTelSink
 ```
 
-### Emission Point
+### Emission Points
 
-Audit events are emitted from `Registry.executeSpecWithAudit()` — a wrapper around `executeSpec()`. This guarantees 100% coverage of all registry-mediated operations without requiring individual tool handlers to emit events. Tool handlers pass an `AuditContext` (tool name, confirmation method, resource_id, action) through `dispatch`/`dispatchExecute`.
+There are two emission points, one for dispatched calls and one for pre-dispatch blocks:
+
+1. **`Registry.executeSpecWithAudit()`** — a wrapper around `executeSpec()` that emits an event for every registry-mediated API call (`outcome: "success" | "error"`). This guarantees 100% coverage of dispatched operations without requiring individual tool handlers to emit events. Tool handlers pass an `AuditContext` (tool name, confirmation method, resource_id, action) through `dispatch` / `dispatchExecute`.
+2. **`Registry.auditBlockedAttempt()`** — explicit pre-dispatch emission for operations that were blocked by the elicitation gate before any API call ran. The four write-tool handlers (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) call this when `confirmViaElicitation` returns `proceed: false`, so operators see blocked attempts as first-class audit rows (`outcome: "blocked"`, `duration_ms: 0`). This is the only path on which tool handlers must wire audit calls explicitly; the dispatched-call path remains automatic.
 
 ---
 
