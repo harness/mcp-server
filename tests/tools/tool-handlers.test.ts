@@ -1322,6 +1322,29 @@ describe("harness_execute", () => {
     expect(schema.inputSchema.resource_scope?.description).toContain("Scope for the operation");
   });
 
+  it("exposes a description on every documented input field (Zod 4 chaining order regression)", () => {
+    // Regression for Cursor PR #351 finding: in Zod 4, `.optional()` /
+    // `.default()` / `.min()` / `.max()` each return a fresh wrapper schema
+    // whose `.description` getter does NOT walk into the inner schema. The
+    // MCP SDK reads `schema.description` directly via getSchemaDescription,
+    // so any chain that calls `.describe(...)` BEFORE `.optional()` would
+    // strip the description from the public tool surface. This test asserts
+    // every documented field has a non-empty description after registration.
+    const schema = server.schema("harness_execute") as {
+      inputSchema: Record<string, { description?: string | null } | undefined>;
+    };
+    const documented = [
+      "resource_type", "url", "action", "resource_id", "org_id", "project_id",
+      "resource_scope", "inputs", "input_set_ids", "body", "params", "confirm",
+      "wait", "wait_timeout_seconds", "wait_poll_interval_seconds", "queries",
+    ];
+    for (const field of documented) {
+      const desc = schema.inputSchema[field]?.description;
+      expect(desc, `field "${field}" must expose a description on the registered schema`).toBeTruthy();
+      expect(desc!.length, `field "${field}" description must be non-empty`).toBeGreaterThan(5);
+    }
+  });
+
   it("returns error when user declines", async () => {
     const declineServer = makeMcpServer("decline");
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");

@@ -1975,7 +1975,7 @@ tests/
 
 ## Elicitation
 
-Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use [MCP elicitation](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/elicitation) to prompt the user for confirmation before making changes. This gives real human-in-the-loop approval — the user sees what's about to happen and accepts or declines.
+The write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use [MCP elicitation](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/elicitation) to prompt the user for confirmation when the action's risk requires it — `medium_write`, `high_write`, and `destructive` operations only. Low-risk creates / updates / reads (e.g. `pipeline.create`, `pipeline.update`, `hql_query.run`) proceed silently with no prompt. When a prompt is surfaced, the user sees what's about to happen and accepts or declines, giving real human-in-the-loop approval for the operations that actually mutate or run things.
 
 **How it works:**
 
