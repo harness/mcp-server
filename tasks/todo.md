@@ -1,15 +1,20 @@
 # Harness MCP Server — Task Tracking
 
 ## PR 344 Review Follow-up (2026-06-16)
-- [ ] Align `execution_inputs` missing-ID test plan/report language with the live `harness_get` error path
-- [ ] Add public `harness_get(resource_type="execution_inputs", resource_id=...)` handler coverage
-- [ ] Run focused and broad verification
+- [x] Align `execution_inputs` missing-ID test plan/report language with the live `harness_get` error path
+- [x] Add public `harness_get(resource_type="execution_inputs", resource_id=...)` handler coverage
+- [x] Run focused and broad verification
 - [ ] Commit, push, open/update PR, and report back in Slack
 
 ### Plan
 - Keep `harness_get.resource_id` optional because URL-only calls rely on handler-level defaulting rather than schema-level required IDs.
 - Update `docs/testing/execution_inputs/test_plan.md` and `test_report.md` so TC-einp-010 documents the registry path-param error (`Missing required field "execution_id" for execution_inputs`) instead of tool input validation.
 - Add a `tests/tools/tool-handlers.test.ts` regression that exercises the registered `harness_get` handler with `resource_id`, proving it maps to the `execution_inputs` `execution_id` path parameter and returns the projected public shape.
+
+### Review
+- TC-einp-010 in `docs/testing/execution_inputs/test_plan.md` and `test_report.md` now documents the real runtime path: `harness_get` accepts the call and registry path-param resolution raises the missing `execution_id` error.
+- `tests/tools/tool-handlers.test.ts` now exercises the public `harness_get` handler for `execution_inputs`, asserting `resource_id` becomes the `planExecutionId` path segment, expression params are forwarded, and the projected response omits upstream-only fields. It also covers read-only mode for the get path.
+- Verification passed: `pnpm exec vitest run tests/registry/execution-inputs.test.ts tests/tools/tool-handlers.test.ts -t "execution_inputs|harness_get"`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, and `pnpm test` (78 files / 1948 tests).
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
