@@ -601,6 +601,44 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     expect(events[0]!.confirmation).toBe("caller_confirmed");
   });
 
+  it("blocked audit row resolves a real http_path for pathBuilder-backed execute actions", async () => {
+    // Regression for Cursor PR #351 finding: blocked rows for execute
+    // actions whose pathBuilder reads action-target identifier fields
+    // (e.g. security_exemption.approve reading input.exemption_id) must
+    // resolve a stable http_path. Previously they recorded
+    // "/sto/api/v2/exemptions//approve" because the resource_id -> action
+    // target remap happened AFTER audit emission.
+    const { AuditManager } = await import("../../src/audit/manager.js");
+    const events: import("../../src/audit/types.js").AuditEvent[] = [];
+    const manager = new AuditManager();
+    manager.addSink({
+      name: "test",
+      emit(e) { events.push(e); },
+    });
+    const stoRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" } as any), { auditManager: manager });
+
+    // Decline elicitation so we hit the blocked audit path.
+    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server, stoRegistry, client);
+
+    const result = await server.call("harness_execute", {
+      resource_type: "security_exemption",
+      action: "approve",
+      resource_id: "ex-1",
+      body: { scope: "CURRENT" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.tool).toBe("harness_execute");
+    expect(events[0]!.action).toBe("approve");
+    expect(events[0]!.outcome).toBe("blocked");
+    // The path must resolve to the real exemption id, not "//".
+    expect(events[0]!.http_path).toBe("/sto/api/v2/exemptions/ex-1/approve");
+    expect(events[0]!.http_path).not.toContain("//");
+  });
+
   it("HARNESS_READ_ONLY blocks BEFORE elicitation and emits a blocked audit row", async () => {
     // Regression for Cursor PR #351 finding: the registry's read-only gate
     // throws inside dispatch, AFTER elicitation has already prompted the

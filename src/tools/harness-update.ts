@@ -70,6 +70,12 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         if (!resolvedResourceId) {
           return errorResult("resource_id is required for harness_update unless url contains the resource ID or params includes the resource-specific ID field.");
         }
+        // Populate the primary identifier on the input map BEFORE any
+        // pre-dispatch audit emission so pathBuilder-backed updates resolve
+        // a stable http_path on blocked-attempt audit rows.
+        if (primaryField) {
+          input[primaryField] = resolvedResourceId;
+        }
 
         const risk = def.operations.update!.operationPolicy.risk;
         // Fail fast on HARNESS_READ_ONLY before elicitation — see
@@ -103,9 +109,6 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
             describeBlockedAudit(elicit),
           );
           return errorResult(describeElicitationFailure(elicit));
-        }
-        if (primaryField) {
-          input[primaryField] = resolvedResourceId;
         }
         const versionLabel = asString(input.version_label);
         if (versionLabel) { /* already set via params */ }

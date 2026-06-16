@@ -25,6 +25,50 @@ const DEFAULT_WAIT_POLL_INTERVAL_SECONDS = 3;
 const MAX_WAIT_INTERVAL_MS = 30_000;
 
 /**
+ * Map `resource_id` onto the execute action's target identifier field, in
+ * place. Mirrors the remap performed inline in the dispatch path so that
+ * pre-dispatch consumers (e.g. blocked-attempt audit emission, where the
+ * action's `pathBuilder` reads identifier fields off the input map) see
+ * the same shape the registry would dispatch with.
+ *
+ * Most resources use `identifierFields[0]`, but some execute endpoints
+ * omit the parent identifier used by get/update/delete and target a child
+ * path field directly (e.g. `security_exemption.approve` writes to
+ * `exemption_id`, not the resource's primary id).
+ *
+ * Returns the same `input` reference for chaining; idempotent (safe to
+ * call when `resourceId` is undefined or the action has no pathParams).
+ */
+function applyExecuteActionTargetRemap(
+  input: Record<string, unknown>,
+  def: { identifierFields: readonly string[] },
+  actionSpec: { pathParams?: Record<string, string> } | undefined,
+  resourceId: string | undefined,
+): Record<string, unknown> {
+  const primaryField = def.identifierFields[0];
+  if (!primaryField || !resourceId) return input;
+  const actionPathFields = new Set(Object.keys(actionSpec?.pathParams ?? {}));
+  const primaryUsedByAction = actionPathFields.has(primaryField);
+  const actionTargetField = primaryUsedByAction
+    ? undefined
+    : [...def.identifierFields].reverse().find((field) => actionPathFields.has(field));
+
+  if (actionTargetField) {
+    input[actionTargetField] = resourceId;
+  } else {
+    const existing = input[primaryField];
+    const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
+    if (primaryAlreadySet && def.identifierFields.length > 1) {
+      const childField = def.identifierFields[def.identifierFields.length - 1]!;
+      input[childField] = resourceId;
+    } else {
+      input[primaryField] = resourceId;
+    }
+  }
+  return input;
+}
+
+/**
  * Extract the execution ID from a `harness_execute` run/retry response.
  * Verified shapes:
  *  - v0 pipeline run (ngExtract): `{ planExecution: { uuid, metadata: { executionUuid, ... } }, ... }`
@@ -117,6 +161,13 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const actionSpec = def.executeActions?.[args.action];
         const risk = actionSpec?.operationPolicy.risk ?? "low_write";
 
+        // Resolve the execute action's path identifier BEFORE any
+        // pre-dispatch audit emission. Without this, blocked rows for
+        // pathBuilder-backed actions (e.g. security_exemption.approve
+        // reading `input.exemption_id`) record an http_path with empty
+        // placeholders ("/sto/api/v2/exemptions//approve").
+        applyExecuteActionTargetRemap(input, def, actionSpec, resourceId);
+
         // Fail fast on HARNESS_READ_ONLY before elicitation. Mirrors
         // registry.dispatchExecute()'s gate (risk !== "read"): read-safe
         // actions like hql_query.run/validate stay allowed in read-only
@@ -192,28 +243,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         // Map resource_id to the execute action's target identifier. Most
         // resources use identifierFields[0], but some execute endpoints omit
         // the parent identifier used by get/update/delete and target a child
-        // path field directly.
-        const primaryField = def.identifierFields[0];
-        if (primaryField && resourceId) {
-          const actionPathFields = new Set(Object.keys(actionSpec?.pathParams ?? {}));
-          const primaryUsedByAction = actionPathFields.has(primaryField);
-          const actionTargetField = primaryUsedByAction
-            ? undefined
-            : [...def.identifierFields].reverse().find((field) => actionPathFields.has(field));
-
-          if (actionTargetField) {
-            input[actionTargetField] = resourceId;
-          } else {
-            const existing = input[primaryField];
-            const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
-            if (primaryAlreadySet && def.identifierFields.length > 1) {
-              const childField = def.identifierFields[def.identifierFields.length - 1]!;
-              input[childField] = resourceId;
-            } else {
-              input[primaryField] = resourceId;
-            }
-          }
-        }
+        // path field directly. The same remap is also applied earlier (before
+        // any auditBlockedAttempt emission) so blocked audit rows record a
+        // resolved http_path rather than a "/...//..." with empty placeholders.
+        applyExecuteActionTargetRemap(input, def, actionSpec, resourceId);
 
         // Pass input_set_ids as string[] so HarnessClient emits repeated `inputSetIdentifiers=` query keys
         // (grpc-gateway array style). Comma-joined single param is ignored by pipeline execute.

@@ -64,6 +64,14 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         if (!resolvedResourceId) {
           return errorResult("resource_id is required for harness_delete unless url contains the resource ID or params includes the resource-specific ID field.");
         }
+        // Populate the primary identifier on the input map BEFORE any
+        // pre-dispatch audit emission so pathBuilder-backed deletes (e.g.
+        // template.delete reading input.template_id) resolve a stable
+        // http_path on blocked-attempt audit rows instead of throwing or
+        // recording a path with empty placeholders.
+        if (primaryField) {
+          input[primaryField] = resolvedResourceId;
+        }
 
         // Fail fast on HARNESS_READ_ONLY before elicitation — see
         // harness_create.ts for the rationale. Mirrors registry.dispatch().
@@ -95,9 +103,6 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
             describeBlockedAudit(elicit),
           );
           return errorResult(describeElicitationFailure(elicit));
-        }
-        if (primaryField) {
-          input[primaryField] = resolvedResourceId;
         }
 
         const result = await registry.dispatch(client, args.resource_type, "delete", input, { tool: "harness_delete", confirmation: elicit.method, resource_id: resolvedResourceId });
