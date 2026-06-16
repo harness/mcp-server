@@ -7,16 +7,16 @@ const executeResource = dbopsToolset.resources.find(
 if (!executeResource) {
   throw new Error("database_execute_llm_authoring_pipeline resource missing from dbopsToolset");
 }
-const createOp = executeResource.operations.create;
-if (!createOp) {
-  throw new Error("create operation missing from database_execute_llm_authoring_pipeline resource");
+const runAction = executeResource.executeActions?.run;
+if (!runAction) {
+  throw new Error("run execute action missing from database_execute_llm_authoring_pipeline resource");
 }
-const buildBody = createOp.bodyBuilder!;
+const buildBody = runAction.bodyBuilder!;
 
 describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
   it("hits the v1 llm-authoring/execute-pipeline path", () => {
-    expect(createOp.method).toBe("POST");
-    expect(createOp.path).toBe(
+    expect(runAction.method).toBe("POST");
+    expect(runAction.path).toBe(
       "/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
     );
   });

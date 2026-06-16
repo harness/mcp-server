@@ -698,7 +698,7 @@ describe("database_instance skipScopeBodyInjection", () => {
   });
 });
 
-describe("database_execute_llm_authoring_pipeline create", () => {
+describe("database_execute_llm_authoring_pipeline run", () => {
   it("maps body aliases to the new /v1/llm-authoring/execute-pipeline payload (default-pipeline branch)", async () => {
     const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({
@@ -708,7 +708,7 @@ describe("database_execute_llm_authoring_pipeline create", () => {
     });
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "database_execute_llm_authoring_pipeline", "create", {
+    await registry.dispatchExecute(client, "database_execute_llm_authoring_pipeline", "run", {
       org_id: "default",
       project_id: "test-project",
       body: {
@@ -746,7 +746,7 @@ describe("database_execute_llm_authoring_pipeline create", () => {
     });
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "database_execute_llm_authoring_pipeline", "create", {
+    await registry.dispatchExecute(client, "database_execute_llm_authoring_pipeline", "run", {
       org_id: "default",
       project_id: "test-project",
       body: {

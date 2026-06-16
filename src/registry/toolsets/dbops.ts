@@ -783,17 +783,15 @@ export const dbopsToolset: ToolsetDefinition = {
       resourceType: "database_execute_llm_authoring_pipeline",
       displayName: "Execute LLM Authoring Pipeline",
       description:
-        "Trigger an LLM-authoring validate-and-preview pipeline and record the " +
-        "billable execution event in one transactional call. " +
+        "Execute the LLM-authoring validate-and-preview pipeline and record a billable " +
+        "ChangeAuthoringExecutionEvent atomically. Use harness_execute with action=run. " +
         "Two branches: " +
-        "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill " +
-        "from NG setting `dbops_llm_authoring_pipeline_id`) plus optional " +
-        "runtime_inputs collected from the user via AskUserQuestion; " +
-        "(b) default-pipeline — pass use_default_pipeline=true and the server " +
-        "performs get-or-create of the canonical default pipeline. " +
+        "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill from NG setting " +
+        "`dbops_llm_authoring_pipeline_id`) plus optional runtime_inputs; " +
+        "(b) default-pipeline — pass use_default_pipeline=true and the server performs " +
+        "get-or-create of the canonical default pipeline. " +
         "Exactly one of pipeline_identifier OR use_default_pipeline must be set. " +
-        "Reserved runtime-input keys (schemaId, instanceId, changeset) " +
-        "are rejected by the server. " +
+        "Reserved runtime-input keys (schemaId, instanceId, changeset) are rejected by the server. " +
         "Returns { executionId, pipelineIdentifier, openInHarness }. " +
         "The chat-side polling block in the dbops_changeset skill is dead code — " +
         "show the user the openInHarness link and let the existing changeauthoring " +
@@ -801,12 +799,13 @@ export const dbopsToolset: ToolsetDefinition = {
       toolset: "dbops",
       scope: "project",
       identifierFields: [],
-      operations: {
-        create: {
+      operations: {},
+      executeActions: {
+        run: {
           method: "POST",
           path: "/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
           bodyBuilder: (input: Record<string, unknown>) => {
             const src = ((input.body ?? input) as Record<string, unknown>) ?? {};
@@ -838,10 +837,11 @@ export const dbopsToolset: ToolsetDefinition = {
             return body;
           },
           responseExtractor: passthrough,
-          description:
-            "Execute the LLM-authoring change-authoring validate-and-preview pipeline. " +
-            "Use this INSTEAD of separate database_llm_authoring_pipeline + pipeline execution calls. " +
-            "Body must specify exactly one of pipeline_identifier or use_default_pipeline=true.",
+          actionDescription:
+            "Trigger the consolidated LLM-authoring validate-and-preview pipeline. " +
+            "The user has already consented via the changeset review card (Accept & Commit) " +
+            "before the skill calls this — no second approval is needed. " +
+            "Server triggers execution and records the billable event atomically.",
           bodySchema: {
             description:
               "ExecuteLlmAuthoringPipelineRequestBody. Caller may pass any field as " +
@@ -872,7 +872,10 @@ export const dbopsToolset: ToolsetDefinition = {
                 name: "changeset",
                 type: "string",
                 required: true,
-                description: "Liquibase YAML changeset body.",
+                description:
+                  "Liquibase YAML changeset body as PLAIN TEXT. Do NOT base64-encode — " +
+                  "the dbservice encodes it server-side before injecting into the pipeline YAML " +
+                  "(the DBTestAndPreview step expects base64). Sending base64 here would double-encode.",
               },
               {
                 name: "pipelineIdentifier",
