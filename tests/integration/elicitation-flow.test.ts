@@ -600,4 +600,36 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     // automation overrides apart from genuine human consents.
     expect(events[0]!.confirmation).toBe("caller_confirmed");
   });
+
+  it("blocked audit row from no-elicitation path does NOT misattribute to user", async () => {
+    // Regression: confirmViaElicitation returns reason:"declined" for the
+    // no-elicitation-capability branch. The audit row's error string must
+    // not echo that token — no user actually declined.
+    const { AuditManager } = await import("../../src/audit/manager.js");
+    const events: import("../../src/audit/types.js").AuditEvent[] = [];
+    const manager = new AuditManager();
+    manager.addSink({
+      name: "test",
+      emit(e) { events.push(e); },
+    });
+    const auditedRegistry = new Registry(makeConfig(), { auditManager: manager });
+
+    const server = makeMcpServer({ supportsElicitation: false });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(server, auditedRegistry, client);
+
+    const result = await server.call("harness_delete", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      // no confirm — should be blocked
+    });
+
+    expect(result.isError).toBe(true);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.outcome).toBe("blocked");
+    expect(events[0]!.confirmation).toBe("blocked");
+    expect(events[0]!.error).toContain("blocked pre-dispatch");
+    expect(events[0]!.error).not.toContain("declined");
+    expect(events[0]!.error).not.toContain("by user");
+  });
 });

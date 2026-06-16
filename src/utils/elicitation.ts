@@ -52,10 +52,17 @@ export function describeElicitationFailure(result: ElicitationResult): string {
  * `ElicitationResult`. Mirrors `describeElicitationFailure` in attributing
  * the block correctly: the `blocked` method is a CLIENT-side failure to
  * surface a prompt, not a human decline, and the audit row must say so.
+ *
+ * For the `blocked` branch we deliberately do NOT echo the internal
+ * `reason` token — `reason` is set to `"declined"` for the
+ * no-elicitation-capability path and `"cancelled"` for the throws /
+ * accept-without-confirm paths, and either token would falsely imply a
+ * human action when surfaced. The fact that the operation never reached
+ * dispatch is captured by `outcome: "blocked"` on the audit row instead.
  */
 export function describeBlockedAudit(result: ElicitationResult): string {
   if (result.method === "blocked") {
-    return `Operation blocked pre-dispatch: client could not surface a confirmation prompt (${result.reason ?? "cancelled"})`;
+    return "Operation blocked pre-dispatch: client could not surface a confirmation prompt";
   }
   return `Operation ${result.reason ?? "declined"} by user (${result.method})`;
 }

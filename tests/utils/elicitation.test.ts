@@ -564,10 +564,27 @@ describe("describeElicitationFailure attribution", () => {
 });
 
 describe("describeBlockedAudit attribution", () => {
-  it("blocked path produces a client-attributed audit reason", () => {
+  it("blocked path produces a client-attributed audit reason (cancelled)", () => {
     const reason = describeBlockedAudit({ proceed: false, reason: "cancelled", method: "blocked" });
     expect(reason).toContain("blocked pre-dispatch");
     expect(reason).toContain("client could not surface");
+    expect(reason).not.toContain("by user");
+    // The internal `reason` token must not leak into the audit string —
+    // it's set to "cancelled" or "declined" depending on which blocked
+    // branch produced the result, and either token would falsely imply
+    // a user action.
+    expect(reason).not.toContain("(cancelled)");
+    expect(reason).not.toContain("(declined)");
+  });
+
+  it("blocked path with reason=declined (no-elicitation branch) does NOT echo `declined`", () => {
+    // confirmViaElicitation returns `{reason: "declined", method: "blocked"}`
+    // when the client lacks elicitation capability and confirm:true wasn't
+    // set. The audit string must NOT surface "declined" — no human declined.
+    const reason = describeBlockedAudit({ proceed: false, reason: "declined", method: "blocked" });
+    expect(reason).toContain("blocked pre-dispatch");
+    expect(reason).toContain("client could not surface");
+    expect(reason).not.toContain("declined");
     expect(reason).not.toContain("by user");
   });
 
