@@ -398,3 +398,142 @@ describe("Elicitation ordering: validate before elicit", () => {
     expect(server._elicitInput).not.toHaveBeenCalled();
   });
 });
+
+describe("Elicitation flow: confirm: true override (end-to-end through tool entry points)", () => {
+  let registry: Registry;
+  let client: HarnessClient;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+    client = makeClient();
+    (client.request as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { planExecutionId: "exec-123", identifier: "test" },
+    });
+  });
+
+  it("harness_delete proceeds with confirm:true when client lacks elicitation", async () => {
+    const server = makeMcpServer({ supportsElicitation: false });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(server, registry, client);
+
+    const result = await server.call("harness_delete", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(server._elicitInput).not.toHaveBeenCalled();
+  });
+
+  it("harness_delete proceeds with confirm:true when elicitInput throws", async () => {
+    const server = makeMcpServer({ supportsElicitation: true, elicitThrows: true });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(server, registry, client);
+
+    const result = await server.call("harness_delete", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+  });
+
+  it("harness_execute proceeds with confirm:true when client lacks elicitation (high_write)", async () => {
+    const server = makeMcpServer({ supportsElicitation: false });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server, registry, client);
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(server._elicitInput).not.toHaveBeenCalled();
+  });
+
+  it("harness_update proceeds with confirm:true when elicitInput throws", async () => {
+    const server = makeMcpServer({ supportsElicitation: true, elicitThrows: true });
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(server, registry, client);
+
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      body: { yamlPipeline: "pipeline:\n  name: Updated" },
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+  });
+
+  it("harness_create proceeds with confirm:true on accept missing confirm flag", async () => {
+    // Non-interactive client that advertises elicitation but returns a
+    // degenerate accept (no confirm field). callerConfirmed is the opt-in.
+    const server = makeMcpServer({ supportsElicitation: true });
+    server._elicitInput.mockResolvedValue({ action: "accept", content: {} });
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(server, registry, client);
+
+    const result = await server.call("harness_create", {
+      resource_type: "pipeline",
+      body: { yamlPipeline: "pipeline:\n  name: Test" },
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+  });
+
+  it("harness_delete still blocks on explicit decline EVEN with confirm:true (authoritative human decline)", async () => {
+    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(server, registry, client);
+
+    const result = await server.call("harness_delete", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
+    // The error must explicitly tell the caller that confirm:true does NOT
+    // bypass an explicit decline — otherwise an LLM will retry forever.
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("does not bypass an explicit decline") });
+  });
+
+  it("harness_execute still blocks on explicit cancel EVEN with confirm:true", async () => {
+    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "cancel" });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server, registry, client);
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("cancelled") });
+  });
+
+  it("error hint when client lacks elicitation tells caller to retry with confirm:true", async () => {
+    const server = makeMcpServer({ supportsElicitation: false });
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(server, registry, client);
+
+    const result = await server.call("harness_delete", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      // no confirm — caller should learn from the hint
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("retry with confirm: true") });
+  });
+});

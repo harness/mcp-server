@@ -5,7 +5,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
-import { confirmViaElicitation } from "../utils/elicitation.js";
+import { confirmViaElicitation, describeElicitationFailure } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord, asString } from "../utils/type-guards.js";
 import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
@@ -25,7 +25,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         resource_scope: resourceScopeSchema,
         org_id: z.string().optional().describe("Organization identifier (overrides default)"),
         project_id: z.string().optional().describe("Project identifier (overrides default)"),
-        confirm: z.boolean().optional().describe("Set to true to confirm the destructive operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP)."),
+        confirm: z.boolean().optional().describe("Set to true to confirm the destructive operation. Required for non-interactive clients (e.g. managed MCP) and as a recovery hint when the client cannot surface a confirmation prompt. NOTE: this does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources (e.g. pipeline_id for triggers/input sets, environment_id for infrastructure)."),
       },
       outputSchema: deleteOutputSchema,
@@ -74,9 +74,7 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
           callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
-          return errorResult(
-            `Operation ${elicit.reason} by user. Hint: if your client does not support interactive confirmation, pass confirm: true to proceed.`,
-          );
+          return errorResult(describeElicitationFailure(elicit));
         }
         if (primaryField) {
           input[primaryField] = resolvedResourceId;

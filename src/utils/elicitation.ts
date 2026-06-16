@@ -27,6 +27,25 @@ export interface ElicitationResult {
   method: "elicited" | "auto_approved" | "not_required" | "blocked" | "skipped";
 }
 
+/**
+ * Build a tool-handler-friendly error string for a non-proceeding
+ * `ElicitationResult`. Branches on `method` so the recovery hint matches
+ * what actually happened:
+ *
+ *  - `elicited` → the client completed the handshake and the user declined
+ *    or cancelled. Authoritative; `confirm: true` does NOT bypass this.
+ *  - `blocked` → the client did not surface a prompt (no elicitation
+ *    capability, or `elicitInput` failed). Caller can retry with
+ *    `confirm: true` to opt in for non-interactive automation.
+ */
+export function describeElicitationFailure(result: ElicitationResult): string {
+  const reason = result.reason ?? "declined";
+  if (result.method === "blocked") {
+    return `Operation ${reason} by user. Hint: client could not surface an interactive confirmation prompt — retry with confirm: true if you intend to proceed (e.g. non-interactive automation).`;
+  }
+  return `Operation ${reason} by user. To override an interactive decline, the user must accept the prompt — confirm: true does not bypass an explicit decline.`;
+}
+
 /** Module-level auto-approve threshold (set via HARNESS_AUTO_APPROVE_RISK). */
 let _autoApproveRisk: AutoApproveRisk = "none";
 
@@ -55,10 +74,16 @@ export function clientSupportsElicitation(server: Server): boolean {
  *  3. If the client lacks elicitation:
  *     - `read` / `low_write` → proceed silently.
  *     - `medium_write` / `high_write` / `destructive` → BLOCK.
- *  4. `callerConfirmed` (caller passed `confirm: true`) overrides a negative
- *     elicitation result, an `accept` missing `confirm=true`, and an
- *     `elicitInput` failure. This lets non-interactive automation clients that
- *     advertise elicitation but resolve prompts to decline/cancel still opt in.
+ *  4. `callerConfirmed` (caller passed `confirm: true`) overrides:
+ *       - the lacking-elicitation block (managed MCP, Cursor, etc.),
+ *       - an `elicitInput` failure (transport or unsupported method),
+ *       - an `accept` action missing `confirm=true` (degenerate response from
+ *         a non-interactive client that advertises elicitation but does not
+ *         actually surface a prompt).
+ *     It does NOT override an explicit `decline` or `cancel` from a client
+ *     that completed the elicitation handshake — a human (or trusted client)
+ *     saying "no" to a write is authoritative, even if the model also passed
+ *     `confirm: true` on the call.
  */
 export async function confirmViaElicitation({
   server,
@@ -123,10 +148,11 @@ export async function confirmViaElicitation({
       log.warn("Elicitation accept missing confirm=true", { toolName, risk });
       return { proceed: false, reason: "cancelled", method: "elicited" };
     }
-    if (callerConfirmed) {
-      log.info("Elicitation returned negative; proceeding via explicit confirm param", { toolName, risk, action: result.action });
-      return { proceed: true, method: "elicited" };
-    }
+    // An explicit decline / cancel from a client that completed the
+    // elicitation handshake is authoritative — `callerConfirmed` does NOT
+    // override it, even if the caller passed `confirm: true`. The override
+    // is reserved for clients that cannot or did not surface the prompt
+    // (no capability, transport error, accept missing confirm=true).
     if (result.action === "decline") {
       return { proceed: false, reason: "declined", method: "elicited" };
     }

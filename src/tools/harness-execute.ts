@@ -6,7 +6,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, HarnessApiError } from "../utils/errors.js";
-import { confirmViaElicitation } from "../utils/elicitation.js";
+import { confirmViaElicitation, describeElicitationFailure } from "../utils/elicitation.js";
 import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
@@ -67,7 +67,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         input_set_ids: z.array(z.string()).describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'}).").optional(),
         body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
         params: z.record(z.string(), z.unknown()).describe("Action-specific parameters. Call harness_describe for available fields per resource_type.").optional(),
-        confirm: z.boolean().describe("Set to true to confirm the operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP).").optional(),
+        confirm: z.boolean().describe("Set to true to confirm the operation. Required for non-interactive clients (e.g. managed MCP) and as a recovery hint when the client cannot surface a confirmation prompt. NOTE: this does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative.").optional(),
         wait: z.boolean().describe("For pipeline run/retry actions: block until the execution reaches a terminal status (Success/Failed/Aborted/Errored/Expired). Server-side polling — a single tool call gives the agent the final outcome instead of an LLM polling loop. Ignored for other actions.").optional(),
         wait_timeout_seconds: z.number().min(10).max(7200).describe("Max seconds to wait when wait=true. Default 600 (10 min). Max 7200 (2 h). When the timeout fires, returns execution_timed_out=true with the last observed status.").optional(),
         wait_poll_interval_seconds: z.number().min(2).max(60).describe("Initial poll interval when wait=true (seconds). Default 3. Backoff multiplier 1.5x, capped at 30s.").optional(),
@@ -120,9 +120,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
-          return errorResult(
-            `Operation ${elicit.reason} by user. Hint: if your client does not support interactive confirmation, pass confirm: true to proceed.`,
-          );
+          return errorResult(describeElicitationFailure(elicit));
         }
 
         // Batch HQL path — fan out queries in parallel through the registry
