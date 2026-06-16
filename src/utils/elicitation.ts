@@ -40,11 +40,24 @@ export interface ElicitationResult {
  *    non-interactive automation.
  */
 export function describeElicitationFailure(result: ElicitationResult): string {
-  const reason = result.reason ?? "declined";
   if (result.method === "blocked") {
-    return `Operation ${reason} by user. Hint: client could not surface an interactive confirmation prompt — retry with confirm: true if you intend to proceed (e.g. non-interactive automation).`;
+    return "Operation blocked: the client could not surface a usable confirmation prompt (no elicitation capability, elicitInput failed, or accept missing confirm field). Hint: retry with confirm: true if you intend to proceed (e.g. non-interactive automation).";
   }
+  const reason = result.reason ?? "declined";
   return `Operation ${reason} by user. To override an interactive decline, the user must accept the prompt — confirm: true does not bypass an explicit decline.`;
+}
+
+/**
+ * Build the audit-row error string for a non-proceeding
+ * `ElicitationResult`. Mirrors `describeElicitationFailure` in attributing
+ * the block correctly: the `blocked` method is a CLIENT-side failure to
+ * surface a prompt, not a human decline, and the audit row must say so.
+ */
+export function describeBlockedAudit(result: ElicitationResult): string {
+  if (result.method === "blocked") {
+    return `Operation blocked pre-dispatch: client could not surface a confirmation prompt (${result.reason ?? "cancelled"})`;
+  }
+  return `Operation ${result.reason ?? "declined"} by user (${result.method})`;
 }
 
 /** Module-level auto-approve threshold (set via HARNESS_AUTO_APPROVE_RISK). */

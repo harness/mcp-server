@@ -152,9 +152,10 @@ describe("Elicitation flow: harness_delete (destructive)", () => {
       resource_id: "my-pipe",
     });
 
-    // Destructive + no elicitation → blocked
+    // Destructive + no elicitation → blocked (client-side, not human decline)
     expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Operation blocked") });
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("retry with confirm: true") });
   });
 
   it("blocks when elicitInput throws (destructive)", async () => {
@@ -167,9 +168,9 @@ describe("Elicitation flow: harness_delete (destructive)", () => {
       resource_id: "my-pipe",
     });
 
-    // Destructive + elicitation throws → blocked
+    // Destructive + elicitation throws → blocked (client-side, not human decline)
     expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("cancelled") });
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Operation blocked") });
   });
 
   it("proceeds when user accepts", async () => {
@@ -225,9 +226,9 @@ describe("Elicitation flow: harness_execute", () => {
       resource_id: "my-pipe",
     });
 
-    // pipeline.run is high_write → blocked without elicitation
+    // pipeline.run is high_write → blocked without elicitation (client-side block)
     expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Operation blocked") });
     expect(server._elicitInput).not.toHaveBeenCalled();
   });
 
@@ -487,7 +488,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("cancelled") });
   });
 
-  it("error hint when client lacks elicitation tells caller to retry with confirm:true", async () => {
+  it("error hint when client lacks elicitation tells caller to retry with confirm:true (and does NOT misattribute to user)", async () => {
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
     registerDeleteTool(server, registry, client);
@@ -499,7 +500,11 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     });
 
     expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Operation blocked") });
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("retry with confirm: true") });
+    // Critical: must NOT attribute the block to the user — this is a
+    // client-side prompt failure, not a human decline.
+    expect(parseResult(result)).not.toMatchObject({ error: expect.stringContaining("by user") });
   });
 
   it("error hint on accept-without-confirm tells caller to retry with confirm:true (recoverable)", async () => {

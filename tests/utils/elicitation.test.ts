@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { clientSupportsElicitation, confirmViaElicitation, configureElicitation } from "../../src/utils/elicitation.js";
+import { clientSupportsElicitation, confirmViaElicitation, configureElicitation, describeElicitationFailure, describeBlockedAudit } from "../../src/utils/elicitation.js";
 import { isBlockingRisk, requiresConfirmation, shouldAutoApprove } from "../../src/registry/types.js";
 import type { RiskLevel, AutoApproveRisk } from "../../src/registry/types.js";
 
@@ -537,5 +537,42 @@ describe("confirmViaElicitation", () => {
       callerConfirmed: true,
     });
     expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
+  });
+});
+
+describe("describeElicitationFailure attribution", () => {
+  it("blocked path is attributed to the client, NOT the user", () => {
+    const msg = describeElicitationFailure({ proceed: false, reason: "cancelled", method: "blocked" });
+    expect(msg).toContain("Operation blocked");
+    expect(msg).toContain("retry with confirm: true");
+    // Critical: a client-side prompt failure must not be reported as
+    // "Operation cancelled by user" — that misclassification is what this
+    // test guards against (see Cursor review thread on PR #351).
+    expect(msg).not.toContain("by user");
+  });
+
+  it("elicited decline is attributed to the user (authoritative)", () => {
+    const msg = describeElicitationFailure({ proceed: false, reason: "declined", method: "elicited" });
+    expect(msg).toContain("Operation declined by user");
+    expect(msg).toContain("does not bypass an explicit decline");
+  });
+
+  it("elicited cancel is attributed to the user", () => {
+    const msg = describeElicitationFailure({ proceed: false, reason: "cancelled", method: "elicited" });
+    expect(msg).toContain("Operation cancelled by user");
+  });
+});
+
+describe("describeBlockedAudit attribution", () => {
+  it("blocked path produces a client-attributed audit reason", () => {
+    const reason = describeBlockedAudit({ proceed: false, reason: "cancelled", method: "blocked" });
+    expect(reason).toContain("blocked pre-dispatch");
+    expect(reason).toContain("client could not surface");
+    expect(reason).not.toContain("by user");
+  });
+
+  it("elicited path produces a user-attributed audit reason", () => {
+    const reason = describeBlockedAudit({ proceed: false, reason: "declined", method: "elicited" });
+    expect(reason).toBe("Operation declined by user (elicited)");
   });
 });

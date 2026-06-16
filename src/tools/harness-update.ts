@@ -5,7 +5,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
-import { confirmViaElicitation, describeElicitationFailure } from "../utils/elicitation.js";
+import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
@@ -87,7 +87,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
             "update",
             input,
             { tool: "harness_update", confirmation: elicit.method, resource_id: resolvedResourceId },
-            `Operation ${elicit.reason} by user (${elicit.method})`,
+            describeBlockedAudit(elicit),
           );
           return errorResult(describeElicitationFailure(elicit));
         }

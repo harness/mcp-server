@@ -170,14 +170,16 @@ describe("Registry audit emission", () => {
       "delete",
       { resource_id: "my-pipe" },
       { tool: "harness_delete", confirmation: "blocked", resource_id: "my-pipe" },
-      "Operation cancelled by user (blocked)",
+      "Operation blocked pre-dispatch: client could not surface a confirmation prompt (cancelled)",
     );
 
     expect(sink.events).toHaveLength(1);
     const event = sink.events[0]!;
     expect(event.confirmation).toBe("blocked");
     expect(event.outcome).toBe("blocked");
-    expect(event.error).toContain("cancelled");
+    expect(event.error).toContain("blocked pre-dispatch");
+    // Critical: blocked-path audit error must NOT misattribute to the user.
+    expect(event.error).not.toContain("by user");
   });
 
   it("auditBlockedAttempt is a no-op when auditManager is not configured", () => {
