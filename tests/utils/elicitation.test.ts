@@ -124,7 +124,7 @@ describe("confirmViaElicitation", () => {
   it("proceeds when user accepts", async () => {
     const mcpServer = makeServerStub(
       { elicitation: { form: {} } },
-      { action: "accept" },
+      { action: "accept", content: { confirm: true } },
     );
     const result = await confirmViaElicitation({
       server: mcpServer,
@@ -200,10 +200,10 @@ describe("confirmViaElicitation", () => {
     expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
-  it("passes message to elicitInput with empty schema", async () => {
+  it("passes message to elicitInput with an explicit confirmation schema", async () => {
     const mcpServer = makeServerStub(
       { elicitation: { form: {} } },
-      { action: "accept" },
+      { action: "accept", content: { confirm: true } },
     );
     await confirmViaElicitation({
       server: mcpServer,
@@ -214,7 +214,32 @@ describe("confirmViaElicitation", () => {
     const call = mcpServer.server.elicitInput.mock.calls[0][0];
     expect(call.mode).toBe("form");
     expect(call.message).toBe("Delete pipeline 'my-pipe'?");
-    expect(call.requestedSchema.properties).toEqual({});
+    expect(call.requestedSchema).toEqual({
+      type: "object",
+      properties: {
+        confirm: {
+          type: "boolean",
+          title: "Confirm operation",
+          description: "Set to true to approve this Harness operation.",
+          default: true,
+        },
+      },
+      required: ["confirm"],
+    });
+  });
+
+  it("blocks when an elicitation accept does not include confirm=true", async () => {
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "accept", content: {} },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      risk: "destructive",
+    });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "elicited" });
   });
 
   it("auto-approves when risk is within AUTO_APPROVE_RISK threshold", async () => {

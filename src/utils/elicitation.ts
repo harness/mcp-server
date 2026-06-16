@@ -5,6 +5,19 @@ import { type RiskLevel, type AutoApproveRisk, shouldAutoApprove, requiresConfir
 
 const log = createLogger("elicitation");
 
+const confirmationSchema = {
+  type: "object" as const,
+  properties: {
+    confirm: {
+      type: "boolean" as const,
+      title: "Confirm operation",
+      description: "Set to true to approve this Harness operation.",
+      default: true,
+    },
+  },
+  required: ["confirm"],
+};
+
 export interface ElicitationResult {
   /** Whether the operation should proceed. */
   proceed: boolean;
@@ -85,15 +98,21 @@ export async function confirmViaElicitation({
     const result = await server.server.elicitInput({
       mode: "form",
       message,
-      requestedSchema: {
-        type: "object",
-        properties: {},
-      },
+      requestedSchema: confirmationSchema,
     });
 
     log.info("Elicitation response", { toolName, action: result.action });
 
     if (result.action === "accept") {
+      const content = result.content;
+      const confirmed = typeof content === "object"
+        && content !== null
+        && "confirm" in content
+        && content.confirm === true;
+      if (!confirmed) {
+        log.warn("Elicitation accept missing confirm=true", { toolName, risk });
+        return { proceed: false, reason: "cancelled", method: "elicited" };
+      }
       return { proceed: true, method: "elicited" };
     }
     if (result.action === "decline") {
