@@ -6,7 +6,7 @@
 - [x] Reproduce a high-severity execution-log schema bug with focused regression coverage
 - [x] Implement minimal `harness_get` schema fix for URL-only log retrieval
 - [x] Run focused and broad verification
-- [ ] Commit, push, open PR, and report outcome in Slack
+- [x] Commit, push, open PR, and report outcome in Slack
 
 ### Plan
 - Treat the branch as matching `origin/main`; inspect recent behavioral commits rather than unmerged local changes.
@@ -18,6 +18,7 @@
 - Root cause: the execution-log special case reads `input.return_download_url`, while the public tool schema only allowed generic fields plus `params`.
 - Fix: added `return_download_url` to the `harness_get` input schema and added focused tests that prove schema-driven top-level URL mode reaches `resolveLogDownloadUrl()` and does not call `resolveLogContent()`.
 - Verification passed: `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "harness_get — execution_log"` and full `pnpm build && pnpm docs:generate && pnpm typecheck && pnpm docs:check && pnpm test` (78 files / 1957 tests).
+- Opened PR: https://github.com/harness/mcp-server/pull/349
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
