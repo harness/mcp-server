@@ -24,7 +24,7 @@ export interface ElicitationResult {
   /** Why the operation was stopped, if applicable. */
   reason?: "declined" | "cancelled";
   /** How the confirmation was resolved — maps directly to ConfirmationMethod for audit. */
-  method: "elicited" | "auto_approved" | "not_required" | "blocked" | "skipped";
+  method: "elicited" | "caller_confirmed" | "auto_approved" | "not_required" | "blocked" | "skipped";
 }
 
 /**
@@ -101,7 +101,10 @@ export async function confirmViaElicitation({
   /** Optional per-session threshold. Falls back to the process default. */
   autoApproveRisk?: AutoApproveRisk;
   /** When true, the caller explicitly passed confirm=true — acts as confirmation
-   *  on clients that lack elicitation support (managed MCP, Cursor, etc.). */
+   *  on clients that lack elicitation support (managed MCP, Cursor, etc.) and
+   *  on clients that fail to surface a usable prompt. Override paths emit
+   *  `method: "caller_confirmed"` (distinct from `elicited`) so audit sinks
+   *  can tell automation overrides apart from genuine human consents. */
   callerConfirmed?: boolean;
 }): Promise<ElicitationResult> {
   const threshold = autoApproveRisk ?? _autoApproveRisk;
@@ -114,7 +117,7 @@ export async function confirmViaElicitation({
     if (requiresConfirmation(risk)) {
       if (callerConfirmed) {
         log.info("Client lacks elicitation, proceeding via explicit confirm param", { toolName, risk });
-        return { proceed: true, method: "elicited" };
+        return { proceed: true, method: "caller_confirmed" };
       }
       log.warn("Client does not support elicitation, blocking operation", { toolName, risk });
       return { proceed: false, reason: "declined", method: "blocked" };
@@ -143,7 +146,7 @@ export async function confirmViaElicitation({
       }
       if (callerConfirmed) {
         log.info("Elicitation accept missing confirm=true; proceeding via explicit confirm param", { toolName, risk });
-        return { proceed: true, method: "elicited" };
+        return { proceed: true, method: "caller_confirmed" };
       }
       log.warn("Elicitation accept missing confirm=true", { toolName, risk });
       return { proceed: false, reason: "cancelled", method: "elicited" };
@@ -161,7 +164,7 @@ export async function confirmViaElicitation({
     if (requiresConfirmation(risk)) {
       if (callerConfirmed) {
         log.info("Elicitation failed but proceeding via explicit confirm param", { toolName, risk, error: String(err) });
-        return { proceed: true, method: "elicited" };
+        return { proceed: true, method: "caller_confirmed" };
       }
       log.warn("Elicitation failed, blocking operation", {
         toolName,

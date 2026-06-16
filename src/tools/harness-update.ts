@@ -30,7 +30,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         ]).describe("The updated resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object)"),
         org_id: z.string().optional().describe("Organization identifier (overrides default)"),
         project_id: z.string().optional().describe("Project identifier (overrides default)"),
-        confirm: z.boolean().optional().describe("Set to true to confirm the operation. Required for non-interactive clients (e.g. managed MCP) and as a recovery hint when the client cannot surface a confirmation prompt. NOTE: this does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
+        confirm: z.boolean().optional().describe("Set to true to confirm the operation. Only required when the operation risk is medium_write or above AND the client cannot surface a confirmation prompt — e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Has no effect for low-risk updates. Does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers (e.g. pipeline_id for triggers/input sets, version_label for templates)."),
       },
       outputSchema: updateOutputSchema,

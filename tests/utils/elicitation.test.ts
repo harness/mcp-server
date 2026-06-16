@@ -318,7 +318,7 @@ describe("confirmViaElicitation", () => {
       risk: "destructive",
       callerConfirmed: true,
     });
-    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
@@ -331,7 +331,7 @@ describe("confirmViaElicitation", () => {
       risk: "medium_write",
       callerConfirmed: true,
     });
-    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
   });
 
   it("proceeds with callerConfirmed when elicitInput throws (destructive)", async () => {
@@ -344,7 +344,7 @@ describe("confirmViaElicitation", () => {
       risk: "destructive",
       callerConfirmed: true,
     });
-    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
   });
 
   it("still blocks without callerConfirmed when client lacks elicitation (destructive)", async () => {
@@ -407,7 +407,7 @@ describe("confirmViaElicitation", () => {
       risk: "destructive",
       callerConfirmed: true,
     });
-    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
   });
 
   it("still returns declined without callerConfirmed when elicitation returns decline", async () => {
@@ -478,6 +478,6 @@ describe("confirmViaElicitation", () => {
       risk: "medium_write",
       callerConfirmed: true,
     });
-    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
   });
 });
