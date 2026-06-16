@@ -269,6 +269,123 @@ describe("harness_get", () => {
   });
 });
 
+describe("harness_get — execution_inputs", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let registry: Registry;
+  let client: HarnessClient;
+  let mockRequest: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    server = makeMcpServer();
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: {
+        inputSetYaml: "yaml-1",
+        inputSetTemplateYaml: "yaml-2",
+        resolvedYaml: null,
+        inputSetDetails: [{ identifier: "is1", name: "One" }],
+        inputSetBranchName: "main",
+      },
+    });
+    client = makeClient(mockRequest);
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server, registry, client);
+  });
+
+  it("maps resource_id to execution_id and returns the projected response shape", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_inputs",
+      resource_id: "exec-abc123",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toEqual({
+      executionId: "exec-abc123",
+      inputSetYaml: "yaml-1",
+      inputSetTemplateYaml: "yaml-2",
+      resolvedYaml: null,
+      inputSetDetails: [{ identifier: "is1", name: "One" }],
+      inputSetBranchName: "main",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/pipeline/api/pipelines/execution/exec-abc123/inputsetV2",
+      }),
+    );
+  });
+
+  it("passes org/project scope and expression params through the public harness_get contract", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_inputs",
+      resource_id: "exec-abc123",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+      params: {
+        resolve_expressions: true,
+        resolve_expressions_type: "RESOLVE_ALL_EXPRESSIONS",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params?: Record<string, unknown> };
+    expect(call.params).toEqual(
+      expect.objectContaining({
+        orgIdentifier: "AI_Devops",
+        projectIdentifier: "Sanity",
+        resolveExpressions: true,
+        resolveExpressionsType: "RESOLVE_ALL_EXPRESSIONS",
+      }),
+    );
+  });
+
+  it("omits expression resolution params when not provided", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_inputs",
+      resource_id: "exec-abc123",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params?: Record<string, unknown> };
+    expect(call.params).not.toHaveProperty("resolveExpressions");
+    expect(call.params).not.toHaveProperty("resolveExpressionsType");
+  });
+
+  it("fails at registry dispatch when execution_id is missing", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "execution_inputs",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining('Missing required field "execution_id" for execution_inputs'),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("is allowed in read-only mode because the get operation is read-risk", async () => {
+    const roServer = makeMcpServer();
+    const roRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines", HARNESS_READ_ONLY: true }));
+    const roRequest = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: { inputSetYaml: "yaml-1", inputSetDetails: [] },
+    });
+    const roClient = makeClient(roRequest);
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(roServer, roRegistry, roClient);
+
+    const result = await roServer.call("harness_get", {
+      resource_type: "execution_inputs",
+      resource_id: "exec-readonly",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(roRequest).toHaveBeenCalledOnce();
+  });
+});
+
 describe("harness_get — execution_log", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;

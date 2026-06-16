@@ -29,7 +29,7 @@ Validate retrieval of the merged input set YAML that produced a pipeline executi
 | TC-einp-007 | Response | Normalize contributing input set details | Mock upstream `inputSetDetails` with extra fields | Public `inputSetDetails` contains only `{identifier, name}` pairs; missing fields become `null` |
 | TC-einp-008 | Response | Missing optional fields | Mock upstream `data:{}` | Returns `null` for YAML/branch fields and `[]` for `inputSetDetails` |
 | TC-einp-009 | Read-only | Verify read-risk behavior | Run TC-einp-001 with `HARNESS_READ_ONLY=true` | Request is allowed because `operationPolicy.risk="read"` |
-| TC-einp-010 | Error | Missing execution ID | `harness_get(resource_type="execution_inputs")` | Tool input validation fails before dispatch because `resource_id`/execution ID is required |
+| TC-einp-010 | Error | Missing execution ID | `harness_get(resource_type="execution_inputs")` | `harness_get` accepts the call (`resource_id` is optional at the tool schema), then registry dispatch fails with `Missing required field "execution_id" for execution_inputs.` |
 | TC-einp-011 | Error | Unknown execution ID | `harness_get(resource_type="execution_inputs", resource_id="nonexistent_exec")` | Harness not-found error is surfaced |
 | TC-einp-012 | Workflow | Chain from a pipeline run | Run `pipeline.run` or `pipeline_dynamic_execution.run`, then call `harness_get(resource_type="execution_inputs", resource_id="<execution_id>")` | Returned input YAML explains what values produced that execution |
 
