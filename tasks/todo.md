@@ -1,5 +1,23 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-16)
+- [x] Compare current branch with `origin/main` and confirm this is a recent-main scan
+- [x] Review recent elicitation, GitOps scope, dynamic execution, execution input, auth, resources, AI eval, and log-download changes
+- [x] Reproduce a high-severity execution-log schema bug with focused regression coverage
+- [x] Implement minimal `harness_get` schema fix for URL-only log retrieval
+- [ ] Run focused and broad verification
+- [ ] Commit, push, open PR, and report outcome in Slack
+
+### Plan
+- Treat the branch as matching `origin/main`; inspect recent behavioral commits rather than unmerged local changes.
+- Prioritize bugs that can cause crashes/resource exhaustion, unintended writes, auth bypass, wrong-scope mutations, or significant breakage.
+- For the confirmed bug, keep the patch limited to the public `harness_get` input surface and add a tool-handler regression that simulates schema-driven clients dropping undocumented fields.
+
+### Review
+- Confirmed critical bug: `execution_log` documents `return_download_url=true` to avoid downloading log content, but `harness_get` did not expose the flag in its registered input schema. Strict MCP clients can strip the undocumented top-level flag, causing the handler to call `resolveLogContent()` and buffer/decompress logs instead of returning the signed URL. Large logs with missing or unreliable `Content-Length` can exhaust memory before the resolver's post-buffer size check runs.
+- Root cause: the execution-log special case reads `input.return_download_url`, while the public tool schema only allowed generic fields plus `params`.
+- Fix: added `return_download_url` to the `harness_get` input schema and added focused tests that prove schema-driven top-level URL mode reaches `resolveLogDownloadUrl()` and does not call `resolveLogContent()`.
+
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap
