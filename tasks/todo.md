@@ -6,7 +6,7 @@
 - [x] Inspect dependency/security-bump diffs for runtime behavior changes or config regressions
 - [x] Validate any concrete critical trigger with focused tests or local evidence
 - [x] If a critical bug is confirmed, implement a minimal fix, test it, commit, push, and open a PR
-- [ ] Report the outcome in Slack
+- [x] Report the outcome in Slack
 
 ### Plan
 - Treat the current branch as a recent-main inspection because it starts aligned with `origin/main`.
@@ -20,6 +20,8 @@
 - Fix: added `return_download_url` to the public `harness_get` schema and added regressions that simulate schema-driven filtering and assert `resolveLogDownloadUrl()` is used while `resolveLogContent()` is not.
 - Focused red/green evidence: `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "execution_log"` failed before the fix on the missing schema field and content fallback, then passed after the schema fix.
 - Verification passed: `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, `git diff --check`, and full `pnpm test` (78 files / 1992 tests).
+- Opened PR: https://github.com/harness/mcp-server/pull/356
+- Posted Slack outcome to `#proj-mcp-v2`.
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
