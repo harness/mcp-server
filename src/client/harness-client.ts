@@ -1,9 +1,10 @@
-import type { Config } from "../config.js";
+import { type Config, isPlaceholderCredential, resolveFmeApiKey } from "../config.js";
 import type { RequestOptions } from "./types.js";
 import { HarnessApiError } from "../utils/errors.js";
 import { RateLimiter } from "../utils/rate-limiter.js";
 import { createLogger } from "../utils/logger.js";
 import { redactJsonString } from "../utils/redact.js";
+import { isFormDataBody } from "../utils/type-guards.js";
 
 const log = createLogger("harness-client");
 
@@ -21,6 +22,7 @@ function hasExplicitBody(body: unknown): boolean {
 
 function serializeRequestBody(body: unknown): string | undefined {
   if (!hasExplicitBody(body)) return undefined;
+  if (isFormDataBody(body)) return undefined;
   return typeof body === "string" ? body : JSON.stringify(body);
 }
 
@@ -113,6 +115,8 @@ export class HarnessClient {
   private readonly maxRetries: number;
   private readonly rateLimiter: RateLimiter;
   private readonly logUnsafeBodies: boolean;
+  private readonly fmeApiKey: string | undefined;
+  private readonly mcpMode: Config["HARNESS_MCP_MODE"];
   private accountIdResolver?: AccountIdResolver;
   private currentUserId?: string;
   private currentUserPromise?: Promise<string>;
@@ -125,6 +129,8 @@ export class HarnessClient {
     this.maxRetries = config.HARNESS_MAX_RETRIES;
     this.rateLimiter = new RateLimiter(config.HARNESS_RATE_LIMIT_RPS);
     this.logUnsafeBodies = config.HARNESS_LOG_UNSAFE_BODIES;
+    this.fmeApiKey = resolveFmeApiKey(config);
+    this.mcpMode = config.HARNESS_MCP_MODE;
   }
 
   /**
@@ -146,6 +152,49 @@ export class HarnessClient {
 
   get baseURL(): string {
     return this.baseUrl;
+  }
+
+  private applyDefaultAuth(headers: Record<string, string>, isFme: boolean): void {
+    if (isFme) {
+      // FME/Split Admin APIs expect Bearer auth. Drop x-api-key here so
+      // placeholder credentials are never forwarded to api.split.io.
+      const headerApiKey = headers["x-api-key"]?.trim();
+      delete headers["x-api-key"];
+
+      // Preserve caller-provided auth instead of layering fallback credentials on top.
+      if (headers["Authorization"]) return;
+
+      const fmeApiKey = headerApiKey && !isPlaceholderCredential(headerApiKey)
+        ? headerApiKey
+        : this.fmeApiKey;
+
+      if (!fmeApiKey) {
+        const remediation = this.mcpMode === "multi-user"
+          ? "Ensure the session x-harness-api-key is an FME-entitled Harness PAT/SAT. " +
+            "Do not configure HARNESS_FME_API_KEY in multi-user mode."
+          : "Configure an FME/Split Admin credential, " +
+            "or set HARNESS_FME_API_KEY to a legacy Split admin key or FME-entitled Harness PAT/SAT. " +
+            "A non-placeholder HARNESS_API_KEY may also be used when it is FME-entitled.";
+        throw new HarnessApiError(
+          "FME is not configured or authorized for this MCP session. " +
+          `${remediation} ` +
+          "Placeholder credentials such as \"dummy\" are not sent to api.split.io.",
+          401,
+          "FME_AUTH_MISSING",
+        );
+      }
+
+      headers["Authorization"] = `Bearer ${fmeApiKey}`;
+      return;
+    }
+
+    // Preserve caller-provided auth instead of layering fallback credentials on top.
+    if (headers["Authorization"]) return;
+
+    // Non-FME Harness services continue to use the standard API-key header.
+    if (!headers["x-api-key"]) {
+      headers["x-api-key"] = this.token;
+    }
   }
 
   /**
@@ -196,16 +245,16 @@ export class HarnessClient {
       ...options.headers,
     };
 
-    // Only inject x-api-key when the caller hasn't already set auth.
+    // Only inject default auth when the caller hasn't already set auth.
     // When service-routing handles auth (bearer-jwt, remote-mcp), it sets
     // Authorization directly — sending x-api-key alongside would cause
     // downstream services to attempt API-key validation on the dummy token.
-    if (!headers["Authorization"] && !headers["x-api-key"]) {
-      headers["x-api-key"] = this.token;
-    }
+    this.applyDefaultAuth(headers, isFme);
 
     if (hasExplicitBody(options.body)) {
-      if (typeof options.body === "string") {
+      if (isFormDataBody(options.body)) {
+        // Let fetch set multipart boundary — never force application/json
+      } else if (typeof options.body === "string") {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/yaml";
       } else {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/json";
@@ -235,10 +284,14 @@ export class HarnessClient {
           ? AbortSignal.any([options.signal, timeoutController.signal])
           : timeoutController.signal;
 
+        const formBody = isFormDataBody(options.body) ? options.body : undefined;
         const bodyString = serializeRequestBody(options.body);
+        const fetchBody: BodyInit | undefined = formBody ?? bodyString;
 
         log.debug(`${method} ${url}`);
-        if (bodyString !== undefined) {
+        if (formBody) {
+          log.debug("Request body", { body: "[multipart/form-data FormData]" });
+        } else if (bodyString !== undefined) {
           log.debug("Request body", {
             body: this.logUnsafeBodies ? bodyString.slice(0, 1000) : redactJsonString(bodyString),
           });
@@ -247,7 +300,7 @@ export class HarnessClient {
         const response = await fetch(url, {
           method,
           headers,
-          body: bodyString,
+          body: fetchBody,
           signal,
         });
 
@@ -367,12 +420,12 @@ export class HarnessClient {
     };
 
     // Same auth-header guard as request() — see comment there.
-    if (!headers["Authorization"] && !headers["x-api-key"]) {
-      headers["x-api-key"] = this.token;
-    }
+    this.applyDefaultAuth(headers, isFme);
 
     if (hasExplicitBody(options.body)) {
-      if (typeof options.body === "string") {
+      if (isFormDataBody(options.body)) {
+        // boundary set by fetch
+      } else if (typeof options.body === "string") {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/yaml";
       } else {
         headers["Content-Type"] = headers["Content-Type"] ?? "application/json";
@@ -400,11 +453,13 @@ export class HarnessClient {
           ? AbortSignal.any([options.signal, timeoutController.signal])
           : timeoutController.signal;
 
+        const formBody = isFormDataBody(options.body) ? options.body : undefined;
         const bodyString = serializeRequestBody(options.body);
+        const fetchBody: BodyInit | undefined = formBody ?? bodyString;
 
         log.debug(`STREAM ${method} ${url}`);
 
-        const response = await fetch(url, { method, headers, body: bodyString, signal });
+        const response = await fetch(url, { method, headers, body: fetchBody, signal });
 
         clearTimeout(timer);
 
@@ -454,6 +509,12 @@ export class HarnessClient {
   private buildUrl(options: RequestOptions): string {
     const baseUrl = (options.baseUrl ?? this.baseUrl).replace(/\/$/, "");
     let path = options.path;
+    const queryIndex = path.indexOf("?");
+    const pathQuery = queryIndex === -1 ? "" : path.slice(queryIndex + 1);
+    if (queryIndex !== -1) {
+      path = path.slice(0, queryIndex);
+    }
+    const pathParams = new URLSearchParams(pathQuery);
 
     const basePath = new URL(baseUrl).pathname.replace(/\/$/, "");
     if (basePath && basePath !== "/" && path.startsWith(`${basePath}/`)) {
@@ -467,11 +528,19 @@ export class HarnessClient {
     if (!options.headerBasedScoping && options.product !== "fme") {
       const accountId = this.resolveAccountId();
       params.set("accountIdentifier", accountId);
+      params.set("routingId", accountId);
 
       // Log-service gateway expects accountID (capital ID) in query params
       if (path.includes("/log-service/")) {
         params.set("accountID", accountId);
       }
+    }
+
+    for (const key of pathParams.keys()) {
+      params.delete(key);
+    }
+    for (const [key, value] of pathParams) {
+      params.append(key, value);
     }
 
     if (options.params) {

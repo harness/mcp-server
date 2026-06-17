@@ -1,12 +1,17 @@
 import { gunzipSync, inflateRawSync } from "node:zlib";
 import type { HarnessClient } from "../client/harness-client.js";
+import { HarnessApiError } from "./errors.js";
 import { createLogger } from "./logger.js";
 
 const log = createLogger("log-resolver");
 
 const DEFAULT_POLL_ATTEMPTS = 3;
 const DEFAULT_POLL_INTERVAL_MS = 3000;
-const DEFAULT_MAX_LOG_BYTES = 10 * 1024 * 1024; // 10 MB
+// Tightened from 10 MB to 2 MB. Diagnose callers truncate output to a few
+// hundred lines anyway; buffering 10 MB per concurrent log fetch into the V8
+// heap was a contributor to the prod2 mcp-server-internal cgroup OOMs
+// (AIDEVOPS-2200). Callers needing more can still pass maxLogSizeBytes.
+const DEFAULT_MAX_LOG_BYTES = 2 * 1024 * 1024; // 2 MB
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
 
 export interface LogResolveOptions {
@@ -39,6 +44,14 @@ const EXTERNAL_STORAGE_HOSTS = new Set([
 /** S3-style host pattern: bucket.s3.amazonaws.com or bucket.s3.region.amazonaws.com */
 const S3_BUCKET_HOST_RE = /^[a-z0-9][a-z0-9.-]*\.s3([.-][a-z0-9-]+)?\.amazonaws\.com$/i;
 
+function safeParseUrl(raw: string): URL | undefined {
+  try {
+    return new URL(raw);
+  } catch {
+    return undefined;
+  }
+}
+
 function isExternalStorageHost(host: string): boolean {
   const h = host.toLowerCase();
   if (EXTERNAL_STORAGE_HOSTS.has(h)) return true;
@@ -48,28 +61,48 @@ function isExternalStorageHost(host: string): boolean {
 }
 
 /**
- * Resolve the final download URL for a blob link.
- * - External storage (GCS, S3): use as-is — blob is served directly.
- * - Harness-hosted: rewrite host to configured base URL when self-managed.
+ * Detect Harness-internal hosts that are never publicly routable.
+ * Even when these URLs carry pre-signed query params, they must route
+ * through the client so internal deployments can rewrite the host.
  */
-function resolveDownloadUrl(blobLink: string, harnessBaseUrl: string): string {
-  let url: URL;
-  try {
-    url = new URL(blobLink);
-  } catch {
-    return blobLink;
-  }
-  if (isExternalStorageHost(url.host)) {
-    return blobLink;
-  }
-  const base = new URL(harnessBaseUrl.replace(/\/$/, "") + "/");
-  if (url.host === base.host) {
-    return blobLink;
-  }
-  url.host = base.host;
-  url.protocol = base.protocol;
-  return url.toString();
+function isHarnessHost(host: string): boolean {
+  const h = host.toLowerCase();
+  return h === "harness.io" || h.endsWith(".harness.io");
 }
+
+/**
+ * Detect pre-signed URLs that should be fetched directly without auth.
+ * GCS and S3 signed URLs carry their credentials in query params — adding
+ * extra auth headers or rewriting the host invalidates the signature.
+ */
+function isPresignedUrl(url: URL): boolean {
+  if (url.searchParams.has("X-Goog-Signature")) return true;
+  if (url.searchParams.has("X-Amz-Signature")) return true;
+  return false;
+}
+
+/**
+ * True when the URL's signature covers the HTTP `Host` header.
+ * Rewriting the hostname for CDN fetch would invalidate the signature (401).
+ */
+function signedHeadersIncludeHost(url: URL): boolean {
+  const goog = url.searchParams.get("X-Goog-SignedHeaders");
+  if (goog) {
+    return goog
+      .split(";")
+      .map((s) => s.trim().toLowerCase())
+      .includes("host");
+  }
+  const amz = url.searchParams.get("X-Amz-SignedHeaders");
+  if (amz) {
+    return amz
+      .split(";")
+      .map((s) => s.trim().toLowerCase())
+      .includes("host");
+  }
+  return false;
+}
+
 
 // ─── ANSI / log parsing helpers ─────────────────────────────────────────────
 
@@ -312,25 +345,163 @@ function decompressBlob(buf: Buffer): string {
   return buf.toString("utf-8");
 }
 
-// ─── Public API ─────────────────────────────────────────────────────────────
+// ─── Blob download ──────────────────────────────────────────────────────────
+
+const LOG_SERVICE_GATEWAY_PREFIX = "/gateway/log-service";
 
 /**
- * Resolve execution log content from the Harness log-service.
+ * Download the blob content from the link returned by log-service.
  *
- * Full pipeline: initiate blob download → poll until ready → download zip →
- * extract → parse JSON log entries → return clean text.
+ * External storage URLs (GCS, S3) are pre-signed and fetched directly.
+ * Harness-hosted URLs are routed through the client so that auth headers
+ * (PAT, service JWT, or log-service token) are injected by the client or
+ * any proxy installed on it (e.g. mcpServerInternal's service routing).
+ *
+ * ### Routing invariants — please read before modifying
+ *
+ * The three strategies below have specific edge cases that are easy to get
+ * wrong. Here is the reasoning behind each constraint:
+ *
+ * **A. Always rewrite when blob host ≠ base URL host.**
+ * The log-service always returns `app.harness.io/storage/...` in blob links
+ * regardless of `HARNESS_BASE_URL`. On self-managed deployments that host is
+ * not publicly reachable, so the URL must be rewritten to the configured host.
+ * This includes cases where `X-Amz-SignedHeaders` / `X-Goog-SignedHeaders`
+ * contains `host` — a potential 403 from the CDN is preferable to a guaranteed
+ * network error on a blocked host.
+ *
+ * **B. Skip rewrite only when blob host already equals base URL host.**
+ * When the hostnames already match, the presigned signature is valid as-is and
+ * rewriting would be a no-op. In that case it is safe (and cleaner) to fetch
+ * the original URL directly.
+ *
+ * **C. Never route `/storage/` blobs through `requestStream()`.**
+ * Strategy 3 prepends `/gateway/log-service/` to the path, which produces a
+ * 404 for CDN storage paths. Blobs with a `/storage/` path must always be
+ * direct-fetched (Strategy 2).
+ *
+ * **D. External S3/GCS hosts bypass all rewriting.**
+ * True external storage URLs (amazonaws.com, googleapis.com, …) are publicly
+ * routable with embedded signature params. Adding auth headers or rewriting the
+ * host invalidates the AWS/GCS signature.
+ *
+ * Each invariant is covered by `REGRESSION-GUARD [A/B/C/D]` tests in
+ * `tests/utils/log-resolver.test.ts`. Please keep all of them green.
  */
-export async function resolveLogContent(
+async function downloadBlobContent(
+  client: HarnessClient,
+  blobLink: string,
+  prefix: string,
+  signal: AbortSignal,
+): Promise<Response> {
+  const blobUrl = safeParseUrl(blobLink);
+
+  // Three routing strategies based on the blob URL:
+  //
+  // 1. True external storage (S3, GCS domains) → direct fetch, no auth headers.
+  //    The URL is publicly routable with embedded signature params; routing through
+  //    the client or adding extra headers would invalidate the AWS/GCS signature.
+  //
+  // 2. *.harness.io pre-signed CDN blob URLs → usually rewrite hostname to match
+  //    HARNESS_BASE_URL host, then direct fetch.
+  //    The Harness log-service always returns blob links pointing to app.harness.io/storage/...
+  //    regardless of the configured base URL. On self-managed deployments app.harness.io is
+  //    not directly reachable, but the CDN is accessible via the configured host
+  //    (e.g. self-managed.example.com/storage/...). The pre-signed params authenticate the request
+  //    so no API key header is needed — and adding one would not help anyway since this is
+  //    a CDN path, not an API gateway path (/gateway/... would 403 for /storage/... paths).
+  //    Exception: if SignedHeaders includes `host`, the signature is bound to the link's
+  //    hostname — do not rewrite; fetch the original URL (e.g. QA SaaS with qa.harness.io base).
+  //
+  // 3. Standard log-service paths → client.requestStream() with gateway prefix so
+  //    PAT/JWT auth headers are injected by the client proxy.
+
+  if (blobUrl && isExternalStorageHost(blobUrl.hostname)) {
+    // Strategy 1: true external storage — always direct fetch
+    log.debug("Downloading log blob (direct, external storage)", { prefix, url: blobLink.slice(0, 80) });
+    try {
+      return await fetch(blobLink, { signal });
+    } catch (err) {
+      const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
+    }
+  }
+
+  if (blobUrl && isPresignedUrl(blobUrl) && isHarnessHost(blobUrl.hostname) && blobUrl.pathname.startsWith("/storage/")) {
+    // Strategy 2: *.harness.io CDN blob — rewrite hostname and direct fetch.
+    // Guarded by /storage/ prefix to avoid misrouting signed API paths (e.g. /gateway/log-service/...)
+    // that happen to carry pre-signed params — those must go through client.requestStream() for auth.
+    // The blob link always points to app.harness.io/storage/... regardless of HARNESS_BASE_URL.
+    // Rewrite to the configured host so self-managed deployments can reach it.
+    const baseUrl = safeParseUrl(client.baseURL);
+    if (!baseUrl) {
+      // If baseURL is unparseable we cannot safely rewrite — throw rather than
+      // direct-fetching the original app.harness.io URL (which is blocked on self-managed nets).
+      throw new Error(`Cannot rewrite Harness CDN blob URL: HARNESS_BASE_URL "${client.baseURL}" is not a valid URL`);
+    }
+    // Skip rewriting only when the signature covers the Host header AND the blob hostname
+    // already matches our base URL (rewrite would be a no-op). When hostnames differ
+    // (self-managed deployment), rewrite regardless — the original hostname (app.harness.io)
+    // may not be reachable from the client's network.
+    // Invariant A: rewrite when hosts differ. Invariant B: skip only when they already match (rewrite is a no-op).
+    if (signedHeadersIncludeHost(blobUrl) && blobUrl.hostname === baseUrl.hostname) {
+      log.debug("Downloading log blob (direct, host-bound presigned CDN)", {
+        prefix,
+        url: blobLink.slice(0, 80),
+      });
+      try {
+        return await fetch(blobLink, { signal });
+      } catch (err) {
+        const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+        throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
+      }
+    }
+    blobUrl.hostname = baseUrl.hostname;
+    blobUrl.protocol = baseUrl.protocol;
+    // Preserve non-default port from baseURL (e.g. https://gateway.example.com:8443/...)
+    blobUrl.port = baseUrl.port;
+    const rewrittenUrl = blobUrl.toString();
+    log.debug("Downloading log blob (direct, host-rewritten)", { prefix, url: rewrittenUrl.slice(0, 80) });
+    try {
+      return await fetch(rewrittenUrl, { signal });
+    } catch (err) {
+      const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+      throw new Error(`Log download fetch failed for ${blobUrl.hostname}: ${cause}`);
+    }
+  }
+
+  // Strategy 3: standard log-service path — route through client for auth injection.
+  const rawPath = blobUrl
+    ? blobUrl.pathname + blobUrl.search
+    : blobLink.startsWith("/") ? blobLink : `/${blobLink}`;
+  const downloadPath = rawPath.startsWith(LOG_SERVICE_GATEWAY_PREFIX)
+    ? rawPath
+    : `${LOG_SERVICE_GATEWAY_PREFIX}${rawPath}`;
+  log.debug("Downloading log blob (client)", { prefix, path: downloadPath.slice(0, 80) });
+  try {
+    return await client.requestStream({
+      method: "GET",
+      path: downloadPath,
+      signal,
+    });
+  } catch (err) {
+    if (err instanceof HarnessApiError) throw err;
+    const cause = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
+    throw new Error(`Log download fetch failed for ${blobUrl?.hostname ?? "harness"}: ${cause}`);
+  }
+}
+
+// ─── Public API ─────────────────────────────────────────────────────────────
+
+async function requestLogBlobLink(
   client: HarnessClient,
   prefix: string,
   options?: LogResolveOptions,
 ): Promise<string> {
   const maxAttempts = options?.maxPollAttempts ?? DEFAULT_POLL_ATTEMPTS;
   const pollInterval = options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-  const maxBytes = options?.maxLogSizeBytes ?? DEFAULT_MAX_LOG_BYTES;
   const signal = options?.signal;
 
-  // Step 1 & 2: Initiate and poll until status is "success"
   let blob: BlobResponse | undefined;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (signal?.aborted) throw new Error("Log download cancelled");
@@ -344,7 +515,7 @@ export async function resolveLogContent(
     });
 
     if (blob?.status === "success" && blob.link) {
-      break;
+      return blob.link;
     }
 
     if (attempt < maxAttempts - 1) {
@@ -353,30 +524,65 @@ export async function resolveLogContent(
     }
   }
 
-  if (!blob?.link) {
-    throw new Error(
-      `Log blob not ready after ${maxAttempts} attempts (status: ${blob?.status ?? "unknown"}). Logs may still be processing or have expired.`,
-    );
+  throw new Error(
+    `Log blob not ready after ${maxAttempts} attempts (status: ${blob?.status ?? "unknown"}). Logs may still be processing or have expired.`,
+  );
+}
+
+function rewriteDownloadUrlIfNeeded(client: HarnessClient, blobLink: string): string {
+  const blobUrl = safeParseUrl(blobLink);
+  if (!blobUrl || isExternalStorageHost(blobUrl.hostname)) {
+    return blobLink;
   }
 
+  if (isPresignedUrl(blobUrl) && isHarnessHost(blobUrl.hostname) && blobUrl.pathname.startsWith("/storage/")) {
+    const baseUrl = safeParseUrl(client.baseURL);
+    if (!baseUrl) {
+      throw new Error(`Cannot rewrite Harness CDN blob URL: HARNESS_BASE_URL "${client.baseURL}" is not a valid URL`);
+    }
+    if (signedHeadersIncludeHost(blobUrl) && blobUrl.hostname === baseUrl.hostname) {
+      return blobLink;
+    }
+    blobUrl.hostname = baseUrl.hostname;
+    blobUrl.protocol = baseUrl.protocol;
+    blobUrl.port = baseUrl.port;
+    return blobUrl.toString();
+  }
+
+  return blobLink;
+}
+
+export async function resolveLogDownloadUrl(
+  client: HarnessClient,
+  prefix: string,
+  options?: LogResolveOptions,
+): Promise<string> {
+  const blobLink = await requestLogBlobLink(client, prefix, options);
+  return rewriteDownloadUrlIfNeeded(client, blobLink);
+}
+
+/**
+ * Resolve execution log content from the Harness log-service.
+ *
+ * Full pipeline: initiate blob download → poll until ready → download zip →
+ * extract → parse JSON log entries → return clean text.
+ */
+export async function resolveLogContent(
+  client: HarnessClient,
+  prefix: string,
+  options?: LogResolveOptions,
+): Promise<string> {
+  const maxBytes = options?.maxLogSizeBytes ?? DEFAULT_MAX_LOG_BYTES;
+  const signal = options?.signal;
+
+  const blobLink = await requestLogBlobLink(client, prefix, options);
+
   // Step 3: Download the zip/gzip from the signed URL
-  // External storage (GCS, S3): use as-is. Harness-hosted: rewrite host when self-managed.
-  const downloadUrl = resolveDownloadUrl(blob.link, client.baseURL);
-  log.debug("Downloading log blob", { prefix, url: downloadUrl.slice(0, 80) });
   const downloadSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS)])
     : AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS);
 
-  let response: Response;
-  try {
-    response = await fetch(downloadUrl, { signal: downloadSignal });
-  } catch (err) {
-    const cause =
-      err instanceof Error
-        ? `${err.name}: ${err.message}`
-        : String(err);
-    throw new Error(`Log download fetch failed for ${new URL(downloadUrl).host}: ${cause}`);
-  }
+  const response = await downloadBlobContent(client, blobLink, prefix, downloadSignal);
   if (!response.ok) {
     const errBody = await response.text().catch(() => "");
     throw new Error(`Log download failed: HTTP ${response.status} — ${errBody.slice(0, 200)}`);

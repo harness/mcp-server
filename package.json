@@ -1,6 +1,6 @@
 {
   "name": "harness-mcp-v2",
-  "version": "0.9.6",
+  "version": "3.1.9",
   "description": "Give AI agents full access to the Harness.io platform — manage pipelines, deployments, cloud costs, chaos engineering, feature flags, SEI, and 125+ resource types through 11 MCP tools",
   "type": "module",
   "main": "build/index.js",
@@ -19,6 +19,7 @@
     "prepare:mcpb": "node scripts/prepare-mcpb.js",
     "typecheck": "tsc --noEmit",
     "sync-schemas": "node scripts/sync-schemas.js",
+    "sync-entity-schemas": "node scripts/sync-entity-schemas.js",
     "check-schema-coverage": "node scripts/check-schema-coverage.js",
     "docs:generate": "node scripts/generate-docs.js",
     "docs:check": "node scripts/generate-docs.js --check",
@@ -52,7 +53,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
-    "hono": "^4.12.15",
+    "hono": "^4.12.25",
     "jsonwebtoken": "^9.0.3",
     "yaml": "^2.8.3",
     "zod": "^4.0.0"
@@ -86,17 +87,23 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.5",
     "typescript": "^5.7.3",
-    "vitest": "^3.0.6"
+    "vite": "^7.3.5",
+    "vitest": "^4.1.0"
   },
   "pnpm": {
     "overrides": {
       "picomatch": ">=4.0.4",
-      "hono": ">=4.12.12",
+      "hono": ">=4.12.25",
       "path-to-regexp": ">=8.4.0",
       "@hono/node-server": ">=1.19.10",
       "express-rate-limit": ">=8.2.2",
-      "vite": "^7.3.2",
-      "postcss": ">=8.5.10"
+      "ip-address": ">=10.1.1",
+      "vite": "^7.3.5",
+      "esbuild": ">=0.28.1",
+      "postcss": ">=8.5.10",
+      "fast-uri": ">=3.1.2",
+      "protobufjs": ">=8.0.2",
+      "qs": ">=6.15.2"
     }
   },
   "packageManager": "pnpm@10.18.2",

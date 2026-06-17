@@ -1,8 +1,8 @@
 {
   "manifest_version": "0.3",
   "name": "harness-mcp-server",
-  "display_name": "Harness MCP Server",
-  "version": "0.9.6",
+  "display_name": "Harness",
+  "version": "3.1.9",
   "description": "Connect AI agents to Harness for CI/CD, code repositories, pull requests, services, environments, and feature flags.",
   "long_description": "The Harness MCP Server gives MCP-compatible clients access to Harness platform workflows through consolidated tools, resources, and prompts. It supports local stdio usage and can be bundled as a Node-based MCPB extension.",
   "author": {
@@ -42,6 +42,8 @@
       ],
       "env": {
         "HARNESS_API_KEY": "${user_config.HARNESS_API_KEY}",
+        "HARNESS_FME_API_KEY": "${user_config.HARNESS_FME_API_KEY}",
+        "HARNESS_FME_BASE_URL": "${user_config.HARNESS_FME_BASE_URL}",
         "HARNESS_ACCOUNT_ID": "${user_config.HARNESS_ACCOUNT_ID}",
         "HARNESS_ORG": "${user_config.HARNESS_ORG}",
         "HARNESS_PROJECT": "${user_config.HARNESS_PROJECT}",
@@ -67,17 +69,32 @@
       "required": true,
       "sensitive": true
     },
+    "HARNESS_FME_API_KEY": {
+      "type": "string",
+      "title": "FME/Split Admin Credential",
+      "description": "Optional single-user/self-hosted FME/Split Admin credential for fme_ resources. This can be a legacy Split admin key or an FME-entitled Harness PAT/SAT. Do not set this for multi-user deployments.",
+      "required": false,
+      "sensitive": true
+    },
+    "HARNESS_FME_BASE_URL": {
+      "type": "string",
+      "title": "FME/Split Base URL",
+      "description": "Optional Split/FME Admin API base URL used by fme_ resources. Defaults to https://api.split.io.",
+      "default": "https://api.split.io",
+      "required": false,
+      "sensitive": false
+    },
     "HARNESS_ACCOUNT_ID": {
       "type": "string",
       "title": "Harness Account ID",
-      "description": "Harness account identifier. Optional when using a PAT because the server can extract the account ID from pat.<accountId>.<tokenId>.<secret>.",
+      "description": "Harness account identifier. Optional when using a PAT or SAT because the server can extract the account ID from pat.<accountId>.<tokenId>.<secret> or sat.<accountId>.<tokenId>.<secret>.",
       "required": false,
       "sensitive": false
     },
     "HARNESS_ORG": {
       "type": "string",
       "title": "Default Harness Organization",
-      "description": "Default Harness organization identifier. If omitted, the server uses default.",
+      "description": "Default Harness organization identifier. If omitted, org_id must be provided per tool call.",
       "required": false,
       "sensitive": false
     },
@@ -91,7 +108,7 @@
     "HARNESS_BASE_URL": {
       "type": "string",
       "title": "Harness Base URL",
-      "description": "Harness base URL. Use the default for Harness SaaS unless you run a self-managed Harness installation.",
+      "description": "Harness API/UI base URL for this local MCP server. Use the default for public Harness SaaS, or set an environment such as https://harness0.harness.io when running the server yourself.",
       "default": "https://app.harness.io",
       "required": false,
       "sensitive": false

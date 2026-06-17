@@ -6,9 +6,14 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint, HarnessApiError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, coerceRecord } from "../utils/type-guards.js";
-import { resolveLogContent } from "../utils/log-resolver.js";
+import { resolveLogContent, resolveLogDownloadUrl } from "../utils/log-resolver.js";
 import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
 import { resourceTypeSchema } from "./input-schemas.js";
+import { getOutputSchema } from "./output-schemas.js";
+
+function isTrue(value: unknown): boolean {
+  return value === true || value === "true";
+}
 
 export function registerGetTool(server: McpServer, registry: Registry, client: HarnessClient): void {
   const gettableTypes = registry.getTypesForOperation("get");
@@ -21,20 +26,23 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         resource_type: resourceTypeSchema(gettableTypes).optional().describe("Resource type to retrieve. Auto-detected from url."),
         resource_id: z.string().describe("Primary resource identifier. Auto-detected from url.").optional(),
         url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
+        resource_scope: z.enum(["account", "org", "project"]).optional().describe("Scope to query. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url."),
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type.").optional(),
       },
+      outputSchema: getOutputSchema,
       annotations: {
         title: "Get Harness Resource",
         readOnlyHint: true,
+        destructiveHint: false,
         openWorldHint: true,
       },
     },
     async (args) => {
       try {
         const { params, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url);
+        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
         const resourceType = asString(input.resource_type);
@@ -69,7 +77,13 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
           input[primaryField] = resourceId;
         }
 
-        // execution_log: resolve full log content instead of returning a download URL
+        // When fetching a global template, override accountIdentifier to the global account.
+        if (resourceType === "template" && (input.global === true || input.global === "true")) {
+          input.account_id = "__GLOBAL_TEMPLATES_ACCOUNT_ID__";
+          delete input.global;
+        }
+
+        // execution_log: preserve legacy content by default; opt into URL-only mode with return_download_url=true.
         if (resourceType === "execution_log") {
           try {
             let prefix = asString(input.prefix);
@@ -81,11 +95,15 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
               }
               prefix = await buildLogPrefixFromExecution(client, registry, executionId, input);
             }
+            if (isTrue(input.return_download_url)) {
+              const downloadUrl = await resolveLogDownloadUrl(client, prefix);
+              return jsonResult({ download_url: downloadUrl });
+            }
             const logText = await resolveLogContent(client, prefix);
             return jsonResult({ log_content: logText });
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
-            return errorResult(`Failed to fetch execution logs: ${msg}. Try harness_diagnose with include_logs=true for better failure analysis.`);
+            return errorResult(`Failed to resolve execution logs: ${msg}. Try harness_diagnose with include_logs=true for better failure analysis.`);
           }
         }
 

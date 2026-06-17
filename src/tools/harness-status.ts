@@ -11,6 +11,7 @@ import { createLogger } from "../utils/logger.js";
 import { sendProgress } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString } from "../utils/type-guards.js";
+import { statusOutputSchema } from "./output-schemas.js";
 
 const log = createLogger("status");
 
@@ -80,9 +81,11 @@ export function registerStatusTool(
         limit: z.number().describe("Max items per section (default 5, max 20)").default(5).optional(),
         include_visual: z.boolean().describe("Include visual health dashboard image (default false)").default(false).optional(),
       },
+      outputSchema: statusOutputSchema,
       annotations: {
         title: "Project Health Status",
         readOnlyHint: true,
+        destructiveHint: false,
         openWorldHint: true,
       },
     },
@@ -91,8 +94,15 @@ export function registerStatusTool(
         const signal = extra.signal;
         const merged = applyUrlDefaults(args as Record<string, unknown>, args.url);
         const orgId = asString(merged.org_id) ?? config.HARNESS_ORG;
-        const projectId = asString(merged.project_id) ?? config.HARNESS_PROJECT ?? "";
+        const projectId = asString(merged.project_id) ?? config.HARNESS_PROJECT;
         const limit = Math.min(args.limit ?? 5, 20);
+
+        if (!orgId) {
+          return errorResult("org_id is required. Pass org_id or set HARNESS_ORG.");
+        }
+        if (!projectId) {
+          return errorResult("project_id is required. Pass project_id or set HARNESS_PROJECT.");
+        }
 
         const baseInput: Record<string, unknown> = {
           org_id: orgId,

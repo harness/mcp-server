@@ -132,11 +132,14 @@ export type ToolsetName =
   | "access_control"
   | "settings"
   | "platform"
+  | "file_store"
 
   | "visualizations"
   | "governance"
   | "freeze"
   | "overrides"
+  | "iacm"
+  | "ansible"
   | "ai-evals"
   | "incidents"
   | "deploys";
@@ -144,6 +147,7 @@ export type ToolsetName =
 export type ProductName = "harness" | "fme";
 
 export type OperationName = "list" | "get" | "create" | "update" | "delete";
+export type ResourceScope = "project" | "org" | "account";
 
 /**
  * Lightweight field descriptor for body schemas.
@@ -173,6 +177,22 @@ export interface BodySchema {
   description: string;
   /** The fields the body expects */
   fields: BodyFieldSpec[];
+}
+
+/**
+ * Schema for path/query params passed via the `params` argument.
+ * Surfaced by harness_describe so agents know what identifiers to pass and under what names.
+ */
+export interface ParamsSchema {
+  /** The params this operation requires or accepts */
+  fields: Array<{
+    /** Field name as used in the `params` argument (e.g. "repo_id", "pr_number") */
+    name: string;
+    /** Whether this param is required for the operation to succeed */
+    required: boolean;
+    /** Brief description shown to agents */
+    description: string;
+  }>;
 }
 
 /**
@@ -215,6 +235,8 @@ export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_ORG?: str
  */
 export interface EndpointSpec {
   method: HttpMethod;
+  /** Optional dynamic method override. When set, takes precedence over `method`. */
+  methodBuilder?: (input: Record<string, unknown>) => HttpMethod;
   /** Path template, e.g. "/pipeline/api/pipelines/{pipelineIdentifier}". Ignored when pathBuilder is set. */
   path: string;
   /** Optional dynamic path builder. When set, used instead of path + pathParams for account-scoped or multi-endpoint resources. */
@@ -240,7 +262,7 @@ export interface EndpointSpec {
   /** Static headers to merge into the request (e.g. Content-Type override) */
   headers?: Record<string, string>;
   /** For GET: extract the useful part from the raw response */
-  responseExtractor?: (raw: unknown) => unknown;
+  responseExtractor?: (raw: unknown, input?: Record<string, unknown>) => unknown;
   /** Request binary (ArrayBuffer) response instead of JSON. Used for ZIP download endpoints. */
   responseType?: "json" | "buffer";
   /** Description shown in harness_describe output */
@@ -248,11 +270,22 @@ export interface EndpointSpec {
   /** Optional body schema for write operations — exposed via harness_describe */
   bodySchema?: BodySchema;
   /**
+   * Optional schema for params (path/query identifiers) — exposed via harness_describe.
+   * Use this to document required path identifiers (e.g. repo_id, pr_number) so agents
+   * know the exact field names to pass via the `params` argument.
+   */
+  paramsSchema?: ParamsSchema;
+  /**
    * When the bodyBuilder wraps user fields inside a single key
    * (e.g. `{ project: { identifier, name } }`), set this to the wrapper key
    * so required-field validation checks the inner object, not the wrapper.
    */
   bodyWrapperKey?: string;
+  /**
+   * When true, do not inject orgIdentifier/projectIdentifier into POST/PUT
+   * bodies. Some APIs take scope only in query/path and reject extra body fields.
+   */
+  skipScopeBodyInjection?: boolean;
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**
@@ -298,6 +331,13 @@ export interface EndpointSpec {
    * Only applicable to ssca-manager endpoints that accept the `enforce_elasticsearch` query param.
    */
   elkFallback?: boolean;
+  /**
+   * When true, harness_list will NOT run the global compactItems whitelist pass
+   * on this response's `items`. Use this when `responseExtractor` already
+   * produces a minimal, hand-picked projection and further compaction would
+   * strip intentional display fields (e.g. `severity`, `requested_by`).
+   */
+  skipCompact?: boolean;
 }
 
 /**
@@ -312,8 +352,13 @@ export interface ResourceDefinition {
   description: string;
   /** Which toolset this resource belongs to (for HARNESS_TOOLSETS filtering) */
   toolset: string;
-  /** Scope level: "project" | "org" | "account" */
-  scope: "project" | "org" | "account";
+  /** Default scope level: "project" | "org" | "account" */
+  scope: ResourceScope;
+  /**
+   * Scopes this resource can query when the caller passes `resource_scope`.
+   * If omitted, the resource supports only its default `scope`.
+   */
+  supportedScopes?: readonly ResourceScope[];
   /**
    * When true, org/project params are only added if explicitly provided in input.
    * Use for resources that support multiple scopes (e.g., Harness Code repos/PRs

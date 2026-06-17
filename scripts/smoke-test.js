@@ -59,10 +59,11 @@ async function main() {
     const { HARNESS_TOOLSETS: _ignoreToolsets, ...registryConfigWithoutToolsets } = config;
     const baseRegistry = new Registry(registryConfigWithoutToolsets);
     const baseTypes = baseRegistry.getAllResourceTypes();
+    const isAdditive = process.env.HARNESS_TOOLSETS.startsWith("+");
     const filtered = resourceTypes.length !== baseTypes.length;
     checks.push(check(
       `HARNESS_TOOLSETS filtering: ${resourceTypes.length} types (base ${baseTypes.length})`,
-      filtered,
+      filtered || isAdditive,
       `filtering had no effect (${resourceTypes.length} = ${baseTypes.length})`,
     ));
   }
@@ -82,13 +83,31 @@ async function main() {
       }
       checks.push(check("read-only: create dispatch blocked", blocked, "dispatch did not throw"));
 
-      let execBlocked = false;
-      try {
-        await registry.dispatchExecute(null, sampleType, "run", {});
-      } catch (err) {
-        if (String(err).includes("Read-only mode")) execBlocked = true;
+      if (resourceTypes.includes("pipeline")) {
+        let execBlocked = false;
+        try {
+          await registry.dispatchExecute(null, "pipeline", "run", { pipeline_id: "smoke-pipeline" });
+        } catch (err) {
+          if (String(err).includes("Read-only mode")) execBlocked = true;
+        }
+        checks.push(check("read-only: write-risk execute dispatch blocked", execBlocked, "dispatch did not throw"));
       }
-      checks.push(check("read-only: execute dispatch blocked", execBlocked, "dispatch did not throw"));
+
+      if (resourceTypes.includes("file_store")) {
+        let readExecAllowed = false;
+        try {
+          await registry.dispatchExecute(
+            { request: async () => ({ data: { nodes: [] } }), account: "smoke-test" },
+            "file_store",
+            "list_children",
+            { file_store_id: "folder123", folder_name: "scripts" },
+          );
+          readExecAllowed = true;
+        } catch {
+          readExecAllowed = false;
+        }
+        checks.push(check("read-only: read-risk execute dispatch allowed", readExecAllowed, "dispatch threw"));
+      }
     }
   }
 

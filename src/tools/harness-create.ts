@@ -2,14 +2,17 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
+import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
-import { confirmViaElicitation } from "../utils/elicitation.js";
+import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
-import { resourceTypeSchema } from "./input-schemas.js";
+import { formatBodyPreview } from "../utils/body-preview.js";
+import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
+import { createOutputSchema } from "./output-schemas.js";
 
-export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient): void {
+export function registerCreateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
   const creatableTypes = registry.getTypesForOperation("create");
 
   server.registerTool(
@@ -22,11 +25,14 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           z.record(z.string(), z.unknown()),
           z.string(),
         ]).describe("The resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object). For other resources: pass a JSON object"),
-        url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
-        org_id: z.string().describe("Organization identifier (overrides default)").optional(),
-        project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        params: z.record(z.string(), z.unknown()).describe("Additional parameters. For external Git pipelines: store_type='REMOTE', connector_ref, repo_name, branch, file_path, commit_msg. For Harness Code pipelines: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path.").optional(),
+        url: z.string().optional().describe("A Harness UI URL — org, project, and supported resource_scope are extracted automatically"),
+        resource_scope: resourceScopeSchema,
+        org_id: z.string().optional().describe("Organization identifier (overrides default)"),
+        project_id: z.string().optional().describe("Project identifier (overrides default)"),
+        confirm: z.boolean().optional().describe("Set to true to confirm the operation. Only required when the operation risk is medium_write or above (most write resources) AND the client cannot surface a confirmation prompt — e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Has no effect for low-risk creates. Does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
+        params: z.record(z.string(), z.unknown()).optional().describe("Additional parameters. For external Git pipelines: store_type='REMOTE', connector_ref, repo_name, branch, file_path, commit_msg. For Harness Code pipelines: store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path."),
       },
+      outputSchema: createOutputSchema,
       annotations: {
         title: "Create Harness Resource",
         readOnlyHint: false,
@@ -37,9 +43,9 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
     },
     async (args) => {
       try {
-        const { params, body, ...rest } = args;
+        const { params, body, confirm: _confirm, ...rest } = args;
         const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
-        const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url);
+        const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
         if (coercedParams) Object.assign(input, coercedParams);
 
@@ -50,17 +56,41 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
         }
 
         const risk = def.operations.create!.operationPolicy.risk;
-        const bodyPreview = typeof args.body === "string"
-          ? (args.body.length > 500 ? args.body.slice(0, 500) + "\n...(truncated)" : args.body)
-          : JSON.stringify(args.body, null, 2);
+        // Fail fast on HARNESS_READ_ONLY before elicitation. The registry
+        // re-checks at dispatch time and is the source of truth, but we
+        // mirror the gate here so users aren't asked to approve a write
+        // that can never run, AND so the rejection is captured as a
+        // pre-dispatch "blocked" audit row. `create` is never in
+        // READ_OPERATIONS, so any read-only deployment blocks.
+        if (config?.HARNESS_READ_ONLY) {
+          const reason = `Read-only mode is enabled (HARNESS_READ_ONLY=true). "create" operations are not allowed.`;
+          registry.auditBlockedAttempt(
+            args.resource_type,
+            "create",
+            input,
+            { tool: "harness_create", confirmation: "blocked" },
+            reason,
+          );
+          return errorResult(reason);
+        }
+        const bodyPreview = formatBodyPreview(args.body);
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_create",
           message: `Create ${args.resource_type}?\n\n${bodyPreview}`,
           risk,
+          autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
+          callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
-          return errorResult(`Operation ${elicit.reason} by user.`);
+          registry.auditBlockedAttempt(
+            args.resource_type,
+            "create",
+            input,
+            { tool: "harness_create", confirmation: elicit.method },
+            describeBlockedAudit(elicit),
+          );
+          return errorResult(describeElicitationFailure(elicit));
         }
 
         const result = await registry.dispatch(client, args.resource_type, "create", input, { tool: "harness_create", confirmation: elicit.method });

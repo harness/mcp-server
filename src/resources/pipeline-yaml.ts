@@ -4,6 +4,7 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { createLogger } from "../utils/logger.js";
+import { hasRequiredDiscoveryScope } from "./scope-check.js";
 
 const log = createLogger("resource:pipeline-yaml");
 
@@ -12,6 +13,15 @@ export function registerPipelineYamlResource(server: McpServer, registry: Regist
 
   const template = new ResourceTemplate("pipeline:///{pipelineId}", {
     list: async () => {
+      const pipelineDef = registry.getResource(pipelineResourceType);
+      if (!pipelineDef.scopeOptional && !hasRequiredDiscoveryScope(pipelineDef.scope, config)) {
+        log.debug("Skipping pipeline resource discovery: missing required scope", {
+          resourceType: pipelineResourceType,
+          scope: pipelineDef.scope,
+        });
+        return { resources: [] };
+      }
+
       try {
         const result = await registry.dispatch(client, pipelineResourceType, "list", {
           org_id: config.HARNESS_ORG,

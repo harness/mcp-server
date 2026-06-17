@@ -1,246 +1,201 @@
 # Harness MCP Server — Task Tracking
 
-## Phase 1: Foundation ✅
-- [x] Project scaffolding (package.json, tsconfig, pnpm)
-- [x] Config validation with Zod
-- [x] HarnessClient with auth, retry, error handling
-- [x] Logger (stderr only)
-- [x] Rate limiter
-- [x] Error utilities
-- [x] Deep-link builder
-- [x] Response formatter
-
-## Phase 2: Registry + Core Toolsets ✅
-- [x] Registry types (ResourceDefinition, EndpointSpec, ToolsetDefinition)
-- [x] Pipelines toolset (pipeline, execution, trigger, input_set)
-- [x] Services toolset
-- [x] Environments toolset
-- [x] Connectors toolset
-- [x] Infrastructure toolset
-- [x] Secrets toolset (read-only)
-- [x] Logs toolset
-- [x] Audit toolset
-- [x] Master registry with dispatch() + dispatchExecute()
-
-## Phase 3: Tools + Entrypoint ✅
-- [x] harness_list
-- [x] harness_get
-- [x] harness_create (with confirmation gate)
-- [x] harness_update (with confirmation gate)
-- [x] harness_delete (with confirmation gate)
-- [x] harness_execute
-- [x] harness_diagnose
-- [x] harness_search
-- [x] harness_describe
-- [x] tools/index.ts — registerAllTools()
-- [x] src/index.ts — server entrypoint
-
-## Phase 4: Remaining Toolsets + Resources + Prompts ✅
-- [x] Delegates toolset
-- [x] Repositories toolset
-- [x] Registries toolset
-- [x] Templates toolset
-- [x] Dashboards toolset
-- [x] IDP toolset
-- [x] Pull Requests toolset
-- [x] Feature Flags toolset
-- [x] GitOps toolset
-- [x] Chaos toolset
-- [x] CCM toolset
-- [x] SEI toolset
-- [x] SCS toolset
-- [x] STO toolset
-- [x] Pipeline YAML resource
-- [x] Execution summary resource
-- [x] Debug pipeline prompt
-- [x] Create pipeline prompt
-
-## Phase 5: Verification ✅
-- [x] TypeScript build succeeds (0 errors)
-- [ ] MCP Inspector verification
-- [ ] Real Harness API integration test
-- [ ] README.md
-
-## Documentation Alignment Automation (2026-03-16) ✅
-- [x] Audit docs against current tool registration and registry counts
-- [x] Update README public interface claims to match tool schemas
-- [x] Add pipeline runtime-input execution workflow + troubleshooting notes
-- [x] Align supporting docs (`CONTRIBUTING.md`, `docs/gemini.md`)
-
-### Review
-- Corrected stale inventory references (11 tools / 26 toolsets / 124 resource types).
-- Documented `harness_diagnose` multi-resource support and `harness_ask` conditional availability.
-- Added concrete pipeline run workflow for `runtime_input_template` + `input_set_ids`.
-
-## Documentation Alignment Automation (2026-03-23)
-- [x] Audit live tool/toolset/resource counts from source
-- [x] Update stale public docs (`README.md`, `docs/gemini.md`, `CONTRIBUTING.md`)
-- [x] Add/refresh pipeline run guidance for runtime-input shorthand expansions
-- [x] Run docs consistency verification
-- [x] Commit, push, and open docs-only PR
-
-### Review
-- Aligned public inventory claims with current source of truth: 10 tools, 29 toolsets, 137 resource types.
-- Added concrete pipeline runtime-input shorthand mapping (`branch`, `tag`, `pr_number`, `commit_sha`) and documented the `inputs.build` precedence constraint.
-- Added troubleshooting guidance for shorthand non-application and linked shorthand discovery to `harness_describe(resource_type="pipeline")`.
-
-## Hosted MCP README Update (2026-04-23)
-- [x] Review current README setup and client configuration sections
-- [x] Document Harness-hosted MCP support and managed endpoint example
-- [x] Add Platform OAuth + Harness Support enablement note
-- [x] Review docs-only diff
-
-### Review
-- Added a Quick Start note so readers discover the hosted MCP option before local installation paths.
-- Added hosted MCP client config examples using the managed `https://mcp.harness.io/mcp` endpoint and `CLIENT_ID` auth stanza.
-- Explicitly documented that hosted MCP requires Harness Platform OAuth and per-account enablement/configuration by Harness Support.
-
-## License Change to MIT (2026-04-23)
-- [x] Audit repository references to Apache 2.0
-- [x] Update root license file and package metadata to MIT
-- [x] Align contributor and README license text
-- [x] Verify no stale Apache 2.0 references remain for project licensing
-- [x] Commit, push, and open docs/legal change PR
-
-### Review
-- Replaced the repository's Apache 2.0 license text with the MIT license and updated the package SPDX identifier.
-- Aligned README and CONTRIBUTING so public licensing guidance matches the new MIT license.
-- Verified that remaining Apache mentions are limited to task history and test fixture/sample data, not the repository's project licensing.
-- Verified the change set with `pnpm typecheck` and `pnpm test` after installing dependencies from the existing lockfile.
-
-## Critical Bug Inspection (2026-04-25)
-- [x] Inspect recent commits for high-severity behavioral regressions
-- [x] Identify startup regression from renamed `agent-pipelines` toolset
-- [x] Add backward-compatible `HARNESS_TOOLSETS` alias handling
-- [x] Add registry regression tests for explicit and additive alias syntax
-- [x] Run focused tests and typecheck
-
-### Review
-- Found that users with existing `HARNESS_TOOLSETS=agent-pipelines` or `+agent-pipelines` configs would fail server startup after the toolset was renamed to `agents`.
-- Added a narrow parser alias so legacy configs resolve to the current `agents` toolset without reintroducing the old public name internally.
-- Verified with `pnpm test tests/registry/registry.test.ts` and `pnpm typecheck`.
-
-## Critical Bug Inspection (2026-04-27)
-- [x] Inspect recent commits for high-severity behavioral regressions
-- [x] Reproduce filtered-toolset startup crash for operation-less dynamic enums
-- [x] Add minimal helper so disabled operations accept no resource types without startup failure
-- [x] Add focused regression coverage
-- [x] Run focused tests, typecheck, full tests, build, and startup probe
-
-### Review
-- Found that narrow `HARNESS_TOOLSETS` selections such as `logs` could leave list/create/update/delete/execute resource type arrays empty. Tool registration cast those arrays to non-empty tuples for `z.enum(...)`, which could throw during MCP startup before the server became available.
-- Added a shared `resourceTypeSchema` helper that preserves enum validation when resource types exist and uses a non-throwing schema that rejects all values when none support the operation.
-- Added a regression test that registers every MCP tool with `HARNESS_TOOLSETS=logs`.
-- Verified with `pnpm test tests/registry/registry.test.ts`, `pnpm typecheck`, `pnpm test`, `pnpm build`, and `HARNESS_API_KEY=pat.test-account.token.secret HARNESS_TOOLSETS=logs timeout 3s node build/index.js stdio`.
-
-## Documentation Alignment Automation (2026-04-27)
-- [x] Audit recent registry/config changes against public docs
-- [x] Align README tool counts and pipeline version semantics
-- [x] Refresh `.env.example` with current operational config
-- [x] Run docs consistency checks
-- [ ] Commit and push docs-only changes
-
-### Review
-- README now matches `src/tools/index.ts` with 11 generic tools and documents that `HARNESS_PIPELINE_VERSION` selects either `pipeline` or `pipeline_v1`, not both.
-- HTTP transport docs now mention the per-session `x-harness-pipeline-version` initialize header from `src/index.ts`.
-- `.env.example` now covers operational config from `src/config.ts` and clarifies default vs opt-in toolset filtering, including the legacy `agent-pipelines` alias.
-
-## Critical Bug Inspection (2026-04-29)
-- [x] Inspect recent commits for high-severity behavioral regressions
-- [x] Confirm `--env-file` loads before config values except HTTP `PORT`
-- [x] Fix HTTP port resolution so env-file `PORT` is honored
-- [x] Add focused regression coverage
-- [x] Run tests/typecheck, commit, push, and open PR
+## Documentation Alignment Automation (2026-06-15)
+- [x] Audit recent commits and existing docs for weakly documented subsystems
+- [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap
+- [x] Update README and testing docs with verified usage, constraints, and pitfalls
+- [x] Run docs verification and review the documentation-only diff
+- [x] Commit, push, and open/update the docs PR
 
 ### Plan
-- Split CLI parsing so transport/env-file discovery remains early, but final port resolution can happen after dotenv loads.
-- Preserve precedence: `--port` > loaded `PORT` env var > `3000`.
-- Keep the change scoped to CLI startup behavior and focused tests.
+- Use `src/registry/toolsets/pipelines.ts`, `src/registry/extractors.ts`, `tests/registry/pipeline-dynamic-execution.test.ts`, and `tests/registry/execution-inputs.test.ts` as the source of truth.
+- Keep the public README update concise and colocated with the existing Pipeline Run Workflow and Input Set examples.
+- Add targeted `docs/testing/pipeline_dynamic_execution/test_plan.md` and `docs/testing/execution_inputs/test_plan.md` pages because both resource types are public in the pipelines toolset but missing from the testing catalog.
+- Update `docs/testing/README.md` so QA can find the new resource-level test plans.
+- Cover dynamic execution preconditions, object-only `body.yaml`, unsupported runtime-input behaviors, optional params, high-write confirmation, execution input response shape, expression resolution params, and common troubleshooting cases without documenting behavior not present in source.
 
 ### Review
-- Found HTTP startup ignored `PORT` from a specified `--env-file` because `parseArgs()` resolved the port before dotenv loaded the file.
-- Added `resolvePort()` so `src/index.ts` loads dotenv first, then resolves the final HTTP port while preserving `--port` precedence.
-- Verified with `pnpm test tests/utils/cli.test.ts` and `pnpm typecheck`.
+- README now documents `pipeline_dynamic_execution.run` with a concrete `harness_execute` example, preconditions, `body.yaml` constraints, unsupported runtime-input behaviors, high-write confirmation semantics, response shape, and troubleshooting for disabled dynamic execution.
+- README now documents `execution_inputs` as a post-run forensics workflow, including expression-resolution params and the stable projected response fields.
+- Added `docs/testing/pipeline_dynamic_execution/test_plan.md` and `test_report.md` with pending QA coverage for request shape, object-only body validation, optional params, high-write gating, response envelope stripping, and dynamic-execution enablement failures.
+- Added `docs/testing/execution_inputs/test_plan.md` and `test_report.md` with pending QA coverage for expression resolution, read-only behavior, response projection, input set detail normalization, missing fields, and chain-from-run workflows.
+- Updated the CD/CI section of `docs/testing/README.md` to link the new resource plans and to correct the touched pipeline-related paths to the existing singular resource directories.
+- Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `pnpm typecheck`, `pnpm exec vitest run tests/registry/pipeline-dynamic-execution.test.ts tests/registry/execution-inputs.test.ts tests/tools/tool-handlers.test.ts -t "pipeline_dynamic_execution|execution_inputs"`, `git diff --check HEAD`, and `pnpm test` (78 files / 1946 tests).
+- Opened PR: https://github.com/harness/mcp-server/pull/344
 
-## PR 102 Review Follow-up (2026-04-29)
-- [x] Verify each review comment against the current PR branch
-- [x] Move malformed `HARNESS_MCP_ALLOWED_HOSTS` validation into startup config parsing
-- [x] Preserve real Express Host-header accept/reject coverage
-- [x] Preserve behavioral dotenv stdout regression coverage
-- [x] Run focused tests and typecheck
-- [ ] Commit, push, and update PR
+## Cursor MCP Confirmation Prompt Regression (2026-06-15)
+- [x] Read Slack report and confirm screenshot/thread context
+- [x] Trace MCP elicitation/write confirmation behavior and identify root cause
+- [x] Add failing regression coverage for a visible confirmation field and rejected incomplete accepts
+- [x] Implement minimal elicitation confirmation schema fix
+- [x] Run focused tests, build, docs generation/check, typecheck, and full test suite
+- [x] Commit, push, open/update PR, and reply in Slack thread
 
 ### Plan
-- Add a config-level validator for `HARNESS_MCP_ALLOWED_HOSTS` using the same hostname parsing rules as HTTP host resolution.
-- Keep host resolution responsible for producing MCP Express options, not discovering config typos late.
-- Run focused tests for config, HTTP transport, env loading, and CLI parsing before full typecheck.
+- Keep the fix in the generic elicitation helper so `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` share the behavior.
+- Preserve existing safety semantics: explicit `decline`/`cancel` still block, `confirm: true` remains the fallback for clients without working elicitation, and auto-approve thresholds still bypass prompts.
+- Use a flat primitive MCP form schema with a required boolean confirmation field so clients have concrete UI to render instead of an empty form.
+- Validate accepted elicitation content so an `accept` without `confirm: true` does not execute a write.
 
 ### Review
-- Moved malformed `HARNESS_MCP_ALLOWED_HOSTS` handling into `ConfigSchema`, where startup config validation fails loudly and stores a normalized, de-duplicated allowlist.
-- Kept `resolveHttpHostValidationOptions()` focused on producing Express adapter options from validated config.
-- Confirmed request-level host behavior through the real `createMcpExpressApp()` adapter and behavioral dotenv stdout tests.
-- Verified with focused tests, full `pnpm test`, and `pnpm typecheck`.
+- Root cause: the server sent approval-only MCP elicitation requests with an empty `requestedSchema`. That is spec-valid, but the newer Cursor MCP Agent path can fail to surface a useful approval UI and report a decline/cancel-like response, which made writes appear declined even when the user had said to proceed.
+- Changed `src/utils/elicitation.ts` to request a concrete required boolean `confirm` field and to proceed only when an accepted response includes `content.confirm === true`.
+- Updated elicitation, integration, and generic tool-handler tests to cover the new schema and accepted-response contract.
+- Verification passed: `pnpm exec vitest run tests/utils/elicitation.test.ts -t "explicit confirmation schema|confirm=true"`, `pnpm exec vitest run tests/utils/elicitation.test.ts tests/integration/elicitation-flow.test.ts`, `pnpm exec vitest run tests/tools/tool-handlers.test.ts`, and full `pnpm build && pnpm docs:generate && pnpm typecheck && pnpm docs:check && pnpm test` (78 files / 1947 tests).
+- Opened PR #345. Slack thread reply could not be posted because the trigger channel `C08SYT1FWJD` is not configured in the available Slack send tool; no message was posted to another channel.
 
-## Slack Bug Triage: MCP Connections Failing (2026-04-29)
-- [x] Read the Slack report thread and capture available symptoms
-- [x] Reproduce MCP connection startup/initialize behavior locally
-- [x] Identify the root cause from code and recent changes
-- [x] Add a focused regression test before implementation
-- [x] Implement the minimal fix
-- [x] Run focused and broader verification
-- [x] Commit, push, open PR, and reply in the original Slack thread
+## Documentation Alignment Automation (2026-06-08)
+- [x] Audit recent commits and existing docs for weakly documented subsystems
+- [x] Select File Store multipart workflows as the focused documentation gap
+- [x] Update README and testing docs with verified File Store usage, constraints, and pitfalls
+- [x] Run docs verification and review the documentation-only diff
+- [x] Commit, push, and open/update the docs PR
 
 ### Plan
-- Start with the stdio and HTTP connection paths in `src/index.ts`, `src/config.ts`, and the MCP SDK integration tests because the report is connection-level and the Slack thread has no detailed error text.
-- Use recent commits plus local startup tests to narrow whether this is a startup crash, config parsing issue, or session initialization regression.
-- If a repo bug is found, write the smallest regression test that fails on current code, then fix only the implicated path.
+- Use `src/registry/toolsets/file-store.ts`, `src/utils/body-preview.ts`, and focused File Store tests as the source of truth.
+- Keep the public README update concise and colocated with the existing File Store resource table.
+- Add a targeted `docs/testing/file_store/test_plan.md` because File Store has new multipart/write semantics and no existing test-plan page.
+- Cover create/update multipart bodies, account/org/project scope, URL-derived IDs, read-only `list_children`, confirmation redaction, and common validation failures without documenting behavior not present in source.
 
 ### Review
-- The Slack thread had no screenshots or concrete error details, so investigation focused on the HTTP connection path and recent SDK/config changes.
-- Found that `createMcpExpressApp({ host: "127.0.0.1" })` enables SDK Host-header validation for only localhost names. That is safe for local use but rejects the documented hosted MCP hostname (`mcp.harness.io`) when the server sits behind a public proxy while binding locally.
-- Added `resolveHttpHostValidationOptions()` to preserve SDK DNS-rebinding protection while allowing the hosted MCP hostname by default and optional proxy/custom hostnames through `HARNESS_MCP_ALLOWED_HOSTS`.
-- Verified with `pnpm test tests/utils/http-hosts.test.ts`, `pnpm test tests/integration/http-transport.test.ts`, and `pnpm typecheck` using a temporary Node toolchain because the automation image did not have Node on `PATH`.
+- README now documents File Store as a multi-scope resource, with copy-pasteable examples for list, folder create, file upload, metadata-only update, and `list_children`.
+- README now spells out multipart constraints from `src/registry/toolsets/file-store.ts`: required `name`/`type`/`parent_identifier`, `FILE` content one-of rules, metadata-only update behavior, folder content rejection, `file_usage` enum values, 100 MB upload limit, and confirmation preview redaction.
+- Added `docs/testing/file_store/test_plan.md` with File Store list/get/create/update/delete/execute coverage, URL-derived scope/ID cases, read-only `list_children`, validation failures, and redaction checks.
+- Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts -t "File Store|file_store"`, and `git diff --check HEAD~1..HEAD`.
+- Opened PR: https://github.com/harness/mcp-server/pull/311
 
-## Follow-up: Stdio Dotenv Banner (2026-04-29)
-- [x] Reproduce stdout contamination from dotenv during stdio startup
-- [x] Add quiet dotenv loading for default and `--env-file` paths
-- [x] Add regression coverage for quiet dotenv invocation
-- [x] Verify focused CLI test, build, stdio stdout, typecheck, and related HTTP tests
-
-### Review
-- Reproduced current 0.9.5 behavior: `dotenv@17.3.1` printed `[dotenv@17.3.1] injecting env ...` to stdout before MCP JSON-RPC when starting `node build/index.js stdio --env-file ...`.
-- Added `quiet: true` to both `loadDotenv({ path: envFile })` and default `loadDotenv()` calls in `src/index.ts`.
-- Verified after rebuild that the same stdio startup produced `stdout bytes=0`, preserving stdout for JSON-RPC.
-
-## PR #102 Review Follow-up (2026-04-29)
-- [x] Fetch PR review comments
-- [x] Split localhost bind-host detection from Host-header allowlist values
-- [x] Fail loudly on malformed `HARNESS_MCP_ALLOWED_HOSTS`
-- [x] Add request-level SDK Host-header validation coverage
-- [x] Run focused HTTP tests, CLI tests, typecheck, and build
-
-### Review
-- Added `::1` as a localhost bind host while keeping `[::1]` as the Host-header allowlist value expected by the SDK middleware.
-- `HARNESS_MCP_ALLOWED_HOSTS` now throws with the malformed entries instead of silently dropping them.
-- Added an integration test that runs the real SDK Express Host-header middleware and verifies `Host: mcp.harness.io` is accepted while an unexpected host is rejected.
-- Replaced the source-text dotenv assertion with behavioral `loadEnvFile()` tests that verify custom and default dotenv loading do not write through `console.log`.
-
-## Slack Bug Triage: MCP Down Again (2026-05-01)
-- [x] Read the triggered Slack thread and related prior context
-- [x] Verify current npm release status and repository fixes
-- [x] Identify why users still see the outage after PR #102 merged
-- [x] Add a release/version regression check
-- [x] Bump package and bundle metadata for a patch release
-- [x] Run focused verification
-- [ ] Commit, push, open PR, and reply in the Slack thread
+## PR 307 Remote Pipeline Branch Execution Follow-up (2026-06-08)
+- [x] Remove stale cache preflight from remote pipeline runs
+- [x] Keep `pipelineBranchName` defaulting for remote branch execution
+- [x] Update regressions to prove execute goes straight to `pipeline.run`
+- [x] Run focused and broad verification
+- [x] Update PR branch and local MCP build
 
 ### Plan
-- Treat the sparse report as the same user/environment until contradicted by thread context, then verify against npm and current repo state.
-- Add a small release metadata test that fails when `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` drift.
-- Bump the patch version so the already-merged stdio/hosted MCP fixes can actually ship through `npx harness-mcp-v2@latest`.
+- Treat Harness `cacheResponse.cacheState` as read/UI cache metadata, not execution truth.
+- Keep the branch-selection fix: remote executions should send `pipelineBranchName` when the caller provides a remote codebase branch or runtime YAML codebase branch.
+- Remove fail-closed behavior that blocks execution after a stale `pipeline.get` response.
 
 ### Review
-- Slack thread had no new details, but the same reporter's previous thread identified `harness-mcp-v2@0.9.5` stdio stdout contamination as the concrete failure.
-- Confirmed npm `latest` still serves `0.9.5`, so users running `npx harness-mcp-v2@latest` can still receive the known-bad build even though PR #102 is merged.
-- Bumped `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `0.9.6` and added `tests/release-metadata.test.ts` to keep patch release metadata synchronized.
-- Verified with focused release/env/HTTP tests, `pnpm typecheck`, `pnpm build`, and a stdio startup smoke test showing `stdout bytes=0`.
+- Removed the `pipeline.get` cache validation before `pipeline.run`, so `cacheResponse.cacheState=STALE_CACHE` from the read/UI path no longer blocks execution.
+- Kept remote branch normalization: `branch` and runtime YAML codebase branch still default `pipeline_branch`, which the registry sends as `pipelineBranchName`.
+- Updated remote pipeline handler regressions to fail if a read-cache preflight runs and to assert the execute POST carries `pipelineBranchName`.
+- Verification passed: `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "remote pipeline"`, `pnpm typecheck`, `pnpm build`, and `pnpm test` (71 files / 1860 tests).
+
+## Critical Bug Inspection (2026-06-05)
+- [x] Baseline branch against `origin/main` and inspect recent behavioral commits
+- [x] Trace File Store create/update upload handling through MCP confirmation and registry dispatch
+- [x] Add failing prompt-redaction regression coverage for File Store uploads
+- [x] Implement minimal confirmation body preview redaction and bounding
+- [x] Run focused and broad verification
+- [ ] Open PR and report outcome in Slack
+
+### Plan
+- Treat this branch as a recent-main scan because it initially matched `origin/main`.
+- Prioritize high-blast-radius behavior in the new File Store multipart support and recent auth/config changes.
+- Patch only a concrete crash/data-exposure scenario with a narrow helper used by the affected write confirmation path.
+
+### Review
+- Found that `harness_create` and `harness_update` built confirmation prompts by directly `JSON.stringify`-ing object bodies. File Store uploads can include large `content` or `content_base64` payloads, so a valid upload could allocate and send the full file body in the elicitation prompt before the multipart builder's size validation ran.
+- Fixed confirmation previews to redact upload content fields and bound long string/object previews before calling elicitation.
+- Added public tool-handler regressions for File Store create/update confirmation messages so raw upload content is not exposed.
+- Verification passed: focused red/green prompt tests, `pnpm typecheck`, full `tests/tools/tool-handlers.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check HEAD~1..HEAD`, and full `pnpm test`.
+
+## PR 211 File Store Review Follow-up (2026-06-04)
+- [x] Inspect PR state and Cursor review findings
+- [x] Merge current `origin/main` into PR branch
+- [x] Fix file-store update/list/multipart validation contract
+- [x] Align README resource/toolset discoverability
+- [x] Run focused and broad verification
+- [x] Push branch and re-check PR status
+- [x] Tighten latest File Store validation review feedback
+- [x] Re-run focused and broad verification for the follow-up
+- [x] Fix File Store execute scope/read-only/full-body review feedback
+- [x] Re-run focused and broad verification for scope/read-only follow-up
+- [x] Fix read-only CI smoke expectation for read-risk execute actions
+- [x] Restrict File Store list_children to folder nodes only
+- [x] Align write-tool URL-derived scope and File Store update metadata
+- [x] Fix URL-only write IDs, Zod metadata ordering, and File Store file_usage validation
+- [ ] Push final PR #211 update and re-check status
+
+### Plan
+- Keep multipart client plumbing intact unless verification shows it is implicated.
+- Make unsafe File Store inputs fail loudly before request construction.
+- Preserve generic tool contracts: `harness_execute(resource_id=...)` should work without duplicate params.
+- Keep generated README counts and hand-authored resource/toolset tables aligned with the registry.
+- Latest follow-up: validate multipart scalar metadata as strings, reject dual `content`/`content_base64` inputs, and reject conflicting folder identifiers instead of letting stale aliases override the generic resource id.
+- Scope/read-only follow-up: expose `resource_scope` on `harness_execute`, allow read-risk execute actions under read-only mode, and reject API-shaped `parent_identifier` in File Store full-body `list_children`.
+
+### Review
+- Merged current `origin/main` into PR #211 and resolved conflicts in `README.md`, `src/registry/index.ts`, and task history.
+- Hardened File Store multipart input handling: update requires explicit `body.parent_identifier`, malformed `content_base64` is rejected before `Buffer.from`, and `list_children` accepts the generic `resource_id` -> `file_store_id` path.
+- Follow-up review fix: create also requires explicit `body.parent_identifier`; `list_children` shorthand identifiers are documented through `paramsSchema`, while `bodySchema` now describes only a real FileStoreNode body.
+- Second follow-up review fix: multipart `body.content` must be a string, and `list_children` rejects invalid File Store node `type`/`node_type` values before dispatch.
+- Added helper and `harness_execute` regression coverage, documented `file_store` in README resource/toolset tables, and extended `docs:check` coverage for the File Store README section.
+- Verification passed: `pnpm typecheck`, focused File Store/client and `harness_execute` Vitest runs, `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+- Follow-up verification passed: `pnpm typecheck`, focused File Store/helper and tool-handler Vitest runs, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+- Second follow-up verification passed: `pnpm typecheck`, focused File Store/helper and tool-handler Vitest runs, `pnpm build`, `pnpm docs:check`, full `pnpm test`, and `git diff --check`.
+- Third follow-up review fix: multipart scalar metadata is string-validated before FormData construction, FILE uploads reject simultaneous `content` and `content_base64`, and `list_children` rejects conflicting folder identifiers instead of letting stale aliases override the generic resource id.
+- Third follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts`, `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "File Store"`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Fourth follow-up review fix: FOLDER multipart bodies now reject `content`/`content_base64` instead of silently dropping them, and full-body `list_children` rejects top-level generic IDs that conflict with `body.identifier`.
+- Fourth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts`, `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "File Store"`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Fifth follow-up review fix: create/update body schemas now document their different FILE content requirements, update rejects path/body identifier conflicts, and full-body `list_children` validates `identifier`/`name` scalar types before dispatch.
+- Fifth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts`, `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "File Store"`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Sixth follow-up review fix: `harness_execute` now exposes and URL-derives `resource_scope`, read-only mode permits execute actions whose operation policy is `risk: "read"`, and full-body File Store `list_children` rejects snake_case `parent_identifier`.
+- Sixth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts tests/registry/registry.test.ts tests/utils/url-parser.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- CI smoke follow-up: `scripts/smoke-test.js` now checks read-only mode with a real write-risk execute action (`pipeline.run`) and a real read-risk execute action (`file_store.list_children`), matching the updated registry contract. Verification passed: `env HARNESS_READ_ONLY=true node scripts/smoke-test.js`, `pnpm build`, `pnpm typecheck`, focused Vitest run, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Seventh follow-up review fix: `file_store.list_children` now rejects `FILE` in full-body and shorthand inputs, and its surfaced body/params schema metadata describes `FOLDER` only.
+- Seventh follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Eighth follow-up review fix: generic write tools now opt into URL-derived `resource_scope`, and File Store update metadata no longer advertises `body.identifier` as a replacement for the required top-level `resource_id`.
+- Eighth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts tests/utils/url-parser.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+- Ninth follow-up review fix: URL-only `harness_update`/`harness_delete` calls now resolve the primary ID from the parsed URL, edited optional Zod fields keep `.describe()` last, and File Store `file_usage` rejects values outside `MANIFEST_FILE`, `CONFIG`, or `SCRIPT` before dispatch.
+- Ninth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts tests/utils/url-parser.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
+
+## PR 172 Conflict Resolution (2026-06-04)
+- [x] Inspect PR status and identify conflicted documentation files
+- [x] Merge current `origin/main` into PR branch
+- [x] Resolve documentation and task-log conflicts
+- [x] Run docs/build/test verification
+- [x] Push resolved branch and re-check PR status
+
+### Plan
+- Preserve current public docs as source of truth where main has newer runtime-facing guidance.
+- Keep the security exemption workflow documentation from the PR where it still matches current files.
+- Treat this as a docs-focused conflict resolution unless verification exposes a runtime contract mismatch.
+
+### Review
+- Merged current `origin/main` into PR #172 and resolved conflicts in contributor docs, Gemini docs, security exemption test docs, and task history.
+- Updated security exemption docs and prompt guidance to match the current execute surface: `approve` and `reject` are the available actions, while elevated approval uses `approve` with `body.scope`.
+- Verification passed: `pnpm docs:check`, `pnpm typecheck`, `pnpm build`, focused STO/registry/tool tests, full `pnpm test`, and `git diff --check`.
+
+## Vitest Security Upgrade (2026-06-03)
+- [x] Confirm the affected local Vitest version and patched target
+- [x] Upgrade `vitest` dev dependency to the patched 4.1 line
+- [x] Regenerate `pnpm-lock.yaml`
+- [x] Run focused and broad verification
+
+### Plan
+- Address GHSA-5xrq-8626-4rwp / Dependabot alert by moving from `vitest` 3.2.4 to `vitest` 4.1.0 or later.
+- Keep the change limited to test tooling metadata and lockfile updates unless v4 requires code/config changes.
+- Verify with the release metadata test, typecheck, and the full Vitest test suite.
+
+### Review
+- Updated `devDependencies.vitest` from `^3.0.6` to `^4.1.0`; `pnpm-lock.yaml` now resolves `vitest` to `4.1.8`.
+- `pnpm audit` also surfaced a moderate `qs` advisory through `express`; added a narrow `pnpm.overrides.qs >=6.15.2` entry and regenerated the lockfile to resolve `qs` to `6.15.2`.
+- Verification passed: `pnpm audit` reports no known vulnerabilities; `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, `pnpm test` (70 files / 1770 tests), `pnpm build`, and `git diff --check` all pass.
+
+## Version Bump 3.1.2 (2026-06-03)
+- [x] Identify release metadata fields pinned to the previous version
+- [x] Update package and manifest versions to 3.1.2
+- [x] Update release metadata regression test
+- [x] Run verification
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, root `manifest.json`, `mcp-directory/manifest.json`, and the release metadata test expectation.
+- Do not change dependency versions or generated lockfile data unless verification shows the package manager requires it.
+
+### Review
+- Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.2`.
+- Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.2` release.
+- Verification passed: `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, and `git diff --check`.

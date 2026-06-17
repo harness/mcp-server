@@ -37,22 +37,37 @@ function validateAllowedHosts(rawHosts: string | undefined): string | undefined 
   return hosts.join(",");
 }
 
+const ACCOUNT_SCOPED_API_KEY_PREFIXES = new Set(["pat", "sat"]);
+
 /**
- * Extract the account ID from a Harness PAT token.
- * PAT format: pat.<accountId>.<tokenId>.<secret>
- * Returns undefined if the token doesn't match the expected format.
+ * Extract the account ID from a Harness account-scoped API key.
+ * Supported formats:
+ * - pat.<accountId>.<tokenId>.<secret>
+ * - sat.<accountId>.<tokenId>.<secret>
+ * Returns undefined if the token doesn't match a supported format.
  */
 export function extractAccountIdFromToken(apiKey: string): string | undefined {
   const parts = apiKey.split(".");
+  const prefix = parts[0]?.toLowerCase();
   const accountId = parts[1];
-  if (parts.length >= 3 && parts[0] === "pat" && accountId && accountId.length > 0) {
+  if (
+    parts.length >= 3 &&
+    prefix &&
+    ACCOUNT_SCOPED_API_KEY_PREFIXES.has(prefix) &&
+    accountId &&
+    accountId.length > 0
+  ) {
     return accountId;
   }
   return undefined;
 }
 
 const RawConfigSchema = z.object({
-  HARNESS_API_KEY: z.string().min(1, "HARNESS_API_KEY is required"),
+  HARNESS_MCP_MODE: z.preprocess(
+    emptyStringAsUndefined,
+    z.enum(["single-user", "multi-user"]).default("single-user"),
+  ),
+  HARNESS_API_KEY: optionalStringFromEnv,
   HARNESS_ACCOUNT_ID: optionalStringFromEnv,
   HARNESS_BASE_URL: urlFromEnv("https://app.harness.io"),
   // New names (preferred)
@@ -78,6 +93,9 @@ const RawConfigSchema = z.object({
   ),
   HARNESS_ALLOW_HTTP: booleanFromEnv.default(false),
   HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
+  HARNESS_MCP_AUTH_TOKEN: optionalStringFromEnv,
+  HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: booleanFromEnv.default(false),
+  HARNESS_FME_API_KEY: optionalStringFromEnv,
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
@@ -86,14 +104,50 @@ const RawConfigSchema = z.object({
   HARNESS_AUDIT_WEBHOOK_TOKEN: optionalStringFromEnv,
   HARNESS_AUDIT_WEBHOOK_BATCH_SIZE: z.preprocess(emptyStringAsUndefined, z.coerce.number().min(1).default(10)),
   HARNESS_AUDIT_WEBHOOK_FLUSH_MS: z.preprocess(emptyStringAsUndefined, z.coerce.number().min(1).default(5000)),
+  // Maximum number of concurrent log-blob downloads issued by harness_diagnose
+  // when fetching logs for failed steps. Default 3 keeps peak memory bounded
+  // while still parallelising the common case (1–3 failed steps). Increase
+  // only if diagnose latency is dominated by log-fetch wall-clock and the
+  // pod has memory headroom (AIDEVOPS-2200).
+  HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: z.preprocess(
+    emptyStringAsUndefined,
+    z.coerce.number().min(1).max(20).default(3),
+  ),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {
-  const accountId = data.HARNESS_ACCOUNT_ID ?? extractAccountIdFromToken(data.HARNESS_API_KEY);
-  if (!accountId) {
+  const isMultiUser = data.HARNESS_MCP_MODE === "multi-user";
+
+  if (isMultiUser && data.HARNESS_API_KEY) {
     throw new Error(
-      "HARNESS_ACCOUNT_ID is required when the API key is not a PAT (pat.<accountId>.<tokenId>.<secret>)",
+      "HARNESS_API_KEY must not be set in multi-user mode. " +
+      "Each session must provide its own API key via the x-harness-api-key header.",
     );
+  }
+
+  if (isMultiUser && data.HARNESS_FME_API_KEY) {
+    throw new Error(
+      "HARNESS_FME_API_KEY must not be set in multi-user mode. " +
+      "FME calls must use the session user's x-harness-api-key credential.",
+    );
+  }
+
+  if (!isMultiUser && !data.HARNESS_API_KEY) {
+    throw new Error(
+      "HARNESS_API_KEY is required in single-user mode.",
+    );
+  }
+
+  let accountId: string | undefined;
+  if (isMultiUser) {
+    accountId = data.HARNESS_ACCOUNT_ID ?? "";
+  } else {
+    accountId = data.HARNESS_ACCOUNT_ID ?? extractAccountIdFromToken(data.HARNESS_API_KEY!);
+    if (!accountId) {
+      throw new Error(
+        "HARNESS_ACCOUNT_ID is required when the API key does not include an account ID segment (pat.<accountId>... or sat.<accountId>...)",
+      );
+    }
   }
 
   if (!data.HARNESS_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
@@ -124,7 +178,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   if (!data.HARNESS_PROJECT && data.HARNESS_DEFAULT_PROJECT_ID) {
     console.error('[DEPRECATION] HARNESS_DEFAULT_PROJECT_ID is deprecated. Use HARNESS_PROJECT instead.');
   }
-  const HARNESS_ORG = data.HARNESS_ORG ?? data.HARNESS_DEFAULT_ORG_ID ?? "default";
+  const HARNESS_ORG = data.HARNESS_ORG ?? data.HARNESS_DEFAULT_ORG_ID;
   const HARNESS_PROJECT = data.HARNESS_PROJECT ?? data.HARNESS_DEFAULT_PROJECT_ID;
 
   // Resolve auto-approve risk: prefer new name, fall back to deprecated SKIP_ELICITATION
@@ -140,10 +194,43 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   // Remove deprecated keys from output, expose only the canonical names
   const { HARNESS_DEFAULT_ORG_ID: _oldOrg, HARNESS_DEFAULT_PROJECT_ID: _oldProject, ...rest } = data;
 
-  return { ...rest, HARNESS_ACCOUNT_ID: accountId, HARNESS_ORG, HARNESS_PROJECT, HARNESS_AUTO_APPROVE_RISK };
+  return { ...rest, HARNESS_API_KEY: data.HARNESS_API_KEY ?? "", HARNESS_ACCOUNT_ID: accountId, HARNESS_ORG, HARNESS_PROJECT, HARNESS_AUTO_APPROVE_RISK };
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
+
+/**
+ * Some integrations use literal placeholder credentials (for example "dummy").
+ * Those placeholders are not valid external Split/FME API credentials.
+ */
+export function isPlaceholderCredential(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) return true;
+  return normalized === "dummy" || normalized.endsWith(".dummy");
+}
+
+/**
+ * Resolve the token used for Split/FME product APIs.
+ * FME talks directly to api.split.io, so a Harness platform auth placeholder
+ * cannot be reused there.
+ */
+export function resolveFmeApiKey(
+  config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_FME_API_KEY" | "HARNESS_API_KEY">,
+): string | undefined {
+  const explicitFmeKey = config.HARNESS_MCP_MODE === "multi-user"
+    ? undefined
+    : config.HARNESS_FME_API_KEY?.trim();
+  if (explicitFmeKey && !isPlaceholderCredential(explicitFmeKey)) {
+    return explicitFmeKey;
+  }
+
+  const fallbackHarnessKey = config.HARNESS_API_KEY?.trim();
+  if (fallbackHarnessKey && !isPlaceholderCredential(fallbackHarnessKey)) {
+    return fallbackHarnessKey;
+  }
+
+  return undefined;
+}
 
 /**
  * Resolve the base URL for a given product backend.

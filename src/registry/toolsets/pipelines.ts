@@ -1,5 +1,5 @@
-import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract } from "../extractors.js";
+import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract, dynamicExecutionExtract } from "../extractors.js";
 import YAML from "yaml";
 
 /**
@@ -309,6 +309,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             module: "module",
             input_set_ids: "inputSetIdentifiers",
             branch: "branch",
+            pipeline_branch: "pipelineBranchName",
             store_type: "storeType",
             connector_ref: "connectorRef",
             repo_name: "repoName",
@@ -348,12 +349,13 @@ export const pipelinesToolset: ToolsetDefinition = {
               skipIfPresent: "build",
             },
           ],
-          actionDescription: "Execute/run a pipeline. RECOMMENDED: first check harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID') to see required inputs. For simple variable inputs: pass key-value pairs in inputs (e.g. {branch: 'main'}) — auto-resolved. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex pipelines with template inputs: use input_set_ids to reference a saved input set. List available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
+          actionDescription: "Execute/run a pipeline. RECOMMENDED: first check harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID') to see required inputs. For simple variable inputs: pass key-value pairs in inputs (e.g. {branch: 'main'}) — auto-resolved. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex pipelines with template inputs: use input_set_ids to reference a saved input set. List available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}). To load the pipeline YAML from a specific git branch (e.g. a feature branch): pass params={pipeline_branch: 'feature/my-fix'} — sent as ?pipelineBranchName= on the API call.",
           bodySchema: {
             description: "Runtime inputs for pipeline execution. For simple variables: pass key-value pairs in inputs like {branch: 'main', env: 'prod'}, auto-resolved against the pipeline's runtime input template. CI codebase shorthands (branch, tag, pr_number, commit_sha) are auto-expanded to full build structures. For complex pipelines with template inputs, use input_set_ids to reference saved input sets. You can combine both: input_set_ids for the base config + inputs for simple overrides. Check runtime_input_template first to see what the pipeline expects.",
             fields: [
               { name: "inputs", type: "yaml", required: false, description: "Key-value pairs (e.g. {branch: 'main', env: 'prod'}) — auto-resolved to full YAML. CI codebase shorthands (branch, tag, pr_number, commit_sha) are auto-expanded. For template inputs, use input_set_ids instead." },
               { name: "input_set_ids", type: "array", required: false, description: "Input set identifiers to apply. Recommended for complex pipelines with template inputs. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})." },
+              { name: "pipeline_branch", type: "string", required: false, description: "Git branch to load the pipeline YAML from (sent as ?pipelineBranchName= on the API). Use when the pipeline definition lives on a feature branch rather than the default branch." },
             ],
           },
         },
@@ -406,7 +408,7 @@ export const pipelinesToolset: ToolsetDefinition = {
     {
       resourceType: "pipeline_v1",
       displayName: "Pipeline (V1)",
-      description: "V1 pipeline definition using simplified YAML format. Use for agent pipelines and v1 YAML schema. Supports list, get, create, update, delete, and execute (run). V1 pipelines use a flatter YAML structure with direct step types (run, agent, action, approval) instead of v0's nested stage/step wrappers.",
+      description: "V1 pipeline definition using simplified YAML format. Use ONLY when user explicitly requests v1, says 'agent pipeline', or provides YAML with v1 indicators: kebab-case keys (allow-stage-executions, fixed-inputs-on-rerun), top-level step types (run, agent, action, approval) without nested stage/step wrappers. Supports list, get, create, update, delete, and execute (run).",
       toolset: "pipelines",
       scope: "project",
       headerBasedScoping: true,
@@ -497,6 +499,82 @@ export const pipelinesToolset: ToolsetDefinition = {
       },
     },
     {
+      resourceType: "pipeline_dynamic_execution",
+      displayName: "Pipeline Dynamic Execution",
+      description:
+        "Execute a v0 Harness pipeline with a dynamically-provided pipeline YAML — wraps POST /v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/execute/dynamic (the URL uses Harness's /v1/... control-plane path; the target is a v0 pipeline). The v0 pipeline shell must already exist in Harness with 'Allow Dynamic Execution' enabled at both the account and pipeline level (gated by the PIPE_DYNAMIC_PIPELINES_EXECUTION feature flag). Use when an agent or external system generates the full v0 pipeline YAML at runtime instead of running a saved configuration. Supports the run execute action only.",
+      toolset: "pipelines",
+      scope: "project",
+      headerBasedScoping: true,
+      identifierFields: ["pipeline_id"],
+      executeHint:
+        "Targets v0 pipelines (resource_type='pipeline'). Pre-conditions: (1) account-level Allow Dynamic Execution setting on; (2) pipeline-level Allow Dynamic Execution toggle on; (3) caller has Edit + Execute on the pipeline. Runtime `<+input>` placeholders are NOT resolved at execution time — the agent must fully resolve all values in the YAML before submitting. Input sets, selective stage execution, retry, and triggers are not supported by this API. Call as harness_execute(resource_type='pipeline_dynamic_execution', action='run', resource_id='<pipeline_id>', body={yaml: '<full v0 pipeline yaml string>'}). The body argument must be an object — pass the YAML inside `body.yaml`, not as a top-level string.",
+      diagnosticHint:
+        "If the run is rejected with a 'dynamic execution not enabled' error, verify the account-level Allow Dynamic Execution setting and the pipeline-level toggle (Pipeline → Advanced Options → Dynamic Execution Settings). Invalid YAML errors include a parse location — re-generate the YAML and resubmit.",
+      relatedResources: [
+        {
+          resourceType: "execution",
+          relationship: "produces",
+          description: "The plan execution started by this run. After a successful response, use harness_get(resource_type='execution', resource_id=<execution_id>) to monitor stage/step status.",
+        },
+        {
+          resourceType: "pipeline",
+          relationship: "executes",
+          description: "The v0 pipeline shell that hosts the dynamic execution. Use harness_get(resource_type='pipeline', resource_id=<pipeline_id>) for the saved shell definition. Use harness_get(resource_type='runtime_input_template', resource_id=<pipeline_id>) to confirm the shell expects no unresolved `<+input>` placeholders before submitting YAML.",
+        },
+      ],
+      deepLinkTemplate:
+        "/ng/account/{accountId}/all/orgs/{org}/projects/{project}/pipelines/{pipeline}/deployments/{execution_id}/pipeline",
+      operations: {},
+      executeActions: {
+        run: {
+          method: "POST",
+          path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/execute/dynamic",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
+          queryParams: {
+            module_type: "moduleType",
+            notes: "notes",
+            notify_only_user: "notify_only_user",
+          },
+          bodyBuilder: (input) => {
+            // Public contract: body must be an object with a `yaml` field
+            // (string or JSON pipeline object). harness_execute.body is
+            // typed as z.record(...) and rejects raw string bodies before
+            // the registry sees them, so we mirror that shape here.
+            const body = input.body as Record<string, unknown> | undefined;
+            const yamlField = body?.yaml;
+            let yaml: string | undefined;
+            if (typeof yamlField === "string") {
+              yaml = yamlField;
+            } else if (yamlField && typeof yamlField === "object") {
+              yaml = YAML.stringify(yamlField);
+            }
+            if (!yaml) {
+              throw new Error("body.yaml is required and must be a YAML string or a JSON pipeline object (auto-serialized to YAML). Pass the full v0 pipeline YAML inside body.yaml — raw string bodies are not supported by harness_execute.");
+            }
+            return { yaml };
+          },
+          responseExtractor: dynamicExecutionExtract,
+          actionDescription:
+            "Execute a v0 Harness pipeline using YAML provided at runtime. Targets the v0 pipeline shell identified by resource_id. Pass body as an object with a `yaml` field — either body={yaml: '<yaml string>'} or body={yaml: <JSON pipeline object>} (auto-serialized to YAML). Raw string bodies are not accepted. Optional params: module_type (e.g. CI, CD), notes (free-form notes attached to the run), notify_only_user (boolean). Returns { execution_id, status } and an openInHarness deep link to the execution. Pre-conditions: account- and pipeline-level Allow Dynamic Execution must be enabled and the caller must have Edit + Execute on the pipeline.",
+          bodySchema: {
+            description: "Full v0 pipeline YAML to execute. Two options: (1) body={yaml: '<yaml string>'} — pass the YAML as a string under the `yaml` key. (2) body={yaml: {<JSON pipeline>}} — pass the pipeline as a JSON object, auto-serialized to YAML. The body itself must be an object (harness_execute does not accept raw string bodies). Must conform to the v0 Harness pipeline YAML schema (the same schema accepted by harness_create with resource_type='pipeline'). All `<+input>` placeholders must be fully resolved before submission — runtime input prompts are not supported by the dynamic execution API.",
+            fields: [
+              { name: "yaml", type: "yaml", required: true, description: "Full v0 pipeline YAML string (or JSON object that will be serialized to YAML). Must conform to the v0 Harness pipeline YAML schema." },
+            ],
+          },
+          paramsSchema: {
+            fields: [
+              { name: "module_type", required: false, description: "Harness module the execution is associated with (e.g. CI, CD)." },
+              { name: "notes", required: false, description: "Free-form notes attached to the pipeline execution run." },
+              { name: "notify_only_user", required: false, description: "When true, execution notifications are sent only to the triggering user." },
+            ],
+          } satisfies ParamsSchema,
+        },
+      },
+    },
+    {
       resourceType: "execution",
       displayName: "Pipeline Execution",
       description: "Pipeline execution history and details. Supports list and get.",
@@ -504,6 +582,13 @@ export const pipelinesToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["execution_id"],
       diagnosticHint: "Use harness_diagnose with execution_id to analyze a failed execution — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
+      relatedResources: [
+        {
+          resourceType: "execution_inputs",
+          relationship: "produced-from",
+          description: "The merged input set YAML that produced this execution. Use harness_get(resource_type='execution_inputs', resource_id=<planExecutionId>) to see what runtime inputs the run actually used (post-run forensics).",
+        },
+      ],
       listFilterFields: [
         { name: "search_term", description: "Filter executions by name or keyword" },
         { name: "pipeline_id", description: "Pipeline identifier to filter executions" },
@@ -555,6 +640,56 @@ export const pipelinesToolset: ToolsetDefinition = {
           bodySchema: { description: "No body required. Interrupt type is specified via the interrupt_type query parameter (IMPORTANT: do not pass this as a body parameter, otherwise the request will fail)", fields: [] },
           responseExtractor: ngExtract,
           actionDescription: "Interrupt a running execution. Pass interrupt_type as a param: AbortAll (abort all stages), Pause, Resume, StageRollback, Abort (abort current retry), ExpireAll, or Retry.",
+        },
+      },
+    },
+    {
+      resourceType: "execution_inputs",
+      displayName: "Pipeline Execution Inputs",
+      description:
+        "Merged input set YAML for a pipeline execution — the inputs that produced a given run. Supports get only. Use to answer 'what inputs triggered this execution?' without leaving the MCP tool chain.",
+      toolset: "pipelines",
+      scope: "project",
+      identifierFields: ["execution_id"],
+      relatedResources: [
+        {
+          resourceType: "execution",
+          relationship: "produced-by",
+          description: "The pipeline execution this input set was used for. Use harness_get(resource_type='execution', resource_id=<planExecutionId>) for status/stage details.",
+        },
+        {
+          resourceType: "input_set",
+          relationship: "merged-from",
+          description: "Saved input sets that contributed to this execution's merged YAML. inputSetDetails lists their identifiers/names.",
+        },
+      ],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/pipeline/api/pipelines/execution/{planExecutionId}/inputsetV2",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { execution_id: "planExecutionId" },
+          queryParams: {
+            resolve_expressions: "resolveExpressions",
+            resolve_expressions_type: "resolveExpressionsType",
+          },
+          responseExtractor: executionInputsExtract,
+          description:
+            "Get the merged input set YAML for a pipeline execution. Returns inputSetYaml (merged inputs used at runtime), inputSetTemplateYaml (template at execution time), resolvedYaml (only when resolve_expressions=true), inputSetDetails (saved input sets that contributed), and inputSetBranchName (source branch for git-backed input sets). Call as harness_get(resource_type='execution_inputs', resource_id=<planExecutionId>) — resource_id is mapped to the execution_id path identifier. Optional params (pass via the params argument): resolve_expressions (bool), resolve_expressions_type (enum: RESOLVE_ALL_EXPRESSIONS | RESOLVE_TRIGGER_EXPRESSIONS | UNKNOWN — default UNKNOWN means no resolution).",
+          paramsSchema: {
+            fields: [
+              {
+                name: "resolve_expressions",
+                required: false,
+                description: "When true, resolve `<+...>` expressions in the YAML. The resolved output is returned in the resolvedYaml field. Defaults to false.",
+              },
+              {
+                name: "resolve_expressions_type",
+                required: false,
+                description: "Which expressions to resolve. One of: RESOLVE_ALL_EXPRESSIONS, RESOLVE_TRIGGER_EXPRESSIONS, UNKNOWN. Defaults to UNKNOWN (no resolution), matching the upstream API default.",
+              },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },

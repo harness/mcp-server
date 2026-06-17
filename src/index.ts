@@ -16,25 +16,13 @@ import { registerAllPrompts } from "./prompts/index.js";
 import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
+import { createHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
+import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "./utils/session-headers.js";
+
 
 const log = createLogger("main");
-
-const PIPELINE_VERSION_HEADER = "x-harness-pipeline-version";
-
-function parsePipelineVersionHeader(req: import("express").Request): "0" | "1" | undefined {
-  const raw = req.headers[PIPELINE_VERSION_HEADER];
-  const s = Array.isArray(raw) ? raw[0] : raw;
-  if (s === "0" || s === "1") return s;
-  return undefined;
-}
-
-function mergeConfigWithPipelineVersion(baseConfig: Config, req: import("express").Request): Config {
-  const pv = parsePipelineVersionHeader(req);
-  if (pv === undefined) return baseConfig;
-  return { ...baseConfig, HARNESS_PIPELINE_VERSION: pv };
-}
 
 interface HarnessServerResult {
   server: McpServer;
@@ -79,8 +67,8 @@ function createHarnessServer(config: Config, sharedAuditManager?: AuditManager):
         "",
         "PR RESOURCES: pull_request, pr_comment, pr_activity, pr_reviewer, pr_check — all accept URL or explicit repo_id + pr_number.",
         ...(config.HARNESS_PIPELINE_VERSION === "1"
-          ? ["", "PIPELINE VERSION: This account uses v1 pipelines. Use resource_type='pipeline_v1' for all pipeline operations."]
-          : ["", "PIPELINE VERSION: This account uses v0 pipelines. Use resource_type='pipeline' for all pipeline operations."]),
+          ? ["", "PIPELINES: Both v0 ('pipeline') and v1 ('pipeline_v1') are available. Default to v1. Use harness_describe for version detection hints."]
+          : ["", "PIPELINES: Both v0 ('pipeline') and v1 ('pipeline_v1') are available. Default to v0 unless user explicitly requests v1 or 'agent pipeline'. Use harness_describe for version detection hints."]),
       ].join("\n"),
     },
   );
@@ -143,6 +131,7 @@ async function startStdio(config: Config): Promise<void> {
     lastActivityTs = Date.now();
     return originalSend(msg);
   };
+  process.stdin.on("data", () => { lastActivityTs = Date.now(); });
 
   process.stdin.on("end", () => {
     logToFile("stdin EOF — parent disconnected", {
@@ -164,7 +153,10 @@ async function startStdio(config: Config): Promise<void> {
     }
   });
 
+  let keepaliveTimer: ReturnType<typeof setInterval> | undefined;
+
   const shutdown = async (signal: string): Promise<void> => {
+    if (keepaliveTimer) clearInterval(keepaliveTimer);
     log.info(`Received ${signal}, closing stdio transport...`, {
       idle_ms: Date.now() - lastActivityTs,
       uptime_s: Math.round(process.uptime()),
@@ -176,8 +168,40 @@ async function startStdio(config: Config): Promise<void> {
     process.exit(0);
   };
 
-  process.on("SIGINT", () => { shutdown("SIGINT"); });
-  process.on("SIGTERM", () => { shutdown("SIGTERM"); });
+  process.on("SIGINT", () => {
+    shutdown("SIGINT").catch((err) => {
+      logToFile("shutdown failed", { signal: "SIGINT", error: String(err) });
+      process.exit(1);
+    });
+  });
+  process.on("SIGTERM", () => {
+    shutdown("SIGTERM").catch((err) => {
+      logToFile("shutdown failed", { signal: "SIGTERM", error: String(err) });
+      process.exit(1);
+    });
+  });
+
+  // Keepalive check — detect half-dead connections where stdin hasn't sent EOF
+  // but the parent process is gone. Exit immediately if reparented to init (ppid 1);
+  // otherwise wait for idle timeout + stdin not readable.
+  const KEEPALIVE_CHECK_MS = 30_000;
+  const KEEPALIVE_TIMEOUT_MS = 5 * 60_000;
+  keepaliveTimer = setInterval(() => {
+    const idleMs = Date.now() - lastActivityTs;
+    const reparented = process.ppid === 1;
+    const stdinDead = !process.stdin.readable;
+
+    if (reparented || (idleMs > KEEPALIVE_TIMEOUT_MS && stdinDead)) {
+      logToFile("parent gone — exiting", {
+        idle_ms: idleMs,
+        reparented,
+        stdin_readable: process.stdin.readable,
+        uptime_s: Math.round(process.uptime()),
+      });
+      auditManager.close().catch(() => {}).finally(() => process.exit(0));
+    }
+  }, KEEPALIVE_CHECK_MS);
+  keepaliveTimer.unref();
 }
 
 // ---------------------------------------------------------------------------
@@ -204,30 +228,21 @@ const REAP_INTERVAL_MS = 60_000;    // check every minute
 async function startHttp(config: Config, port: number): Promise<void> {
   const host = process.env.HOST || "127.0.0.1";
 
-  const isLoopback = host === "127.0.0.1" || host === "::1" || host === "localhost";
-  if (!isLoopback) {
-    log.warn(
-      "HTTP server binding to non-loopback address without authentication. " +
-      "Any client that can reach this address will have full access to Harness resources via the configured API key. " +
-      "Deploy behind an authenticated reverse proxy or use HARNESS_ALLOWED_ORIGINS to restrict access.",
-      { host, port },
-    );
-  }
+  validateHttpAuthForBindHost(host, config);
 
   const app = createMcpExpressApp(resolveHttpHostValidationOptions(host, config));
-
-  const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
-  const { json } = await import("express");
-  app.use(json({ limit: maxBodySize }));
 
   // CORS — allow GET, POST, DELETE for session-based MCP
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, mcp-session-id, x-harness-pipeline-version");
+    res.setHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, mcp-session-id, x-harness-api-key, x-harness-account-id, x-harness-org, x-harness-project, x-harness-pipeline-version, x-harness-auto-approve-risk");
     res.setHeader("Access-Control-Expose-Headers", "mcp-session-id");
     next();
   });
+
+  // Auth gate before body parsing — reject unauthenticated requests without allocating body memory
+  app.use(createHttpAuthMiddleware(config.HARNESS_MCP_AUTH_TOKEN));
 
   // Simple per-IP rate limiting: 60 requests per minute
   const ipHits = new Map<string, { count: number; resetAt: number }>();
@@ -253,6 +268,10 @@ async function startHttp(config: Config, port: number): Promise<void> {
     }
     next();
   });
+
+  const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
+  const { json } = await import("express");
+  app.use(json({ limit: maxBodySize }));
 
   // ---- Session store ----
   const sessions = new Map<string, Session>();
@@ -327,7 +346,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
     let server: McpServer | undefined;
     let transport: StreamableHTTPServerTransport | undefined;
     try {
-      const sessionConfig = mergeConfigWithPipelineVersion(config, req);
+      const sessionConfig = mergeConfigWithSessionHeaders(config, req.headers);
       const result = createHarnessServer(sessionConfig, sharedAuditManager);
       server = result.server;
       transport = new StreamableHTTPServerTransport({
@@ -347,6 +366,17 @@ async function startHttp(config: Config, port: number): Promise<void> {
       await server.connect(transport);
       await transport.handleRequest(req, res, req.body);
     } catch (err) {
+      if (err instanceof MissingSessionCredentialsError) {
+        log.warn("Session rejected — missing credentials", { error: err.message });
+        if (!res.headersSent) {
+          res.status(401).json({
+            jsonrpc: "2.0",
+            error: { code: -32001, message: err.message },
+            id: null,
+          });
+        }
+        return;
+      }
       log.error("Error initializing session", { error: String(err) });
       if (!res.headersSent) {
         res.status(400).json({
@@ -520,11 +550,19 @@ async function main(): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.LOG_LEVEL);
 
+  if (config.HARNESS_MCP_MODE === "multi-user" && transport === "stdio") {
+    throw new Error(
+      "Multi-user mode is only supported with HTTP transport. " +
+      "Use --transport http or set HARNESS_MCP_MODE=single-user for stdio.",
+    );
+  }
+
   log.info("Starting harness-mcp-server", {
     transport,
+    mode: config.HARNESS_MCP_MODE,
     baseUrl: config.HARNESS_BASE_URL,
-    accountId: config.HARNESS_ACCOUNT_ID,
-    defaultOrg: config.HARNESS_ORG,
+    accountId: config.HARNESS_ACCOUNT_ID || "(per-session)",
+    defaultOrg: config.HARNESS_ORG ?? "(none)",
     defaultProject: config.HARNESS_PROJECT ?? "(none)",
     toolsets: config.HARNESS_TOOLSETS ?? "(all)",
   });

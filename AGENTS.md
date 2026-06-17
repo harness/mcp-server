@@ -57,6 +57,17 @@
 - Zero context switching required from the user
 - Go fix failing CI tests without being told how
 
+### 7. Pre-Push Architecture-Review Pass (avoid the Cursor-bot round-trip)
+The "Sunil On Demand Architecture Review" bot reviews every PR and reliably catches the same public-contract gaps. Self-review against these BEFORE pushing — each round-trip costs a full review cycle. For every new/changed resource or endpoint, confirm:
+- **No raw passthrough.** Every `responseExtractor` projects a stable, documented shape — never `passthrough` on a real endpoint. Backend envelope/debug/meta must not cross the tool boundary.
+- **Docs match implementation.** Every field the description/`bodySchema`/`paramsSchema` promises is actually what the extractor emits, sourced from the field it claims (identifier-named field → stable id, not a display label).
+- **Metadata matches operations.** `listFilterFields` only on resources with `list`; get-only params go in the `get` op's `paramsSchema`. Don't leak get params into the global filter catalog.
+- **Policy is consistent, not ad-hoc.** Read-only/confirmation gating keys off `operationPolicy.risk`, mirroring `registry.dispatchExecute()` — never gate by tool family or hardcode an action allowlist. Classify `risk` by what the endpoint actually does (a no-mutation query is `risk: "read"`).
+- **No silent data loss.** Body builders use `!= null` (not truthiness) so `0`/`false` survive; metadata strippers preserve meaningful empty collections but prune `{}` placeholder rows; reattached raw fields are re-stripped.
+- **Tests cover the contract, not just the request.** Add a response-shape/extractor test (envelope dropped, empty/edge cases) and a request-shape test for every new extractor and body builder — "no focused coverage" is itself a review finding.
+- **Guardrails are green locally.** Run `pnpm build` THEN `pnpm docs:generate`, plus `pnpm typecheck` and `pnpm test`, before pushing. `docs:check` reads from `build/`.
+- **No internal Jira IDs in external PRs.** This is a public OSS repo — do not put Harness-internal ticket IDs (e.g. `AIDEVOPS-1234`, `AIDEVOSP-1830`) in PR titles, descriptions, or commit messages. Describe the user-facing problem and fix instead; link internal tickets only in private channels or the internal tracker.
+
 ---
 
 ## Task Management
@@ -277,8 +288,8 @@ HARNESS_ACCOUNT_ID=abc123xyz                    # Account identifier
 HARNESS_BASE_URL=https://app.harness.io         # Override for self-managed
 
 # .env — optional defaults
-HARNESS_DEFAULT_ORG=default                     # Default org identifier
-HARNESS_DEFAULT_PROJECT=                        # Default project identifier
+HARNESS_ORG=                                    # Default org identifier (required if not provided per-call)
+HARNESS_PROJECT=                                # Default project identifier
 HARNESS_API_TIMEOUT_MS=30000                    # Request timeout
 HARNESS_MAX_RETRIES=3                           # Retry count for transient failures
 LOG_LEVEL=info                                  # debug | info | warn | error
@@ -288,16 +299,19 @@ LOG_LEVEL=info                                  # debug | info | warn | error
 ```typescript
 import * as z from "zod/v4";
 
+const emptyStringAsUndefined = (val: unknown): unknown => val === "" ? undefined : val;
+const optionalStringFromEnv = z.preprocess(emptyStringAsUndefined, z.string().optional());
+
 export const ConfigSchema = z.object({
   HARNESS_API_KEY: z.string().min(1, "HARNESS_API_KEY is required"),
-  HARNESS_ACCOUNT_ID: z.string().optional(),
+  HARNESS_ACCOUNT_ID: optionalStringFromEnv,
   HARNESS_BASE_URL: z.string().url().default("https://app.harness.io"),
-  HARNESS_DEFAULT_ORG_ID: z.string().default("default"),
-  HARNESS_DEFAULT_PROJECT_ID: z.string().optional(),
+  HARNESS_ORG: optionalStringFromEnv,
+  HARNESS_PROJECT: optionalStringFromEnv,
   HARNESS_API_TIMEOUT_MS: z.coerce.number().default(30000),
   HARNESS_MAX_RETRIES: z.coerce.number().default(3),
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
-  HARNESS_TOOLSETS: z.string().optional(),
+  HARNESS_TOOLSETS: optionalStringFromEnv,
   HARNESS_MAX_BODY_SIZE_MB: z.coerce.number().default(10),
   HARNESS_RATE_LIMIT_RPS: z.coerce.number().default(10),
   HARNESS_READ_ONLY: z.coerce.boolean().default(false),
@@ -413,7 +427,7 @@ server.prompt(
 4. Similar past failures if identifiable
 
 Execution ID: ${executionId}
-Project: ${projectId || "default"}
+Project: ${projectId || "not specified"}
 
 Use get_execution and get_execution_logs tools to gather context.`
       }
@@ -527,7 +541,7 @@ The MCP server exposes an `instructions` string (in `src/index.ts`) that is sent
 |---------|-----|
 | `console.log()` in stdio mode | Use `console.error()` or stderr logger ONLY |
 | Forgetting `accountIdentifier` param | Inject from config in HarnessClient automatically |
-| Raw API response passthrough | Always map to clean, typed output objects |
+| Raw API response passthrough (`responseExtractor: passthrough`) | Map to a stable, projected shape (`{columns, rows, stats}`, `{items, total}`). Passthrough leaks backend envelope/debug/meta fields across the public tool boundary |
 | Exposing secret values | Only return secret metadata (name, type, scope) |
 | Unbounded list queries | Always paginate, default size=20, max=100 |
 | No retry on rate limits | Implement exponential backoff on HTTP 429 |
@@ -541,6 +555,14 @@ The MCP server exposes an `instructions` string (in `src/index.ts`) that is sent
 | `message` param for custom errors | Zod 4 uses unified `error` param: `z.string().min(5, { error: "Too short" })` |
 | Adding docs to server `instructions` | Put resource-specific guidance in `actionDescription`, `executeHint`, `bodySchema`, or `inputExpansions` instead |
 | Hardcoding input transformations | Use declarative `inputExpansions` on `EndpointSpec` — data, not code |
+| Reattaching raw `obj.*` fields after `stripInternalMeta()` | Re-run the stripper on each reattached field — raw values can re-introduce nested `columnMappingMeta`/internal keys the earlier strip removed |
+| Published field name ≠ its source (e.g. `connectorId` filled from `connector_name`) | Fill identifier-named fields from a stable identifier; fall back to display names only if that is all the API returns. A name is not a JOIN key |
+| `listFilterFields` on a get-only resource | `kind`/`include_transitive`-style get params belong in the `get` op's `paramsSchema`, not the global `harness_list` filter catalog `harness_describe` aggregates |
+| Read-only / confirmation gating by tool family | Gate by the action's `operationPolicy.risk`, mirroring `registry.dispatchExecute()` — `risk: "read"` actions (e.g. a query language with no mutations) must pass in read-only mode |
+| Stripping non-empty array values, or leaving `{}` placeholder rows | Preserve explicitly-empty collections (meaningful), but prune array elements that collapse to `{}` after stripping — recurse first, then decide |
+| Truthiness checks dropping `0`/`false` from body builders | Use `!= null` checks so zero-valued options (`timeout_ms: 0`) reach the API instead of being silently rewritten |
+| Internal Jira IDs in PR title, description, or commit message | Describe the user-facing problem/fix in plain language; reserve ticket IDs for internal trackers and Slack, not the public GitHub history |
+| Running `pnpm docs:generate` without `pnpm build` first | `docs:generate` reads from `build/` — a stale build produces wrong counts and `docs:check` fails in CI. Build, then generate |
 
 ---
 
@@ -620,13 +642,44 @@ Add to Claude Desktop config (`claude_desktop_config.json`):
       "env": {
         "HARNESS_API_KEY": "pat.xxx.xxx.xxx",
         "HARNESS_ACCOUNT_ID": "your-account-id",
-        "HARNESS_DEFAULT_ORG": "default",
-        "HARNESS_DEFAULT_PROJECT": "your-project"
+        "HARNESS_ORG": "your-org-id",
+        "HARNESS_PROJECT": "your-project"
       }
     }
   }
 }
 ```
+
+---
+
+## Cursor Cloud specific instructions
+
+### Services
+
+This is a single-service TypeScript MCP server (no database, no sidecar containers). The only external dependency is the Harness.io REST API.
+
+### Common commands
+
+See `package.json` scripts. Key commands:
+- `pnpm build` — compile TypeScript to `build/`
+- `pnpm typecheck` — type-check without emitting
+- `pnpm test` — run vitest unit tests (1458 tests, ~12s)
+- `pnpm start` — run server in stdio mode (requires `HARNESS_API_KEY`)
+- `pnpm start:http` — run server in HTTP mode on port 3000
+- `pnpm dev` — watch mode for TypeScript compilation
+- `pnpm inspect` — launch MCP Inspector against stdio server
+
+### Running the server locally
+
+The server requires `HARNESS_API_KEY` env var to start in single-user mode. Set it before running `pnpm start` or `node build/index.js stdio`. Account ID is auto-extracted from PAT tokens (`pat.<accountId>.<tokenId>.<secret>`).
+
+For HTTP transport, set `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true` for local dev without auth tokens.
+
+### Gotchas
+
+- **pnpm install warning about build scripts**: `esbuild` and `protobufjs` build scripts are blocked by default. This is expected and does not affect functionality — those packages are transitive dependencies that work without native builds.
+- **Stdio transport**: Never use `console.log()` in source code — it corrupts JSON-RPC. Use `console.error()` or the stderr logger from `src/utils/logger.ts`.
+- **Build before run**: Always run `pnpm build` before `pnpm start` or `pnpm inspect` — the server runs from `build/index.js`, not source.
 
 ---
 

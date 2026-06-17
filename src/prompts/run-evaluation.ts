@@ -35,7 +35,7 @@ ${org_id ? `org_id=${org_id}` : "Use default HARNESS_ORG"}; ${project_id ? `proj
    - Datasets: \`harness_list(resource_type="eval_dataset")\` — create with \`harness_create\` if needed (body: name, identifier, ...).
    - Targets: \`harness_list(resource_type="eval_target")\`
    - Metric sets: \`harness_list(resource_type="eval_metric_set")\`
-   - Models (optional): \`harness_list(resource_type="eval_model")\`
+   - LLM connectors (for prompt targets / judge models): \`harness_list(resource_type="connector", filters={type:"OpenAI"})\` (also type: "Anthropic")
 
 3. **Create an evaluation** — \`harness_create(resource_type="evaluation", body={ name, dataset_id, target_id, metric_set_id, ... })\`
 
@@ -46,7 +46,9 @@ ${org_id ? `org_id=${org_id}` : "Use default HARNESS_ORG"}; ${project_id ? `proj
 ## Notes
 - All AI Evals paths are under the Harness platform host (same \`HARNESS_BASE_URL\` as the UI); scope is \`/ai-evals/api/v1/orgs/{org}/projects/{project}/...\`.
 - Ensure \`Harness-Account\` and auth are configured on the MCP server.
-- For comparing runs: \`harness_execute(resource_type="eval_run", action="compare", params={ run_ids: "uuid1,uuid2,uuid3" })\` (no resource_id needed for compare).`,
+- Resources support **git-backed storage**: pass \`storage_type: "git"\` + \`git_source: { file_path: "..." }\` on create to reference YAML definitions in a repo instead of managing inline.
+- For comparing runs: \`harness_execute(resource_type="eval_run", action="compare", params={ run_ids: "uuid1,uuid2,uuid3" })\` (no resource_id needed for compare).
+- For git-backed evals, pass \`branch\` in the trigger body to run against a PR branch.`,
           },
         },
       ],

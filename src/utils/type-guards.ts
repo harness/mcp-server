@@ -23,6 +23,11 @@ export function asNumber(value: unknown): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
+/** Narrow `unknown` to `FormData` with a runtime check (guards against environments where FormData is not defined). */
+export function isFormDataBody(body: unknown): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
 /**
  * Coerce a value to a Record.  LLMs sometimes serialize nested objects as JSON
  * strings (e.g. `params: '{"artifact_id":"..."}' `) instead of actual objects.

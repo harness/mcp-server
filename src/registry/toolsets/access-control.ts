@@ -323,7 +323,7 @@ export const accessControlToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/resourcegroup/api/v2/resourcegroup",
+          path: "/authz/api/v2/resourcegroup",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
@@ -335,7 +335,7 @@ export const accessControlToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: "/resourcegroup/api/v2/resourcegroup/{resourceGroupIdentifier}",
+          path: "/authz/api/v2/resourcegroup/{resourceGroupIdentifier}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { resource_group_id: "resourceGroupIdentifier" },
           responseExtractor: ngExtract,
@@ -343,9 +343,26 @@ export const accessControlToolset: ToolsetDefinition = {
         },
         create: {
           method: "POST",
-          path: "/resourcegroup/api/v2/resourcegroup",
+          path: "/authz/api/v2/resourcegroup",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input) => input.body,
+          /** POST body must be `{ resourceGroup: { ... } }` per Harness authz API. */
+          bodyBuilder: (input) => {
+            const b = input.body;
+            if (b === undefined || b === null) return b;
+            if (typeof b !== "object" || Array.isArray(b)) return b;
+            const rec = b as Record<string, unknown>;
+            if (
+              "resourceGroup" in rec &&
+              typeof rec.resourceGroup === "object" &&
+              rec.resourceGroup !== null &&
+              !Array.isArray(rec.resourceGroup)
+            ) {
+              return { resourceGroup: rec.resourceGroup };
+            }
+            return { resourceGroup: rec };
+          },
+          bodyWrapperKey: "resourceGroup",
+          injectAccountInBody: true,
           responseExtractor: ngExtract,
           description: "Create a resource group",
           bodySchema: {
@@ -361,7 +378,7 @@ export const accessControlToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/resourcegroup/api/v2/resourcegroup/{resourceGroupIdentifier}",
+          path: "/authz/api/v2/resourcegroup/{resourceGroupIdentifier}",
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { resource_group_id: "resourceGroupIdentifier" },
           responseExtractor: ngExtract,

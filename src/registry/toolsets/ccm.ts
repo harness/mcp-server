@@ -1,5 +1,6 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, PreflightContext } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
+import type { HarnessClient } from "../../client/harness-client.js";
 import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
 
 // ---------------------------------------------------------------------------
@@ -192,8 +193,40 @@ function buildTimeFilters(timeFilter: string): Record<string, unknown>[] {
       end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
       break;
     }
+    case "THIS_QUARTER": {
+      const quarterStartMonth = Math.floor(now.getUTCMonth() / 3) * 3;
+      start = new Date(Date.UTC(now.getUTCFullYear(), quarterStartMonth, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+      break;
+    }
+    case "THIS_YEAR": {
+      start = new Date(Date.UTC(now.getUTCFullYear(), 0, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 23, 59, 59, 999));
+      break;
+    }
     case "LAST_MONTH": {
       start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0, 23, 59, 59, 999));
+      break;
+    }
+    case "LAST_QUARTER": {
+      const currentQuarterStartMonth = Math.floor(now.getUTCMonth() / 3) * 3;
+      start = new Date(Date.UTC(now.getUTCFullYear(), currentQuarterStartMonth - 3, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear(), currentQuarterStartMonth, 0, 23, 59, 59, 999));
+      break;
+    }
+    case "LAST_YEAR": {
+      start = new Date(Date.UTC(now.getUTCFullYear() - 1, 0, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear() - 1, 11, 31, 23, 59, 59, 999));
+      break;
+    }
+    case "LAST_3_MONTHS": {
+      start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 3, 1));
+      end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0, 23, 59, 59, 999));
+      break;
+    }
+    case "LAST_6_MONTHS": {
+      start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 6, 1));
       end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0, 23, 59, 59, 999));
       break;
     }
@@ -278,6 +311,180 @@ function gqlPath(input: Record<string, unknown>): string {
   return "/ccm/api/graphql";
 }
 
+/**
+ * Normalizes REST cost_category responses into the same {values} shape
+ * that perspectiveFilters returns, so callers get a uniform interface.
+ *
+ * - No value_sub_type → list endpoint → extract category names from the list
+ * - With value_sub_type → get endpoint → extract costTarget bucket names
+ */
+function extractBusinessMappingValues(raw: unknown, valueSubType?: string): unknown {
+  // Unwrap NG envelope: response may be { data: ... } or { resource: ... }
+  const envelope = raw as { data?: unknown; resource?: unknown } | undefined;
+  const unwrapped = envelope?.data ?? envelope?.resource ?? raw;
+
+  if (valueSubType) {
+    // Single category GET: unwrapped is { costTargets: [{ name }], ... }
+    const entity = unwrapped as Record<string, unknown>;
+    const targets = entity.costTargets as Array<{ name?: string }> | undefined;
+    if (!Array.isArray(targets)) {
+      return { values: [], _error: "No costTargets found in response" };
+    }
+    return {
+      values: targets.map(t => t.name).filter(Boolean),
+    };
+  }
+  // List all categories: unwrapped is { businessMappings: [{ uuid, name }] }
+  const data = unwrapped as Record<string, unknown>;
+  const mappings = data.businessMappings as Array<{ uuid?: string; name?: string }> | undefined;
+  if (Array.isArray(mappings)) {
+    return {
+      values: mappings.map(m => m.name).filter(Boolean),
+    };
+  }
+  // Fallback: if unwrapped is already an array
+  if (Array.isArray(unwrapped)) {
+    return {
+      values: (unwrapped as Array<{ name?: string }>).map(m => m.name).filter(Boolean),
+    };
+  }
+  return { values: [], _error: "Unexpected response shape — no businessMappings or array found" };
+}
+
+// ---------------------------------------------------------------------------
+// Perspective preferences preflight — mirrors Go server's
+// GetPerspectivePreferenceDefaults + overlay pattern
+// ---------------------------------------------------------------------------
+
+interface SettingsValue {
+  identifier?: string;
+  value?: string;
+}
+
+function mapSettingsToViewPreferences(settings: SettingsValue[]): Record<string, unknown> {
+  const get = (id: string): string | undefined =>
+    settings.find(s => s.identifier === id)?.value;
+  const getBool = (id: string): boolean | undefined => {
+    const v = get(id);
+    return v !== undefined ? v === "true" : undefined;
+  };
+
+  const prefs: Record<string, unknown> = {};
+
+  const includeOthers = getBool("show_others");
+  if (includeOthers !== undefined) prefs.includeOthers = includeOthers;
+  const showAnomalies = getBool("show_anomalies");
+  if (showAnomalies !== undefined) prefs.showAnomalies = showAnomalies;
+  const includeUnallocated = getBool("show_unallocated_cluster_cost");
+  if (includeUnallocated !== undefined) prefs.includeUnallocatedCost = includeUnallocated;
+
+  // AWS preferences
+  const awsPrefs: Record<string, unknown> = {};
+  const awsDisc = getBool("include_aws_discounts");
+  if (awsDisc !== undefined) awsPrefs.includeDiscounts = awsDisc;
+  const awsCred = getBool("include_aws_credit");
+  if (awsCred !== undefined) awsPrefs.includeCredits = awsCred;
+  const awsRef = getBool("include_aws_refunds");
+  if (awsRef !== undefined) awsPrefs.includeRefunds = awsRef;
+  const awsTax = getBool("include_aws_taxes");
+  if (awsTax !== undefined) awsPrefs.includeTaxes = awsTax;
+  const awsCost = get("show_aws_cost_as");
+  if (awsCost) awsPrefs.awsCost = awsCost;
+  if (Object.keys(awsPrefs).length > 0) prefs.awsPreferences = awsPrefs;
+
+  // GCP preferences
+  const gcpPrefs: Record<string, unknown> = {};
+  const gcpDisc = getBool("include_gcp_discounts");
+  if (gcpDisc !== undefined) gcpPrefs.includeDiscounts = gcpDisc;
+  const gcpTax = getBool("include_gcp_taxes");
+  if (gcpTax !== undefined) gcpPrefs.includeTaxes = gcpTax;
+  const gcpPromo = getBool("include_gcp_promotions");
+  if (gcpPromo !== undefined) gcpPrefs.includePromotions = gcpPromo;
+  const gcpNeg = getBool("include_gcp_negotiated_savings");
+  if (gcpNeg !== undefined) gcpPrefs.includeNegotiatedSavings = gcpNeg;
+  const gcpSub = getBool("include_gcp_subscription_credits");
+  if (gcpSub !== undefined) gcpPrefs.includeSubscriptionCredits = gcpSub;
+  const gcpSus = getBool("include_gcp_sustained_use_discounts");
+  if (gcpSus !== undefined) gcpPrefs.includeSustainedUseDiscounts = gcpSus;
+  const gcpRes = getBool("include_gcp_resource_based_cud_credits");
+  if (gcpRes !== undefined) gcpPrefs.includeResourceBasedCudCredits = gcpRes;
+  const gcpLeg = getBool("include_gcp_legacy_based_cud_credits");
+  if (gcpLeg !== undefined) gcpPrefs.includeLegacyBasedCudCredits = gcpLeg;
+  const gcpSpend = getBool("include_gcp_spend_based_cud_discounts");
+  if (gcpSpend !== undefined) gcpPrefs.includeSpendBasedCudDiscounts = gcpSpend;
+  if (Object.keys(gcpPrefs).length > 0) prefs.gcpPreferences = gcpPrefs;
+
+  // Azure preferences
+  const azureCost = get("show_azure_cost_as");
+  if (azureCost) prefs.azureViewPreferences = { costType: azureCost };
+
+  return prefs;
+}
+
+function deepMerge(base: Record<string, unknown>, override: Record<string, unknown>): Record<string, unknown> {
+  const result = { ...base };
+  for (const key of Object.keys(override)) {
+    const ov = override[key];
+    if (ov !== undefined && ov !== null) {
+      if (typeof ov === "object" && !Array.isArray(ov) && typeof result[key] === "object" && result[key] !== null && !Array.isArray(result[key])) {
+        result[key] = deepMerge(result[key] as Record<string, unknown>, ov as Record<string, unknown>);
+      } else {
+        result[key] = ov;
+      }
+    }
+  }
+  return result;
+}
+
+/**
+ * Preflight hook for cost_perspective.create: fetches account-level preference
+ * defaults from the Settings API and uses them as a baseline. Agent-provided
+ * viewPreferences fields are overlaid on top (agent wins).
+ *
+ * Mirrors the Go MCP server pattern at:
+ * mcpServerInternal/mcp-server-pkg/common/pkg/tools/ccmperspectives.go
+ */
+async function perspectiveCreatePreflight(ctx: PreflightContext): Promise<void> {
+  const harnessClient = ctx.client as HarnessClient;
+  const input = ctx.input as { body?: Record<string, unknown> };
+  if (!input.body) input.body = {};
+
+  const accountId = harnessClient.account;
+  if (!accountId) return;
+
+  // Fetch account preference defaults
+  try {
+    const resp = await harnessClient.request<{ resource?: SettingsValue[]; data?: SettingsValue[] } | SettingsValue[]>({
+      method: "GET",
+      path: "/ng/api/settings",
+      params: {
+        accountIdentifier: accountId,
+        category: "CE",
+        group: "perspective_preferences",
+      },
+    });
+
+    const settings = Array.isArray(resp)
+      ? resp
+      : (resp as { resource?: SettingsValue[]; data?: SettingsValue[] }).resource
+        ?? (resp as { resource?: SettingsValue[]; data?: SettingsValue[] }).data
+        ?? [];
+
+    if (settings.length > 0) {
+      const defaults = mapSettingsToViewPreferences(settings);
+      const agentPrefs = (input.body.viewPreferences ?? {}) as Record<string, unknown>;
+      input.body.viewPreferences = deepMerge(defaults, agentPrefs);
+    }
+  } catch {
+    // Graceful degradation — proceed without defaults
+  }
+
+  // Set other defaults if absent
+  if (!input.body.viewState) input.body.viewState = "COMPLETED";
+  if (!input.body.viewType) input.body.viewType = "CUSTOMER";
+  if (!input.body.viewVersion) input.body.viewVersion = "v1";
+}
+
 // ---------------------------------------------------------------------------
 // Toolset definition: 6 resource types covering REST + GraphQL
 // ---------------------------------------------------------------------------
@@ -301,9 +508,12 @@ export const ccmToolset: ToolsetDefinition = {
       identifierFields: ["perspective_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter perspectives by name" },
-        { name: "sort_type", description: "Sort field", enum: ["NAME", "LAST_EDIT", "COST", "CLUSTER_COST"] },
+        { name: "sort_type", description: "Sort field (default: TIME)", enum: ["TIME", "COST", "CLUSTER_COST", "NAME"] },
         { name: "sort_order", description: "Sort direction", enum: ["ASCENDING", "DESCENDING"] },
         { name: "cloud_filter", description: "Filter by cloud provider", enum: ["AWS", "GCP", "AZURE", "CLUSTER", "DEFAULT"] },
+        { name: "view_state", description: "Filter by state", enum: ["DRAFT", "COMPLETED"] },
+        { name: "view_type", description: "Filter by type", enum: ["SAMPLE", "CUSTOMER", "DEFAULT"] },
+        { name: "view_ids", description: "Filter by specific perspective IDs (comma-separated or array)" },
       ],
       operations: {
         list: {
@@ -315,6 +525,9 @@ export const ccmToolset: ToolsetDefinition = {
             sort_type: "sortType",
             sort_order: "sortOrder",
             cloud_filter: "cloudFilters",
+            view_state: "viewState",
+            view_type: "viewType",
+            view_ids: "viewIds",
             page: "pageNo",
             size: "pageSize",
           },
@@ -332,15 +545,27 @@ export const ccmToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/ccm/api/perspective",
+          preflight: perspectiveCreatePreflight,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
-            description: "Cost perspective definition",
+            description: "Cost perspective definition. viewPreferences defaults are auto-fetched from account settings and merged — agent-provided values override.",
             fields: [
-              { name: "name", type: "string", required: true, description: "Perspective name" },
-              { name: "viewVisualization", type: "object", required: false, description: "Chart type and group by configuration" },
-              { name: "viewRules", type: "array", required: false, description: "Filter rules for the perspective", itemType: "rule object" },
-              { name: "viewTimeRange", type: "object", required: false, description: "Time range settings" },
+              { name: "name", type: "string", required: true, description: "Perspective name (1-80 chars)" },
+              { name: "viewVisualization", type: "object", required: false, description: "Chart config: { granularity: 'DAY'|'MONTH', groupBy: { fieldId, fieldName, identifier, identifierName }, chartType: 'STACKED_TIME_SERIES'|'STACKED_LINE_CHART' }" },
+              {
+                name: "viewRules", type: "array", required: false,
+                description: "Filter rules. Multiple rules are OR-ed. Each rule has viewConditions (AND-ed). Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier (COMMON|AWS|GCP|AZURE|CLUSTER|LABEL|LABEL_V2|BUSINESS_MAPPING|EXTERNAL_DATA), identifierName }, viewOperator: 'IN'|'NOT_IN'|'LIKE'|'NOT_NULL'|'NULL', values: string[] }",
+                itemType: "{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_IN' | 'LIKE' | 'NOT_NULL' | 'NULL', values: string[] }] }",
+              },
+              { name: "viewTimeRange", type: "object", required: false, description: "Time range: { viewTimeRangeType: 'LAST_7'|'LAST_30'|'LAST_MONTH'|'CURRENT_MONTH'|'LAST_QUARTER'|'CURRENT_QUARTER'|'LAST_3_MONTH'|'CUSTOM', startTime?: number (epoch ms), endTime?: number (epoch ms) }" },
+              { name: "folderId", type: "string", required: false, description: "Target folder ID to place perspective in" },
+              { name: "viewVersion", type: "string", required: false, description: "View version (default: 'v1')" },
+              { name: "dataSources", type: "array", required: false, description: "Data sources: CLUSTER|AWS|GCP|AZURE|EXTERNAL_DATA|OPENAI|ANTHROPIC|COMMON|CUSTOM|BUSINESS_MAPPING|LABEL|LABEL_V2" },
+              { name: "viewType", type: "string", required: false, description: "Perspective type (default: 'CUSTOMER'): SAMPLE|CUSTOMER|DEFAULT" },
+              { name: "viewState", type: "string", required: false, description: "State (default: 'COMPLETED'): DRAFT|COMPLETED" },
+              { name: "viewPreferences", type: "object", required: false, description: "Cost display preferences. Account defaults auto-applied as baseline; provide fields here to override. Shape: { showAnomalies?: bool, includeOthers?: bool, includeUnallocatedCost?: bool, awsPreferences?: { includeDiscounts, includeCredits, includeRefunds, includeTaxes: bool, awsCost: 'AMORTISED'|'NET_AMORTISED'|'BLENDED'|'UNBLENDED'|'EFFECTIVE' }, gcpPreferences?: { includeDiscounts, includeTaxes, includePromotions, includeNegotiatedSavings, includeSubscriptionCredits, includeSustainedUseDiscounts, includeResourceBasedCudCredits, includeLegacyBasedCudCredits, includeSpendBasedCudDiscounts: bool }, azureViewPreferences?: { costType: 'ACTUAL'|'AMORTIZED' } }" },
+              { name: "unitMetricInfo", type: "array", required: false, description: "Unit metrics: [{ name (max 80), kind: 'DIVISION'|'FORMULA', unitMetricNumerator: { operands: [{ type: 'VIEW'|'METRIC', operandName }], operators: ['ADD'|'SUBTRACT'|'MULTIPLY'|'DIVIDE'] }, unitMetricDenominator: { ... } }]" },
             ],
           },
           responseExtractor: ngExtract,
@@ -352,13 +577,24 @@ export const ccmToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: (input) => input.body,
           bodySchema: {
-            description: "Cost perspective update",
+            description: "Cost perspective update. Fetch the existing perspective via harness_get first, modify the fields, and send the full object back. No preflight defaults — only explicitly provided fields are sent.",
             fields: [
               { name: "uuid", type: "string", required: true, description: "Perspective UUID (from get)" },
-              { name: "name", type: "string", required: true, description: "Perspective name" },
-              { name: "viewVisualization", type: "object", required: false, description: "Chart type and group by configuration" },
-              { name: "viewRules", type: "array", required: false, description: "Filter rules", itemType: "rule object" },
-              { name: "viewTimeRange", type: "object", required: false, description: "Time range settings" },
+              { name: "name", type: "string", required: true, description: "Perspective name (1-80 chars)" },
+              { name: "viewVisualization", type: "object", required: false, description: "Chart config: { granularity: 'DAY'|'MONTH', groupBy: { fieldId, fieldName, identifier, identifierName }, chartType: 'STACKED_TIME_SERIES'|'STACKED_LINE_CHART' }" },
+              {
+                name: "viewRules", type: "array", required: false,
+                description: "Filter rules. Multiple rules are OR-ed. Each rule has viewConditions (AND-ed). Each ViewIdCondition: { type: 'VIEW_ID_CONDITION', viewField: { fieldId, fieldName, identifier (COMMON|AWS|GCP|AZURE|CLUSTER|LABEL|LABEL_V2|BUSINESS_MAPPING|EXTERNAL_DATA), identifierName }, viewOperator: 'IN'|'NOT_IN'|'LIKE'|'NOT_NULL'|'NULL', values: string[] }",
+                itemType: "{ viewConditions: [{ type: 'VIEW_ID_CONDITION', viewField: { fieldId: string, fieldName: string, identifier: string, identifierName: string }, viewOperator: 'IN' | 'NOT_IN' | 'LIKE' | 'NOT_NULL' | 'NULL', values: string[] }] }",
+              },
+              { name: "viewTimeRange", type: "object", required: false, description: "Time range: { viewTimeRangeType: 'LAST_7'|'LAST_30'|'LAST_MONTH'|'CURRENT_MONTH'|'LAST_QUARTER'|'CURRENT_QUARTER'|'LAST_3_MONTH'|'CUSTOM', startTime?: number (epoch ms), endTime?: number (epoch ms) }" },
+              { name: "folderId", type: "string", required: false, description: "Target folder ID" },
+              { name: "viewVersion", type: "string", required: false, description: "View version" },
+              { name: "dataSources", type: "array", required: false, description: "Data sources: CLUSTER|AWS|GCP|AZURE|EXTERNAL_DATA|OPENAI|ANTHROPIC|COMMON|CUSTOM|BUSINESS_MAPPING|LABEL|LABEL_V2" },
+              { name: "viewType", type: "string", required: false, description: "Perspective type: SAMPLE|CUSTOMER|DEFAULT" },
+              { name: "viewState", type: "string", required: false, description: "State: DRAFT|COMPLETED" },
+              { name: "viewPreferences", type: "object", required: false, description: "Cost display preferences: { showAnomalies?: bool, includeOthers?: bool, includeUnallocatedCost?: bool, awsPreferences?: { includeDiscounts, includeCredits, includeRefunds, includeTaxes: bool, awsCost: 'AMORTISED'|'NET_AMORTISED'|'BLENDED'|'UNBLENDED'|'EFFECTIVE' }, gcpPreferences?: { includeDiscounts, includeTaxes, includePromotions, includeNegotiatedSavings, includeSubscriptionCredits, includeSustainedUseDiscounts, includeResourceBasedCudCredits, includeLegacyBasedCudCredits, includeSpendBasedCudDiscounts: bool }, azureViewPreferences?: { costType: 'ACTUAL'|'AMORTIZED' } }" },
+              { name: "unitMetricInfo", type: "array", required: false, description: "Unit metrics: [{ name (max 80), kind: 'DIVISION'|'FORMULA', unitMetricNumerator: { operands: [{ type: 'VIEW'|'METRIC', operandName }], operators: ['ADD'|'SUBTRACT'|'MULTIPLY'|'DIVIDE'] }, unitMetricDenominator: { ... } }]" },
             ],
           },
           responseExtractor: ngExtract,
@@ -366,11 +602,116 @@ export const ccmToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/ccm/api/perspective/{perspectiveId}",
+          path: "/ccm/api/perspective",
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          pathParams: { perspective_id: "perspectiveId" },
+          queryParams: { perspective_id: "perspectiveId" },
           responseExtractor: ngExtract,
           description: "Delete a cost perspective",
+        },
+      },
+      executeActions: {
+        clone: {
+          method: "POST",
+          path: "/ccm/api/perspective/clone/{perspectiveId}",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { perspective_id: "perspectiveId" },
+          queryParams: { clone_name: "cloneName", destination_folder_id: "destinationFolderId" },
+          responseExtractor: ngExtract,
+          actionDescription: "Clone a perspective. Requires perspective_id and clone_name. Optionally specify destination_folder_id to place the clone in a specific folder.",
+        },
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 1b. cost_perspective_folder — REST CRUD for perspective folders
+    // ------------------------------------------------------------------
+    {
+      resourceType: "cost_perspective_folder",
+      displayName: "Cost Perspective Folder",
+      description:
+        "Folders for organizing cost perspectives. Use harness_list to see all folders, harness_get to list perspectives in a folder. Use the move_perspectives action to move perspectives between folders.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["folder_id"],
+      listFilterFields: [
+        { name: "folder_name_pattern", description: "Filter folders by name pattern (substring match)" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/ccm/api/perspectiveFolders",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { folder_name_pattern: "folderNamePattern" },
+          responseExtractor: ngExtract,
+          description: "List all perspective folders for the account",
+        },
+        get: {
+          method: "GET",
+          path: "/ccm/api/perspectiveFolders/{folderId}/perspectives",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { folder_id: "folderId" },
+          responseExtractor: ngExtract,
+          description: "Get all perspectives in a specific folder",
+        },
+        create: {
+          method: "POST",
+          path: "/ccm/api/perspectiveFolders/create",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Folder creation payload",
+            fields: [
+              { name: "ceViewFolder", type: "object", required: true, description: "Folder definition: { name: string (1-80 chars), description?: string, pinned?: boolean, tags?: string[] }" },
+              { name: "perspectiveIds", type: "array", required: false, description: "Perspective IDs to move into this folder on creation" },
+              { name: "budgetIds", type: "array", required: false, description: "Budget IDs to associate with this folder" },
+            ],
+          },
+          responseExtractor: ngExtract,
+          description: "Create a new perspective folder",
+        },
+        update: {
+          method: "PUT",
+          path: "/ccm/api/perspectiveFolders",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Folder update payload (full CEViewFolder object)",
+            fields: [
+              { name: "uuid", type: "string", required: true, description: "Folder UUID (from list/get)" },
+              { name: "name", type: "string", required: true, description: "Folder name (1-80 chars)" },
+              { name: "description", type: "string", required: false, description: "Folder description" },
+              { name: "pinned", type: "boolean", required: false, description: "Whether folder is pinned" },
+              { name: "tags", type: "array", required: false, description: "Folder tags (string array)" },
+            ],
+          },
+          responseExtractor: ngExtract,
+          description: "Update a perspective folder",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/ccm/api/perspectiveFolders/{folderId}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { folder_id: "folderId" },
+          responseExtractor: ngExtract,
+          description: "Delete a perspective folder",
+        },
+      },
+      executeActions: {
+        move_perspectives: {
+          method: "POST",
+          path: "/ccm/api/perspectiveFolders/movePerspectives",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Move perspectives between folders",
+            fields: [
+              { name: "newFolderId", type: "string", required: true, description: "Destination folder ID" },
+              { name: "perspectiveIds", type: "array", required: true, description: "Array of perspective IDs to move" },
+              { name: "moveAssociatedBudgets", type: "boolean", required: false, description: "Also move budgets associated with the perspectives (default: false)" },
+            ],
+          },
+          responseExtractor: ngExtract,
+          actionDescription: "Move perspectives to a different folder. Requires newFolderId and perspectiveIds array. Optionally set moveAssociatedBudgets=true to move associated budgets too.",
         },
       },
     },
@@ -847,34 +1188,73 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           injectAccountInBody: "accountId",
           bodyBuilder: (input) => input.body,
           bodySchema: {
-            description: "Cost category (business mapping) definition with cost targets and rules",
+            description: "Cost category (business mapping) definition. costTargets are cost buckets — each bucket has a name and rules that determine which costs fall into it. Rules use the same ViewIdCondition structure as perspectives.",
             fields: [
-              { name: "name", type: "string", required: true, description: "Cost category display name" },
-              { name: "costTargets", type: "array", required: true, description: "Array of cost target buckets", itemType: "CostTarget", fields: [
-                { name: "name", type: "string", required: true, description: "Bucket display name (e.g. 'Development', 'Production')" },
-                { name: "rules", type: "array", required: true, description: "Array of rules for this bucket. Typically one rule with multiple viewConditions.", itemType: "Rule", fields: [
-                  { name: "viewConditions", type: "array", required: true, description: "Array of conditions (one per label key). All conditions in a rule are ANDed.", itemType: "ViewCondition", fields: [
-                    { name: "type", type: "string", required: true, description: "Always 'VIEW_ID_CONDITION'" },
-                    { name: "viewField", type: "object", required: true, description: "Label field reference", fields: [
-                      { name: "fieldId", type: "string", required: true, description: "Always 'labels.value'" },
-                      { name: "fieldName", type: "string", required: true, description: "The label key name (e.g. 'env', 'Environment', 'team')" },
-                      { name: "identifierName", type: "string", required: true, description: "Always 'Label V2'" },
-                      { name: "identifier", type: "string", required: true, description: "Always 'LABEL_V2'" },
-                    ]},
-                    { name: "viewOperator", type: "string", required: true, description: "'IN' for exact match, 'LIKE' for pattern/regex match (e.g. 'prod-' matches all values starting with 'prod-')" },
-                    { name: "values", type: "array", required: true, description: "Label values. For IN: exact values (e.g. ['dev', 'qa']). For LIKE: patterns (e.g. ['prod-'])", itemType: "string" },
-                  ]},
-                ]},
-              ]},
-              { name: "sharedCosts", type: "array", required: false, description: "Shared cost definitions (default: empty array)", itemType: "SharedCost" },
-              { name: "unallocatedCost", type: "object", required: false, description: "Unallocated cost config. Strategy: HIDE (default), DISPLAY_NAME, or SHARE", fields: [
-                { name: "label", type: "string", required: true, description: "Display label (default: 'Unattributed')" },
-                { name: "strategy", type: "string", required: true, description: "Strategy: 'HIDE', 'DISPLAY_NAME', or 'SHARE'" },
-              ]},
+              { name: "name", type: "string", required: true, description: "Cost category name" },
+              {
+                name: "costTargets", type: "array", required: true,
+                description: "Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed.",
+                itemType: "{ name: string, rules: [{ viewConditions: [ViewIdCondition] }] }",
+              },
+              {
+                name: "sharedCosts", type: "array", required: false,
+                description: "Shared cost buckets with allocation strategy. Each has a name, rules, strategy (PROPORTIONAL or FIXED), and optional splits for FIXED strategy.",
+                itemType: "{ name: string, rules: [...], strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }",
+              },
+              {
+                name: "unallocatedCost", type: "object", required: false,
+                description: "How to handle costs not matching any bucket",
+                fields: [
+                  { name: "strategy", type: "string", required: true, description: "DISPLAY_NAME (show with label), SHARE (distribute), or HIDE" },
+                  { name: "label", type: "string", required: false, description: "Display label when strategy is DISPLAY_NAME (e.g. 'Unattributed')" },
+                ],
+              },
             ],
           },
           responseExtractor: ngExtract,
-          description: "Create a new cost category (business mapping). The accountId is injected automatically. Body must include name and costTargets array with label-based rules.",
+          description: "Create a new cost category (business mapping). The accountId is injected automatically.",
+        },
+        update: {
+          method: "PUT",
+          path: "/ccm/api/business-mapping",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          injectAccountInBody: "accountId",
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Cost category update (full replacement). Fetch the existing category via harness_get first, modify the fields, and send the full object back.",
+            fields: [
+              { name: "uuid", type: "string", required: true, description: "Cost category UUID (from harness_get)" },
+              { name: "name", type: "string", required: true, description: "Cost category name" },
+              {
+                name: "costTargets", type: "array", required: true,
+                description: "Cost buckets. Each has a name and rules array. Multiple rules are OR-ed; conditions within a rule are AND-ed.",
+                itemType: "{ name: string, rules: [{ viewConditions: [ViewIdCondition] }] }",
+              },
+              {
+                name: "sharedCosts", type: "array", required: false,
+                description: "Shared cost buckets with allocation strategy",
+                itemType: "{ name: string, rules: [...], strategy: 'PROPORTIONAL' | 'FIXED', splits?: [{ costTargetName: string, percentageContribution: number }] }",
+              },
+              {
+                name: "unallocatedCost", type: "object", required: false,
+                description: "How to handle costs not matching any bucket",
+                fields: [
+                  { name: "strategy", type: "string", required: true, description: "DISPLAY_NAME, SHARE, or HIDE" },
+                  { name: "label", type: "string", required: false, description: "Display label when strategy is DISPLAY_NAME" },
+                ],
+              },
+            ],
+          },
+          responseExtractor: ngExtract,
+          description: "Update an existing cost category (full replacement)",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/ccm/api/business-mapping/{costCategoryId}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { category_id: "costCategoryId" },
+          responseExtractor: ngExtract,
+          description: "Delete a cost category",
         },
       },
     },
@@ -937,8 +1317,8 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       identifierFields: [],
       listFilterFields: [
         { name: "perspective_id", description: "Cost perspective identifier (optional for some value types)" },
-        { name: "value_type", description: "Type of values to fetch: 'label_v2_key' (label keys), 'label_v2' (label values), 'region', 'product', 'awsUsageaccountid', 'cloudProvider', etc.", required: true },
-        { name: "value_sub_type", description: "Sub-type for label_v2: the specific label key name to get values for (e.g. 'env', 'team')" },
+        { name: "value_type", description: "Type of values to fetch: 'label_v2_key' (label keys), 'label_v2' (label values), 'business_mapping' (cost category names or bucket names), 'region', 'product', 'awsUsageaccountid', 'cloudProvider', etc.", required: true },
+        { name: "value_sub_type", description: "Sub-type qualifier. For label_v2: the label key name (e.g. 'env'). For business_mapping: the cost category UUID to get bucket names (omit to list all categories)." },
         { name: "time_filter", description: "Time filter for the query", enum: [...VALID_TIME_FILTERS] },
         { name: "offset", description: "Pagination offset", type: "number" },
         { name: "limit", description: "Result limit (default 1000)", type: "number" },
@@ -948,10 +1328,26 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       operations: {
         list: {
           method: "POST",
+          methodBuilder: (input) =>
+            (input.value_type as string) === "business_mapping" ? "GET" : "POST",
           path: "/ccm/api/graphql",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathBuilder: (input) => {
+            if ((input.value_type as string) === "business_mapping") {
+              const sub = input.value_sub_type as string | undefined;
+              if (sub) {
+                return `/ccm/api/business-mapping/${encodeURIComponent(sub)}`;
+              }
+              return "/ccm/api/business-mapping";
+            }
+            return "/ccm/api/graphql";
+          },
           bodyBuilder: (input) => {
             const valueType = input.value_type as string;
+
+            // business_mapping routes through REST — no body needed
+            if (valueType === "business_mapping") return undefined;
+
             const valueSubType = input.value_sub_type as string | undefined;
             const timeFilter = (input.time_filter as string) || "LAST_30_DAYS";
 
@@ -992,21 +1388,6 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
                 fieldName: valueSubType, // The specific label key name
                 identifier: "LABEL",
                 identifierName: "Label",
-              };
-              filters.push({
-                idFilter: {
-                  values: [""],
-                  operator: "IN",
-                  field: fieldOut,
-                },
-              });
-            } else if (valueType === "business_mapping") {
-              // Cost category / business mapping
-              const fieldOut = {
-                fieldId: "businessMapping.costCategoryName",
-                fieldName: valueSubType || "Cost Category",
-                identifier: "BUSINESS_MAPPING",
-                identifierName: "Business Mapping",
               };
               filters.push({
                 idFilter: {
@@ -1064,8 +1445,14 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
               },
             };
           },
-          responseExtractor: gqlExtract("perspectiveFilters"),
-          description: "Fetch perspective filter values. Examples: value_type='label_v2_key' returns all label keys; value_type='label_v2' with value_sub_type='env' returns all values for 'env' label; value_type='region' returns all regions.",
+          responseExtractor: (raw: unknown, input?: Record<string, unknown>): unknown => {
+            const valueType = input?.value_type as string | undefined;
+            if (valueType === "business_mapping") {
+              return extractBusinessMappingValues(raw, input?.value_sub_type as string | undefined);
+            }
+            return gqlExtract("perspectiveFilters")(raw);
+          },
+          description: "Fetch perspective filter values. Examples: value_type='label_v2_key' returns all label keys; value_type='label_v2' with value_sub_type='env' returns all values for 'env' label; value_type='region' returns all regions; value_type='business_mapping' returns cost category names; value_type='business_mapping' with value_sub_type='<category_id>' returns bucket names.",
         },
       },
     },
