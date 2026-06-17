@@ -7,6 +7,7 @@ import type { Registry } from "../../../src/registry/index.js";
 // Mock resolveLogContent so diagnose tests don't depend on the full log pipeline
 vi.mock("../../../src/utils/log-resolver.js", () => ({
   resolveLogContent: vi.fn().mockResolvedValue("resolved log line 1\nresolved log line 2"),
+  resolveLogDownloadUrl: vi.fn().mockResolvedValue("https://storage.example.com/logs.zip?signed=1"),
 }));
 
 const NOW = 1700000000000;
@@ -309,6 +310,46 @@ describe("pipelineHandler", () => {
     expect(logs["s1/step1"]).toBe("resolved log line 1\nresolved log line 2");
   });
 
+  it("returns download URLs for failed steps when return_download_url is true", async () => {
+    const { resolveLogContent, resolveLogDownloadUrl } = await import("../../../src/utils/log-resolver.js");
+    const contentMock = resolveLogContent as ReturnType<typeof vi.fn>;
+    const urlMock = resolveLogDownloadUrl as ReturnType<typeof vi.fn>;
+    contentMock.mockClear();
+    urlMock.mockClear();
+
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "Stage1", status: "Failed", steps: [{ id: "step1", name: "Step1", status: "Failed" }] }],
+      nodeMapEntries: {
+        step1: {
+          uuid: "step1",
+          identifier: "step1",
+          name: "Step1",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step1",
+          status: "Failed",
+          failureInfo: { message: "Step1 error" },
+          logBaseKey: "log/step1",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: false, include_logs: true, return_download_url: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    const logs = result.failed_step_logs as Record<string, unknown>;
+    expect(logs["s1/step1"]).toEqual({
+      download_url: "https://storage.example.com/logs.zip?signed=1",
+    });
+    expect(urlMock).toHaveBeenCalledWith(expect.anything(), "log/step1", { signal: undefined });
+    expect(contentMock).not.toHaveBeenCalled();
+  });
+
   it("truncates long logs to log_snippet_lines", async () => {
     // Override resolveLogContent mock to return a long log for this test
     const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
@@ -379,6 +420,49 @@ describe("pipelineHandler", () => {
     expect(stepLog.step).toBe("step-passed");
     expect(stepLog.status).toBe("Success");
     expect(stepLog.log).toBe("resolved log line 1\nresolved log line 2");
+  });
+
+  it("returns a download URL for an explicitly requested step when return_download_url is true", async () => {
+    const { resolveLogContent, resolveLogDownloadUrl } = await import("../../../src/utils/log-resolver.js");
+    const contentMock = resolveLogContent as ReturnType<typeof vi.fn>;
+    const urlMock = resolveLogDownloadUrl as ReturnType<typeof vi.fn>;
+    contentMock.mockClear();
+    urlMock.mockClear();
+
+    const exec = makeExecution({
+      status: "Success",
+      stages: [{ id: "s1", name: "Stage1", status: "Success", steps: [{ id: "step-passed", name: "Deploy", status: "Success" }] }],
+      nodeMapEntries: {
+        "step-passed": {
+          uuid: "step-passed",
+          identifier: "step-passed",
+          name: "Deploy",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-passed",
+          status: "Success",
+          logBaseKey: "log/step-passed",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001", step_id: "step-passed" },
+      registry,
+      args: { summary: true, include_logs: true, return_download_url: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog).toMatchObject({
+      step_id: "step-passed",
+      step: "step-passed",
+      status: "Success",
+      download_url: "https://storage.example.com/logs.zip?signed=1",
+    });
+    expect(stepLog.log).toBeUndefined();
+    expect(urlMock).toHaveBeenCalledWith(expect.anything(), "log/step-passed", { signal: undefined });
+    expect(contentMock).not.toHaveBeenCalled();
   });
 
   it("returns requested_step_log alongside failed_step_logs when step is explicitly requested", async () => {
