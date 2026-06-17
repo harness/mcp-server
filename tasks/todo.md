@@ -1,5 +1,26 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-17)
+- [x] Baseline recent commits and identify high-blast-radius behavioral changes
+- [x] Trace confirmation/elicitation changes through public write-tool handlers and registry dispatch
+- [x] Inspect dependency/security-bump diffs for runtime behavior changes or config regressions
+- [x] Validate any concrete critical trigger with focused tests or local evidence
+- [x] If a critical bug is confirmed, implement a minimal fix, test it, commit, push, and open a PR
+- [ ] Report the outcome in Slack
+
+### Plan
+- Treat the current branch as a recent-main inspection because it starts aligned with `origin/main`.
+- Prioritize commits after `v3.1.8`, especially the confirmation/elicitation flow change in PR #351; dependency bumps and version metadata only get deeper review if their diffs touch runtime code or lock critical transitive behavior.
+- For suspicious findings, trace from public MCP tool schema through URL/default resolution, confirmation/elicitation, registry dispatch, and request body construction before deciding severity.
+- Only patch a finding with a concrete high-severity trigger: data loss, crash/OOM, auth bypass, permission bypass, or significant user-facing write breakage.
+
+### Review
+- Found a critical `execution_log` contract gap: `return_download_url` was documented and handled by `harness_get`, but omitted from the public top-level schema. Schema-driven MCP clients can strip unknown top-level fields, so a caller asking for URL-only logs can fall back to `resolveLogContent()` and buffer a large log response.
+- Root cause: PR #327 added URL-only log handling in the runtime path but did not expose the operation-specific top-level knob in `harness_get` input schema.
+- Fix: added `return_download_url` to the public `harness_get` schema and added regressions that simulate schema-driven filtering and assert `resolveLogDownloadUrl()` is used while `resolveLogContent()` is not.
+- Focused red/green evidence: `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "execution_log"` failed before the fix on the missing schema field and content fallback, then passed after the schema fix.
+- Verification passed: `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, `git diff --check`, and full `pnpm test` (78 files / 1992 tests).
+
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap

@@ -30,6 +30,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         org_id: z.string().describe("Organization identifier (overrides default)").optional(),
         project_id: z.string().describe("Project identifier (overrides default)").optional(),
         params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type.").optional(),
+        return_download_url: z.boolean().optional().describe("For execution_log only: return a signed download URL instead of downloading and buffering log content."),
       },
       outputSchema: getOutputSchema,
       annotations: {
