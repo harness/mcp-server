@@ -66,11 +66,19 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         }
         const result = await registry.dispatch(client, resourceType, "list", input);
 
-        // Apply compact mode — strip verbose metadata from list items
+        // Apply compact mode — strip verbose metadata from list items.
+        // A resource may declare a `compactItem` transform for fields the
+        // generic whitelist can't express (e.g. deploy services/summary).
         if (args.compact !== false && isRecord(result)) {
           const items = result.items;
           if (Array.isArray(items)) {
-            result.items = compactItems(items);
+            let compactFn: ((item: Record<string, unknown>) => Record<string, unknown>) | undefined;
+            try {
+              compactFn = registry.getResource(resourceType).compactItem;
+            } catch {
+              compactFn = undefined;
+            }
+            result.items = compactItems(items, compactFn);
           }
         }
 

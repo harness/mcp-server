@@ -59,10 +59,18 @@ function isWhitelistedKey(key: string): boolean {
  * Strip verbose fields from an array of list items.
  * Keeps identity, status, type, ownership, timestamp, and deep link fields.
  * Merges openInHarness into name as a markdown hyperlink.
+ *
+ * When `compactFn` is provided (from a resource's `compactItem`), it replaces
+ * the generic key-name whitelist for object items — used by resources whose
+ * useful fields can't be expressed as a flat whitelist (e.g. deploys).
  */
-export function compactItems(items: unknown[]): unknown[] {
+export function compactItems(
+  items: unknown[],
+  compactFn?: (item: Record<string, unknown>) => Record<string, unknown>,
+): unknown[] {
   return items.map((item) => {
     if (typeof item !== "object" || item === null) return item;
+    if (compactFn) return compactFn(item as Record<string, unknown>);
     const full = item as Record<string, unknown>;
     const slim: Record<string, unknown> = {};
     for (const key of Object.keys(full)) {

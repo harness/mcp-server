@@ -88,7 +88,7 @@ describe("incident — harness_list", () => {
   it("hits the incidents list path with scope params", async () => {
     await server.call("harness_list", { resource_type: "incident" });
     const callArgs = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
-    expect(callArgs.path).toBe("/api/v1/mc/incidents");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents");
     expect(callArgs.params.accountId).toBe("test-account");
     expect(callArgs.params.orgId).toBe("default");
     expect(callArgs.params.projectId).toBe("test-project");
@@ -125,7 +125,7 @@ describe("incident — harness_get", () => {
     const result = await server.call("harness_get", { resource_type: "incident", resource_id: "INC-42" });
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { path: string };
-    expect(callArgs.path).toBe("/api/v1/mc/incidents/INC-42");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42");
     const data = parseResult(result) as { prettyId: string };
     expect(data.prettyId).toBe("INC-42");
   });
@@ -165,7 +165,7 @@ describe("incident — harness_create", () => {
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: Record<string, unknown> };
     expect(callArgs.method).toBe("POST");
-    expect(callArgs.path).toBe("/api/v1/mc/incidents");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents");
     expect(callArgs.body).toMatchObject({ templateShortId: "tmpl-1", title: "DB down" });
   });
 });
@@ -194,7 +194,7 @@ describe("incident — harness_update", () => {
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: Record<string, unknown> };
     expect(callArgs.method).toBe("PATCH");
-    expect(callArgs.path).toBe("/api/v1/mc/incidents/INC-42");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42");
     expect(callArgs.body).toMatchObject({ status: "monitoring" });
   });
 });
@@ -223,7 +223,7 @@ describe("incident — harness_execute (close)", () => {
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
     expect(callArgs.method).toBe("POST");
-    expect(callArgs.path).toBe("/api/v1/mc/incidents/INC-42/close");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42/close");
     expect(callArgs.body).toBeUndefined();
   });
 });

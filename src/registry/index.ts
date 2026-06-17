@@ -43,6 +43,7 @@ import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
 import { aiEvalsToolset } from "./toolsets/ai-evals.js";
 import { incidentsToolset } from "./toolsets/incidents.js";
+import { deploysToolset } from "./toolsets/deploys.js";
 
 const log = createLogger("registry");
 
@@ -89,6 +90,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   overridesToolset,
   aiEvalsToolset,
   incidentsToolset,
+  deploysToolset,
 ];
 
 /** All available toolset names — used by docs generation to discover opt-in toolsets. */
