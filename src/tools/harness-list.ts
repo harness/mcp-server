@@ -79,12 +79,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         if (args.compact !== false && !resultSkipCompact && isRecord(result)) {
           const items = result.items;
           if (Array.isArray(items)) {
-            let compactFn: ((item: Record<string, unknown>) => Record<string, unknown>) | undefined;
-            try {
-              compactFn = registry.getResource(resourceType).compactItem;
-            } catch {
-              compactFn = undefined;
-            }
+            const compactFn = registry.getResource(resourceType).compactItem;
             result.items = compactItems(items, compactFn);
           }
         }

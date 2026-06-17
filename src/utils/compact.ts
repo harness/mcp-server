@@ -69,7 +69,7 @@ export function compactItems(
   compactFn?: (item: Record<string, unknown>) => Record<string, unknown>,
 ): unknown[] {
   return items.map((item) => {
-    if (typeof item !== "object" || item === null) return item;
+    if (typeof item !== "object" || item === null || Array.isArray(item)) return item;
     if (compactFn) return compactFn(item as Record<string, unknown>);
     const full = item as Record<string, unknown>;
     const slim: Record<string, unknown> = {};

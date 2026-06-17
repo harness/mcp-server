@@ -1,5 +1,6 @@
 import type { ToolsetDefinition } from "../types.js";
-import { offsetListExtract, passthrough } from "../extractors.js";
+import { offsetListExtract } from "../extractors.js";
+import { isRecord } from "../../utils/type-guards.js";
 
 /**
  * Same custom scope naming as the incidents API (both route through
@@ -36,6 +37,40 @@ function compactDeploy(item: Record<string, unknown>): Record<string, unknown> {
   }
   if (item.deployTimestamp !== undefined) slim.deployTimestamp = item.deployTimestamp;
   if (typeof item.webLink === "string") slim.webLink = item.webLink;
+  return slim;
+}
+
+/**
+ * Extract deploy detail response for GET /deploys/{deployId}.
+ * Projects a stable, documented shape (id, projectId, title, summary, status,
+ * environments, buildVersions, deployTimestamp, webLink) and strips backend
+ * envelope/debug/meta fields. Unlike the list compactor, this keeps the full
+ * summary and all buildVersions subfields since this is the detail view.
+ */
+function deployGetExtract(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+  const slim: Record<string, unknown> = {};
+  if (typeof raw.id === "string") slim.id = raw.id;
+  if (typeof raw.projectId === "string") slim.projectId = raw.projectId;
+  if (typeof raw.title === "string") slim.title = raw.title;
+  if (typeof raw.summary === "string") slim.summary = raw.summary;
+  if (raw.status !== undefined) slim.status = raw.status;
+  if (Array.isArray(raw.environments)) slim.environments = raw.environments;
+  if (Array.isArray(raw.buildVersions)) {
+    slim.buildVersions = raw.buildVersions.map((bv) => {
+      if (!isRecord(bv)) return bv;
+      const b: Record<string, unknown> = {};
+      if (typeof bv.service === "string") b.service = bv.service;
+      if (typeof bv.version === "string") b.version = bv.version;
+      if (typeof bv.commitSha === "string") b.commitSha = bv.commitSha;
+      if (typeof bv.branch === "string") b.branch = bv.branch;
+      if (typeof bv.repositoryName === "string") b.repositoryName = bv.repositoryName;
+      if (typeof bv.repositoryUrl === "string") b.repositoryUrl = bv.repositoryUrl;
+      return b;
+    });
+  }
+  if (typeof raw.deployTimestamp === "number") slim.deployTimestamp = raw.deployTimestamp;
+  if (typeof raw.webLink === "string") slim.webLink = raw.webLink;
   return slim;
 }
 
@@ -82,8 +117,8 @@ export const deploysToolset: ToolsetDefinition = {
           path: "/gateway/ir/tp/api/v1/mc/deploys/{deployId}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { deploy_id: "deployId" },
-          responseExtractor: passthrough,
-          description: "Get deploy details by ID (e.g. DEPL-24)",
+          responseExtractor: deployGetExtract,
+          description: "Get deploy details by ID (e.g. DEPLU65-8065, format: DEPL<env>-<number>)",
         },
       },
     },

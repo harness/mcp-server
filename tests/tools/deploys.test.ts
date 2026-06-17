@@ -179,12 +179,56 @@ describe("deploy — harness_get", () => {
     registerGetTool(server, registry, client);
   });
 
-  it("substitutes deploy_id into the path and passes the response through", async () => {
+  it("substitutes deploy_id into the path", async () => {
     const result = await server.call("harness_get", { resource_type: "deploy", resource_id: "DEPL-24" });
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { path: string };
     expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/deploys/DEPL-24");
-    const data = parseResult(result) as { id: string };
-    expect(data.id).toBe("DEPL-24");
+  });
+
+  it("projects stable fields and strips backend debug fields", async () => {
+    mockRequest.mockResolvedValueOnce({
+      id: "DEPLU65-8065",
+      projectId: "AI_SRE",
+      title: "",
+      summary: "### Change Log for resource-hierarchy-service (harness0)\nUnable to find changes.\n",
+      status: null,
+      environments: ["harness0"],
+      buildVersions: [
+        {
+          service: "resource-hierarchy-service",
+          version: "1.20.0",
+          commitSha: "f6496b9d336a1c514351a934be9d7263a2c2af5c",
+          branch: "release/resource-hierarchy-service_1.20.0",
+          repositoryName: "harness-core",
+          repositoryUrl: "https://git0.harness.io/acct/PROD/Harness_Commons/harness-core.git",
+        },
+      ],
+      deployTimestamp: 1781175806000,
+      webLink: "https://harness0.harness.io/ng/account/acct/changes/DEPLU65-8065",
+      someBackendDebugField: "should-not-leak",
+    });
+    const result = await server.call("harness_get", { resource_type: "deploy", resource_id: "DEPLU65-8065" });
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as Record<string, unknown>;
+    // Stable fields present
+    expect(data.id).toBe("DEPLU65-8065");
+    expect(data.projectId).toBe("AI_SRE");
+    expect(data.title).toBe("");
+    expect(data.summary).toContain("Change Log for resource-hierarchy-service");
+    expect(data.status).toBeNull();
+    expect(data.environments).toEqual(["harness0"]);
+    expect(data.buildVersions).toHaveLength(1);
+    const bv = (data.buildVersions as Record<string, unknown>[])[0]!;
+    expect(bv.service).toBe("resource-hierarchy-service");
+    expect(bv.version).toBe("1.20.0");
+    expect(bv.commitSha).toBe("f6496b9d336a1c514351a934be9d7263a2c2af5c");
+    expect(bv.branch).toBe("release/resource-hierarchy-service_1.20.0");
+    expect(bv.repositoryName).toBe("harness-core");
+    expect(bv.repositoryUrl).toContain("harness-core.git");
+    expect(data.deployTimestamp).toBe(1781175806000);
+    expect(data.webLink).toContain("DEPLU65-8065");
+    // Backend debug field stripped
+    expect(data).not.toHaveProperty("someBackendDebugField");
   });
 });
