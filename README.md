@@ -1975,14 +1975,14 @@ tests/
 
 ## Elicitation
 
-Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use [MCP elicitation](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/elicitation) to prompt the user for confirmation before making changes. This gives real human-in-the-loop approval — the user sees what's about to happen and accepts or declines.
+The write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use [MCP elicitation](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/elicitation) to prompt the user for confirmation when the action's risk requires it — `medium_write`, `high_write`, and `destructive` operations only. Low-risk creates / updates / reads (e.g. `pipeline.create`, `pipeline.update`, `hql_query.run`) proceed silently with no prompt. When a prompt is surfaced, the user sees what's about to happen and accepts or declines, giving real human-in-the-loop approval for the operations that actually mutate or run things.
 
 **How it works:**
 
-1. The LLM calls a write tool (e.g. `harness_create` with a pipeline body)
-2. The server sends an elicitation request to the client with a summary of the operation
-3. The user sees the details and clicks **Accept** or **Decline**
-4. If accepted, the operation proceeds. If declined, it's blocked and the LLM is told
+1. The LLM calls a write tool with `medium_write`+ risk (e.g. `harness_delete`, `harness_execute pipeline.run`). Low-risk creates / updates / reads do not surface a prompt.
+2. The server sends an elicitation request to the client with a summary of the operation and a `confirm` checkbox (default checked).
+3. The user sees the details and clicks **Accept** (with `confirm` checked) or **Decline / Cancel**.
+4. If accepted with `confirm: true`, the operation proceeds. If accepted with `confirm` unchecked, declined, or cancelled, it's blocked and the LLM is told (an explicit decline is **authoritative** and not bypassed by `confirm: true` on the tool call).
 
 **Client support:**
 
@@ -1999,15 +1999,16 @@ Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_exec
 Elicitation behavior varies by operation risk when client support is missing:
 
 
-| Risk Level                                    | Client supports elicitation | Behavior                                          |
-| --------------------------------------------- | --------------------------- | ------------------------------------------------- |
-| `read`, `low_write`                           | any                         | Proceed silently (no confirmation needed)         |
-| `medium_write`, `high_write`, `destructive`   | Yes                         | Prompt user — proceed on accept, block on decline |
-| `medium_write`, `high_write`, `destructive`   | No                          | **BLOCK** (return error)                          |
-| any (at or below `HARNESS_AUTO_APPROVE_RISK`) | any                         | Auto-approve without prompting                    |
+| Risk Level                                    | Client supports elicitation | `confirm: true` passed | Behavior                                          |
+| --------------------------------------------- | --------------------------- | ---------------------- | ------------------------------------------------- |
+| `read`, `low_write`                           | any                         | any                    | Proceed silently — no prompt is surfaced (`confirm` has no effect at this risk tier) |
+| `medium_write`, `high_write`, `destructive`   | Yes                         | any                    | Prompt user. Proceed only if user accepts **with** `confirm: true` (the schema's default). An explicit decline, cancel, or accept with `confirm: false` (user unchecked the box) is **authoritative** and is not bypassed by `confirm: true` on the tool call. An accept missing the `confirm` field is treated as the client failing to surface a usable prompt — recoverable by retrying with `confirm: true` |
+| `medium_write`, `high_write`, `destructive`   | No                          | No                     | **BLOCK** (return error with hint to retry with `confirm: true`) |
+| `medium_write`, `high_write`, `destructive`   | No                          | Yes                    | Proceed (explicit opt-in for non-interactive automation) |
+| any (at or below `HARNESS_AUTO_APPROVE_RISK`) | any                         | any                    | Auto-approve without prompting                    |
 
 
-If elicitation fails at runtime, operations at `medium_write` or above are blocked.
+If `elicitInput` fails at runtime (transport error, unsupported method) for a `medium_write`+ operation, the call is blocked unless the caller passes `confirm: true`. `confirm: true` is honored as a fallback when the client could not surface a prompt or returned a degenerate accept (`{action: "accept"}` without the confirm field), but it does **not** override an explicit decline/cancel from a client that completed the elicitation handshake.
 
 ### Autonomous Mode
 
@@ -2061,7 +2062,7 @@ HARNESS_AUTO_APPROVE_RISK=high_write
 ## Safety
 
 - **Secrets are never exposed.** The `secret` resource type returns metadata only (name, type, scope) — secret values are never included in any response.
-- **Write operations use elicitation when available.** `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` attempt MCP elicitation before proceeding (see [Elicitation](#elicitation)).
+- **Confirmation-requiring operations use elicitation when available.** When a write or execute action has `medium_write`, `high_write`, or `destructive` risk, `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` attempt MCP elicitation before proceeding (see [Elicitation](#elicitation)). Low-risk actions (`read`, `low_write` — e.g. `pipeline.create`, `pipeline.update`, `hql_query.run`) proceed silently with no prompt.
 - **Medium-risk and above fail closed.** If confirmation cannot be obtained for `medium_write`, `high_write`, or `destructive` operations, they are blocked instead of executing blindly. Override with `HARNESS_AUTO_APPROVE_RISK` for autonomous workflows.
 - **CORS restricted to same-origin.** The HTTP transport only allows same-origin requests, preventing CSRF attacks from malicious websites targeting the MCP server on localhost.
 - **HTTP rate limiting.** The HTTP transport enforces 60 requests per minute per IP to prevent request flooding.
@@ -2097,7 +2098,8 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | `wait: true` returned `_wait.error`                                              | The pipeline trigger succeeded, but server-side polling failed                                       | Recheck the `execution_id` with `harness_get(resource_type="execution", ...)` before deciding whether to rerun                        |
 | `wait: true` returned `execution_timed_out: true`                                | The execution did not reach a terminal status before `wait_timeout_seconds`                          | Use the returned `execution_id` to recheck status or diagnose the still-running execution                                             |
 | Execution logs are empty or blob downloads return 403                           | Harness-hosted log blob URLs require the configured Harness client/auth path, especially for internal or self-managed hosts | Keep `HARNESS_BASE_URL` pointed at the target Harness host and use `harness_get(resource_type="execution_log", ...)` or `harness_diagnose(..., include_logs=true)` rather than bypassing the MCP client |
-| `Operation declined by user`                                                     | User declined the elicitation confirmation dialog                                                    | The user chose not to proceed — verify the operation details and retry if intended                                                   |
+| `Operation declined by user` / `Operation cancelled by user`                     | User declined or cancelled the elicitation confirmation dialog — authoritative                       | Verify operation details with the user; `confirm: true` does **not** bypass an explicit decline. The user must accept the prompt   |
+| `Operation blocked: the client could not surface a usable confirmation prompt`   | Client lacks elicitation support, `elicitInput` failed, or returned a degenerate accept              | Retry with `confirm: true` for non-interactive automation, or use a client that supports elicitation                                |
 | `body.template_yaml (or body.yaml) is required` for template create/update       | Template APIs expect full YAML payload                                                               | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
 | `HARNESS_BASE_URL must use HTTPS` on startup                                     | `HARNESS_BASE_URL` is set to an HTTP URL                                                             | Use HTTPS, or set `HARNESS_ALLOW_HTTP=true` for local development                                                                    |
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { clientSupportsElicitation, confirmViaElicitation, configureElicitation } from "../../src/utils/elicitation.js";
+import { clientSupportsElicitation, confirmViaElicitation, configureElicitation, describeElicitationFailure, describeBlockedAudit } from "../../src/utils/elicitation.js";
 import { isBlockingRisk, requiresConfirmation, shouldAutoApprove } from "../../src/registry/types.js";
 import type { RiskLevel, AutoApproveRisk } from "../../src/registry/types.js";
 
@@ -99,6 +99,10 @@ describe("confirmViaElicitation", () => {
   });
 
   it("blocks when client does not support elicitation (destructive)", async () => {
+    // No-capability blocked path returns reason:"cancelled" rather than
+    // "declined" — no human declined; the client never surfaced a prompt.
+    // method:"blocked" is the load-bearing signal; reason stays consistent
+    // across every blocked branch.
     const mcpServer = makeServerStub(undefined);
     const result = await confirmViaElicitation({
       server: mcpServer,
@@ -106,7 +110,7 @@ describe("confirmViaElicitation", () => {
       message: "Delete pipeline?",
       risk: "destructive",
     });
-    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
@@ -118,10 +122,27 @@ describe("confirmViaElicitation", () => {
       message: "Create repo rule?",
       risk: "medium_write",
     });
-    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
-  it("proceeds when user accepts", async () => {
+  it("proceeds when user accepts (destructive risk surfaces a real prompt)", async () => {
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "accept", content: { confirm: true } },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete service?",
+      risk: "destructive",
+    });
+    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(mcpServer.server.elicitInput).toHaveBeenCalledOnce();
+  });
+
+  it("does not call elicitInput for low_write even when client supports it", async () => {
+    // Low-risk creates should not surface a prompt — confirmation is gated on
+    // requiresConfirmation(risk), which kicks in at medium_write.
     const mcpServer = makeServerStub(
       { elicitation: { form: {} } },
       { action: "accept", content: { confirm: true } },
@@ -132,8 +153,8 @@ describe("confirmViaElicitation", () => {
       message: "Create service?",
       risk: "low_write",
     });
-    expect(result).toEqual({ proceed: true, method: "elicited" });
-    expect(mcpServer.server.elicitInput).toHaveBeenCalledOnce();
+    expect(result).toEqual({ proceed: true, method: "not_required" });
+    expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
   it("returns declined when user declines", async () => {
@@ -164,7 +185,9 @@ describe("confirmViaElicitation", () => {
     expect(result).toEqual({ proceed: false, reason: "cancelled", method: "elicited" });
   });
 
-  it("proceeds when elicitInput throws (low_write)", async () => {
+  it("does not call elicitInput for low_write (no confirmation required)", async () => {
+    // Low-risk operations short-circuit before calling elicitInput, so a
+    // mocked failure should never be reached.
     const mcpServer = makeServerStub({ elicitation: { form: {} } });
     mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
     const result = await confirmViaElicitation({
@@ -173,7 +196,8 @@ describe("confirmViaElicitation", () => {
       message: "Create service?",
       risk: "low_write",
     });
-    expect(result).toEqual({ proceed: true, method: "skipped" });
+    expect(result).toEqual({ proceed: true, method: "not_required" });
+    expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
   it("blocks when elicitInput throws (destructive)", async () => {
@@ -228,7 +252,45 @@ describe("confirmViaElicitation", () => {
     });
   });
 
-  it("blocks when an elicitation accept does not include confirm=true", async () => {
+  it("blocks when elicitation accept includes confirm=false (user unchecked the box)", async () => {
+    // confirm:false is an explicit user choice — the user accepted the
+    // prompt but unchecked the confirmation box. Authoritative; not
+    // bypassable by callerConfirmed.
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "accept", content: { confirm: false } },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      risk: "destructive",
+    });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "elicited" });
+  });
+
+  it("does NOT override accept with confirm=false even when callerConfirmed=true", async () => {
+    // The model passing confirm:true must not bypass the human unchecking
+    // the elicitation prompt's confirm box.
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "accept", content: { confirm: false } },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      risk: "destructive",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "elicited" });
+  });
+
+  it("blocks when an elicitation accept does not include confirm=true (treated as no usable prompt)", async () => {
+    // A degenerate `accept` (no confirm field) is treated as the client
+    // failing to surface a usable prompt — `method: "blocked"` routes the
+    // caller to the "retry with confirm: true" recovery hint, matching the
+    // documented contract for non-interactive automation.
     const mcpServer = makeServerStub(
       { elicitation: { form: {} } },
       { action: "accept", content: {} },
@@ -239,7 +301,7 @@ describe("confirmViaElicitation", () => {
       message: "Delete pipeline?",
       risk: "destructive",
     });
-    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "elicited" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
   it("auto-approves when risk is within AUTO_APPROVE_RISK threshold", async () => {
@@ -293,7 +355,7 @@ describe("confirmViaElicitation", () => {
       message: "Run pipeline?",
       risk: "high_write",
     });
-    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
   });
 
   it("skips elicitation for non-destructive ops when auto-approve is 'all'", async () => {
@@ -318,7 +380,7 @@ describe("confirmViaElicitation", () => {
       risk: "destructive",
       callerConfirmed: true,
     });
-    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
     expect(mcpServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
@@ -331,7 +393,7 @@ describe("confirmViaElicitation", () => {
       risk: "medium_write",
       callerConfirmed: true,
     });
-    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
   });
 
   it("proceeds with callerConfirmed when elicitInput throws (destructive)", async () => {
@@ -344,7 +406,7 @@ describe("confirmViaElicitation", () => {
       risk: "destructive",
       callerConfirmed: true,
     });
-    expect(result).toEqual({ proceed: true, method: "elicited" });
+    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
   });
 
   it("still blocks without callerConfirmed when client lacks elicitation (destructive)", async () => {
@@ -356,6 +418,182 @@ describe("confirmViaElicitation", () => {
       risk: "destructive",
       callerConfirmed: false,
     });
-    expect(result).toEqual({ proceed: false, reason: "declined", method: "blocked" });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
+  });
+
+  it("does NOT override an explicit decline even with callerConfirmed=true (destructive)", async () => {
+    // A client that completed the elicitation handshake and replied "decline"
+    // is authoritative — the LLM passing confirm:true must not bypass it.
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "decline" },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete connector?",
+      risk: "destructive",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "elicited" });
+    expect(mcpServer.server.elicitInput).toHaveBeenCalledOnce();
+  });
+
+  it("does NOT override an explicit cancel even with callerConfirmed=true (high_write)", async () => {
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "cancel" },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_execute",
+      message: "Run pipeline?",
+      risk: "high_write",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "elicited" });
+  });
+
+  it("proceeds with callerConfirmed when elicitation accepts without confirm=true", async () => {
+    // A non-interactive client that advertises elicitation but returns a
+    // degenerate accept (no confirm field) is interpreted as not actually
+    // surfacing a prompt — callerConfirmed is the explicit opt-in.
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "accept", content: {} },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      risk: "destructive",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
+  });
+
+  it("still returns declined without callerConfirmed when elicitation returns decline", async () => {
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "decline" },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete connector?",
+      risk: "destructive",
+      callerConfirmed: false,
+    });
+    expect(result).toEqual({ proceed: false, reason: "declined", method: "elicited" });
+  });
+
+  it("still returns cancelled without callerConfirmed when elicitation returns cancel", async () => {
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "cancel" },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_execute",
+      message: "Run pipeline?",
+      risk: "high_write",
+      callerConfirmed: false,
+    });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "elicited" });
+  });
+
+  it("returns blocked (recoverable via confirm:true) on accept missing confirm=true with no callerConfirmed", async () => {
+    const mcpServer = makeServerStub(
+      { elicitation: { form: {} } },
+      { action: "accept", content: {} },
+    );
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete pipeline?",
+      risk: "destructive",
+      callerConfirmed: false,
+    });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
+  });
+
+  it("still blocks without callerConfirmed when elicitInput throws (destructive)", async () => {
+    const mcpServer = makeServerStub({ elicitation: { form: {} } });
+    mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_delete",
+      message: "Delete service?",
+      risk: "destructive",
+      callerConfirmed: false,
+    });
+    expect(result).toEqual({ proceed: false, reason: "cancelled", method: "blocked" });
+  });
+
+  it("proceeds with callerConfirmed when elicitInput throws (medium_write)", async () => {
+    const mcpServer = makeServerStub({ elicitation: { form: {} } });
+    mcpServer.server.elicitInput.mockRejectedValue(new Error("not implemented"));
+    const result = await confirmViaElicitation({
+      server: mcpServer,
+      toolName: "harness_create",
+      message: "Create repo rule?",
+      risk: "medium_write",
+      callerConfirmed: true,
+    });
+    expect(result).toEqual({ proceed: true, method: "caller_confirmed" });
+  });
+});
+
+describe("describeElicitationFailure attribution", () => {
+  it("blocked path is attributed to the client, NOT the user", () => {
+    const msg = describeElicitationFailure({ proceed: false, reason: "cancelled", method: "blocked" });
+    expect(msg).toContain("Operation blocked");
+    expect(msg).toContain("retry with confirm: true");
+    // Critical: a client-side prompt failure must not be reported as
+    // "Operation cancelled by user" — that misclassification is what this
+    // test guards against (see Cursor review thread on PR #351).
+    expect(msg).not.toContain("by user");
+  });
+
+  it("elicited decline is attributed to the user (authoritative)", () => {
+    const msg = describeElicitationFailure({ proceed: false, reason: "declined", method: "elicited" });
+    expect(msg).toContain("Operation declined by user");
+    expect(msg).toContain("does not bypass an explicit decline");
+  });
+
+  it("elicited cancel is attributed to the user", () => {
+    const msg = describeElicitationFailure({ proceed: false, reason: "cancelled", method: "elicited" });
+    expect(msg).toContain("Operation cancelled by user");
+  });
+});
+
+describe("describeBlockedAudit attribution", () => {
+  it("blocked path produces a client-attributed audit reason (cancelled)", () => {
+    const reason = describeBlockedAudit({ proceed: false, reason: "cancelled", method: "blocked" });
+    expect(reason).toContain("blocked pre-dispatch");
+    expect(reason).toContain("client could not surface");
+    expect(reason).not.toContain("by user");
+    // The internal `reason` token must not leak into the audit string —
+    // it's set to "cancelled" or "declined" depending on which blocked
+    // branch produced the result, and either token would falsely imply
+    // a user action.
+    expect(reason).not.toContain("(cancelled)");
+    expect(reason).not.toContain("(declined)");
+  });
+
+  it("blocked path is reason-token agnostic — never echoes declined or cancelled", () => {
+    // Defensive: even if a future caller passes a stale reason="declined"
+    // on a blocked result (the legacy shape), the audit string must still
+    // attribute correctly to the client.
+    const reason = describeBlockedAudit({ proceed: false, reason: "declined", method: "blocked" });
+    expect(reason).toContain("blocked pre-dispatch");
+    expect(reason).toContain("client could not surface");
+    expect(reason).not.toContain("declined");
+    expect(reason).not.toContain("by user");
+  });
+
+  it("elicited path produces a user-attributed audit reason", () => {
+    const reason = describeBlockedAudit({ proceed: false, reason: "declined", method: "elicited" });
+    expect(reason).toBe("Operation declined by user (elicited)");
   });
 });

@@ -619,7 +619,11 @@ describe("harness_create", () => {
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("does not support") });
   });
 
-  it("returns error when user declines confirmation", async () => {
+  it("does not surface elicitation prompt for low_write create even when client declines", async () => {
+    // pipeline.create is low_write — confirmation is gated on
+    // requiresConfirmation(risk) which kicks in at medium_write. The
+    // simulated decline below should be ignored entirely (elicitInput
+    // is never called).
     const declineServer = makeMcpServer("decline");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
     registerCreateTool(declineServer, registry, client);
@@ -628,8 +632,7 @@ describe("harness_create", () => {
       resource_type: "pipeline",
       body: { pipeline: { name: "Test", identifier: "test", stages: [] } },
     });
-    expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
+    expect(result.isError).toBeUndefined();
   });
 
   it("creates resource when user confirms", async () => {
@@ -838,7 +841,9 @@ describe("harness_update", () => {
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("does not support") });
   });
 
-  it("returns error when user declines", async () => {
+  it("does not surface elicitation prompt for low_write update even when client declines", async () => {
+    // pipeline.update is low_write — confirmation is gated on
+    // requiresConfirmation(risk) which kicks in at medium_write.
     const declineServer = makeMcpServer("decline");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
     registerUpdateTool(declineServer, registry, client);
@@ -848,8 +853,7 @@ describe("harness_update", () => {
       resource_id: "my-pipe",
       body: { yamlPipeline: "pipeline:\n  name: Updated" },
     });
-    expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("declined") });
+    expect(result.isError).toBeUndefined();
   });
 
   it("updates resource when confirmed", async () => {
@@ -1316,6 +1320,29 @@ describe("harness_execute", () => {
       inputSchema: { resource_scope?: { description?: string | null } };
     };
     expect(schema.inputSchema.resource_scope?.description).toContain("Scope for the operation");
+  });
+
+  it("exposes a description on every documented input field (Zod 4 chaining order regression)", () => {
+    // Regression for Cursor PR #351 finding: in Zod 4, `.optional()` /
+    // `.default()` / `.min()` / `.max()` each return a fresh wrapper schema
+    // whose `.description` getter does NOT walk into the inner schema. The
+    // MCP SDK reads `schema.description` directly via getSchemaDescription,
+    // so any chain that calls `.describe(...)` BEFORE `.optional()` would
+    // strip the description from the public tool surface. This test asserts
+    // every documented field has a non-empty description after registration.
+    const schema = server.schema("harness_execute") as {
+      inputSchema: Record<string, { description?: string | null } | undefined>;
+    };
+    const documented = [
+      "resource_type", "url", "action", "resource_id", "org_id", "project_id",
+      "resource_scope", "inputs", "input_set_ids", "body", "params", "confirm",
+      "wait", "wait_timeout_seconds", "wait_poll_interval_seconds", "queries",
+    ];
+    for (const field of documented) {
+      const desc = schema.inputSchema[field]?.description;
+      expect(desc, `field "${field}" must expose a description on the registered schema`).toBeTruthy();
+      expect(desc!.length, `field "${field}" description must be non-empty`).toBeGreaterThan(5);
+    }
   });
 
   it("returns error when user declines", async () => {
@@ -2114,10 +2141,15 @@ pipeline:
       expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("body.yaml") });
     });
 
-    it("is blocked in read-only mode because run is risk:'high_write'", async () => {
+    it("is blocked in read-only mode because run is risk:'high_write' (and does NOT prompt the user)", async () => {
       // Mirrors registry.dispatchExecute()'s risk-based gate: a high_write
       // action must NOT execute under HARNESS_READ_ONLY=true. This guards the
       // policy contract documented in TC-pdyn-005.
+      //
+      // Regression for Cursor PR #351 finding: the read-only gate must fire
+      // BEFORE elicitation, otherwise users get prompted to approve writes
+      // that can never run, AND the rejection escapes the new
+      // outcome:"blocked" audit surface.
       const roServer = makeMcpServer("accept");
       const roRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines", HARNESS_READ_ONLY: true }));
       const roRequest = vi.fn();
@@ -2135,6 +2167,7 @@ pipeline:
       expect(result.isError).toBe(true);
       expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Read-only mode") });
       expect(roRequest).not.toHaveBeenCalled();
+      expect(roServer.server.elicitInput).not.toHaveBeenCalled();
     });
   });
 });

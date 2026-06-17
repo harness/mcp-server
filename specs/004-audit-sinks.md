@@ -35,9 +35,12 @@ Tool Handler                    Registry                     AuditManager
      |                             |                              |-- emit() --> OTelSink
 ```
 
-### Emission Point
+### Emission Points
 
-Audit events are emitted from `Registry.executeSpecWithAudit()` — a wrapper around `executeSpec()`. This guarantees 100% coverage of all registry-mediated operations without requiring individual tool handlers to emit events. Tool handlers pass an `AuditContext` (tool name, confirmation method, resource_id, action) through `dispatch`/`dispatchExecute`.
+There are two emission points, one for dispatched calls and one for pre-dispatch blocks:
+
+1. **`Registry.executeSpecWithAudit()`** — a wrapper around `executeSpec()` that emits an event for every registry-mediated API call (`outcome: "success" | "error"`). This guarantees 100% coverage of dispatched operations without requiring individual tool handlers to emit events. Tool handlers pass an `AuditContext` (tool name, confirmation method, resource_id, action) through `dispatch` / `dispatchExecute`.
+2. **`Registry.auditBlockedAttempt()`** — explicit pre-dispatch emission for operations that were blocked by the elicitation gate before any API call ran. The four write-tool handlers (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) call this when `confirmViaElicitation` returns `proceed: false`, so operators see blocked attempts as first-class audit rows (`outcome: "blocked"`, `duration_ms: 0`). This is the only path on which tool handlers must wire audit calls explicitly; the dispatched-call path remains automatic.
 
 ---
 
@@ -57,7 +60,7 @@ interface AuditEvent {
   account_id: string;
   risk: RiskLevel;
   confirmation?: ConfirmationMethod;
-  outcome: "success" | "error";
+  outcome: "success" | "error" | "blocked";
   error?: string;
   duration_ms: number;
   http_status?: number;
@@ -65,7 +68,32 @@ interface AuditEvent {
   http_path?: string;
 }
 
-type ConfirmationMethod = "auto_approved" | "elicited" | "skipped" | "blocked" | "not_required";
+type ConfirmationMethod = "auto_approved" | "elicited" | "caller_confirmed" | "blocked" | "not_required";
+//
+// - auto_approved:    risk was at or below HARNESS_AUTO_APPROVE_RISK
+// - elicited:         the client completed an MCP elicitation handshake
+//                     and the user either accepted with content.confirm===true
+//                     (proceed) or explicitly declined / cancelled / unchecked
+//                     the confirm box (block). Pair the latter with
+//                     outcome="blocked" on the pre-dispatch audit row
+// - caller_confirmed: caller passed confirm: true and the client could not
+//                     surface a usable elicitation prompt (no capability,
+//                     elicitInput failed, or degenerate accept). Used by
+//                     non-interactive automation; distinct from `elicited`
+//                     so audits can tell automation overrides apart from
+//                     genuine human consents
+// - not_required:     risk was read or low_write — no confirmation needed
+// - blocked:          client could not surface a usable confirmation prompt
+//                     and no confirm:true was supplied. Paired with
+//                     outcome="blocked" on the pre-dispatch audit row
+
+type AuditOutcome = "success" | "error" | "blocked";
+//
+// - success: the dispatched API call returned successfully
+// - error:   the dispatched API call failed (network/HTTP/etc.)
+// - blocked: pre-dispatch audit row emitted by Registry.auditBlockedAttempt()
+//            when an operation was gated by elicitation. Distinct from `error`
+//            so consumers can filter pre-dispatch blocks from real API failures
 ```
 
 ## AuditSink Interface

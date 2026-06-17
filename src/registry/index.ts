@@ -4,7 +4,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import { HarnessApiError } from "../utils/errors.js";
 import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec, ResourceScope } from "./types.js";
 import type { AuditManager } from "../audit/manager.js";
-import type { AuditContext, AuditEvent } from "../audit/types.js";
+import type { AuditContext, AuditEvent, AuditOutcome } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 import { isFormDataBody } from "../utils/type-guards.js";
@@ -455,6 +455,61 @@ export class Registry {
     }
   }
 
+  /**
+   * Emit a pre-dispatch audit event for an operation that was blocked
+   * (e.g. by elicitation when the client could not surface a confirmation
+   * prompt). The blocked attempt does not run; this exists so operators can
+   * see in audit logs that the LLM tried to execute something that was
+   * gated.
+   *
+   * Best-effort: if path resolution throws (e.g. a `pathBuilder` requires
+   * identifier fields that haven't been populated on the input map yet for
+   * this blocked attempt), the failure is swallowed and the audit row is
+   * emitted with `http_path` omitted. Audit emission must NEVER block or
+   * alter the user-visible response — the blocked attempt itself is the
+   * load-bearing signal, not the path. Safe to call when no audit manager
+   * is configured (no-ops).
+   */
+  auditBlockedAttempt(
+    resourceType: string,
+    operation: string,
+    input: Record<string, unknown>,
+    auditCtx: AuditContext | undefined,
+    blockReason: string,
+  ): void {
+    if (!this.auditManager) return;
+    const def = this.resourceMap.get(resourceType);
+    if (!def) return;
+    let spec: EndpointSpec | undefined;
+    if (operation === "execute") {
+      spec = auditCtx?.action ? def.executeActions?.[auditCtx.action] : undefined;
+    } else {
+      spec = def.operations[operation as OperationName];
+    }
+    if (!spec) return;
+    // For blocked attempts, treat path resolution as best-effort: a
+    // `pathBuilder` may require identifier fields that aren't populated on
+    // the input map for this attempt (the operation never ran), so skip the
+    // builder and use the static template path. The audit row still records
+    // the operation, resource_type, action, confirmation, and reason — the
+    // load-bearing signal — even when the templated path retains its
+    // placeholders. Falling back here prevents pathBuilder errors from
+    // killing the user-visible response.
+    let safeSpec = spec;
+    if (spec.pathBuilder) {
+      try {
+        spec.pathBuilder(input, { HARNESS_ACCOUNT_ID: this.getAccountId(), HARNESS_ORG: this.config.HARNESS_ORG, HARNESS_PROJECT: this.config.HARNESS_PROJECT });
+      } catch {
+        safeSpec = { ...spec, pathBuilder: undefined };
+      }
+    }
+    try {
+      this.emitAuditEvent(def, safeSpec, operation, resourceType, input, auditCtx, "blocked", 0, blockReason);
+    } catch (err) {
+      log.warn("Failed to emit blocked-attempt audit event", { resourceType, operation, error: String(err) });
+    }
+  }
+
   private emitAuditEvent(
     def: ResourceDefinition,
     spec: EndpointSpec,
@@ -462,7 +517,7 @@ export class Registry {
     resourceType: string,
     input: Record<string, unknown>,
     auditCtx: AuditContext | undefined,
-    outcome: "success" | "error",
+    outcome: AuditOutcome,
     durationMs: number,
     error?: string,
     httpStatus?: number,

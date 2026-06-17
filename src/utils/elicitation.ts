@@ -24,7 +24,48 @@ export interface ElicitationResult {
   /** Why the operation was stopped, if applicable. */
   reason?: "declined" | "cancelled";
   /** How the confirmation was resolved — maps directly to ConfirmationMethod for audit. */
-  method: "elicited" | "auto_approved" | "not_required" | "blocked" | "skipped";
+  method: "elicited" | "caller_confirmed" | "auto_approved" | "not_required" | "blocked";
+}
+
+/**
+ * Build a tool-handler-friendly error string for a non-proceeding
+ * `ElicitationResult`. Branches on `method` so the recovery hint matches
+ * what actually happened:
+ *
+ *  - `elicited` → the client completed the handshake and the user explicitly
+ *    declined or cancelled. Authoritative; `confirm: true` does NOT bypass.
+ *  - `blocked` → the client did not surface a usable prompt (no elicitation
+ *    capability, `elicitInput` failed, or accept arrived without
+ *    `confirm=true`). Caller can retry with `confirm: true` to opt in for
+ *    non-interactive automation.
+ */
+export function describeElicitationFailure(result: ElicitationResult): string {
+  if (result.method === "blocked") {
+    return "Operation blocked: the client could not surface a usable confirmation prompt (no elicitation capability, elicitInput failed, or accept missing confirm field). Hint: retry with confirm: true if you intend to proceed (e.g. non-interactive automation).";
+  }
+  const reason = result.reason ?? "declined";
+  return `Operation ${reason} by user. To override an interactive decline, the user must accept the prompt — confirm: true does not bypass an explicit decline.`;
+}
+
+/**
+ * Build the audit-row error string for a non-proceeding
+ * `ElicitationResult`. Mirrors `describeElicitationFailure` in attributing
+ * the block correctly: the `blocked` method is a CLIENT-side failure to
+ * surface a prompt, not a human decline, and the audit row must say so.
+ *
+ * For the `blocked` branch we deliberately do NOT echo the internal
+ * `reason` token. confirmViaElicitation always sets `reason: "cancelled"`
+ * on blocked results today, but the function is defensive against any
+ * residual `reason: "declined"` shape — either token would falsely imply
+ * a human action when surfaced on a client-capability failure. The fact
+ * that the operation never reached dispatch is captured by
+ * `outcome: "blocked"` on the audit row instead.
+ */
+export function describeBlockedAudit(result: ElicitationResult): string {
+  if (result.method === "blocked") {
+    return "Operation blocked pre-dispatch: client could not surface a confirmation prompt";
+  }
+  return `Operation ${result.reason ?? "declined"} by user (${result.method})`;
 }
 
 /** Module-level auto-approve threshold (set via HARNESS_AUTO_APPROVE_RISK). */
@@ -51,10 +92,30 @@ export function clientSupportsElicitation(server: Server): boolean {
  * Decision flow:
  *  1. If the operation risk is at or below `HARNESS_AUTO_APPROVE_RISK`, proceed
  *     immediately (autonomous mode for CI/CD agents).
- *  2. If the client supports elicitation, prompt the user.
- *  3. If the client lacks elicitation:
- *     - `read` / `low_write` → proceed silently.
+ *  2. If the operation risk is `read` or `low_write`, proceed silently — these
+ *     do not require user confirmation regardless of client capability.
+ *     `requiresConfirmation(risk)` is the single threshold that decides
+ *     whether a prompt is surfaced; it kicks in at `medium_write`.
+ *  3. If the client supports elicitation, prompt the user. The prompt
+ *     contains a `confirm` checkbox (default `true`):
+ *       - `accept` + `confirm === true` → proceed
+ *       - `accept` + `confirm === false` (user unchecked the box) → BLOCK
+ *         (authoritative; not bypassable by callerConfirmed)
+ *       - `accept` missing the `confirm` field → degenerate non-interactive
+ *         response (handled under callerConfirmed below)
+ *       - `decline` / `cancel` → BLOCK (authoritative; not bypassable)
+ *  4. If the client lacks elicitation:
  *     - `medium_write` / `high_write` / `destructive` → BLOCK.
+ *  5. `callerConfirmed` (caller passed `confirm: true`) overrides:
+ *       - the lacking-elicitation block (managed MCP, Cursor, etc.),
+ *       - an `elicitInput` failure (transport or unsupported method),
+ *       - an `accept` action missing `confirm=true` (degenerate response from
+ *         a non-interactive client that advertises elicitation but does not
+ *         actually surface a prompt).
+ *     It does NOT override an explicit `decline` or `cancel` from a client
+ *     that completed the elicitation handshake — a human (or trusted client)
+ *     saying "no" to a write is authoritative, even if the model also passed
+ *     `confirm: true` on the call.
  */
 export async function confirmViaElicitation({
   server,
@@ -72,7 +133,10 @@ export async function confirmViaElicitation({
   /** Optional per-session threshold. Falls back to the process default. */
   autoApproveRisk?: AutoApproveRisk;
   /** When true, the caller explicitly passed confirm=true — acts as confirmation
-   *  on clients that lack elicitation support (managed MCP, Cursor, etc.). */
+   *  on clients that lack elicitation support (managed MCP, Cursor, etc.) and
+   *  on clients that fail to surface a usable prompt. Override paths emit
+   *  `method: "caller_confirmed"` (distinct from `elicited`) so audit sinks
+   *  can tell automation overrides apart from genuine human consents. */
   callerConfirmed?: boolean;
 }): Promise<ElicitationResult> {
   const threshold = autoApproveRisk ?? _autoApproveRisk;
@@ -81,17 +145,27 @@ export async function confirmViaElicitation({
     return { proceed: true, method: "auto_approved" };
   }
 
-  if (!clientSupportsElicitation(server.server)) {
-    if (requiresConfirmation(risk)) {
-      if (callerConfirmed) {
-        log.info("Client lacks elicitation, proceeding via explicit confirm param", { toolName, risk });
-        return { proceed: true, method: "elicited" };
-      }
-      log.warn("Client does not support elicitation, blocking operation", { toolName, risk });
-      return { proceed: false, reason: "declined", method: "blocked" };
-    }
-    log.debug("Client does not support elicitation, proceeding (low risk)", { toolName, risk });
+  // `read` / `low_write` actions never need user confirmation, regardless of
+  // client capability. This matches the documented risk policy: confirmation
+  // is gated on `requiresConfirmation(risk)` (medium_write+), and surfacing
+  // an elicitation prompt for low-risk reads (e.g. hql_query.run) would be
+  // user-hostile noise.
+  if (!requiresConfirmation(risk)) {
+    log.debug("Risk does not require confirmation, proceeding silently", { toolName, risk });
     return { proceed: true, method: "not_required" };
+  }
+
+  if (!clientSupportsElicitation(server.server)) {
+    if (callerConfirmed) {
+      log.info("Client lacks elicitation, proceeding via explicit confirm param", { toolName, risk });
+      return { proceed: true, method: "caller_confirmed" };
+    }
+    log.warn("Client does not support elicitation, blocking operation", { toolName, risk });
+    // Use `reason: "cancelled"` rather than `"declined"`: no human declined —
+    // the client never surfaced a prompt at all. `method: "blocked"` is the
+    // load-bearing signal; the reason field stays consistent across every
+    // blocked branch (no-capability, throws, accept-without-confirm).
+    return { proceed: false, reason: "cancelled", method: "blocked" };
   }
 
   try {
@@ -105,38 +179,50 @@ export async function confirmViaElicitation({
 
     if (result.action === "accept") {
       const content = result.content;
-      const confirmed = typeof content === "object"
-        && content !== null
-        && "confirm" in content
-        && content.confirm === true;
-      if (!confirmed) {
-        log.warn("Elicitation accept missing confirm=true", { toolName, risk });
-        return { proceed: false, reason: "cancelled", method: "elicited" };
+      const isContentObject = typeof content === "object" && content !== null;
+      const hasConfirmField = isContentObject && "confirm" in content;
+      const confirmValue = hasConfirmField ? (content as Record<string, unknown>).confirm : undefined;
+      if (confirmValue === true) {
+        return { proceed: true, method: "elicited" };
       }
-      return { proceed: true, method: "elicited" };
+      // `confirm: false` is an explicit user choice (they unchecked the
+      // confirmation box) — authoritative, not bypassable by callerConfirmed.
+      if (hasConfirmField && confirmValue === false) {
+        log.info("Elicitation accept with confirm=false (user unchecked the box)", { toolName, risk });
+        return { proceed: false, reason: "declined", method: "elicited" };
+      }
+      // From here: `accept` arrived without the confirm field — a degenerate
+      // shape from a non-interactive client that did not actually surface a
+      // usable prompt. callerConfirmed is the explicit opt-in.
+      if (callerConfirmed) {
+        log.info("Elicitation accept missing confirm field; proceeding via explicit confirm param", { toolName, risk });
+        return { proceed: true, method: "caller_confirmed" };
+      }
+      log.warn("Elicitation accept missing confirm field; treating as blocked (no usable prompt surfaced)", { toolName, risk });
+      return { proceed: false, reason: "cancelled", method: "blocked" };
     }
+    // An explicit decline / cancel from a client that completed the
+    // elicitation handshake is authoritative — `callerConfirmed` does NOT
+    // override it, even if the caller passed `confirm: true`. The override
+    // is reserved for clients that cannot or did not surface the prompt
+    // (no capability, transport error, accept missing confirm=true).
     if (result.action === "decline") {
       return { proceed: false, reason: "declined", method: "elicited" };
     }
     return { proceed: false, reason: "cancelled", method: "elicited" };
   } catch (err) {
-    if (requiresConfirmation(risk)) {
-      if (callerConfirmed) {
-        log.info("Elicitation failed but proceeding via explicit confirm param", { toolName, risk, error: String(err) });
-        return { proceed: true, method: "elicited" };
-      }
-      log.warn("Elicitation failed, blocking operation", {
-        toolName,
-        risk,
-        error: String(err),
-      });
-      return { proceed: false, reason: "cancelled", method: "blocked" };
+    // We only reach this branch for confirmation-requiring risks (low-risk
+    // ops short-circuited above), so the elicitation failure is a real block
+    // unless the caller explicitly opted in.
+    if (callerConfirmed) {
+      log.info("Elicitation failed but proceeding via explicit confirm param", { toolName, risk, error: String(err) });
+      return { proceed: true, method: "caller_confirmed" };
     }
-    log.warn("Elicitation failed, proceeding without confirmation (low risk)", {
+    log.warn("Elicitation failed, blocking operation", {
       toolName,
       risk,
       error: String(err),
     });
-    return { proceed: true, method: "skipped" };
+    return { proceed: false, reason: "cancelled", method: "blocked" };
   }
 }
