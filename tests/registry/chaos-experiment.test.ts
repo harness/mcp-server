@@ -98,6 +98,76 @@ describe("chaos_experiment list/get", () => {
     expect((result.items[1] as Record<string, unknown>).name).toBe("Exp B");
   });
 
+  it("list: per-item openInHarness uses the experiment UUID (not name) and the chaos-studio route", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [
+        { experimentID: "91351b37-56da-426c-aee9-668ccf329023", name: "test-conditions" },
+      ],
+      pagination: { totalItems: 1 },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "chaos_experiment", "list", {
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    })) as { items: Array<Record<string, unknown>> };
+
+    expect(result.items[0].openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/module/chaos/orgs/templatescopetest/projects/templatescopetest/experiments/91351b37-56da-426c-aee9-668ccf329023/chaos-studio",
+    );
+  });
+
+  it("chaos_experiment_run get: openInHarness points to the experiment runs page", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentID: "exp-1", name: "pod-delete" });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "chaos_experiment_run", "get", {
+      experiment_id: "exp-1",
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/module/chaos/orgs/templatescopetest/projects/templatescopetest/experiments/exp-1/runs",
+    );
+  });
+
+  it("chaos_input_set list: per-item openInHarness uses the parent experiment id (not the item name)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [{ identity: "is-1", name: "Set A" }],
+      pagination: { totalItems: 1 },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "chaos_input_set", "list", {
+      experiment_id: "exp-1",
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    })) as { items: Array<Record<string, unknown>> };
+
+    expect(result.items[0].openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/module/chaos/orgs/templatescopetest/projects/templatescopetest/experiments/exp-1/inputsets",
+    );
+  });
+
+  it("chaos_experiment_variable list: items carry no openInHarness (no deep link)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      experiment: [{ name: "DURATION", value: "60" }],
+      tasks: null,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "chaos_experiment_variable", "list", {
+      experiment_id: "exp-1",
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    })) as { items: Array<Record<string, unknown>> };
+
+    for (const item of result.items) {
+      expect(item.openInHarness).toBeUndefined();
+    }
+  });
+
   it("get: builds correct path with experimentId and returns passthrough data", async () => {
     const experimentPayload = {
       experimentID: "exp-pod-delete",
@@ -214,6 +284,152 @@ describe("chaos_experiment create", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.body.infraId).toBe("demo/qaauto1");
     expect(call.body.infra_id).toBe("demo/qaauto1");
+  });
+});
+
+describe("chaos_action create", () => {
+  let registry: Registry;
+  beforeEach(() => { registry = new Registry(makeConfig()); });
+
+  it("create: builds the delay-action body matching the verified curl", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "deplay-action-01", name: "deplay-action-01", type: "delay" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_action", "create", {
+      org_id: "templatescopetest",
+      project_id: "templatescopetest",
+      identity: "deplay-action-01",
+      name: "deplay-action-01",
+      description: "optional desc",
+      tags: ["op:tag1", "op:tag2"],
+      infrastructure_type: "Kubernetes",
+      type: "delay",
+      variables: [{ name: "variable_1", type: "String", value: "10", description: "variable1 desc" }],
+      action_properties: { delayAction: { duration: "5s" } },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/rest/actions");
+    expect(call.body).toMatchObject({
+      identity: "deplay-action-01",
+      name: "deplay-action-01",
+      description: "optional desc",
+      tags: ["op:tag1", "op:tag2"],
+      infrastructureType: "Kubernetes",
+      type: "delay",
+      variables: [{ name: "variable_1", type: "String", value: "10", description: "variable1 desc" }],
+      actionProperties: { delayAction: { duration: "5s" } },
+      inputs: [],
+    });
+  });
+
+  it("create: identity defaults to name when omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_action", "create", {
+      org_id: "default", project_id: "p",
+      name: "my-delay", type: "delay", infrastructure_type: "Linux",
+      action_properties: { delayAction: { duration: "5s" } },
+    });
+    expect(mockRequest.mock.calls[0][0].body.identity).toBe("my-delay");
+  });
+
+  it("create: duration shorthand builds delayAction when action_properties omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_action", "create", {
+      org_id: "default", project_id: "p",
+      name: "d", type: "delay", infrastructure_type: "Kubernetes", duration: "30s",
+    });
+    expect(mockRequest.mock.calls[0][0].body.actionProperties).toEqual({ delayAction: { duration: "30s" } });
+  });
+
+  it("create: accepts Windows and Linux infra for a delay action", async () => {
+    for (const infra of ["Windows", "Linux"]) {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "chaos_action", "create", {
+        org_id: "default", project_id: "p",
+        name: "d", type: "delay", infrastructure_type: infra,
+        action_properties: { delayAction: { duration: "5s" } },
+      });
+      expect(mockRequest.mock.calls[0][0].body.infrastructureType).toBe(infra);
+    }
+  });
+
+  it("create: builds the customScript-action body matching the verified curl", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "custom-script-action-8s3", name: "new-custom-script-action-8s3", type: "customScript" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_action", "create", {
+      org_id: "templatescopetest", project_id: "templatescopetest",
+      identity: "custom-script-action-8s3",
+      name: "new-custom-script-action-8s3",
+      description: "optional desc",
+      tags: ["op:tag1", "op:tag2"],
+      infrastructure_type: "Kubernetes",
+      type: "customScript",
+      variables: [{ name: "randomVar1", type: "String", value: "10", required: true }],
+      action_properties: { customScriptAction: { command: "/bin/sh", args: ["-c", "while true; do echo hello; sleep 10;done"], env: [{ name: "HELLO", value: "WORLD" }] } },
+      run_properties: { maxRetries: 1, initialDelay: "5s", interval: "2s", timeout: "10s", iterations: 1 },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/rest/actions");
+    expect(call.body).toMatchObject({
+      identity: "custom-script-action-8s3",
+      name: "new-custom-script-action-8s3",
+      description: "optional desc",
+      tags: ["op:tag1", "op:tag2"],
+      infrastructureType: "Kubernetes",
+      type: "customScript",
+      variables: [{ name: "randomVar1", type: "String", value: "10", required: true }],
+      actionProperties: { customScriptAction: { command: "/bin/sh", args: ["-c", "while true; do echo hello; sleep 10;done"], env: [{ name: "HELLO", value: "WORLD" }] } },
+      runProperties: { maxRetries: 1, initialDelay: "5s", interval: "2s", timeout: "10s", iterations: 1 },
+      inputs: [],
+    });
+  });
+
+  it("create: builds the container-action body (Kubernetes; command array + args string)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "container-action-zia", name: "new-container-action-zia", type: "container" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_action", "create", {
+      org_id: "templatescopetest", project_id: "templatescopetest",
+      identity: "container-action-zia",
+      name: "new-container-action-zia",
+      infrastructure_type: "Kubernetes",
+      type: "container",
+      action_properties: { containerAction: {
+        image: "bitnami/kubectl:latest",
+        command: ["/bin/sh", "-c"],
+        args: 'echo "Hello World"',
+        env: [{ name: "Hello_Variable1", value: "World_Ans2" }],
+        namespace: "some",
+        imagePullPolicy: "IfNotPresent",
+      } },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/rest/actions");
+    expect(call.body).toMatchObject({
+      identity: "container-action-zia",
+      name: "new-container-action-zia",
+      infrastructureType: "Kubernetes",
+      type: "container",
+      actionProperties: { containerAction: {
+        image: "bitnami/kubectl:latest",
+        command: ["/bin/sh", "-c"],
+        args: 'echo "Hello World"',
+        env: [{ name: "Hello_Variable1", value: "World_Ans2" }],
+        namespace: "some",
+        imagePullPolicy: "IfNotPresent",
+      } },
+      inputs: [],
+    });
   });
 });
 
@@ -354,6 +570,68 @@ describe("chaos_k8s_infrastructure list", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/chaos/manager/api/rest/kubernetes/infra/infra-abc/health");
+  });
+});
+
+describe("chaos_enabled_infrastructure list", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: targets the chaos-enabled endpoint and extracts infras/total", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      infras: [{ infraID: "k8s-1", name: "prod-cluster", status: "ACTIVE", isChaosEnabled: true }],
+      pagination: { page: 0, limit: 15 },
+      totalNoOfInfrastructures: 1,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "chaos_enabled_infrastructure", "list", {
+      project_id: "PM_Signoff",
+      org_id: "default",
+    })) as { items: unknown[]; total: number };
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/infrastructures/chaos-enabled");
+    expect(call.params).toMatchObject({ organizationIdentifier: "default", projectIdentifier: "PM_Signoff" });
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBe(1);
+  });
+
+  it("list: uppercases infra_type, sends infra_scope/is_ai_enabled in body, env as query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ infras: [], totalNoOfInfrastructures: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_enabled_infrastructure", "list", {
+      project_id: "ChaosDev1",
+      org_id: "default",
+      environment_id: "demoash",
+      infra_type: "KubernetesV2",
+      infra_scope: "CLUSTER",
+      is_ai_enabled: false,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.environmentIdentifier).toBe("demoash");
+    expect(call.params.infraType).toBeUndefined();
+    expect(call.body.filter).toMatchObject({
+      infraTypeFilter: "KUBERNETESV2",
+      infraScope: "CLUSTER",
+      isAIEnabled: false,
+    });
+  });
+
+  it("list: sends empty body when no filters provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ infras: [], totalNoOfInfrastructures: 0 });
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_enabled_infrastructure", "list", {
+      project_id: "ChaosDev1",
+      org_id: "default",
+    });
+    expect(mockRequest.mock.calls[0][0].body.filter).toBeUndefined();
   });
 });
 

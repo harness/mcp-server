@@ -858,7 +858,7 @@ export class Registry {
     if (def.deepLinkTemplate && typeof result === "object" && result !== null) {
       const resultRecord = result as Record<string, unknown>;
       const baseLinkParams: Record<string, string> = {
-        orgIdentifier: (params.orgIdentifier as string) ?? "",
+        orgIdentifier: (params.orgIdentifier as string) ?? (params.organizationIdentifier as string) ?? "",
         projectIdentifier: (params.projectIdentifier as string) ?? "",
       };
 
