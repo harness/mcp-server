@@ -4,21 +4,26 @@ import {
   passthrough,
   ngExtract,
   chaosPageExtract,
+  chaosExperimentListExtract,
+  chaosInputSetListExtract,
   chaosAppMapPageExtract,
   chaosProbeListExtract,
   chaosInfraListExtract,
   chaosK8sInfraListExtract,
+  chaosLoadTestListExtract,
+  chaosLoadTestExtract,
   chaosHubListExtract,
   chaosDRTestListExtract,
   sdPageExtract,
   chaosRunTimeInputsExtract,
+  chaosActionExtract,
 } from "../extractors.js";
 import {
   descToolsetChaos,
   // Resource descriptions
   descChaosExperiment, descChaosExperimentRun, descChaosProbe,
   descChaosExperimentTemplate, descChaosExperimentVariable,
-  descChaosInfrastructure, descChaosLoadtest, descChaosK8sInfrastructure,
+  descChaosInfrastructure, descChaosLoadtest, descChaosK8sInfrastructure, descChaosEnabledInfrastructure,
   descChaosHub, descChaosFault, descChaosFaultExperimentRun, descChaosFaultTemplate,
   descChaosProbeTemplate, descChaosActionTemplate,
   descChaosHubFault, descChaosEnvironment,
@@ -36,7 +41,7 @@ import {
   descListExperimentVariables, descGetComponentVariable, descCreateExperiment,
   descListLinuxInfra,
   descListLoadtests, descGetLoadtest, descCreateLoadtest, descDeleteLoadtest,
-  descListK8sInfra, descGetK8sInfra,
+  descListK8sInfra, descGetK8sInfra, descListChaosEnabledInfra,
   descListHubs, descGetHub, descCreateHub, descUpdateHub, descDeleteHub,
   descListFaults, descGetFault,
   descListFaultTemplates, descGetFaultTemplate, descDeleteFaultTemplate,
@@ -56,6 +61,10 @@ import {
   descListProbesInRun,
   descGetFaultVariables, descGetFaultYaml, descListFaultExperimentRuns, descDeleteFault,
   descListActions, descGetAction, descGetActionManifest, descDeleteAction,
+  descCreateAction, descBodyActionCreate, descActionName, descActionIdentityCreate,
+  descActionEntityTypeCreate, descActionInfraTypeCreate, descActionPropertiesBody,
+  descActionDurationShorthand, descActionDescriptionCreate, descActionTagsCreate,
+  descActionVariablesBody, descActionRunPropertiesBody, descActionInputsBody,
   // Action descriptions
   descRunExperiment, descStopExperiment, descDeleteExperiment,
   descEnableProbe, descVerifyProbe,
@@ -75,6 +84,12 @@ import {
   descExperimentName, descExperimentIdentity, descInfraRef,
   descExperimentId, descInfraStatus,
   descLoadtestName, descLoadtestType,
+  descLoadtestIdentity, descLoadtestDescription, descLoadtestTags,
+  descLoadtestEnvId, descLoadtestInfraId, descLoadtestTargetType,
+  descLoadtestTargetUrl, descLoadtestScript, descLoadtestUsers,
+  descLoadtestDurationSec, descLoadtestRampUpSec, descLoadtestWorkerCount,
+  descLoadtestScriptSource, descLoadtestScriptImage,
+  descLoadtestScriptEntrypoint, descLoadtestLoadArgs,
   descHubIdentityExact, descHubName, descHubNameUpdate,
   descHubDescription, descHubDescriptionUpdate,
   descHubTags, descHubTagsReplace,
@@ -88,6 +103,7 @@ import {
   descEntityTypeProbe, descEntityTypeAction,
   descEntityTypeFault, descPermissionsRequiredEnum, descOnlyTemplatisedFaults,
   descEnvironmentId, descK8sInfraStatus, descIncludeLegacyInfra, descSearchK8sInfra,
+  descChaosEnabledInfraType, descInfraScope, descInfraAiEnabled,
   descSearchTermEnv, descSortEnv, descEnvironmentType,
   descGuardSearch, descGuardInfraType, descGuardTags, descGuardEnabled,
   descExperimentRunIdStop, descNotifyId, descForce,
@@ -191,7 +207,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["experiment_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/experiments/{experimentId}/chaos-studio",
       searchAliases: [
         "chaos test", "fault injection", "fault injection experiment",
         "blast radius experiment", "resilience test", "chaos engineering test",
@@ -248,7 +264,7 @@ export const chaosToolset: ToolsetDefinition = {
             my_experiments: "myExperiments",
             exclude_automation: "excludeAutomation",
           },
-          responseExtractor: chaosPageExtract,
+          responseExtractor: chaosExperimentListExtract,
           description: descListExperiments,
         },
         get: {
@@ -425,7 +441,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["experiment_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/experiments/{experimentId}/runs",
       operations: {
         get: {
           method: "GET",
@@ -448,6 +464,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["probe_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/probes/{probeId}",
       listFilterFields: [
         { name: "search", description: descSearchProbes },
         { name: "tags", description: descTags },
@@ -1193,7 +1210,6 @@ export const chaosToolset: ToolsetDefinition = {
         { name: "experiment_id", description: descExperimentId, required: true },
         { name: "is_identity", description: descIsIdentity, type: "boolean" },
       ],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
       operations: {
         list: {
           method: "GET",
@@ -1267,6 +1283,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["experiment_id", "inputset_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/experiments/{experimentId}/inputsets",
       listFilterFields: [
         { name: "experiment_id", description: descExperimentId, required: true },
         { name: "is_identity", description: descIsIdentity, type: "boolean" },
@@ -1283,7 +1300,7 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { experiment_id: "experimentId" },
           queryParams: { page: "page", limit: "limit", size: "limit", is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
-          responseExtractor: chaosPageExtract,
+          responseExtractor: chaosInputSetListExtract,
           description: descListInputSets,
         },
         get: {
@@ -1410,14 +1427,16 @@ export const chaosToolset: ToolsetDefinition = {
     // ── Load Tests ─────────────────────────────────────────────────────
     // Note: Load test API uses a different service path (loadTest/manager/api)
     // than the chaos manager (chaos/manager/api), per v1 Go code.
-    // Also uses standard orgIdentifier (no scopeParams override).
+    // Like the chaos REST API, it scopes via organizationIdentifier (CHAOS_SCOPE).
     {
       resourceType: "chaos_loadtest",
       displayName: "Chaos Load Test",
       description: descChaosLoadtest,
       toolset: "chaos",
       scope: "project",
+      scopeParams: CHAOS_SCOPE,
       identifierFields: ["loadtest_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/load-tests/{loadtestId}",
       operations: {
         list: {
           method: "GET",
@@ -1426,8 +1445,12 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: {
             page: "page",
             limit: "limit",
+            size: "limit",
+            search: "search",
+            search_term: "search",
+            environment_id: "environmentIdentifier",
           },
-          responseExtractor: passthrough,
+          responseExtractor: chaosLoadTestListExtract,
           description: descListLoadtests,
         },
         get: {
@@ -1435,21 +1458,116 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { loadtest_id: "loadtestId" },
-          responseExtractor: passthrough,
+          responseExtractor: chaosLoadTestExtract,
           description: descGetLoadtest,
         },
         create: {
           method: "POST",
           path: `${CHAOS_LOADTEST}/v1/load-tests`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input) => input.body ?? {},
-          responseExtractor: passthrough,
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const name = (b.name as string) ?? "";
+            // Backend constraint: name allows only lowercase letters, numbers and dashes.
+            if (name && !/^[a-z0-9-]+$/.test(name)) {
+              throw new Error(
+                `Invalid load test name '${name}': only lowercase letters, numbers and dashes are allowed.`,
+              );
+            }
+            const slug = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "");
+            const targetType = (b.target_type as string) ?? "machine-chaos-linux";
+            const tags = b.tags;
+            const environmentIdentifier = b.environment_id ?? b.environmentIdentifier;
+            const infraIdentifier = b.infra_id ?? b.infraIdentifier;
+            const targetUrl = b.target_url ?? b.targetUrl;
+            const script = b.script as string | undefined;
+            const scriptImage = (b.script_image ?? b.scriptImage) as string | undefined;
+            // Resolve test-definition source: explicit script_source wins, else infer
+            // "image" when an image is supplied, otherwise "inline" (Python script).
+            const scriptSource =
+              (b.script_source as string) ?? (scriptImage != null ? "image" : "inline");
+
+            const body: Record<string, unknown> = {
+              identity: (b.identity as string) || slug(name) || randomUUID(),
+              name,
+              environmentIdentifier,
+              infraIdentifier,
+              targetType,
+              toolType: (b.tool_type as string) ?? "Locust",
+              targetUrl,
+              scriptSource,
+              defaultUsers: b.users != null ? b.users : 100,
+              defaultDurationSec: b.duration_sec != null ? b.duration_sec : 600,
+              defaultRampUpTimeSec: b.ramp_up_sec != null ? b.ramp_up_sec : 120,
+            };
+            // Emit snake_case aliases for the required fields whose API key is a
+            // camelCase rename, so the registry's required-field validator (which
+            // checks the built body against the snake_case bodySchema field names)
+            // sees them. The load-test backend reads the camelCase keys and ignores
+            // the extra ones (same pattern as chaos_action create).
+            if (environmentIdentifier != null) body.environment_id = environmentIdentifier;
+            if (infraIdentifier != null) body.infra_id = infraIdentifier;
+            if (targetUrl != null) body.target_url = targetUrl;
+            if (b.description != null) body.description = b.description;
+            if (tags != null) {
+              body.tags = Array.isArray(tags)
+                ? tags
+                : (tags as string).split(",").map((t: string) => t.trim()).filter(Boolean);
+            }
+
+            if (scriptSource === "image") {
+              // Custom Image mode (Kubernetes): prebuilt container image as the source.
+              if (scriptImage == null) {
+                throw new Error("script_image is required when script_source='image'.");
+              }
+              body.scriptImage = scriptImage;
+              const entrypoint = b.script_entrypoint ?? b.scriptEntrypoint;
+              if (entrypoint != null) body.scriptEntrypoint = entrypoint;
+              const loadArgs = b.load_args ?? b.loadArgs;
+              if (loadArgs != null) body.loadArgs = loadArgs;
+            } else {
+              // Inline (Python script) mode: base64-encode the raw locust script.
+              if (script == null) {
+                throw new Error(
+                  "script is required when script_source='inline' (the raw Python locust script).",
+                );
+              }
+              body.scriptContent = Buffer.from(script, "utf8").toString("base64");
+            }
+
+            // Kubernetes always carries a worker count (0 = standalone, N = distributed).
+            if (targetType === "kubernetes") {
+              const workerCount = b.worker_count != null ? b.worker_count : 0;
+              body.variables = {
+                workerCount: { type: "fixed", valueType: "int", value: workerCount },
+              };
+            }
+            return body;
+          },
+          responseExtractor: chaosLoadTestExtract,
           description: descCreateLoadtest,
           bodySchema: {
             description: descBodyLoadtestDefinition,
             fields: [
               { name: "name", type: "string", required: true, description: descLoadtestName },
-              { name: "type", type: "string", required: false, description: descLoadtestType },
+              { name: "environment_id", type: "string", required: true, description: descLoadtestEnvId },
+              { name: "infra_id", type: "string", required: true, description: descLoadtestInfraId },
+              { name: "target_url", type: "string", required: true, description: descLoadtestTargetUrl },
+              { name: "script", type: "string", required: false, description: descLoadtestScript },
+              { name: "script_source", type: "string", required: false, description: descLoadtestScriptSource },
+              { name: "script_image", type: "string", required: false, description: descLoadtestScriptImage },
+              { name: "script_entrypoint", type: "string", required: false, description: descLoadtestScriptEntrypoint },
+              { name: "load_args", type: "string", required: false, description: descLoadtestLoadArgs },
+              { name: "identity", type: "string", required: false, description: descLoadtestIdentity },
+              { name: "description", type: "string", required: false, description: descLoadtestDescription },
+              { name: "tags", type: "array", required: false, description: descLoadtestTags },
+              { name: "target_type", type: "string", required: false, description: descLoadtestTargetType },
+              { name: "tool_type", type: "string", required: false, description: descLoadtestType },
+              { name: "users", type: "number", required: false, description: descLoadtestUsers },
+              { name: "duration_sec", type: "number", required: false, description: descLoadtestDurationSec },
+              { name: "ramp_up_sec", type: "number", required: false, description: descLoadtestRampUpSec },
+              { name: "worker_count", type: "number", required: false, description: descLoadtestWorkerCount },
             ],
           },
         },
@@ -1548,6 +1666,72 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: descCheckK8sHealth,
           bodySchema: { description: descBodyNoBody, fields: [] },
+        },
+      },
+    },
+
+    // ── Chaos-Enabled Infrastructure (ready to run experiments) ──────
+    {
+      resourceType: "chaos_enabled_infrastructure",
+      displayName: "Chaos-Enabled Infrastructure",
+      description: descChaosEnabledInfrastructure,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["infra_id"],
+      diagnosticHint:
+        "Returns only infrastructures that are ready to run chaos experiments (chaos-enabled AND ACTIVE). " +
+        "Empty result usually means no chaos infrastructure is installed/connected for this project/environment yet — " +
+        "register/connect one, or use chaos_k8s_infrastructure to see infra that exist but are not chaos-enabled.",
+      relatedResources: [
+        {
+          resourceType: "chaos_k8s_infrastructure",
+          relationship: "alternative",
+          description:
+            "Full K8s infra inventory (all statuses, chaos-enabled or not) plus get + check_health. Use chaos_enabled_infrastructure only to pick a ready-to-use infra.",
+        },
+        {
+          resourceType: "chaos_experiment",
+          relationship: "used_by",
+          description:
+            "The infraID/identity returned here is the infra_ref/infra selector when creating or running an experiment.",
+        },
+      ],
+      listFilterFields: [
+        { name: "environment_id", description: descEnvironmentId },
+        { name: "infra_type", description: descChaosEnabledInfraType, enum: ["Kubernetes", "KubernetesV2", "All"] },
+        { name: "infra_scope", description: descInfraScope, enum: ["NAMESPACE", "CLUSTER"] },
+        { name: "is_ai_enabled", description: descInfraAiEnabled, type: "boolean" },
+        { name: "search", description: descSearchK8sInfra },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/infrastructures/chaos-enabled`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            size: "limit",
+            environment_id: "environmentIdentifier",
+            search: "search",
+            search_term: "search",
+          },
+          bodyBuilder: (input) => {
+            const filter: Record<string, unknown> = {};
+            if (input.infra_type) {
+              filter.infraTypeFilter = String(input.infra_type).toUpperCase();
+            }
+            if (input.infra_scope) {
+              filter.infraScope = input.infra_scope;
+            }
+            if (input.is_ai_enabled != null) {
+              filter.isAIEnabled = input.is_ai_enabled;
+            }
+            return Object.keys(filter).length > 0 ? { filter } : {};
+          },
+          responseExtractor: chaosK8sInfraListExtract,
+          description: descListChaosEnabledInfra,
         },
       },
     },
@@ -1665,6 +1849,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["fault_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/faults/{identity}",
       listFilterFields: [
         { name: "search", description: descFaultSearch },
         { name: "type", description: descFaultListType },
@@ -1771,6 +1956,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["fault_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/faults/{faultId}?tab=execution-history",
       listFilterFields: [
         { name: "fault_id", description: descFaultIdentityParam, required: true },
         { name: "is_enterprise", description: descIsEnterpriseRuns, type: "boolean" },
@@ -1802,6 +1988,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["template_identity"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/hubs/{hubRef}?tab=FAULTS",
       listFilterFields: [
         { name: "hub_identity", description: descHubIdentity },
         { name: "search", description: descTemplateSearch },
@@ -1964,6 +2151,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["template_identity"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/hubs/{hubRef}?tab=PROBES",
       listFilterFields: [
         { name: "hub_identity", description: descHubIdentity },
         { name: "search", description: descTemplateSearch },
@@ -2048,6 +2236,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["template_identity"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/hubs/{hubRef}?tab=ACTIONS",
       listFilterFields: [
         { name: "hub_identity", description: descHubIdentity },
         { name: "search", description: descTemplateSearch },
@@ -2179,6 +2368,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["action_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/actions/{identity}",
       listFilterFields: [
         { name: "hub_identity", description: descHubIdentityActions },
         { name: "search", description: descSearchActionsParam },
@@ -2219,6 +2409,63 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { action_id: "actionId" },
           responseExtractor: passthrough,
           description: descDeleteAction,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/actions`,
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const name = b.name;
+            // UI derives identity from name; backend does NOT auto-generate it.
+            const identity = b.identity ?? name;
+            const type = b.type ?? b.action_type ?? b.actionType;
+            const infrastructureType = b.infrastructure_type ?? b.infrastructureType ?? b.infra_type;
+            const tags = b.tags;
+            // delay shorthand: build delayAction from `duration` when action_properties absent
+            let actionProperties = b.action_properties ?? b.actionProperties;
+            const duration = b.duration;
+            if (actionProperties == null && type === "delay" && duration != null) {
+              actionProperties = { delayAction: { duration } };
+            }
+            const runProperties = b.run_properties ?? b.runProperties;
+            return {
+              ...(identity != null ? { identity } : {}),
+              ...(name != null ? { name } : {}),
+              ...(b.description != null ? { description: b.description } : {}),
+              ...(tags != null
+                ? { tags: Array.isArray(tags) ? tags : String(tags).split(",").map((t: string) => t.trim()).filter(Boolean) }
+                : {}),
+              // Emit snake_case alias too so the registry's required-field
+              // validator (which checks the built body against bodySchema field
+              // names) sees `infrastructure_type`; the backend reads the
+              // camelCase `infrastructureType` and ignores the extra key.
+              ...(infrastructureType != null ? { infrastructureType, infrastructure_type: infrastructureType } : {}),
+              ...(type != null ? { type } : {}),
+              ...(b.variables != null ? { variables: b.variables } : {}),
+              ...(actionProperties != null ? { actionProperties } : {}),
+              ...(runProperties != null ? { runProperties } : {}),
+              inputs: Array.isArray(b.inputs) ? b.inputs : [],
+            };
+          },
+          responseExtractor: chaosActionExtract,
+          description: descCreateAction,
+          bodySchema: {
+            description: descBodyActionCreate,
+            fields: [
+              { name: "name", type: "string", required: true, description: descActionName },
+              { name: "type", type: "string", required: true, description: descActionEntityTypeCreate },
+              { name: "infrastructure_type", type: "string", required: true, description: descActionInfraTypeCreate },
+              { name: "action_properties", type: "object", required: false, description: descActionPropertiesBody },
+              { name: "duration", type: "string", required: false, description: descActionDurationShorthand },
+              { name: "identity", type: "string", required: false, description: descActionIdentityCreate },
+              { name: "description", type: "string", required: false, description: descActionDescriptionCreate },
+              { name: "tags", type: "array", required: false, description: descActionTagsCreate },
+              { name: "variables", type: "array", required: false, description: descActionVariablesBody },
+              { name: "run_properties", type: "object", required: false, description: descActionRunPropertiesBody },
+              { name: "inputs", type: "array", required: false, description: descActionInputsBody },
+            ],
+          },
         },
       },
       executeActions: {
