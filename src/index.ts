@@ -213,8 +213,7 @@ interface Session {
   lastActivity: number;
 }
 
-const SESSION_TTL_MS = 30 * 60_000; // 30 minutes
-const REAP_INTERVAL_MS = 60_000;    // check every minute
+const REAP_INTERVAL_MS = 60_000; // check every minute
 
 /**
  * Start the server in HTTP mode — stateful, session-based.
@@ -290,7 +289,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const reaper = setInterval(() => {
     const now = Date.now();
     for (const [id, session] of sessions) {
-      if (now - session.lastActivity > SESSION_TTL_MS) {
+      if (now - session.lastActivity > config.MCP_SESSION_TTL_MS) {
         log.info("Reaping idle session", { sessionId: id });
         destroySession(id);
       }
