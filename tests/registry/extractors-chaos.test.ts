@@ -1,5 +1,57 @@
 import { describe, expect, it } from "vitest";
-import { chaosDRTestListExtract } from "../../src/registry/extractors.js";
+import { chaosActionExtract, chaosDRTestListExtract, chaosExperimentListExtract, chaosInputSetListExtract } from "../../src/registry/extractors.js";
+
+describe("chaosInputSetListExtract", () => {
+  it("injects experimentId from input into each item", () => {
+    const raw = { data: [{ identity: "is-1", name: "Set A" }], pagination: { totalItems: 1 } };
+    expect(chaosInputSetListExtract(raw, { experiment_id: "exp-uuid" })).toEqual({
+      items: [{ identity: "is-1", name: "Set A", experimentId: "exp-uuid" }],
+      total: 1,
+    });
+  });
+
+  it("does not overwrite an existing experimentId", () => {
+    const raw = { data: [{ identity: "is-1", experimentId: "kept" }] };
+    expect(chaosInputSetListExtract(raw, { experiment_id: "exp-uuid" }).items[0]).toEqual({
+      identity: "is-1",
+      experimentId: "kept",
+    });
+  });
+
+  it("returns the page unchanged when experiment_id is absent", () => {
+    const raw = { data: [{ identity: "is-1" }], pagination: { totalItems: 1 } };
+    expect(chaosInputSetListExtract(raw, {})).toEqual({ items: [{ identity: "is-1" }], total: 1 });
+  });
+
+  it("handles the empty envelope", () => {
+    expect(chaosInputSetListExtract({}, { experiment_id: "exp-uuid" })).toEqual({ items: [], total: 0 });
+  });
+});
+
+describe("chaosExperimentListExtract", () => {
+  it("mirrors experimentID to experimentId and preserves other fields", () => {
+    const raw = { data: [{ experimentID: "uuid-1", name: "exp-a" }], pagination: { totalItems: 5 } };
+    expect(chaosExperimentListExtract(raw)).toEqual({
+      items: [{ experimentID: "uuid-1", name: "exp-a", experimentId: "uuid-1" }],
+      total: 5,
+    });
+  });
+
+  it("does not overwrite an existing experimentId", () => {
+    const raw = { data: [{ experimentID: "uuid-1", experimentId: "kept" }] };
+    expect(chaosExperimentListExtract(raw).items[0]).toEqual({ experimentID: "uuid-1", experimentId: "kept" });
+  });
+
+  it("leaves items without experimentID untouched", () => {
+    const raw = { data: [{ name: "no-id" }], pagination: { totalItems: 1 } };
+    expect(chaosExperimentListExtract(raw)).toEqual({ items: [{ name: "no-id" }], total: 1 });
+  });
+
+  it("handles the empty envelope", () => {
+    expect(chaosExperimentListExtract({})).toEqual({ items: [], total: 0 });
+    expect(chaosExperimentListExtract({ data: [] })).toEqual({ items: [], total: 0 });
+  });
+});
 
 describe("chaosDRTestListExtract", () => {
   it("extracts items and total from the new {items, pagination.totalItems} envelope", () => {
@@ -48,5 +100,20 @@ describe("chaosDRTestListExtract", () => {
       items: [{ id: "dr-1" }, { id: "dr-2" }],
       total: 50,
     });
+  });
+});
+
+describe("chaosActionExtract", () => {
+  it("projects documented fields, drops unknown envelope keys", () => {
+    const out = chaosActionExtract({
+      identity: "a1", name: "A1", type: "delay", infrastructureType: "Kubernetes",
+      actionProperties: { delayAction: { duration: "5s" } }, variables: [], inputs: [],
+      audit: { createdBy: "x" }, isRemoved: false, recentExecutions: [],
+    }) as Record<string, unknown>;
+    expect(out.identity).toBe("a1");
+    expect(out.actionProperties).toEqual({ delayAction: { duration: "5s" } });
+    expect(out).not.toHaveProperty("audit");
+    expect(out).not.toHaveProperty("isRemoved");
+    expect(out).not.toHaveProperty("recentExecutions");
   });
 });
