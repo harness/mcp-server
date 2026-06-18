@@ -24,6 +24,15 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
 /** Pass-through extractor — returns raw response unchanged. Used for APIs that don't wrap in `data`. */
 export const passthrough = (raw: unknown): unknown => raw;
 
+/** Offset-paginated list (OffsetPaginatedResult): { entities, totalCount } */
+export const offsetListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { entities?: unknown[]; totalCount?: number };
+  return {
+    items: r.entities ?? [],
+    total: r.totalCount ?? 0,
+  };
+};
+
 /**
  * STO Global Exemptions extractor.
  * API response: `{ exemptions: [...], pagination: { page, pageSize, totalPages, totalItems }, counts: {...} }`

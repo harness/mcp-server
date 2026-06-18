@@ -48,6 +48,8 @@ import { iacmToolset } from "./toolsets/iacm.js";
 import { knowledgeGraphToolset } from "./toolsets/knowledge-graph.js";
 import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
 import { ansibleToolset } from "./toolsets/ansible.js";
+import { incidentsToolset } from "./toolsets/incidents.js";
+import { deploysToolset } from "./toolsets/deploys.js";
 
 const log = createLogger("registry");
 
@@ -161,6 +163,8 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   knowledgeGraphToolset,
   semanticLayerToolset,
   ansibleToolset,
+  incidentsToolset,
+  deploysToolset,
 ];
 
 /** All available toolset names — used by docs generation to discover opt-in toolsets. */
