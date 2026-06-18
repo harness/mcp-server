@@ -1,15 +1,7 @@
 import type { ToolsetDefinition } from "../types.js";
 import { offsetListExtract } from "../extractors.js";
+import { MC_SCOPE } from "./scopes.js";
 import { isRecord } from "../../utils/type-guards.js";
-
-/**
- * Same custom scope naming as the incidents API (both route through
- * /api/v1/mc/ behind the @HarnessAuth filter): accountId / orgId / projectId
- * rather than the standard NG accountIdentifier / orgIdentifier /
- * projectIdentifier. The client still appends its default `accountIdentifier`
- * query param; the Java side ignores unknown params.
- */
-const DEPLOY_SCOPE = { account: "accountId", org: "orgId", project: "projectId" } as const;
 
 /**
  * Compact a deploy list item. The deploy API returns an always-empty `title`,
@@ -31,11 +23,11 @@ function compactDeploy(item: Record<string, unknown>): Record<string, unknown> {
   if (Array.isArray(item.environments)) slim.environments = item.environments;
   if (Array.isArray(item.buildVersions)) {
     slim.services = item.buildVersions.map((bv) => {
-      const b = (bv ?? {}) as Record<string, unknown>;
-      return { service: b.service, version: b.version };
+      if (!isRecord(bv)) return bv;
+      return { service: bv.service, version: bv.version };
     });
   }
-  if (item.deployTimestamp !== undefined) slim.deployTimestamp = item.deployTimestamp;
+  if (typeof item.deployTimestamp === "number") slim.deployTimestamp = item.deployTimestamp;
   if (typeof item.webLink === "string") slim.webLink = item.webLink;
   return slim;
 }
@@ -85,7 +77,7 @@ export const deploysToolset: ToolsetDefinition = {
       description: "Deployment activity for a project's services. Read-only: list and get.",
       toolset: "deploys",
       scope: "project",
-      scopeParams: DEPLOY_SCOPE,
+      scopeParams: MC_SCOPE,
       identifierFields: ["deploy_id"],
       compactItem: compactDeploy,
       listFilterFields: [

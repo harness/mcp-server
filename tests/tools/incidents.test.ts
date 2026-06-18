@@ -104,6 +104,33 @@ describe("incident — harness_list", () => {
     expect(callArgs.params.impactedService).toEqual(["svc-a"]);
     expect(callArgs.params.sortField).toBe("REPORTED_AT");
   });
+
+  it("compacts list items: keeps prettyId/severity, replaces heavy timelines with counts", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{
+        prettyId: "INC-1",
+        title: "Outage",
+        severity: { id: "1", label: "SEV1" },
+        impactedServices: ["svc-a"],
+        summary: "short",
+        keyEvents: [{ timestamp: 1, status: "FIXING", details: "x" }, { timestamp: 2, status: "FIXING", details: "y" }],
+        rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true }],
+        __internalMeta: { trace: "abc" },
+      }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "incident" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    const item = data.items[0]!;
+    expect(item.prettyId).toBe("INC-1");
+    expect(item.severity).toEqual({ id: "1", label: "SEV1" });
+    expect(item.impactedServices).toEqual(["svc-a"]);
+    // Heavy timelines become counts in the list view
+    expect(item.keyEvents).toBe(2);
+    expect(item.rootCauseTheories).toBe(1);
+    // Internal/meta fields are dropped
+    expect(item).not.toHaveProperty("__internalMeta");
+  });
 });
 
 describe("incident — harness_get", () => {
@@ -115,19 +142,45 @@ describe("incident — harness_get", () => {
   beforeEach(async () => {
     server = makeMcpServer();
     registry = new Registry(makeConfig());
-    mockRequest = vi.fn().mockResolvedValue({ prettyId: "INC-42", title: "Outage" });
+    mockRequest = vi.fn().mockResolvedValue({
+      prettyId: "INC-42",
+      title: "Outage",
+      severity: { id: "1", label: "SEV1" },
+      reportedAtTimestamp: 1781776808000,
+      keyEvents: [{ timestamp: 1, status: "INVESTIGATING", details: "looking" }],
+      rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true }],
+      // Backend envelope/internal fields that must NOT cross the tool boundary
+      __internalMeta: { trace: "abc" },
+      correlationId: "xyz",
+    });
     client = makeClient(mockRequest);
     const { registerGetTool } = await import("../../src/tools/harness-get.js");
     registerGetTool(server, registry, client);
   });
 
-  it("substitutes incident_id into the path and passes the response through", async () => {
+  it("substitutes incident_id into the path", async () => {
     const result = await server.call("harness_get", { resource_type: "incident", resource_id: "INC-42" });
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { path: string };
     expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42");
-    const data = parseResult(result) as { prettyId: string };
+  });
+
+  it("projects a stable shape and drops backend envelope/meta fields", async () => {
+    const result = await server.call("harness_get", { resource_type: "incident", resource_id: "INC-42" });
+    const data = parseResult(result) as Record<string, unknown>;
+    // Documented fields survive, with severity kept as the {id,label} object
     expect(data.prettyId).toBe("INC-42");
+    expect(data.title).toBe("Outage");
+    expect(data.severity).toEqual({ id: "1", label: "SEV1" });
+    expect(data.reportedAtTimestamp).toBe(1781776808000);
+    // Detail view keeps the full timelines (projected to their stable fields)
+    expect(data.keyEvents).toEqual([{ timestamp: 1, status: "INVESTIGATING", details: "looking" }]);
+    expect(data.rootCauseTheories).toEqual([
+      { message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true },
+    ]);
+    // Backend envelope/meta must not leak across the tool boundary
+    expect(data).not.toHaveProperty("__internalMeta");
+    expect(data).not.toHaveProperty("correlationId");
   });
 });
 

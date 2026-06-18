@@ -62,7 +62,8 @@ function isWhitelistedKey(key: string): boolean {
  *
  * When `compactFn` is provided (from a resource's `compactItem`), it replaces
  * the generic key-name whitelist for object items — used by resources whose
- * useful fields can't be expressed as a flat whitelist (e.g. deploys).
+ * useful fields can't be expressed as a flat whitelist (e.g. deploys). The
+ * openInHarness→name markdown-link merge is applied to compactFn output too.
  */
 export function compactItems(
   items: unknown[],
@@ -70,7 +71,7 @@ export function compactItems(
 ): unknown[] {
   return items.map((item) => {
     if (typeof item !== "object" || item === null || Array.isArray(item)) return item;
-    if (compactFn) return compactFn(item as Record<string, unknown>);
+    if (compactFn) return mergeOpenInHarness(compactFn(item as Record<string, unknown>));
     const full = item as Record<string, unknown>;
     const slim: Record<string, unknown> = {};
     for (const key of Object.keys(full)) {
@@ -79,12 +80,15 @@ export function compactItems(
       }
     }
 
-    // Merge deep link into name as markdown hyperlink, then drop the separate field
-    if (typeof slim.openInHarness === "string" && typeof slim.name === "string") {
-      slim.name = `[${slim.name}](${slim.openInHarness})`;
-      delete slim.openInHarness;
-    }
-
-    return slim;
+    return mergeOpenInHarness(slim);
   });
+}
+
+/** Merge deep link into name as markdown hyperlink, then drop the separate field. */
+function mergeOpenInHarness(slim: Record<string, unknown>): Record<string, unknown> {
+  if (typeof slim.openInHarness === "string" && typeof slim.name === "string") {
+    slim.name = `[${slim.name}](${slim.openInHarness})`;
+    delete slim.openInHarness;
+  }
+  return slim;
 }

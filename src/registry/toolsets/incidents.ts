@@ -1,16 +1,103 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { buildBodyNormalized } from "../../utils/body-normalizer.js";
-import { offsetListExtract, passthrough } from "../extractors.js";
+import { offsetListExtract } from "../extractors.js";
+import { MC_SCOPE } from "./scopes.js";
+import { isRecord } from "../../utils/type-guards.js";
 
 /**
- * Incident-management scope override — the incidents API uses
- * accountId / orgId / projectId instead of the standard NG
- * accountIdentifier / orgIdentifier / projectIdentifier.
- *
- * The client still appends its default `accountIdentifier` query param; the
- * Java side ignores unknown params (same pattern STO relies on).
+ * Project a single root-cause theory to its stable, agent-relevant fields,
+ * dropping any backend-internal keys the API may add.
  */
-const INCIDENT_SCOPE = { account: "accountId", org: "orgId", project: "projectId" } as const;
+function projectRootCauseTheory(t: unknown): unknown {
+  if (!isRecord(t)) return t;
+  const out: Record<string, unknown> = {};
+  if (typeof t.message === "string") out.message = t.message;
+  if (typeof t.status === "string") out.status = t.status;
+  if (typeof t.confidence === "number") out.confidence = t.confidence;
+  if (typeof t.aiGenerated === "boolean") out.aiGenerated = t.aiGenerated;
+  return out;
+}
+
+/**
+ * Project a single key-event entry to its stable fields.
+ */
+function projectKeyEvent(e: unknown): unknown {
+  if (!isRecord(e)) return e;
+  const out: Record<string, unknown> = {};
+  if (typeof e.timestamp === "number") out.timestamp = e.timestamp;
+  if (typeof e.status === "string") out.status = e.status;
+  if (typeof e.details === "string") out.details = e.details;
+  return out;
+}
+
+/**
+ * Project the common incident fields shared by the detail view and the list
+ * compactor. Emits a stable, documented shape and drops backend
+ * envelope/debug/meta. `verbose` controls whether the heavy event/theory
+ * arrays are projected in full (detail view) or replaced with counts (list).
+ */
+function projectIncident(raw: Record<string, unknown>, verbose: boolean): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  // Identity + core status
+  if (typeof raw.prettyId === "string") slim.prettyId = raw.prettyId;
+  if (typeof raw.projectId === "string") slim.projectId = raw.projectId;
+  if (typeof raw.title === "string") slim.title = raw.title;
+  if (typeof raw.status === "string") slim.status = raw.status;
+  // severity is an object { id, label } in the response (not a bare string)
+  if (raw.severity !== undefined) slim.severity = raw.severity;
+  if (typeof raw.summary === "string") slim.summary = raw.summary;
+  if (Array.isArray(raw.impactedServices)) slim.impactedServices = raw.impactedServices;
+  if (Array.isArray(raw.environments)) slim.environments = raw.environments;
+  // reporter/commander are user objects (or null)
+  if (raw.reporter !== undefined) slim.reporter = raw.reporter;
+  if (raw.commander !== undefined) slim.commander = raw.commander;
+  if (typeof raw.videoConferenceLink === "string") slim.videoConferenceLink = raw.videoConferenceLink;
+  if (Array.isArray(raw.commsLinks)) slim.commsLinks = raw.commsLinks;
+  // Lifecycle timestamps (epoch-millis). Keep all that are present and non-null.
+  for (const key of [
+    "reportedAtTimestamp", "startedAtTimestamp", "acknowledgedAtTimestamp",
+    "mitigatedAtTimestamp", "resolvedAtTimestamp", "closedAtTimestamp",
+    "responderAssignedAtTimestamp",
+  ]) {
+    if (typeof raw[key] === "number") slim[key] = raw[key];
+  }
+  // Heavy arrays: full projection in the detail view, counts only in lists.
+  if (Array.isArray(raw.keyEvents)) {
+    slim.keyEvents = verbose ? raw.keyEvents.map(projectKeyEvent) : raw.keyEvents.length;
+  }
+  if (Array.isArray(raw.rootCauseTheories)) {
+    slim.rootCauseTheories = verbose
+      ? raw.rootCauseTheories.map(projectRootCauseTheory)
+      : raw.rootCauseTheories.length;
+  }
+  if (Array.isArray(raw.relatedActivities) && raw.relatedActivities.length > 0) {
+    slim.relatedActivities = raw.relatedActivities;
+  }
+  return slim;
+}
+
+/**
+ * Extract an incident detail response (get/create/update/close all return the
+ * same incident DTO). Projects a stable shape and strips backend
+ * envelope/debug/meta fields. Keeps the full keyEvents/rootCauseTheories
+ * timeline since this is the detail view.
+ */
+function incidentGetExtract(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+  return projectIncident(raw, true);
+}
+
+/**
+ * Compact an incident list item. The list response carries the same multi-KB
+ * keyEvents / rootCauseTheories arrays as the detail view; the generic key
+ * whitelist would also drop the identifying `prettyId` (not an *Id/Identifier
+ * suffix) and the `severity`/`impactedServices` fields an agent needs. This
+ * keeps the identity and replaces the heavy timelines with counts. Full
+ * timelines remain available via harness_get.
+ */
+function compactIncident(item: Record<string, unknown>): Record<string, unknown> {
+  return projectIncident(item, false);
+}
 
 /**
  * Body field names are camelCase to match the Jackson-mapped Java DTOs
@@ -60,8 +147,9 @@ export const incidentsToolset: ToolsetDefinition = {
       description: "Incident-management entity. Supports list/get/create/update plus a close action.",
       toolset: "incidents",
       scope: "project",
-      scopeParams: INCIDENT_SCOPE,
+      scopeParams: MC_SCOPE,
       identifierFields: ["incident_id"],
+      compactItem: compactIncident,
       listFilterFields: [
         { name: "status", description: "Filter by incident status (multi-value)", enum: ["new", "investigating", "fixing", "monitoring", "closed"] },
         { name: "severity", description: "Filter by severity (multi-value)" },
@@ -101,7 +189,7 @@ export const incidentsToolset: ToolsetDefinition = {
           path: "/gateway/ir/tp/api/v1/mc/incidents/{incidentId}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { incident_id: "incidentId" },
-          responseExtractor: passthrough,
+          responseExtractor: incidentGetExtract,
           description: "Get incident details by ID",
         },
         create: {
@@ -109,7 +197,7 @@ export const incidentsToolset: ToolsetDefinition = {
           path: "/gateway/ir/tp/api/v1/mc/incidents",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: buildBodyNormalized(),
-          responseExtractor: passthrough,
+          responseExtractor: incidentGetExtract,
           description: "Create a new incident from a template",
           bodySchema: incidentCreateSchema,
         },
@@ -119,7 +207,7 @@ export const incidentsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { incident_id: "incidentId" },
           bodyBuilder: buildBodyNormalized(),
-          responseExtractor: passthrough,
+          responseExtractor: incidentGetExtract,
           description: "Update an incident (merge-patch; only provided fields change)",
           bodySchema: incidentUpdateSchema,
         },
@@ -135,7 +223,7 @@ export const incidentsToolset: ToolsetDefinition = {
           pathParams: { incident_id: "incidentId" },
           // No bodyBuilder — this is a bodyless POST. The dispatcher omits the
           // body entirely when bodyBuilder is absent.
-          responseExtractor: passthrough,
+          responseExtractor: incidentGetExtract,
           actionDescription: "Close an incident (transitions status to closed).",
         },
       },
