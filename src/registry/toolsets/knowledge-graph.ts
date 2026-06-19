@@ -221,7 +221,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
         "Fetch this ONCE when you need to write HQL queries to learn the full " +
         "syntax: find/filter/select/group_by/order_by/join/having/with (CTEs), " +
         "window functions, array functions, case/when, cast, interval, unnest, etc. " +
-        "Returns the grammar as a plain text string.",
+        "Returns { grammar: \"<ANTLR4 .g4 text>\" }.",
       toolset: "knowledge-graph",
       scope: "account",
       identifierFields: [],
@@ -234,7 +234,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
           responseExtractor: grammarExtract,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           description:
-            "Fetch the HQL grammar definition. Returns the full ANTLR4 .g4 grammar as text.",
+            "Fetch the HQL grammar definition. Returns { grammar: \"<ANTLR4 .g4 text>\" }.",
         },
       },
     },
