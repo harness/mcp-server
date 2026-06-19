@@ -82,7 +82,8 @@ const queryableTypeSummaryExtract = (raw: unknown): { items: unknown[]; total: n
 
 const grammarExtract = (raw: unknown): unknown => {
   const r = raw as { grammar?: string };
-  return r.grammar ?? raw;
+  const grammar = r.grammar;
+  return grammar !== undefined ? { grammar } : raw;
 };
 
 /**
