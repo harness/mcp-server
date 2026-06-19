@@ -16,6 +16,7 @@ import {
   type HarnessYamlScope,
 } from "./entity-schema/live.js";
 import type { JsonObject } from "./entity-schema/normalize.js";
+import { navigateSchemaPath } from "../utils/schema-path-navigation.js";
 
 const scopeSchema = z
   .enum(["account", "org", "project"])
@@ -63,31 +64,6 @@ function inlineRefs(schema: Record<string, unknown>, node: unknown, depth = 0): 
     result[key] = inlineRefs(schema, value, depth + 1);
   }
   return result;
-}
-
-function navigateStaticPath(
-  schema: Record<string, unknown>,
-  resourceType: string,
-  path: string,
-): unknown {
-  const definitions = schema.definitions as Record<string, unknown> | undefined;
-  if (!definitions) return undefined;
-
-  const resourceDefs = definitions[resourceType] as Record<string, unknown> | undefined;
-  if (!resourceDefs) return undefined;
-
-  if (resourceDefs[path]) return resourceDefs[path];
-
-  const parts = path.split(".");
-  let current: unknown = resourceDefs;
-  for (const part of parts) {
-    if (current && typeof current === "object" && !Array.isArray(current)) {
-      current = (current as Record<string, unknown>)[part];
-    } else {
-      return undefined;
-    }
-  }
-  return current;
 }
 
 function getStaticSummary(schema: Record<string, unknown>, resourceType: string): Record<string, unknown> {
@@ -318,7 +294,7 @@ export function registerSchemaTool(
           return jsonResult(summary);
         }
 
-        const node = navigateStaticPath(schema, args.resource_type, args.path);
+        const node = navigateSchemaPath(schema, args.resource_type, args.path);
         if (!node) {
           const definitions = schema.definitions as Record<string, Record<string, unknown>> | undefined;
           const available = definitions ? Object.keys(definitions[args.resource_type] ?? {}) : [];
