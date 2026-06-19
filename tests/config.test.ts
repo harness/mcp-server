@@ -151,7 +151,25 @@ describe("ConfigSchema", () => {
     if (result.success) {
       expect(result.data.HARNESS_API_TIMEOUT_MS).toBe(30000);
       expect(result.data.HARNESS_MAX_RETRIES).toBe(3);
+      expect(result.data.MCP_SESSION_TTL_MS).toBe(30 * 60_000);
     }
+  });
+
+  it("coerces and validates MCP_SESSION_TTL_MS", () => {
+    const custom = ConfigSchema.safeParse({
+      ...validConfig,
+      MCP_SESSION_TTL_MS: "60000",
+    });
+    expect(custom.success).toBe(true);
+    if (custom.success) {
+      expect(custom.data.MCP_SESSION_TTL_MS).toBe(60_000);
+    }
+
+    const invalid = ConfigSchema.safeParse({
+      ...validConfig,
+      MCP_SESSION_TTL_MS: "0",
+    });
+    expect(invalid.success).toBe(false);
   });
 
   it("coerces string numbers for timeout and retries", () => {

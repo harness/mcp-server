@@ -213,7 +213,7 @@ interface Session {
   lastActivity: number;
 }
 
-const REAP_INTERVAL_MS = 60_000; // check every minute
+const MAX_REAP_INTERVAL_MS = 60_000; // upper bound for idle-session checks
 
 /**
  * Start the server in HTTP mode — stateful, session-based.
@@ -285,7 +285,12 @@ async function startHttp(config: Config, port: number): Promise<void> {
     log.info("Session destroyed", { sessionId, remaining: sessions.size });
   }
 
-  // TTL reaper — evicts idle sessions and expired rate-limit entries
+  // TTL reaper — evicts idle sessions and expired rate-limit entries.
+  // Check at most once per minute, but more often when TTL is short.
+  const reaperIntervalMs = Math.min(
+    MAX_REAP_INTERVAL_MS,
+    Math.max(1_000, Math.floor(config.MCP_SESSION_TTL_MS / 2)),
+  );
   const reaper = setInterval(() => {
     const now = Date.now();
     for (const [id, session] of sessions) {
@@ -300,7 +305,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
         ipHits.delete(ip);
       }
     }
-  }, REAP_INTERVAL_MS);
+  }, reaperIntervalMs);
   reaper.unref();
 
   // ---- Routes ----

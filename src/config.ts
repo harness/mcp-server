@@ -78,7 +78,7 @@ const RawConfigSchema = z.object({
   HARNESS_DEFAULT_PROJECT_ID: optionalStringFromEnv,
   HARNESS_API_TIMEOUT_MS: z.coerce.number().default(30000),
   HARNESS_MAX_RETRIES: z.coerce.number().default(3),
-  MCP_SESSION_TTL_MS: z.coerce.number().min(1).default(5 * 60_000),
+  MCP_SESSION_TTL_MS: z.coerce.number().min(1).default(30 * 60_000),
   LOG_LEVEL: z.preprocess(
     (val) => (val === "" ? undefined : val),
     z.enum(["debug", "info", "warn", "error"]).default("info"),
