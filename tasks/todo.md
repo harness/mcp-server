@@ -1,5 +1,25 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-20)
+- [x] Baseline branch against recent `main` changes
+- [x] Inspect recent behavioral commits for high-blast-radius risks
+- [x] Trace any suspicious paths through callers, registry dispatch, and tests
+- [x] Patch only if a concrete critical trigger is confirmed
+- [ ] Report outcome in Slack
+
+### Plan
+- Treat this as a critical-only sweep: data loss, crashes/OOM, security/auth bypass, write-scope corruption, or significant user-facing breakage.
+- Compare the current branch with recent `origin/main` history and prioritize runtime/tool behavior over docs-only churn.
+- Use focused code tracing and existing regression tests as evidence; do not open a PR for speculative or low-severity concerns.
+- If a real bug is found, follow red/green with a minimal regression and fix, then run focused verification before committing and pushing.
+
+### Review
+- Found `harness_diagnose` treated `return_download_url: "true"` as false because pipeline diagnosis checked strict boolean `true`, while the public options bag is an untyped record and `harness_get` already accepts the string form. Impact: agents using the common string form still fetched, buffered, and decompressed logs inline, reopening the large-log/OOM risk the URL-only option was added to avoid.
+- Fixed pipeline diagnosis to use the same boolean/string-`"true"` interpretation and added a regression proving the URL resolver is used while inline log resolution is not called.
+- Found `chaos_loadtest.run` and `chaos_loadtest.stop` no-body POST actions inherited generic NG body scope injection, sending `{ projectIdentifier }` to load-test manager endpoints that scope through query parameters and whose create action already opts out. Impact: run/stop requests could be rejected or behave inconsistently for every normal project-scoped call.
+- Fixed both actions with `skipScopeBodyInjection: true` and added request-shape regressions proving scope stays in query params and bodies remain `{}`.
+- Focused verification passed: `pnpm exec vitest run tests/tools/diagnose/pipeline.test.ts tests/registry/chaos-loadtest.test.ts` (48 tests).
+
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap

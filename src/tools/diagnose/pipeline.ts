@@ -8,6 +8,10 @@ import { resolveLogContent, resolveLogDownloadUrl } from "../../utils/log-resolv
 
 const log = createLogger("diagnose:pipeline");
 
+function isTrue(value: unknown): boolean {
+  return value === true || value === "true";
+}
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface LayoutNode {
@@ -469,7 +473,7 @@ export const pipelineHandler: DiagnoseHandler = {
 
     const includeYaml = args.include_yaml ?? !isSummary;
     const includeLogs = args.include_logs ?? !isSummary;
-    const returnDownloadUrl = args.return_download_url === true;
+    const returnDownloadUrl = isTrue(args.return_download_url);
     const logSnippetLines = asNumber(args.log_snippet_lines) ?? 120;
     const maxFailedSteps = asNumber(args.max_failed_steps) ?? 5;
 

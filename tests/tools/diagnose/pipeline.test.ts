@@ -3,6 +3,7 @@ import { pipelineHandler } from "../../../src/tools/diagnose/pipeline.js";
 import { makeContext, makeConfig, makeExtra } from "./helpers.js";
 import type { HarnessClient } from "../../../src/client/harness-client.js";
 import type { Registry } from "../../../src/registry/index.js";
+import { resolveLogContent, resolveLogDownloadUrl } from "../../../src/utils/log-resolver.js";
 
 // Mock resolveLogContent so diagnose tests don't depend on the full log pipeline
 vi.mock("../../../src/utils/log-resolver.js", () => ({
@@ -342,11 +343,51 @@ describe("pipelineHandler", () => {
     });
   });
 
+  it("treats string return_download_url=true as URL-only mode", async () => {
+    vi.mocked(resolveLogContent).mockClear();
+    vi.mocked(resolveLogDownloadUrl).mockClear();
+
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "Stage1", status: "Failed", steps: [{ id: "step1", name: "Step1", status: "Failed" }] }],
+      nodeMapEntries: {
+        step1: {
+          uuid: "step1",
+          identifier: "step1",
+          name: "Step1",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step1",
+          status: "Failed",
+          failureInfo: { message: "Step1 error" },
+          logBaseKey: "log/step1",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: false, include_logs: true, return_download_url: "true" },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    const logs = result.failed_step_logs as Record<string, { download_url: string }>;
+    expect(logs["s1/step1"]).toEqual({
+      download_url: "https://storage.example.com/logs.zip?signed=1",
+    });
+    expect(resolveLogDownloadUrl).toHaveBeenCalledWith(
+      expect.anything(),
+      "log/step1",
+      expect.objectContaining({ signal: undefined }),
+    );
+    expect(resolveLogContent).not.toHaveBeenCalled();
+  });
+
   it("truncates long logs to log_snippet_lines", async () => {
     // Override resolveLogContent mock to return a long log for this test
-    const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
     const longLog = Array.from({ length: 200 }, (_, i) => `log line ${i + 1}`).join("\n");
-    (resolveLogContent as ReturnType<typeof vi.fn>).mockResolvedValueOnce(longLog);
+    vi.mocked(resolveLogContent).mockResolvedValueOnce(longLog);
 
     const exec = makeExecution({
       status: "Failed",
