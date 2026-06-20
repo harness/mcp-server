@@ -103,4 +103,32 @@ describe("compactItems", () => {
   it("handles empty array", () => {
     expect(compactItems([])).toEqual([]);
   });
+
+  it("uses compactFn instead of the generic whitelist when provided", () => {
+    const compactFn = (item: Record<string, unknown>) => ({
+      id: item.id,
+      summary: typeof item.summary === "string" ? item.summary.split("\n", 1)[0] : item.summary,
+    });
+    const items = [{
+      id: "DEPL-1",
+      title: "",
+      summary: "first line\nsecond line",
+      buildVersions: [{ service: "api", version: "1.0.0" }],
+    }];
+    const result = compactItems(items, compactFn) as Record<string, unknown>[];
+    expect(result[0]).toEqual({ id: "DEPL-1", summary: "first line" });
+    expect(result[0]).not.toHaveProperty("title");
+    expect(result[0]).not.toHaveProperty("buildVersions");
+  });
+
+  it("merges openInHarness into name on compactFn output", () => {
+    const compactFn = (item: Record<string, unknown>) => ({
+      name: item.name,
+      openInHarness: item.openInHarness,
+    });
+    const items = [{ name: "Deploy", openInHarness: "https://app.harness.io/deploy/1" }];
+    const result = compactItems(items, compactFn) as Record<string, unknown>[];
+    expect(result[0].name).toBe("[Deploy](https://app.harness.io/deploy/1)");
+    expect(result[0].openInHarness).toBeUndefined();
+  });
 });

@@ -1320,6 +1320,61 @@ describe("gitops_application sync options", () => {
 });
 
 // ---------------------------------------------------------------------------
+// supportedScopes — account/org/project validation (regression for #342)
+// ---------------------------------------------------------------------------
+
+describe("gitops supportedScopes", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it.each([
+    "gitops_agent",
+    "gitops_cluster",
+    "gitops_repository",
+    "gitops_repo_credential",
+  ])("%s declares account/org/project supportedScopes", (resourceType) => {
+    const def = registry.getResource(resourceType);
+    expect(def.supportedScopes).toEqual(["account", "org", "project"]);
+    expect(registry.getSupportedScopes(resourceType)).toEqual(["account", "org", "project"]);
+  });
+
+  it.each([
+    "gitops_agent",
+    "gitops_cluster",
+    "gitops_repository",
+    "gitops_repo_credential",
+  ])("%s list accepts explicit account resource_scope", async (resourceType) => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, resourceType, "list", {
+      resource_scope: "account",
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("gitops_cluster_link rejects account resource_scope (project-only)", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_cluster_link", "list", {
+        resource_scope: "account",
+        environment_id: "my-env",
+      }),
+    ).rejects.toThrow(/gitops_cluster_link does not support account scope/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Toolset filtering — only gitops resources loaded
 // ---------------------------------------------------------------------------
 
