@@ -5,7 +5,7 @@
 - [x] Inspect recent behavioral commits for high-blast-radius risks
 - [x] Trace any suspicious paths through callers, registry dispatch, and tests
 - [x] Patch only if a concrete critical trigger is confirmed
-- [ ] Report outcome in Slack
+- [x] Report outcome in Slack
 
 ### Plan
 - Treat this as a critical-only sweep: data loss, crashes/OOM, security/auth bypass, write-scope corruption, or significant user-facing breakage.
@@ -19,6 +19,8 @@
 - Found `chaos_loadtest.run` and `chaos_loadtest.stop` no-body POST actions inherited generic NG body scope injection, sending `{ projectIdentifier }` to load-test manager endpoints that scope through query parameters and whose create action already opts out. Impact: run/stop requests could be rejected or behave inconsistently for every normal project-scoped call.
 - Fixed both actions with `skipScopeBodyInjection: true` and added request-shape regressions proving scope stays in query params and bodies remain `{}`.
 - Focused verification passed: `pnpm exec vitest run tests/tools/diagnose/pipeline.test.ts tests/registry/chaos-loadtest.test.ts` (48 tests).
+- Full verification passed: `pnpm build && pnpm docs:generate && pnpm typecheck && pnpm docs:check && pnpm test` (82 files / 2066 tests).
+- Opened PR #365.
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
