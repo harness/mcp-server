@@ -407,3 +407,106 @@ describe("chaos_loadtest list/get", () => {
     );
   });
 });
+
+describe("chaos_loadtest execute actions", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("run: POST /v1/load-tests/{loadtestId}/runs with CHAOS_SCOPE query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ runId: "run-abc" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_loadtest", "run", {
+      loadtest_id: "testloadone",
+      org_id: "templatescopetest",
+      project_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/loadTest/manager/api/v1/load-tests/testloadone/runs");
+    expect(call.params.organizationIdentifier).toBe("templatescopetest");
+    expect(call.params.projectIdentifier).toBe("templatescopetest");
+    expect(call.body?.projectIdentifier).toBe("templatescopetest");
+    expect(call.body?.organizationIdentifier).toBeUndefined();
+  });
+
+  it("stop: POST /v1/runs/{runId}/stop with CHAOS_SCOPE query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ status: "STOPPED" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_loadtest", "stop", {
+      run_id: "run-abc",
+      org_id: "templatescopetest",
+      project_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/loadTest/manager/api/v1/runs/run-abc/stop");
+    expect(call.params.organizationIdentifier).toBe("templatescopetest");
+    expect(call.params.projectIdentifier).toBe("templatescopetest");
+    expect(call.body?.projectIdentifier).toBe("templatescopetest");
+    expect(call.body?.organizationIdentifier).toBeUndefined();
+  });
+
+  it("run: blocked in read-only mode (high_write) before HTTP call", async () => {
+    const readOnlyRegistry = new Registry(makeConfig({ HARNESS_READ_ONLY: true }));
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      readOnlyRegistry.dispatchExecute(client, "chaos_loadtest", "run", {
+        loadtest_id: "testloadone",
+        org_id: "templatescopetest",
+        project_id: "templatescopetest",
+      }),
+    ).rejects.toThrow(/Read-only mode/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("chaos_loadtest delete", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("delete: DELETE /v1/load-tests/{loadtestId} with CHAOS_SCOPE query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_loadtest", "delete", {
+      loadtest_id: "testloadone",
+      org_id: "templatescopetest",
+      project_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/loadTest/manager/api/v1/load-tests/testloadone");
+    expect(call.params.organizationIdentifier).toBe("templatescopetest");
+    expect(call.params.projectIdentifier).toBe("templatescopetest");
+  });
+
+  it("delete: blocked in read-only mode (destructive)", async () => {
+    const readOnlyRegistry = new Registry(makeConfig({ HARNESS_READ_ONLY: true }));
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      readOnlyRegistry.dispatch(client, "chaos_loadtest", "delete", {
+        loadtest_id: "testloadone",
+        org_id: "templatescopetest",
+        project_id: "templatescopetest",
+      }),
+    ).rejects.toThrow(/Read-only mode/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});

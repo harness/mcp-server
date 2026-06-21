@@ -80,6 +80,52 @@ describe("gitops_agent", () => {
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/gitops/api/v1/agents/account.myagent");
   });
+
+  it("exposes account/org/project supportedScopes via describe and getSupportedScopes", () => {
+    expect(registry.getSupportedScopes("gitops_agent")).toEqual(["account", "org", "project"]);
+    const desc = registry.describe() as {
+      toolsets: { gitops: { resources: Array<{ resource_type: string; supportedScopes?: string[] }> } };
+    };
+    const agent = desc.toolsets.gitops.resources.find((r) => r.resource_type === "gitops_agent");
+    expect(agent?.supportedScopes).toEqual(["account", "org", "project"]);
+  });
+
+  it.each([
+    ["account", undefined, undefined],
+    ["org", "org-level", undefined],
+    ["project", "proj-org", "proj-level"],
+  ] as const)("list with resource_scope=%s omits/injects org/project query params", async (scope, orgId, projectId) => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [], totalItems: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "list", {
+      resource_scope: scope,
+      ...(orgId ? { org_id: orgId } : {}),
+      ...(projectId ? { project_id: projectId } : {}),
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    if (scope === "account") {
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    } else if (scope === "org") {
+      expect(call.params.orgIdentifier).toBe("org-level");
+      expect(call.params.projectIdentifier).toBeUndefined();
+    } else {
+      expect(call.params.orgIdentifier).toBe("proj-org");
+      expect(call.params.projectIdentifier).toBe("proj-level");
+    }
+  });
+
+  it("rejects unsupported resource_scope before HTTP call", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_agent", "list", { resource_scope: "workspace" }),
+    ).rejects.toThrow(/Invalid resource_scope/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

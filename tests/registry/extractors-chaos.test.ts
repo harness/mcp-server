@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { chaosActionExtract, chaosDRTestListExtract, chaosExperimentListExtract, chaosInputSetListExtract } from "../../src/registry/extractors.js";
+import {
+  chaosActionExtract,
+  chaosDRTestListExtract,
+  chaosExperimentListExtract,
+  chaosInputSetListExtract,
+  chaosLoadTestExtract,
+  chaosLoadTestListExtract,
+} from "../../src/registry/extractors.js";
 
 describe("chaosInputSetListExtract", () => {
   it("injects experimentId from input into each item", () => {
@@ -115,5 +122,66 @@ describe("chaosActionExtract", () => {
     expect(out).not.toHaveProperty("audit");
     expect(out).not.toHaveProperty("isRemoved");
     expect(out).not.toHaveProperty("recentExecutions");
+  });
+});
+
+describe("chaosLoadTestExtract", () => {
+  it("mirrors identity into loadtestId and drops scriptContent and user-detail envelopes", () => {
+    const out = chaosLoadTestExtract({
+      identity: "lt-1",
+      name: "load-one",
+      scriptContent: "BIG_BASE64_BLOB",
+      createdByUserDetails: { name: "someone" },
+      updatedByUserDetails: { email: "a@b.com" },
+      environmentIdentifier: "env-1",
+      targetUrl: "https://example.com",
+    }) as Record<string, unknown>;
+
+    expect(out.loadtestId).toBe("lt-1");
+    expect(out.identity).toBe("lt-1");
+    expect(out.name).toBe("load-one");
+    expect(out.environmentIdentifier).toBe("env-1");
+    expect(out.targetUrl).toBe("https://example.com");
+    expect(out).not.toHaveProperty("scriptContent");
+    expect(out).not.toHaveProperty("createdByUserDetails");
+    expect(out).not.toHaveProperty("updatedByUserDetails");
+  });
+
+  it("passes null/undefined/non-object through defensively", () => {
+    expect(chaosLoadTestExtract(null)).toBeNull();
+    expect(chaosLoadTestExtract(undefined)).toBeUndefined();
+    expect(chaosLoadTestExtract("raw")).toBe("raw");
+    expect(chaosLoadTestExtract([])).toEqual([]);
+  });
+});
+
+describe("chaosLoadTestListExtract", () => {
+  it("projects each item and prefers pagination.totalItems over items.length", () => {
+    const raw = {
+      items: [
+        { identity: "lt-1", name: "one", scriptContent: "blob" },
+        { identity: "lt-2", name: "two", scriptContent: "blob" },
+      ],
+      pagination: { totalItems: 50 },
+    };
+
+    const out = chaosLoadTestListExtract(raw);
+    expect(out.total).toBe(50);
+    expect(out.items).toHaveLength(2);
+    expect((out.items[0] as Record<string, unknown>).loadtestId).toBe("lt-1");
+    expect((out.items[0] as Record<string, unknown>).scriptContent).toBeUndefined();
+  });
+
+  it("falls back to items.length when pagination.totalItems is missing", () => {
+    const raw = { items: [{ identity: "only-one" }] };
+    expect(chaosLoadTestListExtract(raw)).toEqual({
+      items: [expect.objectContaining({ loadtestId: "only-one" })],
+      total: 1,
+    });
+  });
+
+  it("returns empty items and total=0 for an empty envelope", () => {
+    expect(chaosLoadTestListExtract({})).toEqual({ items: [], total: 0 });
+    expect(chaosLoadTestListExtract({ items: [] })).toEqual({ items: [], total: 0 });
   });
 });

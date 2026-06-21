@@ -209,4 +209,19 @@ describe("pipeline_dynamic_execution.run — request shape", () => {
     expect(result.openInHarness).toContain("/orgs/myorg/projects/myproj/pipelines/Deploy_Web_Application/");
     expect(result.openInHarness).toContain("/deployments/exec-9/pipeline");
   });
+
+  it("throws before HTTP when org_id and project_id are missing and config defaults are unset", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }));
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pipeline_dynamic_execution", "run", {
+        pipeline_id: "p1",
+        body: { yaml: "pipeline: {}\n" },
+      }),
+    ).rejects.toThrow(/Missing required field "org_id"/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
