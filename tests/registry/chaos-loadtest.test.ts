@@ -407,3 +407,48 @@ describe("chaos_loadtest list/get", () => {
     );
   });
 });
+
+describe("chaos_loadtest execute", () => {
+  let registry: Registry;
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("run sends scope in query params without injecting an API-specific JSON body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ runId: "run-123" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_loadtest", "run", {
+      loadtest_id: "loadtest-one",
+      org_id: "templatescopetest",
+      project_id: "templatescopetest",
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/loadTest/manager/api/v1/load-tests/loadtest-one/runs");
+    expect(call.params.organizationIdentifier).toBe("templatescopetest");
+    expect(call.params.projectIdentifier).toBe("templatescopetest");
+    expect(call.body).toEqual({});
+  });
+
+  it("stop sends scope in query params without injecting an API-specific JSON body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ stopped: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_loadtest", "stop", {
+      run_id: "run-123",
+      org_id: "templatescopetest",
+      project_id: "templatescopetest",
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/loadTest/manager/api/v1/runs/run-123/stop");
+    expect(call.params.organizationIdentifier).toBe("templatescopetest");
+    expect(call.params.projectIdentifier).toBe("templatescopetest");
+    expect(call.body).toEqual({});
+  });
+});

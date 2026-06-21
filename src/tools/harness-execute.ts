@@ -49,12 +49,24 @@ function applyExecuteActionTargetRemap(
   if (!primaryField || !resourceId) return input;
   const actionPathFields = new Set(Object.keys(actionSpec?.pathParams ?? {}));
   const primaryUsedByAction = actionPathFields.has(primaryField);
-  const actionTargetField = primaryUsedByAction
+  const declaredActionTargetField = primaryUsedByAction
     ? undefined
     : [...def.identifierFields].reverse().find((field) => actionPathFields.has(field));
+  const fallbackActionTargetField =
+    !primaryUsedByAction && !declaredActionTargetField && actionPathFields.size === 1
+      ? [...actionPathFields][0]
+      : undefined;
+  const actionTargetField = declaredActionTargetField ?? fallbackActionTargetField;
 
   if (actionTargetField) {
-    input[actionTargetField] = resourceId;
+    if (declaredActionTargetField) {
+      input[actionTargetField] = resourceId;
+    } else {
+      const existing = input[actionTargetField];
+      if (existing === undefined || existing === "") {
+        input[actionTargetField] = resourceId;
+      }
+    }
   } else {
     const existing = input[primaryField];
     const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;

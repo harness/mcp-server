@@ -1528,6 +1528,30 @@ pipeline:
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
   });
 
+  it("uses resource_id as the chaos load-test run id for stop", async () => {
+    const loadtestServer = makeMcpServer("accept");
+    const loadtestRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "chaos" }));
+    const loadtestRequest = vi.fn().mockResolvedValue({ stopped: true });
+    const loadtestClient = makeClient(loadtestRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(loadtestServer, loadtestRegistry, loadtestClient);
+
+    const result = await loadtestServer.call("harness_execute", {
+      resource_type: "chaos_loadtest",
+      action: "stop",
+      resource_id: "run-123",
+      org_id: "templatescopetest",
+      project_id: "templatescopetest",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(loadtestRequest).toHaveBeenCalledOnce();
+    const call = loadtestRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/loadTest/manager/api/v1/runs/run-123/stop");
+    expect(call.body).toEqual({});
+  });
+
   it("explicit resource_id overrides URL-derived pr_number", async () => {
     const prServer = makeMcpServer("accept");
     const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));

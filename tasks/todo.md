@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-21)
+- [x] Baseline current branch against `origin/main` and inspect recent commits
+- [x] Review behavioral changes for concrete high-severity failure scenarios
+- [x] Trace any plausible candidates through caller and downstream code paths
+- [x] If a critical bug is confirmed, add a minimal fix and regression coverage
+- [ ] Report the outcome in Slack
+
+### Plan
+- Focus on recent behavioral changes with blast radius across generic tool dispatch, auth/session handling, registry resources, confirmation/write safety, and generated public contracts.
+- Only treat a finding as actionable if it has a concrete trigger and impact consistent with data loss, crash, security bypass, or significant user-facing breakage.
+- If no such issue is confirmed, leave code unchanged and post the expected no-critical-bugs summary.
+
+### Review
+- Found a concrete `chaos_loadtest.run` / `chaos_loadtest.stop` regression: both actions document no request body, but their empty object body passed through generic POST scope injection and became `{ projectIdentifier: ... }`. Load-test manager endpoints scope via query params and can reject or mis-handle extra JSON fields.
+- Found a public `harness_execute` stop regression: `resource_id=<runId>` mapped to `loadtest_id`, while the stop endpoint requires `run_id`, causing stop requests to fail locally before hitting the API. This can leave a running load test unstopped from the MCP workflow.
+- Fixed run/stop by setting `skipScopeBodyInjection: true`, matching the existing load-test create scoping contract.
+- Fixed the execute remapper so `resource_id` can populate a single non-primary action path field when the caller did not already pass that field explicitly.
+- Focused red/green verification: `pnpm exec vitest run tests/registry/chaos-loadtest.test.ts tests/tools/tool-handlers.test.ts -t "chaos_loadtest execute|uses resource_id as the chaos load-test run id"` failed before the fix on injected body and missing `run_id`, then passed after the fix.
+
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap
