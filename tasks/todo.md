@@ -5,7 +5,7 @@
 - [x] Review behavioral changes for concrete high-severity failure scenarios
 - [x] Trace any plausible candidates through caller and downstream code paths
 - [x] If a critical bug is confirmed, add a minimal fix and regression coverage
-- [ ] Report the outcome in Slack
+- [x] Report the outcome in Slack
 
 ### Plan
 - Focus on recent behavioral changes with blast radius across generic tool dispatch, auth/session handling, registry resources, confirmation/write safety, and generated public contracts.
@@ -18,6 +18,8 @@
 - Fixed run/stop by setting `skipScopeBodyInjection: true`, matching the existing load-test create scoping contract.
 - Fixed the execute remapper so `resource_id` can populate a single non-primary action path field when the caller did not already pass that field explicitly.
 - Focused red/green verification: `pnpm exec vitest run tests/registry/chaos-loadtest.test.ts tests/tools/tool-handlers.test.ts -t "chaos_loadtest execute|uses resource_id as the chaos load-test run id"` failed before the fix on injected body and missing `run_id`, then passed after the fix.
+- Full verification passed: `pnpm build && pnpm docs:generate && pnpm docs:check && pnpm typecheck && pnpm test` (82 files / 2066 tests).
+- Opened PR #367.
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
