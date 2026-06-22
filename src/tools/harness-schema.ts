@@ -138,6 +138,8 @@ function navigateStaticPath(
     return { node: current, path };
   }
 
+  if (parts.length !== 1) return undefined;
+
   const finalSegment = parts[parts.length - 1] ?? path;
   return findStaticDefinitionByName(resourceDefs, finalSegment);
 }
