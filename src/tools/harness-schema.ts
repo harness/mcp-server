@@ -65,29 +65,81 @@ function inlineRefs(schema: Record<string, unknown>, node: unknown, depth = 0): 
   return result;
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isJsonSchemaNode(value: unknown): boolean {
+  if (!isPlainObject(value)) return false;
+  return (
+    "title" in value ||
+    "type" in value ||
+    "$ref" in value ||
+    "properties" in value ||
+    "oneOf" in value ||
+    "anyOf" in value ||
+    "allOf" in value ||
+    "enum" in value
+  );
+}
+
+function findStaticDefinitionByName(
+  root: Record<string, unknown>,
+  name: string,
+): { node: unknown; path: string } | undefined {
+  const stack: Array<{ node: Record<string, unknown>; path: string[] }> = [{ node: root, path: [] }];
+
+  while (stack.length > 0) {
+    const entry = stack.pop();
+    if (!entry) continue;
+
+    for (const [key, value] of Object.entries(entry.node)) {
+      const path = [...entry.path, key];
+      if (key === name && isJsonSchemaNode(value)) {
+        return { node: value, path: path.join(".") };
+      }
+
+      if (isPlainObject(value) && !isJsonSchemaNode(value)) {
+        stack.push({ node: value, path });
+      }
+    }
+  }
+
+  return undefined;
+}
+
 function navigateStaticPath(
   schema: Record<string, unknown>,
   resourceType: string,
   path: string,
-): unknown {
+): { node: unknown; path: string } | undefined {
   const definitions = schema.definitions as Record<string, unknown> | undefined;
   if (!definitions) return undefined;
 
   const resourceDefs = definitions[resourceType] as Record<string, unknown> | undefined;
   if (!resourceDefs) return undefined;
 
-  if (resourceDefs[path]) return resourceDefs[path];
+  if (Object.prototype.hasOwnProperty.call(resourceDefs, path)) {
+    return { node: resourceDefs[path], path };
+  }
 
   const parts = path.split(".");
   let current: unknown = resourceDefs;
+  let dotPathMatched = true;
   for (const part of parts) {
-    if (current && typeof current === "object" && !Array.isArray(current)) {
+    if (isPlainObject(current) && Object.prototype.hasOwnProperty.call(current, part)) {
       current = (current as Record<string, unknown>)[part];
     } else {
-      return undefined;
+      dotPathMatched = false;
+      break;
     }
   }
-  return current;
+  if (dotPathMatched && current !== undefined) {
+    return { node: current, path };
+  }
+
+  const finalSegment = parts[parts.length - 1] ?? path;
+  return findStaticDefinitionByName(resourceDefs, finalSegment);
 }
 
 function getStaticSummary(schema: Record<string, unknown>, resourceType: string): Record<string, unknown> {
@@ -318,8 +370,8 @@ export function registerSchemaTool(
           return jsonResult(summary);
         }
 
-        const node = navigateStaticPath(schema, args.resource_type, args.path);
-        if (!node) {
+        const match = navigateStaticPath(schema, args.resource_type, args.path);
+        if (!match) {
           const definitions = schema.definitions as Record<string, Record<string, unknown>> | undefined;
           const available = definitions ? Object.keys(definitions[args.resource_type] ?? {}) : [];
           return errorResult(
@@ -328,10 +380,11 @@ export function registerSchemaTool(
           );
         }
 
-        const resolved = inlineRefs(schema, node);
+        const resolved = inlineRefs(schema, match.node);
         return jsonResult({
           resource_type: args.resource_type,
-          path: args.path,
+          path: match.path,
+          ...(match.path !== args.path ? { requested_path: args.path } : {}),
           source: "harness-schema",
           schema: resolved,
         });
