@@ -2,9 +2,9 @@
 
 ## Critical Bug Inspection (2026-06-22)
 - [x] Baseline branch against `origin/main` and inspect recent behavioral commits
-- [ ] Trace high-risk recent changes for concrete critical bug scenarios
-- [ ] Implement a minimal fix only if a high-confidence critical issue is found
-- [ ] Run focused verification for reviewed or changed paths
+- [x] Trace high-risk recent changes for concrete critical bug scenarios
+- [x] Implement a minimal fix only if a high-confidence critical issue is found
+- [x] Run focused verification for reviewed or changed paths
 - [ ] Report outcome in Slack and commit/push any task log or fix updates
 
 ### Plan
@@ -12,6 +12,13 @@
 - Prioritize new/changed runtime behavior in the latest merged commits: gRPC proxy tenant headers and KG grammar extraction, incidents/deploy resource surfaces, URL-only log diagnosis, and Chaos/load-test endpoint fixes.
 - For each candidate, trace public tool input through registry/client dispatch and response extraction before deciding whether there is a concrete trigger.
 - Avoid opening a PR unless the review finds a critical bug with a narrow, verified fix.
+
+### Review
+- Found a critical `harness_diagnose` log URL-mode regression: `options.return_download_url: "true"` was ignored because `src/tools/diagnose/pipeline.ts` required the literal boolean `true`, unlike `harness_get`.
+- Impact: schema-driven or stringly clients asking for signed log URLs could silently fall back to `resolveLogContent()`, downloading/decompressing failed step logs inline and reintroducing the OOM/crash path the URL-only mode is meant to avoid.
+- Fix: parse `return_download_url` with boolean-or-string `true` semantics in the pipeline diagnose handler.
+- Added a regression in `tests/tools/diagnose/pipeline.test.ts` proving string `"true"` returns `{ download_url }` and never calls `resolveLogContent`.
+- Verification passed: red regression failed with inline log text before the fix; after the fix, `pnpm exec vitest run tests/tools/diagnose/pipeline.test.ts -t "string return_download_url"` passed. Full guardrails passed: `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, and `pnpm test` (82 files / 2064 tests).
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
