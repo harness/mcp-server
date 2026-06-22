@@ -6,7 +6,7 @@
 - [x] Add failing regression coverage for bare nested static definition lookups
 - [x] Implement a minimal recursive fallback that preserves direct and dotted path precedence
 - [x] Run focused tests, build/docs/typecheck, and full test suite
-- [ ] Commit, push, open/update PR, and reply in Slack thread
+- [x] Commit, push, open/update PR, and reply in Slack thread
 
 ### Plan
 - Keep the change scoped to static bundled schema path resolution in `src/tools/harness-schema.ts`; live NG entity schema navigation is a separate path and should remain unchanged.
