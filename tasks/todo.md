@@ -5,7 +5,7 @@
 - [x] Trace high-risk recent changes for concrete critical bug scenarios
 - [x] Implement a minimal fix only if a high-confidence critical issue is found
 - [x] Run focused verification for reviewed or changed paths
-- [ ] Report outcome in Slack and commit/push any task log or fix updates
+- [x] Report outcome in Slack and commit/push any task log or fix updates
 
 ### Plan
 - Treat this branch as a recent-main scan because it currently matches `origin/main`.
@@ -19,6 +19,7 @@
 - Fix: parse `return_download_url` with boolean-or-string `true` semantics in the pipeline diagnose handler.
 - Added a regression in `tests/tools/diagnose/pipeline.test.ts` proving string `"true"` returns `{ download_url }` and never calls `resolveLogContent`.
 - Verification passed: red regression failed with inline log text before the fix; after the fix, `pnpm exec vitest run tests/tools/diagnose/pipeline.test.ts -t "string return_download_url"` passed. Full guardrails passed: `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, and `pnpm test` (82 files / 2064 tests).
+- Opened PR #371 and posted the bug/fix summary to Slack.
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
