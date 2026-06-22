@@ -1,5 +1,19 @@
 # Harness MCP Server — Task Tracking
 
+## Nested Harness Schema Lookup Review (2026-06-22)
+- [x] Read Slack thread and linked PR #368 context
+- [x] Trace `harness_schema` static path resolution and confirm root cause
+- [ ] Add failing regression coverage for bare nested static definition lookups
+- [ ] Implement a minimal recursive fallback that preserves direct and dotted path precedence
+- [ ] Run focused tests, build/docs/typecheck, and full test suite
+- [ ] Commit, push, open/update PR, and reply in Slack thread
+
+### Plan
+- Keep the change scoped to static bundled schema path resolution in `src/tools/harness-schema.ts`; live NG entity schema navigation is a separate path and should remain unchanged.
+- Preserve the existing lookup order for compatibility: direct section key first, then literal dotted path, then a recursive fallback by the requested final segment.
+- Return the resolved dotted path when the fallback finds a nested definition, plus the originally requested path when it differs, so callers can learn the exact location.
+- Add handler-level coverage in `tests/tools/harness-schema-tool.test.ts` using the bundled `pipeline_v1` schema so the public `harness_schema` output contract is covered.
+
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap

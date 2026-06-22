@@ -148,6 +148,24 @@ describe("harness_schema static enum", () => {
     expect(description).toContain("pipeline_v1");
     expect(description).not.toMatch(/prefer pipeline_v1/i);
   });
+
+  it("resolves bare nested definition names in bundled schemas", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline_v1",
+      path: "EnvironmentV1",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).not.toBe(true);
+    expect(parsed.resource_type).toBe("pipeline_v1");
+    expect(parsed.path).toBe("stages.unified.EnvironmentV1");
+    expect(parsed.requested_path).toBe("EnvironmentV1");
+    expect(parsed.source).toBe("harness-schema");
+    expect((parsed.schema as Record<string, unknown>).title).toBe("EnvironmentV1");
+  });
 });
 
 describe("extractLiveSchema", () => {
