@@ -376,6 +376,7 @@ describe("HarnessClient", () => {
     it.each([
       "/query-service/grpc/io.harness.platform.query.service.api.v1.QueryServiceGrpc/getGrammar",
       "/schema-service/grpc/io.harness.platform.schema.service.api.v1.SchemaServiceGrpc/getType",
+      "/config-service/grpc/io.harness.platform.config.service.api.v1.ConfigServiceGrpc/getConfig",
     ])("sets x-tenant-id for gRPC proxy paths via request(): %s", async (path) => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());
