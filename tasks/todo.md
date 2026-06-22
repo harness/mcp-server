@@ -3,9 +3,9 @@
 ## Nested Harness Schema Lookup Review (2026-06-22)
 - [x] Read Slack thread and linked PR #368 context
 - [x] Trace `harness_schema` static path resolution and confirm root cause
-- [ ] Add failing regression coverage for bare nested static definition lookups
-- [ ] Implement a minimal recursive fallback that preserves direct and dotted path precedence
-- [ ] Run focused tests, build/docs/typecheck, and full test suite
+- [x] Add failing regression coverage for bare nested static definition lookups
+- [x] Implement a minimal recursive fallback that preserves direct and dotted path precedence
+- [x] Run focused tests, build/docs/typecheck, and full test suite
 - [ ] Commit, push, open/update PR, and reply in Slack thread
 
 ### Plan
@@ -13,6 +13,12 @@
 - Preserve the existing lookup order for compatibility: direct section key first, then literal dotted path, then a recursive fallback by the requested final segment.
 - Return the resolved dotted path when the fallback finds a nested definition, plus the originally requested path when it differs, so callers can learn the exact location.
 - Add handler-level coverage in `tests/tools/harness-schema-tool.test.ts` using the bundled `pipeline_v1` schema so the public `harness_schema` output contract is covered.
+
+### Review
+- Root cause: static `harness_schema(resource_type, path)` only resolved direct keys and literal dot paths under `definitions[resourceType]`, so reusable definitions nested under groups such as `stages.unified.EnvironmentV1` could not be found by bare name.
+- Changed `src/tools/harness-schema.ts` to add a final recursive lookup for bare names after direct and dotted lookups fail. The fallback searches definition-group containers, avoids recursing into schema nodes, rejects invalid dotted paths, and returns the resolved dotted path plus `requested_path` when different.
+- Added `tests/tools/harness-schema-tool.test.ts` coverage for the public tool response when `harness_schema` resolves `pipeline_v1` path `EnvironmentV1` to `stages.unified.EnvironmentV1`, plus a regression that `missing.EnvironmentV1` still fails instead of resolving by final segment.
+- Verification passed: the two focused regressions failed before their respective fixes and passed after them; `pnpm exec vitest run tests/tools/harness-schema-tool.test.ts`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, and `pnpm test` all passed.
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
