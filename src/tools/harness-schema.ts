@@ -65,29 +65,90 @@ function inlineRefs(schema: Record<string, unknown>, node: unknown, depth = 0): 
   return result;
 }
 
+function isSchemaNode(value: unknown): boolean {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const v = value as Record<string, unknown>;
+  return (
+    "title" in v ||
+    "type" in v ||
+    "$ref" in v ||
+    "properties" in v ||
+    "oneOf" in v ||
+    "anyOf" in v ||
+    "allOf" in v ||
+    "enum" in v
+  );
+}
+
+/**
+ * Recursively search for a definition by key name within a resource's
+ * definitions tree. Harness schemas nest reusable definitions under group
+ * keys (e.g. EnvironmentV1 lives at stages.unified.EnvironmentV1), so a bare
+ * name lookup must walk the tree. Returns the node plus its dotted path.
+ */
+function findDefinitionByName(
+  root: Record<string, unknown>,
+  name: string,
+  maxDepth = 8,
+): { node: unknown; path: string } | undefined {
+  const stack: Array<{ node: unknown; path: string[] }> = [{ node: root, path: [] }];
+  while (stack.length > 0) {
+    const entry = stack.pop();
+    if (!entry) continue;
+    const { node, path } = entry;
+    if (path.length > maxDepth) continue;
+    if (!node || typeof node !== "object" || Array.isArray(node)) continue;
+    for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
+      if (key === name && isSchemaNode(value)) {
+        return { node: value, path: [...path, key].join(".") };
+      }
+      if (value && typeof value === "object") {
+        stack.push({ node: value, path: [...path, key] });
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Resolution order: direct key -> literal dot-path -> recursive name search.
+ * Returns the matched node and the dotted path it resolved to (which may
+ * differ from the requested path when a bare nested name was supplied,
+ * e.g. "EnvironmentV1" -> "stages.unified.EnvironmentV1").
+ */
 function navigateStaticPath(
   schema: Record<string, unknown>,
   resourceType: string,
   path: string,
-): unknown {
+): { node: unknown; path: string } | undefined {
   const definitions = schema.definitions as Record<string, unknown> | undefined;
   if (!definitions) return undefined;
 
   const resourceDefs = definitions[resourceType] as Record<string, unknown> | undefined;
   if (!resourceDefs) return undefined;
 
-  if (resourceDefs[path]) return resourceDefs[path];
+  if (resourceDefs[path]) return { node: resourceDefs[path], path };
 
   const parts = path.split(".");
   let current: unknown = resourceDefs;
+  let dotPathValid = true;
   for (const part of parts) {
     if (current && typeof current === "object" && !Array.isArray(current)) {
       current = (current as Record<string, unknown>)[part];
     } else {
-      return undefined;
+      dotPathValid = false;
+      break;
     }
   }
-  return current;
+  if (dotPathValid && current !== undefined) return { node: current, path };
+
+  // Fall back to a recursive search by the final path segment. Handles bare
+  // definition names that are nested (e.g. "EnvironmentV1").
+  const finalSegment = parts[parts.length - 1] ?? path;
+  const found = findDefinitionByName(resourceDefs, finalSegment);
+  if (found) return { node: found.node, path: found.path };
+
+  return undefined;
 }
 
 function getStaticSummary(schema: Record<string, unknown>, resourceType: string): Record<string, unknown> {
@@ -318,8 +379,8 @@ export function registerSchemaTool(
           return jsonResult(summary);
         }
 
-        const node = navigateStaticPath(schema, args.resource_type, args.path);
-        if (!node) {
+        const match = navigateStaticPath(schema, args.resource_type, args.path);
+        if (!match) {
           const definitions = schema.definitions as Record<string, Record<string, unknown>> | undefined;
           const available = definitions ? Object.keys(definitions[args.resource_type] ?? {}) : [];
           return errorResult(
@@ -328,10 +389,13 @@ export function registerSchemaTool(
           );
         }
 
-        const resolved = inlineRefs(schema, node);
+        const resolved = inlineRefs(schema, match.node);
         return jsonResult({
           resource_type: args.resource_type,
-          path: args.path,
+          // Resolved path may be a nested dotted path when a bare definition
+          // name was supplied (e.g. "EnvironmentV1").
+          path: match.path,
+          ...(match.path !== args.path ? { requested_path: args.path } : {}),
           source: "harness-schema",
           schema: resolved,
         });
