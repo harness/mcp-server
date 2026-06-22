@@ -166,6 +166,20 @@ describe("harness_schema static enum", () => {
     expect(parsed.source).toBe("harness-schema");
     expect((parsed.schema as Record<string, unknown>).title).toBe("EnvironmentV1");
   });
+
+  it("does not resolve invalid dotted paths by their final segment", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline_v1",
+      path: "missing.EnvironmentV1",
+    });
+    const parsed = parseResult(result) as { error: string };
+
+    expect(result.isError).toBe(true);
+    expect(parsed.error).toContain("Path 'missing.EnvironmentV1' not found");
+  });
 });
 
 describe("extractLiveSchema", () => {
