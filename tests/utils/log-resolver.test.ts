@@ -1669,4 +1669,49 @@ describe("resolveLogDownloadUrl", () => {
     expect(requestFn).toHaveBeenCalledTimes(2);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("rewrites Harness CDN presigned URL hostname for self-managed deployments", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/harness-download/logs.zip" +
+      "?X-Amz-Signature=abc&X-Amz-SignedHeaders=host&X-Amz-Expires=900";
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    const result = await resolveLogDownloadUrl(client, "prefix");
+
+    expect(result).toContain("self-managed.example.com");
+    expect(result).toContain("/storage/harness-download/logs.zip");
+    expect(result).toContain("X-Amz-Signature=abc");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("preserves SaaS CDN URL when blob host matches configured base URL host", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/harness-download/logs.zip" +
+      "?X-Amz-Signature=abc&X-Amz-SignedHeaders=host&X-Amz-Expires=900";
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://app.harness.io/gateway" },
+    );
+
+    const result = await resolveLogDownloadUrl(client, "prefix");
+
+    expect(result).toBe(blobLink);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns external S3/GCS storage URLs unchanged", async () => {
+    const blobLink = "https://my-bucket.s3.amazonaws.com/logs.zip?X-Amz-Signature=s3";
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    const result = await resolveLogDownloadUrl(client, "prefix");
+
+    expect(result).toBe(blobLink);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
