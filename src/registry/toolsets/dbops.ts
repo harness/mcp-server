@@ -787,15 +787,15 @@ export const dbopsToolset: ToolsetDefinition = {
         "Project-scoped — requires org_id and project_id (defaults to HARNESS_ORG/HARNESS_PROJECT). " +
         "Execute the LLM-authoring validate-and-preview pipeline and record a billable " +
         "ChangeAuthoringExecutionEvent atomically. Use harness_execute with action=run. " +
+        "Required for both branches: conversation_id, schema_id, instance_id, changeset. " +
         "Two branches: " +
         "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill from the " +
         "project-level NG setting `dbops_llm_authoring_pipeline_id` in Database DevOps settings) " +
-        "plus optional runtime_inputs; " +
+        "plus optional runtime_inputs (reserved keys schemaId, instanceId, changeset are rejected); " +
         "(b) default-pipeline — pass use_default_pipeline=true and the server performs " +
         "get-or-create of the canonical default pipeline. " +
         "Exactly one of pipeline_identifier OR use_default_pipeline must be set. " +
-        "Reserved runtime-input keys (schemaId, instanceId, changeset) are rejected by the server. " +
-        "Returns { executionId, pipelineIdentifier, openInHarness }. " +
+        "Both branches return { executionId, pipelineIdentifier, openInHarness }. " +
         "The chat-side polling block in the dbops_changeset skill is dead code — " +
         "show the user the openInHarness link and let the existing changeauthoring " +
         "billing job reconcile execution status server-side.",
