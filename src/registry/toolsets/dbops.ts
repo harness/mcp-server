@@ -783,19 +783,21 @@ export const dbopsToolset: ToolsetDefinition = {
       resourceType: "database_execute_llm_authoring_pipeline",
       displayName: "Execute LLM Authoring Pipeline",
       description:
-        "Execute the LLM-authoring validate-and-preview pipeline and record a billable " +
+        "Consolidated endpoint for the LLM change authoring Accept & Commit flow. " +
+        "Executes the validate-and-preview pipeline and records a billable " +
         "ChangeAuthoringExecutionEvent atomically. Use harness_execute with action=run. " +
-        "Two branches: " +
-        "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill from NG setting " +
-        "`dbops_llm_authoring_pipeline_id`) plus optional runtime_inputs; " +
+        "Requires project scope: org_id and project_id must be supplied (or defaulted via " +
+        "HARNESS_ORG / HARNESS_PROJECT env vars). " +
+        "Both branches require the same common inputs: conversation_id, schema_id, instance_id, changeset. " +
+        "Two branches (exactly one must be set): " +
+        "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill from the " +
+        "project-level NG setting `dbops_llm_authoring_pipeline_id`) plus optional runtime_inputs; " +
         "(b) default-pipeline — pass use_default_pipeline=true and the server performs " +
         "get-or-create of the canonical default pipeline. " +
-        "Exactly one of pipeline_identifier OR use_default_pipeline must be set. " +
         "Reserved runtime-input keys (schemaId, instanceId, changeset) are rejected by the server. " +
         "Returns { executionId, pipelineIdentifier, openInHarness }. " +
-        "The chat-side polling block in the dbops_changeset skill is dead code — " +
-        "show the user the openInHarness link and let the existing changeauthoring " +
-        "billing job reconcile execution status server-side.",
+        "Show the user the openInHarness link; the changeauthoring billing job reconciles " +
+        "execution status server-side.",
       toolset: "dbops",
       scope: "project",
       identifierFields: [],
