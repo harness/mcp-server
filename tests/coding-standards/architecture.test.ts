@@ -7,8 +7,9 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
-import type { ToolsetName } from "../../src/registry/types.js";
+import { ALL_TOOLSET_NAMES, Registry } from "../../src/registry/index.js";
+import type { ToolsetName, ResourceScope } from "../../src/registry/types.js";
+import type { Config } from "../../src/config.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
@@ -54,6 +55,44 @@ const TOOLSET_HELPER_FILES = new Set([
   "src/registry/toolsets/scopes.ts",
 ]);
 
+/** Legacy inline responseExtractor arrow functions — new ones must live in extractors.ts. */
+const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
+  "src/registry/toolsets/ansible.ts": 4,
+  "src/registry/toolsets/chaos.ts": 2,
+  "src/registry/toolsets/ccm.ts": 1,
+  "src/registry/toolsets/governance.ts": 1,
+  "src/registry/toolsets/iacm.ts": 1,
+  "src/registry/toolsets/idp.ts": 1,
+  "src/registry/toolsets/knowledge-graph.ts": 1,
+  "src/registry/toolsets/sto.ts": 3,
+};
+
+const WRITE_TOOL_FILES = [
+  "src/tools/harness-create.ts",
+  "src/tools/harness-update.ts",
+  "src/tools/harness-delete.ts",
+  "src/tools/harness-execute.ts",
+] as const;
+
+const VALID_RESOURCE_SCOPES = new Set<ResourceScope>(["account", "org", "project"]);
+
+const TEST_CONFIG: Config = {
+  HARNESS_API_KEY: "pat.test-account.token.secret",
+  HARNESS_ACCOUNT_ID: "test-account",
+  HARNESS_BASE_URL: "https://app.harness.io",
+  HARNESS_ORG: "default",
+  HARNESS_PROJECT: "test-project",
+  HARNESS_API_TIMEOUT_MS: 30000,
+  HARNESS_MAX_RETRIES: 3,
+  LOG_LEVEL: "info",
+  HARNESS_MAX_BODY_SIZE_MB: 10,
+  HARNESS_RATE_LIMIT_RPS: 10,
+  HARNESS_READ_ONLY: false,
+  HARNESS_SKIP_ELICITATION: false,
+  HARNESS_ALLOW_HTTP: false,
+  HARNESS_FME_BASE_URL: "https://api.split.io",
+};
+
 /** Forbidden import patterns in toolset definition files. */
 const FORBIDDEN_TOOLSET_IMPORTS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /from\s+["'][^"']*harness-client/, reason: "HarnessClient import" },
@@ -87,6 +126,26 @@ function extractRegisterToolNames(content: string): string[] {
     names.push(match[1]!);
   }
   return names;
+}
+
+function countInlineResponseExtractors(content: string): number {
+  const matches = content.match(/responseExtractor:\s*\(/g);
+  return matches?.length ?? 0;
+}
+
+function findZodDescribeViolations(fileRel: string, content: string): string[] {
+  const violations: string[] = [];
+  const lines = content.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (!/^\s{8}\w+:\s*(z\.|resourceTypeSchema)/.test(line)) continue;
+    if (/resourceScopeSchema/.test(line)) continue;
+    const chunk = lines.slice(i, Math.min(i + 10, lines.length)).join("\n");
+    if (!/\.describe\s*\(/.test(chunk)) {
+      violations.push(`${fileRel}:${i + 1} ${line.trim()}`);
+    }
+  }
+  return violations;
 }
 
 function extractToolsetNamesFromUnion(): Set<string> {
@@ -247,5 +306,150 @@ describe("Coding standards — registry registration", () => {
     for (const name of ALL_TOOLSET_NAMES) {
       expect(() => assign(name)).not.toThrow();
     }
+  });
+});
+
+describe("Coding standards — registry resource definitions", () => {
+  const registry = new Registry(TEST_CONFIG);
+
+  it("every resource declares a valid scope and identifierFields array", () => {
+    const violations: string[] = [];
+
+    for (const toolset of registry.getAllToolsets()) {
+      for (const resource of toolset.resources) {
+        if (!VALID_RESOURCE_SCOPES.has(resource.scope)) {
+          violations.push(`${resource.resourceType}: invalid scope "${resource.scope}"`);
+        }
+        if (!Array.isArray(resource.identifierFields)) {
+          violations.push(`${resource.resourceType}: identifierFields must be an array`);
+        }
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("every endpoint spec declares operationPolicy with risk and retryPolicy", () => {
+    const violations: string[] = [];
+
+    for (const toolset of registry.getAllToolsets()) {
+      for (const resource of toolset.resources) {
+        for (const [operation, spec] of Object.entries(resource.operations)) {
+          if (!spec) continue;
+          const policy = spec.operationPolicy;
+          if (!policy?.risk || !policy?.retryPolicy) {
+            violations.push(`${resource.resourceType}.${operation}: missing operationPolicy`);
+          }
+        }
+        if (resource.executeActions) {
+          for (const [action, spec] of Object.entries(resource.executeActions)) {
+            const policy = spec.operationPolicy;
+            if (!policy?.risk || !policy?.retryPolicy) {
+              violations.push(`${resource.resourceType}.execute.${action}: missing operationPolicy`);
+            }
+          }
+        }
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("does not add new inline responseExtractor functions in toolsets", () => {
+    const toolsetDir = join(SRC, "registry/toolsets");
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const count = countInlineResponseExtractors(readFileSync(file, "utf8"));
+      if (count === 0) continue;
+
+      const allowed = ALLOWED_INLINE_EXTRACTOR_COUNTS[fileRel];
+      if (allowed === undefined) {
+        violations.push(`${fileRel}: ${count} inline responseExtractor(s) — move to extractors.ts`);
+      } else if (count > allowed) {
+        violations.push(`${fileRel}: expected at most ${allowed} inline responseExtractor(s), found ${count}`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+});
+
+describe("Coding standards — HarnessClient singleton", () => {
+  it("instantiates HarnessClient only in src/index.ts", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(SRC)) {
+      const content = readFileSync(file, "utf8");
+      if (/\bnew\s+HarnessClient\s*\(/.test(content) && rel(file) !== "src/index.ts") {
+        violations.push(rel(file));
+      }
+    }
+
+    expect(violations, `new HarnessClient() found outside src/index.ts:\n${violations.join("\n")}`).toEqual([]);
+  });
+});
+
+describe("Coding standards — tool handler contracts", () => {
+  it("write tool handlers declare confirm param and use elicitation", () => {
+    const violations: string[] = [];
+
+    for (const file of WRITE_TOOL_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!/confirm:\s*z\.boolean\(/.test(content)) {
+        violations.push(`${file}: missing confirm z.boolean() input param`);
+      }
+      if (!content.includes("confirmViaElicitation")) {
+        violations.push(`${file}: missing confirmViaElicitation()`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("dispatch tool handlers use toMcpError for unexpected failures", () => {
+    const dispatchTools = [...ALLOWED_REGISTER_TOOL_FILES].filter(
+      (f) => f !== "src/tools/harness-describe.ts" && f !== "src/tools/harness-schema.ts",
+    );
+    const violations: string[] = [];
+
+    for (const file of dispatchTools) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!content.includes("toMcpError")) {
+        violations.push(`${file}: missing toMcpError()`);
+      }
+      if (!content.includes("errorResult")) {
+        violations.push(`${file}: missing errorResult()`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("tool handler Zod inputSchema fields expose .describe() for LLM tool selection", () => {
+    const violations: string[] = [];
+
+    for (const file of ALLOWED_REGISTER_TOOL_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      violations.push(...findZodDescribeViolations(file, content));
+    }
+
+    expect(violations, `inputSchema fields missing .describe():\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("tool handlers import Zod from zod/v4", () => {
+    const violations: string[] = [];
+
+    for (const file of ALLOWED_REGISTER_TOOL_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (/from\s+["']zod["']/.test(content) && !/from\s+["']zod\/v4["']/.test(content)) {
+        violations.push(`${file}: must import from "zod/v4"`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
   });
 });
