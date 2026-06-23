@@ -367,6 +367,35 @@ describe("HarnessClient", () => {
       expect(headers["Harness-Account"]).toBe("test-account");
     });
 
+    it("preserves caller-provided non-FME auth regardless of header casing", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/ng/api/projects",
+        headers: { authorization: "Bearer session-token" },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("Bearer session-token");
+      expect(headers.has("x-api-key")).toBe(false);
+    });
+
+    it("does not inject x-api-key when caller already provided it with alternate casing", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/ng/api/projects",
+        headers: { "X-Api-Key": "caller-provided-key" },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("x-api-key")).toBe("caller-provided-key");
+    });
+
     it("preserves explicit FME bearer auth instead of injecting configured placeholder token", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig({ HARNESS_API_KEY: "dummy" }));

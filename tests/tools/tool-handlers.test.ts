@@ -793,6 +793,37 @@ connector:
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("injects connector identifier into wrapped YAML update bodies when missing", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { connector: { identifier: "dev_connector" } } });
+    client = makeClient(mockRequest);
+    const connectorServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(connectorServer, registry, client);
+
+    const result = await connectorServer.call("harness_update", {
+      resource_type: "connector",
+      resource_id: "dev_connector",
+      body: `
+connector:
+  name: Dev Connector
+  type: K8sCluster
+  spec:
+    credential:
+      type: InheritFromDelegate
+`,
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { body: { connector?: Record<string, unknown> } };
+    expect(callArgs.body.connector).toMatchObject({
+      identifier: "dev_connector",
+      name: "Dev Connector",
+      connectionType: "K8sCluster",
+    });
+  });
+
   it("uses account scope from account-level File Store URLs during update", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "scripts" } });
