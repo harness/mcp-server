@@ -27,6 +27,14 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
     expect(createOp.path).toBe(runAction.path);
   });
 
+  it("uses low_write risk on run and deprecated create (user consents upstream)", () => {
+    // Intentionally below requiresConfirmation: Accept & Commit in the changeset
+    // skill already collects user consent; medium_write stacked a second approval card.
+    const expected = { risk: "low_write", retryPolicy: "do_not_retry" };
+    expect(runAction.operationPolicy).toEqual(expected);
+    expect(createOp.operationPolicy).toEqual(expected);
+  });
+
   it("forwards the custom-pipeline branch verbatim", () => {
     const body = buildBody({
       schema_id: "s",
