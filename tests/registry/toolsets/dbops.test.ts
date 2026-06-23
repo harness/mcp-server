@@ -97,4 +97,17 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
       pipelineIdentifier: "my-pipe",
     });
   });
+
+  it("rejects when both branch fields are set", () => {
+    expect(() =>
+      buildBody({
+        schema_id: "s",
+        instance_id: "i",
+        conversation_id: "c",
+        changeset: "cs",
+        use_default_pipeline: true,
+        pipeline_identifier: "my-pipe",
+      }),
+    ).toThrow(/mutually exclusive/);
+  });
 });

@@ -828,6 +828,12 @@ export const dbopsToolset: ToolsetDefinition = {
             const runtimeInputs = (src.runtimeInputs ?? src.runtime_inputs) as
               | Record<string, unknown>
               | undefined;
+            if (useDefault === true && pipelineId) {
+              throw new Error(
+                "database_execute_llm_authoring_pipeline: sets both use_default_pipeline and pipeline_identifier — they are mutually exclusive. " +
+                  "Pick exactly one branch: pass use_default_pipeline=true for the default pipeline, or pipeline_identifier for a custom pipeline.",
+              );
+            }
             if (useDefault === true) {
               body.useDefaultPipeline = true;
             } else if (pipelineId) {
