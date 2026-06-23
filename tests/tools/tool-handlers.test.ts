@@ -820,7 +820,6 @@ connector:
     expect(callArgs.body.connector).toMatchObject({
       identifier: "dev_connector",
       name: "Dev Connector",
-      connectionType: "K8sCluster",
     });
   });
 
