@@ -7,8 +7,9 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
+import { ALL_TOOLSET_NAMES, Registry } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
+import type { Config } from "../../src/config.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
@@ -247,5 +248,120 @@ describe("Coding standards — registry registration", () => {
     for (const name of ALL_TOOLSET_NAMES) {
       expect(() => assign(name)).not.toThrow();
     }
+  });
+});
+
+describe("Coding standards — Zod input schemas", () => {
+  /** Zod 4 creates new schema instances per method — .describe() must be last. */
+  const DESCRIBE_BEFORE_MODIFIER = /\.describe\([^)]*\)\s*\.(optional|default|min|max)\(/;
+
+  it("harness tool handlers place .describe() after .optional()/.default()", () => {
+    const violations: string[] = [];
+
+    for (const file of ALLOWED_REGISTER_TOOL_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (DESCRIBE_BEFORE_MODIFIER.test(content)) {
+        violations.push(file);
+      }
+    }
+
+    expect(
+      violations,
+      `.describe() must be the last Zod chain call (before optional/default). Fix:\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("Coding standards — HTTP client singleton", () => {
+  it("instantiates HarnessClient only in src/index.ts", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (!content.includes("new HarnessClient(")) continue;
+
+      const fileRel = rel(file);
+      if (fileRel !== "src/index.ts") {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `HarnessClient must be a singleton — only src/index.ts may construct it:\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("Coding standards — resource metadata", () => {
+  const testConfig = {
+    HARNESS_API_KEY: "pat.testacct.testid.testsecret",
+    HARNESS_ACCOUNT_ID: "testacct",
+    HARNESS_BASE_URL: "https://app.harness.io",
+    HARNESS_API_TIMEOUT_MS: 30000,
+    HARNESS_MAX_RETRIES: 3,
+    LOG_LEVEL: "error",
+    HARNESS_MAX_BODY_SIZE_MB: 10,
+    HARNESS_RATE_LIMIT_RPS: 10,
+    HARNESS_READ_ONLY: false,
+  } as Config;
+
+  /**
+   * Singleton/dashboard GET resources that use filter params instead of resource_id.
+   * New entries require a comment in the PR — prefer real identifierFields when possible.
+   */
+  const ALLOWED_EMPTY_IDENTIFIER_GET_RESOURCES = new Set([
+    "cost_account_overview",
+    "cost_anomaly_summary",
+    "cost_recommendation_stats",
+    "eval_analytics",
+    "eval_git_settings",
+    "gitops_dashboard",
+    "global_freeze",
+    "kg_grammar",
+    "scs_auto_pr_config",
+    "scs_oss_risk_summary",
+    "scs_project_security_overview",
+    "sei_ai_adoption",
+    "sei_ai_impact",
+    "sei_ai_usage",
+    "sei_dora_metric",
+    "sei_productivity_metric",
+  ]);
+
+  it("resources with a get operation declare identifierFields (or are allowlisted singletons)", () => {
+    const registry = new Registry(testConfig);
+    const violations: string[] = [];
+
+    for (const resourceType of registry.getAllResourceTypes()) {
+      const def = registry.getResource(resourceType);
+      if (!def.operations.get) continue;
+      if (def.identifierFields.length === 0 && !ALLOWED_EMPTY_IDENTIFIER_GET_RESOURCES.has(resourceType)) {
+        violations.push(`${resourceType} (${def.toolset})`);
+      }
+    }
+
+    expect(
+      violations,
+      `get-capable resources must declare identifierFields for harness_get dispatch (or be added to the allowlist with justification):\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("every resource declares scope and identifierFields", () => {
+    const registry = new Registry(testConfig);
+    const violations: string[] = [];
+
+    for (const resourceType of registry.getAllResourceTypes()) {
+      const def = registry.getResource(resourceType);
+      if (!def.scope) {
+        violations.push(`${resourceType}: missing scope`);
+      }
+      if (!Array.isArray(def.identifierFields)) {
+        violations.push(`${resourceType}: missing identifierFields array`);
+      }
+    }
+
+    expect(violations, `Resource metadata violations:\n${violations.join("\n")}`).toEqual([]);
   });
 });
