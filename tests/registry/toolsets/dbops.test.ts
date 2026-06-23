@@ -14,6 +14,14 @@ if (!runAction) {
 const buildBody = runAction.bodyBuilder!;
 
 describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
+  it("exposes only harness_execute run (no legacy operations.create shim)", () => {
+    expect(executeResource.operations).toEqual({});
+    expect(executeResource.executeActions?.run).toBeDefined();
+    expect(executeResource.executeActions?.run?.path).not.toContain(
+      "execute-llm-authoring-pipeline",
+    );
+  });
+
   it("hits the v1 llm-authoring/execute-pipeline path", () => {
     expect(runAction.method).toBe("POST");
     expect(runAction.path).toBe(
