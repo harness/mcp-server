@@ -783,6 +783,7 @@ export const dbopsToolset: ToolsetDefinition = {
       resourceType: "database_execute_llm_authoring_pipeline",
       displayName: "Execute LLM Authoring Pipeline",
       description:
+        "Consolidated endpoint for LLM change authoring Accept & Commit. " +
         "Execute the LLM-authoring validate-and-preview pipeline and record a billable " +
         "ChangeAuthoringExecutionEvent atomically. Use harness_execute with action=run. " +
         "Two branches: " +
