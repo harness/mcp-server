@@ -493,23 +493,15 @@ async function downloadBlobContent(
 
 // ─── Public API ─────────────────────────────────────────────────────────────
 
-/**
- * Resolve execution log content from the Harness log-service.
- *
- * Full pipeline: initiate blob download → poll until ready → download zip →
- * extract → parse JSON log entries → return clean text.
- */
-export async function resolveLogContent(
+async function requestLogBlobLink(
   client: HarnessClient,
   prefix: string,
   options?: LogResolveOptions,
 ): Promise<string> {
   const maxAttempts = options?.maxPollAttempts ?? DEFAULT_POLL_ATTEMPTS;
   const pollInterval = options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
-  const maxBytes = options?.maxLogSizeBytes ?? DEFAULT_MAX_LOG_BYTES;
   const signal = options?.signal;
 
-  // Step 1 & 2: Initiate and poll until status is "success"
   let blob: BlobResponse | undefined;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     if (signal?.aborted) throw new Error("Log download cancelled");
@@ -523,7 +515,7 @@ export async function resolveLogContent(
     });
 
     if (blob?.status === "success" && blob.link) {
-      break;
+      return blob.link;
     }
 
     if (attempt < maxAttempts - 1) {
@@ -532,18 +524,65 @@ export async function resolveLogContent(
     }
   }
 
-  if (!blob?.link) {
-    throw new Error(
-      `Log blob not ready after ${maxAttempts} attempts (status: ${blob?.status ?? "unknown"}). Logs may still be processing or have expired.`,
-    );
+  throw new Error(
+    `Log blob not ready after ${maxAttempts} attempts (status: ${blob?.status ?? "unknown"}). Logs may still be processing or have expired.`,
+  );
+}
+
+function rewriteDownloadUrlIfNeeded(client: HarnessClient, blobLink: string): string {
+  const blobUrl = safeParseUrl(blobLink);
+  if (!blobUrl || isExternalStorageHost(blobUrl.hostname)) {
+    return blobLink;
   }
+
+  if (isPresignedUrl(blobUrl) && isHarnessHost(blobUrl.hostname) && blobUrl.pathname.startsWith("/storage/")) {
+    const baseUrl = safeParseUrl(client.baseURL);
+    if (!baseUrl) {
+      throw new Error(`Cannot rewrite Harness CDN blob URL: HARNESS_BASE_URL "${client.baseURL}" is not a valid URL`);
+    }
+    if (signedHeadersIncludeHost(blobUrl) && blobUrl.hostname === baseUrl.hostname) {
+      return blobLink;
+    }
+    blobUrl.hostname = baseUrl.hostname;
+    blobUrl.protocol = baseUrl.protocol;
+    blobUrl.port = baseUrl.port;
+    return blobUrl.toString();
+  }
+
+  return blobLink;
+}
+
+export async function resolveLogDownloadUrl(
+  client: HarnessClient,
+  prefix: string,
+  options?: LogResolveOptions,
+): Promise<string> {
+  const blobLink = await requestLogBlobLink(client, prefix, options);
+  return rewriteDownloadUrlIfNeeded(client, blobLink);
+}
+
+/**
+ * Resolve execution log content from the Harness log-service.
+ *
+ * Full pipeline: initiate blob download → poll until ready → download zip →
+ * extract → parse JSON log entries → return clean text.
+ */
+export async function resolveLogContent(
+  client: HarnessClient,
+  prefix: string,
+  options?: LogResolveOptions,
+): Promise<string> {
+  const maxBytes = options?.maxLogSizeBytes ?? DEFAULT_MAX_LOG_BYTES;
+  const signal = options?.signal;
+
+  const blobLink = await requestLogBlobLink(client, prefix, options);
 
   // Step 3: Download the zip/gzip from the signed URL
   const downloadSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS)])
     : AbortSignal.timeout(DEFAULT_DOWNLOAD_TIMEOUT_MS);
 
-  const response = await downloadBlobContent(client, blob.link, prefix, downloadSignal);
+  const response = await downloadBlobContent(client, blobLink, prefix, downloadSignal);
   if (!response.ok) {
     const errBody = await response.text().catch(() => "");
     throw new Error(`Log download failed: HTTP ${response.status} — ${errBody.slice(0, 200)}`);

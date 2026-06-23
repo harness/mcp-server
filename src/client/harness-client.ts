@@ -176,6 +176,26 @@ export class HarnessClient {
     return this.baseUrl;
   }
 
+  private buildHeaders(options: RequestOptions): Record<string, string> {
+    const isFme = options.product === "fme";
+    const accountId = this.resolveAccountId();
+    const headers: Record<string, string> = {
+      ...(isFme ? {} : { "Harness-Account": accountId }),
+      ...options.headers,
+    };
+    // gRPC-proxy services (query-service, schema-service, config-service) require x-tenant-id,
+    // consistent with how /log-service/ gets accountID in buildUrl.
+    if (
+      options.path.includes("/query-service/") ||
+      options.path.includes("/schema-service/") ||
+      options.path.includes("/config-service/")
+    ) {
+      headers["x-tenant-id"] = accountId;
+    }
+    this.applyDefaultAuth(headers, isFme);
+    return headers;
+  }
+
   private applyDefaultAuth(headers: Record<string, string>, isFme: boolean): void {
     if (isFme) {
       // FME/Split Admin APIs expect Bearer auth. Drop x-api-key here so
@@ -261,18 +281,7 @@ export class HarnessClient {
 
     const method = options.method ?? "GET";
     const url = this.buildUrl(options);
-    const isFme = options.product === "fme";
-    const accountId = this.resolveAccountId();
-    const headers: Record<string, string> = {
-      ...(isFme ? {} : { "Harness-Account": accountId }),
-      ...options.headers,
-    };
-
-    // Only inject default auth when the caller hasn't already set auth.
-    // When service-routing handles auth (bearer-jwt, remote-mcp), it sets
-    // Authorization directly — sending x-api-key alongside would cause
-    // downstream services to attempt API-key validation on the dummy token.
-    this.applyDefaultAuth(headers, isFme);
+    const headers = this.buildHeaders(options);
 
     if (hasExplicitBody(options.body)) {
       if (isFormDataBody(options.body)) {
@@ -435,15 +444,7 @@ export class HarnessClient {
 
     const method = options.method ?? "POST";
     const url = this.buildUrl(options);
-    const isFme = options.product === "fme";
-    const accountId = this.resolveAccountId();
-    const headers: Record<string, string> = {
-      ...(isFme ? {} : { "Harness-Account": accountId }),
-      ...options.headers,
-    };
-
-    // Same auth-header guard as request() — see comment there.
-    this.applyDefaultAuth(headers, isFme);
+    const headers = this.buildHeaders(options);
 
     if (hasExplicitBody(options.body)) {
       if (isFormDataBody(options.body)) {

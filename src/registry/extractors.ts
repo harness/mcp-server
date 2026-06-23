@@ -24,6 +24,15 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
 /** Pass-through extractor — returns raw response unchanged. Used for APIs that don't wrap in `data`. */
 export const passthrough = (raw: unknown): unknown => raw;
 
+/** Offset-paginated list (OffsetPaginatedResult): { entities, totalCount } */
+export const offsetListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { entities?: unknown[]; totalCount?: number };
+  return {
+    items: r.entities ?? [],
+    total: r.totalCount ?? 0,
+  };
+};
+
 /**
  * STO Global Exemptions extractor.
  * API response: `{ exemptions: [...], pagination: { page, pageSize, totalPages, totalItems }, counts: {...} }`
@@ -297,6 +306,65 @@ export const runtimeInputExtract = (raw: unknown): unknown => {
 };
 
 /**
+ * Extracts the dynamic-execution response for
+ * POST /v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/execute/dynamic.
+ *
+ * The upstream returns `{ execution_details: { execution_id, status } }`.
+ * Project to a flat, stable public shape — `{ execution_id, status }` — and
+ * preserve any other top-level fields the API may add (without leaking the
+ * original `execution_details` envelope). Returning a flat shape mirrors
+ * how `pipeline.run` surfaces the planExecutionId so chained tools
+ * (`harness_get(resource_type='execution', ...)`) work without re-mapping.
+ */
+export const dynamicExecutionExtract = (raw: unknown): unknown => {
+  if (raw === null || raw === undefined) return raw;
+  const r = raw as { execution_details?: { execution_id?: string; status?: string } };
+  const details = r.execution_details ?? {};
+  return {
+    execution_id: details.execution_id ?? null,
+    status: details.status ?? null,
+  };
+};
+
+/**
+ * Extracts merged input set data for a pipeline execution from
+ * GET /pipeline/api/pipelines/execution/{planExecutionId}/inputsetV2.
+ *
+ * Projects to a stable shape: { inputSetYaml, inputSetTemplateYaml, resolvedYaml,
+ * inputSetDetails, inputSetBranchName, executionId } so the public tool boundary
+ * never leaks the NG response envelope or unrelated debug fields. `inputSetDetails`
+ * is normalized to `[{identifier, name}]` even when the upstream returns a richer
+ * object — agents only need those two fields per the spec.
+ */
+export const executionInputsExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
+  const r = raw as {
+    data?: {
+      inputSetYaml?: string;
+      inputSetTemplateYaml?: string;
+      resolvedYaml?: string;
+      inputSetDetails?: Array<{ identifier?: string; name?: string }>;
+      inputSetBranchName?: string;
+    };
+  };
+  const data = r?.data ?? {};
+  const details = Array.isArray(data.inputSetDetails)
+    ? data.inputSetDetails.map((d) => ({
+      identifier: d?.identifier ?? null,
+      name: d?.name ?? null,
+    }))
+    : [];
+  const executionId = (input?.execution_id as string | undefined) ?? null;
+  return {
+    executionId,
+    inputSetYaml: data.inputSetYaml ?? null,
+    inputSetTemplateYaml: data.inputSetTemplateYaml ?? null,
+    resolvedYaml: data.resolvedYaml ?? null,
+    inputSetDetails: details,
+    inputSetBranchName: data.inputSetBranchName ?? null,
+  };
+};
+
+/**
  * Extracts CCM list responses with views/totalCount structure.
  * Maps `data.views` → `items` and `data.totalCount` → `total`.
  * Used by multiple CCM APIs that return this response pattern.
@@ -406,6 +474,74 @@ export const chaosPageExtract = (raw: unknown): { items: unknown[]; total: numbe
 };
 
 /**
+ * Chaos v2 experiment list items expose their id as `experimentID` (capital ID),
+ * but the deep-link resolver and the get-op path param use `experimentId`. Mirror
+ * the value so per-item `openInHarness` links use the UUID instead of falling back
+ * to the experiment name. Wraps chaosPageExtract; all other fields are preserved.
+ */
+export const chaosExperimentListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const page = chaosPageExtract(raw);
+  const items = page.items.map((item) => {
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const rec = item as Record<string, unknown>;
+      if (typeof rec.experimentID === "string" && rec.experimentId === undefined) {
+        return { ...rec, experimentId: rec.experimentID };
+      }
+    }
+    return item;
+  });
+  return { items, total: page.total };
+};
+
+/**
+ * The create-action handler echoes back the request `actions.Action` (clean,
+ * no backend envelope). Project a stable, documented shape so no raw
+ * passthrough crosses the tool boundary and future server-added fields stay
+ * out of the public contract.
+ */
+export const chaosActionExtract = (raw: unknown): unknown => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const a = raw as Record<string, unknown>;
+  return {
+    identity: a.identity,
+    name: a.name,
+    description: a.description,
+    tags: a.tags,
+    type: a.type,
+    infrastructureType: a.infrastructureType,
+    hubRef: a.hubRef,
+    actionsTemplateRef: a.actionsTemplateRef,
+    actionProperties: a.actionProperties,
+    runProperties: a.runProperties,
+    variables: a.variables,
+    inputs: a.inputs,
+  };
+};
+
+/**
+ * Input-set list items belong to a single parent experiment (the required
+ * experiment_id filter), but don't carry it in the row. Inject experimentId from
+ * the request input so each item's deep link resolves to the parent experiment's
+ * inputsets page instead of the per-item resolver clobbering it with the row's name.
+ */
+export const chaosInputSetListExtract = (
+  raw: unknown,
+  input?: Record<string, unknown>,
+): { items: unknown[]; total: number } => {
+  const page = chaosPageExtract(raw);
+  const experimentId = input?.experiment_id;
+  if (typeof experimentId !== "string" || experimentId === "") return page;
+  const items = page.items.map((item) => {
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const rec = item as Record<string, unknown>;
+      if (rec.experimentId === undefined) return { ...rec, experimentId };
+    }
+    return item;
+  });
+  return { items, total: page.total };
+};
+
+/**
  * Normalize chaos experiment variables response (RunTimeInputs shape):
  * { experiment: [...] | null, tasks: { taskName: [...] } | null }
  * → { items: [{ task, variables }], total }
@@ -480,6 +616,48 @@ export const chaosK8sInfraListExtract = (raw: unknown): { items: unknown[]; tota
     items: r.infras ?? [],
     total: r.totalNoOfInfrastructures ?? (Array.isArray(r.infras) ? r.infras.length : 0),
   };
+};
+
+/**
+ * Project a single load test (InternalApiLoadTestResponse) to a stable shape.
+ * Drops backend user-detail envelopes and the large base64 scriptContent
+ * (scriptSource is retained). Mirrors `identity` into `loadtestId` so the
+ * deep-link resolver fills {loadtestId} instead of falling back to the name.
+ */
+export const chaosLoadTestExtract = (raw: unknown): unknown => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const t = raw as Record<string, unknown>;
+  return {
+    loadtestId: t.identity,
+    identity: t.identity,
+    name: t.name,
+    description: t.description,
+    tags: t.tags,
+    environmentIdentifier: t.environmentIdentifier,
+    infraIdentifier: t.infraIdentifier,
+    targetType: t.targetType,
+    targetUrl: t.targetUrl,
+    toolType: t.toolType,
+    scriptSource: t.scriptSource,
+    defaultUsers: t.defaultUsers,
+    defaultDurationSec: t.defaultDurationSec,
+    defaultRampUpTimeSec: t.defaultRampUpTimeSec,
+    defaultWorkerCount: t.defaultWorkerCount,
+    variables: t.variables,
+    lastExecuted: t.lastExecuted,
+    createdAt: t.createdAt,
+    updatedAt: t.updatedAt,
+  };
+};
+
+/**
+ * Load test list response: { items, pagination: { totalItems } }.
+ * Projects each item via chaosLoadTestExtract → { items, total }.
+ */
+export const chaosLoadTestListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { items?: unknown[]; pagination?: { totalItems?: number } };
+  const items = (r.items ?? []).map(chaosLoadTestExtract);
+  return { items, total: r.pagination?.totalItems ?? items.length };
 };
 
 /**

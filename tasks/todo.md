@@ -1,5 +1,49 @@
 # Harness MCP Server — Task Tracking
 
+## Documentation Alignment Automation (2026-06-15)
+- [x] Audit recent commits and existing docs for weakly documented subsystems
+- [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap
+- [x] Update README and testing docs with verified usage, constraints, and pitfalls
+- [x] Run docs verification and review the documentation-only diff
+- [x] Commit, push, and open/update the docs PR
+
+### Plan
+- Use `src/registry/toolsets/pipelines.ts`, `src/registry/extractors.ts`, `tests/registry/pipeline-dynamic-execution.test.ts`, and `tests/registry/execution-inputs.test.ts` as the source of truth.
+- Keep the public README update concise and colocated with the existing Pipeline Run Workflow and Input Set examples.
+- Add targeted `docs/testing/pipeline_dynamic_execution/test_plan.md` and `docs/testing/execution_inputs/test_plan.md` pages because both resource types are public in the pipelines toolset but missing from the testing catalog.
+- Update `docs/testing/README.md` so QA can find the new resource-level test plans.
+- Cover dynamic execution preconditions, object-only `body.yaml`, unsupported runtime-input behaviors, optional params, high-write confirmation, execution input response shape, expression resolution params, and common troubleshooting cases without documenting behavior not present in source.
+
+### Review
+- README now documents `pipeline_dynamic_execution.run` with a concrete `harness_execute` example, preconditions, `body.yaml` constraints, unsupported runtime-input behaviors, high-write confirmation semantics, response shape, and troubleshooting for disabled dynamic execution.
+- README now documents `execution_inputs` as a post-run forensics workflow, including expression-resolution params and the stable projected response fields.
+- Added `docs/testing/pipeline_dynamic_execution/test_plan.md` and `test_report.md` with pending QA coverage for request shape, object-only body validation, optional params, high-write gating, response envelope stripping, and dynamic-execution enablement failures.
+- Added `docs/testing/execution_inputs/test_plan.md` and `test_report.md` with pending QA coverage for expression resolution, read-only behavior, response projection, input set detail normalization, missing fields, and chain-from-run workflows.
+- Updated the CD/CI section of `docs/testing/README.md` to link the new resource plans and to correct the touched pipeline-related paths to the existing singular resource directories.
+- Verification passed: `pnpm install --frozen-lockfile`, `pnpm build`, `pnpm docs:check`, `pnpm typecheck`, `pnpm exec vitest run tests/registry/pipeline-dynamic-execution.test.ts tests/registry/execution-inputs.test.ts tests/tools/tool-handlers.test.ts -t "pipeline_dynamic_execution|execution_inputs"`, `git diff --check HEAD`, and `pnpm test` (78 files / 1946 tests).
+- Opened PR: https://github.com/harness/mcp-server/pull/344
+
+## Cursor MCP Confirmation Prompt Regression (2026-06-15)
+- [x] Read Slack report and confirm screenshot/thread context
+- [x] Trace MCP elicitation/write confirmation behavior and identify root cause
+- [x] Add failing regression coverage for a visible confirmation field and rejected incomplete accepts
+- [x] Implement minimal elicitation confirmation schema fix
+- [x] Run focused tests, build, docs generation/check, typecheck, and full test suite
+- [x] Commit, push, open/update PR, and reply in Slack thread
+
+### Plan
+- Keep the fix in the generic elicitation helper so `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` share the behavior.
+- Preserve existing safety semantics: explicit `decline`/`cancel` still block, `confirm: true` remains the fallback for clients without working elicitation, and auto-approve thresholds still bypass prompts.
+- Use a flat primitive MCP form schema with a required boolean confirmation field so clients have concrete UI to render instead of an empty form.
+- Validate accepted elicitation content so an `accept` without `confirm: true` does not execute a write.
+
+### Review
+- Root cause: the server sent approval-only MCP elicitation requests with an empty `requestedSchema`. That is spec-valid, but the newer Cursor MCP Agent path can fail to surface a useful approval UI and report a decline/cancel-like response, which made writes appear declined even when the user had said to proceed.
+- Changed `src/utils/elicitation.ts` to request a concrete required boolean `confirm` field and to proceed only when an accepted response includes `content.confirm === true`.
+- Updated elicitation, integration, and generic tool-handler tests to cover the new schema and accepted-response contract.
+- Verification passed: `pnpm exec vitest run tests/utils/elicitation.test.ts -t "explicit confirmation schema|confirm=true"`, `pnpm exec vitest run tests/utils/elicitation.test.ts tests/integration/elicitation-flow.test.ts`, `pnpm exec vitest run tests/tools/tool-handlers.test.ts`, and full `pnpm build && pnpm docs:generate && pnpm typecheck && pnpm docs:check && pnpm test` (78 files / 1947 tests).
+- Opened PR #345. Slack thread reply could not be posted because the trigger channel `C08SYT1FWJD` is not configured in the available Slack send tool; no message was posted to another channel.
+
 ## Documentation Alignment Automation (2026-06-08)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select File Store multipart workflows as the focused documentation gap

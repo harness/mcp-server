@@ -6,7 +6,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, HarnessApiError } from "../utils/errors.js";
-import { confirmViaElicitation } from "../utils/elicitation.js";
+import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
 import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
@@ -23,6 +23,50 @@ const log = createLogger("execute");
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const DEFAULT_WAIT_POLL_INTERVAL_SECONDS = 3;
 const MAX_WAIT_INTERVAL_MS = 30_000;
+
+/**
+ * Map `resource_id` onto the execute action's target identifier field, in
+ * place. Mirrors the remap performed inline in the dispatch path so that
+ * pre-dispatch consumers (e.g. blocked-attempt audit emission, where the
+ * action's `pathBuilder` reads identifier fields off the input map) see
+ * the same shape the registry would dispatch with.
+ *
+ * Most resources use `identifierFields[0]`, but some execute endpoints
+ * omit the parent identifier used by get/update/delete and target a child
+ * path field directly (e.g. `security_exemption.approve` writes to
+ * `exemption_id`, not the resource's primary id).
+ *
+ * Returns the same `input` reference for chaining; idempotent (safe to
+ * call when `resourceId` is undefined or the action has no pathParams).
+ */
+function applyExecuteActionTargetRemap(
+  input: Record<string, unknown>,
+  def: { identifierFields: readonly string[] },
+  actionSpec: { pathParams?: Record<string, string> } | undefined,
+  resourceId: string | undefined,
+): Record<string, unknown> {
+  const primaryField = def.identifierFields[0];
+  if (!primaryField || !resourceId) return input;
+  const actionPathFields = new Set(Object.keys(actionSpec?.pathParams ?? {}));
+  const primaryUsedByAction = actionPathFields.has(primaryField);
+  const actionTargetField = primaryUsedByAction
+    ? undefined
+    : [...def.identifierFields].reverse().find((field) => actionPathFields.has(field));
+
+  if (actionTargetField) {
+    input[actionTargetField] = resourceId;
+  } else {
+    const existing = input[primaryField];
+    const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
+    if (primaryAlreadySet && def.identifierFields.length > 1) {
+      const childField = def.identifierFields[def.identifierFields.length - 1]!;
+      input[childField] = resourceId;
+    } else {
+      input[primaryField] = resourceId;
+    }
+  }
+  return input;
+}
 
 /**
  * Extract the execution ID from a `harness_execute` run/retry response.
@@ -56,21 +100,27 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
     {
       description: "Execute an action on a Harness resource: run/retry/interrupt pipelines, kill/restore FME feature flags, test connectors, sync GitOps apps, run chaos experiments. You can pass a Harness URL to auto-extract identifiers. Pass `wait: true` for pipeline run/retry to block until the execution reaches a terminal status — single tool call instead of an LLM polling loop. For HQL batch operations pass `queries` with resource_type='hql_query' and action='validate' or 'run'.",
       inputSchema: {
+        // .describe() must be the LAST call in every chain — Zod 4's
+        // .optional() / .default() / .min() / .max() each return a fresh
+        // wrapper schema whose `.description` getter does NOT walk into the
+        // inner schema (verified on @modelcontextprotocol/sdk via
+        // getSchemaDescription). A description set before any of those
+        // would be invisible to MCP clients listing this tool.
         resource_type: resourceTypeSchema(executableTypes).optional().describe("Resource type with executable actions. Auto-detected from url."),
-        url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
+        url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
         action: z.string().describe("Action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
-        resource_id: z.string().describe("Primary resource identifier").optional(),
-        org_id: z.string().describe("Organization identifier (overrides default)").optional(),
-        project_id: z.string().describe("Project identifier (overrides default)").optional(),
+        resource_id: z.string().optional().describe("Primary resource identifier"),
+        org_id: z.string().optional().describe("Organization identifier (overrides default)"),
+        project_id: z.string().optional().describe("Project identifier (overrides default)"),
         resource_scope: resourceScopeSchema,
-        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).describe("Pipeline runtime inputs: key-value pairs like {branch: 'main'} (auto-resolved), or full YAML string. Check runtime_input_template first via harness_get.").optional(),
-        input_set_ids: z.array(z.string()).describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'}).").optional(),
-        body: z.record(z.string(), z.unknown()).describe("Additional body payload for the action").optional(),
-        params: z.record(z.string(), z.unknown()).describe("Action-specific parameters. Call harness_describe for available fields per resource_type.").optional(),
-        confirm: z.boolean().describe("Set to true to confirm the operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP).").optional(),
-        wait: z.boolean().describe("For pipeline run/retry actions: block until the execution reaches a terminal status (Success/Failed/Aborted/Errored/Expired). Server-side polling — a single tool call gives the agent the final outcome instead of an LLM polling loop. Ignored for other actions.").optional(),
-        wait_timeout_seconds: z.number().min(10).max(7200).describe("Max seconds to wait when wait=true. Default 600 (10 min). Max 7200 (2 h). When the timeout fires, returns execution_timed_out=true with the last observed status.").optional(),
-        wait_poll_interval_seconds: z.number().min(2).max(60).describe("Initial poll interval when wait=true (seconds). Default 3. Backoff multiplier 1.5x, capped at 30s.").optional(),
+        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe("Pipeline runtime inputs: key-value pairs like {branch: 'main'} (auto-resolved), or full YAML string. Check runtime_input_template first via harness_get."),
+        input_set_ids: z.array(z.string()).optional().describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})."),
+        body: z.record(z.string(), z.unknown()).optional().describe("Additional body payload for the action"),
+        params: z.record(z.string(), z.unknown()).optional().describe("Action-specific parameters. Call harness_describe for available fields per resource_type."),
+        confirm: z.boolean().optional().describe("Set to true to confirm the operation. Only required when the action's risk is medium_write or above (e.g. pipeline.run is high_write; hql_query.run/validate are read and need no confirmation) AND the client cannot surface a confirmation prompt — e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Has no effect for low-risk actions. Does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
+        wait: z.boolean().optional().describe("For pipeline run/retry actions: block until the execution reaches a terminal status (Success/Failed/Aborted/Errored/Expired). Server-side polling — a single tool call gives the agent the final outcome instead of an LLM polling loop. Ignored for other actions."),
+        wait_timeout_seconds: z.number().min(10).max(7200).optional().describe("Max seconds to wait when wait=true. Default 600 (10 min). Max 7200 (2 h). When the timeout fires, returns execution_timed_out=true with the last observed status."),
+        wait_poll_interval_seconds: z.number().min(2).max(60).optional().describe("Initial poll interval when wait=true (seconds). Default 3. Backoff multiplier 1.5x, capped at 30s."),
         queries: z.array(
           z.object({
             query_string: z.string().describe("HQL query string"),
@@ -111,6 +161,31 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const actionSpec = def.executeActions?.[args.action];
         const risk = actionSpec?.operationPolicy.risk ?? "low_write";
 
+        // Resolve the execute action's path identifier BEFORE any
+        // pre-dispatch audit emission. Without this, blocked rows for
+        // pathBuilder-backed actions (e.g. security_exemption.approve
+        // reading `input.exemption_id`) record an http_path with empty
+        // placeholders ("/sto/api/v2/exemptions//approve").
+        applyExecuteActionTargetRemap(input, def, actionSpec, resourceId);
+
+        // Fail fast on HARNESS_READ_ONLY before elicitation. Mirrors
+        // registry.dispatchExecute()'s gate (risk !== "read"): read-safe
+        // actions like hql_query.run/validate stay allowed in read-only
+        // mode. For everything else we don't ask the user to approve a
+        // write that can never run, AND we capture the rejection as a
+        // pre-dispatch "blocked" audit row.
+        if (config?.HARNESS_READ_ONLY && risk !== "read") {
+          const reason = `Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${args.action}" is not allowed.`;
+          registry.auditBlockedAttempt(
+            resourceType,
+            "execute",
+            input,
+            { tool: "harness_execute", confirmation: "blocked", resource_id: resourceId, action: args.action },
+            reason,
+          );
+          return errorResult(reason);
+        }
+
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_execute",
@@ -120,9 +195,14 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
-          return errorResult(
-            `Operation ${elicit.reason} by user. Hint: if your client does not support interactive confirmation, pass confirm: true to proceed.`,
+          registry.auditBlockedAttempt(
+            resourceType,
+            "execute",
+            input,
+            { tool: "harness_execute", confirmation: elicit.method, resource_id: resourceId, action: args.action },
+            describeBlockedAudit(elicit),
           );
+          return errorResult(describeElicitationFailure(elicit));
         }
 
         // Batch HQL path — fan out queries in parallel through the registry
@@ -163,28 +243,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         // Map resource_id to the execute action's target identifier. Most
         // resources use identifierFields[0], but some execute endpoints omit
         // the parent identifier used by get/update/delete and target a child
-        // path field directly.
-        const primaryField = def.identifierFields[0];
-        if (primaryField && resourceId) {
-          const actionPathFields = new Set(Object.keys(actionSpec?.pathParams ?? {}));
-          const primaryUsedByAction = actionPathFields.has(primaryField);
-          const actionTargetField = primaryUsedByAction
-            ? undefined
-            : [...def.identifierFields].reverse().find((field) => actionPathFields.has(field));
-
-          if (actionTargetField) {
-            input[actionTargetField] = resourceId;
-          } else {
-            const existing = input[primaryField];
-            const primaryAlreadySet = existing !== undefined && existing !== "" && existing !== resourceId;
-            if (primaryAlreadySet && def.identifierFields.length > 1) {
-              const childField = def.identifierFields[def.identifierFields.length - 1]!;
-              input[childField] = resourceId;
-            } else {
-              input[primaryField] = resourceId;
-            }
-          }
-        }
+        // path field directly. The same remap is also applied earlier (before
+        // any auditBlockedAttempt emission) so blocked audit rows record a
+        // resolved http_path rather than a "/...//..." with empty placeholders.
+        applyExecuteActionTargetRemap(input, def, actionSpec, resourceId);
 
         // Pass input_set_ids as string[] so HarnessClient emits repeated `inputSetIdentifiers=` query keys
         // (grpc-gateway array style). Comma-joined single param is ignored by pipeline execute.

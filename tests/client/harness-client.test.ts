@@ -424,6 +424,45 @@ describe("HarnessClient", () => {
       expect(headers["Harness-Account"]).toBe("resolved-account");
     });
 
+    it.each([
+      "/query-service/grpc/io.harness.platform.query.service.api.v1.QueryServiceGrpc/getGrammar",
+      "/schema-service/grpc/io.harness.platform.schema.service.api.v1.SchemaServiceGrpc/getType",
+      "/config-service/grpc/io.harness.platform.config.service.api.v1.ConfigServiceGrpc/getConfig",
+    ])("sets x-tenant-id for gRPC proxy paths via request(): %s", async (path) => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ method: "POST", path });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["x-tenant-id"]).toBe("test-account");
+      expect(headers["Harness-Account"]).toBe("test-account");
+    });
+
+    it("sets x-tenant-id for gRPC proxy paths via requestStream()", async () => {
+      fetchSpy.mockResolvedValue(new Response("ok", { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+      client.setAccountIdResolver(() => "resolved-tenant");
+
+      await client.requestStream({
+        method: "POST",
+        path: "/query-service/grpc/io.harness.platform.query.service.api.v1.QueryServiceGrpc/executeQuery",
+      });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["x-tenant-id"]).toBe("resolved-tenant");
+    });
+
+    it("omits x-tenant-id for non-gRPC-proxy paths", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ path: "/ng/api/projects" });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["x-tenant-id"]).toBeUndefined();
+    });
+
     it("sets Content-Type to application/json for object body", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());

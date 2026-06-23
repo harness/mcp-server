@@ -59,10 +59,19 @@ function isWhitelistedKey(key: string): boolean {
  * Strip verbose fields from an array of list items.
  * Keeps identity, status, type, ownership, timestamp, and deep link fields.
  * Merges openInHarness into name as a markdown hyperlink.
+ *
+ * When `compactFn` is provided (from a resource's `compactItem`), it replaces
+ * the generic key-name whitelist for object items — used by resources whose
+ * useful fields can't be expressed as a flat whitelist (e.g. deploys). The
+ * openInHarness→name markdown-link merge is applied to compactFn output too.
  */
-export function compactItems(items: unknown[]): unknown[] {
+export function compactItems(
+  items: unknown[],
+  compactFn?: (item: Record<string, unknown>) => Record<string, unknown>,
+): unknown[] {
   return items.map((item) => {
-    if (typeof item !== "object" || item === null) return item;
+    if (typeof item !== "object" || item === null || Array.isArray(item)) return item;
+    if (compactFn) return mergeOpenInHarness(compactFn(item as Record<string, unknown>));
     const full = item as Record<string, unknown>;
     const slim: Record<string, unknown> = {};
     for (const key of Object.keys(full)) {
@@ -71,12 +80,15 @@ export function compactItems(items: unknown[]): unknown[] {
       }
     }
 
-    // Merge deep link into name as markdown hyperlink, then drop the separate field
-    if (typeof slim.openInHarness === "string" && typeof slim.name === "string") {
-      slim.name = `[${slim.name}](${slim.openInHarness})`;
-      delete slim.openInHarness;
-    }
-
-    return slim;
+    return mergeOpenInHarness(slim);
   });
+}
+
+/** Merge deep link into name as markdown hyperlink, then drop the separate field. */
+function mergeOpenInHarness(slim: Record<string, unknown>): Record<string, unknown> {
+  if (typeof slim.openInHarness === "string" && typeof slim.name === "string") {
+    slim.name = `[${slim.name}](${slim.openInHarness})`;
+    delete slim.openInHarness;
+  }
+  return slim;
 }
