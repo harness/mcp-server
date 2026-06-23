@@ -6,6 +6,7 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { SCHEMAS } from "../data/schemas/index.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
+import { createLogger } from "../utils/logger.js";
 import { schemaOutputSchema } from "./output-schemas.js";
 import {
   createLiveSchemaFetcher,
@@ -16,6 +17,8 @@ import {
   type HarnessYamlScope,
 } from "./entity-schema/live.js";
 import type { JsonObject } from "./entity-schema/normalize.js";
+
+const log = createLogger("schema");
 
 const scopeSchema = z
   .enum(["account", "org", "project"])
@@ -85,6 +88,10 @@ function isSchemaNode(value: unknown): boolean {
  * definitions tree. Harness schemas nest reusable definitions under group
  * keys (e.g. EnvironmentV1 lives at stages.unified.EnvironmentV1), so a bare
  * name lookup must walk the tree. Returns the node plus its dotted path.
+ *
+ * A schema-node match (the value looks like a definition, per isSchemaNode)
+ * wins. Failing that, the first key-name match of any shape is returned so a
+ * bare wrapper definition still resolves rather than reporting "not found".
  */
 function findDefinitionByName(
   root: Record<string, unknown>,
@@ -92,22 +99,36 @@ function findDefinitionByName(
   maxDepth = 8,
 ): { node: unknown; path: string } | undefined {
   const stack: Array<{ node: unknown; path: string[] }> = [{ node: root, path: [] }];
+  let fallback: { node: unknown; path: string } | undefined;
+  let truncated = false;
   while (stack.length > 0) {
     const entry = stack.pop();
     if (!entry) continue;
     const { node, path } = entry;
-    if (path.length > maxDepth) continue;
+    // Cap traversal depth as a guard against pathological/cyclic structures.
+    // Record truncation so a too-deep definition surfaces a signal rather
+    // than a silent miss — current bundled schemas nest only ~3 levels.
+    if (path.length > maxDepth) {
+      truncated = true;
+      continue;
+    }
     if (!node || typeof node !== "object" || Array.isArray(node)) continue;
     for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
-      if (key === name && isSchemaNode(value)) {
-        return { node: value, path: [...path, key].join(".") };
+      if (key === name) {
+        if (isSchemaNode(value)) {
+          return { node: value, path: [...path, key].join(".") };
+        }
+        if (!fallback) fallback = { node: value, path: [...path, key].join(".") };
       }
       if (value && typeof value === "object") {
         stack.push({ node: value, path: [...path, key] });
       }
     }
   }
-  return undefined;
+  if (!fallback && truncated) {
+    log.warn(`Schema search for '${name}' hit max depth ${maxDepth} without a match; a deeper definition may exist`);
+  }
+  return fallback;
 }
 
 /**
