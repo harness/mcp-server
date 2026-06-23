@@ -754,6 +754,48 @@ describe("harness_create", () => {
     expect(callArgs.params.projectIdentifier).toBeUndefined();
   });
 
+  it("does not inject connector identifier on create even when connector_id is passed in params", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { connector: { identifier: "explicit_id" } } });
+    client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "connector", "create", {
+        connector_id: "dev_connector",
+        body: `
+connector:
+  name: Dev Connector
+  type: K8sCluster
+  spec:
+    credential:
+      type: InheritFromDelegate
+`,
+      }),
+    ).rejects.toThrow(/Missing required fields.*identifier/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("preserves an explicit connector identifier on create instead of substituting connector_id param", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { connector: { identifier: "explicit_id" } } });
+    client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "connector", "create", {
+      connector_id: "dev_connector",
+      body: {
+        connector: {
+          identifier: "explicit_id",
+          name: "Dev Connector",
+          type: "K8sCluster",
+          spec: { credential: { type: "InheritFromDelegate" } },
+        },
+      },
+    });
+
+    const callArgs = mockRequest.mock.calls[0]![0] as { body: { connector?: Record<string, unknown> } };
+    expect(callArgs.body.connector?.identifier).toBe("explicit_id");
+  });
+
   it("uses account scope from account-level File Store URLs during create", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "scripts" } });
@@ -905,6 +947,118 @@ describe("harness_update", () => {
       name: "Project One",
       identifier: "proj1",
     });
+  });
+
+  it("rejects raw YAML update bodies whose identifier conflicts with resource_id", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "prod_connector" } });
+    client = makeClient(mockRequest);
+    const connectorServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(connectorServer, registry, client);
+
+    const result = await connectorServer.call("harness_update", {
+      resource_type: "connector",
+      resource_id: "dev_connector",
+      body: `
+connector:
+  identifier: prod_connector
+  name: Prod Connector
+  type: K8sCluster
+  spec:
+    credential:
+      type: InheritFromDelegate
+`,
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("injects connector identifier into wrapped YAML update bodies when missing", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { connector: { identifier: "dev_connector" } } });
+    client = makeClient(mockRequest);
+    const connectorServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(connectorServer, registry, client);
+
+    const result = await connectorServer.call("harness_update", {
+      resource_type: "connector",
+      resource_id: "dev_connector",
+      body: `
+connector:
+  name: Dev Connector
+  type: K8sCluster
+  spec:
+    credential:
+      type: InheritFromDelegate
+`,
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { body: { connector?: Record<string, unknown> } };
+    expect(callArgs.body.connector).toMatchObject({
+      identifier: "dev_connector",
+      name: "Dev Connector",
+    });
+  });
+
+  it("injects service identifier into unwrapped YAML update bodies when missing", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "services" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { service: { identifier: "my_service" } } });
+    client = makeClient(mockRequest);
+    const serviceServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(serviceServer, registry, client);
+
+    const result = await serviceServer.call("harness_update", {
+      resource_type: "service",
+      resource_id: "my_service",
+      body: `
+service:
+  name: My Service
+  type: Kubernetes
+`,
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(callArgs.body).toMatchObject({
+      identifier: "my_service",
+      name: "My Service",
+      type: "Kubernetes",
+    });
+    expect(callArgs.body).not.toHaveProperty("service");
+  });
+
+  it("rejects environment update bodies whose identifier conflicts with resource_id", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "environments" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { environment: { identifier: "prod_env" } } });
+    client = makeClient(mockRequest);
+    const environmentServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(environmentServer, registry, client);
+
+    const result = await environmentServer.call("harness_update", {
+      resource_type: "environment",
+      resource_id: "dev_env",
+      body: `
+environment:
+  identifier: prod_env
+  name: Prod Environment
+  type: Production
+`,
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("uses account scope from account-level File Store URLs during update", async () => {

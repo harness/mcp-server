@@ -307,6 +307,28 @@ describe("HarnessClient", () => {
       expect(headers.has("x-api-key")).toBe(false);
     });
 
+    it("preserves caller-provided FME auth regardless of header casing", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({
+        HARNESS_API_KEY: "pat.internal.internal.dummy",
+        HARNESS_FME_API_KEY: undefined,
+      }));
+
+      await client.request({
+        path: "/internal/api/v2/workspaces",
+        product: "fme",
+        headers: {
+          authorization: "PlatformService service-jwt",
+          "X-Api-Key": "pat.internal.internal.dummy",
+        },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("PlatformService service-jwt");
+      expect(headers.has("x-api-key")).toBe(false);
+    });
+
     it("fails before sending placeholder credentials to Split.io", async () => {
       const client = new HarnessClient(makeConfig({
         HARNESS_API_KEY: "pat.internal.internal.dummy",
@@ -343,6 +365,35 @@ describe("HarnessClient", () => {
       const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
       expect(headers["x-api-key"]).toBe("pat.test-account.token.secret");
       expect(headers["Harness-Account"]).toBe("test-account");
+    });
+
+    it("preserves caller-provided non-FME auth regardless of header casing", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/ng/api/projects",
+        headers: { authorization: "Bearer session-token" },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("Bearer session-token");
+      expect(headers.has("x-api-key")).toBe(false);
+    });
+
+    it("does not inject x-api-key when caller already provided it with alternate casing", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/ng/api/projects",
+        headers: { "X-Api-Key": "caller-provided-key" },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("x-api-key")).toBe("caller-provided-key");
     });
 
     it("preserves explicit FME bearer auth instead of injecting configured placeholder token", async () => {

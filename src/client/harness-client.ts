@@ -26,6 +26,28 @@ function serializeRequestBody(body: unknown): string | undefined {
   return typeof body === "string" ? body : JSON.stringify(body);
 }
 
+function getHeaderValue(headers: Record<string, string>, headerName: string): string | undefined {
+  const normalizedName = headerName.toLowerCase();
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() === normalizedName) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function deleteHeaderValues(headers: Record<string, string>, headerName: string): string[] {
+  const normalizedName = headerName.toLowerCase();
+  const values: string[] = [];
+  for (const key of Object.keys(headers)) {
+    if (key.toLowerCase() === normalizedName) {
+      values.push(headers[key]!);
+      delete headers[key];
+    }
+  }
+  return values;
+}
+
 const BASE_BACKOFF_MS = 1000;
 
 /** Strip HTML tags, script/style contents, and collapse whitespace. */
@@ -178,11 +200,12 @@ export class HarnessClient {
     if (isFme) {
       // FME/Split Admin APIs expect Bearer auth. Drop x-api-key here so
       // placeholder credentials are never forwarded to api.split.io.
-      const headerApiKey = headers["x-api-key"]?.trim();
-      delete headers["x-api-key"];
+      const headerApiKey = deleteHeaderValues(headers, "x-api-key")
+        .map((value) => value.trim())
+        .find((value) => value && !isPlaceholderCredential(value));
 
       // Preserve caller-provided auth instead of layering fallback credentials on top.
-      if (headers["Authorization"]) return;
+      if (getHeaderValue(headers, "authorization")) return;
 
       const fmeApiKey = headerApiKey && !isPlaceholderCredential(headerApiKey)
         ? headerApiKey
@@ -209,10 +232,10 @@ export class HarnessClient {
     }
 
     // Preserve caller-provided auth instead of layering fallback credentials on top.
-    if (headers["Authorization"]) return;
+    if (getHeaderValue(headers, "authorization")) return;
 
     // Non-FME Harness services continue to use the standard API-key header.
-    if (!headers["x-api-key"]) {
+    if (!getHeaderValue(headers, "x-api-key")) {
       headers["x-api-key"] = this.token;
     }
   }
