@@ -784,6 +784,7 @@ export const dbopsToolset: ToolsetDefinition = {
       displayName: "Execute LLM Authoring Pipeline",
       description:
         "Consolidated endpoint for LLM change authoring Accept & Commit. " +
+        "Project-scoped — requires org_id and project_id (defaults to HARNESS_ORG/HARNESS_PROJECT). " +
         "Execute the LLM-authoring validate-and-preview pipeline and record a billable " +
         "ChangeAuthoringExecutionEvent atomically. Use harness_execute with action=run. " +
         "Two branches: " +
