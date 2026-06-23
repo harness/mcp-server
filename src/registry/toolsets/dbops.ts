@@ -786,8 +786,9 @@ export const dbopsToolset: ToolsetDefinition = {
         "Execute the LLM-authoring validate-and-preview pipeline and record a billable " +
         "ChangeAuthoringExecutionEvent atomically. Use harness_execute with action=run. " +
         "Two branches: " +
-        "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill from NG setting " +
-        "`dbops_llm_authoring_pipeline_id`) plus optional runtime_inputs; " +
+        "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill from the " +
+        "project-level NG setting `dbops_llm_authoring_pipeline_id` in Database DevOps settings) " +
+        "plus optional runtime_inputs; " +
         "(b) default-pipeline — pass use_default_pipeline=true and the server performs " +
         "get-or-create of the canonical default pipeline. " +
         "Exactly one of pipeline_identifier OR use_default_pipeline must be set. " +
@@ -882,8 +883,8 @@ export const dbopsToolset: ToolsetDefinition = {
                 type: "string",
                 required: false,
                 description:
-                  "Custom-pipeline branch — value of NG setting `dbops_llm_authoring_pipeline_id` " +
-                  "(alias: pipeline_identifier). Mutually exclusive with useDefaultPipeline.",
+                  "Custom-pipeline branch — project-level NG setting `dbops_llm_authoring_pipeline_id` " +
+                  "(Database DevOps settings; alias: pipeline_identifier). Mutually exclusive with useDefaultPipeline.",
               },
               {
                 name: "runtimeInputs",
