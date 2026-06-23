@@ -192,4 +192,32 @@ describe("pipeline-yaml resource", () => {
       ],
     });
   });
+
+  it("proceeds with discovery when resource is scopeOptional despite missing project", async () => {
+    const { registry, template } = setupResource({ HARNESS_PROJECT: undefined });
+    registry.getResource.mockReturnValue({ scope: "project", scopeOptional: true });
+    registry.dispatch.mockResolvedValue({ items: [] });
+
+    const result = await template.list();
+
+    expect(result).toEqual({ resources: [] });
+    expect(registry.dispatch).toHaveBeenCalled();
+  });
+
+  it("uses pipeline_v1 resource type when HARNESS_PIPELINE_VERSION is v1", async () => {
+    const { registry, template } = setupResource({ HARNESS_PIPELINE_VERSION: "1" });
+    registry.dispatch.mockResolvedValue({ items: [{ identifier: "v1-pipe", name: "V1 Pipe" }] });
+
+    const result = await template.list();
+
+    expect(registry.getResource).toHaveBeenCalledWith("pipeline_v1");
+    expect(registry.dispatch).toHaveBeenCalledWith(
+      expect.anything(),
+      "pipeline_v1",
+      "list",
+      expect.objectContaining({ size: 20, page: 0 }),
+      { tool: "pipeline_yaml_resource" },
+    );
+    expect(result.resources).toEqual([{ uri: "pipeline:///v1-pipe", name: "V1 Pipe" }]);
+  });
 });

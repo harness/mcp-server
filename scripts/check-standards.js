@@ -43,7 +43,7 @@ const FETCH_ALLOWLIST = new Set([
 ]);
 
 /** Toolset helper modules (not registered in ALL_TOOLSETS). */
-const TOOLSET_HELPER_FILES = new Set(["chaos-descriptions.ts"]);
+const TOOLSET_HELPER_FILES = new Set(["chaos-descriptions.ts", "scopes.ts"]);
 
 const errors = [];
 const warnings = [];
@@ -125,10 +125,20 @@ function checkToolsDirectory() {
   }
 }
 
+/** True when a line invokes the global fetch(), not a method named fetch. */
+function lineUsesGlobalFetch(line) {
+  if (!/\bfetch\s*\(/.test(line)) return false;
+  if (/\.\s*fetch\s*\(/.test(line)) return false;
+  if (/\basync\s+fetch\s*\(/.test(line)) return false;
+  return true;
+}
+
 function checkFetchAllowlist() {
   for (const file of walk(SRC, (p) => p.endsWith(".ts"))) {
     const content = read(file);
-    if (!/\bfetch\s*\(/.test(content)) continue;
+    const lines = content.split("\n");
+    const hasGlobalFetch = lines.some(lineUsesGlobalFetch);
+    if (!hasGlobalFetch) continue;
     const r = rel(file);
     if (!FETCH_ALLOWLIST.has(r)) {
       addError(`${r} — direct fetch() bypasses HarnessClient auth/retry/rate-limiting`);
@@ -150,6 +160,9 @@ function checkHarnessClientSingleton() {
 function checkToolsetForbiddenImports() {
   const toolsetsDir = join(SRC, "registry", "toolsets");
   for (const file of walk(toolsetsDir, (p) => p.endsWith(".ts"))) {
+    const base = file.slice(file.lastIndexOf("/") + 1);
+    if (TOOLSET_HELPER_FILES.has(base)) continue;
+
     const content = read(file);
     const r = rel(file);
     const forbidden = [
@@ -160,6 +173,15 @@ function checkToolsetForbiddenImports() {
     for (const { pattern, label } of forbidden) {
       if (pattern.test(content)) {
         addError(`${r} — toolsets must not import ${label}; keep toolset files pure data`);
+      }
+    }
+
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (/\bconsole\.(log|error|warn|info)\s*\(/.test(lines[i])) {
+        addError(
+          `${r}:${i + 1} — toolsets must not use console.*; use createLogger() on stderr if logging is needed`,
+        );
       }
     }
   }

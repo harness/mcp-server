@@ -147,11 +147,13 @@ export type ToolsetName =
   | "governance"
   | "freeze"
   | "overrides"
-  | "ai-evals"
   | "iacm"
   | "knowledge-graph"
   | "semantic-layer"
-  | "ansible";
+  | "ansible"
+  | "ai-evals"
+  | "incidents"
+  | "deploys";
 
 export type ProductName = "harness" | "fme";
 
@@ -387,6 +389,15 @@ export interface ResourceDefinition {
   identifierFields: string[];
   /** Additional filter fields for list operations */
   listFilterFields?: FilterFieldSpec[];
+  /**
+   * Optional per-resource compaction override for list items. When set,
+   * harness_list applies this instead of the generic key-name whitelist
+   * (utils/compact.ts) to each item in compact mode. Use when a resource's
+   * useful fields aren't expressible as a flat key whitelist — e.g. fields
+   * that must be derived (deploy `services` from `buildVersions`) or truncated
+   * (deploy `summary` to its first line). Returns the slimmed item.
+   */
+  compactItem?: (item: Record<string, unknown>) => Record<string, unknown>;
   /** Harness UI deep-link URL template */
   deepLinkTemplate?: string;
   /** Troubleshooting guidance for LLMs. Describes how to diagnose issues with this resource type. */

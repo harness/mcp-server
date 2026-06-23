@@ -395,6 +395,46 @@ describe("HarnessClient", () => {
       expect(headers["Harness-Account"]).toBe("resolved-account");
     });
 
+    it.each([
+      "/query-service/grpc/io.harness.platform.query.service.api.v1.QueryServiceGrpc/getGrammar",
+      "/schema-service/grpc/io.harness.platform.schema.service.api.v1.SchemaServiceGrpc/getType",
+      "/config-service/grpc/io.harness.platform.config.service.api.v1.ConfigServiceGrpc/getConfig",
+    ])("sets x-tenant-id for gRPC proxy paths via request(): %s", async (path) => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ method: "POST", path });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["x-tenant-id"]).toBe("test-account");
+      expect(headers["Harness-Account"]).toBe("test-account");
+    });
+
+    it.each([
+      "/query-service/grpc/io.harness.platform.query.service.api.v1.QueryServiceGrpc/executeQuery",
+      "/schema-service/grpc/io.harness.platform.schema.service.api.v1.SchemaServiceGrpc/getType",
+      "/config-service/grpc/io.harness.platform.config.service.api.v1.ConfigServiceGrpc/getConfig",
+    ])("sets x-tenant-id for gRPC proxy paths via requestStream(): %s", async (path) => {
+      fetchSpy.mockResolvedValue(new Response("ok", { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+      client.setAccountIdResolver(() => "resolved-tenant");
+
+      await client.requestStream({ method: "POST", path });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["x-tenant-id"]).toBe("resolved-tenant");
+    });
+
+    it("omits x-tenant-id for non-gRPC-proxy paths", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ path: "/ng/api/projects" });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["x-tenant-id"]).toBeUndefined();
+    });
+
     it("sets Content-Type to application/json for object body", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());
@@ -455,6 +495,59 @@ describe("HarnessClient", () => {
         expect(e.harnessCode).toBe("INVALID");
         expect(e.correlationId).toBe("corr-1");
       }
+    });
+
+    it.each([
+      {
+        path: "/chaos/manager/api/rest/v2/experiment",
+        description: "Probe identifier already exists in this chaos hub",
+      },
+      {
+        path: "/loadTest/manager/api/v1/load-tests",
+        description: "Load test name must be unique within the project",
+      },
+    ])("appends API description to error message for $path", async ({ path, description }) => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({ message: "Request failed", description }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path })).rejects.toMatchObject({
+        message: `Request failed — ${description}`,
+        statusCode: 400,
+      });
+    });
+
+    it("does not append description field for non-chaos/loadTest paths", async () => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({ message: "Request failed", description: "ignored detail" }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path: "/ng/api/projects" })).rejects.toMatchObject({
+        message: "Request failed",
+        statusCode: 400,
+      });
+    });
+
+    it("appends chaos description on requestStream errors", async () => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({
+          message: "Experiment validation failed",
+          description: "Target namespace is required",
+        }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(
+        client.requestStream({ method: "POST", path: "/chaos/manager/api/rest/v2/experiment" }),
+      ).rejects.toMatchObject({
+        message: "Experiment validation failed — Target namespace is required",
+        statusCode: 400,
+      });
     });
 
     it("throws HarnessApiError with raw body on non-JSON error", async () => {

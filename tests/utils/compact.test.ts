@@ -103,4 +103,41 @@ describe("compactItems", () => {
   it("handles empty array", () => {
     expect(compactItems([])).toEqual([]);
   });
+
+  it("uses compactFn when provided instead of the generic whitelist", () => {
+    const compactFn = (item: Record<string, unknown>) => ({
+      id: item.id,
+      services: Array.isArray(item.buildVersions)
+        ? (item.buildVersions as Array<Record<string, unknown>>).map((bv) => ({
+            service: bv.service,
+            version: bv.version,
+          }))
+        : undefined,
+    });
+    const items = [{
+      id: "DEPL-1",
+      title: "",
+      status: null,
+      buildVersions: [{ service: "api", version: "1.0.0", commitSha: "abc" }],
+      yaml: "should-not-appear",
+    }];
+    const result = compactItems(items, compactFn) as Record<string, unknown>[];
+    expect(result[0]).toEqual({
+      id: "DEPL-1",
+      services: [{ service: "api", version: "1.0.0" }],
+    });
+    expect(result[0]).not.toHaveProperty("title");
+    expect(result[0]).not.toHaveProperty("yaml");
+  });
+
+  it("merges openInHarness into name when compactFn output includes both", () => {
+    const compactFn = (item: Record<string, unknown>) => ({
+      name: item.name as string,
+      openInHarness: item.openInHarness as string,
+    });
+    const items = [{ name: "Incident 1", openInHarness: "https://app.harness.io/inc/1" }];
+    const result = compactItems(items, compactFn) as Record<string, unknown>[];
+    expect(result[0].name).toBe("[Incident 1](https://app.harness.io/inc/1)");
+    expect(result[0]).not.toHaveProperty("openInHarness");
+  });
 });

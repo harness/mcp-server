@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 213 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 218 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,8 +8,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 213 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 36 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
+- **11 tools, 218 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 38 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **32 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -840,6 +840,62 @@ Use this sequence to reduce execution-time input errors:
 
 If required fields are unresolved, the tool returns a pre-flight error with expected keys and suggested input sets. You can inspect available shorthand mappings with `harness_describe(resource_type="pipeline")` (`executeActions.run.inputShorthands`).
 
+### Dynamic Pipeline Execution
+
+Use `pipeline_dynamic_execution.run` when an agent or external system generates the full v0 pipeline YAML at runtime and needs to run it against an existing Harness pipeline shell. This is not a replacement for normal `pipeline.run`: the saved v0 pipeline must already exist, account-level and pipeline-level **Allow Dynamic Execution** must be enabled, and the caller needs Edit plus Execute permissions on the pipeline.
+
+```json
+{
+  "resource_type": "pipeline_dynamic_execution",
+  "action": "run",
+  "resource_id": "deploy_app",
+  "body": {
+    "yaml": "pipeline:\n  identifier: deploy_app\n  name: Deploy App\n  stages: []"
+  },
+  "params": {
+    "module_type": "CD",
+    "notes": "agent-generated dynamic run",
+    "notify_only_user": true
+  }
+}
+```
+
+Constraints:
+
+- `body` must be an object with a `yaml` field. Raw string bodies are rejected by the public `harness_execute` schema.
+- `body.yaml` may be a YAML string or a JSON pipeline object; JSON is serialized to YAML before the request.
+- Runtime `<+input>` placeholders are not resolved by this API. Submit fully resolved YAML.
+- Input sets, selective stage execution, retry, and triggers are not supported by the dynamic execution endpoint.
+- The action is `high_write` and uses the normal confirmation/auto-approval path. The response projects the API envelope to `{ "execution_id": "...", "status": "..." }` and includes an `openInHarness` execution link when scope data is available.
+
+If Harness rejects the run as not enabled, check both the account-level Allow Dynamic Execution setting and the pipeline-level toggle under Pipeline -> Advanced Options -> Dynamic Execution Settings.
+
+### Execution Input Forensics
+
+Use `execution_inputs` after a run to inspect the merged input YAML that produced a specific execution. This is useful when a failure depends on input-set merging, Git-backed input set branches, or trigger/runtime values that are hard to reconstruct from the execution page alone.
+
+```json
+{
+  "resource_type": "execution_inputs",
+  "resource_id": "PLAN_EXECUTION_ID",
+  "params": {
+    "resolve_expressions": true,
+    "resolve_expressions_type": "RESOLVE_ALL_EXPRESSIONS"
+  }
+}
+```
+
+The get response is projected to:
+
+- `executionId` - the plan execution ID from `resource_id`.
+- `inputSetYaml` - merged runtime input YAML used for the run, or `null`.
+- `inputSetTemplateYaml` - input template at execution time, or `null`.
+- `resolvedYaml` - expression-resolved YAML when `resolve_expressions=true`, otherwise usually `null`.
+- `inputSetDetails` - contributing saved input sets as `{ identifier, name }` pairs.
+- `inputSetBranchName` - source branch for Git-backed input sets, or `null`.
+
+`execution_inputs` is get-only and read-risk. If `resolve_expressions` is omitted, the server omits the API query parameters and Harness uses its default `UNKNOWN` resolution mode.
+
 ### Pipeline Execute Wait Mode
 
 For `pipeline.run`, `pipeline.retry`, and `pipeline_v1.run`, pass `wait: true` to let the server poll until the execution reaches a terminal status. This keeps a pipeline launch and status check in one tool call instead of asking the client or LLM to run a polling loop.
@@ -1082,7 +1138,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-213 resource types organized across 36 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+218 resource types organized across 38 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1096,16 +1152,18 @@ Harness pipelines can be stored in three ways:
 ### Pipelines
 
 
-| Resource Type             | List | Get | Create | Update | Delete | Execute Actions     |
-| ------------------------- | ---- | --- | ------ | ------ | ------ | ------------------- |
-| `pipeline`                | x    | x   | x      | x      | x      | `run`, `retry`      |
-| `pipeline_v1` **(Alpha)** | x    | x   | x      | x      | x      | `run`               |
-| `execution`               | x    | x   |        |        |        | `interrupt`         |
-| `trigger`                 | x    | x   | x      | x      | x      |                     |
-| `pipeline_summary`        |      | x   |        |        |        |                     |
-| `input_set`               | x    | x   | x      | x      | x      |                     |
-| `runtime_input_template`  |      | x   |        |        |        |                     |
-| `approval_instance`       | x    |     |        |        |        | `approve`, `reject` |
+| Resource Type                  | List | Get | Create | Update | Delete | Execute Actions     |
+| ------------------------------ | ---- | --- | ------ | ------ | ------ | ------------------- |
+| `pipeline`                     | x    | x   | x      | x      | x      | `run`, `retry`      |
+| `pipeline_v1` **(Alpha)**      | x    | x   | x      | x      | x      | `run`               |
+| `pipeline_dynamic_execution`   |      |     |        |        |        | `run`               |
+| `execution`                    | x    | x   |        |        |        | `interrupt`         |
+| `execution_inputs`             |      | x   |        |        |        |                     |
+| `trigger`                      | x    | x   | x      | x      | x      |                     |
+| `pipeline_summary`             |      | x   |        |        |        |                     |
+| `input_set`                    | x    | x   | x      | x      | x      |                     |
+| `runtime_input_template`       |      | x   |        |        |        |                     |
+| `approval_instance`            | x    |     |        |        |        | `approve`, `reject` |
 
 
 Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_PIPELINE_VERSION=0` exposes `pipeline` and hides `pipeline_v1`; set `HARNESS_PIPELINE_VERSION=1` to expose `pipeline_v1` and hide `pipeline`. In HTTP mode, include `x-harness-pipeline-version: 0` or `1` on the `initialize` request to choose the version for that session.
@@ -1638,7 +1696,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, 36 of 37 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
+By default, 38 of 39 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 
@@ -1682,7 +1740,7 @@ Available toolset names:
 | Toolset                 | Resource Types                                                                                                                                                                                                                                                                                  |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `platform`              | organization, project                                                                                                                                                                                                                                                                           |
-| `pipelines`             | pipeline, pipeline_v1, execution, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                                                                                       |
+| `pipelines`             | pipeline, pipeline_v1, pipeline_dynamic_execution, execution, execution_inputs, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                                         |
 | `agents`                | agent, agent_run                                                                                                                                                                                                                                                                                |
 | `services`              | service                                                                                                                                                                                                                                                                                         |
 | `environments`          | environment                                                                                                                                                                                                                                                                                     |
@@ -1715,7 +1773,7 @@ Available toolset names:
 | `visualizations`        | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture                                                                                                                                                         |
 | `knowledge-graph`       | kg_queryable_type_summary, kg_grammar, hql_query                                                                                                                                                                                                                                                |
 | `semantic-layer`        | kg_type, kg_related_type                                                                                                                                                                                                                                                                        |
-| `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_model, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item |
+| `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item, eval_git_registration, online_eval |
 | `iacm`                  | iacm_workspace, iacm_resource, iacm_module, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                                                                 |
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
 
@@ -1735,8 +1793,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  36 Toolsets      |      (data files, not code)
-                |  213 Resource Types|
+                |  38 Toolsets      |      (data files, not code)
+                |  218 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
@@ -1917,14 +1975,14 @@ tests/
 
 ## Elicitation
 
-Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use [MCP elicitation](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/elicitation) to prompt the user for confirmation before making changes. This gives real human-in-the-loop approval — the user sees what's about to happen and accepts or declines.
+The write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use [MCP elicitation](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/elicitation) to prompt the user for confirmation when the action's risk requires it — `medium_write`, `high_write`, and `destructive` operations only. Low-risk creates / updates / reads (e.g. `pipeline.create`, `pipeline.update`, `hql_query.run`) proceed silently with no prompt. When a prompt is surfaced, the user sees what's about to happen and accepts or declines, giving real human-in-the-loop approval for the operations that actually mutate or run things.
 
 **How it works:**
 
-1. The LLM calls a write tool (e.g. `harness_create` with a pipeline body)
-2. The server sends an elicitation request to the client with a summary of the operation
-3. The user sees the details and clicks **Accept** or **Decline**
-4. If accepted, the operation proceeds. If declined, it's blocked and the LLM is told
+1. The LLM calls a write tool with `medium_write`+ risk (e.g. `harness_delete`, `harness_execute pipeline.run`). Low-risk creates / updates / reads do not surface a prompt.
+2. The server sends an elicitation request to the client with a summary of the operation and a `confirm` checkbox (default checked).
+3. The user sees the details and clicks **Accept** (with `confirm` checked) or **Decline / Cancel**.
+4. If accepted with `confirm: true`, the operation proceeds. If accepted with `confirm` unchecked, declined, or cancelled, it's blocked and the LLM is told (an explicit decline is **authoritative** and not bypassed by `confirm: true` on the tool call).
 
 **Client support:**
 
@@ -1941,15 +1999,16 @@ Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_exec
 Elicitation behavior varies by operation risk when client support is missing:
 
 
-| Risk Level                                    | Client supports elicitation | Behavior                                          |
-| --------------------------------------------- | --------------------------- | ------------------------------------------------- |
-| `read`, `low_write`                           | any                         | Proceed silently (no confirmation needed)         |
-| `medium_write`, `high_write`, `destructive`   | Yes                         | Prompt user — proceed on accept, block on decline |
-| `medium_write`, `high_write`, `destructive`   | No                          | **BLOCK** (return error)                          |
-| any (at or below `HARNESS_AUTO_APPROVE_RISK`) | any                         | Auto-approve without prompting                    |
+| Risk Level                                    | Client supports elicitation | `confirm: true` passed | Behavior                                          |
+| --------------------------------------------- | --------------------------- | ---------------------- | ------------------------------------------------- |
+| `read`, `low_write`                           | any                         | any                    | Proceed silently — no prompt is surfaced (`confirm` has no effect at this risk tier) |
+| `medium_write`, `high_write`, `destructive`   | Yes                         | any                    | Prompt user. Proceed only if user accepts **with** `confirm: true` (the schema's default). An explicit decline, cancel, or accept with `confirm: false` (user unchecked the box) is **authoritative** and is not bypassed by `confirm: true` on the tool call. An accept missing the `confirm` field is treated as the client failing to surface a usable prompt — recoverable by retrying with `confirm: true` |
+| `medium_write`, `high_write`, `destructive`   | No                          | No                     | **BLOCK** (return error with hint to retry with `confirm: true`) |
+| `medium_write`, `high_write`, `destructive`   | No                          | Yes                    | Proceed (explicit opt-in for non-interactive automation) |
+| any (at or below `HARNESS_AUTO_APPROVE_RISK`) | any                         | any                    | Auto-approve without prompting                    |
 
 
-If elicitation fails at runtime, operations at `medium_write` or above are blocked.
+If `elicitInput` fails at runtime (transport error, unsupported method) for a `medium_write`+ operation, the call is blocked unless the caller passes `confirm: true`. `confirm: true` is honored as a fallback when the client could not surface a prompt or returned a degenerate accept (`{action: "accept"}` without the confirm field), but it does **not** override an explicit decline/cancel from a client that completed the elicitation handshake.
 
 ### Autonomous Mode
 
@@ -2003,7 +2062,7 @@ HARNESS_AUTO_APPROVE_RISK=high_write
 ## Safety
 
 - **Secrets are never exposed.** The `secret` resource type returns metadata only (name, type, scope) — secret values are never included in any response.
-- **Write operations use elicitation when available.** `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` attempt MCP elicitation before proceeding (see [Elicitation](#elicitation)).
+- **Confirmation-requiring operations use elicitation when available.** When a write or execute action has `medium_write`, `high_write`, or `destructive` risk, `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` attempt MCP elicitation before proceeding (see [Elicitation](#elicitation)). Low-risk actions (`read`, `low_write` — e.g. `pipeline.create`, `pipeline.update`, `hql_query.run`) proceed silently with no prompt.
 - **Medium-risk and above fail closed.** If confirmation cannot be obtained for `medium_write`, `high_write`, or `destructive` operations, they are blocked instead of executing blindly. Override with `HARNESS_AUTO_APPROVE_RISK` for autonomous workflows.
 - **CORS restricted to same-origin.** The HTTP transport only allows same-origin requests, preventing CSRF attacks from malicious websites targeting the MCP server on localhost.
 - **HTTP rate limiting.** The HTTP transport enforces 60 requests per minute per IP to prevent request flooding.
@@ -2039,7 +2098,8 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | `wait: true` returned `_wait.error`                                              | The pipeline trigger succeeded, but server-side polling failed                                       | Recheck the `execution_id` with `harness_get(resource_type="execution", ...)` before deciding whether to rerun                        |
 | `wait: true` returned `execution_timed_out: true`                                | The execution did not reach a terminal status before `wait_timeout_seconds`                          | Use the returned `execution_id` to recheck status or diagnose the still-running execution                                             |
 | Execution logs are empty or blob downloads return 403                           | Harness-hosted log blob URLs require the configured Harness client/auth path, especially for internal or self-managed hosts | Keep `HARNESS_BASE_URL` pointed at the target Harness host and use `harness_get(resource_type="execution_log", ...)` or `harness_diagnose(..., include_logs=true)` rather than bypassing the MCP client |
-| `Operation declined by user`                                                     | User declined the elicitation confirmation dialog                                                    | The user chose not to proceed — verify the operation details and retry if intended                                                   |
+| `Operation declined by user` / `Operation cancelled by user`                     | User declined or cancelled the elicitation confirmation dialog — authoritative                       | Verify operation details with the user; `confirm: true` does **not** bypass an explicit decline. The user must accept the prompt   |
+| `Operation blocked: the client could not surface a usable confirmation prompt`   | Client lacks elicitation support, `elicitInput` failed, or returned a degenerate accept              | Retry with `confirm: true` for non-interactive automation, or use a client that supports elicitation                                |
 | `body.template_yaml (or body.yaml) is required` for template create/update       | Template APIs expect full YAML payload                                                               | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
 | `HARNESS_BASE_URL must use HTTPS` on startup                                     | `HARNESS_BASE_URL` is set to an HTTP URL                                                             | Use HTTPS, or set `HARNESS_ALLOW_HTTP=true` for local development                                                                    |
 

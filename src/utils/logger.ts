@@ -28,6 +28,11 @@ export interface Logger {
 /**
  * @deprecated Use `AuditEvent` from `../audit/types.js` instead.
  * Kept for backward compatibility with external consumers.
+ *
+ * The `outcome` union widened to include `"blocked"` for pre-dispatch
+ * elicitation blocks, matching `AuditOutcome` in `../audit/types.js`. This
+ * is a non-breaking, additive change — existing producers writing
+ * `"success"` / `"error"` continue to type-check.
  */
 export interface AuditEntry {
   operation: string;
@@ -36,7 +41,7 @@ export interface AuditEntry {
   action?: string;
   org_id?: string;
   project_id?: string;
-  outcome: "success" | "error";
+  outcome: "success" | "error" | "blocked";
   error?: string;
 }
 
@@ -57,7 +62,11 @@ export function logAudit(entry: AuditEntry): void {
   const { outcome, error, ...rest } = entry;
   const data: Record<string, unknown> = { ...rest, outcome };
   if (error) data.error = error;
-  if (outcome === "error") {
+  // `blocked` rows describe pre-dispatch elicitation blocks — neither a
+  // routine success nor an API failure, but operationally noteworthy.
+  // Route through warn alongside `error` so legacy consumers parsing
+  // stderr see them.
+  if (outcome === "error" || outcome === "blocked") {
     auditLogger.get().warn("audit", data);
   } else {
     auditLogger.get().info("audit", data);

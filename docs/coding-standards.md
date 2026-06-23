@@ -105,3 +105,23 @@ pnpm docs:check
 ```
 
 `pnpm standards:check` runs `scripts/check-standards.js` and fails CI on architectural violations.
+
+### Automated checks (`pnpm standards:check`)
+
+| Rule | Enforced |
+|------|----------|
+| No `console.log()` in `src/` | Yes |
+| `registerTool()` only in 11 `harness-*.ts` handlers | Yes |
+| No unexpected files under `src/tools/` | Yes |
+| `fetch()` only in allowlisted paths | Yes |
+| `HarnessClient` singleton in `src/index.ts` only | Yes |
+| Toolsets must not import `HarnessClient`, `McpServer`, or `Registry` | Yes |
+| Toolsets must not use `console.*` | Yes |
+| `ToolsetName` union ↔ toolset files ↔ `ALL_TOOLSETS` in sync | Yes |
+
+### Manual review (not yet automated)
+
+- Response extractors project stable shapes (avoid `passthrough` on real endpoints)
+- `identifierFields` and `deepLinkTemplate` on every resource
+- Write operations gated by `operationPolicy.risk` and `confirmation: true`
+- Zod `.describe()` on every tool input parameter

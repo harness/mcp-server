@@ -128,7 +128,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           if (result) {
             const r = result as { items?: unknown[]; total?: number; openInHarness?: string };
             if (r.items && r.items.length > 0) {
-              const items = args.compact !== false ? compactItems(r.items) : r.items;
+              const items = args.compact !== false ? compactItems(r.items, registry.getResource(rt).compactItem) : r.items;
               const matchCount = r.items.length;
               totalMatches += matchCount;
               entries.push({
