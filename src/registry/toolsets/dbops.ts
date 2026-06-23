@@ -783,16 +783,19 @@ export const dbopsToolset: ToolsetDefinition = {
       resourceType: "database_execute_llm_authoring_pipeline",
       displayName: "Execute LLM Authoring Pipeline",
       description:
+        "Consolidated endpoint for LLM change authoring Accept & Commit. " +
+        "Project-scoped — requires org_id and project_id (defaults to HARNESS_ORG/HARNESS_PROJECT). " +
         "Execute the LLM-authoring validate-and-preview pipeline and record a billable " +
         "ChangeAuthoringExecutionEvent atomically. Use harness_execute with action=run. " +
+        "Required for both branches: conversation_id, schema_id, instance_id, changeset. " +
         "Two branches: " +
-        "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill from NG setting " +
-        "`dbops_llm_authoring_pipeline_id`) plus optional runtime_inputs; " +
+        "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill from the " +
+        "project-level NG setting `dbops_llm_authoring_pipeline_id` in Database DevOps settings) " +
+        "plus optional runtime_inputs (reserved keys schemaId, instanceId, changeset are rejected); " +
         "(b) default-pipeline — pass use_default_pipeline=true and the server performs " +
         "get-or-create of the canonical default pipeline. " +
         "Exactly one of pipeline_identifier OR use_default_pipeline must be set. " +
-        "Reserved runtime-input keys (schemaId, instanceId, changeset) are rejected by the server. " +
-        "Returns { executionId, pipelineIdentifier, openInHarness }. " +
+        "Both branches return { executionId, pipelineIdentifier, openInHarness }. " +
         "The chat-side polling block in the dbops_changeset skill is dead code — " +
         "show the user the openInHarness link and let the existing changeauthoring " +
         "billing job reconcile execution status server-side.",
@@ -809,14 +812,12 @@ export const dbopsToolset: ToolsetDefinition = {
           skipScopeBodyInjection: true,
           bodyBuilder: (input: Record<string, unknown>) => {
             const src = ((input.body ?? input) as Record<string, unknown>) ?? {};
-            // Required fields: accept either snake_case or camelCase from the caller.
             const body: Record<string, unknown> = {
               conversationId: src.conversationId ?? src.conversation_id,
               schemaId: src.schemaId ?? src.schema_id,
               instanceId: src.instanceId ?? src.instance_id,
               changeset: src.changeset,
             };
-            // Branch fields: forward only the populated branch.
             const useDefault = (src.useDefaultPipeline ?? src.use_default_pipeline) as
               | boolean
               | undefined;
@@ -882,8 +883,8 @@ export const dbopsToolset: ToolsetDefinition = {
                 type: "string",
                 required: false,
                 description:
-                  "Custom-pipeline branch — value of NG setting `dbops_llm_authoring_pipeline_id` " +
-                  "(alias: pipeline_identifier). Mutually exclusive with useDefaultPipeline.",
+                  "Custom-pipeline branch — project-level NG setting `dbops_llm_authoring_pipeline_id` " +
+                  "(Database DevOps settings; alias: pipeline_identifier). Mutually exclusive with useDefaultPipeline.",
               },
               {
                 name: "runtimeInputs",
