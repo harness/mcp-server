@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection (2026-06-23)
+- [ ] Baseline branch against `origin/main` and inspect recent commits/diff
+- [ ] Identify behavioral changes with high-severity blast radius
+- [ ] Trace any candidate bug through caller and downstream paths
+- [ ] If a concrete critical trigger exists, add failing regression coverage and minimal fix
+- [ ] Run focused verification, commit/push changes if any, and report outcome in Slack
+
+### Plan
+- Follow the review-and-ship/systematic-debugging workflow: gather branch context first, then investigate only concrete high-impact candidates.
+- Prioritize changes that could cause writes to target the wrong resource, leak secrets, crash/OOM the MCP server, bypass read-only/confirmation policy, or silently truncate/drop user input.
+- Do not open a PR unless there is a reproducible critical scenario and a narrow validated fix.
+
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap
