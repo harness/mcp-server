@@ -52,15 +52,14 @@ function rel(filePath) {
   return relative(ROOT, filePath).replace(/\\/g, "/");
 }
 
-function walk(dir, predicate = () => true) {
+function walk(dir, fileFilter = () => true) {
   const results = [];
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
-    if (!predicate(full)) continue;
     const st = statSync(full);
     if (st.isDirectory()) {
-      results.push(...walk(full, predicate));
-    } else if (st.isFile()) {
+      results.push(...walk(full, fileFilter));
+    } else if (st.isFile() && fileFilter(full)) {
       results.push(full);
     }
   }
@@ -125,10 +124,21 @@ function checkToolsDirectory() {
   }
 }
 
+/** True when a line invokes global fetch(), not a method named fetch. */
+function lineUsesGlobalFetch(line) {
+  const trimmed = line.trimStart();
+  if (/^(?:async\s+)?fetch\s*\(/.test(trimmed)) return false;
+  return /(?<!\.)fetch\s*\(/.test(line);
+}
+
+function fileUsesGlobalFetch(content) {
+  return content.split("\n").some(lineUsesGlobalFetch);
+}
+
 function checkFetchAllowlist() {
   for (const file of walk(SRC, (p) => p.endsWith(".ts"))) {
     const content = read(file);
-    if (!/\bfetch\s*\(/.test(content)) continue;
+    if (!fileUsesGlobalFetch(content)) continue;
     const r = rel(file);
     if (!FETCH_ALLOWLIST.has(r)) {
       addError(`${r} — direct fetch() bypasses HarnessClient auth/retry/rate-limiting`);
