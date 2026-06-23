@@ -72,12 +72,22 @@ export function requiresConfirmation(risk: RiskLevel): boolean {
 // ---------------------------------------------------------------------------
 // Minimal interfaces for PreflightContext (avoids circular imports).
 // The concrete HarnessClient and Registry satisfy these structurally.
-// Preflight hooks that need concrete-only methods (e.g. getCurrentUserId)
-// can narrow via `(client as unknown as HarnessClient)`.
 // ---------------------------------------------------------------------------
+
+/** Subset of HarnessClient.request() options used by preflight hooks. */
+export interface HarnessClientRequestOptions {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+  params?: Record<string, string | number | boolean | string[] | undefined>;
+  body?: unknown;
+  headers?: Record<string, string>;
+  product?: "harness" | "fme";
+}
 
 export interface HarnessClientInterface {
   readonly account: string;
+  getCurrentUserId(): Promise<string>;
+  request<T>(options: HarnessClientRequestOptions): Promise<T>;
 }
 
 export interface RegistryDispatchInterface {
@@ -94,8 +104,7 @@ export interface RegistryDispatchInterface {
 /**
  * Context passed to EndpointSpec.preflight hooks. Uses structural interfaces
  * so this module does not import HarnessClient/Registry (which would create a
- * cycle). Hooks that need concrete-only methods can narrow:
- *   `const hc = client as unknown as HarnessClient;`
+ * cycle).
  */
 export interface PreflightContext {
   client: HarnessClientInterface;
@@ -141,6 +150,8 @@ export type ToolsetName =
   | "iacm"
   | "ansible"
   | "ai-evals"
+  | "knowledge-graph"
+  | "semantic-layer"
   | "incidents"
   | "deploys";
 

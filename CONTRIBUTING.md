@@ -28,7 +28,12 @@ pnpm docs:generate  # Refresh generated README counts from the built registry
 pnpm docs:check     # Verify README counts and clone instructions are current
 pnpm sync-schemas   # Refresh checked-in JSON Schemas for harness_schema
 pnpm check-schema-coverage # Verify schema examples cover registered schemas
+pnpm standards:check  # Architecture/coding-standards guardrails
 ```
+
+## Contributing
+
+See [docs/coding-standards.md](docs/coding-standards.md) for the architecture rules enforced by `pnpm standards:check`.
 
 ## Project Structure
 
