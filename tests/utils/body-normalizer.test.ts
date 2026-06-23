@@ -139,4 +139,93 @@ connector:
       }),
     ).toThrow(/Conflicting identifiers/);
   });
+
+  const serviceUpdateBuilder = buildBodyNormalized({
+    unwrapKey: "service",
+    injectIdentifier: { inputField: "service_id", bodyField: "identifier" },
+  });
+
+  it("injects service_id into an unwrapped service body when identifier is missing", () => {
+    const result = serviceUpdateBuilder({
+      service_id: "my_service",
+      body: {
+        service: {
+          name: "My Service",
+          type: "Kubernetes",
+        },
+      },
+    }) as Record<string, unknown>;
+
+    expect(result).toMatchObject({
+      identifier: "my_service",
+      name: "My Service",
+      type: "Kubernetes",
+    });
+    expect(result).not.toHaveProperty("service");
+  });
+
+  it("rejects conflicting service identifiers between input and wrapped body", () => {
+    expect(() =>
+      serviceUpdateBuilder({
+        service_id: "dev_service",
+        body: {
+          service: {
+            identifier: "prod_service",
+            name: "Prod Service",
+            type: "Kubernetes",
+          },
+        },
+      }),
+    ).toThrow(/Conflicting identifiers/);
+  });
+
+  const environmentUpdateBuilder = buildBodyNormalized({
+    unwrapKey: "environment",
+    injectIdentifier: { inputField: "environment_id", bodyField: "identifier" },
+  });
+
+  it("injects environment_id from YAML bodies after unwrap", () => {
+    const result = environmentUpdateBuilder({
+      environment_id: "staging",
+      body: `
+environment:
+  name: Staging
+  type: PreProduction
+`,
+    }) as Record<string, unknown>;
+
+    expect(result).toMatchObject({
+      identifier: "staging",
+      name: "Staging",
+      type: "PreProduction",
+    });
+  });
+
+  const overrideUpdateBuilder = buildBodyNormalized({
+    injectIdentifier: { inputField: "override_id", bodyField: "identifier" },
+    injectFields: [
+      { from: "org_id", to: "orgIdentifier", onlyIfMissing: true },
+      { from: "project_id", to: "projectIdentifier", onlyIfMissing: true },
+    ],
+  });
+
+  it("injects override_id and scope fields into a flat update body", () => {
+    const result = overrideUpdateBuilder({
+      override_id: "svc_env_override",
+      org_id: "my-org",
+      project_id: "my-proj",
+      body: {
+        environmentRef: "staging",
+        type: "ENV_SERVICE_OVERRIDE",
+        spec: { variables: [] },
+      },
+    }) as Record<string, unknown>;
+
+    expect(result).toMatchObject({
+      identifier: "svc_env_override",
+      environmentRef: "staging",
+      orgIdentifier: "my-org",
+      projectIdentifier: "my-proj",
+    });
+  });
 });
