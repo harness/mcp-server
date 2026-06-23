@@ -927,4 +927,72 @@ describe("HarnessClient", () => {
       expect(url.searchParams.get("inputSetIdentifiers")).toBe("mcp_default_runtime_inputs");
     });
   });
+
+  describe("getCurrentUserId", () => {
+    it("resolves UUID from /ng/api/user/currentUser", async () => {
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify({ data: { uuid: "user-uuid-123" } }), { status: 200 }),
+      );
+      const client = new HarnessClient(makeConfig());
+
+      const uuid = await client.getCurrentUserId();
+
+      expect(uuid).toBe("user-uuid-123");
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.pathname).toBe("/ng/api/user/currentUser");
+    });
+
+    it("caches UUID for subsequent calls", async () => {
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify({ data: { uuid: "cached-uuid" } }), { status: 200 }),
+      );
+      const client = new HarnessClient(makeConfig());
+
+      await client.getCurrentUserId();
+      await client.getCurrentUserId();
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("dedupes concurrent getCurrentUserId calls", async () => {
+      let resolveFetch: (value: Response) => void = () => {};
+      const fetchPromise = new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+      fetchSpy.mockImplementation(() => fetchPromise);
+      const client = new HarnessClient(makeConfig());
+
+      const p1 = client.getCurrentUserId();
+      const p2 = client.getCurrentUserId();
+      resolveFetch(new Response(JSON.stringify({ data: { uuid: "deduped-uuid" } }), { status: 200 }));
+
+      const [uuid1, uuid2] = await Promise.all([p1, p2]);
+
+      expect(uuid1).toBe("deduped-uuid");
+      expect(uuid2).toBe("deduped-uuid");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws HarnessApiError when currentUser response has no uuid", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: {} }), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await expect(client.getCurrentUserId()).rejects.toThrow("Could not resolve current user UUID");
+    });
+
+    it("clears inflight promise on failure so a retry can succeed", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(new Response(JSON.stringify({ data: {} }), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ data: { uuid: "retry-uuid" } }), { status: 200 }),
+        );
+      const client = new HarnessClient(makeConfig());
+
+      await expect(client.getCurrentUserId()).rejects.toThrow(HarnessApiError);
+      const uuid = await client.getCurrentUserId();
+
+      expect(uuid).toBe("retry-uuid");
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+  });
 });
