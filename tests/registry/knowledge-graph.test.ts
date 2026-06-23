@@ -436,3 +436,233 @@ describe("hql_query run policy", () => {
     expect(mockRequest).toHaveBeenCalledTimes(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// hql_query validate — body aliases + response projection
+// ---------------------------------------------------------------------------
+
+describe("hql_query validate", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it.each([
+    ["query_string", "find view \"x\""],
+    ["queryString", "find entity \"service\""],
+    ["query", "find metric \"cpu\""],
+  ] as const)("accepts body.%s alias and posts query_string", async (field, query) => {
+    const mockRequest = vi.fn().mockResolvedValue({ is_valid: true, errors: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "hql_query", "validate", {
+      body: { [field]: query },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(call.body).toEqual({ query_string: query });
+  });
+
+  it("projects only is_valid and errors, dropping backend envelope fields", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      is_valid: false,
+      errors: [{ message: "syntax error near 'foo'" }],
+      trace_id: "internal-trace",
+      correlationId: "leak-me",
+      debug: { plan: "..." },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(client, "hql_query", "validate", {
+      body: { query_string: "bad query" },
+    });
+
+    expect(result).toEqual({
+      is_valid: false,
+      errors: [{ message: "syntax error near 'foo'" }],
+    });
+  });
+
+  it("defaults errors to an empty array when the API omits it", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ is_valid: true });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatchExecute(client, "hql_query", "validate", {
+      body: { query_string: "find view \"x\"" },
+    })) as { is_valid: boolean; errors: unknown[] };
+
+    expect(result).toEqual({ is_valid: true, errors: [] });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// kg_type list — schemaTypesExtract + schemaTypesBody
+// ---------------------------------------------------------------------------
+
+describe("kg_type list extractor", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("flattens multi-bucket API response into compact items with category labels", async () => {
+    const longDesc = "x".repeat(130);
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity_types: [
+        { id: "service", name: "Service", kind: "OBJECT_KIND_ENTITY", description: "short" },
+        { name: "no-id-should-skip" },
+      ],
+      view_types: [
+        { identifier: "v1", name: "View 1", kind: "OBJECT_KIND_VIEW", description: longDesc },
+      ],
+      data_model_types: [{ id: "dm1", name: "Data Model 1" }],
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "kg_type", "list", {})) as {
+      items: Record<string, unknown>[];
+      total: number;
+    };
+
+    expect(result.total).toBe(3);
+    expect(result.items).toEqual([
+      {
+        identifier: "service",
+        name: "Service",
+        category: "entity",
+        kind: "OBJECT_KIND_ENTITY",
+        description: "short",
+      },
+      {
+        identifier: "v1",
+        name: "View 1",
+        category: "view",
+        kind: "OBJECT_KIND_VIEW",
+        description: `${"x".repeat(120)}...`,
+      },
+      {
+        identifier: "dm1",
+        name: "Data Model 1",
+        category: "data_model",
+        kind: undefined,
+      },
+    ]);
+  });
+
+  it("maps object_kind filter to POST body filter.objectKind", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity_types: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "kg_type", "list", { object_kind: "OBJECT_KIND_VIEW" });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(call.body).toEqual({ filter: { objectKind: ["OBJECT_KIND_VIEW"] } });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// kg_type get — relationship_type dcs_enrichment branch (schemaTypeExtract)
+// ---------------------------------------------------------------------------
+
+describe("kg_type get dcs_enrichment", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("reattaches join metadata for annotated relationship types without leaking columnMappingMeta", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      type: {
+        relationship_type: {
+          id: "service_to_deployment",
+          name: "Service to Deployment",
+          annotations: [{ key: "dcs_enrichment" }],
+          join_predicates: [{ left: "id", right: "service_id", columnMappingMeta: { hidden: true } }],
+          left_reference: { id: "service", columnMappingMeta: { internal: true } },
+          right_reference: { id: "deployment" },
+          fields: [
+            { name: "deployed_at", columnMappingMeta: { x: 1 } },
+            { columnMappingMeta: { only: true } },
+          ],
+        },
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "kg_type", "get", {
+      type_id: "service_to_deployment",
+      kind: "OBJECT_KIND_RELATIONSHIP",
+    })) as Record<string, unknown>;
+
+    expect(result).toMatchObject({
+      id: "service_to_deployment",
+      name: "Service to Deployment",
+      dcs_enrichment: true,
+      join_predicates: [{ left: "id", right: "service_id" }],
+      left_reference: { id: "service" },
+      right_reference: { id: "deployment" },
+      enrichment_fields: [{ name: "deployed_at" }],
+    });
+    expect(result.join_predicates).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ columnMappingMeta: expect.anything() })]),
+    );
+    expect(result.enrichment_fields).toEqual([{ name: "deployed_at" }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// kg_queryable_type_summary — queryableTypesBody + list edge cases
+// ---------------------------------------------------------------------------
+
+describe("kg_queryable_type_summary list filters and projection", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("maps kinds and annotations filters into the POST body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ queryable_types: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "kg_queryable_type_summary", "list", {
+      kinds: "OBJECT_KIND_VIEW",
+      annotations: "dcs",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(call.body).toEqual({
+      filter: { kinds: ["OBJECT_KIND_VIEW"], annotations: ["dcs"] },
+    });
+  });
+
+  it("truncates long descriptions and surfaces annotation tags", async () => {
+    const longDesc = "a".repeat(100);
+    const mockRequest = vi.fn().mockResolvedValue({
+      queryable_types: [
+        {
+          type: {
+            view_type: {
+              id: "v1",
+              name: "View 1",
+              description: longDesc,
+              annotations: [{ key: "dcs" }, { key: "dashboard" }],
+            },
+          },
+          type_reference: { object_kind: "OBJECT_KIND_VIEW" },
+        },
+      ],
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "kg_queryable_type_summary", "list", {})) as {
+      items: Record<string, unknown>[];
+    };
+
+    expect(result.items[0]!.description).toBe(`${"a".repeat(80)}...`);
+    expect(result.items[0]!.tags).toEqual(["dcs", "dashboard"]);
+  });
+});
