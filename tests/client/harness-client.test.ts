@@ -329,6 +329,28 @@ describe("HarnessClient", () => {
       expect(headers.has("x-api-key")).toBe(false);
     });
 
+    it("uses the first non-placeholder x-api-key for FME bearer auth when duplicate headers are present", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({
+        HARNESS_API_KEY: "pat.internal.internal.dummy",
+        HARNESS_FME_API_KEY: undefined,
+      }));
+
+      await client.request({
+        path: "/internal/api/v2/workspaces",
+        product: "fme",
+        headers: {
+          "x-api-key": "dummy",
+          "X-Api-Key": "pat.real-account.real-token.secret",
+        },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("Bearer pat.real-account.real-token.secret");
+      expect(headers.has("x-api-key")).toBe(false);
+    });
+
     it("fails before sending placeholder credentials to Split.io", async () => {
       const client = new HarnessClient(makeConfig({
         HARNESS_API_KEY: "pat.internal.internal.dummy",

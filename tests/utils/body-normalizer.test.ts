@@ -140,6 +140,21 @@ connector:
     ).toThrow(/Conflicting identifiers/);
   });
 
+  it("treats boolean identifiers as matching their string form", () => {
+    const result = connectorUpdateBuilder({
+      connector_id: "true",
+      body: {
+        connector: {
+          identifier: true,
+          name: "Flag Connector",
+          type: "K8sCluster",
+        },
+      },
+    }) as Record<string, unknown>;
+
+    expect(result.connector).toMatchObject({ identifier: true });
+  });
+
   const serviceUpdateBuilder = buildBodyNormalized({
     unwrapKey: "service",
     injectIdentifier: { inputField: "service_id", bodyField: "identifier" },
