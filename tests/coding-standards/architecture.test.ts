@@ -223,6 +223,58 @@ describe("Coding standards — toolset purity", () => {
   });
 });
 
+describe("Coding standards — Zod input schemas", () => {
+  const handlerFiles = [...ALLOWED_REGISTER_TOOL_FILES];
+
+  it("places .describe() after .optional()/.default() in harness handler source", () => {
+    const violations: string[] = [];
+
+    for (const fileRel of handlerFiles) {
+      const lines = readFileSync(join(REPO_ROOT, fileRel), "utf8").split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]!;
+        if (!line.includes(".describe(")) continue;
+        const descIdx = line.indexOf(".describe(");
+        const optIdx = line.indexOf(".optional(");
+        const defIdx = line.indexOf(".default(");
+        if (optIdx !== -1 && optIdx > descIdx) {
+          violations.push(`${fileRel}:${i + 1} — .describe() before .optional()`);
+        }
+        if (defIdx !== -1 && defIdx > descIdx) {
+          violations.push(`${fileRel}:${i + 1} — .describe() before .default()`);
+        }
+      }
+    }
+
+    expect(violations, `Zod 4 describe ordering violations:\n${violations.join("\n")}`).toEqual([]);
+  });
+});
+
+describe("Coding standards — write confirmation", () => {
+  const writeHandlers = [
+    "src/tools/harness-create.ts",
+    "src/tools/harness-update.ts",
+    "src/tools/harness-delete.ts",
+    "src/tools/harness-execute.ts",
+  ];
+
+  it("write handlers expose confirm param and elicitation flow", () => {
+    const violations: string[] = [];
+
+    for (const fileRel of writeHandlers) {
+      const content = readFileSync(join(REPO_ROOT, fileRel), "utf8");
+      if (!/confirm:\s*z\./.test(content)) {
+        violations.push(`${fileRel} — missing confirm param`);
+      }
+      if (!/confirmViaElicitation/.test(content)) {
+        violations.push(`${fileRel} — missing confirmViaElicitation()`);
+      }
+    }
+
+    expect(violations, `Write handler confirmation gaps:\n${violations.join("\n")}`).toEqual([]);
+  });
+});
+
 describe("Coding standards — registry registration", () => {
   it("ALL_TOOLSET_NAMES matches the ToolsetName union exactly", () => {
     const fromRegistry = new Set(ALL_TOOLSET_NAMES);

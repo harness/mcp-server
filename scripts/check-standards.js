@@ -228,6 +228,52 @@ function checkToolsetRegistrySync() {
   }
 }
 
+function checkZodDescribeOrdering() {
+  const handlerFiles = [...ALLOWED_TOOL_HANDLERS].map((f) => join(SRC, "tools", f));
+  for (const file of handlerFiles) {
+    const lines = read(file).split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (!line.includes(".describe(")) continue;
+      const descIdx = line.indexOf(".describe(");
+      const optIdx = line.indexOf(".optional(");
+      const defIdx = line.indexOf(".default(");
+      if (optIdx !== -1 && optIdx > descIdx) {
+        addError(
+          `${rel(file)}:${i + 1} — .describe() must come after .optional() (Zod 4 drops descriptions on outer wrappers)`,
+        );
+      }
+      if (defIdx !== -1 && defIdx > descIdx) {
+        addError(
+          `${rel(file)}:${i + 1} — .describe() must come after .default() (Zod 4 drops descriptions on outer wrappers)`,
+        );
+      }
+    }
+  }
+}
+
+/** Write handlers must wire user confirmation via elicitation + confirm param. */
+const WRITE_HANDLER_FILES = [
+  "harness-create.ts",
+  "harness-update.ts",
+  "harness-delete.ts",
+  "harness-execute.ts",
+];
+
+function checkWriteHandlerConfirmation() {
+  for (const file of WRITE_HANDLER_FILES) {
+    const path = join(SRC, "tools", file);
+    const content = read(path);
+    const relPath = rel(path);
+    if (!/confirm:\s*z\./.test(content)) {
+      addError(`${relPath} — write handler must expose confirm param for confirmation gating`);
+    }
+    if (!/confirmViaElicitation/.test(content)) {
+      addError(`${relPath} — write handler must call confirmViaElicitation() before dispatch`);
+    }
+  }
+}
+
 function main() {
   checkNoConsoleLog();
   checkRegisterToolLocations();
@@ -236,6 +282,8 @@ function main() {
   checkHarnessClientSingleton();
   checkToolsetForbiddenImports();
   checkToolsetRegistrySync();
+  checkZodDescribeOrdering();
+  checkWriteHandlerConfirmation();
 
   if (warnings.length > 0) {
     console.warn("Standards warnings:");
