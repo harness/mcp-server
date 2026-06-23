@@ -1,16 +1,23 @@
 # Harness MCP Server — Task Tracking
 
 ## Critical Bug Inspection (2026-06-23)
-- [ ] Baseline branch against `origin/main` and inspect recent commits/diff
-- [ ] Identify behavioral changes with high-severity blast radius
-- [ ] Trace any candidate bug through caller and downstream paths
-- [ ] If a concrete critical trigger exists, add failing regression coverage and minimal fix
-- [ ] Run focused verification, commit/push changes if any, and report outcome in Slack
+- [x] Baseline branch against `origin/main` and inspect recent commits/diff
+- [x] Identify behavioral changes with high-severity blast radius
+- [x] Trace any candidate bug through caller and downstream paths
+- [x] If a concrete critical trigger exists, add failing regression coverage and minimal fix
+- [x] Run focused verification, commit/push changes if any, and report outcome in Slack
 
 ### Plan
 - Follow the review-and-ship/systematic-debugging workflow: gather branch context first, then investigate only concrete high-impact candidates.
 - Prioritize changes that could cause writes to target the wrong resource, leak secrets, crash/OOM the MCP server, bypass read-only/confirmation policy, or silently truncate/drop user input.
 - Do not open a PR unless there is a reproducible critical scenario and a narrow validated fix.
+
+### Review
+- Found a concrete crash/OOM regression in `harness_diagnose`: `return_download_url` is documented under untyped `options`, but the pipeline handler only accepted literal boolean `true`. Clients that sent `"true"` fell back to inline log fetching, defeating the URL-only path intended for large failed-pipeline logs.
+- Fixed `src/tools/diagnose/pipeline.ts` to parse `return_download_url` consistently with `harness_get`.
+- Added a focused regression in `tests/tools/diagnose/pipeline.test.ts` proving string `"true"` returns signed log download URLs instead of inline log text.
+- Also reviewed recent client/schema, Knowledge Graph/gRPC, incident/deploy/search, and Chaos changes. Other candidates did not meet the critical-confidence bar for this automation.
+- Verification passed: focused red/green test, full `tests/tools/diagnose/pipeline.test.ts`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, and `pnpm test` (86 files / 2127 tests).
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
