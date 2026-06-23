@@ -23,6 +23,7 @@ pnpm dev            # Watch mode (recompile on change)
 pnpm typecheck      # Type-check without emitting
 pnpm test           # Run all tests
 pnpm test:watch     # Run tests in watch mode
+pnpm standards:check # Enforce architectural coding standards (see docs/coding-standards.md)
 pnpm inspect        # Launch MCP Inspector for interactive testing
 pnpm docs:generate  # Refresh generated README counts from the built registry
 pnpm docs:check     # Verify README counts and clone instructions are current
@@ -272,8 +273,9 @@ console.log("anything");       // NEVER — breaks stdio transport
 1. One concern per PR — don't mix features with refactors
 2. `pnpm build` must pass with no errors
 3. `pnpm test` must pass — all tests green
-4. Add tests for new logic (custom extractors, bodyBuilders, utilities)
-5. Update README.md if adding user-visible features (new config vars, resource types, prompts)
+4. `pnpm standards:check` must pass — see [docs/coding-standards.md](docs/coding-standards.md)
+5. Add tests for new logic (custom extractors, bodyBuilders, utilities)
+6. Update README.md if adding user-visible features (new config vars, resource types, prompts)
 
 ## License
 

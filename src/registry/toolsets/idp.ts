@@ -1,6 +1,9 @@
 import type { PathBuilderConfig, ToolsetDefinition } from "../types.js";
 import { ngExtract, passthrough, v1ListExtract } from "../extractors.js";
 import { parse as parseYaml } from "yaml";
+import { createLogger } from "../../utils/logger.js";
+
+const log = createLogger("idp-toolset");
 
 const CONFIG_API_KEY = "__config_api_key";
 const PARAM_REF_RE = /^\s*\$\{\{\s*parameters\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}\s*$/;
@@ -492,10 +495,7 @@ export const idpToolset: ToolsetDefinition = {
             for (const ref of refs.apiKeySecretRefs) {
               if (loggedValues[ref] !== undefined) loggedValues[ref] = "[REDACTED]";
             }
-            console.error(
-              "[idp_workflow.execute] final request body",
-              JSON.stringify({ identifier, values: loggedValues }),
-            );
+            log.debug("idp_workflow.execute final request body", { identifier, values: loggedValues });
             return requestBody;
           },
           responseExtractor: ngExtract,
