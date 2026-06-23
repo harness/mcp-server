@@ -22,6 +22,7 @@ pnpm build          # Compile TypeScript
 pnpm dev            # Watch mode (recompile on change)
 pnpm typecheck      # Type-check without emitting
 pnpm test           # Run all tests
+pnpm standards:check # Architecture/coding-standards guardrails (see docs/coding-standards.md)
 pnpm test:watch     # Run tests in watch mode
 pnpm inspect        # Launch MCP Inspector for interactive testing
 pnpm docs:generate  # Refresh generated README counts from the built registry

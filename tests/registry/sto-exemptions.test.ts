@@ -273,3 +273,99 @@ describe("security_exemption list — registry dispatch", () => {
     expect(compacted[0]).toBeDefined();
   });
 });
+
+// ─── security_exemption create / approve / reject preflight ───────────────
+
+function getCreateSpec(): EndpointSpec {
+  const spec = getExemptionResource().operations.create;
+  if (!spec) throw new Error("security_exemption.create spec missing");
+  return spec;
+}
+
+function getApproveAction(): EndpointSpec {
+  const action = getExemptionResource().executeActions?.approve;
+  if (!action) throw new Error("security_exemption.approve action missing");
+  return action;
+}
+
+function getRejectAction(): EndpointSpec {
+  const action = getExemptionResource().executeActions?.reject;
+  if (!action) throw new Error("security_exemption.reject action missing");
+  return action;
+}
+
+function makeExemptionCtx(
+  input: Record<string, unknown>,
+  getCurrentUserId = vi.fn().mockResolvedValue("user-uuid"),
+): PreflightContext {
+  return {
+    client: { account: "test-account", getCurrentUserId } as unknown as PreflightContext["client"],
+    input,
+    registry: {
+      dispatch: async () => undefined,
+      getResource: () => getExemptionResource(),
+    },
+  };
+}
+
+describe("security_exemption.create preflight", () => {
+  it("rejects when required fields are missing", async () => {
+    const spec = getCreateSpec();
+    const input = { body: { issue_id: "i1" } };
+    await expect(spec.preflight!(makeExemptionCtx(input))).rejects.toThrow(/Missing required fields.*type.*reason/);
+  });
+
+  it("auto-derives requester_id from narrow StoPreflightClient", async () => {
+    const getCurrentUserId = vi.fn().mockResolvedValue("pat-user-99");
+    const input = { body: { issue_id: "i1", type: "Other", reason: "justified" } };
+    const spec = getCreateSpec();
+    await spec.preflight!(makeExemptionCtx(input, getCurrentUserId));
+
+    expect(getCurrentUserId).toHaveBeenCalledOnce();
+    expect((input.body as Record<string, unknown>).requester_id).toBe("pat-user-99");
+  });
+});
+
+describe("security_exemption approve preflight", () => {
+  it("requires body.scope", async () => {
+    const spec = getApproveAction();
+    const input = { exemption_id: "e1", body: {} };
+    await expect(spec.preflight!(makeExemptionCtx(input))).rejects.toThrow(/body\.scope is required/);
+  });
+
+  it("auto-derives approver_id when omitted", async () => {
+    const getCurrentUserId = vi.fn().mockResolvedValue("approver-uuid");
+    const input = { exemption_id: "e1", body: { scope: "CURRENT" } };
+    const spec = getApproveAction();
+    await spec.preflight!(makeExemptionCtx(input, getCurrentUserId));
+
+    expect(getCurrentUserId).toHaveBeenCalledOnce();
+    expect((input.body as Record<string, unknown>).approver_id).toBe("approver-uuid");
+  });
+
+  it("clears org_id and project_id for ACCOUNT scope elevation", async () => {
+    const input = {
+      exemption_id: "e1",
+      org_id: "my-org",
+      project_id: "my-proj",
+      body: { scope: "ACCOUNT" },
+    };
+    const spec = getApproveAction();
+    await spec.preflight!(makeExemptionCtx(input));
+
+    expect(input.org_id).toBe("");
+    expect(input.project_id).toBe("");
+  });
+});
+
+describe("security_exemption reject preflight", () => {
+  it("auto-derives approver_id when omitted", async () => {
+    const getCurrentUserId = vi.fn().mockResolvedValue("rejector-uuid");
+    const input = { exemption_id: "e1", body: {} };
+    const spec = getRejectAction();
+    await spec.preflight!(makeExemptionCtx(input, getCurrentUserId));
+
+    expect(getCurrentUserId).toHaveBeenCalledOnce();
+    expect((input.body as Record<string, unknown>).approver_id).toBe("rejector-uuid");
+  });
+});

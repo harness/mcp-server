@@ -253,6 +253,66 @@ describe("harness_schema nested static definition lookup", () => {
     expect(parsed.path).toBe("stages.unified.EnvironmentV1");
     expect(parsed.requested_path).toBe("EnvironmentV1");
   });
+
+  it("resolves a wrapper definition via recursive search when value is not a schema node", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, {
+      wrapper_demo: {
+        schema: {
+          definitions: {
+            wrapper_demo: {
+              groups: {
+                MyWrapper: {
+                  metadata: { version: 1 },
+                  inner: { type: "object", title: "InnerDef", properties: { x: { type: "string" } } },
+                },
+              },
+            },
+          },
+        },
+        description: "Wrapper fallback test schema",
+        group: "test",
+      },
+    });
+
+    const result = await server.call("harness_schema", {
+      resource_type: "wrapper_demo",
+      path: "MyWrapper",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("groups.MyWrapper");
+    expect(parsed.requested_path).toBe("MyWrapper");
+    expect((parsed.schema as Record<string, unknown>).metadata).toEqual({ version: 1 });
+  });
+
+  it("errors when a definition exceeds the recursive search depth cap", async () => {
+    let nested: Record<string, unknown> = {
+      DeepDef: { type: "object", title: "TooDeep", properties: {} },
+    };
+    for (let i = 9; i >= 0; i--) {
+      nested = { [`level${i}`]: nested };
+    }
+
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, {
+      deep_demo: {
+        schema: { definitions: { deep_demo: nested } },
+        description: "Depth cap test schema",
+        group: "test",
+      },
+    });
+
+    const result = await server.call("harness_schema", {
+      resource_type: "deep_demo",
+      path: "DeepDef",
+    });
+    const parsed = parseResult(result) as { error: string };
+
+    expect(result.isError).toBe(true);
+    expect(parsed.error).toMatch(/not found/);
+  });
 });
 
 describe("extractLiveSchema", () => {
