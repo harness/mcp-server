@@ -774,6 +774,29 @@ describe("database_execute_llm_authoring_pipeline run", () => {
     });
     expect(call.body).not.toHaveProperty("useDefaultPipeline");
   });
+
+  it("rejects when both branch fields are set", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "database_execute_llm_authoring_pipeline", "run", {
+        org_id: "default",
+        project_id: "test-project",
+        body: {
+          schema_id: "schema_1",
+          instance_id: "instance_1",
+          conversation_id: "conversation-1",
+          changeset: "databaseChangeLog: []",
+          use_default_pipeline: true,
+          pipeline_identifier: "my-pipe",
+        },
+      }),
+    ).rejects.toThrow(/mutually exclusive/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("database_snapshot_object get", () => {
