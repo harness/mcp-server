@@ -23,6 +23,7 @@ jobs:
       - run: node -e "import('@hono/node-server')"
       - run: pnpm build
       - run: pnpm test
+      - run: pnpm standards:check
       - run: pnpm typecheck
       - run: pnpm docs:check
 
