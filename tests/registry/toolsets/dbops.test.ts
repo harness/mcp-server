@@ -21,6 +21,12 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
     );
   });
 
+  it("description opens with Accept & Commit workflow framing", () => {
+    expect(executeResource.description).toMatch(
+      /^Consolidated endpoint for the LLM change authoring Accept & Commit flow\./,
+    );
+  });
+
   it("forwards the custom-pipeline branch verbatim", () => {
     const body = buildBody({
       schema_id: "s",
