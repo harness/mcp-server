@@ -14,11 +14,26 @@ if (!runAction) {
 const buildBody = runAction.bodyBuilder!;
 
 describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
+  it("exposes only harness_execute run (no legacy operations.create shim)", () => {
+    expect(executeResource.operations).toEqual({});
+    expect(executeResource.executeActions?.run).toBeDefined();
+    expect(runAction.path).not.toContain("execute-llm-authoring-pipeline");
+  });
+
   it("hits the v1 llm-authoring/execute-pipeline path", () => {
     expect(runAction.method).toBe("POST");
     expect(runAction.path).toBe(
       "/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
     );
+  });
+
+  it("uses low_write risk on run (user consents upstream)", () => {
+    // Intentionally below requiresConfirmation: Accept & Commit in the changeset
+    // skill already collects user consent; medium_write stacked a second approval card.
+    expect(runAction.operationPolicy).toEqual({
+      risk: "low_write",
+      retryPolicy: "do_not_retry",
+    });
   });
 
   it("forwards the custom-pipeline branch verbatim", () => {
@@ -90,5 +105,16 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
       instanceId: "i",
       pipelineIdentifier: "my-pipe",
     });
+  });
+
+  it("does not default branch fields when omitted", () => {
+    const body = buildBody({
+      schema_id: "s",
+      instance_id: "i",
+      conversation_id: "c",
+      changeset: "cs",
+    }) as Record<string, unknown>;
+    expect(body).not.toHaveProperty("useDefaultPipeline");
+    expect(body).not.toHaveProperty("pipelineIdentifier");
   });
 });
