@@ -72,12 +72,22 @@ export function requiresConfirmation(risk: RiskLevel): boolean {
 // ---------------------------------------------------------------------------
 // Minimal interfaces for PreflightContext (avoids circular imports).
 // The concrete HarnessClient and Registry satisfy these structurally.
-// Preflight hooks that need concrete-only methods (e.g. getCurrentUserId)
-// can narrow via `(client as unknown as HarnessClient)`.
+// Keep this surface small — toolset preflight hooks must not import HarnessClient.
 // ---------------------------------------------------------------------------
+
+/** Minimal request shape for preflight hooks (avoids importing client/types.ts). */
+export interface PreflightRequestOptions {
+  method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  path: string;
+  params?: Record<string, string | number | boolean | string[] | undefined>;
+  body?: unknown;
+  signal?: AbortSignal;
+}
 
 export interface HarnessClientInterface {
   readonly account: string;
+  getCurrentUserId(): Promise<string>;
+  request<T>(options: PreflightRequestOptions): Promise<T>;
 }
 
 export interface RegistryDispatchInterface {
@@ -94,8 +104,7 @@ export interface RegistryDispatchInterface {
 /**
  * Context passed to EndpointSpec.preflight hooks. Uses structural interfaces
  * so this module does not import HarnessClient/Registry (which would create a
- * cycle). Hooks that need concrete-only methods can narrow:
- *   `const hc = client as unknown as HarnessClient;`
+ * cycle). Preflight hooks should use HarnessClientInterface methods directly.
  */
 export interface PreflightContext {
   client: HarnessClientInterface;

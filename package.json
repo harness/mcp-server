@@ -25,6 +25,7 @@
     "docs:check": "node scripts/generate-docs.js --check",
     "test": "vitest run",
     "test:watch": "vitest",
+    "standards:check": "vitest run tests/coding-standards.test.ts",
     "docker:build": "docker build -t harness-mcp-server .",
     "docker:run": "docker run --rm -p 3000:3000 --env-file .env harness-mcp-server",
     "prepublishOnly": "pnpm build"
