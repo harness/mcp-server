@@ -805,6 +805,7 @@ export const dbopsToolset: ToolsetDefinition = {
       executeActions: {
         run: {
           method: "POST",
+          // Note: /v1/ prefix (not /dbops/v1/) — routed through db-devops-service, not the legacy dbops gateway.
           path: "/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
