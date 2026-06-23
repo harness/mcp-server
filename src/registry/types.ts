@@ -142,7 +142,9 @@ export type ToolsetName =
   | "ansible"
   | "ai-evals"
   | "incidents"
-  | "deploys";
+  | "deploys"
+  | "knowledge-graph"
+  | "semantic-layer";
 
 export type ProductName = "harness" | "fme";
 
