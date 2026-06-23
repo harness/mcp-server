@@ -805,6 +805,8 @@ export const dbopsToolset: ToolsetDefinition = {
       executeActions: {
         run: {
           method: "POST",
+          // /v1/ prefix is intentional — this endpoint is on the new db-devops-service
+          // routing, not the legacy /dbops/v1/ prefix used by older resources in this toolset.
           path: "/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
@@ -818,7 +820,7 @@ export const dbopsToolset: ToolsetDefinition = {
               instanceId: src.instanceId ?? src.instance_id,
               changeset: src.changeset,
             };
-            // Branch fields: forward only the populated branch.
+            // Branch fields: exactly one of useDefaultPipeline or pipelineIdentifier must be set.
             const useDefault = (src.useDefaultPipeline ?? src.use_default_pipeline) as
               | boolean
               | undefined;
@@ -828,6 +830,11 @@ export const dbopsToolset: ToolsetDefinition = {
             const runtimeInputs = (src.runtimeInputs ?? src.runtime_inputs) as
               | Record<string, unknown>
               | undefined;
+            if (useDefault === true && pipelineId) {
+              throw new Error(
+                "Exactly one of use_default_pipeline or pipeline_identifier must be set, not both.",
+              );
+            }
             if (useDefault === true) {
               body.useDefaultPipeline = true;
             } else if (pipelineId) {
