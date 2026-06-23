@@ -97,4 +97,19 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
       pipelineIdentifier: "my-pipe",
     });
   });
+
+  it("rejects when both use_default_pipeline and pipeline_identifier are set", () => {
+    expect(() =>
+      buildBody({
+        schema_id: "s",
+        instance_id: "i",
+        conversation_id: "c",
+        changeset: "cs",
+        use_default_pipeline: true,
+        pipeline_identifier: "my-pipe",
+      }),
+    ).toThrow(
+      "Exactly one of use_default_pipeline or pipeline_identifier must be set, not both.",
+    );
+  });
 });
