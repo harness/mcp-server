@@ -23,6 +23,7 @@
     "check-schema-coverage": "node scripts/check-schema-coverage.js",
     "docs:generate": "node scripts/generate-docs.js",
     "docs:check": "node scripts/generate-docs.js --check",
+    "standards:check": "node scripts/check-standards.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "docker:build": "docker build -t harness-mcp-server .",
