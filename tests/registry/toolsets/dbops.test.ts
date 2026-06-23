@@ -11,7 +11,12 @@ const runAction = executeResource.executeActions?.run;
 if (!runAction) {
   throw new Error("run execute action missing from database_execute_llm_authoring_pipeline resource");
 }
+const createOp = executeResource.operations?.create;
+if (!createOp) {
+  throw new Error("create operation missing from database_execute_llm_authoring_pipeline resource");
+}
 const buildBody = runAction.bodyBuilder!;
+const extractResponse = runAction.responseExtractor!;
 
 describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
   it("hits the v1 llm-authoring/execute-pipeline path", () => {
@@ -19,6 +24,7 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
     expect(runAction.path).toBe(
       "/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
     );
+    expect(createOp.path).toBe(runAction.path);
   });
 
   it("forwards the custom-pipeline branch verbatim", () => {
@@ -90,5 +96,40 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
       instanceId: "i",
       pipelineIdentifier: "my-pipe",
     });
+  });
+
+  it("accepts legacy schemaIdentifier/instanceIdentifier field names", () => {
+    const body = buildBody({
+      schemaIdentifier: "legacy-schema",
+      instanceIdentifier: "legacy-instance",
+      conversation_id: "c",
+      changeset: "cs",
+    }) as Record<string, unknown>;
+    expect(body).toMatchObject({
+      schemaId: "legacy-schema",
+      instanceId: "legacy-instance",
+      useDefaultPipeline: true,
+    });
+  });
+
+  it("defaults to useDefaultPipeline when no branch field is provided", () => {
+    const body = buildBody({
+      schema_id: "s",
+      instance_id: "i",
+      conversation_id: "c",
+      changeset: "cs",
+    }) as Record<string, unknown>;
+    expect(body.useDefaultPipeline).toBe(true);
+    expect(body).not.toHaveProperty("pipelineIdentifier");
+  });
+
+  it("adds pipelineExecutionId alias on the response", () => {
+    const out = extractResponse({
+      executionId: "exec-99",
+      pipelineIdentifier: "pipe-1",
+      openInHarness: "https://app.harness.io/...",
+    }) as Record<string, unknown>;
+    expect(out.pipelineExecutionId).toBe("exec-99");
+    expect(out.executionId).toBe("exec-99");
   });
 });

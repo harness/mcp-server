@@ -774,6 +774,48 @@ describe("database_execute_llm_authoring_pipeline run", () => {
     });
     expect(call.body).not.toHaveProperty("useDefaultPipeline");
   });
+
+  it("create (deprecated) maps legacy pre-DBOPS-2504 body to the new endpoint", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      executionId: "exec-legacy",
+      pipelineIdentifier: "dbops_default_pipeline",
+      openInHarness: "https://app.harness.io/...",
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(
+      client,
+      "database_execute_llm_authoring_pipeline",
+      "create",
+      {
+        org_id: "default",
+        project_id: "test-project",
+        body: {
+          schemaIdentifier: "schema_1",
+          instanceIdentifier: "instance_1",
+          conversation_id: "conversation-1",
+          changeset: "databaseChangeLog: []",
+        },
+      },
+    );
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.path).toBe(
+      "/v1/orgs/default/projects/test-project/llm-authoring/execute-pipeline",
+    );
+    expect(call.body).toEqual({
+      conversationId: "conversation-1",
+      schemaId: "schema_1",
+      instanceId: "instance_1",
+      changeset: "databaseChangeLog: []",
+      useDefaultPipeline: true,
+    });
+    expect(result).toMatchObject({
+      executionId: "exec-legacy",
+      pipelineExecutionId: "exec-legacy",
+    });
+  });
 });
 
 describe("database_snapshot_object get", () => {
