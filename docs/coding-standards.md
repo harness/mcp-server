@@ -134,6 +134,14 @@ All Zod schemas in tool handlers must:
 - Make raw `fetch()` calls from tool handlers or toolset definitions
 - Bypass the client's auth, retry, or rate-limiting
 
+**Documented exceptions** for global `fetch()` outside `HarnessClient` (enforced by `pnpm standards:check`):
+
+| File | Reason |
+|------|--------|
+| `src/client/harness-client.ts` | Core HTTP transport |
+| `src/utils/log-resolver.ts` | Pre-signed CDN/S3 blob URLs must not receive API auth headers (would invalidate signatures) |
+| `src/audit/sinks/webhook.ts` | Best-effort POST to a user-configured external audit webhook URL |
+
 ### 11. File Organization Rules
 
 | Change Type | Where It Goes |
@@ -247,7 +255,7 @@ Before every commit, verify:
 
 - [ ] **No new `server.registerTool()` calls** — only toolset definitions added/modified
 - [ ] **No `console.log()`** — only `createLogger()` for stderr output
-- [ ] **No direct `fetch()` calls** — all HTTP goes through `HarnessClient`
+- [ ] **No direct `fetch()` calls** — all Harness API HTTP goes through `HarnessClient` (exceptions: log blob CDN URLs, audit webhooks — see rule 10)
 - [ ] **No new `harness-*.ts` handler files** — the 11 handlers are fixed
 - [ ] **Toolset files are pure data** — no imports of `HarnessClient`, `McpServer`, or `Registry`
 - [ ] **All Zod params have `.describe()`** — LLMs need these for tool selection
