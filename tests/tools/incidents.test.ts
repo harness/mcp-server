@@ -221,6 +221,28 @@ describe("incident — harness_create", () => {
     expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents");
     expect(callArgs.body).toMatchObject({ templateShortId: "tmpl-1", title: "DB down" });
   });
+
+  it("projects create response and drops backend envelope fields", async () => {
+    mockRequest.mockResolvedValueOnce({
+      prettyId: "INC-99",
+      title: "DB down",
+      severity: { id: "1", label: "SEV1" },
+      __internalMeta: { trace: "abc" },
+      correlationId: "xyz",
+    });
+
+    const result = await server.call("harness_create", {
+      resource_type: "incident",
+      body: { templateShortId: "tmpl-1", title: "DB down" },
+    });
+    const data = parseResult(result) as Record<string, unknown>;
+
+    expect(data.prettyId).toBe("INC-99");
+    expect(data.title).toBe("DB down");
+    expect(data.severity).toEqual({ id: "1", label: "SEV1" });
+    expect(data).not.toHaveProperty("__internalMeta");
+    expect(data).not.toHaveProperty("correlationId");
+  });
 });
 
 describe("incident — harness_update", () => {
