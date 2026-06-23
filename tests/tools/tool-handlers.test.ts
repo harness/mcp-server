@@ -907,6 +907,34 @@ describe("harness_update", () => {
     });
   });
 
+  it("rejects raw YAML update bodies whose identifier conflicts with resource_id", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "prod_connector" } });
+    client = makeClient(mockRequest);
+    const connectorServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(connectorServer, registry, client);
+
+    const result = await connectorServer.call("harness_update", {
+      resource_type: "connector",
+      resource_id: "dev_connector",
+      body: `
+connector:
+  identifier: prod_connector
+  name: Prod Connector
+  type: K8sCluster
+  spec:
+    credential:
+      type: InheritFromDelegate
+`,
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("uses account scope from account-level File Store URLs during update", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "scripts" } });
