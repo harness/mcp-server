@@ -14,6 +14,15 @@ if (!runAction) {
 const buildBody = runAction.bodyBuilder!;
 
 describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
+  it("documents project scope and the project-level pipeline setting", () => {
+    expect(executeResource.description).toContain("Project-scoped");
+    expect(executeResource.description).toContain("org_id and project_id");
+    expect(executeResource.description).toContain("HARNESS_ORG/HARNESS_PROJECT");
+    expect(executeResource.description).toContain("project-level NG setting");
+    expect(executeResource.description).toContain("dbops_llm_authoring_pipeline_id");
+    expect(executeResource.scope).toBe("project");
+  });
+
   it("exposes only harness_execute run (no legacy operations.create shim)", () => {
     expect(executeResource.operations).toEqual({});
     expect(executeResource.executeActions?.run).toBeDefined();
