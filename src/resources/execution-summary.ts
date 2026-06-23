@@ -17,7 +17,22 @@ export function registerExecutionSummaryResource(server: McpServer, registry: Re
       mimeType: "application/json",
     },
     async (uri) => {
-      const executionDef = registry.getResource("execution");
+      let executionDef: ReturnType<Registry["getResource"]>;
+      try {
+        executionDef = registry.getResource("execution");
+      } catch (err) {
+        log.debug("Skipping execution summary: resource unavailable", {
+          error: String(err),
+        });
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify({ items: [], total: 0, skipped: "resource unavailable" }, null, 2),
+          }],
+        };
+      }
+
       if (!executionDef.scopeOptional && !hasRequiredDiscoveryScope(executionDef.scope, config)) {
         log.debug("Skipping execution summary: missing required scope", {
           scope: executionDef.scope,

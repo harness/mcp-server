@@ -110,6 +110,7 @@ export const connectorsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           bodyBuilder: buildBodyNormalized({
             wrapKey: "connector",
+            injectIdentifier: { inputField: "connector_id", bodyField: "identifier" },
             injectFields: [{ from: "type", to: "connectionType", onlyIfMissing: true }],
           }),
           bodyWrapperKey: "connector",
