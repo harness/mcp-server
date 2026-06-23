@@ -808,6 +808,8 @@ export const dbopsToolset: ToolsetDefinition = {
           method: "POST",
           path: "/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
+          // low_write (not medium_write): Accept & Commit already collects consent;
+          // medium_write would stack a redundant Harness chat confirmation gate.
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
           bodyBuilder: (input: Record<string, unknown>) => {
