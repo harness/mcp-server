@@ -255,6 +255,95 @@ describe("harness_schema nested static definition lookup", () => {
   });
 });
 
+// Wrapper definitions that are grouping objects (not schema nodes) must still
+// resolve by bare name when no deeper schema-node match exists.
+const WRAPPER_FALLBACK_SCHEMA = {
+  definitions: {
+    wrapper_demo: {
+      wrapper_demo: {
+        type: "object",
+        properties: { ref: { $ref: "#/definitions/wrapper_demo/GroupWrapper" } },
+      },
+      GroupWrapper: {
+        description: "grouping object only — not a schema node",
+        children: ["a", "b"],
+      },
+    },
+  },
+};
+
+// When both a wrapper and a nested schema node share a name, the schema node wins
+// during recursive search (direct top-level keys are returned as-is).
+const WRAPPER_VS_SCHEMA_SCHEMA = {
+  definitions: {
+    prefer_schema: {
+      prefer_schema: {
+        type: "object",
+        properties: { stage: { $ref: "#/definitions/prefer_schema/groups/StageRef" } },
+      },
+      groups: {
+        StageRef: {
+          nested: {
+            StageRef: {
+              type: "object",
+              title: "StageRef",
+              properties: { name: { type: "string" } },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+describe("harness_schema wrapper definition fallback", () => {
+  it("resolves a bare wrapper definition when it is not a schema node", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, {
+      wrapper_demo: {
+        schema: WRAPPER_FALLBACK_SCHEMA,
+        description: "Wrapper fallback test schema",
+        group: "test",
+      },
+    });
+
+    const result = await server.call("harness_schema", {
+      resource_type: "wrapper_demo",
+      path: "GroupWrapper",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("GroupWrapper");
+    expect(parsed.requested_path).toBeUndefined();
+    expect((parsed.schema as Record<string, unknown>).description).toBe(
+      "grouping object only — not a schema node",
+    );
+  });
+
+  it("prefers a nested schema-node match over a shallow wrapper with the same name", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, {
+      prefer_schema: {
+        schema: WRAPPER_VS_SCHEMA_SCHEMA,
+        description: "Wrapper vs schema node preference test",
+        group: "test",
+      },
+    });
+
+    const result = await server.call("harness_schema", {
+      resource_type: "prefer_schema",
+      path: "StageRef",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("groups.StageRef.nested.StageRef");
+    expect(parsed.requested_path).toBe("StageRef");
+    expect((parsed.schema as Record<string, unknown>).title).toBe("StageRef");
+  });
+});
+
 describe("extractLiveSchema", () => {
   it("extracts schema from Harness data envelope", () => {
     const schema = { type: "object", properties: { x: { type: "string" } } };
