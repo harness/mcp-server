@@ -58,6 +58,7 @@ export const idpToolset: ToolsetDefinition = {
       description: "Internal Developer Portal catalog entity. Supports list and get. Lists Harness IDP catalog metadata (services, APIs, user groups, resources, etc.) including identifier, scope, kind, ref type (INLINE/GIT), YAML, Git details, ownership, tags, lifecycle, scorecards, status, and group.",
       toolset: "idp",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["kind", "entity_id"],
       listFilterFields: [
         { name: "kind", description: "Comma-separated list of entity kinds to fetch. Defaults to 'component,api,resource'.", enum: ["api", "component", "environment", "environmentblueprint", "group", "resource", "user", "workflow"] },
@@ -120,8 +121,6 @@ export const idpToolset: ToolsetDefinition = {
             lifecycle: "lifecycle",
             tags: "tags",
             scopes: "scopes",
-            org_id: "orgIdentifier",
-            project_id: "projectIdentifier",
           },
           defaultQueryParams: {
             page: "0",
@@ -160,10 +159,6 @@ export const idpToolset: ToolsetDefinition = {
             if (projectId) input.project_id = projectId;
 
             return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(entityId)}`;
-          },
-          queryParams: {
-            org_id: "orgIdentifier",
-            project_id: "projectIdentifier",
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
@@ -354,6 +349,7 @@ export const idpToolset: ToolsetDefinition = {
         "Workflows are IDP catalog entities with kind=workflow — list here is a thin wrapper over /v1/entities that pins kind=workflow and exposes the same filter surface as idp_entity (search_term, scope_level, owned_by_me, favorites, owner, lifecycle, tags, sort).",
       toolset: "idp",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["workflow_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter workflows by name or keyword" },
@@ -411,8 +407,6 @@ export const idpToolset: ToolsetDefinition = {
             lifecycle: "lifecycle",
             tags: "tags",
             scopes: "scopes",
-            org_id: "orgIdentifier",
-            project_id: "projectIdentifier",
           },
           defaultQueryParams: {
             page: "0",
@@ -434,10 +428,6 @@ export const idpToolset: ToolsetDefinition = {
             const cfg = config as PathBuilderConfig & { HARNESS_API_KEY?: string };
             input[CONFIG_API_KEY] = cfg.HARNESS_API_KEY ?? "";
             return "/v2/workflows/execute";
-          },
-          queryParams: {
-            org_id: "orgIdentifier",
-            project_id: "projectIdentifier",
           },
           bodyBuilder: (input) => {
             const b = (input.body as Record<string, unknown> | undefined) ?? {};

@@ -137,6 +137,20 @@ describe("Coding standards — MCP tool handlers", () => {
     expect(violations, `Unexpected registerTool() usage:\n${violations.join("\n")}`).toEqual([]);
   });
 
+  it("does not use legacy server.tool() registrations", () => {
+    const violations: string[] = [];
+    const serverToolPattern = /\bserver\.tool\s*\(/;
+
+    for (const file of walkTsFiles(SRC)) {
+      const content = readFileSync(file, "utf8");
+      if (serverToolPattern.test(content)) {
+        violations.push(rel(file));
+      }
+    }
+
+    expect(violations, `server.tool() found in:\n${violations.join("\n")}`).toEqual([]);
+  });
+
   it("does not add new harness-*.ts handler files under src/tools/", () => {
     const toolsDir = join(SRC, "tools");
     const harnessFiles = readdirSync(toolsDir)
@@ -145,6 +159,39 @@ describe("Coding standards — MCP tool handlers", () => {
 
     const unexpected = harnessFiles.filter((f) => !ALLOWED_HARNESS_HANDLER_FILES.has(f));
     expect(unexpected, `New harness handler files found: ${unexpected.join(", ")}`).toEqual([]);
+  });
+});
+
+describe("Coding standards — singleton client and schema imports", () => {
+  it("instantiates HarnessClient only in src/index.ts", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (!content.includes("new HarnessClient")) continue;
+
+      const fileRel = rel(file);
+      if (fileRel !== "src/index.ts") {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(violations, `Unexpected HarnessClient instantiation in:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it('imports Zod from "zod/v4" (never bare "zod") in src/', () => {
+    const violations: string[] = [];
+    const bareZodImport = /from\s+["']zod["']/;
+
+    for (const file of walkTsFiles(SRC)) {
+      const content = readFileSync(file, "utf8");
+      if (bareZodImport.test(content)) {
+        violations.push(rel(file));
+      }
+    }
+
+    expect(violations, `Bare zod import found in:\n${violations.join("\n")}`).toEqual([]);
   });
 });
 

@@ -1610,7 +1610,7 @@ describe("Registry", () => {
       expect(call.params).toMatchObject({ orgIdentifier: "explicit-org" });
     });
 
-    it("does not inject org via fallback when injectOrgQueryFallback is not set (project list)", async () => {
+    it("injects org via fallback on project list when HARNESS_ORG is configured", async () => {
       const mockRequest = vi.fn().mockResolvedValue({
         data: { content: [], totalElements: 0 },
       });
@@ -1625,7 +1625,7 @@ describe("Registry", () => {
       });
 
       const call = mockRequest.mock.calls[0][0];
-      expect(call.params?.orgIdentifier).toBeUndefined();
+      expect(call.params?.orgIdentifier).toBe("cfg-default-org");
     });
   });
 

@@ -450,7 +450,7 @@ export const dbopsToolset: ToolsetDefinition = {
         "Use the connectors toolset to look up the connector when you need the exact engine type or JDBC details.",
       toolset: "dbops",
       scope: "project",
-      identifierFields: ["dbinstance_id"],
+      identifierFields: ["dbschema_id", "dbinstance_id"],
       listFilterFields: [
         {
           name: "dbschema_id",

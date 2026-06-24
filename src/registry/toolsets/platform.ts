@@ -242,8 +242,8 @@ export const platformToolset: ToolsetDefinition = {
           // NG: GET /ng/api/projects?accountIdentifier=&orgIdentifier=&… (accountIdentifier injected by client)
           path: "/ng/api/projects",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          injectOrgQueryFallback: true,
           queryParams: {
-            org_id: "orgIdentifier",
             has_module: "hasModule",
             identifiers: "identifiers",
             module_type: "moduleType",
@@ -263,7 +263,6 @@ export const platformToolset: ToolsetDefinition = {
           path: "/ng/api/projects/{project}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { project_id: "project" },
-          queryParams: { org_id: "orgIdentifier" },
           injectOrgQueryFallback: true,
           responseExtractor: unwrapProjectResponse,
           description: "Get project details",
@@ -273,7 +272,6 @@ export const platformToolset: ToolsetDefinition = {
           // NG: POST /ng/api/projects?orgIdentifier= — body { project: { orgIdentifier, identifier, name, ... } }
           path: "/ng/api/projects",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          queryParams: { org_id: "orgIdentifier" },
           injectOrgQueryFallback: true,
           bodyBuilder: buildProjectBody,
           responseExtractor: unwrapProjectResponse,
@@ -286,7 +284,6 @@ export const platformToolset: ToolsetDefinition = {
           path: "/ng/api/projects/{project}",
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { project_id: "project" },
-          queryParams: { org_id: "orgIdentifier" },
           injectOrgQueryFallback: true,
           bodyBuilder: buildProjectUpdateBody,
           responseExtractor: unwrapProjectResponse,
@@ -299,7 +296,6 @@ export const platformToolset: ToolsetDefinition = {
           path: "/ng/api/projects/{project}",
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { project_id: "project" },
-          queryParams: { org_id: "orgIdentifier" },
           injectOrgQueryFallback: true,
           responseExtractor: unwrapProjectResponse,
           description: "Delete a project",
