@@ -61,6 +61,24 @@ const FORBIDDEN_TOOLSET_IMPORTS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /from\s+["'][^"']*\/registry\/index/, reason: "Registry import" },
 ];
 
+/** Files allowed to call the global fetch() API (documented exceptions). */
+const ALLOWED_GLOBAL_FETCH_FILES = new Set([
+  "src/client/harness-client.ts",
+  "src/utils/log-resolver.ts",
+  "src/audit/sinks/webhook.ts",
+]);
+
+/** Only this file may instantiate HarnessClient in production src/. */
+const ALLOWED_HARNESS_CLIENT_FILES = new Set(["src/index.ts"]);
+
+/** Files that must import Zod via the v4 subpath — computed after walkTsFiles is defined. */
+function zodV4RequiredFiles(): string[] {
+  return [join(SRC, "config.ts"), ...walkTsFiles(join(SRC, "tools"))];
+}
+
+/** Global fetch API calls — not method names like `async fetch(` or interface `fetch(...)`. */
+const GLOBAL_FETCH_PATTERN = /\bawait fetch\s*\(|\breturn fetch\s*\(|[^.\w]fetch\s*\(\s*["'`]|^fetch\s*\(/m;
+
 function walkTsFiles(dir: string): string[] {
   const results: string[] = [];
   for (const entry of readdirSync(dir)) {
@@ -166,19 +184,57 @@ describe("Coding standards — logging and HTTP", () => {
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {
     const violations: string[] = [];
     const scanDirs = [join(SRC, "tools"), join(SRC, "registry/toolsets")];
-    // Global fetch API calls — not method names like `async fetch(` or interface `fetch(...)`.
-    const globalFetchPattern = /\bawait fetch\s*\(|\breturn fetch\s*\(|[^.\w]fetch\s*\(\s*["'`]|^fetch\s*\(/m;
 
     for (const dir of scanDirs) {
       for (const file of walkTsFiles(dir)) {
         const content = readFileSync(file, "utf8");
-        if (globalFetchPattern.test(content)) {
+        if (GLOBAL_FETCH_PATTERN.test(content)) {
           violations.push(rel(file));
         }
       }
     }
 
     expect(violations, `raw fetch() found in:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("only uses global fetch() in documented exception files", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (!GLOBAL_FETCH_PATTERN.test(content)) continue;
+
+      const fileRel = rel(file);
+      if (!ALLOWED_GLOBAL_FETCH_FILES.has(fileRel)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `Unexpected global fetch() usage (allowed: ${[...ALLOWED_GLOBAL_FETCH_FILES].join(", ")}):\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("instantiates HarnessClient only in src/index.ts", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (!/new\s+HarnessClient\s*\(/.test(content)) continue;
+
+      const fileRel = rel(file);
+      if (!ALLOWED_HARNESS_CLIENT_FILES.has(fileRel)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `HarnessClient must only be constructed in src/index.ts:\n${violations.join("\n")}`,
+    ).toEqual([]);
   });
 });
 
@@ -247,5 +303,52 @@ describe("Coding standards — registry registration", () => {
     for (const name of ALL_TOOLSET_NAMES) {
       expect(() => assign(name)).not.toThrow();
     }
+  });
+});
+
+describe("Coding standards — Zod and tool annotations", () => {
+  it("tool handlers and config import Zod from zod/v4 (not bare zod)", () => {
+    const violations: string[] = [];
+    const bareZodImport = /from\s+["']zod["']/;
+
+    for (const file of zodV4RequiredFiles()) {
+      const content = readFileSync(file, "utf8");
+      if (!content.includes("from \"zod") && !content.includes("from 'zod")) continue;
+
+      if (bareZodImport.test(content)) {
+        violations.push(`${rel(file)}: use import * as z from "zod/v4"`);
+      } else if (!/from\s+["']zod\/v4["']/.test(content)) {
+        violations.push(`${rel(file)}: missing zod/v4 import`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("does not use deprecated server.tool() — only registerTool()", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (/\bserver\.tool\s*\(/.test(content)) {
+        violations.push(rel(file));
+      }
+    }
+
+    expect(violations, `server.tool() found in:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("every harness handler explicitly sets openWorldHint in annotations", () => {
+    const violations: string[] = [];
+
+    for (const file of ALLOWED_REGISTER_TOOL_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!/openWorldHint\s*:/.test(content)) {
+        violations.push(`${file}: missing openWorldHint in annotations`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
   });
 });
