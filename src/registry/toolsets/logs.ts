@@ -1,4 +1,4 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, ParamsSchema } from "../types.js";
 import { passthrough } from "../extractors.js";
 
 export const logsToolset: ToolsetDefinition = {
@@ -13,9 +13,6 @@ export const logsToolset: ToolsetDefinition = {
       toolset: "logs",
       scope: "project",
       identifierFields: ["prefix"],
-      listFilterFields: [
-        { name: "execution_id", description: "Execution identifier — auto-builds log prefix from execution metadata" },
-      ],
       operations: {
         get: {
           method: "POST",
@@ -26,6 +23,15 @@ export const logsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Download and return execution log content by prefix, or return a signed download URL when return_download_url=true",
+          paramsSchema: {
+            fields: [
+              {
+                name: "execution_id",
+                required: false,
+                description: "Execution identifier — auto-builds log prefix from execution metadata",
+              },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },

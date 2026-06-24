@@ -1,4 +1,4 @@
-import type { ToolsetDefinition, BodyFieldSpec } from "../types.js";
+import type { ToolsetDefinition, BodyFieldSpec, ParamsSchema } from "../types.js";
 import { passthrough } from "../extractors.js";
 
 // ── Validation helpers for conditional nested fields ──────────────────────
@@ -751,13 +751,6 @@ export const dbopsToolset: ToolsetDefinition = {
       toolset: "dbops",
       scope: "project",
       identifierFields: ["dbschema_id"],
-      listFilterFields: [
-        {
-          name: "dbinstance_id",
-          description: "Instance identifier",
-          required: true,
-        },
-      ],
       operations: {
         get: {
           method: "GET",
@@ -774,6 +767,11 @@ export const dbopsToolset: ToolsetDefinition = {
             "Returns the product default unless overridden in project Database DevOps settings. " +
             "Returns PipelineStatusOutput: {status, response, metadata}. " +
             "The metadata map may contain 'pipelineIdentifier' or similar — inspect the response.",
+          paramsSchema: {
+            fields: [
+              { name: "dbinstance_id", required: true, description: "Instance identifier" },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },
