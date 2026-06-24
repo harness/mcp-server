@@ -71,6 +71,30 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
 /** Only this file may instantiate HarnessClient in production src/. */
 const ALLOWED_HARNESS_CLIENT_FILES = new Set(["src/index.ts"]);
 
+/** Handlers that call Harness APIs — must follow errorResult / toMcpError pattern. */
+const API_CALLING_HANDLER_FILES = new Set([
+  "src/tools/harness-list.ts",
+  "src/tools/harness-get.ts",
+  "src/tools/harness-create.ts",
+  "src/tools/harness-update.ts",
+  "src/tools/harness-delete.ts",
+  "src/tools/harness-execute.ts",
+  "src/tools/harness-diagnose.ts",
+  "src/tools/harness-search.ts",
+  "src/tools/harness-status.ts",
+]);
+
+/** Write/execute handlers — must gate mutations via elicitation + confirm param. */
+const WRITE_HANDLER_FILES = new Set([
+  "src/tools/harness-create.ts",
+  "src/tools/harness-update.ts",
+  "src/tools/harness-delete.ts",
+  "src/tools/harness-execute.ts",
+]);
+
+/** Matches inputSchema field definitions like `org_id: z.string()`. */
+const INPUT_SCHEMA_FIELD = /^\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*:\s*(?:z\.|\.\.\.)/;
+
 /** Files that must import Zod via the v4 subpath — computed after walkTsFiles is defined. */
 function zodV4RequiredFiles(): string[] {
   return [join(SRC, "config.ts"), ...walkTsFiles(join(SRC, "tools"))];
@@ -254,6 +278,9 @@ describe("Coding standards — toolset purity", () => {
           violations.push(`${fileRel}: ${reason}`);
         }
       }
+      if (/from\s+["'][^"']*\/tools\//.test(content)) {
+        violations.push(`${fileRel}: imports from src/tools/ (toolsets must stay pure data)`);
+      }
     }
 
     expect(violations, `Forbidden toolset imports:\n${violations.join("\n")}`).toEqual([]);
@@ -305,25 +332,63 @@ describe("Coding standards — Zod input schemas", () => {
   });
 });
 
-describe("Coding standards — HarnessClient singleton", () => {
-  it("instantiates HarnessClient only in src/index.ts", () => {
+describe("Coding standards — error handling and write safety", () => {
+  it("API-calling handlers import errorResult and toMcpError", () => {
     const violations: string[] = [];
-    const srcFiles = walkTsFiles(SRC);
 
-    for (const file of srcFiles) {
-      const content = readFileSync(file, "utf8");
-      if (!/\bnew\s+HarnessClient\s*\(/.test(content)) continue;
-
-      const fileRel = rel(file);
-      if (fileRel !== "src/index.ts") {
-        violations.push(fileRel);
+    for (const file of API_CALLING_HANDLER_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!content.includes("errorResult")) {
+        violations.push(`${file}: missing errorResult import/usage`);
+      }
+      if (!content.includes("toMcpError")) {
+        violations.push(`${file}: missing toMcpError import/usage`);
+      }
+      if (!/throw\s+toMcpError\s*\(/.test(content)) {
+        violations.push(`${file}: missing throw toMcpError(err) for unexpected failures`);
       }
     }
 
-    expect(
-      violations,
-      `Extra HarnessClient instantiations (singleton must live in src/index.ts only):\n${violations.join("\n")}`,
-    ).toEqual([]);
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("write handlers gate mutations via confirmViaElicitation and expose confirm param", () => {
+    const violations: string[] = [];
+
+    for (const file of WRITE_HANDLER_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!content.includes("confirmViaElicitation")) {
+        violations.push(`${file}: missing confirmViaElicitation`);
+      }
+      if (!/\bconfirm\s*:\s*z\.boolean/.test(content)) {
+        violations.push(`${file}: missing confirm boolean input param`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("tool handler inputSchema keys use snake_case", () => {
+    const violations: string[] = [];
+
+    for (const file of ALLOWED_REGISTER_TOOL_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      const inputSchemaStart = content.indexOf("inputSchema:");
+      if (inputSchemaStart < 0) continue;
+
+      const inputSection = content.slice(inputSchemaStart);
+      const lines = inputSection.split("\n").slice(0, 80);
+      for (const line of lines) {
+        const match = INPUT_SCHEMA_FIELD.exec(line);
+        if (!match) continue;
+        const fieldName = match[1]!;
+        if (/[A-Z]/.test(fieldName)) {
+          violations.push(`${file}: inputSchema field "${fieldName}" must use snake_case`);
+        }
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
   });
 });
 
