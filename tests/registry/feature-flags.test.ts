@@ -157,6 +157,45 @@ describe("FME request routing", () => {
   });
 });
 
+describe("FME execute action response projection", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it.each([
+    { action: "kill", response: true },
+    { action: "restore", response: false },
+    { action: "archive", response: true },
+  ])("wraps primitive $action API responses in { success, result }", async ({ action, response }) => {
+    const mockRequest = vi.fn().mockResolvedValue(response);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(client, "fme_feature_flag", action, {
+      workspace_id: "ws-1",
+      feature_flag_name: "my-flag",
+      environment_id: "env-prod",
+    });
+
+    expect(result).toMatchObject({ success: true, result: response });
+  });
+
+  it("passes through object responses unchanged", async () => {
+    const apiResponse = { id: "flag-1", status: "killed" };
+    const mockRequest = vi.fn().mockResolvedValue(apiResponse);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(client, "fme_feature_flag", "kill", {
+      workspace_id: "ws-1",
+      feature_flag_name: "my-flag",
+      environment_id: "env-prod",
+    });
+
+    expect(result).toEqual(apiResponse);
+  });
+});
+
 describe("fme_identity create", () => {
   let registry: Registry;
 

@@ -1736,6 +1736,59 @@ pipeline:
     expect(call.body).toEqual(expectedBody);
   });
 
+  it("maps resource_id to exemption_id for successful security_exemption approve", async () => {
+    const stoServer = makeMcpServer("accept");
+    const stoRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const stoRequest = vi.fn().mockResolvedValue({ status: "APPROVED" });
+    const stoClient = {
+      request: stoRequest,
+      account: "test-account",
+      getCurrentUserId: vi.fn().mockResolvedValue("user-uuid-1"),
+    } as unknown as HarnessClient;
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(stoServer, stoRegistry, stoClient);
+
+    const result = await stoServer.call("harness_execute", {
+      resource_type: "security_exemption",
+      action: "approve",
+      resource_id: "ex-1",
+      body: { scope: "CURRENT" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(stoRequest).toHaveBeenCalledOnce();
+    const call = stoRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: Record<string, unknown> };
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/sto/api/v2/exemptions/ex-1/approve");
+    expect(call.body).toMatchObject({ approverId: "user-uuid-1" });
+    expect(call.body).not.toHaveProperty("scope");
+  });
+
+  it("maps resource_id to feature_flag_name for successful FME kill and wraps primitive response", async () => {
+    const fmeServer = makeMcpServer("accept");
+    const fmeRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    const fmeRequest = vi.fn().mockResolvedValue(true);
+    const fmeClient = makeClient(fmeRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(fmeServer, fmeRegistry, fmeClient);
+
+    const result = await fmeServer.call("harness_execute", {
+      resource_type: "fme_feature_flag",
+      action: "kill",
+      resource_id: "my-flag",
+      params: { workspace_id: "ws-1", environment_id: "env-prod" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(fmeRequest).toHaveBeenCalledOnce();
+    const call = fmeRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/internal/api/v2/splits/ws/ws-1/my-flag/environments/env-prod/kill");
+
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data).toMatchObject({ success: true, result: true });
+  });
+
   it("materializes input_set_ids by GETting each input set then POSTing merged pipeline YAML", async () => {
     const inputSetYaml = `inputSet:\n  pipeline:\n    identifier: mat_pipe\n    variables:\n      - name: x\n        type: String\n        value: "1"\n`;
     mockRequest

@@ -163,17 +163,26 @@ describe("Toolset structural validation", () => {
       expect(missing, `Missing identifierFields array: ${missing.join(", ")}`).toEqual([]);
     });
 
-    it("most resource types with a get operation have at least one identifierField", () => {
+    it("get operations with empty identifierFields are filter/body-based (no resource path ID)", () => {
+      const scopeOnlyParams = new Set(["org_id", "project_id", "account_id", "org", "project"]);
       const issues: string[] = [];
+
       for (const type of allTypes) {
         const def = registry.getResource(type);
-        // Only check resources that have a get operation — they need an ID to fetch
-        if (def.operations.get && def.identifierFields.length === 0) {
-          issues.push(type);
+        if (!def.operations.get || def.identifierFields.length > 0) continue;
+
+        const getSpec = def.operations.get;
+        const pathParams = getSpec.pathParams ?? {};
+        const hasResourcePathId = Object.keys(pathParams).some((k) => !scopeOnlyParams.has(k));
+        if (hasResourcePathId) {
+          issues.push(`${type}: get has pathParams for resource IDs but identifierFields is empty`);
         }
       }
-      // Allow some dashboard/analytics types that use body-based get
-      expect(issues.length).toBeLessThan(allTypes.length * 0.3);
+
+      expect(
+        issues,
+        `Resources with get + empty identifierFields must be filter/body-based:\n${issues.join("\n")}`,
+      ).toEqual([]);
     });
 
     it("identifierFields referenced in get pathParams exist", () => {

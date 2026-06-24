@@ -6,6 +6,7 @@ import {
 } from "./normalize.js";
 import { buildLiveSchemaCacheKey } from "./cache-keys.js";
 import {
+  bundledSnapshotMatchesScope,
   bundledSnapshotsMatchAccount,
   getBundledEntitySchema,
   preloadBundledEntitySchemas,
@@ -340,7 +341,10 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
       // Validate scope/org/project before cache or bundled paths (same rules as live NG fetch).
       buildYamlSchemaParams(definition, accountId, params);
 
-      const cacheKey = buildLiveSchemaCacheKey(resourceType, accountId, scope);
+      const cacheKey = buildLiveSchemaCacheKey(resourceType, accountId, scope, {
+        orgId: params.orgId,
+        projectId: params.projectId,
+      });
 
       const cached = cache.get(cacheKey);
       if (cached) {
@@ -352,7 +356,11 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
 
       // Bundled-first when snapshots match the runtime account (see bundledSnapshotsMatchAccount).
       const bundled = getBundledEntitySchema(resourceType, scope);
-      if (bundled && bundledSnapshotsMatchAccount(accountId)) {
+      if (
+        bundled &&
+        bundledSnapshotsMatchAccount(accountId) &&
+        bundledSnapshotMatchesScope(resourceType, scope, params.orgId, params.projectId)
+      ) {
         logBundledServe(resourceType, scope, accountId, false);
         const entry: EntitySchemaCacheEntry = { schema: bundled, source: "bundled" };
         cache.set(cacheKey, entry);

@@ -279,4 +279,32 @@ describe("incident — harness_execute (close)", () => {
     expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42/close");
     expect(callArgs.body).toBeUndefined();
   });
+
+  it("projects a stable close response and drops backend envelope/meta fields", async () => {
+    mockRequest.mockResolvedValueOnce({
+      prettyId: "INC-42",
+      status: "CLOSED",
+      keyEvents: [{ timestamp: 1, status: "CLOSED", details: "resolved" }],
+      rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true }],
+      __internalMeta: { trace: "abc" },
+      correlationId: "xyz",
+    });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "close",
+      resource_id: "INC-42",
+    });
+    expect(result.isError).toBeUndefined();
+
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.prettyId).toBe("INC-42");
+    expect(data.status).toBe("CLOSED");
+    expect(data.keyEvents).toEqual([{ timestamp: 1, status: "CLOSED", details: "resolved" }]);
+    expect(data.rootCauseTheories).toEqual([
+      { message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true },
+    ]);
+    expect(data).not.toHaveProperty("__internalMeta");
+    expect(data).not.toHaveProperty("correlationId");
+  });
 });

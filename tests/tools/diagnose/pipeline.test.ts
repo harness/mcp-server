@@ -342,6 +342,114 @@ describe("pipelineHandler", () => {
     });
   });
 
+  it("returns download URL for explicitly requested passed step when return_download_url is true", async () => {
+    const { resolveLogContent, resolveLogDownloadUrl } = await import("../../../src/utils/log-resolver.js");
+    const contentMock = resolveLogContent as ReturnType<typeof vi.fn>;
+    const urlMock = resolveLogDownloadUrl as ReturnType<typeof vi.fn>;
+    contentMock.mockClear();
+    urlMock.mockClear();
+
+    const exec = makeExecution({
+      status: "Success",
+      stages: [{ id: "s1", name: "Stage1", status: "Success", steps: [{ id: "step-passed", name: "Deploy", status: "Success" }] }],
+      nodeMapEntries: {
+        "step-passed": {
+          uuid: "step-passed",
+          identifier: "step-passed",
+          name: "Deploy",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-passed",
+          status: "Success",
+          logBaseKey: "log/step-passed",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001", step_id: "step-passed" },
+      registry,
+      args: { summary: true, include_logs: true, return_download_url: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.failed_step_logs).toBeUndefined();
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog.step_id).toBe("step-passed");
+    expect(stepLog.download_url).toBe("https://storage.example.com/logs.zip?signed=1");
+    expect(stepLog).not.toHaveProperty("log");
+    expect(urlMock).toHaveBeenCalledWith(expect.anything(), "log/step-passed", expect.any(Object));
+    expect(contentMock).not.toHaveBeenCalled();
+  });
+
+  it("auto-fetches download URL for main step when return_download_url is true", async () => {
+    const { resolveLogContent, resolveLogDownloadUrl } = await import("../../../src/utils/log-resolver.js");
+    const contentMock = resolveLogContent as ReturnType<typeof vi.fn>;
+    const urlMock = resolveLogDownloadUrl as ReturnType<typeof vi.fn>;
+    contentMock.mockClear();
+    urlMock.mockClear();
+
+    const exec = makeExecution({
+      status: "Success",
+      stages: [{ id: "build", name: "Build", status: "Success", steps: [{ id: "run_tests", name: "RunTests", status: "Success" }] }],
+      nodeMapEntries: {
+        run_tests: {
+          uuid: "run_tests",
+          identifier: "run_tests",
+          name: "RunTests",
+          baseFqn: "pipeline.stages.build.spec.execution.steps.run_tests",
+          status: "Success",
+          logBaseKey: "log/build/steps/run_tests",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: true, include_logs: true, return_download_url: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    const stepLog = result.requested_step_log as Record<string, unknown>;
+    expect(stepLog.step).toBe("run_tests");
+    expect(stepLog.download_url).toBe("https://storage.example.com/logs.zip?signed=1");
+    expect(stepLog).not.toHaveProperty("log");
+    expect(urlMock).toHaveBeenCalledWith(expect.anything(), "log/build/steps/run_tests", expect.any(Object));
+    expect(contentMock).not.toHaveBeenCalled();
+  });
+
+  it("omits requested_step_log when failed step already has download URL and step_id matches", async () => {
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "S1", status: "Failed", steps: [{ id: "step-failed", name: "FailedStep", status: "Failed" }] }],
+      nodeMapEntries: {
+        "step-failed": {
+          uuid: "step-failed", identifier: "step-failed", name: "FailedStep",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-failed",
+          status: "Failed", failureInfo: { message: "step error" }, logBaseKey: "log/step-failed",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001", step_id: "step-failed" },
+      registry,
+      args: { summary: false, include_logs: true, return_download_url: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    const logs = result.failed_step_logs as Record<string, { download_url: string }>;
+    expect(logs["s1/step-failed"]).toEqual({
+      download_url: "https://storage.example.com/logs.zip?signed=1",
+    });
+    expect(result.requested_step_log).toBeUndefined();
+  });
+
   it("truncates long logs to log_snippet_lines", async () => {
     // Override resolveLogContent mock to return a long log for this test
     const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");

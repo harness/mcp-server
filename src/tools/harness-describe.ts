@@ -15,9 +15,9 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
     {
       description: "Describe available Harness resource types, their supported operations, and fields. No API call — returns local metadata only. Use this to discover what resource_types you can use with other harness_ tools.",
       inputSchema: {
-        resource_type: z.enum(allTypes).describe("Get details for a specific resource type").optional(),
-        toolset: z.enum(allToolsets).describe("Filter to a specific toolset").optional(),
-        search_term: z.string().describe("Search for resource types by keyword (matches type name, display name, toolset, description)").optional(),
+        resource_type: z.enum(allTypes).optional().describe("Get details for a specific resource type"),
+        toolset: z.enum(allToolsets).optional().describe("Filter to a specific toolset"),
+        search_term: z.string().optional().describe("Search for resource types by keyword (matches type name, display name, toolset, description)"),
       },
       outputSchema: describeOutputSchema,
       annotations: {
