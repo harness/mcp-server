@@ -223,6 +223,65 @@ describe("kg_queryable_type_summary list extractor", () => {
 // kg_type / kg_related_type — extractor behavior
 // ---------------------------------------------------------------------------
 
+describe("kg_type list extractor", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("projects compact items across categories and truncates long descriptions", async () => {
+    const longDesc = "x".repeat(150);
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity_types: [
+        { id: "service", name: "Service", kind: "OBJECT_KIND_ENTITY", description: longDesc },
+        { name: "No Id Type" },
+      ],
+      relationship_types: [
+        { identifier: "rel1", name: "Rel1", kind: "OBJECT_KIND_RELATIONSHIP" },
+      ],
+      event_types: [],
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "kg_type", "list", {})) as {
+      items: Record<string, unknown>[];
+      total: number;
+    };
+
+    expect(result.total).toBe(2);
+    expect(result.items).toEqual([
+      {
+        identifier: "service",
+        name: "Service",
+        category: "entity",
+        kind: "OBJECT_KIND_ENTITY",
+        description: "x".repeat(120) + "...",
+      },
+      {
+        identifier: "rel1",
+        name: "Rel1",
+        category: "relationship",
+        kind: "OBJECT_KIND_RELATIONSHIP",
+      },
+    ]);
+  });
+
+  it("passes object_kind filter to the list request body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity_types: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "kg_type", "list", {
+      object_kind: "OBJECT_KIND_ENTITY",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(call.body).toEqual({
+      filter: { objectKind: ["OBJECT_KIND_ENTITY"] },
+    });
+  });
+});
+
 describe("kg_type get extractor", () => {
   let registry: Registry;
 
@@ -257,6 +316,38 @@ describe("kg_type get extractor", () => {
       name: "Service",
       fields: [{ name: "id", type: "string" }],
       annotations: [],
+    });
+  });
+
+  it("surfaces dcs_enrichment fields on relationship_type get responses", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      type: {
+        relationship_type: {
+          id: "service_to_deployment",
+          annotations: [{ key: "dcs_enrichment" }],
+          left_reference: { id: "service", columnMappingMeta: { hidden: true } },
+          right_reference: { id: "deployment" },
+          join_predicates: [{ left: "id", right: "service_id" }],
+          fields: [{ name: "deployed_at" }],
+        },
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "kg_type", "get", {
+      type_id: "service_to_deployment",
+      kind: "OBJECT_KIND_RELATIONSHIP",
+    })) as Record<string, unknown>;
+
+    expect(result).toEqual({
+      id: "service_to_deployment",
+      annotations: [{ key: "dcs_enrichment" }],
+      dcs_enrichment: true,
+      left_reference: { id: "service" },
+      right_reference: { id: "deployment" },
+      join_predicates: [{ left: "id", right: "service_id" }],
+      fields: [{ name: "deployed_at" }],
+      enrichment_fields: [{ name: "deployed_at" }],
     });
   });
 });

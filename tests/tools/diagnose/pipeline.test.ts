@@ -414,6 +414,40 @@ describe("pipelineHandler", () => {
     expect(stepLog.log).toBe("resolved log line 1\nresolved log line 2");
   });
 
+  it("returns download URL for requested_step_log when return_download_url is true", async () => {
+    const exec = makeExecution({
+      status: "Success",
+      stages: [{ id: "s1", name: "Stage1", status: "Success", steps: [{ id: "step-passed", name: "Deploy", status: "Success" }] }],
+      nodeMapEntries: {
+        "step-passed": {
+          uuid: "step-passed",
+          identifier: "step-passed",
+          name: "Deploy",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step-passed",
+          status: "Success",
+          logBaseKey: "log/step-passed",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001", step_id: "step-passed" },
+      registry,
+      args: { summary: true, include_logs: true, return_download_url: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.requested_step_log).toMatchObject({
+      step_id: "step-passed",
+      step: "step-passed",
+      status: "Success",
+      download_url: "https://storage.example.com/logs.zip?signed=1",
+    });
+    expect((result.requested_step_log as Record<string, unknown>).log).toBeUndefined();
+  });
+
   it("returns requested_step_log alongside failed_step_logs when step is explicitly requested", async () => {
     const exec = makeExecution({
       status: "Failed",

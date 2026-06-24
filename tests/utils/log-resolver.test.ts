@@ -1669,4 +1669,21 @@ describe("resolveLogDownloadUrl", () => {
     expect(requestFn).toHaveBeenCalledTimes(2);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("rewrites Harness CDN hostname in returned download URL on self-managed installs", async () => {
+    const blobLink =
+      "https://app.harness.io/storage/logs.zip" +
+      "?X-Amz-SignedHeaders=host" +
+      "&X-Amz-Signature=sig";
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "success", link: blobLink }),
+      { baseURL: "https://self-managed.example.com/gateway" },
+    );
+
+    const result = await resolveLogDownloadUrl(client, "acct/pipeline/p1/1/-exec1");
+
+    expect(result).toContain("self-managed.example.com");
+    expect(result).not.toContain("app.harness.io");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
 });
