@@ -373,3 +373,24 @@ describe("SSCA-6347 review: policy_set body schemas document SBOM type", () => {
     expect(actionField!.description).toContain("onstep");
   });
 });
+
+// ─── policy_evaluation list response projection ─────────────────────────────
+
+describe("policy_evaluation list responseExtractor", () => {
+  it("remaps id to evaluation_id so compact mode preserves the stable identifier", () => {
+    const spec = getOp("policy_evaluation", "list");
+    const raw = [
+      { id: "eval-1", status: "pass", entity: "pipe-1" },
+      { status: "error" },
+    ];
+    const result = spec.responseExtractor!(raw, {}) as {
+      items: Record<string, unknown>[];
+      total: number;
+    };
+
+    expect(result.total).toBe(2);
+    expect(result.items[0]!.evaluation_id).toBe("eval-1");
+    expect(result.items[0]!.id).toBe("eval-1");
+    expect(result.items[1]).toEqual({ status: "error" });
+  });
+});

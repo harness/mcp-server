@@ -1877,6 +1877,86 @@ pipeline:
     expect(pollCall.path).toBe("/pipeline/api/pipelines/execution/v2/exec-wait-uuid");
   });
 
+  it("extracts execution_id from pipeline_v1 execution_details shape and polls to terminal", async () => {
+    mockRequest
+      .mockResolvedValueOnce({
+        execution_details: { execution_id: "v1-exec-1" },
+      })
+      .mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            planExecutionId: "v1-exec-1",
+            status: "Success",
+            pipelineIdentifier: "v1_pipe",
+            startTs: 1_700_000_000_000,
+            endTs: 1_700_000_010_000,
+          },
+        },
+      });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "v1_pipe",
+      wait: true,
+      wait_poll_interval_seconds: 2,
+      wait_timeout_seconds: 10,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.execution_id).toBe("v1-exec-1");
+    expect(data.execution_status).toBe("Success");
+    expect(data.execution_terminal).toBe(true);
+
+    const pollCall = mockRequest.mock.calls[1]![0] as { path?: string };
+    expect(pollCall.path).toBe("/pipeline/api/pipelines/execution/v2/v1-exec-1");
+  });
+
+  it("extracts execution_id from pipeline_v1 top-level execution_id field", async () => {
+    mockRequest
+      .mockResolvedValueOnce({ execution_id: "v1-top-level" })
+      .mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            planExecutionId: "v1-top-level",
+            status: "Success",
+            pipelineIdentifier: "v1_pipe",
+          },
+        },
+      });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "v1_pipe",
+      wait: true,
+      wait_poll_interval_seconds: 2,
+      wait_timeout_seconds: 10,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.execution_id).toBe("v1-top-level");
+    expect(data.execution_status).toBe("Success");
+  });
+
+  it("skips wait when pipeline_v1 trigger response has no recognizable execution_id", async () => {
+    mockRequest.mockResolvedValueOnce({ status: "QUEUED" });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "v1_pipe",
+      wait: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data._wait).toEqual(expect.objectContaining({ skipped: true }));
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
   it("attaches a diagnose hint when the awaited execution fails", async () => {
     mockRequest
       .mockResolvedValueOnce({ data: { planExecutionId: "exec-wait-fail" } })
@@ -2137,6 +2217,26 @@ pipeline:
     expect(callArgs.params.repoName).toBe("product-management");
     // No connectorRef for Harness Code
     expect(callArgs.params.connectorRef).toBeUndefined();
+  });
+
+  it("blocks pipeline.run BEFORE elicitation in read-only mode (high_write risk)", async () => {
+    const roServer = makeMcpServer("accept");
+    const roRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines", HARNESS_READ_ONLY: true }));
+    const roRequest = vi.fn();
+    const roClient = makeClient(roRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(roServer, roRegistry, roClient, makeConfig({ HARNESS_TOOLSETS: "pipelines", HARNESS_READ_ONLY: true }));
+
+    const result = await roServer.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Read-only mode") });
+    expect(roRequest).not.toHaveBeenCalled();
+    expect(roServer.server.elicitInput).not.toHaveBeenCalled();
   });
 
   it("batch HQL validate is allowed in read-only mode (read-risk action), matching the single-query contract", async () => {
