@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
+import { isUserError, toMcpError } from "../utils/errors.js";
 import { getExamplesForResource } from "../data/examples/index.js";
 import { describeOutputSchema } from "./output-schemas.js";
 
@@ -29,7 +30,8 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
       },
     },
     async (args) => {
-      if (args.resource_type) {
+      try {
+        if (args.resource_type) {
         try {
           const def = registry.getResource(args.resource_type);
           const resourceScopes = registry.getSupportedScopes(args.resource_type);
@@ -119,6 +121,12 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
 
       // No-args: return compact summary (~30 tokens per resource type)
       return jsonResult(registry.describeSummary());
+      } catch (err) {
+        if (isUserError(err)) {
+          return jsonResult({ error: err.message });
+        }
+        throw toMcpError(err);
+      }
     },
   );
 }

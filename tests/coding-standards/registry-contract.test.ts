@@ -63,4 +63,22 @@ describe("Coding standards — registry resource contract", () => {
 
     expect(violations, violations.join("\n")).toEqual([]);
   });
+
+  it("create/update/delete operations never use risk: read", () => {
+    const violations: string[] = [];
+    const mutatingOps = new Set(["create", "update", "delete"]);
+
+    for (const resourceType of registry.getAllResourceTypes()) {
+      const def = registry.getResource(resourceType);
+
+      for (const [operation, spec] of Object.entries(def.operations)) {
+        if (!mutatingOps.has(operation)) continue;
+        if (spec.operationPolicy?.risk === "read") {
+          violations.push(`${resourceType}.${operation}: create/update/delete must not use risk: read`);
+        }
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
 });
