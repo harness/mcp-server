@@ -1,5 +1,15 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, ParamsSchema } from "../types.js";
 import { dashboardListExtract, dashboardDataExtract } from "../extractors.js";
+
+const DASHBOARD_DATA_GET_PARAMS: ParamsSchema = {
+  fields: [
+    {
+      name: "reporting_timeframe",
+      required: false,
+      description: "Reporting timeframe in days (default 30)",
+    },
+  ],
+};
 
 export const dashboardsToolset: ToolsetDefinition = {
   name: "dashboards",
@@ -47,9 +57,6 @@ export const dashboardsToolset: ToolsetDefinition = {
       toolset: "dashboards",
       scope: "account",
       identifierFields: ["dashboard_id"],
-      listFilterFields: [
-        { name: "reporting_timeframe", description: "Reporting timeframe in days (default 30)" },
-      ],
       deepLinkTemplate: "/ng/account/{accountId}/dashboards",
       operations: {
         get: {
@@ -64,6 +71,7 @@ export const dashboardsToolset: ToolsetDefinition = {
           responseType: "buffer",
           responseExtractor: dashboardDataExtract,
           description: "Download dashboard data as structured tables. Pass reporting_timeframe in days (default 30).",
+          paramsSchema: DASHBOARD_DATA_GET_PARAMS,
         },
       },
     },

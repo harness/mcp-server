@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, ParamsSchema } from "../types.js";
 import {
   passthrough,
   ngExtract,
@@ -1233,11 +1233,6 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["identifier"],
-      listFilterFields: [
-        { name: "type", description: descComponentType, required: true, enum: ["Fault", "Probe", "Action"] },
-        { name: "identifier", description: descComponentIdentifier, required: true },
-        { name: "hub_reference", description: descComponentHubReference },
-      ],
       relatedResources: [
         { resourceType: "chaos_probe", relationship: "parent", description: "The probe whose variables are being retrieved. Use harness_get with resource_type=chaos_probe to fetch the full probe definition." },
         { resourceType: "chaos_fault", relationship: "parent", description: "The fault whose variables are being retrieved. Use harness_get with resource_type=chaos_fault to fetch the full fault definition." },
@@ -1255,8 +1250,13 @@ export const chaosToolset: ToolsetDefinition = {
           },
           // Registry only enforces listFilterFields.required for operation==="list"
           // and this resource has only `get`, so we validate locally via preflight.
-          // Keeps the `required: true` flags on listFilterFields as accurate docs
-          // for harness_describe while also failing loudly before any HTTP call.
+          paramsSchema: {
+            fields: [
+              { name: "type", required: true, description: `${descComponentType} (Fault | Probe | Action)` },
+              { name: "identifier", required: true, description: descComponentIdentifier },
+              { name: "hub_reference", required: false, description: descComponentHubReference },
+            ],
+          } satisfies ParamsSchema,
           preflight: async ({ input }) => {
             const missing: string[] = [];
             if (input.type === undefined || input.type === "") missing.push("type");

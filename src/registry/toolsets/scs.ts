@@ -1,9 +1,19 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, FilterFieldSpec, ParamsSchema } from "../types.js";
 import { scsCleanExtract, scsListExtract } from "../extractors.js";
 import { HarnessApiError } from "../../utils/errors.js";
 import { createLogger } from "../../utils/logger.js";
 
 const log = createLogger("scs-toolset");
+
+function filterFieldsToParamsSchema(fields: FilterFieldSpec[]): ParamsSchema {
+  return {
+    fields: fields.map((f) => ({
+      name: f.name,
+      required: f.required ?? false,
+      description: f.description,
+    })),
+  };
+}
 
 /**
  * Normalize a PURL for duplicate-detection comparisons.
@@ -586,9 +596,6 @@ export const scsToolset: ToolsetDefinition = {
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
-      listFilterFields: [
-        { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required", required: true },
-      ],
       operations: {
         get: {
           method: "GET",
@@ -600,6 +607,9 @@ export const scsToolset: ToolsetDefinition = {
           },
           responseExtractor: componentDependenciesExtract,
           description: "Get dependency tree for a component by PURL",
+          paramsSchema: filterFieldsToParamsSchema([
+            { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required", required: true },
+          ]),
         },
       },
     },
@@ -621,9 +631,6 @@ export const scsToolset: ToolsetDefinition = {
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
-      listFilterFields: [
-        { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required for remediation lookup", required: true },
-      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
       operations: {
         get: {
@@ -637,6 +644,9 @@ export const scsToolset: ToolsetDefinition = {
           },
           responseExtractor: scsCleanExtract,
           description: "Get remediation advice for a component by package URL (purl)",
+          paramsSchema: filterFieldsToParamsSchema([
+            { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required for remediation lookup", required: true },
+          ]),
         },
       },
     },
@@ -856,10 +866,6 @@ export const scsToolset: ToolsetDefinition = {
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
-      listFilterFields: [
-        { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required", required: true },
-        { name: "target_version", description: "Specific target version to evaluate upgrade to (optional)" },
-      ],
       operations: {
         get: {
           method: "GET",
@@ -872,6 +878,10 @@ export const scsToolset: ToolsetDefinition = {
           },
           responseExtractor: componentRemediationExtract,
           description: "Get safe upgrade suggestions and dependency impact analysis for a component",
+          paramsSchema: filterFieldsToParamsSchema([
+            { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required", required: true },
+            { name: "target_version", description: "Specific target version to evaluate upgrade to (optional)" },
+          ]),
         },
       },
     },
@@ -1193,10 +1203,6 @@ export const scsToolset: ToolsetDefinition = {
       scope: "project",
       scopeOptional: true,
       identifierFields: ["artifact_id"],
-      listFilterFields: [
-        { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required", required: true },
-        { name: "artifact_id", description: "Artifact ID for project-scoped lookup (preferred — returns richer data including dependency type and parents)" },
-      ],
       operations: {
         get: {
           method: "GET",
@@ -1219,6 +1225,10 @@ export const scsToolset: ToolsetDefinition = {
           },
           responseExtractor: scsCleanExtract,
           description: "Get OSS risk and enrichment data for a component by PURL. Pass artifact_id for project-scoped results.",
+          paramsSchema: filterFieldsToParamsSchema([
+            { name: "purl", description: "Package URL of the component (e.g. pkg:npm/express@4.18.0) — required", required: true },
+            { name: "artifact_id", description: "Artifact ID for project-scoped lookup (preferred — returns richer data including dependency type and parents)" },
+          ]),
         },
       },
     },
