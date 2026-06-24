@@ -1233,6 +1233,76 @@ describe("Registry", () => {
     });
   });
 
+  describe("organization create — nested bodyWrapperKey wrapping", () => {
+    it("wraps flat fields inside body.organization without leaking to top level", async () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "platform" }));
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "org1" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "organization", "create", {
+        body: { identifier: "org1", name: "Engineering" },
+      });
+
+      const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+      expect(call.body.organization).toMatchObject({
+        identifier: "org1",
+        name: "Engineering",
+      });
+      expect(call.body.identifier).toBeUndefined();
+      expect(call.body.name).toBeUndefined();
+    });
+  });
+
+  describe("project create — nested bodyWrapperKey org injection", () => {
+    it("injects orgIdentifier inside body.project, not at top level", async () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "platform" }));
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "proj1" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "project", "create", {
+        org_id: "my-org",
+        body: { identifier: "proj1", name: "Payments" },
+      });
+
+      const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+      expect(call.body.project).toMatchObject({
+        identifier: "proj1",
+        name: "Payments",
+        orgIdentifier: "my-org",
+      });
+      expect(call.body.orgIdentifier).toBeUndefined();
+    });
+  });
+
+  describe("connector create — nested bodyWrapperKey scope injection", () => {
+    it("injects orgIdentifier and projectIdentifier inside body.connector", async () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { connector: { identifier: "github" } } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "connector", "create", {
+        org_id: "my-org",
+        project_id: "my-project",
+        body: {
+          identifier: "github",
+          name: "GitHub",
+          type: "Github",
+          spec: { url: "https://github.com" },
+        },
+      });
+
+      const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+      expect(call.body.connector).toMatchObject({
+        identifier: "github",
+        name: "GitHub",
+        orgIdentifier: "my-org",
+        projectIdentifier: "my-project",
+      });
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+  });
+
   describe("resolved account ID propagation", () => {
     it("passes the resolved account ID to pathBuilder and deep links", async () => {
       const mockRequest = vi.fn().mockResolvedValue({

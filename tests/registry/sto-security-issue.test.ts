@@ -88,6 +88,52 @@ describe("security_issue list — scope keyword preflight", () => {
   });
 });
 
+describe("pipeline_security_step list — step projection", () => {
+  it("maps steps to items with reachability and exploitability flags", () => {
+    const spec = getListSpec("pipeline_security_step");
+    const raw = {
+      steps: [
+        { targetId: "t1", targetName: "my-repo", targetVariant: "main", stepName: "Build.Trivy" },
+      ],
+      reachabilityFlag: true,
+      exploitabilityFlag: false,
+    };
+    const result = spec.responseExtractor!(raw, {}) as Record<string, unknown>;
+
+    expect(result.items).toEqual(raw.steps);
+    expect(result.total).toBe(1);
+    expect(result.reachability_flag).toBe(true);
+    expect(result.exploitability_flag).toBe(false);
+  });
+
+  it("defaults flags to false and items to [] when steps are absent", () => {
+    const spec = getListSpec("pipeline_security_step");
+    const result = spec.responseExtractor!({}, {}) as Record<string, unknown>;
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(0);
+    expect(result.reachability_flag).toBe(false);
+    expect(result.exploitability_flag).toBe(false);
+  });
+
+  it("dispatches through registry with execution_id filter", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ steps: [], reachabilityFlag: false, exploitabilityFlag: false });
+    const client = makeClient(mockRequest);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    await registry.dispatch(client, "pipeline_security_step", "list", {
+      execution_id: "exec-steps-1",
+      org_id: "my-org",
+      project_id: "my-project",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, string> };
+    expect(call.path).toBe("/sto/api/v2/frontend/pipeline-security/steps");
+    expect(call.params.executionId).toBe("exec-steps-1");
+    expect(call.params.orgId).toBe("my-org");
+    expect(call.params.projectId).toBe("my-project");
+  });
+});
+
 describe("pipeline_security_issue list — partition flattening", () => {
   const MOCK_API_RESPONSE = {
     existing: {

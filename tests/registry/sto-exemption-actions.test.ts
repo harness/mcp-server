@@ -262,4 +262,55 @@ describe("security_exemption dispatchExecute", () => {
     expect(call.params.orgId).toBe("");
     expect(call.params.projectId).toBe("");
   });
+
+  it("reject hits /reject with auto-injected approverId and comment", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const mockRequest = vi.fn().mockResolvedValue({ status: "Rejected" });
+    const client = makeClient(mockRequest, "rejector-uuid");
+
+    await registry.dispatchExecute(client, "security_exemption", "reject", {
+      exemption_id: "ex-reject-1",
+      org_id: "my-org",
+      project_id: "my-project",
+      body: { comment: "not justified" },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: Record<string, unknown> };
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/sto/api/v2/exemptions/ex-reject-1/reject");
+    expect(call.body).toEqual({ approverId: "rejector-uuid", comment: "not justified" });
+  });
+});
+
+describe("security_exemption create dispatch", () => {
+  it("POSTs mapped body with auto-injected requesterId from getCurrentUserId", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const mockRequest = vi.fn().mockResolvedValue({ exemptionId: "ex-new-1" });
+    const client = makeClient(mockRequest, "requester-uuid");
+
+    await registry.dispatch(client, "security_exemption", "create", {
+      org_id: "my-org",
+      project_id: "my-project",
+      body: {
+        issue_id: "iss-42",
+        type: "False Positive",
+        reason: "upstream patched",
+        duration_days: 0,
+        scan_id: "scan-9",
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: Record<string, unknown> };
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/sto/api/v2/exemptions");
+    expect(call.body).toEqual({
+      issueId: "iss-42",
+      type: "False Positive",
+      reason: "upstream patched",
+      requesterId: "requester-uuid",
+      exemptFutureOccurrences: true,
+      pendingChanges: { durationDays: 0 },
+      scanId: "scan-9",
+    });
+  });
 });

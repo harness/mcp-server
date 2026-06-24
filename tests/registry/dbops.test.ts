@@ -776,6 +776,73 @@ describe("database_execute_llm_authoring_pipeline run", () => {
   });
 });
 
+describe("database_default_authoring_instance get", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("builds correct path with dbschema_id and returns API response", async () => {
+    const apiResponse = {
+      identifier: "inst-oldest",
+      name: "Primary DB",
+      hasSnapshot: true,
+      connector: "jdbc-connector-1",
+    };
+    const mockRequest = vi.fn().mockResolvedValue(apiResponse);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "database_default_authoring_instance", "get", {
+      dbschema_id: "payments_schema",
+      org_id: "engineering",
+      project_id: "payments",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { method: string; path: string };
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe(
+      "/dbops/v1/orgs/engineering/projects/payments/dbschema/payments_schema/default-authoring-instance",
+    );
+    expect(result).toEqual(apiResponse);
+  });
+});
+
+describe("database_llm_authoring_pipeline get", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("builds path and query params for schema+instance pair", async () => {
+    const apiResponse = {
+      status: "SUCCESS",
+      metadata: { pipelineIdentifier: "dbops-llm-pipeline" },
+    };
+    const mockRequest = vi.fn().mockResolvedValue(apiResponse);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "database_llm_authoring_pipeline", "get", {
+      dbschema_id: "payments_schema",
+      dbinstance_id: "inst-oldest",
+      org_id: "engineering",
+      project_id: "payments",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params: Record<string, string>;
+    };
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/dbops/v1/orgs/engineering/projects/payments/default-llm-pipeline");
+    expect(call.params.dbSchema).toBe("payments_schema");
+    expect(call.params.dbInstance).toBe("inst-oldest");
+    expect(result).toEqual(apiResponse);
+  });
+});
+
 describe("database_snapshot_object get", () => {
   it("passes object lookup body without scope injection", async () => {
     const registry = new Registry(makeConfig());

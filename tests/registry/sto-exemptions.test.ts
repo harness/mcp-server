@@ -75,6 +75,37 @@ async function runPreflight(input: Record<string, unknown>): Promise<void> {
   await spec.preflight(ctx);
 }
 
+// ─── 0. list preflight strips approval-scope keywords from list inputs ────
+
+describe("security_exemption list — scope keyword preflight", () => {
+  it("strips resource_scope='account'/'org' and literal scope keywords from org_id/project_id", async () => {
+    const input: Record<string, unknown> = {
+      resource_scope: "account",
+      org_id: "org",
+      project_id: "account",
+      status: "Pending",
+      size: 5,
+    };
+    await runPreflight(input);
+    expect(input.resource_scope).toBeUndefined();
+    expect(input.org_id).toBeUndefined();
+    expect(input.project_id).toBeUndefined();
+    expect(input.status).toBe("Pending");
+    expect(input.size).toBe(5);
+  });
+
+  it("allows real org/project identifiers through unchanged", async () => {
+    const input: Record<string, unknown> = {
+      org_id: "engineering",
+      project_id: "payments",
+      status: "Pending",
+    };
+    await runPreflight(input);
+    expect(input.org_id).toBe("engineering");
+    expect(input.project_id).toBe("payments");
+  });
+});
+
 // ─── 1. _nextPageHint preserves active filter set ─────────────────────────
 
 describe("stoExemptionsExtract — _nextPageHint", () => {
