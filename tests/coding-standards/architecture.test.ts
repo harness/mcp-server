@@ -223,6 +223,54 @@ describe("Coding standards — toolset purity", () => {
   });
 });
 
+describe("Coding standards — Zod input schemas", () => {
+  const handlerFiles = [...ALLOWED_REGISTER_TOOL_FILES];
+
+  it("tool handlers use .describe() after .optional() / .default() (Zod 4 chaining)", () => {
+    const violations: string[] = [];
+    // Zod 4 drops descriptions when .describe() precedes .optional() or .default() on the same chain.
+    const badChainOnLine = /\.describe\([^)]*\)\s*\.(optional|default)\s*\(/;
+
+    for (const file of handlerFiles) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      const badLines = content
+        .split("\n")
+        .filter((line) => badChainOnLine.test(line))
+        .map((line) => line.trim());
+      if (badLines.length > 0) {
+        violations.push(`${file}: ${badLines.join(" | ")}`);
+      }
+    }
+
+    expect(
+      violations,
+      `Zod describe-before-optional/default chains (descriptions stripped from MCP schema):\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+describe("Coding standards — HarnessClient singleton", () => {
+  it("instantiates HarnessClient only in src/index.ts", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (!/\bnew\s+HarnessClient\s*\(/.test(content)) continue;
+
+      const fileRel = rel(file);
+      if (fileRel !== "src/index.ts") {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `Extra HarnessClient instantiations (singleton must live in src/index.ts only):\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
 describe("Coding standards — registry registration", () => {
   it("ALL_TOOLSET_NAMES matches the ToolsetName union exactly", () => {
     const fromRegistry = new Set(ALL_TOOLSET_NAMES);
