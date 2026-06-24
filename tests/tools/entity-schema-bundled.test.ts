@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import * as bundled from "../../src/tools/entity-schema/bundled.js";
+import { buildLiveSchemaCacheKey } from "../../src/tools/entity-schema/cache-keys.js";
 import { createLiveSchemaFetcher } from "../../src/tools/entity-schema/live.js";
+import type { EntitySchemaCacheEntry } from "../../src/tools/entity-schema/types.js";
 
 describe("entity schema bundled + live fallback", () => {
   afterEach(() => {
@@ -47,6 +49,57 @@ describe("entity schema bundled + live fallback", () => {
     expect(client.request).not.toHaveBeenCalled();
   });
 
+  describe("bundledSnapshotMatchesScope", () => {
+    it("accepts bundled project snapshot when org/project match vendored metadata", () => {
+      expect(
+        bundled.bundledSnapshotMatchesScope("connector", "project", "default", "aidevops"),
+      ).toBe(true);
+    });
+
+    it("rejects bundled project snapshot when org differs from vendored metadata", () => {
+      expect(
+        bundled.bundledSnapshotMatchesScope("connector", "project", "other-org", "aidevops"),
+      ).toBe(false);
+    });
+
+    it("rejects bundled project snapshot when project differs from vendored metadata", () => {
+      expect(
+        bundled.bundledSnapshotMatchesScope("connector", "project", "default", "other-project"),
+      ).toBe(false);
+    });
+
+    it("rejects bundled org snapshot when org differs from vendored metadata", () => {
+      expect(bundled.bundledSnapshotMatchesScope("connector", "org", "other-org")).toBe(false);
+    });
+
+    it("accepts account-scoped snapshots without org/project identifiers", () => {
+      expect(bundled.bundledSnapshotMatchesScope("connector", "account")).toBe(true);
+    });
+  });
+
+  it("does not serve a bundled org snapshot for a different org", async () => {
+    vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue({ type: "object", properties: { bundled: {} } });
+    vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(true);
+
+    const liveSchema = {
+      type: "object",
+      properties: { live: { type: "string" } },
+    };
+    const client = {
+      account: "acct-123",
+      request: vi.fn().mockResolvedValue({ data: liveSchema }),
+    } as unknown as HarnessClient;
+
+    const fetcher = createLiveSchemaFetcher(client);
+    const result = await fetcher.fetch("connector", {
+      scope: "org",
+      orgId: "not-default",
+    });
+
+    expect(result).toEqual({ schema: liveSchema, source: "ng-yaml-schema" });
+    expect(client.request).toHaveBeenCalledTimes(1);
+  });
+
   it("does not serve a bundled project snapshot for a different org/project", async () => {
     vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue({ type: "object", properties: { bundled: {} } });
     vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(true);
@@ -69,5 +122,24 @@ describe("entity schema bundled + live fallback", () => {
 
     expect(result).toEqual({ schema: liveSchema, source: "ng-yaml-schema" });
     expect(client.request).toHaveBeenCalledTimes(1);
+  });
+
+  it("preloads bundled snapshots under scope-specific cache keys", () => {
+    const runtimeCache = new Map<string, EntitySchemaCacheEntry>();
+    const accountId = "VpehPBwPQ9qKsX-xDP8SFg";
+
+    bundled.preloadBundledEntitySchemas(runtimeCache, accountId);
+
+    const matchingKey = buildLiveSchemaCacheKey("connector", accountId, "project", {
+      orgId: "default",
+      projectId: "aidevops",
+    });
+    const mismatchedKey = buildLiveSchemaCacheKey("connector", accountId, "project", {
+      orgId: "other-org",
+      projectId: "other-project",
+    });
+
+    expect(runtimeCache.has(matchingKey)).toBe(true);
+    expect(runtimeCache.has(mismatchedKey)).toBe(false);
   });
 });

@@ -103,6 +103,29 @@ describe("harness_schema live entities", () => {
     expect(requestMock).toHaveBeenCalledTimes(1);
   });
 
+  it("isolates live schema cache entries by org scope identifiers", async () => {
+    requestMock.mockReset();
+    requestMock
+      .mockResolvedValueOnce({ data: liveEntitySchema("environment", "org_a_field") })
+      .mockResolvedValueOnce({ data: liveEntitySchema("environment", "org_b_field") });
+
+    const first = parseResult(await server.call("harness_schema", {
+      resource_type: "environment",
+      scope: "org",
+      org_id: "org-a",
+    })) as { fields: Array<{ name: string }> };
+    const second = parseResult(await server.call("harness_schema", {
+      resource_type: "environment",
+      scope: "org",
+      org_id: "org-b",
+    })) as { fields: Array<{ name: string }> };
+
+    expect(requestMock).toHaveBeenCalledTimes(2);
+    expect(first.fields.map((field) => field.name)).toContain("org_a_field");
+    expect(second.fields.map((field) => field.name)).toContain("org_b_field");
+    expect(second.fields.map((field) => field.name)).not.toContain("org_a_field");
+  });
+
   it("isolates live schema cache entries by project scope identifiers", async () => {
     requestMock.mockReset();
     requestMock
