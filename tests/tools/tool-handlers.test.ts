@@ -154,6 +154,22 @@ describe("harness_list", () => {
     expect(schema.inputSchema.resource_scope?.description).toContain("Scope to query");
   });
 
+  it("exposes a description on every documented input field (Zod 4 chaining order regression)", () => {
+    const schema = server.schema("harness_list") as {
+      inputSchema: Record<string, { description?: string | null } | undefined>;
+    };
+    const documented = [
+      "resource_type", "url", "resource_scope", "org_id", "project_id",
+      "page", "size", "search_term", "compact", "params", "filters",
+      "include_visual", "visual_type",
+    ];
+    for (const field of documented) {
+      const desc = schema.inputSchema[field]?.description;
+      expect(desc, `field "${field}" must expose a description on the registered schema`).toBeTruthy();
+      expect(desc!.length, `field "${field}" description must be non-empty`).toBeGreaterThan(5);
+    }
+  });
+
   it("uses account scope from account-level connector URLs instead of config defaults", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
@@ -222,6 +238,21 @@ describe("harness_get", () => {
       inputSchema: { resource_scope?: { description?: string | null } };
     };
     expect(schema.inputSchema.resource_scope?.description).toContain("Scope to query");
+  });
+
+  it("exposes a description on every documented input field (Zod 4 chaining order regression)", () => {
+    const schema = server.schema("harness_get") as {
+      inputSchema: Record<string, { description?: string | null } | undefined>;
+    };
+    const documented = [
+      "resource_type", "resource_id", "url", "resource_scope",
+      "org_id", "project_id", "params",
+    ];
+    for (const field of documented) {
+      const desc = schema.inputSchema[field]?.description;
+      expect(desc, `field "${field}" must expose a description on the registered schema`).toBeTruthy();
+      expect(desc!.length, `field "${field}" description must be non-empty`).toBeGreaterThan(5);
+    }
   });
 
   it("propagates 404 as errorResult", async () => {

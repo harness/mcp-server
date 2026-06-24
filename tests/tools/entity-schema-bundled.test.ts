@@ -47,6 +47,38 @@ describe("entity schema bundled + live fallback", () => {
     expect(client.request).not.toHaveBeenCalled();
   });
 
+  it("bundledSnapshotMatchesScope rejects mismatched org for project scope", () => {
+    expect(bundled.bundledSnapshotMatchesScope("connector", "project", "not-default", "aidevops")).toBe(false);
+  });
+
+  it("bundledSnapshotMatchesScope accepts matching org and project for vendored snapshot", () => {
+    expect(bundled.bundledSnapshotMatchesScope("connector", "project", "default", "aidevops")).toBe(true);
+  });
+
+  it("reuses cached live schema for identical project scope without a second API call", async () => {
+    const liveSchema = {
+      type: "object",
+      properties: { live: { type: "string" } },
+    };
+    const client = {
+      account: "acct-123",
+      request: vi.fn().mockResolvedValue({ data: liveSchema }),
+    } as unknown as HarnessClient;
+
+    vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue(undefined);
+    vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(false);
+
+    const fetcher = createLiveSchemaFetcher(client);
+    const params = { scope: "project" as const, orgId: "org-a", projectId: "proj-a" };
+
+    const first = await fetcher.fetch("connector", params);
+    const second = await fetcher.fetch("connector", params);
+
+    expect(first).toEqual({ schema: liveSchema, source: "ng-yaml-schema" });
+    expect(second).toEqual(first);
+    expect(client.request).toHaveBeenCalledTimes(1);
+  });
+
   it("does not serve a bundled project snapshot for a different org/project", async () => {
     vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue({ type: "object", properties: { bundled: {} } });
     vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(true);
