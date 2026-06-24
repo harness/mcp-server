@@ -46,4 +46,28 @@ describe("entity schema bundled + live fallback", () => {
     );
     expect(client.request).not.toHaveBeenCalled();
   });
+
+  it("does not serve a bundled project snapshot for a different org/project", async () => {
+    vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue({ type: "object", properties: { bundled: {} } });
+    vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(true);
+
+    const liveSchema = {
+      type: "object",
+      properties: { live: { type: "string" } },
+    };
+    const client = {
+      account: "acct-123",
+      request: vi.fn().mockResolvedValue({ data: liveSchema }),
+    } as unknown as HarnessClient;
+
+    const fetcher = createLiveSchemaFetcher(client);
+    const result = await fetcher.fetch("connector", {
+      scope: "project",
+      orgId: "not-default",
+      projectId: "not-aidevops",
+    });
+
+    expect(result).toEqual({ schema: liveSchema, source: "ng-yaml-schema" });
+    expect(client.request).toHaveBeenCalledTimes(1);
+  });
 });
