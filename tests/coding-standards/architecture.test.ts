@@ -7,8 +7,14 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
-import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
-import type { ToolsetName } from "../../src/registry/types.js";
+import { ALL_TOOLSET_NAMES, Registry } from "../../src/registry/index.js";
+import type { Config } from "../../src/config.js";
+import type {
+  ToolsetName,
+  EndpointSpec,
+  ResourceDefinition,
+  ResourceScope,
+} from "../../src/registry/types.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
@@ -247,5 +253,191 @@ describe("Coding standards — registry registration", () => {
     for (const name of ALL_TOOLSET_NAMES) {
       expect(() => assign(name)).not.toThrow();
     }
+  });
+});
+
+const VALID_RESOURCE_SCOPES = new Set<ResourceScope>(["project", "org", "account"]);
+
+/** Write tool handlers must expose a confirm param for elicitation fallback. */
+const WRITE_HANDLER_FILES = [
+  "src/tools/harness-create.ts",
+  "src/tools/harness-update.ts",
+  "src/tools/harness-delete.ts",
+  "src/tools/harness-execute.ts",
+];
+
+function makeRegistryConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    HARNESS_MCP_MODE: "single-user",
+    HARNESS_API_KEY: "pat.test-account.token.secret",
+    HARNESS_ACCOUNT_ID: "test-account",
+    HARNESS_BASE_URL: "https://app.harness.io",
+    HARNESS_ORG: "default",
+    HARNESS_PROJECT: "test-project",
+    HARNESS_API_TIMEOUT_MS: 30000,
+    HARNESS_MAX_RETRIES: 3,
+    LOG_LEVEL: "error",
+    HARNESS_RATE_LIMIT_RPS: 1000,
+    HARNESS_MAX_BODY_SIZE_MB: 10,
+    HARNESS_READ_ONLY: false,
+    HARNESS_TOOLSETS: ALL_TOOLSET_NAMES.map((name) => `+${name}`).join(","),
+    ...overrides,
+  } as Config;
+}
+
+function loadAllResourceTypes(): string[] {
+  const registryV0 = new Registry({ ...makeRegistryConfig(), HARNESS_PIPELINE_VERSION: "0" } as Config);
+  const registryV1 = new Registry({ ...makeRegistryConfig(), HARNESS_PIPELINE_VERSION: "1" } as Config);
+  return [...new Set([...registryV0.getAllResourceTypes(), ...registryV1.getAllResourceTypes()])].sort();
+}
+
+function getResourceDefinition(type: string, registryV0: Registry, registryV1: Registry): ResourceDefinition {
+  try {
+    return registryV0.getResource(type);
+  } catch {
+    return registryV1.getResource(type);
+  }
+}
+
+function allEndpointSpecs(
+  def: ResourceDefinition,
+): Array<{ kind: "operation" | "executeAction"; name: string; spec: EndpointSpec }> {
+  const ops = Object.entries(def.operations).map(([name, spec]) => ({
+    kind: "operation" as const,
+    name,
+    spec: spec!,
+  }));
+  const actions = Object.entries(def.executeActions ?? {}).map(([name, spec]) => ({
+    kind: "executeAction" as const,
+    name,
+    spec,
+  }));
+  return [...ops, ...actions];
+}
+
+describe("Coding standards — registry resource contracts", () => {
+  const resourceTypes = loadAllResourceTypes();
+  const registryV0 = new Registry({ ...makeRegistryConfig(), HARNESS_PIPELINE_VERSION: "0" } as Config);
+  const registryV1 = new Registry({ ...makeRegistryConfig(), HARNESS_PIPELINE_VERSION: "1" } as Config);
+
+  it("declares operationPolicy on every CRUD operation and execute action", () => {
+    const violations: string[] = [];
+
+    for (const type of resourceTypes) {
+      const def = getResourceDefinition(type, registryV0, registryV1);
+      for (const { kind, name, spec } of allEndpointSpecs(def)) {
+        if (!spec.operationPolicy?.risk || !spec.operationPolicy?.retryPolicy) {
+          const label = kind === "executeAction" ? `${type}.${name} (executeAction)` : `${type}.${name}`;
+          violations.push(label);
+        }
+      }
+    }
+
+    expect(violations, `Missing operationPolicy:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("declares identifierFields on every resource definition", () => {
+    const violations: string[] = [];
+
+    for (const type of resourceTypes) {
+      const def = getResourceDefinition(type, registryV0, registryV1);
+      if (!Array.isArray(def.identifierFields)) {
+        violations.push(type);
+      }
+    }
+
+    expect(violations, `Missing identifierFields array:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("uses only valid scope values on resources", () => {
+    const violations: string[] = [];
+
+    for (const type of resourceTypes) {
+      const def = getResourceDefinition(type, registryV0, registryV1);
+      if (!VALID_RESOURCE_SCOPES.has(def.scope)) {
+        violations.push(`${type}: scope="${String(def.scope)}"`);
+      }
+      for (const scope of def.supportedScopes ?? []) {
+        if (!VALID_RESOURCE_SCOPES.has(scope)) {
+          violations.push(`${type}: supportedScopes contains invalid "${String(scope)}"`);
+        }
+      }
+    }
+
+    expect(violations, `Invalid scope values:\n${violations.join("\n")}`).toEqual([]);
+  });
+});
+
+describe("Coding standards — tool handler contracts", () => {
+  it("write tool handlers expose a confirm param in inputSchema", () => {
+    const violations: string[] = [];
+
+    for (const file of WRITE_HANDLER_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!/confirm:\s*z\./.test(content)) {
+        violations.push(`${file}: missing confirm param in inputSchema`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("harness handler files import Zod v4 via zod/v4", () => {
+    const violations: string[] = [];
+
+    for (const file of ALLOWED_HARNESS_HANDLER_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!/import \* as z from "zod\/v4"/.test(content)) {
+        violations.push(`${file}: must use import * as z from "zod/v4"`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("harness_list keeps pagination defaults (page=0, size=20, max=100)", () => {
+    const content = readFileSync(join(REPO_ROOT, "src/tools/harness-list.ts"), "utf8");
+    expect(content).toMatch(/page:\s*z\.number\(\)[\s\S]*?\.default\(0\)/);
+    expect(content).toMatch(/size:\s*z\.number\(\)\.min\(1\)\.max\(100\)[\s\S]*?\.default\(20\)/);
+  });
+
+  it("API tool handlers map unexpected errors through toMcpError()", () => {
+    const apiHandlers = [...ALLOWED_HARNESS_HANDLER_FILES].filter(
+      (file) => file !== "src/tools/harness-describe.ts" && file !== "src/tools/harness-schema.ts",
+    );
+    const violations: string[] = [];
+
+    for (const file of apiHandlers) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!content.includes("toMcpError")) {
+        violations.push(`${file}: missing toMcpError import/usage`);
+      }
+      if (!content.includes("errorResult")) {
+        violations.push(`${file}: missing errorResult import/usage`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+});
+
+describe("Coding standards — HTTP client singleton", () => {
+  it("instantiates HarnessClient only in src/index.ts", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(SRC)) {
+      const fileRel = rel(file);
+      if (fileRel === "src/index.ts") continue;
+
+      const content = readFileSync(file, "utf8");
+      if (/new HarnessClient\s*\(/.test(content)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `HarnessClient must be a singleton — only src/index.ts may call new HarnessClient():\n${violations.join("\n")}`,
+    ).toEqual([]);
   });
 });
