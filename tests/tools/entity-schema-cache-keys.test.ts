@@ -1,7 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { buildLiveSchemaCacheKey } from "../../src/tools/entity-schema/cache-keys.js";
-import { bundledSnapshotMatchesScope } from "../../src/tools/entity-schema/bundled.js";
+import {
+  buildBundledSchemaKey,
+  buildLiveSchemaCacheKey,
+} from "../../src/tools/entity-schema/cache-keys.js";
+import {
+  bundledSnapshotMatchesScope,
+  preloadBundledEntitySchemas,
+} from "../../src/tools/entity-schema/bundled.js";
 import { ENTITY_BUNDLED_META } from "../../src/data/schemas/entities/index.js";
+import type { EntitySchemaCacheEntry } from "../../src/tools/entity-schema/types.js";
+
+describe("buildBundledSchemaKey", () => {
+  it("joins resource type and scope with a dot", () => {
+    expect(buildBundledSchemaKey("connector", "project")).toBe("connector.project");
+    expect(buildBundledSchemaKey("environment", "account")).toBe("environment.account");
+  });
+});
 
 describe("buildLiveSchemaCacheKey", () => {
   it("account scope keys only resource type, scope, and account id", () => {
@@ -34,6 +48,34 @@ describe("buildLiveSchemaCacheKey", () => {
     expect(buildLiveSchemaCacheKey("connector", "acct-1", "project", {})).toBe(
       JSON.stringify(["connector", "project", "acct-1", "", ""]),
     );
+  });
+});
+
+describe("preloadBundledEntitySchemas", () => {
+  const accountId = ENTITY_BUNDLED_META["connector.account"]!.accountId;
+
+  it("warms runtime cache with scope-aware keys from vendored meta", () => {
+    const cache = new Map<string, EntitySchemaCacheEntry>();
+    preloadBundledEntitySchemas(cache, accountId);
+
+    const projectMeta = ENTITY_BUNDLED_META["connector.project"]!;
+    const projectKey = buildLiveSchemaCacheKey("connector", accountId, "project", {
+      orgId: projectMeta.orgId,
+      projectId: projectMeta.projectId,
+    });
+    expect(cache.get(projectKey)?.source).toBe("bundled");
+
+    const orgMeta = ENTITY_BUNDLED_META["connector.org"]!;
+    const orgKey = buildLiveSchemaCacheKey("connector", accountId, "org", {
+      orgId: orgMeta.orgId,
+    });
+    expect(cache.get(orgKey)?.source).toBe("bundled");
+  });
+
+  it("does not warm cache when account id mismatches vendored snapshots", () => {
+    const cache = new Map<string, EntitySchemaCacheEntry>();
+    preloadBundledEntitySchemas(cache, "wrong-account");
+    expect(cache.size).toBe(0);
   });
 });
 
