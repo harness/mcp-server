@@ -120,9 +120,9 @@ All Zod schemas in tool handlers must:
 ### 9. Safety and Security Rules
 
 - **Never** expose secret values — only metadata (name, type, scope)
-- **Never** auto-execute destructive operations — require `confirmation: true`
+- **Never** auto-execute destructive operations — require user confirmation via elicitation or `confirm: true`
 - **Never** auto-run pipelines — present the execution plan first
-- Write operations (`harness_create`, `harness_update`, `harness_delete`) require explicit `confirmation: true`
+- Write operations (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) require elicitation confirmation or explicit `confirm: true` when the client cannot prompt
 - Rate limit enforced client-side via `RateLimiter`
 - Every `EndpointSpec` must declare `operationPolicy` with appropriate `risk` and `retryPolicy`
 
@@ -263,7 +263,7 @@ Before every commit, verify:
 - [ ] **Scope is declared correctly** — `"project"`, `"org"`, or `"account"`
 - [ ] **`identifierFields` are declared** — required for `harness_get` dispatch
 - [ ] **`operationPolicy` on every endpoint** — risk + retryPolicy set correctly
-- [ ] **Write operations require `confirmation: true`** — no auto-destructive actions
+- [ ] **Write operations require confirmation** — elicitation or `confirm: true`; no auto-destructive actions
 - [ ] **No secrets exposed** — only metadata, never values
 - [ ] **`pnpm build` passes** — no type errors
 - [ ] **`pnpm typecheck` passes** — strict mode
