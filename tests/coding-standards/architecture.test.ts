@@ -223,6 +223,22 @@ describe("Coding standards — toolset purity", () => {
   });
 });
 
+describe("Coding standards — Zod import convention", () => {
+  it("src/ imports Zod from zod/v4 (not bare zod)", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (/from\s+["']zod["']/.test(content)) {
+        violations.push(`${rel(file)}: use import * as z from "zod/v4"`);
+      }
+    }
+
+    expect(violations, `Bare zod imports found:\n${violations.join("\n")}`).toEqual([]);
+  });
+});
+
 describe("Coding standards — Zod input schemas", () => {
   const handlerFiles = [...ALLOWED_REGISTER_TOOL_FILES];
 
