@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { dbopsToolset } from "../../../src/registry/toolsets/dbops.js";
+import { listOutputSchema } from "../../../src/tools/output-schemas.js";
 
 const executeResource = dbopsToolset.resources.find(
   (r) => r.resourceType === "database_execute_llm_authoring_pipeline",
@@ -96,5 +97,51 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
       instanceId: "i",
       pipelineIdentifier: "my-pipe",
     });
+  });
+
+  it("throws when both use_default_pipeline and pipeline_identifier are set", () => {
+    expect(() =>
+      buildBody({
+        schema_id: "s",
+        instance_id: "i",
+        conversation_id: "c",
+        changeset: "cs",
+        use_default_pipeline: true,
+        pipeline_identifier: "my-pipe",
+      }),
+    ).toThrow("Exactly one of use_default_pipeline or pipeline_identifier must be set, not both.");
+  });
+
+  it("omits both branch fields when neither use_default_pipeline nor pipeline_identifier is set", () => {
+    const body = buildBody({
+      schema_id: "s",
+      instance_id: "i",
+      conversation_id: "c",
+      changeset: "cs",
+    }) as Record<string, unknown>;
+    // Server rejects the request; client-side we just forward common fields with no branch key.
+    // This documents "no implicit default" behaviour — the server, not the client, is the guard.
+    expect(body).not.toHaveProperty("useDefaultPipeline");
+    expect(body).not.toHaveProperty("pipelineIdentifier");
+    expect(body).toMatchObject({ schemaId: "s", instanceId: "i", conversationId: "c", changeset: "cs" });
+  });
+
+  it("run action uses low_write risk (intentional — billing side-effect is scoped to the Accept & Commit flow)", () => {
+    expect(runAction.operationPolicy?.risk).toBe("low_write");
+  });
+});
+
+describe("listOutputSchema primitive widening", () => {
+  it("accepts a string[] response from the snapshot-names API (regression: items were object-only)", () => {
+    const result = listOutputSchema.safeParse({ items: ["table_a", "table_b"] });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.items).toEqual(["table_a", "table_b"]);
+    }
+  });
+
+  it("still accepts the normal object[] shape", () => {
+    const result = listOutputSchema.safeParse({ items: [{ id: "1", name: "foo" }], total: 1, page: 0 });
+    expect(result.success).toBe(true);
   });
 });
