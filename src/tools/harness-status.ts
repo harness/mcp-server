@@ -75,11 +75,11 @@ export function registerStatusTool(
     {
       description: "Get a live project health overview: recent failed executions, currently running executions, and recent deployment activity. You can pass a Harness URL to auto-extract org and project. Ideal first question: 'what's happening in my project right now?'",
       inputSchema: {
-        org_id: z.string().describe("Organization identifier (overrides default)").optional(),
-        project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        url: z.string().describe("A Harness UI URL — org and project are extracted automatically").optional(),
-        limit: z.number().describe("Max items per section (default 5, max 20)").default(5).optional(),
-        include_visual: z.boolean().describe("Include visual health dashboard image (default false)").default(false).optional(),
+        org_id: z.string().optional().describe("Organization identifier (overrides default)"),
+        project_id: z.string().optional().describe("Project identifier (overrides default)"),
+        url: z.string().optional().describe("A Harness UI URL — org and project are extracted automatically"),
+        limit: z.number().default(5).optional().describe("Max items per section (default 5, max 20)"),
+        include_visual: z.boolean().default(false).optional().describe("Include visual health dashboard image (default false)"),
       },
       outputSchema: statusOutputSchema,
       annotations: {

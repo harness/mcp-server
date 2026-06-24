@@ -249,3 +249,66 @@ describe("Coding standards — registry registration", () => {
     }
   });
 });
+
+/** Write tool handlers must wire confirmation via elicitation. */
+const WRITE_HANDLER_FILES = [
+  "src/tools/harness-create.ts",
+  "src/tools/harness-update.ts",
+  "src/tools/harness-delete.ts",
+  "src/tools/harness-execute.ts",
+] as const;
+
+/** Local-only tools may return soft errors without toMcpError. */
+const ERROR_HANDLING_ALLOWLIST = new Set([
+  "src/tools/harness-describe.ts",
+]);
+
+describe("Coding standards — HTTP client singleton", () => {
+  it("instantiates HarnessClient only in src/index.ts", () => {
+    const violations = walkTsFiles(SRC)
+      .filter((f) => rel(f) !== "src/index.ts")
+      .filter((f) => readFileSync(f, "utf8").includes("new HarnessClient("))
+      .map(rel);
+
+    expect(violations, `HarnessClient must be a singleton:\n${violations.join("\n")}`).toEqual([]);
+  });
+});
+
+describe("Coding standards — write tool safety", () => {
+  it("write handlers call confirmViaElicitation before mutating operations", () => {
+    const violations: string[] = [];
+    for (const file of WRITE_HANDLER_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!content.includes("confirmViaElicitation(")) {
+        violations.push(`${file}: missing confirmViaElicitation()`);
+      }
+    }
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+});
+
+describe("Coding standards — error handling", () => {
+  it("tool handlers import toMcpError (except local-only allowlist)", () => {
+    const violations: string[] = [];
+    for (const file of ALLOWED_REGISTER_TOOL_FILES) {
+      if (ERROR_HANDLING_ALLOWLIST.has(file)) continue;
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!content.includes("toMcpError")) {
+        violations.push(`${file}: missing toMcpError import/usage`);
+      }
+    }
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("tool handlers with try/catch use throw toMcpError for unexpected failures", () => {
+    const violations: string[] = [];
+    for (const file of ALLOWED_REGISTER_TOOL_FILES) {
+      if (ERROR_HANDLING_ALLOWLIST.has(file)) continue;
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (content.includes("try {") && !content.includes("throw toMcpError")) {
+        violations.push(`${file}: try/catch without throw toMcpError`);
+      }
+    }
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+});

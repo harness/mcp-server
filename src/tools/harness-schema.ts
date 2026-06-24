@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
+import { toMcpError, isUserError } from "../utils/errors.js";
 import { SCHEMAS } from "../data/schemas/index.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
@@ -254,10 +255,10 @@ export function registerSchemaTool(
       inputSchema: {
         resource_type: z
           .enum(availableSchemas as [string, ...string[]])
+          .optional()
           .describe(
             `Schema to fetch. Available: ${availableSchemas.join(", ")}. Required for schema/path lookups, optional for example_search.`,
-          )
-          .optional(),
+          ),
         path: z
           .string()
           .optional()
@@ -421,7 +422,8 @@ export function registerSchemaTool(
           schema: resolved,
         });
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        if (isUserError(err)) return errorResult(err.message);
+        throw toMcpError(err);
       }
     },
   );
