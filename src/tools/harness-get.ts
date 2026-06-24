@@ -24,12 +24,12 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
       description: "Get a Harness resource by ID. Accepts a Harness URL to auto-extract identifiers. For failure analysis, prefer harness_diagnose.",
       inputSchema: {
         resource_type: resourceTypeSchema(gettableTypes).optional().describe("Resource type to retrieve. Auto-detected from url."),
-        resource_id: z.string().describe("Primary resource identifier. Auto-detected from url.").optional(),
-        url: z.string().describe("Harness UI URL — auto-extracts org, project, type, and ID").optional(),
+        resource_id: z.string().optional().describe("Primary resource identifier. Auto-detected from url."),
+        url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
         resource_scope: z.enum(["account", "org", "project"]).optional().describe("Scope to query. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url."),
-        org_id: z.string().describe("Organization identifier (overrides default)").optional(),
-        project_id: z.string().describe("Project identifier (overrides default)").optional(),
-        params: z.record(z.string(), z.unknown()).describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type.").optional(),
+        org_id: z.string().optional().describe("Organization identifier (overrides default)"),
+        project_id: z.string().optional().describe("Project identifier (overrides default)"),
+        params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type."),
       },
       outputSchema: getOutputSchema,
       annotations: {

@@ -146,6 +146,26 @@ describe("Coding standards — MCP tool handlers", () => {
     const unexpected = harnessFiles.filter((f) => !ALLOWED_HARNESS_HANDLER_FILES.has(f));
     expect(unexpected, `New harness handler files found: ${unexpected.join(", ")}`).toEqual([]);
   });
+
+  it("puts Zod .describe() last in harness handler inputSchema chains", () => {
+    const violations: string[] = [];
+    // Zod 4 drops descriptions when .optional()/.default()/.min() follow .describe().
+    const describeBeforeModifier =
+      /\.describe\s*\([^)]*\)\s*\.(optional|default|min|max|refine|transform|pipe)\b/g;
+
+    for (const file of ALLOWED_HARNESS_HANDLER_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      const matches = content.match(describeBeforeModifier);
+      if (matches && matches.length > 0) {
+        violations.push(`${file}: ${matches.length} param(s) with .describe() before modifiers`);
+      }
+    }
+
+    expect(
+      violations,
+      `Zod .describe() must be last in the chain (Zod 4 drops descriptions otherwise):\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
 });
 
 describe("Coding standards — logging and HTTP", () => {
@@ -161,6 +181,54 @@ describe("Coding standards — logging and HTTP", () => {
     }
 
     expect(violations, `console.log() found in:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("never writes to process.stdout in src/ (stdio JSON-RPC safety)", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (/\bprocess\.stdout\.write\s*\(/.test(content)) {
+        violations.push(rel(file));
+      }
+    }
+
+    expect(violations, `process.stdout.write() found in:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("does not use server.tool() — only server.registerTool() is allowed", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (/\bserver\.tool\s*\(/.test(content)) {
+        violations.push(rel(file));
+      }
+    }
+
+    expect(violations, `server.tool() found in:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("instantiates HarnessClient only in src/index.ts", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (!/\bnew HarnessClient\s*\(/.test(content)) continue;
+
+      const fileRel = rel(file);
+      if (fileRel !== "src/index.ts") {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `HarnessClient must be a singleton in src/index.ts only:\n${violations.join("\n")}`,
+    ).toEqual([]);
   });
 
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {
@@ -220,6 +288,23 @@ describe("Coding standards — toolset purity", () => {
       violations,
       `Toolset files missing 'export const <name>Toolset: ToolsetDefinition':\n${violations.join("\n")}`,
     ).toEqual([]);
+  });
+
+  it("toolset files do not use console.* (pure data — use createLogger in handlers)", () => {
+    const violations: string[] = [];
+    const consolePattern = /\bconsole\.(log|error|warn|info|debug)\s*\(/;
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const content = readFileSync(file, "utf8");
+      if (consolePattern.test(content)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(violations, `console.* found in toolsets:\n${violations.join("\n")}`).toEqual([]);
   });
 });
 

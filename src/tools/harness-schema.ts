@@ -254,10 +254,10 @@ export function registerSchemaTool(
       inputSchema: {
         resource_type: z
           .enum(availableSchemas as [string, ...string[]])
+          .optional()
           .describe(
             `Schema to fetch. Available: ${availableSchemas.join(", ")}. Required for schema/path lookups, optional for example_search.`,
-          )
-          .optional(),
+          ),
         path: z
           .string()
           .optional()
