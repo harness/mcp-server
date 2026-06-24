@@ -927,4 +927,68 @@ describe("HarnessClient", () => {
       expect(url.searchParams.get("inputSetIdentifiers")).toBe("mcp_default_runtime_inputs");
     });
   });
+
+  describe("getCurrentUserId", () => {
+    function mockCurrentUserResponse(uuid: string | undefined) {
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify({ status: "SUCCESS", data: uuid ? { uuid } : {} }), {
+          status: 200,
+        }),
+      );
+    }
+
+    it("fetches UUID from /ng/api/user/currentUser and caches it", async () => {
+      mockCurrentUserResponse("user-uuid-123");
+      const client = new HarnessClient(makeConfig());
+
+      const first = await client.getCurrentUserId();
+      const second = await client.getCurrentUserId();
+
+      expect(first).toBe("user-uuid-123");
+      expect(second).toBe("user-uuid-123");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      const url = new URL(fetchSpy.mock.calls[0]![0] as string);
+      expect(url.pathname).toBe("/ng/api/user/currentUser");
+    });
+
+    it("deduplicates concurrent inflight requests", async () => {
+      mockCurrentUserResponse("user-uuid-456");
+      const client = new HarnessClient(makeConfig());
+
+      const [a, b] = await Promise.all([
+        client.getCurrentUserId(),
+        client.getCurrentUserId(),
+      ]);
+
+      expect(a).toBe("user-uuid-456");
+      expect(b).toBe("user-uuid-456");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws HarnessApiError when response lacks data.uuid", async () => {
+      mockCurrentUserResponse(undefined);
+      const client = new HarnessClient(makeConfig());
+
+      await expect(client.getCurrentUserId()).rejects.toThrow(/service account/);
+    });
+
+    it("allows retry after a failed fetch clears the inflight promise", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ status: "SUCCESS", data: {} }), { status: 200 }),
+        )
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ status: "SUCCESS", data: { uuid: "retry-uuid" } }), {
+            status: 200,
+          }),
+        );
+
+      const client = new HarnessClient(makeConfig());
+
+      await expect(client.getCurrentUserId()).rejects.toBeInstanceOf(HarnessApiError);
+      const uuid = await client.getCurrentUserId();
+      expect(uuid).toBe("retry-uuid");
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+  });
 });

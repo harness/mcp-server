@@ -88,6 +88,23 @@ describe("harness_schema live entities", () => {
     expect(requestMock).toHaveBeenCalledTimes(1);
   });
 
+  it("isolates cache entries by scope (account vs project do not share)", async () => {
+    await server.call("harness_schema", { resource_type: "connector", scope: "account" });
+    await server.call("harness_schema", {
+      resource_type: "connector",
+      scope: "project",
+      org_id: "my-org",
+      project_id: "my-proj",
+    });
+    await server.call("harness_schema", {
+      resource_type: "connector",
+      scope: "project",
+      org_id: "my-org",
+      project_id: "my-proj",
+    });
+    expect(requestMock).toHaveBeenCalledTimes(2);
+  });
+
   it("passes org_id and project_id for project scope", async () => {
     await server.call("harness_schema", {
       resource_type: "environment",
