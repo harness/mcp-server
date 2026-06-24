@@ -44,6 +44,21 @@ const CONNECTOR_LIVE_SCHEMA = {
   },
 };
 
+function liveEntitySchema(resourceType: string, fieldName: string) {
+  return {
+    definitions: {
+      [resourceType]: {
+        [resourceType]: {
+          type: "object",
+          properties: {
+            [fieldName]: { type: "string" },
+          },
+        },
+      },
+    },
+  };
+}
+
 describe("harness_schema live entities", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let requestMock: ReturnType<typeof vi.fn>;
@@ -86,6 +101,31 @@ describe("harness_schema live entities", () => {
     await server.call("harness_schema", { resource_type: "connector" });
     await server.call("harness_schema", { resource_type: "connector" });
     expect(requestMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("isolates live schema cache entries by project scope identifiers", async () => {
+    requestMock.mockReset();
+    requestMock
+      .mockResolvedValueOnce({ data: liveEntitySchema("environment", "project_a_field") })
+      .mockResolvedValueOnce({ data: liveEntitySchema("environment", "project_b_field") });
+
+    const first = parseResult(await server.call("harness_schema", {
+      resource_type: "environment",
+      scope: "project",
+      org_id: "org-a",
+      project_id: "project-a",
+    })) as { fields: Array<{ name: string }> };
+    const second = parseResult(await server.call("harness_schema", {
+      resource_type: "environment",
+      scope: "project",
+      org_id: "org-b",
+      project_id: "project-b",
+    })) as { fields: Array<{ name: string }> };
+
+    expect(requestMock).toHaveBeenCalledTimes(2);
+    expect(first.fields.map((field) => field.name)).toContain("project_a_field");
+    expect(second.fields.map((field) => field.name)).toContain("project_b_field");
+    expect(second.fields.map((field) => field.name)).not.toContain("project_a_field");
   });
 
   it("passes org_id and project_id for project scope", async () => {

@@ -49,6 +49,25 @@ export function getBundledEntitySchema(
   return bundledByScopeKey.get(buildBundledSchemaKey(resourceType, scope));
 }
 
+export function bundledSnapshotMatchesScope(
+  resourceType: string,
+  scope: HarnessYamlScope,
+  orgId?: string,
+  projectId?: string,
+): boolean {
+  ensureLoaded();
+  const meta = ENTITY_BUNDLED_META[buildBundledSchemaKey(resourceType, scope)];
+  if (!meta) return true;
+
+  if ((scope === "org" || scope === "project") && meta.orgId && meta.orgId !== orgId) {
+    return false;
+  }
+  if (scope === "project" && meta.projectId && meta.projectId !== projectId) {
+    return false;
+  }
+  return true;
+}
+
 /**
  * Load vendored entity schemas at process startup (no HTTP).
  * Warms the live runtime cache when snapshots match the configured account (OSS / reference account).
@@ -68,7 +87,11 @@ export function preloadBundledEntitySchemas(
     if (dot < 0) continue;
     const resourceType = bundledKey.slice(0, dot);
     const scope = bundledKey.slice(dot + 1) as HarnessYamlScope;
-    const cacheKey = buildLiveSchemaCacheKey(resourceType, accountId, scope);
+    const meta = ENTITY_BUNDLED_META[bundledKey];
+    const cacheKey = buildLiveSchemaCacheKey(resourceType, accountId, scope, {
+      orgId: meta?.orgId,
+      projectId: meta?.projectId,
+    });
     if (!runtimeCache.has(cacheKey)) {
       runtimeCache.set(cacheKey, { schema, source: "bundled" });
       warmed += 1;
