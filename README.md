@@ -1818,6 +1818,8 @@ Available toolset names:
 
 ### Adding a New Resource Type
 
+See [docs/coding-standards.md](docs/coding-standards.md) for the full contributor guide and commit checklist. Run `pnpm standards:check` before every PR — it enforces the registry-driven architecture (fixed 11 tools, pure-data toolsets, stderr-only logging, and related contracts).
+
 Create a new file in `src/registry/toolsets/` or add a resource to an existing toolset:
 
 ```typescript
@@ -1874,6 +1876,9 @@ pnpm typecheck
 
 # Run tests
 pnpm test
+
+# Architecture / coding-standards guardrails (see docs/coding-standards.md)
+pnpm standards:check
 
 # Watch tests
 pnpm test:watch
