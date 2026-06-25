@@ -870,6 +870,48 @@ Constraints:
 
 If Harness rejects the run as not enabled, check both the account-level Allow Dynamic Execution setting and the pipeline-level toggle under Pipeline -> Advanced Options -> Dynamic Execution Settings.
 
+### Pipeline Validation
+
+Use `pipeline_validation` to validate pipeline YAML before saving or executing. Two actions are available:
+
+**`validate_schema`** — Schema-only validation with no side effects. Catches structural errors (missing fields, bad types, invalid stage configs) without creating or modifying anything. Works for brand-new YAML that hasn't been saved yet.
+
+```json
+{
+  "resource_type": "pipeline_validation",
+  "action": "validate_schema",
+  "body": {
+    "yaml": "pipeline:\n  name: My Pipeline\n  identifier: my_pipeline\n  stages: []\n",
+    "version": "v0"
+  }
+}
+```
+
+Returns `{ valid, error_message, errors[] }` where each error has `message`, `path` (FQN like `$.pipeline.stages`), and `hint`.
+
+**`dry_run`** — Full validation including plan resolution and policy checks. Requires an existing pipeline (the identifier must already exist in Harness). Optionally pass `pipeline_yaml` to validate modified YAML against the pipeline shell.
+
+```json
+{
+  "resource_type": "pipeline_validation",
+  "action": "dry_run",
+  "body": {
+    "pipeline_identifier": "my_pipeline",
+    "pipeline_yaml": "pipeline:\n  name: ...\n  ..."
+  }
+}
+```
+
+Returns `{ is_valid, validation[] }` where each entry has `type` (SCHEMA/POLICY/SYSTEM), `entity`, `error`, and `hint`.
+
+**Limitations:**
+- `validate_schema` works reliably for v0 pipelines only. V1 schema validation is inconsistent across environments.
+- `dry_run` requires an existing pipeline — cannot validate brand-new YAML from scratch.
+- `dry_run` cannot parse v1 pipeline YAML (backend limitation).
+- Reference validation (broken connector refs) may not fire reliably in `dry_run`.
+
+**Recommended workflow:** validate_schema (pre-save) → create/update → dry_run (post-save) → execute.
+
 ### Execution Input Forensics
 
 Use `execution_inputs` after a run to inspect the merged input YAML that produced a specific execution. This is useful when a failure depends on input-set merging, Git-backed input set branches, or trigger/runtime values that are hard to reconstruct from the execution page alone.
@@ -1157,6 +1199,7 @@ Harness pipelines can be stored in three ways:
 | `pipeline`                     | x    | x   | x      | x      | x      | `run`, `retry`      |
 | `pipeline_v1` **(Alpha)**      | x    | x   | x      | x      | x      | `run`               |
 | `pipeline_dynamic_execution`   |      |     |        |        |        | `run`               |
+| `pipeline_validation`          |      |     |        |        |        | `validate_schema`, `dry_run` |
 | `execution`                    | x    | x   |        |        |        | `interrupt`         |
 | `execution_inputs`             |      | x   |        |        |        |                     |
 | `trigger`                      | x    | x   | x      | x      | x      |                     |
@@ -1740,7 +1783,7 @@ Available toolset names:
 | Toolset                 | Resource Types                                                                                                                                                                                                                                                                                  |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `platform`              | organization, project                                                                                                                                                                                                                                                                           |
-| `pipelines`             | pipeline, pipeline_v1, pipeline_dynamic_execution, execution, execution_inputs, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                                         |
+| `pipelines`             | pipeline, pipeline_v1, pipeline_dynamic_execution, pipeline_validation, execution, execution_inputs, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                    |
 | `agents`                | agent, agent_run                                                                                                                                                                                                                                                                                |
 | `services`              | service                                                                                                                                                                                                                                                                                         |
 | `environments`          | environment                                                                                                                                                                                                                                                                                     |

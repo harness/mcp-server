@@ -70,6 +70,7 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
             diagnosticHint: def.diagnosticHint ?? undefined,
             relatedResources: def.relatedResources ?? undefined,
             executeHint: def.executeHint ?? undefined,
+            createHint: def.createHint ?? undefined,
             ...(() => {
               const examples = getExamplesForResource(def.resourceType);
               return examples.length > 0

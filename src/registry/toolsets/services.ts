@@ -82,7 +82,11 @@ export const servicesToolset: ToolsetDefinition = {
             unwrapKey: "service",
             injectIdentifier: { inputField: "service_id", bodyField: "identifier" },
           }),
-          responseExtractor: ngExtract,
+          responseExtractor: (raw: unknown) => {
+            const result = ngExtract(raw) as Record<string, unknown>;
+            result._post_update_hint = "CRITICAL: Verify the service still has its serviceDefinition (artifacts + manifests) intact. Use harness_get to confirm — partial updates can silently strip the serviceDefinition block.";
+            return result;
+          },
           description: "Update an existing service",
           bodySchema: serviceUpdateSchema,
         },
