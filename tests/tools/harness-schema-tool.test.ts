@@ -174,6 +174,54 @@ describe("harness_schema live entities", () => {
     expect(parsed.error).toMatch(/org_id is required/);
     expect(requestMock).not.toHaveBeenCalled();
   });
+
+  it("rejects org scope without org_id before bundled or live fetch", async () => {
+    const result = await server.call("harness_schema", {
+      resource_type: "connector",
+      scope: "org",
+    });
+    const parsed = parseResult(result) as { error: string };
+
+    expect(result.isError).toBe(true);
+    expect(parsed.error).toMatch(/org_id is required when scope is 'org'/);
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it("rejects project scope without project_id before bundled or live fetch", async () => {
+    const result = await server.call("harness_schema", {
+      resource_type: "connector",
+      scope: "project",
+      org_id: "default",
+    });
+    const parsed = parseResult(result) as { error: string };
+
+    expect(result.isError).toBe(true);
+    expect(parsed.error).toMatch(/project_id is required when scope is 'project'/);
+    expect(requestMock).not.toHaveBeenCalled();
+  });
+
+  it("isolates live schema cache entries by org scope identifiers", async () => {
+    requestMock.mockReset();
+    requestMock
+      .mockResolvedValueOnce({ data: liveEntitySchema("connector", "org_a_field") })
+      .mockResolvedValueOnce({ data: liveEntitySchema("connector", "org_b_field") });
+
+    const first = parseResult(await server.call("harness_schema", {
+      resource_type: "connector",
+      scope: "org",
+      org_id: "org-a",
+    })) as { fields: Array<{ name: string }> };
+    const second = parseResult(await server.call("harness_schema", {
+      resource_type: "connector",
+      scope: "org",
+      org_id: "org-b",
+    })) as { fields: Array<{ name: string }> };
+
+    expect(requestMock).toHaveBeenCalledTimes(2);
+    expect(first.fields.map((field) => field.name)).toContain("org_a_field");
+    expect(second.fields.map((field) => field.name)).toContain("org_b_field");
+    expect(second.fields.map((field) => field.name)).not.toContain("org_a_field");
+  });
 });
 
 describe("harness_schema static enum", () => {

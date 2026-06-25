@@ -1,7 +1,14 @@
 import { describe, it, expect } from "vitest";
-import { buildLiveSchemaCacheKey } from "../../src/tools/entity-schema/cache-keys.js";
+import { buildLiveSchemaCacheKey, buildBundledSchemaKey } from "../../src/tools/entity-schema/cache-keys.js";
 import { bundledSnapshotMatchesScope } from "../../src/tools/entity-schema/bundled.js";
 import { ENTITY_BUNDLED_META } from "../../src/data/schemas/entities/index.js";
+
+describe("buildBundledSchemaKey", () => {
+  it("joins resource type and scope with a dot", () => {
+    expect(buildBundledSchemaKey("connector", "project")).toBe("connector.project");
+    expect(buildBundledSchemaKey("environment", "org")).toBe("environment.org");
+  });
+});
 
 describe("buildLiveSchemaCacheKey", () => {
   it("account scope keys only resource type, scope, and account id", () => {
@@ -39,6 +46,7 @@ describe("buildLiveSchemaCacheKey", () => {
 
 describe("bundledSnapshotMatchesScope", () => {
   const projectMeta = ENTITY_BUNDLED_META["connector.project"]!;
+  const orgMeta = ENTITY_BUNDLED_META["connector.org"]!;
 
   it("accepts bundled project snapshot when org and project match vendored meta", () => {
     expect(
@@ -65,5 +73,17 @@ describe("bundledSnapshotMatchesScope", () => {
 
   it("accepts account-scoped bundled snapshots without org/project identifiers", () => {
     expect(bundledSnapshotMatchesScope("connector", "account")).toBe(true);
+  });
+
+  it("rejects bundled org snapshot when org differs from vendored meta", () => {
+    expect(
+      bundledSnapshotMatchesScope("connector", "org", "other-org"),
+    ).toBe(false);
+  });
+
+  it("accepts bundled org snapshot when org matches vendored meta", () => {
+    expect(
+      bundledSnapshotMatchesScope("connector", "org", orgMeta.orgId),
+    ).toBe(true);
   });
 });

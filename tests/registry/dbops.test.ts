@@ -776,6 +776,53 @@ describe("database_execute_llm_authoring_pipeline run", () => {
   });
 });
 
+describe("database_snapshot_object list", () => {
+  it("maps object_type and size query params on the snapshot-object-names path", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ data: ["users", "orders"] });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "database_snapshot_object", "list", {
+      org_id: "default",
+      project_id: "test-project",
+      dbschema_id: "my_schema",
+      dbinstance_id: "my_instance",
+      object_type: "Table",
+      size: 50,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe(
+      "/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/dbinstance/my_instance/snapshot-object-names",
+    );
+    expect(call.params).toMatchObject({
+      objectType: "Table",
+      limit: 50,
+    });
+    expect(result).toEqual({ data: ["users", "orders"] });
+  });
+});
+
+describe("database_snapshot_object get bodyBuilder", () => {
+  const getBodyBuilder = () => getOp("database_snapshot_object", "get").bodyBuilder!;
+
+  it("throws when object_names is missing or empty", () => {
+    const build = getBodyBuilder();
+    expect(() => build({ object_type: "Table" })).toThrow(/object_names is required/);
+    expect(() => build({ object_names: [] })).toThrow(/object_names is required/);
+    expect(() => build({ object_names: "users" })).toThrow(/object_names is required/);
+  });
+
+  it("defaults object_type to Table when omitted", () => {
+    const build = getBodyBuilder();
+    expect(build({ object_names: ["users"] })).toEqual({
+      objectType: "Table",
+      objectNames: ["users"],
+    });
+  });
+});
+
 describe("database_snapshot_object get", () => {
   it("passes object lookup body without scope injection", async () => {
     const registry = new Registry(makeConfig());
@@ -804,5 +851,79 @@ describe("database_snapshot_object get", () => {
     });
     expect(call.body).not.toHaveProperty("orgIdentifier");
     expect(call.body).not.toHaveProperty("projectIdentifier");
+  });
+});
+
+describe("database_default_authoring_instance get", () => {
+  it("GETs the default authoring instance for a schema", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      identifier: "instance_1",
+      name: "Primary DB",
+      hasSnapshot: true,
+      connector: "jdbc_connector",
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "database_default_authoring_instance", "get", {
+      org_id: "default",
+      project_id: "test-project",
+      dbschema_id: "my_schema",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe(
+      "/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/default-authoring-instance",
+    );
+    expect(result).toMatchObject({
+      identifier: "instance_1",
+      connector: "jdbc_connector",
+    });
+  });
+});
+
+describe("database_llm_authoring_pipeline get", () => {
+  it("GETs the resolved LLM authoring pipeline with dbSchema and dbInstance query params", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      response: { pipelineIdentifier: "dbops_default_pipeline" },
+      metadata: { pipelineIdentifier: "dbops_default_pipeline" },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "database_llm_authoring_pipeline", "get", {
+      org_id: "default",
+      project_id: "test-project",
+      dbschema_id: "my_schema",
+      dbinstance_id: "my_instance",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe(
+      "/dbops/v1/orgs/default/projects/test-project/default-llm-pipeline",
+    );
+    expect(call.params).toMatchObject({
+      dbSchema: "my_schema",
+      dbInstance: "my_instance",
+    });
+    expect(result).toMatchObject({ status: "SUCCESS" });
+  });
+});
+
+describe("database_execute_llm_authoring_pipeline read-only mode", () => {
+  it("blocks run execute action when HARNESS_READ_ONLY is enabled", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_READ_ONLY: true }));
+    const client = makeClient();
+
+    await expect(
+      registry.dispatchExecute(client, "database_execute_llm_authoring_pipeline", "run", {
+        org_id: "default",
+        project_id: "test-project",
+        body: { use_default_pipeline: true },
+      }),
+    ).rejects.toThrow(/Read-only mode/);
   });
 });

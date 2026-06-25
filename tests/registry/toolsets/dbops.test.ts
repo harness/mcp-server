@@ -129,6 +129,48 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
   it("run action uses low_write risk (intentional — billing side-effect is scoped to the Accept & Commit flow)", () => {
     expect(runAction.operationPolicy?.risk).toBe("low_write");
   });
+
+  it("omits runtimeInputs when custom branch has empty runtime_inputs object", () => {
+    const body = buildBody({
+      schema_id: "s",
+      instance_id: "i",
+      conversation_id: "c",
+      changeset: "cs",
+      pipeline_identifier: "my-pipe",
+      runtime_inputs: {},
+    }) as Record<string, unknown>;
+    expect(body).toMatchObject({ pipelineIdentifier: "my-pipe" });
+    expect(body).not.toHaveProperty("runtimeInputs");
+  });
+
+  it("accepts camelCase useDefaultPipeline on the default-pipeline branch", () => {
+    const body = buildBody({
+      schemaId: "s",
+      instanceId: "i",
+      conversationId: "c",
+      changeset: "cs",
+      useDefaultPipeline: true,
+    }) as Record<string, unknown>;
+    expect(body).toMatchObject({ useDefaultPipeline: true });
+    expect(body).not.toHaveProperty("pipelineIdentifier");
+  });
+
+  it("throws when both camelCase useDefaultPipeline and pipelineIdentifier are set", () => {
+    expect(() =>
+      buildBody({
+        schemaId: "s",
+        instanceId: "i",
+        conversationId: "c",
+        changeset: "cs",
+        useDefaultPipeline: true,
+        pipelineIdentifier: "my-pipe",
+      }),
+    ).toThrow("Exactly one of use_default_pipeline or pipeline_identifier must be set, not both.");
+  });
+
+  it("has skipScopeBodyInjection so scope identifiers never leak into the execute body", () => {
+    expect(runAction.skipScopeBodyInjection).toBe(true);
+  });
 });
 
 describe("listOutputSchema primitive widening", () => {
