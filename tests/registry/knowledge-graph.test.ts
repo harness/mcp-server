@@ -261,6 +261,62 @@ describe("kg_type get extractor", () => {
   });
 });
 
+describe("kg_related_type get body", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("sends include_transitive only when explicitly true", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ relationship_types: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "kg_related_type", "get", {
+      type_id: "service",
+      include_transitive: true,
+    });
+
+    expect(mockRequest.mock.calls[0][0].body).toEqual({
+      type_reference: { object_kind: "OBJECT_KIND_ENTITY", id: "service" },
+      include_transitive: true,
+    });
+
+    mockRequest.mockClear();
+
+    await registry.dispatch(client, "kg_related_type", "get", {
+      type_id: "service",
+      include_transitive: false,
+    });
+
+    expect(mockRequest.mock.calls[0][0].body.include_transitive).toBe(false);
+
+    mockRequest.mockClear();
+
+    await registry.dispatch(client, "kg_related_type", "get", {
+      type_id: "service",
+      include_transitive: "true" as unknown as boolean,
+    });
+
+    expect(mockRequest.mock.calls[0][0].body.include_transitive).toBe(false);
+  });
+
+  it("honors kind override in type_reference", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ relationship_types: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "kg_related_type", "get", {
+      type_id: "my_view",
+      kind: "OBJECT_KIND_VIEW",
+    });
+
+    expect(mockRequest.mock.calls[0][0].body).toEqual({
+      type_reference: { object_kind: "OBJECT_KIND_VIEW", id: "my_view" },
+      include_transitive: false,
+    });
+  });
+});
+
 describe("kg_related_type get extractor", () => {
   let registry: Registry;
 
