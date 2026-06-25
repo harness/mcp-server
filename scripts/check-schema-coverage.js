@@ -6,6 +6,8 @@
  * Usage: node scripts/check-schema-coverage.js
  */
 
+import { compareSchemaCoverage } from "./check-schema-coverage-lib.js";
+
 const GITHUB_API = "https://api.github.com/repos/harness/harness-schema/contents";
 
 const SYNCED_V0 = new Set(["pipeline", "template", "trigger"]);
@@ -41,21 +43,19 @@ async function main() {
     ["v1", SYNCED_V1, EXCLUDED_V1],
   ]) {
     const upstream = await listJsonFiles(version);
-    for (const name of upstream) {
-      if (!synced.has(name) && !excluded.has(name)) {
-        console.error(
-          `[MISSING] ${version}/${name}.json exists upstream but is not synced or excluded. ` +
-          `Add "${name}" to ${version === "v0" ? "V0_SCHEMAS" : "V1_SCHEMAS"} in scripts/sync-schemas.js ` +
-          `or to EXCLUDED_${version.toUpperCase()} in scripts/check-schema-coverage.js.`,
-        );
-        hasError = true;
-      }
+    const { missing, stale } = compareSchemaCoverage(synced, excluded, upstream);
+
+    for (const name of missing) {
+      console.error(
+        `[MISSING] ${version}/${name}.json exists upstream but is not synced or excluded. ` +
+        `Add "${name}" to ${version === "v0" ? "V0_SCHEMAS" : "V1_SCHEMAS"} in scripts/sync-schemas.js ` +
+        `or to EXCLUDED_${version.toUpperCase()} in scripts/check-schema-coverage.js.`,
+      );
+      hasError = true;
     }
 
-    for (const name of synced) {
-      if (!upstream.includes(name)) {
-        console.warn(`[STALE] ${version}/${name}.json is synced but no longer exists upstream.`);
-      }
+    for (const name of stale) {
+      console.warn(`[STALE] ${version}/${name}.json is synced but no longer exists upstream.`);
     }
   }
 
