@@ -220,6 +220,78 @@ describe("kg_queryable_type_summary list extractor", () => {
 });
 
 // ---------------------------------------------------------------------------
+// kg_queryable_type_summary — request-body filter construction
+// ---------------------------------------------------------------------------
+
+describe("kg_queryable_type_summary list body filter", () => {
+  // KG_DEFAULT_ANNOTATIONS is read at module load, so each env permutation
+  // re-imports the registry with a fresh module graph.
+  async function freshRegistry(): Promise<Registry> {
+    vi.resetModules();
+    const { Registry: FreshRegistry } = await import("../../src/registry/index.js");
+    return new FreshRegistry(makeConfig());
+  }
+
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("forwards caller-supplied annotations and kinds verbatim", async () => {
+    const registry = await freshRegistry();
+    const mockRequest = vi.fn().mockResolvedValue({ queryable_types: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "kg_queryable_type_summary", "list", {
+      kinds: "OBJECT_KIND_VIEW",
+      annotations: ["custom_cohort"],
+    });
+
+    expect(mockRequest.mock.calls[0]![0].body).toEqual({
+      filter: { kinds: ["OBJECT_KIND_VIEW"], annotations: ["custom_cohort"] },
+    });
+  });
+
+  it("sends no filter when the caller supplies none and no default is set", async () => {
+    vi.stubEnv("KG_DEFAULT_ANNOTATIONS", "");
+    const registry = await freshRegistry();
+    const mockRequest = vi.fn().mockResolvedValue({ queryable_types: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "kg_queryable_type_summary", "list", {});
+
+    expect(mockRequest.mock.calls[0]![0].body).toEqual({});
+  });
+
+  it("applies KG_DEFAULT_ANNOTATIONS when the caller supplies no annotations", async () => {
+    vi.stubEnv("KG_DEFAULT_ANNOTATIONS", "cohort_a");
+    const registry = await freshRegistry();
+    const mockRequest = vi.fn().mockResolvedValue({ queryable_types: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "kg_queryable_type_summary", "list", {});
+
+    expect(mockRequest.mock.calls[0]![0].body).toEqual({
+      filter: { annotations: ["cohort_a"] },
+    });
+  });
+
+  it("lets caller-supplied annotations override the configured default", async () => {
+    vi.stubEnv("KG_DEFAULT_ANNOTATIONS", "cohort_a");
+    const registry = await freshRegistry();
+    const mockRequest = vi.fn().mockResolvedValue({ queryable_types: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "kg_queryable_type_summary", "list", {
+      annotations: ["other"],
+    });
+
+    expect(mockRequest.mock.calls[0]![0].body).toEqual({
+      filter: { annotations: ["other"] },
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // kg_type / kg_related_type — extractor behavior
 // ---------------------------------------------------------------------------
 

@@ -3,6 +3,15 @@ import type { ToolsetDefinition, FilterFieldSpec } from "../types.js";
 const QUERY_SVC =
   "/query-service/grpc/io.harness.platform.query.service.api.v1.QueryServiceGrpc";
 
+// Default annotation cohort applied to queryable-type discovery when the caller
+// supplies none. Empty (unset) preserves the prior behaviour of returning the
+// full unfiltered catalog; set KG_DEFAULT_ANNOTATIONS (comma-separated) per
+// deployment to scope discovery to a cohort.
+const DEFAULT_KG_ANNOTATIONS = (process.env.KG_DEFAULT_ANNOTATIONS ?? "")
+  .split(",")
+  .map((a) => a.trim())
+  .filter(Boolean);
+
 // ─── Response extractors ─────────────────────────────────────────────────────
 
 const MAX_DESC_LEN = 80;
@@ -122,7 +131,9 @@ function queryableTypesBody(input: Record<string, unknown>): Record<string, unkn
     filter.kinds = Array.isArray(kinds) ? kinds : [kinds];
   }
 
-  const annotations = input.annotations;
+  const annotations =
+    input.annotations ??
+    (DEFAULT_KG_ANNOTATIONS.length > 0 ? DEFAULT_KG_ANNOTATIONS : undefined);
   if (annotations) {
     filter.annotations = Array.isArray(annotations) ? annotations : [annotations];
   }
