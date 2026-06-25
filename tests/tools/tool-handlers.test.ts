@@ -182,6 +182,62 @@ describe("harness_list", () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Server error", 500));
     await expect(server.call("harness_list", { resource_type: "pipeline" })).rejects.toThrow();
   });
+
+  it("returns mixed text+image content when include_visual is set for executions", { timeout: 15_000 }, async () => {
+    mockRequest.mockResolvedValueOnce({
+      status: "SUCCESS",
+      data: {
+        content: [
+          {
+            planExecutionId: "exec-1",
+            status: "Success",
+            pipelineIdentifier: "build",
+            startTs: Date.now(),
+          },
+          {
+            planExecutionId: "exec-2",
+            status: "Failed",
+            pipelineIdentifier: "deploy",
+            startTs: Date.now() - 3600000,
+          },
+        ],
+        totalElements: 2,
+      },
+    });
+
+    const result = await server.call("harness_list", {
+      resource_type: "execution",
+      include_visual: true,
+      visual_type: "pie",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toHaveLength(2);
+    expect(result.content[0]!.type).toBe("text");
+    expect(result.content[1]!.type).toBe("image");
+
+    const data = parseResult(result) as { items: unknown[]; analysis?: string };
+    expect(data.items).toHaveLength(2);
+    expect(data.analysis).toContain("Executions by status");
+    expect(result.structuredContent).toMatchObject({ analysis: expect.stringContaining("Executions by status") });
+
+    const img = result.content[1] as { type: "image"; data: string; mimeType: string };
+    expect(img.mimeType).toBe("image/png");
+    expect(Buffer.from(img.data, "base64")[0]).toBe(0x89);
+  });
+
+  it("returns text-only when include_visual is set for non-execution resources", async () => {
+    const result = await server.call("harness_list", {
+      resource_type: "pipeline",
+      include_visual: true,
+      visual_type: "pie",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(result.content).toHaveLength(1);
+    expect(result.content[0]!.type).toBe("text");
+    expect((parseResult(result) as { analysis?: string }).analysis).toBeUndefined();
+  });
 });
 
 describe("harness_get", () => {

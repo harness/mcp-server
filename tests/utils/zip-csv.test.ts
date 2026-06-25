@@ -12,7 +12,7 @@ function writeUint32LE(buf: Buffer, offset: number, value: number): void {
 }
 
 function createZip(
-  entries: Array<{ name: string; content: string; compression?: "store" | "deflate" }>,
+  entries: Array<{ name: string; content: string; compression?: "store" | "deflate" | number }>,
 ): ArrayBuffer {
   const localParts: Buffer[] = [];
   const centralParts: Buffer[] = [];
@@ -21,9 +21,13 @@ function createZip(
   for (const entry of entries) {
     const nameBuf = Buffer.from(entry.name, "utf-8");
     const rawData = Buffer.from(entry.content, "utf-8");
-    const compressed =
-      entry.compression === "deflate" ? deflateRawSync(rawData) : rawData;
-    const compressionMethod = entry.compression === "deflate" ? 8 : 0;
+    const compressionMethod =
+      typeof entry.compression === "number"
+        ? entry.compression
+        : entry.compression === "deflate"
+          ? 8
+          : 0;
+    const compressed = compressionMethod === 8 ? deflateRawSync(rawData) : rawData;
     const checksum = crc32(rawData) >>> 0;
 
     const localHeader = Buffer.alloc(30 + nameBuf.length);
@@ -120,6 +124,41 @@ describe("parseZipCsv", () => {
   it("returns empty tables for ZIPs with no CSV entries", () => {
     const zip = createZip([{ name: "readme.txt", content: "no tables here" }]);
     expect(parseZipCsv(zip)).toEqual({ tables: {} });
+  });
+
+  it("parses nested path table names and strips outer quotes from simple CSV fields", () => {
+    const zip = createZip([
+      {
+        name: "folder/summary.csv",
+        content: '"service","count"\n"api","12"\n',
+      },
+    ]);
+
+    expect(parseZipCsv(zip)).toEqual({
+      tables: {
+        "folder/summary": [{ service: "api", count: "12" }],
+      },
+    });
+  });
+
+  it("returns empty rows for CSV files with only a header line", () => {
+    const zip = createZip([{ name: "empty.csv", content: "only,header\n" }]);
+    expect(parseZipCsv(zip)).toEqual({ tables: { empty: [] } });
+  });
+
+  it("skips zero-byte CSV entries", () => {
+    const zip = createZip([
+      { name: "empty.csv", content: "" },
+      { name: "data.csv", content: "k,v\na,1\n" },
+    ]);
+    expect(parseZipCsv(zip)).toEqual({
+      tables: { data: [{ k: "a", v: "1" }] },
+    });
+  });
+
+  it("throws for unsupported compression methods", () => {
+    const zip = createZip([{ name: "bad.csv", content: "a,b\n1,2\n", compression: 1 }]);
+    expect(() => parseZipCsv(zip)).toThrow(/Unsupported compression method: 1/);
   });
 });
 
