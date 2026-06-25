@@ -184,6 +184,8 @@ describe("template_v1 global template catalog", () => {
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "template_v1", "list", {
+      org_id: "default",
+      project_id: "test-project",
       template_type: "Step",
     });
 
