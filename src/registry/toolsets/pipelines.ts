@@ -44,7 +44,7 @@ function normalizeTriggerBody(
 // ---------------------------------------------------------------------------
 
 const pipelineV1CreateSchema: BodySchema = {
-  description: "V1 pipeline definition. Pass pipeline_yaml (YAML string of the v1 pipeline definition), identifier, and name. The version field defaults to '1'. Alternatively, pass a raw YAML string as body — identifier and name will be extracted from the YAML. You can also pass {pipeline: {...}} as a JSON object which will be serialized to YAML automatically.",
+  description: "V1 pipeline definition. Pass pipeline_yaml (YAML string of the v1 pipeline definition), identifier, and name. The version field defaults to '1'. Alternatively, pass a raw YAML string as body — identifier (from pipeline.identifier or v1 pipeline.id) and name will be extracted from the YAML. You can also pass {pipeline: {...}} as a JSON object which will be serialized to YAML automatically.",
   fields: [
     { name: "pipeline_yaml", type: "string", required: true, description: "Pipeline YAML string (the v1 pipeline definition including 'pipeline:' root key)" },
     { name: "identifier", type: "string", required: true, description: "Unique pipeline identifier" },
@@ -56,7 +56,7 @@ const pipelineV1CreateSchema: BodySchema = {
 };
 
 const pipelineV1UpdateSchema: BodySchema = {
-  description: "V1 pipeline definition (full replacement). Same fields as create: pipeline_yaml, identifier, name, version. Pass a raw YAML string as body, or {pipeline_yaml, identifier, name} as JSON.",
+  description: "V1 pipeline definition (full replacement). Same fields as create: pipeline_yaml, identifier, name, version. Pass a raw YAML string as body, or {pipeline_yaml, identifier, name} as JSON. Raw v1 YAML can provide the identifier as pipeline.id.",
   fields: [
     { name: "pipeline_yaml", type: "string", required: true, description: "Pipeline YAML string (full replacement)" },
     { name: "identifier", type: "string", required: true, description: "Pipeline identifier" },
@@ -112,7 +112,8 @@ function buildV1PipelineBody(input: Record<string, unknown>): Record<string, unk
     try {
       const parsed = YAML.parse(pipelineYaml);
       const p = parsed?.pipeline ?? parsed;
-      if (!identifier && p?.identifier) identifier = p.identifier;
+      if (!identifier && typeof p?.identifier === "string") identifier = p.identifier;
+      if (!identifier && typeof p?.id === "string") identifier = p.id;
       if (!name && p?.name) name = p.name;
     } catch { /* non-critical — caller can provide identifier/name explicitly */ }
   }
@@ -449,7 +450,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project" },
           bodyBuilder: buildV1PipelineBody,
           responseExtractor: passthrough,
-          description: "Create a new v1 pipeline. Pass pipeline_yaml (YAML string), identifier, name. Version defaults to '1'. Alternatively pass a raw YAML string as body.",
+          description: "Create a new v1 pipeline. Pass pipeline_yaml (YAML string), identifier, name. Version defaults to '1'. Alternatively pass a raw YAML string as body; identifier is extracted from pipeline.identifier or v1 pipeline.id.",
           bodySchema: pipelineV1CreateSchema,
         },
         update: {
