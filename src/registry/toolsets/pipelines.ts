@@ -1,7 +1,7 @@
 import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract, dynamicExecutionExtract } from "../extractors.js";
-import { V1_STEP_TYPES_LIST } from "../../utils/pipeline-lint.js";
 import YAML from "yaml";
+
 
 /**
  * Normalize a trigger body into the canonical `{ trigger: { ... } }` shape,
@@ -451,7 +451,6 @@ export const pipelinesToolset: ToolsetDefinition = {
         "   Set `clone.repo: <repo_name>` at the pipeline level — no Git connector needed.\n\n" +
         "3. HARNESS CODE — pipeline storage:\n" +
         "   Pass `is_harness_code_repo=true` + `repo_name`, `branch`, `file_path` — no connector_ref.\n\n" +
-        `V1 STEP TYPES: only these step keys are valid: ${V1_STEP_TYPES_LIST}.\n` +
         "Do NOT use v0 step types (BuildAndPushDockerRegistry, K8sRollingDeploy, etc.) in v1 pipelines.\n" +
         "Docker repo names must always be lowercase.\n\n" +
         "BUILT-IN STEP/STAGE TEMPLATES — before writing `template: uses: <identifier>`:\n" +

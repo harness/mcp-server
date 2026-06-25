@@ -42,7 +42,9 @@ function templateNgDeletePath(input: Record<string, unknown>): string {
 function templateV1GetPath(input: Record<string, unknown>, config: PathBuilderConfig): string {
   const templateId = input.template_id as string;
   if (!templateId) throw new Error("template_id is required");
-  const base = templateV1BasePathFromScope(input, config);
+  const base = (input.global as boolean | undefined)
+    ? "/v1/templates"
+    : templateV1BasePathFromScope(input, config);
   const version = input.version_label as string | undefined;
   if (version) {
     return `${base}/${encodeURIComponent(templateId)}/versions/${encodeURIComponent(version)}`;
