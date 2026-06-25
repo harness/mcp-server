@@ -3,6 +3,7 @@ import type { ToolResult } from "../../src/utils/response-formatter.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { registerSchemaTool } from "../../src/tools/harness-schema.js";
 import { extractLiveSchema } from "../../src/tools/entity-schema/live.js";
+import { VALID_SCHEMAS } from "../../src/data/schemas/index.js";
 
 function makeMcpServer() {
   const tools = new Map<string, { handler: (...args: unknown[]) => Promise<ToolResult> }>();
@@ -187,6 +188,21 @@ describe("harness_schema static enum", () => {
     expect(description).toContain("pipeline,");
     expect(description).toContain("pipeline_v1");
     expect(description).not.toMatch(/prefer pipeline_v1/i);
+  });
+
+  it("does not expose v1 schemas removed from harness-schema upstream", () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+
+    const call = server.registerTool.mock.calls.find((c: unknown[]) => c[0] === "harness_schema");
+    const description = (call![1] as { description: string }).description;
+
+    for (const bundled of VALID_SCHEMAS) {
+      expect(description).toContain(bundled);
+    }
+    for (const removed of ["trigger_v1", "service_v1", "infra_v1"] as const) {
+      expect(description).not.toContain(removed);
+    }
   });
 });
 
