@@ -86,7 +86,7 @@ describe("runtime_input_template dispatch", () => {
     const req = mockRequest.mock.calls[0][0] as RequestOptions;
     expect(req.method).toBe("POST");
     expect(req.path).toContain("/pipeline/api/inputSets/template");
-    expect(req.query?.pipelineIdentifier).toBe("deploy_prod");
+    expect(req.params?.pipelineIdentifier).toBe("deploy_prod");
 
     expect(result).toEqual({
       inputSetTemplateYaml: "pipeline:\n  name: deploy",
