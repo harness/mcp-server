@@ -33,7 +33,7 @@ const schema: Record<string, any> = {
           }
         },
         "inputs": {
-          "$ref": "#/definitions/template_v1/common/UnifiedInputs"
+          "$ref": "#/definitions/template_v1/common/NGVariableV1Wrapper"
         }
       },
       "oneOf": [
@@ -74,6 +74,16 @@ const schema: Record<string, any> = {
           "properties": {
             "group": {
               "$ref": "#/definitions/template/group/GroupTemplateSpec"
+            }
+          }
+        },
+        {
+          "required": [
+            "agent"
+          ],
+          "properties": {
+            "agent": {
+              "$ref": "#/definitions/template/agent/AgentTemplateSpec"
             }
           }
         }
@@ -180,472 +190,25 @@ const schema: Record<string, any> = {
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         }
+      },
+      "agent": {
+        "AgentTemplateSpec": {
+          "title": "AgentTemplateSpec",
+          "description": "Agent template specification for AI agent execution.",
+          "oneOf": [
+            {
+              "$ref": "#/definitions/template_v1/steps/unified/StepItems"
+            },
+            {
+              "$ref": "#/definitions/template/group/GroupTemplateSpec"
+            }
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        }
       }
     },
     "template_v1": {
       "common": {
-        "UnifiedInputs": {
-          "title": "UnifiedInputs",
-          "type": "object",
-          "description": "Defines typed input parameters for any entity.",
-          "additionalProperties": {
-            "oneOf": [
-              {
-                "$ref": "#/definitions/template_v1/common/StringInput"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/NumberInput"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/ArrayInput"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/BooleanInput"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/ObjectInput"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/SecretInput"
-              }
-            ]
-          },
-          "propertyNames": {
-            "pattern": "^[a-zA-Z_][0-9a-zA-Z_\\.$-]{0,127}$"
-          }
-        },
-        "StringInput": {
-          "title": "StringInput",
-          "allOf": [
-            {
-              "$ref": "#/definitions/template_v1/common/Input"
-            },
-            {
-              "type": "object",
-              "required": [
-                "type"
-              ],
-              "properties": {
-                "default": {
-                  "type": "string"
-                },
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "string"
-                  ]
-                },
-                "value": {
-                  "type": "string"
-                },
-                "validator": {
-                  "type": "object",
-                  "oneOf": [
-                    {
-                      "allOf": [
-                        {
-                          "properties": {
-                            "allowed": {
-                              "description": "defines allowed values for an input",
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            }
-                          }
-                        }
-                      ],
-                      "required": [
-                        "allowed"
-                      ]
-                    },
-                    {
-                      "allOf": [
-                        {
-                          "properties": {
-                            "regex": {
-                              "description": "defines regex pattern for an input value",
-                              "type": "string"
-                            }
-                          }
-                        }
-                      ],
-                      "required": [
-                        "regex"
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "Input": {
-          "title": "Input",
-          "type": "object",
-          "discriminator": "type",
-          "description": "Input defines an input parameter.",
-          "properties": {
-            "type": {
-              "description": "Type defines the input type.",
-              "type": "string",
-              "enum": [
-                "string",
-                "number",
-                "boolean",
-                "array",
-                "object",
-                "secret",
-                "step",
-                "duration",
-                "choice",
-                "environment"
-              ]
-            },
-            "description": {
-              "type": "string",
-              "description": "Description defines the input description."
-            },
-            "default": {
-              "description": "Default defines the default value."
-            },
-            "required": {
-              "type": "boolean",
-              "description": "Required indicates the input is required."
-            },
-            "items": {
-              "type": "array",
-              "description": "Items defines an array type."
-            },
-            "enum": {
-              "type": "array",
-              "description": "Enum defines a list of accepted input values."
-            },
-            "pattern": {
-              "type": "string",
-              "description": "Pattern defines a regular expression input constraint."
-            },
-            "component": {
-              "type": "string",
-              "description": "Component defines the form element for rendering the input.",
-              "enum": [
-                "dropdown",
-                "text",
-                "number",
-                "date",
-                "datetime"
-              ]
-            },
-            "autofocus": {
-              "type": "boolean",
-              "description": "Autofocus configures the form element autofocus attribute."
-            },
-            "placeholder": {
-              "type": "string",
-              "description": "Placeholder configures the form element placeholder attribute."
-            },
-            "tooltip": {
-              "type": "string",
-              "description": "Tooltip configures the form element alt attribute."
-            },
-            "options": {
-              "type": "array",
-              "description": "Options defines a list of accepted input values (alias for enum, GitHub compatibility)."
-            },
-            "mask": {
-              "type": "boolean",
-              "description": "Mask indicates the input should be masked (deprecated).",
-              "deprecated": true
-            }
-          },
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "NumberInput": {
-          "title": "NumberInput",
-          "allOf": [
-            {
-              "$ref": "#/definitions/template_v1/common/Input"
-            },
-            {
-              "type": "object",
-              "required": [
-                "type"
-              ],
-              "properties": {
-                "default": {
-                  "type": "number",
-                  "format": "double"
-                },
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "number"
-                  ]
-                },
-                "value": {
-                  "oneOf": [
-                    {
-                      "type": "number",
-                      "format": "double"
-                    },
-                    {
-                      "type": "string",
-                      "pattern": "((^[+-]?[0-9]*\\.?[0-9]+$)|(<\\+.+>.*))"
-                    }
-                  ]
-                },
-                "validator": {
-                  "type": "object",
-                  "oneOf": [
-                    {
-                      "allOf": [
-                        {
-                          "properties": {
-                            "allowed": {
-                              "description": "defines allowed values for an input",
-                              "type": "array",
-                              "items": {
-                                "oneOf": [
-                                  {
-                                    "type": "number",
-                                    "format": "double"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "pattern": "((^[+-]?[0-9]*\\.?[0-9]+$)|(<\\+.+>.*))"
-                                  }
-                                ]
-                              }
-                            }
-                          }
-                        }
-                      ],
-                      "required": [
-                        "allowed"
-                      ]
-                    },
-                    {
-                      "allOf": [
-                        {
-                          "properties": {
-                            "regex": {
-                              "description": "defines regex pattern for an input value",
-                              "type": "string"
-                            }
-                          }
-                        }
-                      ],
-                      "required": [
-                        "regex"
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "ArrayInput": {
-          "title": "ArrayInput",
-          "allOf": [
-            {
-              "$ref": "#/definitions/template_v1/common/Input"
-            },
-            {
-              "type": "object",
-              "required": [
-                "type"
-              ],
-              "properties": {
-                "default": {
-                  "type": "array"
-                },
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "array"
-                  ]
-                },
-                "value": {
-                  "type": "array"
-                },
-                "validator": {
-                  "type": "object",
-                  "oneOf": [
-                    {
-                      "allOf": [
-                        {
-                          "properties": {
-                            "allowed": {
-                              "description": "defines allowed values for an input",
-                              "type": "array",
-                              "items": {
-                                "type": "array"
-                              }
-                            }
-                          }
-                        }
-                      ],
-                      "required": [
-                        "allowed"
-                      ]
-                    },
-                    {
-                      "allOf": [
-                        {
-                          "properties": {
-                            "regex": {
-                              "description": "defines regex pattern for an input value",
-                              "type": "string"
-                            }
-                          }
-                        }
-                      ],
-                      "required": [
-                        "regex"
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "BooleanInput": {
-          "title": "BooleanInput",
-          "allOf": [
-            {
-              "$ref": "#/definitions/template_v1/common/Input"
-            },
-            {
-              "type": "object",
-              "required": [
-                "type"
-              ],
-              "properties": {
-                "default": {
-                  "type": "boolean"
-                },
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "boolean"
-                  ]
-                },
-                "value": {
-                  "type": "boolean"
-                }
-              }
-            }
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "ObjectInput": {
-          "title": "ObjectInput",
-          "allOf": [
-            {
-              "$ref": "#/definitions/template_v1/common/Input"
-            },
-            {
-              "type": "object",
-              "required": [
-                "type"
-              ],
-              "properties": {
-                "default": {
-                  "type": "object"
-                },
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "object"
-                  ]
-                },
-                "value": {
-                  "type": "object"
-                },
-                "validator": {
-                  "type": "object",
-                  "oneOf": [
-                    {
-                      "allOf": [
-                        {
-                          "properties": {
-                            "allowed": {
-                              "description": "defines allowed values for an input",
-                              "type": "array",
-                              "items": {
-                                "type": "object"
-                              }
-                            }
-                          }
-                        }
-                      ],
-                      "required": [
-                        "allowed"
-                      ]
-                    },
-                    {
-                      "allOf": [
-                        {
-                          "properties": {
-                            "regex": {
-                              "description": "defines regex pattern for an input value",
-                              "type": "string"
-                            }
-                          }
-                        }
-                      ],
-                      "required": [
-                        "regex"
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "SecretInput": {
-          "title": "SecretInput",
-          "allOf": [
-            {
-              "$ref": "#/definitions/template_v1/common/Input"
-            },
-            {
-              "type": "object",
-              "required": [
-                "type"
-              ],
-              "properties": {
-                "default": {
-                  "type": "string"
-                },
-                "type": {
-                  "type": "string",
-                  "enum": [
-                    "secret"
-                  ]
-                },
-                "value": {
-                  "type": "string"
-                }
-              }
-            }
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "Expression": {
-          "title": "Expression",
-          "description": "String value matching a Harness pipeline expression or template placeholder (e.g., <+something> or ${{ ... }}).",
-          "type": "string",
-          "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
         "NGVariableV1Wrapper": {
           "title": "NGVariableV1Wrapper",
           "description": "Wrapper for stage/pipeline-level input variables. Keys are variable names, values define variable configuration.",
@@ -751,9 +314,9 @@ const schema: Record<string, any> = {
                 "connector"
               ]
             },
-            "desc": {
+            "description": {
               "type": "string",
-              "description": "Desc defines the variable description."
+              "description": "Description of the variable."
             },
             "required": {
               "type": "boolean",
@@ -787,58 +350,10 @@ const schema: Record<string, any> = {
             },
             "ui": {
               "description": "UI configuration for variable rendering in forms.",
-              "$ref": "#/definitions/template_v1/common/VariableUI"
+              "type": "object",
+              "additionalProperties": true
             }
           }
-        },
-        "VariableUI": {
-          "title": "VariableUI",
-          "description": "UI configuration for variable rendering in forms.",
-          "type": "object",
-          "properties": {
-            "component": {
-              "description": "Form element type for rendering the variable input.",
-              "type": "string",
-              "enum": [
-                "dropdown",
-                "text",
-                "number",
-                "date",
-                "datetime",
-                "textarea",
-                "checkbox",
-                "radio"
-              ]
-            },
-            "placeholder": {
-              "description": "Placeholder text for the form element.",
-              "type": "string"
-            },
-            "tooltip": {
-              "description": "Tooltip/help text for the form element.",
-              "type": "string"
-            },
-            "autofocus": {
-              "description": "Whether the form element should be auto-focused.",
-              "type": "boolean",
-              "default": false
-            },
-            "hidden": {
-              "description": "Whether the variable should be hidden in the UI.",
-              "type": "boolean",
-              "default": false
-            },
-            "readonly": {
-              "description": "Whether the variable should be read-only in the UI.",
-              "type": "boolean",
-              "default": false
-            },
-            "label": {
-              "description": "Display label for the variable in the UI.",
-              "type": "string"
-            }
-          },
-          "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "NumberVariable": {
           "title": "NumberVariable",
@@ -1219,6 +734,13 @@ const schema: Record<string, any> = {
               }
             }
           ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "Expression": {
+          "title": "Expression",
+          "description": "String value matching a Harness pipeline expression or template placeholder (e.g., <+something> or ${{ ... }}).",
+          "type": "string",
+          "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "Delegate": {
@@ -1805,8 +1327,7 @@ const schema: Record<string, any> = {
           "properties": {
             "name": {
               "description": "Name of the output variable.",
-              "type": "string",
-              "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              "type": "string"
             },
             "alias": {
               "description": "Alias for the output variable.",
@@ -1901,17 +1422,6 @@ const schema: Record<string, any> = {
             "always",
             "never",
             "if-not-exists"
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "OSType": {
-          "title": "OSType",
-          "description": "Operating system type enumeration (maps to io.harness.beans.yaml.extended.infrastrucutre.OSType).",
-          "type": "string",
-          "enum": [
-            "Linux",
-            "MacOS",
-            "Windows"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         }
@@ -3198,10 +2708,15 @@ const schema: Record<string, any> = {
           },
           "ShellRuntimeSpec": {
             "title": "ShellRuntimeSpec",
-            "description": "Shell runtime specification. Mirrors io.harness.beans.yaml.extended.runtime.V1.RuntimeV1.ShellRuntimeSpec (no configurable fields).",
+            "description": "Shell runtime specification. Mirrors io.harness.beans.yaml.extended.runtime.V1.RuntimeV1.ShellRuntimeSpec.",
             "type": "object",
             "additionalProperties": false,
-            "properties": {},
+            "properties": {
+              "connector": {
+                "description": "Override image connector for pulling private Harness plugin images. Supports expressions.",
+                "type": "string"
+              }
+            },
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "CloudRuntimeSpec": {
@@ -3314,17 +2829,6 @@ const schema: Record<string, any> = {
                 "oneOf": [
                   {
                     "$ref": "#/definitions/template_v1/common/PullPolicy"
-                  },
-                  {
-                    "$ref": "#/definitions/template_v1/common/Expression"
-                  }
-                ]
-              },
-              "os": {
-                "description": "Operating system type. Supports expressions.",
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/template_v1/common/OSType"
                   },
                   {
                     "$ref": "#/definitions/template_v1/common/Expression"
@@ -3944,167 +3448,107 @@ const schema: Record<string, any> = {
           "EnvironmentV1": {
             "title": "EnvironmentV1",
             "description": "Environment configuration for CD stages.",
-            "type": "object",
-            "if": {
-              "anyOf": [
-                {
-                  "required": [
-                    "id"
-                  ]
-                },
-                {
-                  "required": [
-                    "items"
-                  ]
-                },
-                {
-                  "required": [
-                    "group"
-                  ]
-                },
-                {
-                  "required": [
-                    "filters"
-                  ]
-                }
-              ]
-            },
-            "then": {
-              "allOf": [
-                {
-                  "if": {
-                    "required": [
-                      "id"
-                    ]
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "description": "Environment identifier.",
+                    "type": "string"
                   },
-                  "then": {
-                    "type": "object",
-                    "required": [
-                      "id"
-                    ],
-                    "properties": {
-                      "id": {
-                        "description": "Environment identifier.",
-                        "type": "string"
-                      },
-                      "deploy-to": {
-                        "description": "Infrastructure(s) to deploy to.",
-                        "$ref": "#/definitions/template_v1/stages/unified/DeployTo"
-                      },
-                      "ref": {
-                        "description": "Git branch for the environment configuration.",
-                        "type": "string"
-                      }
-                    },
-                    "additionalProperties": false
+                  "deploy-to": {
+                    "description": "Infrastructure(s) to deploy to.",
+                    "$ref": "#/definitions/template_v1/stages/unified/DeployTo"
+                  },
+                  "ref": {
+                    "description": "Git branch for the environment configuration.",
+                    "type": "string"
                   }
                 },
-                {
-                  "if": {
-                    "required": [
-                      "items"
-                    ]
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "description": "List of environments for multi-environment deployment.",
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/template_v1/stages/unified/EnvironmentItem"
+                    }
                   },
-                  "then": {
-                    "type": "object",
-                    "required": [
-                      "items"
-                    ],
-                    "properties": {
-                      "items": {
-                        "description": "List of environments for multi-environment deployment.",
-                        "type": "array",
-                        "items": {
-                          "$ref": "#/definitions/template_v1/stages/unified/EnvironmentItem"
-                        }
+                  "sequential": {
+                    "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
+                    "oneOf": [
+                      {
+                        "type": "boolean",
+                        "default": false
                       },
-                      "sequential": {
-                        "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
-                        "oneOf": [
-                          {
-                            "type": "boolean",
-                            "default": false
-                          },
-                          {
-                            "$ref": "#/definitions/template_v1/common/Expression"
-                          }
-                        ]
+                      {
+                        "$ref": "#/definitions/template_v1/common/Expression"
                       }
-                    },
-                    "additionalProperties": false
+                    ]
                   }
                 },
-                {
-                  "if": {
-                    "required": [
-                      "group"
-                    ]
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "required": [
+                  "group"
+                ],
+                "properties": {
+                  "group": {
+                    "description": "Environment group configuration.",
+                    "$ref": "#/definitions/template_v1/stages/unified/EnvironmentGroup"
                   },
-                  "then": {
-                    "type": "object",
-                    "required": [
-                      "group"
-                    ],
-                    "properties": {
-                      "group": {
-                        "description": "Environment group configuration.",
-                        "$ref": "#/definitions/template_v1/stages/unified/EnvironmentGroup"
+                  "sequential": {
+                    "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
+                    "oneOf": [
+                      {
+                        "type": "boolean",
+                        "default": false
                       },
-                      "sequential": {
-                        "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
-                        "oneOf": [
-                          {
-                            "type": "boolean",
-                            "default": false
-                          },
-                          {
-                            "$ref": "#/definitions/template_v1/common/Expression"
-                          }
-                        ]
+                      {
+                        "$ref": "#/definitions/template_v1/common/Expression"
                       }
-                    },
-                    "additionalProperties": false
+                    ]
                   }
                 },
-                {
-                  "if": {
-                    "required": [
-                      "filters"
-                    ]
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "required": [
+                  "filters"
+                ],
+                "properties": {
+                  "filters": {
+                    "description": "Filters for selecting environments and infrastructures.",
+                    "$ref": "#/definitions/template_v1/stages/unified/Filters"
                   },
-                  "then": {
-                    "type": "object",
-                    "required": [
-                      "filters"
-                    ],
-                    "properties": {
-                      "filters": {
-                        "description": "Filters for selecting environments and infrastructures.",
-                        "$ref": "#/definitions/template_v1/stages/unified/Filters"
+                  "sequential": {
+                    "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
+                    "oneOf": [
+                      {
+                        "type": "boolean",
+                        "default": false
                       },
-                      "sequential": {
-                        "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
-                        "oneOf": [
-                          {
-                            "type": "boolean",
-                            "default": false
-                          },
-                          {
-                            "$ref": "#/definitions/template_v1/common/Expression"
-                          }
-                        ]
+                      {
+                        "$ref": "#/definitions/template_v1/common/Expression"
                       }
-                    },
-                    "additionalProperties": false
+                    ]
                   }
-                }
-              ]
-            },
-            "else": {
-              "required": [
-                "id"
-              ]
-            },
+                },
+                "additionalProperties": false
+              }
+            ],
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "DeployTo": {
@@ -5007,10 +4451,17 @@ const schema: Record<string, any> = {
               },
               "output": {
                 "description": "Output variables to capture.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/template_v1/common/OutputV1"
-                }
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/template_v1/common/OutputV1"
+                    }
+                  },
+                  {
+                    "$ref": "#/definitions/template_v1/common/Expression"
+                  }
+                ]
               },
               "report": {
                 "description": "Test report configuration. Supports expressions.",
@@ -5094,6 +4545,10 @@ const schema: Record<string, any> = {
               },
               "connector": {
                 "description": "Image registry connector. Supports expressions.",
+                "type": "string"
+              },
+              "registryRef": {
+                "description": "Harness Artifact Registry reference for the image. Supports expressions.",
                 "type": "string"
               },
               "credentials": {
@@ -5252,12 +4707,16 @@ const schema: Record<string, any> = {
                 "type": "string"
               },
               "cpu": {
-                "description": "CPU limit.",
+                "description": "CPU limit. Ignored when resources.limits.cpu is set.",
                 "type": "string"
               },
               "memory": {
-                "description": "Memory limit.",
+                "description": "Memory limit. Ignored when resources.limits.memory is set.",
                 "type": "string"
+              },
+              "resources": {
+                "description": "Container resource limits and requests. Takes precedence over the flat cpu/memory fields.",
+                "$ref": "#/definitions/template_v1/Resource"
               },
               "shm-size": {
                 "description": "Shared memory size.",
@@ -5780,12 +5239,54 @@ const schema: Record<string, any> = {
                 "description": "Comments for auto-approval. Supports expressions.",
                 "type": "string"
               },
-              "params": {
-                "description": "Approver input parameters.",
-                "type": "array",
-                "items": {
+              "inputs": {
+                "description": "Approver input parameters keyed by input variable name.",
+                "type": "object",
+                "additionalProperties": {
                   "type": "object",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "Description of the approver input.",
+                      "type": "string"
+                    },
+                    "pattern": {
+                      "description": "Regex pattern the approver input value must match. Mutually exclusive with `enum`. Supports expressions.",
+                      "type": "string"
+                    },
+                    "multi-select": {
+                      "description": "Allow selecting multiple values from `enum`. Only applicable when `enum` is provided.",
+                      "type": "boolean"
+                    },
+                    "enum": {
+                      "description": "Allowed values for the approver input. Mutually exclusive with `pattern`. Supports expressions.",
+                      "oneOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "$ref": "#/definitions/template_v1/common/Expression"
+                        }
+                      ]
+                    },
+                    "required": {
+                      "description": "Whether the approver input is required.",
+                      "type": "boolean"
+                    },
+                    "default": {
+                      "description": "Default value for the approver input. Supports expressions.",
+                      "type": "string"
+                    }
+                  },
+                  "not": {
+                    "required": [
+                      "pattern",
+                      "enum"
+                    ]
+                  }
                 }
               }
             },
@@ -6016,6 +5517,21 @@ const schema: Record<string, any> = {
                     "type": "string",
                     "description": "Step group timeout duration.",
                     "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+                  },
+                  "output": {
+                    "description": "Step group output variables. Each entry is a single key:value pair where the key is the\nSG-published output name and the value is either a plain-string descendant step output\nname to capture, or a Harness expression evaluated at step group completion.\n",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "maxProperties": 1,
+                      "additionalProperties": false,
+                      "patternProperties": {
+                        "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   },
                   "steps": {
                     "type": "array",
