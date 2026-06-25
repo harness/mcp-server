@@ -25,6 +25,7 @@ Steps:
 2. Call harness_describe with resource_type="pipeline" to understand available operations
 3. If helpful, call harness_list with resource_type="pipeline"${projectId ? ` and project_id="${projectId}"` : ""} to see existing pipeline patterns
 4. Also check available connectors (harness_list resource_type="connector"), services (harness_list resource_type="service"), and environments (harness_list resource_type="environment")
+   NOTE: If the source repo is in Harness Code, no Git connector is needed — use \`properties.ci.codebase.repoName\` directly. Only create Git connectors for third-party repos (GitHub, GitLab, Bitbucket).
 5. If the pipeline involves building/pushing Docker images, determine the registry type:
    - If the user says "Harness Artifact Registry" or "HAR" → use TEMPLATE A below
    - If the user says DockerHub, ECR, GCR, ACR, or any other provider → use TEMPLATE B below
