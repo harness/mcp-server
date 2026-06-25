@@ -42,7 +42,9 @@ function templateNgDeletePath(input: Record<string, unknown>): string {
 function templateV1GetPath(input: Record<string, unknown>, config: PathBuilderConfig): string {
   const templateId = input.template_id as string;
   if (!templateId) throw new Error("template_id is required");
-  const base = templateV1BasePathFromScope(input, config);
+  const base = (input.global as boolean | undefined)
+    ? "/v1/templates"
+    : templateV1BasePathFromScope(input, config);
   const version = input.version_label as string | undefined;
   if (version) {
     return `${base}/${encodeURIComponent(templateId)}/versions/${encodeURIComponent(version)}`;
@@ -163,6 +165,17 @@ const templateV1ListFilterFields = [
     name: "type",
     description: "Template list type (v1 API)",
     enum: ["STABLE_TEMPLATE", "LAST_UPDATES_TEMPLATE", "ALL"],
+  },
+  {
+    name: "global",
+    description:
+      "When true, fetches from the Harness global template catalog (built-in step/stage/agent templates available to all accounts). Use this to discover available step identifiers for `template: uses: <identifier>` in v1 pipelines.",
+    type: "boolean" as const,
+  },
+  {
+    name: "entity_type",
+    description: "Filter global templates by entity type",
+    enum: ["Step", "Stage", "Agent"],
   },
   { name: "sort", description: "Field to sort by" },
   { name: "order", description: "Sort order", enum: ["asc", "desc"] },
@@ -386,7 +399,10 @@ export const templatesToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/v1/orgs/{org}/projects/{project}/templates",
-          pathBuilder: templateV1BasePathFromScope,
+          pathBuilder: (input, config) =>
+            (input.global as boolean | undefined)
+              ? "/v1/templates"
+              : templateV1BasePathFromScope(input, config),
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "search_term",
@@ -395,19 +411,29 @@ export const templatesToolset: ToolsetDefinition = {
             type: "type",
             sort: "sort",
             order: "order",
+            global: "global_template",
+            entity_type: "entity_types",
           },
           responseExtractor: v1ListExtract(),
           description:
-            "List v1 templates. Scope follows org_id/project_id presence (see resource description). Filter with type=STABLE_TEMPLATE|LAST_UPDATES_TEMPLATE|ALL.",
+            "List v1 templates. Use global=true to browse the Harness built-in catalog (step/stage/agent templates). " +
+            "Combine with entity_type=Step|Stage|Agent to narrow results. " +
+            "For scoped templates, scope follows org_id/project_id presence. " +
+            "Filter with type=STABLE_TEMPLATE|LAST_UPDATES_TEMPLATE|ALL.",
         },
         get: {
           method: "GET",
           path: "/v1/orgs/{org}/projects/{project}/templates/{template}",
           pathBuilder: (input, config) => templateV1GetPath(input, config),
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            global: "global_template",
+          },
           responseExtractor: passthrough,
           description:
-            "Get unified v1 template YAML. Omit version_label for stable; pass version_label for a specific version.",
+            "Get unified v1 template YAML including its full inputs schema. " +
+            "Use global=true to fetch a built-in global template by identifier — the response `yaml` field contains the `inputs:` block listing all valid `with:` params. " +
+            "Omit version_label for stable; pass version_label for a specific version.",
         },
         create: {
           method: "POST",
