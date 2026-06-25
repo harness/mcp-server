@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 219 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 218 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,7 +8,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 219 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 218 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 38 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **32 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -870,48 +870,6 @@ Constraints:
 
 If Harness rejects the run as not enabled, check both the account-level Allow Dynamic Execution setting and the pipeline-level toggle under Pipeline -> Advanced Options -> Dynamic Execution Settings.
 
-### Pipeline Validation
-
-Use `pipeline_validation` to validate pipeline YAML before saving or executing. Two actions are available:
-
-**`validate_schema`** — Schema-only validation with no side effects. Catches structural errors (missing fields, bad types, invalid stage configs) without creating or modifying anything. Works for brand-new YAML that hasn't been saved yet.
-
-```json
-{
-  "resource_type": "pipeline_validation",
-  "action": "validate_schema",
-  "body": {
-    "yaml": "pipeline:\n  name: My Pipeline\n  identifier: my_pipeline\n  stages: []\n",
-    "version": "v0"
-  }
-}
-```
-
-Returns `{ valid, error_message, errors[] }` where each error has `message`, `path` (FQN like `$.pipeline.stages`), and `hint`.
-
-**`dry_run`** — Full validation including plan resolution and policy checks. Requires an existing pipeline (the identifier must already exist in Harness). Optionally pass `pipeline_yaml` to validate modified YAML against the pipeline shell.
-
-```json
-{
-  "resource_type": "pipeline_validation",
-  "action": "dry_run",
-  "body": {
-    "pipeline_identifier": "my_pipeline",
-    "pipeline_yaml": "pipeline:\n  name: ...\n  ..."
-  }
-}
-```
-
-Returns `{ is_valid, validation[] }` where each entry has `type` (SCHEMA/POLICY/SYSTEM), `entity`, `error`, and `hint`.
-
-**Limitations:**
-- `validate_schema` works reliably for v0 pipelines only. V1 schema validation is inconsistent across environments.
-- `dry_run` requires an existing pipeline — cannot validate brand-new YAML from scratch.
-- `dry_run` cannot parse v1 pipeline YAML (backend limitation).
-- Reference validation (broken connector refs) may not fire reliably in `dry_run`.
-
-**Recommended workflow:** validate_schema (pre-save) → create/update → dry_run (post-save) → execute.
-
 ### Execution Input Forensics
 
 Use `execution_inputs` after a run to inspect the merged input YAML that produced a specific execution. This is useful when a failure depends on input-set merging, Git-backed input set branches, or trigger/runtime values that are hard to reconstruct from the execution page alone.
@@ -1180,7 +1138,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-219 resource types organized across 38 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+218 resource types organized across 38 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1199,7 +1157,6 @@ Harness pipelines can be stored in three ways:
 | `pipeline`                     | x    | x   | x      | x      | x      | `run`, `retry`      |
 | `pipeline_v1` **(Alpha)**      | x    | x   | x      | x      | x      | `run`               |
 | `pipeline_dynamic_execution`   |      |     |        |        |        | `run`               |
-| `pipeline_validation`          |      |     |        |        |        | `validate_schema`, `dry_run` |
 | `execution`                    | x    | x   |        |        |        | `interrupt`         |
 | `execution_inputs`             |      | x   |        |        |        |                     |
 | `trigger`                      | x    | x   | x      | x      | x      |                     |
@@ -1783,7 +1740,7 @@ Available toolset names:
 | Toolset                 | Resource Types                                                                                                                                                                                                                                                                                  |
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `platform`              | organization, project                                                                                                                                                                                                                                                                           |
-| `pipelines`             | pipeline, pipeline_v1, pipeline_dynamic_execution, pipeline_validation, execution, execution_inputs, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                    |
+| `pipelines`             | pipeline, pipeline_v1, pipeline_dynamic_execution, execution, execution_inputs, trigger, pipeline_summary, input_set, approval_instance                                                                                                                                                         |
 | `agents`                | agent, agent_run                                                                                                                                                                                                                                                                                |
 | `services`              | service                                                                                                                                                                                                                                                                                         |
 | `environments`          | environment                                                                                                                                                                                                                                                                                     |
@@ -1837,7 +1794,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  38 Toolsets      |      (data files, not code)
-                |  219 Resource Types|
+                |  218 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+

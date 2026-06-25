@@ -412,8 +412,6 @@ export interface ResourceDefinition {
   }>;
   /** Execution guidance for LLMs. Describes how to discover and provide runtime inputs. */
   executeHint?: string;
-  /** Creation guidance for LLMs. Surfaces Harness-native patterns (e.g. registryRef vs connectorRef) to prevent common mistakes. */
-  createHint?: string;
   /** CRUD endpoint mappings */
   operations: Partial<Record<OperationName, EndpointSpec>>;
   /** Execute action mappings (e.g. run pipeline, toggle FF) */
