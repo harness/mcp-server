@@ -120,9 +120,9 @@ function checkHarFields(pipeline: Record<string, unknown>, result: LintResult): 
 }
 
 /**
- * Block when codebase config has both connectorRef and repoName — this is
- * always a misconfiguration. Harness Code repos use repoName only;
- * third-party Git uses connectorRef only.
+ * Block when Harness Code codebase config still includes connectorRef.
+ * Third-party Git codebases legitimately use both connectorRef and repoName;
+ * Harness Code repos use repoName only.
  * Severity: error.
  */
 function checkCodebaseConnector(pipeline: Record<string, unknown>, result: LintResult): void {
@@ -130,12 +130,11 @@ function checkCodebaseConnector(pipeline: Record<string, unknown>, result: LintR
   if (typeof connectorRef !== "string") return;
 
   const repoName = deepGet(pipeline, ["properties", "ci", "codebase", "repoName"]);
-  if (typeof repoName === "string") {
+  if (typeof repoName === "string" && isHarnessCodeConnectorRef(connectorRef)) {
     result.errors.push(
       `Codebase has both \`connectorRef\` ("${connectorRef}") and \`repoName\` ("${repoName}"). ` +
-      `If the repo is in Harness Code, remove \`connectorRef\` — only \`repoName\` is needed. ` +
-      `If the repo is in a third-party Git provider, remove \`repoName\` and keep only \`connectorRef\`. ` +
-      `These fields are mutually exclusive.`,
+      `Harness Code repos are native and only need \`repoName\`; remove \`connectorRef\`. ` +
+      `Third-party Git repos may keep both \`connectorRef\` and \`repoName\`.`,
     );
   }
 }
@@ -201,6 +200,10 @@ function deepGet(obj: unknown, keys: string[]): unknown {
   return current;
 }
 
+function isHarnessCodeConnectorRef(connectorRef: string): boolean {
+  return connectorRef.toLowerCase().replace(/[^a-z0-9]/g, "").includes("harnesscode");
+}
+
 /** Recursively collect all step objects from a v0 pipeline. */
 function collectSteps(obj: unknown, results: Array<Record<string, unknown>> = []): Array<Record<string, unknown>> {
   if (obj == null || typeof obj !== "object") return results;
@@ -241,6 +244,7 @@ export function extractPipelineYaml(body: unknown): string | undefined {
     const obj = body as Record<string, unknown>;
     if (typeof obj.yamlPipeline === "string") return obj.yamlPipeline;
     if (typeof obj.pipeline_yaml === "string") return obj.pipeline_yaml;
+    if (obj.pipeline !== undefined) return YAML.stringify({ pipeline: obj.pipeline });
   }
   return undefined;
 }

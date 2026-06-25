@@ -112,6 +112,7 @@ function buildV1PipelineBody(input: Record<string, unknown>): Record<string, unk
     try {
       const parsed = YAML.parse(pipelineYaml);
       const p = parsed?.pipeline ?? parsed;
+      if (!identifier && p?.id) identifier = p.id;
       if (!identifier && p?.identifier) identifier = p.identifier;
       if (!name && p?.name) name = p.name;
     } catch { /* non-critical — caller can provide identifier/name explicitly */ }

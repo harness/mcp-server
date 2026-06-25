@@ -184,7 +184,7 @@ pipeline:
 // ---------------------------------------------------------------------------
 
 describe("v0 — codebase connector check", () => {
-  it("errors when codebase has both connectorRef and repoName", () => {
+  it("errors when Harness Code codebase has both connectorRef and repoName", () => {
     const yaml = `
 pipeline:
   properties:
@@ -200,7 +200,25 @@ pipeline:
 `;
     const result = lintPipelineYaml(yaml, "v0");
     expect(result.errors.some(e => e.includes("connectorRef") && e.includes("repoName"))).toBe(true);
-    expect(result.errors.some(e => e.includes("mutually exclusive"))).toBe(true);
+    expect(result.errors.some(e => e.includes("Harness Code repos are native"))).toBe(true);
+  });
+
+  it("does not error when third-party Git codebase has both connectorRef and repoName", () => {
+    const yaml = `
+pipeline:
+  properties:
+    ci:
+      codebase:
+        connectorRef: github_connector
+        repoName: my-org/my-app
+        build:
+          type: branch
+          spec:
+            branch: main
+  stages: []
+`;
+    const result = lintPipelineYaml(yaml, "v0");
+    expect(result.errors).toHaveLength(0);
   });
 
   it("does not error when codebase has only repoName (Harness Code)", () => {
@@ -353,6 +371,12 @@ describe("extractPipelineYaml", () => {
 
   it("extracts pipeline_yaml from object", () => {
     expect(extractPipelineYaml({ pipeline_yaml: "pipeline:\n  name: test" })).toBe("pipeline:\n  name: test");
+  });
+
+  it("serializes documented pipeline object bodies", () => {
+    expect(extractPipelineYaml({ pipeline: { name: "test", identifier: "test" } })).toBe(
+      "pipeline:\n  name: test\n  identifier: test\n",
+    );
   });
 
   it("returns undefined for non-pipeline objects", () => {

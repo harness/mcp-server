@@ -1,5 +1,20 @@
 # Harness MCP Server — Task Tracking
 
+## PR 440 Review Follow-up (2026-06-25)
+- [x] Read Slack thread and inspect PR #440 context
+- [x] Fetch and review the PR branch without leaving the working branch
+- [x] Fix runtime regressions found in pipeline lint and template v1 global access
+- [x] Regenerate stale docs after build
+- [ ] Run focused and broad verification
+- [ ] Commit, push, open/update PR, and reply in Slack thread
+
+### Plan
+- Keep the PR branch changes intact, but patch only concrete review blockers.
+- Make pipeline lint preserve valid third-party Git codebase configs, while still catching Harness Code connector misuse.
+- Run lint on every documented pipeline body shape, including `body.pipeline` JSON objects.
+- Make `template_v1` global get route to the same unscoped global endpoint as global list, and keep described filters aligned with mapped query params.
+- Regenerate generated README content after building so `docs:check` matches CI.
+
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap
