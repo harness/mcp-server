@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { chaosActionExtract, chaosDRTestListExtract, chaosExperimentListExtract, chaosInputSetListExtract } from "../../src/registry/extractors.js";
+import {
+  chaosActionExtract,
+  chaosDRTestListExtract,
+  chaosExperimentListExtract,
+  chaosInputSetListExtract,
+  sdPageExtract,
+} from "../../src/registry/extractors.js";
 
 describe("chaosInputSetListExtract", () => {
   it("injects experimentId from input into each item", () => {
@@ -115,5 +121,37 @@ describe("chaosActionExtract", () => {
     expect(out).not.toHaveProperty("audit");
     expect(out).not.toHaveProperty("isRemoved");
     expect(out).not.toHaveProperty("recentExecutions");
+  });
+});
+
+describe("sdPageExtract", () => {
+  it("uses items.length when page.totalItems is zero but items were returned (all=true quirk)", () => {
+    const raw = {
+      items: [{ id: "ns-1", name: "default" }],
+      page: { all: true, totalItems: 0 },
+    };
+    expect(sdPageExtract(raw)).toEqual({
+      items: [{ id: "ns-1", name: "default" }],
+      total: 1,
+    });
+  });
+
+  it("attaches troubleshooting _hint when items is empty", () => {
+    const result = sdPageExtract({ items: [], page: { totalItems: 0 } });
+    expect(result.total).toBe(0);
+    expect(result._hint).toContain("agent_identity");
+    expect(result._hint).toContain("case-sensitive");
+  });
+
+  it("omits _hint when items are present", () => {
+    const result = sdPageExtract({
+      items: [{ id: "svc-1" }],
+      page: { totalItems: 5 },
+    });
+    expect(result).toEqual({
+      items: [{ id: "svc-1" }],
+      total: 5,
+    });
+    expect(result).not.toHaveProperty("_hint");
   });
 });
