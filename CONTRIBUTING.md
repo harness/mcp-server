@@ -272,9 +272,14 @@ console.log("anything");       // NEVER — breaks stdio transport
 
 1. One concern per PR — don't mix features with refactors
 2. `pnpm build` must pass with no errors
-3. `pnpm test` must pass — all tests green
-4. Add tests for new logic (custom extractors, bodyBuilders, utilities)
-5. Update README.md if adding user-visible features (new config vars, resource types, prompts)
+3. `pnpm typecheck` must pass
+4. `pnpm test` must pass — all tests green
+5. `pnpm standards:check` must pass — automated architecture guardrails ([docs/coding-standards.md](docs/coding-standards.md))
+6. `pnpm docs:check` must pass when registry counts or clone instructions change
+7. Add tests for new logic (custom extractors, bodyBuilders, utilities)
+8. Update README.md if adding user-visible features (new config vars, resource types, prompts)
+
+See [docs/coding-standards.md](docs/coding-standards.md) for the full commit checklist (no new tool handlers, pure-data toolsets, stderr-only logging, etc.).
 
 ## License
 
