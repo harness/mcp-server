@@ -129,6 +129,59 @@ describe("harness_schema live entities", () => {
     expect(second.fields.map((field) => field.name)).not.toContain("project_a_field");
   });
 
+  it("isolates live schema cache entries by org scope identifiers", async () => {
+    requestMock.mockReset();
+    requestMock
+      .mockResolvedValueOnce({ data: liveEntitySchema("service", "org_a_field") })
+      .mockResolvedValueOnce({ data: liveEntitySchema("service", "org_b_field") });
+
+    const first = parseResult(await server.call("harness_schema", {
+      resource_type: "service",
+      scope: "org",
+      org_id: "org-a",
+    })) as { fields: Array<{ name: string }> };
+    const second = parseResult(await server.call("harness_schema", {
+      resource_type: "service",
+      scope: "org",
+      org_id: "org-b",
+    })) as { fields: Array<{ name: string }> };
+
+    expect(requestMock).toHaveBeenCalledTimes(2);
+    expect(first.fields.map((field) => field.name)).toContain("org_a_field");
+    expect(second.fields.map((field) => field.name)).toContain("org_b_field");
+    expect(second.fields.map((field) => field.name)).not.toContain("org_a_field");
+  });
+
+  it("drills into a live entity nested definition by path", async () => {
+    const result = await server.call("harness_schema", {
+      resource_type: "connector",
+      path: "ConnectorInfoDTO",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.source).toBe("ng-yaml-schema");
+    expect(parsed.path).toBe("ConnectorInfoDTO");
+    expect((parsed.schema as Record<string, unknown>).type).toBe("object");
+    expect(
+      ((parsed.schema as Record<string, unknown>).properties as Record<string, unknown>)
+        .identifier,
+    ).toBeDefined();
+  });
+
+  it("errors with available sections when live entity path is invalid", async () => {
+    const result = await server.call("harness_schema", {
+      resource_type: "connector",
+      path: "DoesNotExist",
+    });
+    const parsed = parseResult(result) as { error: string };
+
+    expect(result.isError).toBe(true);
+    expect(parsed.error).toMatch(/not found/);
+    expect(parsed.error).toContain("connector");
+    expect(parsed.error).toContain("ConnectorInfoDTO");
+  });
+
   it("passes org_id and project_id for project scope", async () => {
     await server.call("harness_schema", {
       resource_type: "environment",
@@ -409,5 +462,31 @@ describe("extractLiveSchema", () => {
   it("extracts stringified schema", () => {
     const schema = { definitions: { foo: { type: "object" } } };
     expect(extractLiveSchema({ data: JSON.stringify(schema) })).toEqual(schema);
+  });
+
+  it("extracts schema from yamlSchema envelope key", () => {
+    const schema = { type: "object", properties: { x: { type: "string" } } };
+    expect(extractLiveSchema({ yamlSchema: schema })).toEqual(schema);
+  });
+
+  it("extracts schema from jsonSchema envelope key", () => {
+    const schema = { definitions: { foo: { type: "object" } } };
+    expect(extractLiveSchema({ jsonSchema: schema })).toEqual(schema);
+  });
+
+  it("extracts schema from nested data.schema envelope", () => {
+    const schema = { type: "object", properties: { y: { type: "number" } } };
+    expect(extractLiveSchema({ data: { schema } })).toEqual(schema);
+  });
+
+  it("extracts top-level schema object", () => {
+    const schema = { definitions: { connector: { type: "object" } } };
+    expect(extractLiveSchema(schema)).toEqual(schema);
+  });
+
+  it("throws when response has no JSON Schema", () => {
+    expect(() => extractLiveSchema({ status: "ERROR", message: "nope" })).toThrow(
+      /did not contain a JSON Schema/,
+    );
   });
 });

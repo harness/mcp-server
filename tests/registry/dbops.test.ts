@@ -774,6 +774,70 @@ describe("database_execute_llm_authoring_pipeline run", () => {
     });
     expect(call.body).not.toHaveProperty("useDefaultPipeline");
   });
+
+  it("returns the execute-pipeline response at the tool boundary", async () => {
+    const registry = new Registry(makeConfig());
+    const apiResponse = {
+      executionId: "exec-1",
+      pipelineIdentifier: "dbops_default_pipeline",
+      openInHarness: "https://app.harness.io/ng/#/account/acct/pipelines/exec-1",
+    };
+    const mockRequest = vi.fn().mockResolvedValue(apiResponse);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(
+      client,
+      "database_execute_llm_authoring_pipeline",
+      "run",
+      {
+        org_id: "default",
+        project_id: "test-project",
+        body: {
+          schema_id: "schema_1",
+          instance_id: "instance_1",
+          conversation_id: "conversation-1",
+          changeset: "databaseChangeLog: []",
+          use_default_pipeline: true,
+        },
+      },
+    );
+
+    expect(result).toEqual(apiResponse);
+  });
+
+  it("passes through wrapped SUCCESS envelope as-is (passthrough contract)", async () => {
+    const registry = new Registry(makeConfig());
+    const wrapped = {
+      status: "SUCCESS",
+      data: {
+        executionId: "exec-1",
+        pipelineIdentifier: "dbops_default_pipeline",
+        openInHarness: "https://app.harness.io/...",
+      },
+      correlationId: "internal-only",
+    };
+    const mockRequest = vi.fn().mockResolvedValue(wrapped);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(
+      client,
+      "database_execute_llm_authoring_pipeline",
+      "run",
+      {
+        org_id: "default",
+        project_id: "test-project",
+        body: {
+          schema_id: "schema_1",
+          instance_id: "instance_1",
+          conversation_id: "conversation-1",
+          changeset: "databaseChangeLog: []",
+          use_default_pipeline: true,
+        },
+      },
+    );
+
+    expect(result).toEqual(wrapped);
+  });
 });
 
 describe("database_snapshot_object get", () => {
