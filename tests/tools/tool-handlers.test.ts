@@ -965,6 +965,37 @@ connector:
     });
   });
 
+  it("injects environment identifier into unwrapped YAML update bodies when missing", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "environments" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { environment: { identifier: "prod_env" } } });
+    client = makeClient(mockRequest);
+    const environmentServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(environmentServer, registry, client);
+
+    const result = await environmentServer.call("harness_update", {
+      resource_type: "environment",
+      resource_id: "prod_env",
+      org_id: "default",
+      project_id: "project",
+      body: `
+environment:
+  name: Production
+  type: Production
+`,
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(callArgs.body).toMatchObject({
+      identifier: "prod_env",
+      name: "Production",
+      type: "Production",
+    });
+    expect(callArgs.body).not.toHaveProperty("environment");
+  });
+
   it("uses account scope from account-level File Store URLs during update", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "file_store" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "scripts" } });

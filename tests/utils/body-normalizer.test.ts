@@ -139,4 +139,43 @@ connector:
       }),
     ).toThrow(/Conflicting identifiers/);
   });
+
+  const environmentUpdateBuilder = buildBodyNormalized({
+    unwrapKey: "environment",
+    injectIdentifier: { inputField: "environment_id", bodyField: "identifier" },
+  });
+
+  it("injects environment_id after unwrapping a wrapped environment body", () => {
+    const result = environmentUpdateBuilder({
+      environment_id: "prod_env",
+      body: {
+        environment: {
+          name: "Production",
+          type: "Production",
+        },
+      },
+    }) as Record<string, unknown>;
+
+    expect(result).toMatchObject({
+      identifier: "prod_env",
+      name: "Production",
+      type: "Production",
+    });
+    expect(result).not.toHaveProperty("environment");
+  });
+
+  it("rejects conflicting environment_id between input and unwrapped body", () => {
+    expect(() =>
+      environmentUpdateBuilder({
+        environment_id: "dev_env",
+        body: {
+          environment: {
+            identifier: "prod_env",
+            name: "Production",
+            type: "Production",
+          },
+        },
+      }),
+    ).toThrow(/Conflicting identifiers/);
+  });
 });
