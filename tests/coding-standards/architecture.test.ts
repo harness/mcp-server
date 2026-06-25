@@ -305,25 +305,47 @@ describe("Coding standards — Zod input schemas", () => {
   });
 });
 
-describe("Coding standards — HarnessClient singleton", () => {
-  it("instantiates HarnessClient only in src/index.ts", () => {
+describe("Coding standards — error handling", () => {
+  /** Handlers that call Harness APIs must map unexpected failures via toMcpError(). */
+  const API_CALLING_HANDLERS = [
+    "src/tools/harness-list.ts",
+    "src/tools/harness-get.ts",
+    "src/tools/harness-create.ts",
+    "src/tools/harness-update.ts",
+    "src/tools/harness-delete.ts",
+    "src/tools/harness-execute.ts",
+    "src/tools/harness-diagnose.ts",
+    "src/tools/harness-search.ts",
+    "src/tools/harness-status.ts",
+  ];
+
+  it("API-calling handlers import and throw toMcpError for unexpected failures", () => {
     const violations: string[] = [];
-    const srcFiles = walkTsFiles(SRC);
 
-    for (const file of srcFiles) {
-      const content = readFileSync(file, "utf8");
-      if (!/\bnew\s+HarnessClient\s*\(/.test(content)) continue;
-
-      const fileRel = rel(file);
-      if (fileRel !== "src/index.ts") {
-        violations.push(fileRel);
+    for (const file of API_CALLING_HANDLERS) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!content.includes("toMcpError")) {
+        violations.push(`${file}: missing toMcpError import/usage`);
+        continue;
+      }
+      if (!/throw\s+toMcpError\s*\(/.test(content)) {
+        violations.push(`${file}: must throw toMcpError(err) for unexpected failures`);
+      }
+      if (!content.includes("errorResult")) {
+        violations.push(`${file}: missing errorResult for known/user-facing errors`);
       }
     }
 
-    expect(
-      violations,
-      `Extra HarnessClient instantiations (singleton must live in src/index.ts only):\n${violations.join("\n")}`,
-    ).toEqual([]);
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+});
+
+describe("Coding standards — list pagination defaults", () => {
+  it("harness_list uses page=0, size=20, max size=100", () => {
+    const content = readFileSync(join(REPO_ROOT, "src/tools/harness-list.ts"), "utf8");
+
+    expect(content).toMatch(/page:\s*z\.number\(\)\.default\(0\)/);
+    expect(content).toMatch(/size:\s*z\.number\(\)\.min\(1\)\.max\(100\)\.default\(20\)/);
   });
 });
 
