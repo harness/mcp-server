@@ -705,6 +705,55 @@ describe("harness_create", () => {
     expect(parsed.openInHarness).not.toContain("storeType=");
   });
 
+  it("extracts v1 pipeline identifiers from raw YAML id fields", async () => {
+    const yaml = [
+      "pipeline:",
+      "  id: simple_build",
+      "  name: Simple Build",
+      "  clone:",
+      "    enabled: false",
+      "  stages: []",
+    ].join("\n");
+
+    const result = await server.call("harness_create", {
+      resource_type: "pipeline_v1",
+      body: yaml,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(callArgs.body).toMatchObject({
+      pipeline_yaml: yaml,
+      identifier: "simple_build",
+      name: "Simple Build",
+      version: "1",
+    });
+  });
+
+  it("extracts v1 pipeline identifiers from JSON pipeline id fields", async () => {
+    const result = await server.call("harness_create", {
+      resource_type: "pipeline_v1",
+      body: {
+        pipeline: {
+          id: "json_build",
+          name: "JSON Build",
+          clone: { enabled: false },
+          stages: [],
+        },
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(callArgs.body).toMatchObject({
+      identifier: "json_build",
+      name: "JSON Build",
+      version: "1",
+    });
+    expect(callArgs.body.pipeline_yaml).toContain("id: json_build");
+    expect(callArgs.body.pipeline_yaml).not.toContain("identifier:");
+  });
+
   it("coerces JSON-string bodies before dispatch", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { uuid: "category-1" } });
