@@ -198,6 +198,12 @@ const schema: Record<string, any> = {
                 "type": "string",
                 "pattern": "^[0-9a-zA-Z][^\\s/&]{0,63}$"
               },
+              "label": {
+                "type": "string",
+                "description": "Optional template label in identifier format (case-insensitive; letters, digits, underscore; must start with letter or underscore).",
+                "maxLength": 128,
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
               "description": {
                 "desc": "This is the description for TemplateLinkConfig"
               }
@@ -2130,6 +2136,9 @@ const schema: Record<string, any> = {
                   },
                   "to": {
                     "type": "string"
+                  },
+                  "fireAndForget": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -2210,6 +2219,9 @@ const schema: Record<string, any> = {
               },
               "to": {
                 "type": "string"
+              },
+              "fireAndForget": {
+                "type": "boolean"
               },
               "inputVariables": {
                 "type": "array",
@@ -12295,6 +12307,87 @@ const schema: Record<string, any> = {
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
+          "SscaAibomSource": {
+            "title": "SscaAibomSource",
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "repository"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for SscaAibomSource"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "repository"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/SscaAibomRepositorySource"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "SscaAibomRepositorySource": {
+            "title": "SscaAibomRepositorySource",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/steps/custom/SbomSourceSpec"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "url",
+                  "variant_type",
+                  "variant"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "variant_type": {
+                    "type": "string",
+                    "enum": [
+                      "branch",
+                      "git_tag",
+                      "commit"
+                    ]
+                  },
+                  "variant": {
+                    "type": "string"
+                  },
+                  "cloned_codebase": {
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for SscaAibomRepositorySource"
+              }
+            }
+          },
           "SscaComplianceSource": {
             "title": "SscaComplianceSource",
             "type": "object",
@@ -15748,6 +15841,22 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/steps/common/ModelScanStepInfo"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "OpenAi"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/OpenAiStepInfo"
                     }
                   }
                 }
@@ -20878,6 +20987,9 @@ const schema: Record<string, any> = {
                   "advanced": {
                     "$ref": "#/definitions/pipeline/steps/common/STOYamlAdvancedSettings"
                   },
+                  "auth": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlAuth"
+                  },
                   "baseImageConnectorRefs": {
                     "$ref": "#/definitions/pipeline/steps/ci/ParameterFieldListString"
                   },
@@ -24573,6 +24685,9 @@ const schema: Record<string, any> = {
             "type": "object",
             "properties": {
               "ingest_tool_severity": {
+                "type": "boolean"
+              },
+              "honor_grace_period": {
                 "type": "boolean"
               },
               "description": {
@@ -28645,6 +28760,258 @@ const schema: Record<string, any> = {
               }
             }
           },
+          "OpenAiStepInfo": {
+            "title": "OpenAiStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "config",
+                  "mode",
+                  "target"
+                ],
+                "properties": {
+                  "advanced": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlAdvancedSettings"
+                  },
+                  "auth": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlAuth"
+                  },
+                  "baseImageConnectorRefs": {
+                    "$ref": "#/definitions/pipeline/steps/ci/ParameterFieldListString"
+                  },
+                  "config": {
+                    "type": "string",
+                    "enum": [
+                      "default"
+                    ]
+                  },
+                  "connectorRef": {
+                    "type": "string"
+                  },
+                  "imageTag": {
+                    "type": "string"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "ingestion": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlIngestion"
+                  },
+                  "mode": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ingestion",
+                          "orchestration"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "outputVariables": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/pipeline/common/OutputNGVariable"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "privileged": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "runAsUser": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "settings": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "target": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "config",
+              "mode",
+              "target"
+            ],
+            "properties": {
+              "advanced": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlAdvancedSettings"
+              },
+              "auth": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlAuth"
+              },
+              "baseImageConnectorRefs": {
+                "$ref": "#/definitions/pipeline/steps/ci/ParameterFieldListString"
+              },
+              "config": {
+                "type": "string",
+                "enum": [
+                  "default"
+                ]
+              },
+              "connectorRef": {
+                "type": "string"
+              },
+              "imageTag": {
+                "type": "string"
+              },
+              "imagePullPolicy": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Always",
+                      "Never",
+                      "IfNotPresent"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "ingestion": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlIngestion"
+              },
+              "mode": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "ingestion",
+                      "orchestration"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "outputVariables": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/OutputNGVariable"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "privileged": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "runAsUser": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "settings": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "target": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
+              },
+              "description": {
+                "desc": "This is the description for OpenAiStepInfo"
+              }
+            }
+          },
           "CheckovScanNode": {
             "title": "CheckovScanNode",
             "type": "object",
@@ -29918,6 +30285,74 @@ const schema: Record<string, any> = {
                 "desc": "This is the description for DependencySpecType"
               }
             }
+          },
+          "common-jexl-expression-only": {
+            "title": "common-jexl-expression-only",
+            "description": "JEXL expression that excludes runtime input.\n\nThis schema allows JEXL expressions like <+pipeline.variables.x>, <+stage.variables.y>, etc.\nbut explicitly excludes runtime input patterns:\n- <+input>\n- <+input>.allowedValues(...)\n- <+input>.default(...)\n- <+input>.executionInput()\n- <+input>.regex(...)\n- <+input>.selectOneFrom(...)\n- <+input>.selectManyFrom(...)\n\nUse this when a field should support expressions but NOT runtime input.\n",
+            "type": "string",
+            "allOf": [
+              {
+                "pattern": "^<\\+.+>.*$"
+              },
+              {
+                "not": {
+                  "pattern": "^<\\+input>.*$"
+                }
+              }
+            ]
+          },
+          "ChaosExperimentValue": {
+            "title": "ChaosExperimentValue",
+            "type": "object",
+            "required": [
+              "name",
+              "value"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)"
+                  }
+                ]
+              },
+              "referenceKind": {
+                "type": "string",
+                "enum": [
+                  "Connector",
+                  "Secret"
+                ]
+              },
+              "referenceType": {
+                "type": "string",
+                "enum": [
+                  "Prometheus",
+                  "AppDynamics",
+                  "SignalFX",
+                  "Dynatrace",
+                  "NewRelic",
+                  "Datadog",
+                  "Splunk",
+                  "SecretFile",
+                  "SecretText"
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "BackgroundStepNode": {
             "title": "BackgroundStepNode",
@@ -34314,6 +34749,357 @@ const schema: Record<string, any> = {
               }
             }
           },
+          "EnforceAttestationStepNode": {
+            "title": "EnforceAttestationStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for EnforceAttestationStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "EnforceAttestation"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "EnforceAttestation"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/EnforceAttestationStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "EnforceAttestationStepInfo": {
+            "title": "EnforceAttestationStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "description": {
+                    "desc": "This is the description for EnforceAttestationStepInfo"
+                  },
+                  "policy": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/custom/EnforcementPolicy"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/common/PolicyConfig"
+                      }
+                    ]
+                  },
+                  "source": {
+                    "$ref": "#/definitions/pipeline/steps/common/EnforceAttestationSource"
+                  },
+                  "verifyAttestationSignatures": {
+                    "type": "boolean"
+                  },
+                  "attestedEventScope": {
+                    "$ref": "#/definitions/pipeline/steps/common/AttestedEventScope"
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "overrideConnectorRef": {
+                    "type": "string"
+                  },
+                  "imageTag": {
+                    "type": "string"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "policy",
+              "source"
+            ]
+          },
+          "EnforceAttestationSource": {
+            "title": "EnforceAttestationSource",
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "image",
+                  "docker",
+                  "ecr",
+                  "gcr",
+                  "acr",
+                  "gar",
+                  "har"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for EnforceAttestationSource"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "image"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/ImageSbomSource"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "docker"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/ImageSbomSource"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "ecr"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/EcrSbomSource"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "gcr"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/GcrSbomSource"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "acr"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/AcrSbomSource"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "gar"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/GarSbomSource"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "har"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/HarSbomSource"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "AttestedEventScope": {
+            "title": "AttestedEventScope",
+            "type": "object",
+            "required": [
+              "scope"
+            ],
+            "properties": {
+              "scope": {
+                "type": "string",
+                "enum": [
+                  "all",
+                  "specific"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for AttestedEventScope"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "scope": {
+                      "const": "specific"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "eventTypes"
+                  ],
+                  "properties": {
+                    "eventTypes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": [
+                          "Code",
+                          "Test",
+                          "Build",
+                          "Security",
+                          "Custom"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
           "DBApplySchemaStepNode": {
             "title": "DBApplySchemaStepNode",
             "type": "object",
@@ -36628,21 +37414,6 @@ const schema: Record<string, any> = {
             "type": "string",
             "description": "FME Treatment Name",
             "pattern": "^[a-zA-Z0-9][-_\\.a-zA-Z0-9]*$"
-          },
-          "common-jexl-expression-only": {
-            "title": "common-jexl-expression-only",
-            "description": "JEXL expression that excludes runtime input.\n\nThis schema allows JEXL expressions like <+pipeline.variables.x>, <+stage.variables.y>, etc.\nbut explicitly excludes runtime input patterns:\n- <+input>\n- <+input>.allowedValues(...)\n- <+input>.default(...)\n- <+input>.executionInput()\n- <+input>.regex(...)\n- <+input>.selectOneFrom(...)\n- <+input>.selectManyFrom(...)\n\nUse this when a field should support expressions but NOT runtime input.\n",
-            "type": "string",
-            "allOf": [
-              {
-                "pattern": "^<\\+.+>.*$"
-              },
-              {
-                "not": {
-                  "pattern": "^<\\+input>.*$"
-                }
-              }
-            ]
           },
           "fme-segment-common-segment-name": {
             "title": "fme-segment-common-segment-name",
@@ -41319,6 +42090,9 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
+                  "tool": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlCortexCloudToolData"
+                  },
                   "target": {
                     "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
                   }
@@ -41445,6 +42219,9 @@ const schema: Record<string, any> = {
                   }
                 ]
               },
+              "tool": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlCortexCloudToolData"
+              },
               "target": {
                 "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
               },
@@ -41452,6 +42229,22 @@ const schema: Record<string, any> = {
                 "desc": "This is the description for CortexCloudStepInfo"
               }
             }
+          },
+          "STOYamlCortexCloudToolData": {
+            "title": "STOYamlCortexCloudToolData",
+            "type": "object",
+            "properties": {
+              "image_id": {
+                "type": "string"
+              },
+              "ingest_tool_severity": {
+                "type": "boolean"
+              },
+              "description": {
+                "desc": "This is the description for STOYamlCortexCloudToolData"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "ModelScanNode": {
             "title": "ModelScanNode",
@@ -41547,6 +42340,297 @@ const schema: Record<string, any> = {
                 }
               }
             ]
+          },
+          "OpenAiNode": {
+            "title": "OpenAiNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for OpenAiNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "OpenAi"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "OpenAi"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/OpenAiStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "SscaAibomOrchestrationStepNode": {
+            "title": "SscaAibomOrchestrationStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for SscaAibomOrchestrationStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "SscaAibomOrchestration"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "SscaAibomOrchestration"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/SscaAibomOrchestrationStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "SscaAibomOrchestrationStepInfo": {
+            "title": "SscaAibomOrchestrationStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "source"
+                ],
+                "properties": {
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "CycloneDX"
+                    ]
+                  },
+                  "additionalCliFlags": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "$ref": "#/definitions/pipeline/steps/custom/SscaAibomSource"
+                  },
+                  "overrideConnectorRef": {
+                    "type": "string"
+                  },
+                  "imageTag": {
+                    "type": "string"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "source"
+            ],
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": [
+                  "CycloneDX"
+                ]
+              },
+              "additionalCliFlags": {
+                "type": "string"
+              },
+              "source": {
+                "$ref": "#/definitions/pipeline/steps/custom/SscaAibomSource"
+              },
+              "overrideConnectorRef": {
+                "type": "string"
+              },
+              "imageTag": {
+                "type": "string"
+              },
+              "imagePullPolicy": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Always",
+                      "Never",
+                      "IfNotPresent"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "description": {
+                "desc": "This is the description for SscaAibomOrchestrationStepInfo"
+              }
+            }
           },
           "SscaComplianceStepNode": {
             "title": "SscaComplianceStepNode",
@@ -41709,6 +42793,522 @@ const schema: Record<string, any> = {
               },
               "imageTag": {
                 "type": "string"
+              },
+              "imagePullPolicy": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Always",
+                      "Never",
+                      "IfNotPresent"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              }
+            }
+          },
+          "SscaPrAttestationStepNode": {
+            "title": "SscaPrAttestationStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for SscaPrAttestationStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "SscaPrAttestation"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "SscaPrAttestation"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/SscaPrAttestationStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "SscaPrAttestationStepInfo": {
+            "title": "SscaPrAttestationStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "repoUrl",
+                  "branch",
+                  "oidcProvider",
+                  "sourcePlatform"
+                ],
+                "properties": {
+                  "description": {
+                    "desc": "This is the description for SscaPrAttestationStepInfo"
+                  },
+                  "connectorRef": {
+                    "type": "string"
+                  },
+                  "repoUrl": {
+                    "type": "string"
+                  },
+                  "branch": {
+                    "type": "string"
+                  },
+                  "prNumber": {
+                    "type": "string"
+                  },
+                  "sourcePlatform": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "GITHUB",
+                          "GITLAB",
+                          "BITBUCKET",
+                          "HARNESS"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "oidcProvider": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "harness",
+                          "non-harness"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "overrideConnectorRef": {
+                    "type": "string"
+                  },
+                  "imageTag": {
+                    "type": "string"
+                  },
+                  "settings": {
+                    "type": "object"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "repoUrl",
+              "branch",
+              "oidcProvider",
+              "sourcePlatform"
+            ],
+            "properties": {
+              "description": {
+                "desc": "This is the description for SscaPrAttestationStepInfo"
+              },
+              "connectorRef": {
+                "type": "string"
+              },
+              "repoUrl": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              },
+              "prNumber": {
+                "type": "string"
+              },
+              "sourcePlatform": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "GITHUB",
+                      "GITLAB",
+                      "BITBUCKET",
+                      "HARNESS"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "oidcProvider": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "harness",
+                      "non-harness"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "overrideConnectorRef": {
+                "type": "string"
+              },
+              "imageTag": {
+                "type": "string"
+              },
+              "settings": {
+                "type": "object"
+              },
+              "imagePullPolicy": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Always",
+                      "Never",
+                      "IfNotPresent"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              }
+            }
+          },
+          "SscaJunitAttestationStepNode": {
+            "title": "SscaJunitAttestationStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for SscaJunitAttestationStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "SscaJunitAttestation"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "SscaJunitAttestation"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/SscaJunitAttestationStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "SscaJunitAttestationStepInfo": {
+            "title": "SscaJunitAttestationStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "repoUrl",
+                  "branch",
+                  "junitReportPath",
+                  "oidcProvider"
+                ],
+                "properties": {
+                  "description": {
+                    "desc": "This is the description for SscaJunitAttestationStepInfo"
+                  },
+                  "repoUrl": {
+                    "type": "string"
+                  },
+                  "branch": {
+                    "type": "string"
+                  },
+                  "junitReportPath": {
+                    "type": "string"
+                  },
+                  "oidcProvider": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "harness",
+                          "non-harness"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "overrideConnectorRef": {
+                    "type": "string"
+                  },
+                  "imageTag": {
+                    "type": "string"
+                  },
+                  "settings": {
+                    "type": "object"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "repoUrl",
+              "branch",
+              "junitReportPath",
+              "oidcProvider"
+            ],
+            "properties": {
+              "description": {
+                "desc": "This is the description for SscaJunitAttestationStepInfo"
+              },
+              "repoUrl": {
+                "type": "string"
+              },
+              "branch": {
+                "type": "string"
+              },
+              "junitReportPath": {
+                "type": "string"
+              },
+              "oidcProvider": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "harness",
+                      "non-harness"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "overrideConnectorRef": {
+                "type": "string"
+              },
+              "imageTag": {
+                "type": "string"
+              },
+              "settings": {
+                "type": "object"
               },
               "imagePullPolicy": {
                 "oneOf": [
@@ -44401,28 +46001,6 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
-                  "runId": {
-                    "description": "Pre-created eval run ID to execute",
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                      },
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                      }
-                    ]
-                  },
-                  "suiteRunId": {
-                    "description": "Pre-created suite run ID to execute",
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                      },
-                      {
-                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                      }
-                    ]
-                  },
                   "apiKey": {
                     "description": "Harness API key secret reference for authentication",
                     "oneOf": [
@@ -44498,28 +46076,6 @@ const schema: Record<string, any> = {
               },
               "suitePath": {
                 "description": "Path to a suite.yaml file on disk (skips API fetch mode)",
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "runId": {
-                "description": "Pre-created eval run ID to execute",
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "suiteRunId": {
-                "description": "Pre-created suite run ID to execute",
                 "oneOf": [
                   {
                     "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
@@ -51239,7 +52795,9 @@ const schema: Record<string, any> = {
                       "synth",
                       "deploy",
                       "destroy",
-                      "diff"
+                      "diff",
+                      "drift",
+                      "approval"
                     ]
                   },
                   "image": {
@@ -51323,7 +52881,9 @@ const schema: Record<string, any> = {
                   "synth",
                   "deploy",
                   "destroy",
-                  "diff"
+                  "diff",
+                  "drift",
+                  "approval"
                 ]
               },
               "image": {
@@ -51393,6 +52953,159 @@ const schema: Record<string, any> = {
               },
               "resources": {
                 "$ref": "#/definitions/pipeline/common/ContainerResource"
+              }
+            }
+          },
+          "IACMBlastRadiusAgentStepNode": {
+            "title": "IACMBlastRadiusAgentStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for IACMBlastRadiusAgentStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "IACMBlastRadiusAgent"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "IACMBlastRadiusAgent"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/iacm/IACMBlastRadiusAgentInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "IACMBlastRadiusAgentInfo": {
+            "title": "IACMBlastRadiusAgentInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "string"
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "envVariables": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "image": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for IACMBlastRadiusAgentInfo"
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "envVariables": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
               }
             }
           },
@@ -53173,6 +54886,176 @@ const schema: Record<string, any> = {
                 "items": {
                   "$ref": "#/definitions/pipeline/steps/iacm/ImportCommandParameterField"
                 }
+              }
+            }
+          },
+          "IACMRemediationAgentStepNode": {
+            "title": "IACMRemediationAgentStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for IACMRemediationAgentStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "IACMRemediationAgent"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "IACMRemediationAgent"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/iacm/IACMRemediationAgentInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "IACMRemediationAgentInfo": {
+            "title": "IACMRemediationAgentInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "image": {
+                    "type": "string"
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "remediationType": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "drift",
+                          "ccm",
+                          "sto",
+                          "custom"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+.*>$"
+                      }
+                    ]
+                  },
+                  "recommendation": {
+                    "type": "string"
+                  },
+                  "instructions": {
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "image": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for IACMRemediationAgentInfo"
+              },
+              "remediationType": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "drift",
+                      "ccm",
+                      "sto",
+                      "custom"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+.*>$"
+                  }
+                ]
+              },
+              "recommendation": {
+                "type": "string"
+              },
+              "instructions": {
+                "type": "string"
               }
             }
           }
@@ -58200,7 +60083,8 @@ const schema: Record<string, any> = {
                 "type": "string",
                 "enum": [
                   "Generic",
-                  "ECR"
+                  "ECR",
+                  "GAR"
                 ]
               },
               "description": {
@@ -58237,6 +60121,22 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/steps/cd/OciHelmChartStoreGenericConfig"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "GAR"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/OciHelmChartStoreGarConfig"
                     }
                   }
                 }
@@ -58355,6 +60255,44 @@ const schema: Record<string, any> = {
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "OciHelmChartStoreGarConfig": {
+            "title": "OciHelmChartStoreGarConfig",
+            "allOf": [
+              {},
+              {
+                "type": "object",
+                "required": [
+                  "connectorRef",
+                  "region",
+                  "project",
+                  "repositoryName"
+                ],
+                "properties": {
+                  "connectorRef": {
+                    "type": "string"
+                  },
+                  "metadata": {
+                    "type": "string"
+                  },
+                  "region": {
+                    "type": "string"
+                  },
+                  "project": {
+                    "type": "string"
+                  },
+                  "repositoryName": {
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for OciHelmChartStoreGarConfig"
+              }
+            }
           },
           "S3StoreConfig": {
             "title": "S3StoreConfig",
@@ -60896,6 +62834,317 @@ const schema: Record<string, any> = {
               }
             }
           },
+          "K8sBGStageScaleUpStepNode": {
+            "title": "K8sBGStageScaleUpStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for K8sBGStageScaleUpStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "K8sBlueGreenStageScaleUp"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "K8sBlueGreenStageScaleUp"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/K8sBGStageScaleUpStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "K8sBGStageScaleUpStepInfo": {
+            "title": "K8sBGStageScaleUpStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "delegateSelectors": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "replicaCountMode": {
+                    "type": "string",
+                    "enum": [
+                      "Auto",
+                      "Custom"
+                    ]
+                  },
+                  "instanceSelection": {
+                    "$ref": "#/definitions/pipeline/steps/cd/InstanceSelectionWrapper"
+                  },
+                  "skipSteadyStateCheck": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "replicaCountMode": {
+                "type": "string",
+                "enum": [
+                  "Auto",
+                  "Custom"
+                ]
+              },
+              "instanceSelection": {
+                "$ref": "#/definitions/pipeline/steps/cd/InstanceSelectionWrapper"
+              },
+              "skipSteadyStateCheck": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for K8sBGStageScaleUpStepInfo"
+              }
+            }
+          },
+          "InstanceSelectionWrapper": {
+            "title": "InstanceSelectionWrapper",
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Count",
+                  "Percentage"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for InstanceSelectionWrapper"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Count"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/CountInstanceSelection"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Percentage"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/PercentageInstanceSelection"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "CountInstanceSelection": {
+            "title": "CountInstanceSelection",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/steps/cd/InstanceSelectionBase"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "count": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/cd/ParameterFieldString"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "integer"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for CountInstanceSelection"
+              }
+            }
+          },
+          "InstanceSelectionBase": {
+            "title": "InstanceSelectionBase",
+            "type": "object",
+            "discriminator": "type",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for InstanceSelectionBase"
+              }
+            }
+          },
+          "PercentageInstanceSelection": {
+            "title": "PercentageInstanceSelection",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/steps/cd/InstanceSelectionBase"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "percentage": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/cd/ParameterFieldString"
+                      },
+                      {
+                        "type": "string"
+                      },
+                      {
+                        "type": "number"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for PercentageInstanceSelection"
+              }
+            }
+          },
           "AsgCanaryDeployStepNode": {
             "title": "AsgCanaryDeployStepNode",
             "type": "object",
@@ -61252,6 +63501,9 @@ const schema: Record<string, any> = {
                   }
                 ]
               },
+              "resourcesFilter": {
+                "$ref": "#/definitions/pipeline/steps/cd/ResourcesFilter"
+              },
               "retryStrategy": {
                 "$ref": "#/definitions/pipeline/steps/cd/SyncRetryStrategy"
               },
@@ -61386,8 +63638,115 @@ const schema: Record<string, any> = {
               "applicationName": {
                 "type": "string"
               },
+              "resourcesSelector": {
+                "$ref": "#/definitions/pipeline/steps/cd/ResourcesSelector"
+              },
               "description": {
                 "desc": "This is the description for AgentApplicationTargets"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ResourcesSelector": {
+            "title": "ResourcesSelector",
+            "type": "object",
+            "properties": {
+              "group": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl-expression-only"
+                  }
+                ]
+              },
+              "kind": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl-expression-only"
+                  }
+                ]
+              },
+              "name": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl-expression-only"
+                  }
+                ]
+              },
+              "namespace": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl-expression-only"
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ResourcesFilter": {
+            "title": "ResourcesFilter",
+            "type": "object",
+            "properties": {
+              "group": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "kind": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "name": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "namespace": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "label": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
@@ -65601,132 +67960,6 @@ const schema: Record<string, any> = {
               }
             }
           },
-          "InstanceSelectionWrapper": {
-            "title": "InstanceSelectionWrapper",
-            "type": "object",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Count",
-                  "Percentage"
-                ]
-              },
-              "description": {
-                "desc": "This is the description for InstanceSelectionWrapper"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Count"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/steps/cd/CountInstanceSelection"
-                    }
-                  }
-                }
-              },
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Percentage"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/steps/cd/PercentageInstanceSelection"
-                    }
-                  }
-                }
-              }
-            ]
-          },
-          "CountInstanceSelection": {
-            "title": "CountInstanceSelection",
-            "allOf": [
-              {
-                "$ref": "#/definitions/pipeline/steps/cd/InstanceSelectionBase"
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "count": {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/pipeline/steps/cd/ParameterFieldString"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "integer"
-                      }
-                    ]
-                  }
-                }
-              }
-            ],
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "properties": {
-              "description": {
-                "desc": "This is the description for CountInstanceSelection"
-              }
-            }
-          },
-          "InstanceSelectionBase": {
-            "title": "InstanceSelectionBase",
-            "type": "object",
-            "discriminator": "type",
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "properties": {
-              "description": {
-                "desc": "This is the description for InstanceSelectionBase"
-              }
-            }
-          },
-          "PercentageInstanceSelection": {
-            "title": "PercentageInstanceSelection",
-            "allOf": [
-              {
-                "$ref": "#/definitions/pipeline/steps/cd/InstanceSelectionBase"
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "percentage": {
-                    "oneOf": [
-                      {
-                        "$ref": "#/definitions/pipeline/steps/cd/ParameterFieldString"
-                      },
-                      {
-                        "type": "string"
-                      },
-                      {
-                        "type": "number"
-                      }
-                    ]
-                  }
-                }
-              }
-            ],
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "properties": {
-              "description": {
-                "desc": "This is the description for PercentageInstanceSelection"
-              }
-            }
-          },
           "AsgCanaryDeleteStepNode": {
             "title": "AsgCanaryDeleteStepNode",
             "type": "object",
@@ -68626,10 +70859,37 @@ const schema: Record<string, any> = {
               },
               {
                 "type": "object",
-                "required": [
-                  "instanceSelection"
-                ],
                 "properties": {
+                  "canaryType": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Standard",
+                          "Progressive"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "targetPercentage": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "commandFlags": {
                     "oneOf": [
                       {
@@ -68677,14 +70937,63 @@ const schema: Record<string, any> = {
                     ]
                   }
                 }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "canaryType": {
+                      "const": "Progressive"
+                    }
+                  },
+                  "required": [
+                    "canaryType"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "targetPercentage"
+                  ]
+                },
+                "else": {
+                  "required": [
+                    "instanceSelection"
+                  ]
+                }
               }
             ],
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
-            "required": [
-              "instanceSelection"
-            ],
             "properties": {
+              "canaryType": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Standard",
+                      "Progressive"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "targetPercentage": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
               "commandFlags": {
                 "oneOf": [
                   {
@@ -68734,6 +71043,26 @@ const schema: Record<string, any> = {
               "description": {
                 "desc": "This is the description for K8sCanaryStepInfo"
               }
+            },
+            "if": {
+              "properties": {
+                "canaryType": {
+                  "const": "Progressive"
+                }
+              },
+              "required": [
+                "canaryType"
+              ]
+            },
+            "then": {
+              "required": [
+                "targetPercentage"
+              ]
+            },
+            "else": {
+              "required": [
+                "instanceSelection"
+              ]
             }
           },
           "EcsCanaryDeleteStepNode": {
@@ -78380,9 +80709,7 @@ const schema: Record<string, any> = {
                         "type": "boolean"
                       },
                       {
-                        "type": "string",
-                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                        "minLength": 1
+                        "type": "string"
                       }
                     ]
                   }
@@ -78416,9 +80743,7 @@ const schema: Record<string, any> = {
                     "type": "boolean"
                   },
                   {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
+                    "type": "string"
                   }
                 ]
               },
@@ -80653,6 +82978,30 @@ const schema: Record<string, any> = {
                   }
                 ]
               },
+              "allowNoFilesChanged": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "ignoreMissingFiles": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
               "stringMap": {
                 "$ref": "#/definitions/pipeline/steps/common/ParameterFieldMapStringString"
               },
@@ -81334,30 +83683,16 @@ const schema: Record<string, any> = {
               {
                 "type": "object",
                 "required": [
-                  "healthSourceRefs",
-                  "dataCollectionWindow",
-                  "dataCollectionInfrastructure"
+                  "healthSources",
+                  "dataCollectionWindow"
                 ],
                 "properties": {
-                  "healthSourceRefs": {
-                    "oneOf": [
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "minItems": 1
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "(<\\+.+>.*)",
-                        "minLength": 1
-                      }
-                    ]
-                  },
-                  "dataCollectionInfrastructure": {
-                    "$ref": "#/definitions/pipeline/steps/cd/DataCollectionInfrastructure"
+                  "healthSources": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/cd/AIVerifyNGHealthSource"
+                    },
+                    "minItems": 1
                   },
                   "dataCollectionWindow": {
                     "description": "Data collection window as a duration string '<n>m' (minutes) or '<n>h' (hours), e.g. '30m', '1h', '2h'; may also be a runtime expression.",
@@ -81468,30 +83803,16 @@ const schema: Record<string, any> = {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "type": "object",
             "required": [
-              "healthSourceRefs",
-              "dataCollectionWindow",
-              "dataCollectionInfrastructure"
+              "healthSources",
+              "dataCollectionWindow"
             ],
             "properties": {
-              "healthSourceRefs": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "minItems": 1
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "(<\\+.+>.*)",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "dataCollectionInfrastructure": {
-                "$ref": "#/definitions/pipeline/steps/cd/DataCollectionInfrastructure"
+              "healthSources": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/steps/cd/AIVerifyNGHealthSource"
+                },
+                "minItems": 1
               },
               "dataCollectionWindow": {
                 "description": "Data collection window as a duration string '<n>m' (minutes) or '<n>h' (hours), e.g. '30m', '1h', '2h'; may also be a runtime expression.",
@@ -81601,51 +83922,18 @@ const schema: Record<string, any> = {
               }
             }
           },
-          "DataCollectionInfrastructure": {
-            "title": "DataCollectionInfrastructure",
+          "AIVerifyNGHealthSource": {
+            "title": "AIVerifyNGHealthSource",
+            "description": "A health source reference for the AI Verify NG step. Multiple entries are expanded into a per-source matrix at plan creation time.",
             "type": "object",
             "required": [
-              "type",
-              "spec"
+              "healthSourceRef"
             ],
             "properties": {
-              "type": {
+              "healthSourceRef": {
+                "description": "Identifier of the health source to verify. May be a literal id or a per-element runtime expression.",
                 "type": "string",
-                "enum": [
-                  "KubernetesDirect"
-                ]
-              },
-              "spec": {
-                "type": "object",
-                "required": [
-                  "connectorRef",
-                  "namespace"
-                ],
-                "properties": {
-                  "connectorRef": {
-                    "type": "string"
-                  },
-                  "namespace": {
-                    "type": "string"
-                  },
-                  "resources": {
-                    "$ref": "#/definitions/pipeline/steps/cd/DataCollectionInfrastructureResources"
-                  }
-                }
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "DataCollectionInfrastructureResources": {
-            "title": "DataCollectionInfrastructureResources",
-            "description": "Optional resource requests/limits for AI Verify data collection infrastructure. Omit the block entirely, or include only the fields you need; CPU and memory are optional under requests and limits.",
-            "type": "object",
-            "properties": {
-              "limits": {
-                "$ref": "#/definitions/pipeline/common/Limits"
-              },
-              "requests": {
-                "$ref": "#/definitions/pipeline/common/Limits"
+                "minLength": 1
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
@@ -89669,49 +91957,77 @@ const schema: Record<string, any> = {
                                   "type": "string"
                                 },
                                 "destinations": {
-                                  "type": "array",
-                                  "items": {
-                                    "type": "object",
-                                    "properties": {
-                                      "destination": {
-                                        "type": "string"
-                                      },
-                                      "weight": {
-                                        "oneOf": [
-                                          {
-                                            "type": "integer",
-                                            "format": "int32",
-                                            "minimum": 0,
-                                            "maximum": 100
+                                  "oneOf": [
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "type": "object",
+                                        "properties": {
+                                          "destination": {
+                                            "type": "string"
                                           },
-                                          {
-                                            "type": "string",
-                                            "pattern": "(<\\+.+>.*)",
-                                            "minLength": 1
+                                          "weight": {
+                                            "oneOf": [
+                                              {
+                                                "type": "integer",
+                                                "format": "int32",
+                                                "minimum": 0,
+                                                "maximum": 100
+                                              },
+                                              {
+                                                "type": "string",
+                                                "pattern": "(<\\+.+>.*)",
+                                                "minLength": 1
+                                              }
+                                            ]
                                           }
+                                        },
+                                        "required": [
+                                          "destination",
+                                          "weight"
                                         ]
-                                      }
+                                      },
+                                      "minItems": 1
                                     },
-                                    "required": [
-                                      "destination",
-                                      "weight"
-                                    ]
-                                  }
+                                    {
+                                      "type": "string",
+                                      "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                                      "minLength": 1
+                                    }
+                                  ]
                                 },
                                 "headerRoutingAdd": {
-                                  "type": "array",
-                                  "items": {
-                                    "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingAddSpec"
-                                  },
-                                  "minItems": 1,
+                                  "oneOf": [
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingAddSpec"
+                                      },
+                                      "minItems": 1
+                                    },
+                                    {
+                                      "type": "string",
+                                      "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                                      "minLength": 1
+                                    }
+                                  ],
                                   "description": "Optional. Add or update header-based routing rules."
                                 },
                                 "headerRoutingRemove": {
-                                  "type": "array",
-                                  "items": {
-                                    "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingRemoveSpec"
-                                  },
-                                  "minItems": 1,
+                                  "oneOf": [
+                                    {
+                                      "type": "array",
+                                      "items": {
+                                        "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingRemoveSpec"
+                                      },
+                                      "minItems": 1
+                                    },
+                                    {
+                                      "type": "string",
+                                      "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                                      "minLength": 1
+                                    }
+                                  ],
                                   "description": "Optional. Remove header-based routing rules by key."
                                 }
                               },
@@ -89867,49 +92183,77 @@ const schema: Record<string, any> = {
                               "type": "string"
                             },
                             "destinations": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "destination": {
-                                    "type": "string"
-                                  },
-                                  "weight": {
-                                    "oneOf": [
-                                      {
-                                        "type": "integer",
-                                        "format": "int32",
-                                        "minimum": 0,
-                                        "maximum": 100
+                              "oneOf": [
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "type": "object",
+                                    "properties": {
+                                      "destination": {
+                                        "type": "string"
                                       },
-                                      {
-                                        "type": "string",
-                                        "pattern": "(<\\+.+>.*)",
-                                        "minLength": 1
+                                      "weight": {
+                                        "oneOf": [
+                                          {
+                                            "type": "integer",
+                                            "format": "int32",
+                                            "minimum": 0,
+                                            "maximum": 100
+                                          },
+                                          {
+                                            "type": "string",
+                                            "pattern": "(<\\+.+>.*)",
+                                            "minLength": 1
+                                          }
+                                        ]
                                       }
+                                    },
+                                    "required": [
+                                      "destination",
+                                      "weight"
                                     ]
-                                  }
+                                  },
+                                  "minItems": 1
                                 },
-                                "required": [
-                                  "destination",
-                                  "weight"
-                                ]
-                              }
+                                {
+                                  "type": "string",
+                                  "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                                  "minLength": 1
+                                }
+                              ]
                             },
                             "headerRoutingAdd": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingAddSpec"
-                              },
-                              "minItems": 1,
+                              "oneOf": [
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingAddSpec"
+                                  },
+                                  "minItems": 1
+                                },
+                                {
+                                  "type": "string",
+                                  "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                                  "minLength": 1
+                                }
+                              ],
                               "description": "Optional. Add or update header-based routing rules."
                             },
                             "headerRoutingRemove": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingRemoveSpec"
-                              },
-                              "minItems": 1,
+                              "oneOf": [
+                                {
+                                  "type": "array",
+                                  "items": {
+                                    "$ref": "#/definitions/pipeline/steps/cd/GoogleMigHeaderRoutingRemoveSpec"
+                                  },
+                                  "minItems": 1
+                                },
+                                {
+                                  "type": "string",
+                                  "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                                  "minLength": 1
+                                }
+                              ],
                               "description": "Optional. Remove header-based routing rules by key."
                             }
                           },
@@ -95321,6 +97665,30 @@ const schema: Record<string, any> = {
                   }
                 ]
               },
+              "infraType": {
+                "type": "string",
+                "enum": [
+                  "Kubernetes",
+                  "KubernetesV2",
+                  "Linux",
+                  "Windows"
+                ]
+              },
+              "experimentValues": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/common/ChaosExperimentValue"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
               "tasks": {
                 "oneOf": [
                   {
@@ -95338,34 +97706,7 @@ const schema: Record<string, any> = {
                         "values": {
                           "type": "array",
                           "items": {
-                            "type": "object",
-                            "required": [
-                              "name",
-                              "value"
-                            ],
-                            "properties": {
-                              "name": {
-                                "type": "string",
-                                "minLength": 1
-                              },
-                              "value": {
-                                "anyOf": [
-                                  {
-                                    "type": "string"
-                                  },
-                                  {
-                                    "type": "number"
-                                  },
-                                  {
-                                    "type": "boolean"
-                                  },
-                                  {
-                                    "type": "string",
-                                    "pattern": "(<\\+.+>.*)"
-                                  }
-                                ]
-                              }
-                            }
+                            "$ref": "#/definitions/pipeline/steps/common/ChaosExperimentValue"
                           }
                         }
                       }
@@ -95535,6 +97876,48 @@ const schema: Record<string, any> = {
                         "$ref": "#/definitions/pipeline/steps/common/common-jexl"
                       }
                     ]
+                  },
+                  "inputs": {
+                    "description": "Values for the load test's runtime inputs (entries the selected load test marks as <+input>). Each entry is a name/value pair; value may be fixed or a pipeline expression/runtime input.",
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "name"
+                          ],
+                          "properties": {
+                            "name": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "value": {
+                              "oneOf": [
+                                {
+                                  "type": "integer"
+                                },
+                                {
+                                  "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                                },
+                                {
+                                  "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                                }
+                              ]
+                            },
+                            "type": {
+                              "type": "string"
+                            },
+                            "required": {
+                              "type": "boolean"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
                   }
                 }
               }
@@ -95651,6 +98034,9 @@ const schema: Record<string, any> = {
                 ],
                 "properties": {
                   "identity": {
+                    "type": "string"
+                  },
+                  "kind": {
                     "type": "string"
                   },
                   "duration": {
@@ -95833,6 +98219,9 @@ const schema: Record<string, any> = {
                   "identity": {
                     "type": "string"
                   },
+                  "kind": {
+                    "type": "string"
+                  },
                   "duration": {
                     "type": "string"
                   },
@@ -96010,6 +98399,9 @@ const schema: Record<string, any> = {
                 ],
                 "properties": {
                   "identity": {
+                    "type": "string"
+                  },
+                  "kind": {
                     "type": "string"
                   },
                   "infraReference": {
@@ -96396,7 +98788,12 @@ const schema: Record<string, any> = {
               },
               {
                 "type": "object",
-                "properties": {}
+                "properties": {
+                  "branch": {
+                    "type": "string",
+                    "pattern": "^(?!.*<\\+).*$"
+                  }
+                }
               }
             ],
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -96442,6 +98839,12 @@ const schema: Record<string, any> = {
                   },
                   "versionLabel": {
                     "type": "string"
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "Optional template label in identifier format (case-insensitive; letters, digits, underscore; must start with letter or underscore).",
+                    "maxLength": 128,
+                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
                   }
                 }
               }
@@ -96816,6 +99219,10 @@ const schema: Record<string, any> = {
                   "monitoredServiceRef"
                 ],
                 "properties": {
+                  "branch": {
+                    "type": "string",
+                    "pattern": "^(?!.*<\\+).*$"
+                  },
                   "monitoredServiceRef": {
                     "type": "string"
                   }
@@ -101571,6 +103978,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/iacm/IACMAwsCdkPluginStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/iacm/IACMBlastRadiusAgentStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/iacm/IACMApprovalStepNode"
                   },
                   {
@@ -101617,6 +104027,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/iacm/IACMAnsiblePluginStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/iacm/IACMRemediationAgentStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/QueueStepNode"
@@ -102714,6 +105127,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/cd/K8sBGStageScaleDownStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/cd/K8sBGStageScaleUpStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/cd/AsgCanaryDeployStepNode"
                   },
                   {
@@ -103102,6 +105518,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SlsaVerificationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/EnforceAttestationStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/DBApplySchemaStepNode"
@@ -103801,6 +106220,18 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/common/ECSDirectInfra"
+                  }
+                ]
+              },
+              "platform": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/Platform"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
                   }
                 ]
               },
@@ -111992,13 +114423,25 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/ModelScanNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/OpenAiNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaAibomOrchestrationStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SscaComplianceStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaPrAttestationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaJunitAttestationStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/ArtifactSigningStepNode"
@@ -112008,6 +114451,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SlsaVerificationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/EnforceAttestationStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SastScanNode"
@@ -112557,6 +115003,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaAibomOrchestrationStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/ActionStepNode"
                   },
                   {
@@ -112725,6 +115174,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/SlsaVerificationStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/EnforceAttestationStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/ProvenanceStepNode"
                   },
                   {
@@ -112743,10 +115195,19 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/ModelScanNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/OpenAiNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SscaComplianceStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/HsaRepoScanStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaPrAttestationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaJunitAttestationStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"

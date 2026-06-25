@@ -1197,6 +1197,42 @@ describe("Registry", () => {
     });
   });
 
+  describe("resource_group create — nested bodyWrapperKey account injection", () => {
+    it("injects accountIdentifier inside body.resourceGroup, not at top level", async () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "access_control" }));
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "rg1" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "resource_group", "create", {
+        body: { identifier: "rg1", name: "My Resource Group" },
+      });
+
+      const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+      expect(call.body.resourceGroup).toMatchObject({
+        identifier: "rg1",
+        name: "My Resource Group",
+        accountIdentifier: "test-account",
+      });
+      expect(call.body.accountIdentifier).toBeUndefined();
+    });
+
+    it("injects into pre-wrapped resourceGroup without double-wrapping", async () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "access_control" }));
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS" });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "resource_group", "create", {
+        body: { resourceGroup: { identifier: "rg2", name: "Pre-wrapped" } },
+      });
+
+      const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+      const wrapped = call.body.resourceGroup as Record<string, unknown>;
+      expect(wrapped.accountIdentifier).toBe("test-account");
+      expect(wrapped.identifier).toBe("rg2");
+      expect(Object.keys(call.body)).toEqual(["resourceGroup"]);
+    });
+  });
+
   describe("resolved account ID propagation", () => {
     it("passes the resolved account ID to pathBuilder and deep links", async () => {
       const mockRequest = vi.fn().mockResolvedValue({

@@ -1,4 +1,4 @@
-import type { ToolsetDefinition, BodyFieldSpec } from "../types.js";
+import type { ToolsetDefinition, BodyFieldSpec, ParamsSchema } from "../types.js";
 import { passthrough } from "../extractors.js";
 
 // ── Validation helpers for conditional nested fields ──────────────────────
@@ -751,13 +751,6 @@ export const dbopsToolset: ToolsetDefinition = {
       toolset: "dbops",
       scope: "project",
       identifierFields: ["dbschema_id"],
-      listFilterFields: [
-        {
-          name: "dbinstance_id",
-          description: "Instance identifier",
-          required: true,
-        },
-      ],
       operations: {
         get: {
           method: "GET",
@@ -774,6 +767,11 @@ export const dbopsToolset: ToolsetDefinition = {
             "Returns the product default unless overridden in project Database DevOps settings. " +
             "Returns PipelineStatusOutput: {status, response, metadata}. " +
             "The metadata map may contain 'pipelineIdentifier' or similar — inspect the response.",
+          paramsSchema: {
+            fields: [
+              { name: "dbinstance_id", required: true, description: "Instance identifier" },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },
@@ -783,50 +781,133 @@ export const dbopsToolset: ToolsetDefinition = {
       resourceType: "database_execute_llm_authoring_pipeline",
       displayName: "Execute LLM Authoring Pipeline",
       description:
-        "Consolidated endpoint for LLM change authoring Accept & Commit. " +
-        "Resolves the pipeline (settings override or default), fills runtime inputs " +
-        "(schema, instance, changeset, K8s connector), executes the pipeline, and " +
-        "records the billing event — all in one call. " +
-        "Returns { pipelineExecutionId, pipelineIdentifier }. " +
-        "Poll status with harness_get(resource_type='execution', execution_id='<returned_id>'). " +
-        "Use this INSTEAD of separate database_llm_authoring_pipeline + pipeline execution calls.",
+        "Consolidated endpoint for the LLM change authoring Accept & Commit flow. " +
+        "Executes the validate-and-preview pipeline and records a billable " +
+        "ChangeAuthoringExecutionEvent atomically. Use harness_execute with action=run. " +
+        "Requires project scope: org_id and project_id must be supplied (or defaulted via " +
+        "HARNESS_ORG / HARNESS_PROJECT env vars). " +
+        "Both branches require the same common inputs: conversation_id, schema_id, instance_id, changeset. " +
+        "Two branches (exactly one must be set): " +
+        "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill from the " +
+        "project-level NG setting `dbops_llm_authoring_pipeline_id`) plus optional runtime_inputs; " +
+        "(b) default-pipeline — pass use_default_pipeline=true and the server performs " +
+        "get-or-create of the canonical default pipeline. " +
+        "Reserved runtime-input keys (schemaId, instanceId, changeset) are rejected by the server. " +
+        "Returns { executionId, pipelineIdentifier, openInHarness }. " +
+        "Show the user the openInHarness link; the changeauthoring billing job reconciles " +
+        "execution status server-side.",
       toolset: "dbops",
       scope: "project",
       identifierFields: [],
-      operations: {
-        create: {
+      operations: {},
+      executeActions: {
+        run: {
           method: "POST",
-          path: "/dbops/v1/orgs/{org}/projects/{project}/execute-llm-authoring-pipeline",
+          // /v1/ prefix is intentional — this endpoint is on the new db-devops-service
+          // routing, not the legacy /dbops/v1/ prefix used by older resources in this toolset.
+          path: "/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
           bodyBuilder: (input: Record<string, unknown>) => {
-            const body = ((input.body ?? input) as Record<string, unknown>) ?? {};
-            return {
-              schemaIdentifier: body.schemaIdentifier ?? body.schema_id,
-              instanceIdentifier: body.instanceIdentifier ?? body.instance_id,
-              conversationId: body.conversationId ?? body.conversation_id,
-              changeset: body.changeset,
+            const src = ((input.body ?? input) as Record<string, unknown>) ?? {};
+            // Required fields: accept either snake_case or camelCase from the caller.
+            const body: Record<string, unknown> = {
+              conversationId: src.conversationId ?? src.conversation_id,
+              schemaId: src.schemaId ?? src.schema_id,
+              instanceId: src.instanceId ?? src.instance_id,
+              changeset: src.changeset,
             };
+            // Branch fields: exactly one of useDefaultPipeline or pipelineIdentifier must be set.
+            const useDefault = (src.useDefaultPipeline ?? src.use_default_pipeline) as
+              | boolean
+              | undefined;
+            const pipelineId = (src.pipelineIdentifier ?? src.pipeline_identifier) as
+              | string
+              | undefined;
+            const runtimeInputs = (src.runtimeInputs ?? src.runtime_inputs) as
+              | Record<string, unknown>
+              | undefined;
+            if (useDefault === true && pipelineId) {
+              throw new Error(
+                "Exactly one of use_default_pipeline or pipeline_identifier must be set, not both.",
+              );
+            }
+            if (useDefault === true) {
+              body.useDefaultPipeline = true;
+            } else if (pipelineId) {
+              body.pipelineIdentifier = pipelineId;
+              if (runtimeInputs && Object.keys(runtimeInputs).length > 0) {
+                body.runtimeInputs = runtimeInputs;
+              }
+            }
+            return body;
           },
           responseExtractor: passthrough,
-          description:
-            "Execute the LLM changeset pipeline with integrated billing tracking. " +
-            "Required body fields: schema_id (database schema identifier), " +
-            "instance_id (database instance identifier), " +
-            "conversation_id (chat conversation ID), " +
-            "changeset (Liquibase changeset YAML). " +
-            "The backend resolves the correct pipeline, fills all runtime inputs " +
-            "(including K8s connector), executes it, and records the billing event. " +
-            "Returns { pipelineExecutionId, pipelineIdentifier }.",
+          actionDescription:
+            "Trigger the consolidated LLM-authoring validate-and-preview pipeline. " +
+            "The user has already consented via the changeset review card (Accept & Commit) " +
+            "before the skill calls this — no second approval is needed. " +
+            "Server triggers execution and records the billable event atomically.",
           bodySchema: {
             description:
-              "Changeset execution parameters. Caller aliases schema_id, instance_id, and conversation_id are accepted and mapped to backend field names.",
+              "ExecuteLlmAuthoringPipelineRequestBody. Caller may pass any field as " +
+              "snake_case (conversation_id, schema_id, instance_id, " +
+              "pipeline_identifier, runtime_inputs, use_default_pipeline) or camelCase — " +
+              "the bodyBuilder normalizes both to the camelCase keys expected by the API.",
             fields: [
-              { name: "schemaIdentifier", type: "string", required: true, description: "Database schema identifier" },
-              { name: "instanceIdentifier", type: "string", required: true, description: "Database instance identifier" },
-              { name: "conversationId", type: "string", required: true, description: "Chat conversation ID" },
-              { name: "changeset", type: "string", required: true, description: "Liquibase changeset YAML content" },
+              {
+                name: "conversationId",
+                type: "string",
+                required: true,
+                description:
+                  "Idempotency key — chat conversation id (alias: conversation_id).",
+              },
+              {
+                name: "schemaId",
+                type: "string",
+                required: true,
+                description: "DBOps schema identifier (alias: schema_id).",
+              },
+              {
+                name: "instanceId",
+                type: "string",
+                required: true,
+                description: "DBOps instance identifier (alias: instance_id).",
+              },
+              {
+                name: "changeset",
+                type: "string",
+                required: true,
+                description:
+                  "Liquibase YAML changeset body as PLAIN TEXT. Do NOT base64-encode — " +
+                  "the dbservice encodes it server-side before injecting into the pipeline YAML " +
+                  "(the DBTestAndPreview step expects base64). Sending base64 here would double-encode.",
+              },
+              {
+                name: "pipelineIdentifier",
+                type: "string",
+                required: false,
+                description:
+                  "Custom-pipeline branch — value of NG setting `dbops_llm_authoring_pipeline_id` " +
+                  "(alias: pipeline_identifier). Mutually exclusive with useDefaultPipeline.",
+              },
+              {
+                name: "runtimeInputs",
+                type: "object",
+                required: false,
+                description:
+                  "Custom runtime inputs collected via AskUserQuestion (alias: runtime_inputs). " +
+                  "Reserved keys (schemaId, instanceId, changeset) are rejected by the server.",
+              },
+              {
+                name: "useDefaultPipeline",
+                type: "boolean",
+                required: false,
+                description:
+                  "Default-pipeline branch — server performs get-or-create of dbops_default_pipeline " +
+                  "(alias: use_default_pipeline). Mutually exclusive with pipelineIdentifier.",
+              },
             ],
           },
         },

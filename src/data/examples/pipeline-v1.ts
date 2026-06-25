@@ -8,43 +8,80 @@ const examples: ResourceExample[] = [
     description: "Minimal v1 pipeline with a single run step",
     tags: ["v1", "minimal", "starter", "ci", "simplified"],
     yaml: `pipeline:
+  clone:
+    enabled: false
+  id: simple_build
   name: Simple Build
-  identifier: simple_build
   stages:
-    - name: build
+    - id: build
+      name: build
+      runtime:
+        shell: true
       steps:
-        - type: run
-          spec:
-            shell: sh
-            command: |
+        - id: build
+          name: Build
+          run:
+            script: |-
               echo "Building..."
               npm install
-              npm test`,
+              npm test
+            shell: sh
+          timeout: 10m`,
   },
   {
     name: "agent-pipeline",
     resourceType: "pipeline_v1",
-    description: "AI agent pipeline with tools, MCP servers, and skills",
-    tags: ["v1", "agent", "ai", "mcp", "tools", "agentic"],
+    description: "CI pipeline that runs an AI code-review agent over a pull request",
+    tags: ["v1", "agent", "ai", "code-review", "ci"],
     yaml: `pipeline:
+  clone:
+    connector: account.github_connector
+    enabled: true
+    ref:
+      name: <+trigger.sourceBranch>
+      type: branch
+    repo: applications/backend-api
+  id: code_review_agent
+  inputs:
+    model:
+      type: string
+      value: claude-sonnet-4-6
   name: Code Review Agent
-  identifier: code_review_agent
-  version: 1
   stages:
-    - name: review
+    - cache:
+        enabled: false
+        path: []
+      clone:
+        enabled: true
+      id: review
+      name: review
+      runtime:
+        kubernetes:
+          automount-service-token: true
+          connector: account.k8s_build_cluster
+          namespace: harness-builds
+          node: {}
+          os: Linux
       steps:
-        - type: agent
-          spec:
-            model: claude-sonnet-4-6
-            prompt: "Review the PR for correctness, security, and performance issues"
-            tools:
-              - name: read_file
-              - name: search_code
-            mcp_servers:
-              - url: https://mcp.harness.io
-            rules:
-              - "Focus on security vulnerabilities"
-              - "Check for breaking API changes"`,
+        - id: code_review
+          name: Code Review
+          run:
+            container:
+              connector: account.registry_connector
+              image: harness/agent-cli:latest
+            env:
+              ANTHROPIC_MODEL: <+pipeline.variables.model>
+              ANTHROPIC_API_KEY: <+secrets.getValue("account.anthropic_api_key")>
+            script: |-
+              agent review \\
+                --model "\${ANTHROPIC_MODEL}" \\
+                --diff "origin/<+trigger.targetBranch>...HEAD" \\
+                --rule "Focus on security vulnerabilities" \\
+                --rule "Check for breaking API changes" \\
+                --output review.md
+              cat review.md
+            shell: sh
+          timeout: 30m`,
   },
   {
     name: "helm-deploy-v1",
@@ -113,9 +150,12 @@ const examples: ResourceExample[] = [
       id: Build_Publish
       name: Build & Publish
       runtime:
-        vm:
+        kubernetes:
+          automount-service-token: true
+          connector: account.k8s_build_cluster
+          namespace: harness-builds
+          node: {}
           os: Linux
-          pool: build_pool
       steps:
         - id: Get_Commit_Details
           name: Get Commit Details

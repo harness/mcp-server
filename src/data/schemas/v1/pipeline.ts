@@ -390,9 +390,9 @@ const schema: Record<string, any> = {
                 "connector"
               ]
             },
-            "desc": {
+            "description": {
               "type": "string",
-              "description": "Desc defines the variable description."
+              "description": "Description of the variable."
             },
             "required": {
               "type": "boolean",
@@ -426,58 +426,10 @@ const schema: Record<string, any> = {
             },
             "ui": {
               "description": "UI configuration for variable rendering in forms.",
-              "$ref": "#/definitions/pipeline_v1/common/VariableUI"
+              "type": "object",
+              "additionalProperties": true
             }
           }
-        },
-        "VariableUI": {
-          "title": "VariableUI",
-          "description": "UI configuration for variable rendering in forms.",
-          "type": "object",
-          "properties": {
-            "component": {
-              "description": "Form element type for rendering the variable input.",
-              "type": "string",
-              "enum": [
-                "dropdown",
-                "text",
-                "number",
-                "date",
-                "datetime",
-                "textarea",
-                "checkbox",
-                "radio"
-              ]
-            },
-            "placeholder": {
-              "description": "Placeholder text for the form element.",
-              "type": "string"
-            },
-            "tooltip": {
-              "description": "Tooltip/help text for the form element.",
-              "type": "string"
-            },
-            "autofocus": {
-              "description": "Whether the form element should be auto-focused.",
-              "type": "boolean",
-              "default": false
-            },
-            "hidden": {
-              "description": "Whether the variable should be hidden in the UI.",
-              "type": "boolean",
-              "default": false
-            },
-            "readonly": {
-              "description": "Whether the variable should be read-only in the UI.",
-              "type": "boolean",
-              "default": false
-            },
-            "label": {
-              "description": "Display label for the variable in the UI.",
-              "type": "string"
-            }
-          },
-          "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "NumberVariable": {
           "title": "NumberVariable",
@@ -1444,8 +1396,7 @@ const schema: Record<string, any> = {
           "properties": {
             "name": {
               "description": "Name of the output variable.",
-              "type": "string",
-              "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              "type": "string"
             },
             "alias": {
               "description": "Alias for the output variable.",
@@ -1540,17 +1491,6 @@ const schema: Record<string, any> = {
             "always",
             "never",
             "if-not-exists"
-          ],
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
-        "OSType": {
-          "title": "OSType",
-          "description": "Operating system type enumeration (maps to io.harness.beans.yaml.extended.infrastrucutre.OSType).",
-          "type": "string",
-          "enum": [
-            "Linux",
-            "MacOS",
-            "Windows"
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         }
@@ -2580,10 +2520,15 @@ const schema: Record<string, any> = {
           },
           "ShellRuntimeSpec": {
             "title": "ShellRuntimeSpec",
-            "description": "Shell runtime specification. Mirrors io.harness.beans.yaml.extended.runtime.V1.RuntimeV1.ShellRuntimeSpec (no configurable fields).",
+            "description": "Shell runtime specification. Mirrors io.harness.beans.yaml.extended.runtime.V1.RuntimeV1.ShellRuntimeSpec.",
             "type": "object",
             "additionalProperties": false,
-            "properties": {},
+            "properties": {
+              "connector": {
+                "description": "Override image connector for pulling private Harness plugin images. Supports expressions.",
+                "type": "string"
+              }
+            },
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "CloudRuntimeSpec": {
@@ -2696,17 +2641,6 @@ const schema: Record<string, any> = {
                 "oneOf": [
                   {
                     "$ref": "#/definitions/pipeline_v1/common/PullPolicy"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline_v1/common/Expression"
-                  }
-                ]
-              },
-              "os": {
-                "description": "Operating system type. Supports expressions.",
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline_v1/common/OSType"
                   },
                   {
                     "$ref": "#/definitions/pipeline_v1/common/Expression"
@@ -3326,167 +3260,107 @@ const schema: Record<string, any> = {
           "EnvironmentV1": {
             "title": "EnvironmentV1",
             "description": "Environment configuration for CD stages.",
-            "type": "object",
-            "if": {
-              "anyOf": [
-                {
-                  "required": [
-                    "id"
-                  ]
-                },
-                {
-                  "required": [
-                    "items"
-                  ]
-                },
-                {
-                  "required": [
-                    "group"
-                  ]
-                },
-                {
-                  "required": [
-                    "filters"
-                  ]
-                }
-              ]
-            },
-            "then": {
-              "allOf": [
-                {
-                  "if": {
-                    "required": [
-                      "id"
-                    ]
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "description": "Environment identifier.",
+                    "type": "string"
                   },
-                  "then": {
-                    "type": "object",
-                    "required": [
-                      "id"
-                    ],
-                    "properties": {
-                      "id": {
-                        "description": "Environment identifier.",
-                        "type": "string"
-                      },
-                      "deploy-to": {
-                        "description": "Infrastructure(s) to deploy to.",
-                        "$ref": "#/definitions/pipeline_v1/stages/unified/DeployTo"
-                      },
-                      "ref": {
-                        "description": "Git branch for the environment configuration.",
-                        "type": "string"
-                      }
-                    },
-                    "additionalProperties": false
+                  "deploy-to": {
+                    "description": "Infrastructure(s) to deploy to.",
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/DeployTo"
+                  },
+                  "ref": {
+                    "description": "Git branch for the environment configuration.",
+                    "type": "string"
                   }
                 },
-                {
-                  "if": {
-                    "required": [
-                      "items"
-                    ]
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "required": [
+                  "items"
+                ],
+                "properties": {
+                  "items": {
+                    "description": "List of environments for multi-environment deployment.",
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentItem"
+                    }
                   },
-                  "then": {
-                    "type": "object",
-                    "required": [
-                      "items"
-                    ],
-                    "properties": {
-                      "items": {
-                        "description": "List of environments for multi-environment deployment.",
-                        "type": "array",
-                        "items": {
-                          "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentItem"
-                        }
+                  "sequential": {
+                    "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
+                    "oneOf": [
+                      {
+                        "type": "boolean",
+                        "default": false
                       },
-                      "sequential": {
-                        "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
-                        "oneOf": [
-                          {
-                            "type": "boolean",
-                            "default": false
-                          },
-                          {
-                            "$ref": "#/definitions/pipeline_v1/common/Expression"
-                          }
-                        ]
+                      {
+                        "$ref": "#/definitions/pipeline_v1/common/Expression"
                       }
-                    },
-                    "additionalProperties": false
+                    ]
                   }
                 },
-                {
-                  "if": {
-                    "required": [
-                      "group"
-                    ]
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "required": [
+                  "group"
+                ],
+                "properties": {
+                  "group": {
+                    "description": "Environment group configuration.",
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentGroup"
                   },
-                  "then": {
-                    "type": "object",
-                    "required": [
-                      "group"
-                    ],
-                    "properties": {
-                      "group": {
-                        "description": "Environment group configuration.",
-                        "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentGroup"
+                  "sequential": {
+                    "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
+                    "oneOf": [
+                      {
+                        "type": "boolean",
+                        "default": false
                       },
-                      "sequential": {
-                        "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
-                        "oneOf": [
-                          {
-                            "type": "boolean",
-                            "default": false
-                          },
-                          {
-                            "$ref": "#/definitions/pipeline_v1/common/Expression"
-                          }
-                        ]
+                      {
+                        "$ref": "#/definitions/pipeline_v1/common/Expression"
                       }
-                    },
-                    "additionalProperties": false
+                    ]
                   }
                 },
-                {
-                  "if": {
-                    "required": [
-                      "filters"
-                    ]
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "required": [
+                  "filters"
+                ],
+                "properties": {
+                  "filters": {
+                    "description": "Filters for selecting environments and infrastructures.",
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/Filters"
                   },
-                  "then": {
-                    "type": "object",
-                    "required": [
-                      "filters"
-                    ],
-                    "properties": {
-                      "filters": {
-                        "description": "Filters for selecting environments and infrastructures.",
-                        "$ref": "#/definitions/pipeline_v1/stages/unified/Filters"
+                  "sequential": {
+                    "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
+                    "oneOf": [
+                      {
+                        "type": "boolean",
+                        "default": false
                       },
-                      "sequential": {
-                        "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
-                        "oneOf": [
-                          {
-                            "type": "boolean",
-                            "default": false
-                          },
-                          {
-                            "$ref": "#/definitions/pipeline_v1/common/Expression"
-                          }
-                        ]
+                      {
+                        "$ref": "#/definitions/pipeline_v1/common/Expression"
                       }
-                    },
-                    "additionalProperties": false
+                    ]
                   }
-                }
-              ]
-            },
-            "else": {
-              "required": [
-                "id"
-              ]
-            },
+                },
+                "additionalProperties": false
+              }
+            ],
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "DeployTo": {
@@ -4389,10 +4263,17 @@ const schema: Record<string, any> = {
               },
               "output": {
                 "description": "Output variables to capture.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/pipeline_v1/common/OutputV1"
-                }
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline_v1/common/OutputV1"
+                    }
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               },
               "report": {
                 "description": "Test report configuration. Supports expressions.",
@@ -4476,6 +4357,10 @@ const schema: Record<string, any> = {
               },
               "connector": {
                 "description": "Image registry connector. Supports expressions.",
+                "type": "string"
+              },
+              "registryRef": {
+                "description": "Harness Artifact Registry reference for the image. Supports expressions.",
                 "type": "string"
               },
               "credentials": {
@@ -4634,12 +4519,16 @@ const schema: Record<string, any> = {
                 "type": "string"
               },
               "cpu": {
-                "description": "CPU limit.",
+                "description": "CPU limit. Ignored when resources.limits.cpu is set.",
                 "type": "string"
               },
               "memory": {
-                "description": "Memory limit.",
+                "description": "Memory limit. Ignored when resources.limits.memory is set.",
                 "type": "string"
+              },
+              "resources": {
+                "description": "Container resource limits and requests. Takes precedence over the flat cpu/memory fields.",
+                "$ref": "#/definitions/pipeline_v1/Resource"
               },
               "shm-size": {
                 "description": "Shared memory size.",
@@ -5162,12 +5051,54 @@ const schema: Record<string, any> = {
                 "description": "Comments for auto-approval. Supports expressions.",
                 "type": "string"
               },
-              "params": {
-                "description": "Approver input parameters.",
-                "type": "array",
-                "items": {
+              "inputs": {
+                "description": "Approver input parameters keyed by input variable name.",
+                "type": "object",
+                "additionalProperties": {
                   "type": "object",
-                  "additionalProperties": true
+                  "additionalProperties": false,
+                  "properties": {
+                    "description": {
+                      "description": "Description of the approver input.",
+                      "type": "string"
+                    },
+                    "pattern": {
+                      "description": "Regex pattern the approver input value must match. Mutually exclusive with `enum`. Supports expressions.",
+                      "type": "string"
+                    },
+                    "multi-select": {
+                      "description": "Allow selecting multiple values from `enum`. Only applicable when `enum` is provided.",
+                      "type": "boolean"
+                    },
+                    "enum": {
+                      "description": "Allowed values for the approver input. Mutually exclusive with `pattern`. Supports expressions.",
+                      "oneOf": [
+                        {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        {
+                          "$ref": "#/definitions/pipeline_v1/common/Expression"
+                        }
+                      ]
+                    },
+                    "required": {
+                      "description": "Whether the approver input is required.",
+                      "type": "boolean"
+                    },
+                    "default": {
+                      "description": "Default value for the approver input. Supports expressions.",
+                      "type": "string"
+                    }
+                  },
+                  "not": {
+                    "required": [
+                      "pattern",
+                      "enum"
+                    ]
+                  }
                 }
               }
             },
@@ -5398,6 +5329,21 @@ const schema: Record<string, any> = {
                     "type": "string",
                     "description": "Step group timeout duration.",
                     "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+                  },
+                  "output": {
+                    "description": "Step group output variables. Each entry is a single key:value pair where the key is the\nSG-published output name and the value is either a plain-string descendant step output\nname to capture, or a Harness expression evaluated at step group completion.\n",
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "minProperties": 1,
+                      "maxProperties": 1,
+                      "additionalProperties": false,
+                      "patternProperties": {
+                        "^[a-zA-Z_][a-zA-Z0-9_]*$": {
+                          "type": "string"
+                        }
+                      }
+                    }
                   },
                   "steps": {
                     "type": "array",

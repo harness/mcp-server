@@ -4,7 +4,7 @@ import path from "path";
 const BASE_URL = "https://raw.githubusercontent.com/harness/harness-schema/main";
 
 const V0_SCHEMAS = ["pipeline", "template", "trigger"];
-const V1_SCHEMAS = ["pipeline", "template", "trigger", "inputSet", "overlayInputSet", "service", "infra"];
+const V1_SCHEMAS = ["pipeline", "template", "inputSet", "overlayInputSet"];
 
 /**
  * MCP-local schemas not published under harness-schema.
@@ -23,11 +23,8 @@ const LOCAL_SCHEMA_ENTRIES = [
 const V1_DEF_NAMESPACE = {
   pipeline: "pipeline",
   template: "pipeline",
-  trigger: "trigger",
   inputSet: null,
   overlayInputSet: null,
-  service: "serviceEntity",
-  infra: "infraStructureEntity",
 };
 
 /**

@@ -3,6 +3,7 @@ import type { ToolResult } from "../../src/utils/response-formatter.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { registerSchemaTool } from "../../src/tools/harness-schema.js";
 import { extractLiveSchema } from "../../src/tools/entity-schema/live.js";
+import { VALID_SCHEMAS } from "../../src/data/schemas/index.js";
 
 function makeMcpServer() {
   const tools = new Map<string, { handler: (...args: unknown[]) => Promise<ToolResult> }>();
@@ -43,6 +44,21 @@ const CONNECTOR_LIVE_SCHEMA = {
     },
   },
 };
+
+function liveEntitySchema(resourceType: string, fieldName: string) {
+  return {
+    definitions: {
+      [resourceType]: {
+        [resourceType]: {
+          type: "object",
+          properties: {
+            [fieldName]: { type: "string" },
+          },
+        },
+      },
+    },
+  };
+}
 
 describe("harness_schema live entities", () => {
   let server: ReturnType<typeof makeMcpServer>;
@@ -86,6 +102,31 @@ describe("harness_schema live entities", () => {
     await server.call("harness_schema", { resource_type: "connector" });
     await server.call("harness_schema", { resource_type: "connector" });
     expect(requestMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("isolates live schema cache entries by project scope identifiers", async () => {
+    requestMock.mockReset();
+    requestMock
+      .mockResolvedValueOnce({ data: liveEntitySchema("environment", "project_a_field") })
+      .mockResolvedValueOnce({ data: liveEntitySchema("environment", "project_b_field") });
+
+    const first = parseResult(await server.call("harness_schema", {
+      resource_type: "environment",
+      scope: "project",
+      org_id: "org-a",
+      project_id: "project-a",
+    })) as { fields: Array<{ name: string }> };
+    const second = parseResult(await server.call("harness_schema", {
+      resource_type: "environment",
+      scope: "project",
+      org_id: "org-b",
+      project_id: "project-b",
+    })) as { fields: Array<{ name: string }> };
+
+    expect(requestMock).toHaveBeenCalledTimes(2);
+    expect(first.fields.map((field) => field.name)).toContain("project_a_field");
+    expect(second.fields.map((field) => field.name)).toContain("project_b_field");
+    expect(second.fields.map((field) => field.name)).not.toContain("project_a_field");
   });
 
   it("passes org_id and project_id for project scope", async () => {
@@ -147,6 +188,21 @@ describe("harness_schema static enum", () => {
     expect(description).toContain("pipeline,");
     expect(description).toContain("pipeline_v1");
     expect(description).not.toMatch(/prefer pipeline_v1/i);
+  });
+
+  it("does not expose v1 schemas removed from harness-schema upstream", () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+
+    const call = server.registerTool.mock.calls.find((c: unknown[]) => c[0] === "harness_schema");
+    const description = (call![1] as { description: string }).description;
+
+    for (const bundled of VALID_SCHEMAS) {
+      expect(description).toContain(bundled);
+    }
+    for (const removed of ["trigger_v1", "service_v1", "infra_v1"] as const) {
+      expect(description).not.toContain(removed);
+    }
   });
 });
 
@@ -252,6 +308,95 @@ describe("harness_schema nested static definition lookup", () => {
     expect(result.isError).toBeFalsy();
     expect(parsed.path).toBe("stages.unified.EnvironmentV1");
     expect(parsed.requested_path).toBe("EnvironmentV1");
+  });
+});
+
+// Wrapper definitions that are grouping objects (not schema nodes) must still
+// resolve by bare name when no deeper schema-node match exists.
+const WRAPPER_FALLBACK_SCHEMA = {
+  definitions: {
+    wrapper_demo: {
+      wrapper_demo: {
+        type: "object",
+        properties: { ref: { $ref: "#/definitions/wrapper_demo/GroupWrapper" } },
+      },
+      GroupWrapper: {
+        description: "grouping object only — not a schema node",
+        children: ["a", "b"],
+      },
+    },
+  },
+};
+
+// When both a wrapper and a nested schema node share a name, the schema node wins
+// during recursive search (direct top-level keys are returned as-is).
+const WRAPPER_VS_SCHEMA_SCHEMA = {
+  definitions: {
+    prefer_schema: {
+      prefer_schema: {
+        type: "object",
+        properties: { stage: { $ref: "#/definitions/prefer_schema/groups/StageRef" } },
+      },
+      groups: {
+        StageRef: {
+          nested: {
+            StageRef: {
+              type: "object",
+              title: "StageRef",
+              properties: { name: { type: "string" } },
+            },
+          },
+        },
+      },
+    },
+  },
+};
+
+describe("harness_schema wrapper definition fallback", () => {
+  it("resolves a bare wrapper definition when it is not a schema node", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, {
+      wrapper_demo: {
+        schema: WRAPPER_FALLBACK_SCHEMA,
+        description: "Wrapper fallback test schema",
+        group: "test",
+      },
+    });
+
+    const result = await server.call("harness_schema", {
+      resource_type: "wrapper_demo",
+      path: "GroupWrapper",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("GroupWrapper");
+    expect(parsed.requested_path).toBeUndefined();
+    expect((parsed.schema as Record<string, unknown>).description).toBe(
+      "grouping object only — not a schema node",
+    );
+  });
+
+  it("prefers a nested schema-node match over a shallow wrapper with the same name", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, {
+      prefer_schema: {
+        schema: WRAPPER_VS_SCHEMA_SCHEMA,
+        description: "Wrapper vs schema node preference test",
+        group: "test",
+      },
+    });
+
+    const result = await server.call("harness_schema", {
+      resource_type: "prefer_schema",
+      path: "StageRef",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("groups.StageRef.nested.StageRef");
+    expect(parsed.requested_path).toBe("StageRef");
+    expect((parsed.schema as Record<string, unknown>).title).toBe("StageRef");
   });
 });
 

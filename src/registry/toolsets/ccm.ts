@@ -1,4 +1,4 @@
-import type { ToolsetDefinition, PreflightContext } from "../types.js";
+import type { ToolsetDefinition, PreflightContext, ParamsSchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
 import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
 
@@ -1278,11 +1278,6 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       toolset: "ccm",
       scope: "account",
       identifierFields: [],
-      listFilterFields: [
-        { name: "start_time", description: "Start time filter (ISO 8601)" },
-        { name: "end_time", description: "End time filter (ISO 8601)" },
-        { name: "group_by", description: "Group results by field" },
-      ],
       deepLinkTemplate: "/ng/account/{accountId}/ce/overview",
       operations: {
         get: {
@@ -1309,6 +1304,13 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           },
           responseExtractor: ngExtract,
           description: "Get cost overview with optional time range and grouping",
+          paramsSchema: {
+            fields: [
+              { name: "start_time", required: false, description: "Start time filter (ISO 8601)" },
+              { name: "end_time", required: false, description: "End time filter (ISO 8601)" },
+              { name: "group_by", required: false, description: "Group results by field" },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },
@@ -1477,9 +1479,6 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       toolset: "ccm",
       scope: "account",
       identifierFields: [],
-      listFilterFields: [
-        { name: "group_by", description: "Group by resource type", enum: ["type"] },
-      ],
       deepLinkTemplate: "/ng/account/{accountId}/ce/recommendations",
       operations: {
         get: {
@@ -1498,6 +1497,11 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           responseExtractor: ngExtract,
           description:
             "Get aggregate stats, or stats by resource type when group_by=type",
+          paramsSchema: {
+            fields: [
+              { name: "group_by", required: false, description: "Group by resource type (type)" },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },
@@ -1539,12 +1543,6 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       toolset: "ccm",
       scope: "account",
       identifierFields: ["aspect", "cloud_account_id"],
-      listFilterFields: [
-        { name: "aspect", description: "Which commitment aspect to fetch", enum: ["coverage", "savings", "utilisation", "analysis", "estimated_savings"] },
-        { name: "cloud_account_id", description: "Required for aspect=estimated_savings", type: "string" },
-        { name: "start_date", description: "Start date for commitment data (YYYY-MM-DD)", required: true },
-        { name: "end_date", description: "End date for commitment data (YYYY-MM-DD)", required: true },
-      ],
       deepLinkTemplate: "/ng/account/{accountId}/ce/commitment-orchestration",
       operations: {
         get: {
@@ -1583,6 +1581,14 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           responseExtractor: passthrough,
           description:
             "Get commitment data. Pass aspect: coverage, savings, utilisation, analysis, or estimated_savings. Requires start_date and end_date (YYYY-MM-DD). For estimated_savings, cloud_account_id is required.",
+          paramsSchema: {
+            fields: [
+              { name: "aspect", required: false, description: "Which commitment aspect to fetch (coverage | savings | utilisation | analysis | estimated_savings)" },
+              { name: "cloud_account_id", required: false, description: "Required for aspect=estimated_savings" },
+              { name: "start_date", required: true, description: "Start date for commitment data (YYYY-MM-DD)" },
+              { name: "end_date", required: true, description: "End date for commitment data (YYYY-MM-DD)" },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },
