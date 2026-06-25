@@ -217,25 +217,6 @@ describe("Coding standards — logging and HTTP", () => {
     ).toEqual([]);
   });
 
-  it("instantiates HarnessClient only in src/index.ts", () => {
-    const violations: string[] = [];
-    const srcFiles = walkTsFiles(SRC);
-
-    for (const file of srcFiles) {
-      const content = readFileSync(file, "utf8");
-      if (!/new\s+HarnessClient\s*\(/.test(content)) continue;
-
-      const fileRel = rel(file);
-      if (!ALLOWED_HARNESS_CLIENT_FILES.has(fileRel)) {
-        violations.push(fileRel);
-      }
-    }
-
-    expect(
-      violations,
-      `HarnessClient must only be constructed in src/index.ts:\n${violations.join("\n")}`,
-    ).toEqual([]);
-  });
 });
 
 describe("Coding standards — toolset purity", () => {

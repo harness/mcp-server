@@ -127,6 +127,40 @@ describe("Coding standards — registry metadata", () => {
   });
 });
 
+/** Handlers that call Harness APIs via registry.dispatch (not local-only tools). */
+const API_DISPATCH_HANDLER_FILES = [
+  "src/tools/harness-list.ts",
+  "src/tools/harness-get.ts",
+  "src/tools/harness-create.ts",
+  "src/tools/harness-update.ts",
+  "src/tools/harness-delete.ts",
+  "src/tools/harness-execute.ts",
+  "src/tools/harness-diagnose.ts",
+  "src/tools/harness-search.ts",
+  "src/tools/harness-status.ts",
+];
+
+describe("Coding standards — error handling", () => {
+  it("API dispatch handlers import toMcpError and use the standard catch pattern", () => {
+    const violations: string[] = [];
+
+    for (const file of API_DISPATCH_HANDLER_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!content.includes("toMcpError")) {
+        violations.push(`${file}: missing toMcpError import/usage`);
+      }
+      if (!content.includes("isUserError")) {
+        violations.push(`${file}: missing isUserError for known-error handling`);
+      }
+      if (!/throw\s+toMcpError\s*\(/.test(content)) {
+        violations.push(`${file}: missing 'throw toMcpError(err)' for unexpected failures`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+});
+
 describe("Coding standards — write handler safety", () => {
   it("write/execute handlers use confirmViaElicitation before dispatch", () => {
     const violations: string[] = [];
