@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
+import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { SCHEMAS } from "../data/schemas/index.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
@@ -421,7 +422,10 @@ export function registerSchemaTool(
           schema: resolved,
         });
       } catch (err) {
-        return errorResult(err instanceof Error ? err.message : String(err));
+        if (isUserError(err) || isUserFixableApiError(err)) {
+          return errorResult(err.message);
+        }
+        throw toMcpError(err);
       }
     },
   );
