@@ -30,6 +30,41 @@ const V0_STEP_TYPES = new Set([
   "ShellScript",
 ]);
 
+/**
+ * Canonical v1 pipeline step keys. Single source of truth for all v1 step-type
+ * guidance (createHint, lint messages, resource descriptions).
+ *
+ * Mirrors the `StepItems` discriminator in the bundled v1 schema at
+ * `src/data/schemas/v1/pipeline.ts` → `definitions.pipeline_v1.steps.unified.StepItems`.
+ * A drift test (tests/utils/pipeline-lint.test.ts) fails if these diverge, so the
+ * list cannot silently fall out of sync with the schema.
+ */
+export const V1_STEP_TYPES = [
+  "run",
+  "run-test",
+  "background",
+  "action",
+  "template",
+  "group",
+  "parallel",
+  "approval",
+  "barrier",
+  "wait",
+  "queue",
+  "policy",
+  "build",
+  "test",
+  "deploy",
+  "clone",
+  "chaos",
+  "idp",
+  "iacm",
+  "sto",
+] as const;
+
+/** Comma-joined, backtick-quoted rendering of {@link V1_STEP_TYPES} for prose/hints. */
+export const V1_STEP_TYPES_LIST = V1_STEP_TYPES.map((t) => `\`${t}\``).join(", ");
+
 export interface LintResult {
   errors: string[];
   warnings: string[];
@@ -168,7 +203,7 @@ function checkV0StepTypesInV1(pipeline: Record<string, unknown>, result: LintRes
   if (found.size > 0) {
     result.errors.push(
       `v0 step type(s) found in v1 pipeline: ${[...found].join(", ")}. ` +
-      `v1 pipelines only support \`run\`, \`action\`, \`template\`, \`background\`, \`approval\`, \`group\`, and \`parallel\` steps. ` +
+      `v1 pipelines only support these step keys: ${V1_STEP_TYPES_LIST}. ` +
       `Use \`action: uses: kubernetes-rolling-deploy\` instead of \`type: K8sRollingDeploy\`, etc.`,
     );
   }

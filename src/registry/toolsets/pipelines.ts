@@ -1,5 +1,6 @@
 import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract, dynamicExecutionExtract } from "../extractors.js";
+import { V1_STEP_TYPES_LIST } from "../../utils/pipeline-lint.js";
 import YAML from "yaml";
 
 /**
@@ -434,7 +435,7 @@ export const pipelinesToolset: ToolsetDefinition = {
     {
       resourceType: "pipeline_v1",
       displayName: "Pipeline (V1)",
-      description: "V1 pipeline definition using simplified YAML format. Use ONLY when user explicitly requests v1, says 'agent pipeline', or provides YAML with v1 indicators: kebab-case keys (allow-stage-executions, fixed-inputs-on-rerun), top-level step types (run, agent, action, approval) without nested stage/step wrappers. Supports list, get, create, update, delete, and execute (run).",
+      description: "V1 pipeline definition using simplified YAML format. Use ONLY when user explicitly requests v1, says 'agent pipeline', or provides YAML with v1 indicators: kebab-case keys (allow-stage-executions, fixed-inputs-on-rerun), top-level step keys (run, action, template, approval) without nested stage/step wrappers. Supports list, get, create, update, delete, and execute (run).",
       toolset: "pipelines",
       scope: "project",
       headerBasedScoping: true,
@@ -450,7 +451,7 @@ export const pipelinesToolset: ToolsetDefinition = {
         "   Set `clone.repo: <repo_name>` at the pipeline level — no Git connector needed.\n\n" +
         "3. HARNESS CODE — pipeline storage:\n" +
         "   Pass `is_harness_code_repo=true` + `repo_name`, `branch`, `file_path` — no connector_ref.\n\n" +
-        "V1 STEP TYPES: Only `run`, `background`, `action`, `plugin`, `bitrise`, `group`, `parallel`, `template` are valid.\n" +
+        `V1 STEP TYPES: only these step keys are valid: ${V1_STEP_TYPES_LIST}.\n` +
         "Do NOT use v0 step types (BuildAndPushDockerRegistry, K8sRollingDeploy, etc.) in v1 pipelines.\n" +
         "Docker repo names must always be lowercase.\n\n" +
         "BUILT-IN STEP/STAGE TEMPLATES — before writing `template: uses: <identifier>`:\n" +

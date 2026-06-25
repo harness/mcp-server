@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { lintPipelineYaml, extractPipelineYaml } from "../../src/utils/pipeline-lint.js";
+import { lintPipelineYaml, extractPipelineYaml, V1_STEP_TYPES } from "../../src/utils/pipeline-lint.js";
+import v1PipelineSchema from "../../src/data/schemas/v1/pipeline.js";
 
 // ---------------------------------------------------------------------------
 // v0: trigger expression in codebase branch
@@ -366,5 +367,37 @@ describe("extractPipelineYaml", () => {
 
   it("prefers yamlPipeline over pipeline_yaml", () => {
     expect(extractPipelineYaml({ yamlPipeline: "a", pipeline_yaml: "b" })).toBe("a");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// V1_STEP_TYPES drift guard — keep the canonical list locked to the schema
+// ---------------------------------------------------------------------------
+
+/**
+ * Pull the authoritative step keys out of the bundled v1 schema's StepItems
+ * discriminator (definitions.pipeline_v1.steps.unified.StepItems.if.anyOf[].required[0]).
+ * This is the single source the UI/converter validate against, so V1_STEP_TYPES
+ * must match it exactly.
+ */
+function schemaStepKeys(): string[] {
+  const stepItems =
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (v1PipelineSchema as any).definitions.pipeline_v1.steps.unified.StepItems;
+  const anyOf = stepItems.if.anyOf as Array<{ required?: string[] }>;
+  return anyOf.map((e) => e.required?.[0]).filter((k): k is string => Boolean(k));
+}
+
+describe("V1_STEP_TYPES matches the bundled v1 schema", () => {
+  it("contains exactly the schema's StepItems keys (no drift)", () => {
+    expect([...V1_STEP_TYPES].sort()).toEqual(schemaStepKeys().sort());
+  });
+
+  it("does not include invalid step keys that misled v1 generation", () => {
+    // Regression: createHint previously claimed `plugin`/`bitrise` were valid v1
+    // step keys, and the resource description listed `agent` — none exist in v1.
+    for (const bogus of ["plugin", "bitrise", "agent"]) {
+      expect(V1_STEP_TYPES).not.toContain(bogus);
+    }
   });
 });
