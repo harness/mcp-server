@@ -488,14 +488,6 @@ export const idpToolset: ToolsetDefinition = {
             }
 
             const requestBody = { identifier, values };
-            const loggedValues = { ...values };
-            for (const ref of refs.apiKeySecretRefs) {
-              if (loggedValues[ref] !== undefined) loggedValues[ref] = "[REDACTED]";
-            }
-            console.error(
-              "[idp_workflow.execute] final request body",
-              JSON.stringify({ identifier, values: loggedValues }),
-            );
             return requestBody;
           },
           responseExtractor: ngExtract,
