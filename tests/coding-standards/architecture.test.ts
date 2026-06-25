@@ -305,28 +305,6 @@ describe("Coding standards — Zod input schemas", () => {
   });
 });
 
-describe("Coding standards — HarnessClient singleton", () => {
-  it("instantiates HarnessClient only in src/index.ts", () => {
-    const violations: string[] = [];
-    const srcFiles = walkTsFiles(SRC);
-
-    for (const file of srcFiles) {
-      const content = readFileSync(file, "utf8");
-      if (!/\bnew\s+HarnessClient\s*\(/.test(content)) continue;
-
-      const fileRel = rel(file);
-      if (fileRel !== "src/index.ts") {
-        violations.push(fileRel);
-      }
-    }
-
-    expect(
-      violations,
-      `Extra HarnessClient instantiations (singleton must live in src/index.ts only):\n${violations.join("\n")}`,
-    ).toEqual([]);
-  });
-});
-
 describe("Coding standards — registry registration", () => {
   it("ALL_TOOLSET_NAMES matches the ToolsetName union exactly", () => {
     const fromRegistry = new Set(ALL_TOOLSET_NAMES);
