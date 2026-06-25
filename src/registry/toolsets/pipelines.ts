@@ -447,12 +447,15 @@ export const pipelinesToolset: ToolsetDefinition = {
         "   Use a `run` step with docker build/push commands. For HAR, authenticate with `docker login` using a PAT secret,\n" +
         "   OR use a v0 pipeline with `registryRef` for native HAR push support.\n\n" +
         "2. HARNESS CODE — codebase clone:\n" +
-        "   Set `properties.ci.codebase.repoName: <repo_name>` — no Git connector needed.\n\n" +
+        "   Set `clone.repo: <repo_name>` at the pipeline level — no Git connector needed.\n\n" +
         "3. HARNESS CODE — pipeline storage:\n" +
         "   Pass `is_harness_code_repo=true` + `repo_name`, `branch`, `file_path` — no connector_ref.\n\n" +
         "V1 STEP TYPES: Only `run`, `background`, `action`, `plugin`, `bitrise`, `group`, `parallel`, `template` are valid.\n" +
         "Do NOT use v0 step types (BuildAndPushDockerRegistry, K8sRollingDeploy, etc.) in v1 pipelines.\n" +
-        "Docker repo names must always be lowercase.",
+        "Docker repo names must always be lowercase.\n\n" +
+        "BUILT-IN STEP/STAGE TEMPLATES — before writing `template: uses: <identifier>`:\n" +
+        "1. Discover available identifiers: harness_list(resource_type='template_v1', filters={global: true, entity_type: 'Step'}) — returns the full catalog with descriptions.\n" +
+        "2. Inspect inputs: harness_get(resource_type='template_v1', resource_id='<identifier>', params={version_label: '<version>', global: true}) — the `yaml` field contains the `inputs:` block with every valid `with:` param, its type, default, and description.",
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
       operations: {
         list: {
