@@ -4,11 +4,12 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
+import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint } from "../utils/errors.js";
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
+import { lintPipelineYaml, extractPipelineYaml } from "../utils/pipeline-lint.js";
 import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { createOutputSchema } from "./output-schemas.js";
 
@@ -93,11 +94,39 @@ export function registerCreateTool(server: McpServer, registry: Registry, client
           return errorResult(describeElicitationFailure(elicit));
         }
 
+        let lintResult: { errors: string[]; warnings: string[] } = { errors: [], warnings: [] };
+        if (args.resource_type === "pipeline" || args.resource_type === "pipeline_v1") {
+          const yaml = extractPipelineYaml(args.body);
+          if (yaml) {
+            const version = args.resource_type === "pipeline_v1" ? "v1" : "v0";
+            lintResult = lintPipelineYaml(yaml, version);
+          }
+          if (lintResult.errors.length > 0) {
+            return errorResult(
+              `Pipeline YAML has ${lintResult.errors.length} error(s) that must be fixed before creating:\n\n` +
+              lintResult.errors.map((e, i) => `${i + 1}. ${e}`).join("\n\n") +
+              (lintResult.warnings.length > 0
+                ? `\n\nAdditional warnings:\n${lintResult.warnings.map((w, i) => `${i + 1}. ${w}`).join("\n")}`
+                : ""),
+            );
+          }
+        }
+
         const result = await registry.dispatch(client, args.resource_type, "create", input, { tool: "harness_create", confirmation: elicit.method });
+
+        if (args.resource_type === "pipeline" || args.resource_type === "pipeline_v1") {
+          if (lintResult.warnings.length > 0) {
+            (result as Record<string, unknown>)._warnings = lintResult.warnings;
+          }
+        }
+
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
-        if (isUserFixableApiError(err)) return errorResult(err.message);
+        if (isUserFixableApiError(err)) {
+          const hint = registry.getResource(args.resource_type).createHint;
+          return errorResult(enrichErrorWithHint(err.message, hint));
+        }
         throw toMcpError(err);
       }
     },

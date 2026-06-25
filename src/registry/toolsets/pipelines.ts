@@ -133,7 +133,7 @@ function buildV1PipelineBody(input: Record<string, unknown>): Record<string, unk
 // ---------------------------------------------------------------------------
 
 const pipelineCreateSchema: BodySchema = {
-  description: "Pipeline definition. Three options: (1) Pass body as a raw YAML string directly (simplest for complex pipelines with shell scripts, JEXL, special chars). (2) Pass {yamlPipeline: '<yaml string>'} for YAML inside an object. (3) Pass {pipeline: {...}} as JSON object. Storage options via params: Inline (default), External Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path), Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path).",
+  description: "Pipeline definition. Three options: (1) Pass body as a raw YAML string directly (simplest for complex pipelines with shell scripts, JEXL, special chars). (2) Pass {yamlPipeline: '<yaml string>'} for YAML inside an object. (3) Pass {pipeline: {...}} as JSON object. Storage options via params: Inline (default), External Git (store_type='REMOTE', connector_ref, repo_name, branch, file_path), Harness Code (store_type='REMOTE', is_harness_code_repo=true, repo_name, branch, file_path). IMPORTANT — Harness-native integrations do NOT require connectors: (1) Harness Artifact Registry: use `registryRef` in BuildAndPushDockerRegistry/HarUpload steps, not connectorRef. (2) Harness Code repos: use repoName in codebase config or HarnessCode store type, no Git connector. (3) Harness File Store: use store type `Harness` with file paths. Only create connectors for THIRD-PARTY services (GitHub, DockerHub, ECR, etc.). Docker image names in `repo` must be lowercase.",
   fields: [
     { name: "yamlPipeline", type: "string", required: false, description: "Full pipeline YAML string including the 'pipeline:' root. Alternative: pass the YAML string directly as body (not wrapped in an object)." },
     { name: "pipeline", type: "object", required: false, description: "Pipeline as JSON object (name, identifier, stages, etc.). Use YAML string instead for complex pipelines to avoid serialization issues.", fields: [
@@ -145,7 +145,7 @@ const pipelineCreateSchema: BodySchema = {
 };
 
 const pipelineUpdateSchema: BodySchema = {
-  description: "Pipeline YAML definition (full replacement). Three options: (1) Pass body as a raw YAML string directly (recommended for complex pipelines). (2) Pass {yamlPipeline: '<yaml>'} for YAML inside an object. (3) Pass {pipeline: {...}} as JSON. For remote pipelines, pass store_type='REMOTE' with git details via params. Include last_object_id and last_commit_id from the GET response for conflict detection.",
+  description: "Pipeline YAML definition (full replacement). Three options: (1) Pass body as a raw YAML string directly (recommended for complex pipelines). (2) Pass {yamlPipeline: '<yaml>'} for YAML inside an object. (3) Pass {pipeline: {...}} as JSON. For remote pipelines, pass store_type='REMOTE' with git details via params. Include last_object_id and last_commit_id from the GET response for conflict detection. IMPORTANT: Always pass the COMPLETE pipeline YAML — partial updates will silently drop stages/steps. Docker image names in `repo` must be lowercase.",
   fields: [
     { name: "pipeline", type: "object", required: false, description: "Complete pipeline as JSON object (replaces existing)" },
     { name: "yamlPipeline", type: "string", required: false, description: "Complete pipeline as YAML string (replaces existing). Alternative: pass the YAML string directly as body (not wrapped in an object)." },
@@ -186,6 +186,28 @@ export const pipelinesToolset: ToolsetDefinition = {
       identifierFields: ["pipeline_id"],
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
       executeHint: "Before executing, check required inputs: harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID'). For simple variables, pass key-value pairs in inputs. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex template inputs, use input_set_ids — list available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
+      createHint:
+        "HARNESS-NATIVE INTEGRATIONS — these do NOT need connectors:\n\n" +
+        "1. HARNESS ARTIFACT REGISTRY (HAR) — CI push steps:\n" +
+        "   BuildAndPushDockerRegistry: use `registryRef: <registry_id>`, `repo: <image_name>` (lowercase, image name only — NOT the full registry path).\n" +
+        "   HarUpload: use `registryRef: <registry_id>`, `packageType`, `sourcePath`.\n" +
+        "   Do NOT include connectorRef. Discover registries: harness_list(resource_type='registry').\n\n" +
+        "2. HARNESS CODE — CI codebase clone:\n" +
+        "   Set `properties.ci.codebase.repoName: <repo_name>` — no Git connector needed.\n" +
+        "   The platform clones from Harness Code natively.\n\n" +
+        "3. HARNESS CODE — manifest/config store (CD services):\n" +
+        "   Use store type `HarnessCode` with `repoName`, `branch`/`commitId`, `paths` — no connectorRef.\n\n" +
+        "4. HARNESS FILE STORE — manifest/config store (CD services):\n" +
+        "   Use store type `Harness` with `files` paths — no connectorRef.\n\n" +
+        "5. HARNESS CODE — pipeline/template storage:\n" +
+        "   Pass `is_harness_code_repo=true` + `repo_name`, `branch`, `file_path` in params — no connector_ref.\n\n" +
+        "THIRD-PARTY registries (DockerHub, ECR, GCR, ACR): use `connectorRef` — do NOT use registryRef.\n" +
+        "THIRD-PARTY Git (GitHub, GitLab, Bitbucket): create a Git connector and reference via connectorRef.\n\n" +
+        "RULES: Never mix registryRef and connectorRef in the same step. " +
+        "Docker repo names must be lowercase (image name only, e.g. 'my-app', not 'pkg.harness.io/account/registry/my-app'). " +
+        "Always validate: harness_execute(resource_type='pipeline_validation', action='validate_schema', body={yaml: '...', version: 'v0'}).\n\n" +
+        "CODEBASE BRANCH: `<+trigger.branch>` only resolves when a trigger fires — it becomes null on manual runs, " +
+        "causing 'git fetch refs/heads/null' failures. For manual-runnable pipelines, use a static branch (e.g. `main`) or `<+input>` for runtime input.",
       listFilterFields: [
         { name: "search_term", description: "Filter pipelines by name or keyword" },
         { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
@@ -286,7 +308,11 @@ export const pipelinesToolset: ToolsetDefinition = {
             }
             throw new Error("body must be a YAML string, or an object with yamlPipeline (YAML string) or pipeline (JSON object)");
           },
-          responseExtractor: ngExtract,
+          responseExtractor: (raw: unknown) => {
+            const result = ngExtract(raw) as Record<string, unknown>;
+            result._post_update_hint = "Verify the update preserved all fields: harness_get this pipeline and confirm stages/steps are intact. Partial updates can silently truncate YAML.";
+            return result;
+          },
           description: "Update an existing pipeline YAML. For remote pipelines, pass store_type='REMOTE' with git details and last_object_id/last_commit_id from the GET response. For Harness Code: add is_harness_code_repo=true (no connector_ref needed).",
           bodySchema: pipelineUpdateSchema,
         },
@@ -415,6 +441,18 @@ export const pipelinesToolset: ToolsetDefinition = {
       identifierFields: ["pipeline_id"],
       searchAliases: ["v1 pipeline", "agent pipeline", "v1"],
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures. V1 pipelines use the same execution engine as v0.",
+      createHint:
+        "HARNESS-NATIVE INTEGRATIONS — these do NOT need connectors:\n\n" +
+        "1. HARNESS ARTIFACT REGISTRY (HAR): V1 has NO native BuildAndPushDockerRegistry step.\n" +
+        "   Use a `run` step with docker build/push commands. For HAR, authenticate with `docker login` using a PAT secret,\n" +
+        "   OR use a v0 pipeline with `registryRef` for native HAR push support.\n\n" +
+        "2. HARNESS CODE — codebase clone:\n" +
+        "   Set `properties.ci.codebase.repoName: <repo_name>` — no Git connector needed.\n\n" +
+        "3. HARNESS CODE — pipeline storage:\n" +
+        "   Pass `is_harness_code_repo=true` + `repo_name`, `branch`, `file_path` — no connector_ref.\n\n" +
+        "V1 STEP TYPES: Only `run`, `background`, `action`, `plugin`, `bitrise`, `group`, `parallel`, `template` are valid.\n" +
+        "Do NOT use v0 step types (BuildAndPushDockerRegistry, K8sRollingDeploy, etc.) in v1 pipelines.\n" +
+        "Docker repo names must always be lowercase.",
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
       operations: {
         list: {
@@ -1006,6 +1044,161 @@ export const pipelinesToolset: ToolsetDefinition = {
             description: "Rejection activity",
             fields: [
               { name: "comments", type: "string", required: false, description: "Rejection reason" },
+            ],
+          },
+        },
+      },
+    },
+    // ----- Pipeline Validation -----
+    {
+      resourceType: "pipeline_validation",
+      displayName: "Pipeline Validation",
+      description:
+        "Validate pipeline YAML before saving or executing. Two actions: validate_schema (schema-only, no side effects — catches structural errors like missing fields, bad types, invalid stage configs) and dry_run (full plan resolution including policy checks — requires an existing pipeline_identifier). Use validate_schema first when building YAML from scratch, then dry_run after saving to verify references and plan feasibility.",
+      toolset: "pipelines",
+      scope: "project",
+      identifierFields: [],
+      executeHint:
+        "Workflow: (1) Build pipeline YAML. (2) harness_execute(resource_type='pipeline_validation', action='validate_schema', body={yaml: '...', version: 'v0'}). (3) Fix any schema errors. (4) Create/update the pipeline. (5) harness_execute(resource_type='pipeline_validation', action='dry_run', body={pipeline_identifier: '...'}) to verify plan resolution. Limitations: validate_schema works reliably for v0 only; dry_run cannot parse v1 YAML and requires an existing pipeline.",
+      operations: {},
+      executeActions: {
+        validate_schema: {
+          method: "POST",
+          path: "/pipeline/api/pipelines/validate-yaml-schema",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body?.yaml) {
+              throw new Error("body.yaml is required — pass the full pipeline YAML string to validate");
+            }
+            return {
+              yaml: body.yaml,
+              version: body.version ?? "v0",
+            };
+          },
+          responseExtractor: (raw: unknown) => {
+            const r = raw as {
+              status?: string;
+              data?: {
+                valid?: boolean;
+                errorMessage?: string | null;
+                schemaErrors?: {
+                  schemaErrors?: Array<{
+                    message?: string;
+                    messageWithFQN?: string;
+                    fqn?: string;
+                    hintMessage?: string | null;
+                  }>;
+                } | null;
+              };
+            };
+            const data = r.data;
+            const errors = data?.schemaErrors?.schemaErrors ?? [];
+            return {
+              valid: data?.valid ?? false,
+              error_message: data?.errorMessage ?? null,
+              errors: errors.map((e) => ({
+                message: e.messageWithFQN ?? e.message,
+                path: e.fqn ?? null,
+                hint: e.hintMessage ?? null,
+              })),
+            };
+          },
+          actionDescription:
+            "Validate pipeline YAML against the Harness schema without saving. Returns valid (boolean), error_message, and errors[] with FQN paths. No side effects. Works reliably for v0 pipelines; v1 support is inconsistent across environments.",
+          bodySchema: {
+            description:
+              "Pipeline YAML to validate. Pass the full YAML string (including 'pipeline:' root) and the version flag.",
+            fields: [
+              {
+                name: "yaml",
+                type: "string",
+                required: true,
+                description:
+                  "Full pipeline YAML string to validate (must include 'pipeline:' root key)",
+              },
+              {
+                name: "version",
+                type: "string",
+                required: false,
+                description:
+                  "Pipeline version: 'v0' (default) or 'v1'. Note: v1 validation is unreliable — always use 'v0' for v0 pipelines",
+              },
+            ],
+          },
+        },
+        dry_run: {
+          method: "POST",
+          path: "/pipeline/api/v1/orgs/{org}/projects/{project}/dry-run",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { org_id: "org", project_id: "project" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body?.pipeline_identifier) {
+              throw new Error(
+                "body.pipeline_identifier is required — the pipeline must already exist in Harness",
+              );
+            }
+            const result: Record<string, unknown> = {
+              pipeline_identifier: body.pipeline_identifier,
+            };
+            if (body.pipeline_yaml) result.pipeline_yaml = body.pipeline_yaml;
+            if (body.branch) result.branch = body.branch;
+            if (body.inputset_ref) result.inputset_ref = body.inputset_ref;
+            return result;
+          },
+          responseExtractor: (raw: unknown) => {
+            const r = raw as {
+              is_valid?: boolean;
+              validation?: Array<{
+                validation_type?: string;
+                entity_type?: string | null;
+                entity_identifier?: string;
+                error_message?: string;
+                hint?: string;
+              }>;
+            };
+            return {
+              is_valid: r.is_valid ?? false,
+              validation: (r.validation ?? []).map((v) => ({
+                type: v.validation_type,
+                entity: v.entity_identifier ?? null,
+                error: v.error_message,
+                hint: v.hint ?? null,
+              })),
+            };
+          },
+          actionDescription:
+            "Dry-run a pipeline — full validation including schema, plan resolution, and policy checks without persisting or executing. Requires an existing pipeline (pipeline_identifier must exist). Optionally pass pipeline_yaml to validate modified YAML against the existing pipeline shell. Returns is_valid and validation[] with typed errors. Limitations: cannot parse v1 YAML (backend bug); reference validation (connectors) may not fire reliably.",
+          bodySchema: {
+            description:
+              "Dry-run configuration. The pipeline must already exist in the project.",
+            fields: [
+              {
+                name: "pipeline_identifier",
+                type: "string",
+                required: true,
+                description: "Identifier of an existing pipeline to dry-run against",
+              },
+              {
+                name: "pipeline_yaml",
+                type: "string",
+                required: false,
+                description:
+                  "Optional modified pipeline YAML to validate instead of the stored version. If omitted, validates the stored YAML.",
+              },
+              {
+                name: "branch",
+                type: "string",
+                required: false,
+                description: "Git branch for remote pipelines",
+              },
+              {
+                name: "inputset_ref",
+                type: "string",
+                required: false,
+                description: "Input set reference to merge with the pipeline",
+              },
             ],
           },
         },
