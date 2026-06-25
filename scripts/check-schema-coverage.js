@@ -9,7 +9,7 @@
 const GITHUB_API = "https://api.github.com/repos/harness/harness-schema/contents";
 
 const SYNCED_V0 = new Set(["pipeline", "template", "trigger"]);
-const SYNCED_V1 = new Set(["pipeline", "template", "trigger", "inputSet", "overlayInputSet", "service", "infra"]);
+const SYNCED_V1 = new Set(["pipeline", "template", "inputSet", "overlayInputSet"]);
 
 // Schemas we know exist upstream but intentionally skip (add names here to suppress warnings)
 const EXCLUDED_V0 = new Set([]);

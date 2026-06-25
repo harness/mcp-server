@@ -616,7 +616,7 @@ Current multi-scope resources include `connector`, `service`, `environment`, `in
 
 Use `harness_schema` before creating or updating YAML-backed resources so agents can copy exact field names and constraints instead of guessing from prose.
 
-- Bundled schemas include `pipeline`, `template`, `trigger`, `pipeline_v1`, `template_v1`, `trigger_v1`, `inputSet_v1`, `overlayInputSet_v1`, `service_v1`, `infra_v1`, and `agent-pipeline`.
+- Bundled schemas include `pipeline`, `template`, `trigger`, `pipeline_v1`, `template_v1`, `inputSet_v1`, `overlayInputSet_v1`, and `agent-pipeline`.
 - Entity schemas include `connector`, `environment`, `service`, `secret`, and `infrastructure`. They are scope-aware (`account`, `org`, or `project`) and require `org_id`/`project_id` when the selected scope requires them.
 - Vendored entity snapshots are used first when they match the runtime account; otherwise the tool falls back to the Harness NG `/yaml-schema` API and caches the result.
 - Omit `path` for a field/section summary, then pass a dot-separated `path` to inspect a nested definition.
