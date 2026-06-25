@@ -5,7 +5,7 @@
 - [x] Fetch and review the PR branch without leaving the working branch
 - [x] Fix runtime regressions found in pipeline lint and template v1 global access
 - [x] Regenerate stale docs after build
-- [ ] Run focused and broad verification
+- [x] Run focused and broad verification
 - [ ] Commit, push, open/update PR, and reply in Slack thread
 
 ### Plan
@@ -14,6 +14,15 @@
 - Run lint on every documented pipeline body shape, including `body.pipeline` JSON objects.
 - Make `template_v1` global get route to the same unscoped global endpoint as global list, and keep described filters aligned with mapped query params.
 - Regenerate generated README content after building so `docs:check` matches CI.
+
+### Review
+- Root cause: PR #440 added blocking preflight pipeline lint and global template catalog support, but the lint treated normal third-party Git `connectorRef` + `repoName` codebase configs as invalid, skipped documented `{ pipeline: {...} }` bodies, and global `template_v1` get still routed through scoped org/project paths.
+- Fixed `src/utils/pipeline-lint.ts` so only Harness Code connector refs with `repoName` are blocked, and JSON pipeline bodies are serialized for linting.
+- Fixed `src/registry/toolsets/templates.ts` so global `template_v1` get uses `/v1/templates/...` and the documented `template_type` list filter maps to `entity_types`.
+- Fixed `src/registry/toolsets/pipelines.ts` so v1 raw YAML can derive request `identifier` from `pipeline.id`.
+- Added focused regressions in `tests/utils/pipeline-lint.test.ts`, `tests/registry/templates.test.ts`, and `tests/registry/pipeline-v1-body.test.ts`.
+- Regenerated README docs after `pnpm build`, resolving the stale `docs:check` failure seen in PR CI.
+- Verification passed: focused Vitest run for pipeline lint/template/pipeline v1/validation tests, then `pnpm build`, `pnpm docs:check`, `pnpm standards:check`, `pnpm typecheck`, and full `pnpm test` (104 files / 2355 tests).
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
