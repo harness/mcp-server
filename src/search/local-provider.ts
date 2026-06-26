@@ -139,7 +139,10 @@ export class LocalSearchProvider implements SearchProvider {
         }
         items.splice(minIdx, 1);
       }
-      const embedding = await this.embed(item.content);
+      const embedding =
+        existing >= 0 && items[existing]!.content === item.content
+          ? items[existing]!.embedding
+          : await this.embed(item.content);
       const stored: StoredItem = {
         id: item.id,
         content: item.content,
