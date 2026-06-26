@@ -198,7 +198,7 @@ describe("template_v1 global template catalog", () => {
     expect(call.params?.global_template).toBeUndefined();
   });
 
-  it("get with global=true passes global_template=true", async () => {
+  it("get with global=true routes to /v1/templates and passes global_template=true", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "k8sRollingDeployStep" });
     const client = makeClient(mockRequest);
@@ -212,8 +212,202 @@ describe("template_v1 global template catalog", () => {
     expect(mockRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "GET",
+        path: "/v1/templates/k8sRollingDeployStep/versions/1.0.7",
         params: expect.objectContaining({ global_template: true }),
       }),
     );
+  });
+
+  it("get with global=true and no version_label uses stable global path", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "k8sRollingDeployStep" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template_v1", "get", {
+      template_id: "k8sRollingDeployStep",
+      global: true,
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/v1/templates/k8sRollingDeployStep",
+        params: expect.objectContaining({ global_template: true }),
+      }),
+    );
+  });
+
+  it("get with global=true does not use scoped org/project path even when defaults are set", async () => {
+    const registry = new Registry(makeConfig({
+      HARNESS_TOOLSETS: "templates",
+      HARNESS_ORG: "default",
+      HARNESS_PROJECT: "test-project",
+    }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "runStep" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template_v1", "get", {
+      template_id: "runStep",
+      global: true,
+      org_id: "default",
+      project_id: "test-project",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { path: string };
+    expect(call.path).toBe("/v1/templates/runStep");
+    expect(call.path).not.toContain("/orgs/");
+  });
+});
+
+describe("v0 template list path routing", () => {
+  it("metadata_only=true routes to list-metadata endpoint", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template", "list", { metadata_only: true });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/template/api/templates/list-metadata",
+      }),
+    );
+  });
+
+  it("global=true routes to list-metadata endpoint", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template", "list", { global: true });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/template/api/templates/list-metadata",
+        params: expect.objectContaining({ isGlobal: true }),
+      }),
+    );
+  });
+});
+
+describe("v0 template delete path routing", () => {
+  it("delete with version_label targets a single version", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template", "delete", {
+      template_id: "my_step",
+      version_label: "v2",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "DELETE",
+        path: "/template/api/templates/my_step/v2",
+      }),
+    );
+  });
+
+  it("delete without version_label targets all versions", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template", "delete", {
+      template_id: "my_step",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "DELETE",
+        path: "/template/api/templates/my_step",
+      }),
+    );
+  });
+});
+
+describe("template_v1 body builder", () => {
+  const v1Yaml =
+    "version: 1\ntemplate:\n  identifier: parsed_step\n  name: Parsed Step\n  versionLabel: 2.0.0\n  step:\n    run:\n      script: echo hi\n";
+
+  it("accepts raw YAML string body for v0 create", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "raw" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template", "create", {
+      body: "template:\n  identifier: raw\n  versionLabel: v1\n",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { body: string };
+    expect(call.body).toContain("identifier: raw");
+  });
+
+  it("accepts body.yaml alias for v0 create", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "alias" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template", "create", {
+      body: { yaml: "template:\n  identifier: alias\n  versionLabel: v1\n" },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { body: string };
+    expect(call.body).toContain("identifier: alias");
+  });
+
+  it("parses identifier, name, and label from template_yaml when omitted", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "parsed_step", label: "2.0.0" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template_v1", "create", {
+      body: { template_yaml: v1Yaml },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { body: Record<string, unknown> };
+    expect(call.body).toMatchObject({
+      identifier: "parsed_step",
+      name: "Parsed Step",
+      label: "2.0.0",
+      yaml_version: "1",
+      git_details: { store_type: "INLINE" },
+    });
+  });
+
+  it("preserves is_stable=false on v1 create (not dropped by truthiness check)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "parsed_step" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template_v1", "create", {
+      body: { template_yaml: v1Yaml, is_stable: false },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { body: Record<string, unknown> };
+    expect(call.body.is_stable).toBe(false);
+  });
+
+  it("rejects v1 create when identifier cannot be resolved", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "template_v1", "create", {
+        body: { template_yaml: "version: 1\ntemplate:\n  name: No Id\n  step:\n    run:\n      script: hi\n" },
+      }),
+    ).rejects.toThrow(/identifier is required/);
+  });
+
+  it("rejects v0 create when template_yaml is missing", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "template", "create", { body: { name: "orphan" } }),
+    ).rejects.toThrow(/template_yaml.*required/i);
   });
 });

@@ -188,6 +188,24 @@ describe("build-deploy-app prompt", () => {
     expect(text).toContain("K8s namespace: default");
   });
 
+  it("documents Harness Code repos do not need a Git connector", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({
+      name: "build-deploy-app",
+      arguments: {
+        repoUrl: "https://git.harness.io/org/proj/repo",
+        imageName: "docker.io/acme/webapp",
+      },
+    });
+
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("Harness Code");
+    expect(text).toContain("properties.ci.codebase.repoName");
+    expect(text).toContain("no connectorRef needed");
+    expect(text).toContain("store type `HarnessCode`");
+  });
+
   it("includes manifest discovery paths", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
