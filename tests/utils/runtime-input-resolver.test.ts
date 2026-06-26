@@ -476,6 +476,25 @@ describe("resolveRuntimeInputs", () => {
     expect(result.unmatchedOptional).toHaveLength(3);
     expect(result.yaml).toContain("<+input>.default");
   });
+
+  it("propagates template fetch failures instead of returning partial resolution", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        status: "ERROR",
+        code: "TEMPLATE_UNAVAILABLE",
+        message: "template service unavailable",
+      }), { status: 503, headers: { "Content-Type": "application/json" } }),
+    );
+
+    const client = new HarnessClient(makeConfig());
+    await expect(
+      resolveRuntimeInputs(
+        client,
+        { branch: "main" },
+        { pipelineId: "fail_pipe", orgId: "default", projectId: "test-project" },
+      ),
+    ).rejects.toThrow(/template service unavailable/i);
+  });
 });
 
 describe("fetchRuntimeInputTemplate — caching", () => {

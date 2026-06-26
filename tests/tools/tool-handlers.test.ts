@@ -2098,14 +2098,58 @@ pipeline:
     });
 
     expect(result.isError).toBe(true);
-    expect(parseResult(result)).toMatchObject({
-      error: expect.stringContaining("Could not auto-resolve runtime inputs"),
-    });
+    const data = parseResult(result) as { error: string };
+    expect(data.error).toContain("Could not auto-resolve runtime inputs");
+    expect(data.error).toContain("template service unavailable");
+    expect(data.error).toContain("input_set_ids");
+    expect(data.error).toContain("runtime_input_template");
     expect(mockRequest).toHaveBeenCalledTimes(1);
     expect(mockRequest.mock.calls[0]![0]).toMatchObject({
       method: "POST",
       path: "/pipeline/api/inputSets/template",
     });
+    expect(mockRequest.mock.calls.some((call) => {
+      const req = call[0] as { path?: string };
+      return req.path?.includes("/pipeline/execute/");
+    })).toBe(false);
+  });
+
+  it("fails closed when auto-resolving pipeline runtime inputs fails with non-Error rejection", async () => {
+    mockRequest.mockRejectedValueOnce("template gateway timeout");
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "fail_closed_pipe",
+      inputs: { branch: "main" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("template gateway timeout"),
+    });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails closed when materializing input_set_ids fails before execution", async () => {
+    mockRequest.mockRejectedValueOnce(new Error("input set not found"));
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "input_set_fail_pipe",
+      input_set_ids: ["missing_set"],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Could not load input set(s) for execution"),
+    });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "GET",
+    });
+    expect(mockRequest.mock.calls[0]![0].path).toContain("/pipeline/api/inputSets/");
   });
 
   it("includes structural field hints in pre-flight error", async () => {
