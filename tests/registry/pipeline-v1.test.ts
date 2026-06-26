@@ -158,6 +158,32 @@ pipeline:
       }),
     ).rejects.toThrow(/body is required/);
   });
+
+  it("preserves description, tags, and custom version from object body", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn().mockResolvedValue({ id: "meta_pipe" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pipeline_v1", "create", {
+      org_id: "default",
+      project_id: "test-project",
+      body: {
+        pipeline_yaml: sampleV1Yaml,
+        identifier: "meta_pipe",
+        name: "Meta Pipeline",
+        description: "Has metadata",
+        version: "2",
+        tags: { team: "platform" },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { body: Record<string, unknown> };
+    expect(call.body).toMatchObject({
+      description: "Has metadata",
+      version: "2",
+      tags: { team: "platform" },
+    });
+  });
 });
 
 describe("pipeline_v1 execute run — inputs serialization", () => {

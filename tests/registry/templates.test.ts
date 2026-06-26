@@ -410,4 +410,81 @@ describe("template_v1 body builder", () => {
       registry.dispatch(client, "template", "create", { body: { name: "orphan" } }),
     ).rejects.toThrow(/template_yaml.*required/i);
   });
+
+  it("accepts body.yaml alias for v1 create", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "yaml_alias" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template_v1", "create", {
+      body: { yaml: v1Yaml },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { body: Record<string, unknown> };
+    expect(call.body.template_yaml).toBe(v1Yaml);
+    expect(call.body.identifier).toBe("parsed_step");
+  });
+
+  it("defaults name to identifier and label to 1.0.0 when omitted from YAML", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "bare_id" });
+    const client = makeClient(mockRequest);
+
+    const minimalYaml =
+      "version: 1\ntemplate:\n  identifier: bare_id\n  step:\n    run:\n      script: echo\n";
+
+    await registry.dispatch(client, "template_v1", "create", {
+      body: { template_yaml: minimalYaml },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { body: Record<string, unknown> };
+    expect(call.body).toMatchObject({
+      identifier: "bare_id",
+      name: "bare_id",
+      label: "1.0.0",
+    });
+  });
+
+  it("uses version_label param as label on v1 update when body omits label", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "upd_step" });
+    const client = makeClient(mockRequest);
+
+    const yamlWithoutLabel =
+      "version: 1\ntemplate:\n  identifier: upd_step\n  name: Update Step\n  step:\n    run:\n      script: echo hi\n";
+
+    await registry.dispatch(client, "template_v1", "update", {
+      org_id: "default",
+      project_id: "test-project",
+      template_id: "upd_step",
+      version_label: "3.1.0",
+      body: { template_yaml: yamlWithoutLabel },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { path: string; body: Record<string, unknown> };
+    expect(call.path).toBe("/v1/orgs/default/projects/test-project/templates/upd_step/versions/3.1.0");
+    expect(call.body.label).toBe("3.1.0");
+  });
+});
+
+describe("template_v1 delete path routing", () => {
+  it("delete with version_label targets the versioned v1 REST path", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template_v1", "delete", {
+      org_id: "default",
+      project_id: "test-project",
+      template_id: "my_template",
+      version_label: "2.0.0",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "DELETE",
+        path: "/v1/orgs/default/projects/test-project/templates/my_template/versions/2.0.0",
+      }),
+    );
+  });
 });
