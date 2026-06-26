@@ -189,7 +189,7 @@ export class SearchManager {
   private loadProvider(config: Config): SearchProvider {
     const providerName = config.HARNESS_SEARCH_PROVIDER ?? "none";
     if (providerName === "local") {
-      return new LocalSearchProvider();
+      return new LocalSearchProvider({ cacheDir: config.HARNESS_HF_CACHE_DIR });
     }
     return new NullSearchProvider();
   }

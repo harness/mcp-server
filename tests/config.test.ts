@@ -505,4 +505,21 @@ describe("loadConfig — account ID extraction", () => {
       );
     });
   });
+
+  it("defaults HARNESS_HF_CACHE_DIR to /tmp/hf-cache", () => {
+    withEnv({ HARNESS_API_KEY: "pat.acct123.tok.sec" }, () => {
+      const config = loadConfig();
+      expect(config.HARNESS_HF_CACHE_DIR).toBe("/tmp/hf-cache");
+    });
+  });
+
+  it("accepts a custom HARNESS_HF_CACHE_DIR", () => {
+    withEnv(
+      { HARNESS_API_KEY: "pat.acct123.tok.sec", HARNESS_HF_CACHE_DIR: "/data/hf-cache" },
+      () => {
+        const config = loadConfig();
+        expect(config.HARNESS_HF_CACHE_DIR).toBe("/data/hf-cache");
+      },
+    );
+  });
 });
