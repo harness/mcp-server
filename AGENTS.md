@@ -1,4 +1,4 @@
-# CLAUDE.md — Harness.io MCP Server
+# AGENTS.md — Harness.io MCP Server
 
 > You are building a production-grade MCP (Model Context Protocol) server that wraps the Harness.io REST API, enabling AI agents (Claude, Cursor, Windsurf, etc.) to interact with Harness CI/CD pipelines, services, environments, connectors, and platform entities through standardized tools and resources.
 
