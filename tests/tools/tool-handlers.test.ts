@@ -2087,6 +2087,27 @@ pipeline:
     expect(data._inputResolution.defaulted).toContain("REGISTRY");
   });
 
+  it("fails closed when auto-resolving pipeline runtime inputs fails", async () => {
+    mockRequest.mockRejectedValueOnce(new Error("template service unavailable"));
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "fail_closed_pipe",
+      inputs: { branch: "main" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Could not auto-resolve runtime inputs"),
+    });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "POST",
+      path: "/pipeline/api/inputSets/template",
+    });
+  });
+
   it("includes structural field hints in pre-flight error", async () => {
     const structuralTemplate = `pipeline:
   identifier: "struct_pipe"

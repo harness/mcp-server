@@ -370,7 +370,12 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
             input.inputs = resolved.yaml;
           } catch (err) {
-            log.warn("Failed to auto-resolve runtime inputs, passing through as-is", { error: String(err) });
+            const msg = err instanceof Error ? err.message : String(err);
+            log.warn("Failed to auto-resolve runtime inputs", { error: msg });
+            return errorResult(
+              `Could not auto-resolve runtime inputs for pipeline execution: ${msg}. ` +
+              "Pass full runtime YAML in inputs, use input_set_ids, or retry after checking runtime_input_template.",
+            );
           }
         }
 
