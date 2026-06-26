@@ -26,7 +26,7 @@ function makeSemanticResult(
     id: overrides.id ?? `semantic-${metadata.resource_type ?? "unknown"}`,
     content: overrides.content ?? "semantic hit",
     score,
-    corpus: overrides.corpus ?? "mcp_resources",
+    corpus: overrides.corpus ?? "knowledge",
     metadata,
     ...overrides,
   };

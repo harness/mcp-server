@@ -1,10 +1,10 @@
-export type SearchCorpus = "resources" | "docs" | "mcp_resources";
+export type SearchCorpus = "entities" | "docs" | "knowledge";
 
 /** Per-corpus default TTL in milliseconds. undefined = never expires. */
 export const CORPUS_DEFAULT_TTL_MS: Record<SearchCorpus, number | undefined> = {
-  resources: 30 * 60 * 1000,    // 30 minutes — live Harness data changes frequently
+  entities: 30 * 60 * 1000,    // 30 minutes — live Harness data changes frequently
   docs: undefined,               // permanent — doc content is versioned externally
-  mcp_resources: undefined,      // permanent — bundled static data (schemas, examples, defs)
+  knowledge: undefined,      // permanent — bundled static data (schemas, examples, defs)
 };
 
 export interface SearchResult {

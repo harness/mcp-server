@@ -15,7 +15,7 @@ describe("LocalSearchProvider", () => {
   });
 
   it("returns empty results for empty index", async () => {
-    const results = await provider.search("anything", { corpus: "resources", accountId: "acc-empty" });
+    const results = await provider.search("anything", { corpus: "entities", accountId: "acc-empty" });
     expect(results).toEqual([]);
   });
 
@@ -23,20 +23,20 @@ describe("LocalSearchProvider", () => {
     await provider.index({
       id: "pipeline:p1",
       content: "deploy payments service to production",
-      corpus: "resources",
+      corpus: "entities",
       accountId: "acc1",
       metadata: { resource_type: "pipeline", identifier: "p1" },
     });
 
     const results = await provider.search("deploy payments", {
-      corpus: "resources",
+      corpus: "entities",
       accountId: "acc1",
       k: 5,
     });
 
     expect(results.length).toBeGreaterThan(0);
     expect(results[0]!.id).toBe("pipeline:p1");
-    expect(results[0]!.corpus).toBe("resources");
+    expect(results[0]!.corpus).toBe("entities");
     expect(results[0]!.score).toBeGreaterThan(0);
   });
 
@@ -44,20 +44,20 @@ describe("LocalSearchProvider", () => {
     await provider.index({
       id: "pipeline:p2",
       content: "original content",
-      corpus: "resources",
+      corpus: "entities",
       accountId: "acc1",
       metadata: { resource_type: "pipeline", identifier: "p2" },
     });
     await provider.index({
       id: "pipeline:p2",
       content: "updated canary rollout pipeline",
-      corpus: "resources",
+      corpus: "entities",
       accountId: "acc1",
       metadata: { resource_type: "pipeline", identifier: "p2" },
     });
 
     const results = await provider.search("canary rollout", {
-      corpus: "resources",
+      corpus: "entities",
       accountId: "acc1",
       k: 5,
     });
@@ -68,13 +68,13 @@ describe("LocalSearchProvider", () => {
     await provider.index({
       id: "pipeline:isolated",
       content: "isolated account pipeline xyz123",
-      corpus: "resources",
+      corpus: "entities",
       accountId: "acc-isolated",
       metadata: {},
     });
 
     const results = await provider.search("isolated account pipeline xyz123", {
-      corpus: "resources",
+      corpus: "entities",
       accountId: "acc-other",
     });
     expect(results.find(r => r.id === "pipeline:isolated")).toBeUndefined();
@@ -89,7 +89,7 @@ describe("LocalSearchProvider", () => {
     });
 
     const results = await provider.search("canary deployment strategy", {
-      corpus: "resources",
+      corpus: "entities",
       accountId: "acc1",
     });
     expect(results.find(r => r.id === "doc:d1")).toBeUndefined();
@@ -99,7 +99,7 @@ describe("LocalSearchProvider", () => {
     await provider.index({
       id: "pipeline:all-test",
       content: "unique cross corpus test pipeline deployment",
-      corpus: "resources",
+      corpus: "entities",
       accountId: "acc-all",
       metadata: { resource_type: "pipeline" },
     });
@@ -121,6 +121,6 @@ describe("LocalSearchProvider", () => {
   });
 
   it("does not throw on empty id or content", async () => {
-    await expect(provider.index({ id: "", content: "", corpus: "resources", metadata: {} })).resolves.toBeUndefined();
+    await expect(provider.index({ id: "", content: "", corpus: "entities", metadata: {} })).resolves.toBeUndefined();
   });
 });

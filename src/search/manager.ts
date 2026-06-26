@@ -36,7 +36,7 @@ export class SearchManager {
    * LocalSearchProvider must not index `resources` in multi-user HTTP mode.
    */
   canIndexCorpus(corpus: SearchCorpus): boolean {
-    if (corpus === "resources" && this.mcpMode === "multi-user" && this.configuredProvider === "local") {
+    if (corpus === "entities" && this.mcpMode === "multi-user" && this.configuredProvider === "local") {
       return false;
     }
     return true;
@@ -116,7 +116,7 @@ export class SearchManager {
         return this.provider.index({
           id: `resource-def:${rt}`,
           content: [rt.replace(/_/g, " "), def.displayName, def.description, ops].filter(Boolean).join(" "),
-          corpus: "mcp_resources",
+          corpus: "knowledge",
           ttlMs: 0,
           metadata: {
             type: "resource_definition",
@@ -138,7 +138,7 @@ export class SearchManager {
       this.provider.index({
         id: `example:${ex.name}`,
         content: [ex.resourceType.replace(/_/g, " "), ex.name.replace(/-/g, " "), ex.description, ex.tags.join(" ")].join(" "),
-        corpus: "mcp_resources",
+        corpus: "knowledge",
         ttlMs: 0,
         metadata: {
           type: "example",
@@ -176,7 +176,7 @@ export class SearchManager {
           schema?.title ?? "",
           schema?.description ?? "",
         ].filter(Boolean).join(" "),
-        corpus: "mcp_resources",
+        corpus: "knowledge",
         ttlMs: 0,
         metadata: {
           type: "schema",
@@ -200,7 +200,7 @@ export class SearchManager {
           schema?.title ?? "",
           schema?.description ?? "",
         ].filter(Boolean).join(" "),
-        corpus: "mcp_resources",
+        corpus: "knowledge",
         ttlMs: 0,
         metadata: {
           type: "entity_schema",
@@ -220,7 +220,7 @@ export class SearchManager {
    */
   async initializeIndex(registry: Registry, client: HarnessClient): Promise<void> {
     if (!this.provider.isAvailable()) return;
-    if (!this.canIndexCorpus("resources")) {
+    if (!this.canIndexCorpus("entities")) {
       if (!this.loggedResourcesCorpusDisabled) {
         this.loggedResourcesCorpusDisabled = true;
         log.warn("resources corpus disabled in multi-user mode — requires HarnessSearchProvider");
@@ -240,7 +240,7 @@ export class SearchManager {
           this.indexItem({
             id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
             content: buildResourceIndexContent(resourceType, item),
-            corpus: "resources",
+            corpus: "entities",
             accountId,
             metadata: {
               resource_type: resourceType,

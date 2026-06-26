@@ -6,7 +6,7 @@ const log = createLogger("local-provider");
 const DEFAULT_HF_CACHE_DIR = "/tmp/hf-cache";
 const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
 const EMBEDDING_DIM = 384;
-const CORPORA: SearchCorpus[] = ["resources", "docs", "mcp_resources"];
+const CORPORA: SearchCorpus[] = ["entities", "docs", "knowledge"];
 /** Per-key cap for TTL-backed or resources corpus items. */
 const MAX_ITEMS_PER_KEY = 5000;
 /** Max distinct resources:<account> buckets — cross-key LRU evicts the stalest account. */
@@ -21,7 +21,7 @@ export function isResourceAccountKey(key: string): boolean {
 
 /** resources corpus is always capped; other corpora only cap TTL-backed items. */
 export function needsPerKeyCap(corpus: SearchCorpus, expiresAt: number | undefined): boolean {
-  return corpus === "resources" || expiresAt !== undefined;
+  return corpus === "entities" || expiresAt !== undefined;
 }
 
 export function countResourceAccountKeys(store: ReadonlyMap<string, unknown[]>): number {

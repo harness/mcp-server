@@ -111,7 +111,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
               searchManager.indexItem({
                 id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
                 content: buildResourceIndexContent(resourceType, item),
-                corpus: "resources",
+                corpus: "entities",
                 accountId,
                 metadata: {
                   resource_type: resourceType,

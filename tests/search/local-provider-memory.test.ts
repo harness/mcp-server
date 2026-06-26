@@ -16,8 +16,8 @@ describe("local-provider memory bounds", () => {
   });
 
   it("caps resources corpus items even when permanent", () => {
-    expect(needsPerKeyCap("resources", undefined)).toBe(true);
-    expect(needsPerKeyCap("mcp_resources", undefined)).toBe(false);
+    expect(needsPerKeyCap("entities", undefined)).toBe(true);
+    expect(needsPerKeyCap("knowledge", undefined)).toBe(false);
     expect(needsPerKeyCap("docs", Date.now() + 60_000)).toBe(true);
   });
 

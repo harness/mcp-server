@@ -61,7 +61,7 @@ describe("SearchManager", () => {
         HARNESS_SEARCH_PROVIDER: "local",
         HARNESS_MCP_MODE: "single-user",
       }) as never);
-      expect(mgr.canIndexCorpus("resources")).toBe(true);
+      expect(mgr.canIndexCorpus("entities")).toBe(true);
     });
 
     it("blocks resources corpus in multi-user mode with local provider", () => {
@@ -69,7 +69,7 @@ describe("SearchManager", () => {
         HARNESS_SEARCH_PROVIDER: "local",
         HARNESS_MCP_MODE: "multi-user",
       }) as never);
-      expect(mgr.canIndexCorpus("resources")).toBe(false);
+      expect(mgr.canIndexCorpus("entities")).toBe(false);
     });
 
     it("always allows mcp_resources corpus regardless of mode", () => {
@@ -77,7 +77,7 @@ describe("SearchManager", () => {
         HARNESS_SEARCH_PROVIDER: "local",
         HARNESS_MCP_MODE: "multi-user",
       }) as never);
-      expect(mgr.canIndexCorpus("mcp_resources")).toBe(true);
+      expect(mgr.canIndexCorpus("knowledge")).toBe(true);
     });
   });
 
@@ -93,7 +93,7 @@ describe("SearchManager", () => {
       await mgr.indexItem({
         id: "pipeline:foo",
         content: "pipeline foo",
-        corpus: "resources",
+        corpus: "entities",
         accountId: "acct-1",
         metadata: { resource_type: "pipeline", identifier: "foo", name: "foo" },
       });
@@ -116,7 +116,7 @@ describe("SearchManager", () => {
       await mgr.indexItem({
         id: "pipeline:foo",
         content: "pipeline foo",
-        corpus: "resources",
+        corpus: "entities",
         accountId: "acct-1",
         metadata: { resource_type: "pipeline", identifier: "foo", name: "foo" },
       });

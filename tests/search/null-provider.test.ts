@@ -18,6 +18,6 @@ describe("NullSearchProvider", () => {
   it("index is a no-op", async () => {
     const p = new NullSearchProvider();
     await p.initialize();
-    await expect(p.index({ id: "x", content: "y", corpus: "resources", metadata: {} })).resolves.toBeUndefined();
+    await expect(p.index({ id: "x", content: "y", corpus: "entities", metadata: {} })).resolves.toBeUndefined();
   });
 });
