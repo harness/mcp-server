@@ -110,5 +110,8 @@
   "packageManager": "pnpm@10.18.2",
   "engines": {
     "node": ">=20.0.0"
+  },
+  "optionalDependencies": {
+    "@huggingface/transformers": "^4.2.0"
   }
 }

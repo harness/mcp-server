@@ -31,10 +31,10 @@ export class SearchManager {
     if (providerName === "faiss") {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { FaissSearchProvider } = require("./faiss-provider.js") as typeof import("./faiss-provider.js");
-        return new FaissSearchProvider();
+        const { LocalSearchProvider } = require("./local-provider.js") as typeof import("./local-provider.js");
+        return new LocalSearchProvider();
       } catch (err) {
-        log.warn("faiss provider requested but faiss-node not available — using null provider", { error: String(err) });
+        log.warn("local provider requested but @huggingface/transformers not available — using null provider", { error: String(err) });
         return new NullSearchProvider();
       }
     }

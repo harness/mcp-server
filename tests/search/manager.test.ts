@@ -4,7 +4,7 @@ import { NullSearchProvider } from "../../src/search/null-provider.js";
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
-    HARNESS_SEARCH_PROVIDER: "none",
+    HARNESS_SEARCH_PROVIDER: "none" as const,
     HARNESS_SEARCH_SERVICE_URL: undefined,
     ...overrides,
   };
