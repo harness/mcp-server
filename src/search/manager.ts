@@ -1,4 +1,6 @@
 import type { Config } from "../config.js";
+import type { Registry } from "../registry/index.js";
+import type { HarnessClient } from "../client/harness-client.js";
 import type { SearchProvider } from "./types.js";
 import { NullSearchProvider } from "./null-provider.js";
 import { createLogger } from "../utils/logger.js";
@@ -26,9 +28,41 @@ export class SearchManager {
     }
   }
 
+  async initializeIndex(registry: Registry, client: HarnessClient): Promise<void> {
+    if (!this.provider.isAvailable()) return;
+    const TIER1_TYPES = ["pipeline", "service", "environment", "connector"] as const;
+    const accountId = client.account;
+    const types = TIER1_TYPES.filter(t => registry.supportsOperation(t, "list"));
+
+    for (const resourceType of types) {
+      try {
+        const result = await registry.dispatch(client, resourceType, "list", {
+          size: 50, limit: 50, page: 0,
+        }, { tool: "search-init" }) as { items?: Array<Record<string, unknown>> };
+        const items = result?.items ?? [];
+        await Promise.all(items.map(item =>
+          this.provider.index({
+            id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
+            content: [item["name"], item["description"], item["identifier"]].filter(Boolean).join(" "),
+            corpus: "resources",
+            accountId,
+            metadata: {
+              resource_type: resourceType,
+              identifier: String(item["identifier"] ?? item["id"] ?? ""),
+              name: String(item["name"] ?? ""),
+            },
+          })
+        ));
+        log.info(`Pre-indexed ${items.length} ${resourceType} items`);
+      } catch (err) {
+        log.warn(`Failed to pre-index ${resourceType}`, { error: String(err) });
+      }
+    }
+  }
+
   private loadProvider(config: Config): SearchProvider {
     const providerName = config.HARNESS_SEARCH_PROVIDER ?? "none";
-    if (providerName === "faiss") {
+    if (providerName === "local") {
       try {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { LocalSearchProvider } = require("./local-provider.js") as typeof import("./local-provider.js");

@@ -76,8 +76,12 @@ function createHarnessServer(config: Config, sharedAuditManager?: AuditManager):
   );
 
   configureElicitation({ autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK as import("./registry/types.js").AutoApproveRisk });
-  // Initialize search provider in background — never blocks server startup
-  searchManager.initialize().catch((err) => {
+  // Initialize search provider and pre-index tier-1 resources in background
+  searchManager.initialize().then(async () => {
+    if (searchManager.getProvider().isAvailable()) {
+      await searchManager.initializeIndex(registry, client);
+    }
+  }).catch((err) => {
     log.warn("SearchManager initialization failed", { error: String(err) });
   });
 
