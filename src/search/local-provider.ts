@@ -5,6 +5,7 @@ const log = createLogger("local-provider");
 const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
 const EMBEDDING_DIM = 384;
 const CORPORA: SearchCorpus[] = ["resources", "docs", "mcp_resources"];
+const MAX_ITEMS_PER_KEY = 5000;
 
 interface StoredItem {
   id: string;
@@ -40,8 +41,9 @@ export class LocalSearchProvider implements SearchProvider {
       env.cacheDir = "/tmp/hf-cache";
       const extractor = await pipeline("feature-extraction", EMBEDDING_MODEL, { dtype: "fp32" });
       this.embed = async (text: string): Promise<Float32Array> => {
-        const out = await extractor(text.slice(0, 512), { pooling: "mean", normalize: true });
-        return new Float32Array(out.data as ArrayBuffer);
+        const out = await extractor(text, { pooling: "mean", normalize: true });
+        const raw = out.data;
+        return raw instanceof Float32Array ? raw : new Float32Array(raw as ArrayLike<number>);
       };
       this.available = true;
       log.info("LocalSearchProvider initialized", { model: EMBEDDING_MODEL, dim: EMBEDDING_DIM });
@@ -95,6 +97,8 @@ export class LocalSearchProvider implements SearchProvider {
       if (!this.store.has(key)) this.store.set(key, []);
       const items = this.store.get(key)!;
       const existing = items.findIndex(i => i.id === item.id);
+      // Evict oldest entry if at cap (LRU-lite: drop from front)
+      if (existing < 0 && items.length >= MAX_ITEMS_PER_KEY) items.shift();
       const embedding = await this.embed(item.content);
       const stored: StoredItem = { id: item.id, content: item.content, corpus: item.corpus, metadata: item.metadata, embedding };
       if (existing >= 0) {

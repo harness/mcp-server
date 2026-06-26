@@ -3,6 +3,7 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { SearchProvider } from "./types.js";
 import { NullSearchProvider } from "./null-provider.js";
+import { LocalSearchProvider } from "./local-provider.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("search-manager");
@@ -63,14 +64,9 @@ export class SearchManager {
   private loadProvider(config: Config): SearchProvider {
     const providerName = config.HARNESS_SEARCH_PROVIDER ?? "none";
     if (providerName === "local") {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { LocalSearchProvider } = require("./local-provider.js") as typeof import("./local-provider.js");
-        return new LocalSearchProvider();
-      } catch (err) {
-        log.warn("local provider requested but @huggingface/transformers not available — using null provider", { error: String(err) });
-        return new NullSearchProvider();
-      }
+      // LocalSearchProvider defers @huggingface/transformers import to initialize(),
+      // so construction is safe even if the package is absent at load time
+      return new LocalSearchProvider();
     }
     return new NullSearchProvider();
   }

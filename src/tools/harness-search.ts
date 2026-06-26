@@ -159,7 +159,9 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         const keywordIds = new Set(
           entries.flatMap(e => (e.items as Array<Record<string, unknown>>).map(i => String(i["identifier"] ?? i["id"] ?? "")))
         );
+        const SEMANTIC_SCORE_THRESHOLD = 0.35;
         for (const sr of semanticResults) {
+          if (sr.score < SEMANTIC_SCORE_THRESHOLD) continue;
           const id = sr.metadata["identifier"] ?? "";
           if (id && !keywordIds.has(id)) {
             entries.push({
