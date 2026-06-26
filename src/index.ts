@@ -19,6 +19,7 @@ import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { createHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
+import { SearchManager } from "./search/index.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "./utils/session-headers.js";
 
 
@@ -37,6 +38,7 @@ function createHarnessServer(config: Config, sharedAuditManager?: AuditManager):
   const auditManager = sharedAuditManager ?? createAuditManager(config);
   const client = new HarnessClient(config);
   const registry = new Registry(config, { auditManager });
+  const searchManager = new SearchManager(config);
 
   const server = new McpServer(
     {
@@ -74,7 +76,12 @@ function createHarnessServer(config: Config, sharedAuditManager?: AuditManager):
   );
 
   configureElicitation({ autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK as import("./registry/types.js").AutoApproveRisk });
-  registerAllTools(server, registry, client, config);
+  // Initialize search provider in background — never blocks server startup
+  searchManager.initialize().catch((err) => {
+    log.warn("SearchManager initialization failed", { error: String(err) });
+  });
+
+  registerAllTools(server, registry, client, config, undefined, searchManager);
   registerAllResources(server, registry, client, config);
   registerAllPrompts(server);
 

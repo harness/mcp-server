@@ -8,6 +8,7 @@ import { compactItems } from "../utils/compact.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { renderListVisual } from "../utils/svg/list-visuals.js";
+import type { SearchManager } from "../search/index.js";
 import type { ListVisualType } from "../utils/svg/list-visuals.js";
 import { createLogger } from "../utils/logger.js";
 import { resourceTypeSchema } from "./input-schemas.js";
@@ -15,7 +16,7 @@ import { listOutputSchema } from "./output-schemas.js";
 
 const log = createLogger("list");
 
-export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient): void {
+export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
   // Build a dynamic description for the filters param from all enabled resource definitions
   const allFilterNames = registry.getAllFilterFields().map((f) => f.name);
   const filtersDesc = allFilterNames.length > 0
@@ -99,6 +100,27 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
               log.warn("Visual rendering failed, returning text-only", { error: String(err) });
             }
           }
+        }
+
+        // Fire-and-forget: index items for semantic search
+        const provider = searchManager?.getProvider();
+        if (provider?.isAvailable() && isRecord(result) && Array.isArray(result.items)) {
+          const accountId = client.account;
+          void Promise.all(
+            (result.items as Array<Record<string, unknown>>).map(item =>
+              provider.index({
+                id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
+                content: [item["name"], item["description"], item["identifier"]].filter(Boolean).join(" "),
+                corpus: "resources",
+                accountId,
+                metadata: {
+                  resource_type: resourceType,
+                  identifier: String(item["identifier"] ?? item["id"] ?? ""),
+                  name: String(item["name"] ?? ""),
+                },
+              })
+            )
+          ).catch(() => { /* never surface indexing errors to caller */ });
         }
 
         return jsonResult(result);

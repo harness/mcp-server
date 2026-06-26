@@ -10,6 +10,8 @@ import { sendProgress, sendLog } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import type { ResourceScope } from "../registry/types.js";
 import { searchOutputSchema } from "./output-schemas.js";
+import type { SearchManager } from "../search/index.js";
+import type { SearchResult } from "../search/types.js";
 
 const log = createLogger("search");
 const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
@@ -44,7 +46,7 @@ interface SearchResultEntry {
   openInHarness?: string;
 }
 
-export function registerSearchTool(server: McpServer, registry: Registry, client: HarnessClient): void {
+export function registerSearchTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
   const listableTypes = registry.getTypesForOperation("list") as [string, ...string[]];
 
   server.registerTool(
@@ -73,6 +75,12 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
       try {
         const signal = extra.signal;
         const mergedArgs = applyUrlDefaults(args as Record<string, unknown>, args.url, { includeResourceScope: true });
+
+        // Semantic search via provider (runs concurrently with scatter-gather)
+        const provider = searchManager?.getProvider();
+        const semanticPromise: Promise<SearchResult[]> = provider?.isAvailable()
+          ? provider.search(args.query, { corpus: "all", accountId: client.account, k: 20 })
+          : Promise.resolve([]);
         const requestedScope = asResourceScope(mergedArgs.resource_scope);
         const hasExplicitResourceTypes = (args.resource_types?.length ?? 0) > 0;
         // Determine which resource types to search
@@ -143,6 +151,24 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           }
           if (error) {
             errors[rt] = error;
+          }
+        }
+
+        // Prepend semantic hits not already covered by keyword results
+        const semanticResults = await semanticPromise;
+        const keywordIds = new Set(
+          entries.flatMap(e => (e.items as Array<Record<string, unknown>>).map(i => String(i["identifier"] ?? i["id"] ?? "")))
+        );
+        for (const sr of semanticResults) {
+          const id = sr.metadata["identifier"] ?? "";
+          if (id && !keywordIds.has(id)) {
+            entries.push({
+              resource_type: sr.metadata["resource_type"] ?? "unknown",
+              tier: 0,
+              match_count: 1,
+              items: [{ ...sr.metadata, _semantic_score: sr.score }],
+              total: 1,
+            });
           }
         }
 
