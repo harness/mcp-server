@@ -115,7 +115,7 @@ const RawConfigSchema = z.object({
   ),
   HARNESS_SEARCH_PROVIDER: z.preprocess(
     emptyStringAsUndefined,
-    z.enum(["none", "local"]).default("none"),
+    z.enum(["none", "local"]).default("local"),
   ),
   HARNESS_SEARCH_SERVICE_URL: optionalStringFromEnv,
 });
