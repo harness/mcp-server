@@ -3,6 +3,7 @@ import { CORPUS_DEFAULT_TTL_MS } from "./types.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("local-provider");
+const DEFAULT_HF_CACHE_DIR = "/tmp/hf-cache";
 const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
 const EMBEDDING_DIM = 384;
 const CORPORA: SearchCorpus[] = ["resources", "docs", "mcp_resources"];
@@ -39,17 +40,26 @@ function resolveExpiresAt(item: IndexableItem, now: number): number | undefined 
   return ttl !== undefined ? now + ttl : undefined;
 }
 
+export interface LocalSearchProviderOptions {
+  cacheDir?: string;
+}
+
 export class LocalSearchProvider implements SearchProvider {
   private available = false;
   private embed: EmbedFn | null = null;
+  private readonly cacheDir: string;
   // key: `${corpus}:${accountId ?? "global"}`
   private store = new Map<string, StoredItem[]>();
   private evictionTimer: ReturnType<typeof setInterval> | null = null;
 
+  constructor(options: LocalSearchProviderOptions = {}) {
+    this.cacheDir = options.cacheDir ?? DEFAULT_HF_CACHE_DIR;
+  }
+
   async initialize(): Promise<void> {
     try {
       const { pipeline, env } = await import("@huggingface/transformers");
-      env.cacheDir = "/tmp/hf-cache";
+      env.cacheDir = this.cacheDir;
       const extractor = await pipeline("feature-extraction", EMBEDDING_MODEL, { dtype: "fp32" });
       this.embed = async (text: string): Promise<Float32Array> => {
         const out = await extractor(text, { pooling: "mean", normalize: true });
@@ -59,7 +69,7 @@ export class LocalSearchProvider implements SearchProvider {
       this.available = true;
       // Run eviction every 10 minutes
       this.evictionTimer = setInterval(() => this.evictExpired(), 10 * 60 * 1000);
-      log.info("LocalSearchProvider initialized", { model: EMBEDDING_MODEL, dim: EMBEDDING_DIM });
+      log.info("LocalSearchProvider initialized", { model: EMBEDDING_MODEL, dim: EMBEDDING_DIM, cacheDir: this.cacheDir });
     } catch (err) {
       log.error("LocalSearchProvider initialization failed", { error: String(err) });
     }
