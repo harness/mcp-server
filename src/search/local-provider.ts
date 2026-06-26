@@ -1,10 +1,12 @@
 import type { SearchProvider, SearchResult, SearchOptions, IndexableItem, SearchCorpus } from "./types.js";
+import { CORPUS_DEFAULT_TTL_MS } from "./types.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("local-provider");
 const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
 const EMBEDDING_DIM = 384;
 const CORPORA: SearchCorpus[] = ["resources", "docs", "mcp_resources"];
+// Per-key cap — permanent corpora (mcp_resources, docs) are exempt since they're bounded by definition
 const MAX_ITEMS_PER_KEY = 5000;
 
 interface StoredItem {
@@ -13,6 +15,8 @@ interface StoredItem {
   corpus: SearchCorpus;
   metadata: Record<string, string>;
   embedding: Float32Array;
+  /** Unix ms timestamp when this item expires. undefined = never expires. */
+  expiresAt: number | undefined;
 }
 
 type EmbedFn = (text: string) => Promise<Float32Array>;
@@ -28,16 +32,23 @@ function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   return denom === 0 ? 0 : dot / denom;
 }
 
+function resolveExpiresAt(item: IndexableItem, now: number): number | undefined {
+  // Explicit ttlMs=0 means permanent, overriding corpus default
+  if (item.ttlMs === 0) return undefined;
+  const ttl = item.ttlMs ?? CORPUS_DEFAULT_TTL_MS[item.corpus];
+  return ttl !== undefined ? now + ttl : undefined;
+}
+
 export class LocalSearchProvider implements SearchProvider {
   private available = false;
   private embed: EmbedFn | null = null;
   // key: `${corpus}:${accountId ?? "global"}`
   private store = new Map<string, StoredItem[]>();
+  private evictionTimer: ReturnType<typeof setInterval> | null = null;
 
   async initialize(): Promise<void> {
     try {
       const { pipeline, env } = await import("@huggingface/transformers");
-      // Cache model in memory only, no filesystem write needed for local use
       env.cacheDir = "/tmp/hf-cache";
       const extractor = await pipeline("feature-extraction", EMBEDDING_MODEL, { dtype: "fp32" });
       this.embed = async (text: string): Promise<Float32Array> => {
@@ -46,6 +57,8 @@ export class LocalSearchProvider implements SearchProvider {
         return raw instanceof Float32Array ? raw : new Float32Array(raw as ArrayLike<number>);
       };
       this.available = true;
+      // Run eviction every 10 minutes
+      this.evictionTimer = setInterval(() => this.evictExpired(), 10 * 60 * 1000);
       log.info("LocalSearchProvider initialized", { model: EMBEDDING_MODEL, dim: EMBEDDING_DIM });
     } catch (err) {
       log.error("LocalSearchProvider initialization failed", { error: String(err) });
@@ -56,22 +69,39 @@ export class LocalSearchProvider implements SearchProvider {
     return this.available;
   }
 
+  evictExpired(): void {
+    const now = Date.now();
+    let evicted = 0;
+    for (const [key, items] of this.store) {
+      const before = items.length;
+      const fresh = items.filter(i => i.expiresAt === undefined || i.expiresAt > now);
+      if (fresh.length !== before) {
+        this.store.set(key, fresh);
+        evicted += before - fresh.length;
+      }
+    }
+    if (evicted > 0) log.info(`Evicted ${evicted} expired items`);
+  }
+
   async search(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
     if (!this.available || !this.embed) return [];
     try {
       const { corpus = "all", accountId, k = 10 } = options;
+      const now = Date.now();
       const queryEmbedding = await this.embed(query);
       const corpora = corpus === "all" ? CORPORA : [corpus as SearchCorpus];
       const scored: (SearchResult & { _score: number })[] = [];
 
       const seen = new Set<string>();
       for (const c of corpora) {
-        // Always include global (accountId=undefined) items; also include account-specific items
+        // Include account-specific items + global items (accountId=undefined)
         const keys = accountId ? [storeKey(c, accountId), storeKey(c, undefined)] : [storeKey(c, undefined)];
         for (const key of keys) {
           const items = this.store.get(key) ?? [];
           for (const item of items) {
             if (seen.has(item.id)) continue;
+            // Skip expired items (lazy eviction during search)
+            if (item.expiresAt !== undefined && item.expiresAt <= now) continue;
             seen.add(item.id);
             const score = cosineSimilarity(queryEmbedding, item.embedding);
             scored.push({ id: item.id, content: item.content, score, corpus: c, metadata: item.metadata, _score: score });
@@ -97,10 +127,27 @@ export class LocalSearchProvider implements SearchProvider {
       if (!this.store.has(key)) this.store.set(key, []);
       const items = this.store.get(key)!;
       const existing = items.findIndex(i => i.id === item.id);
-      // Evict oldest entry if at cap (LRU-lite: drop from front)
-      if (existing < 0 && items.length >= MAX_ITEMS_PER_KEY) items.shift();
+      // Only apply cap for non-permanent items (permanent corpora are bounded by definition)
+      const expiresAt = resolveExpiresAt(item, Date.now());
+      if (existing < 0 && expiresAt !== undefined && items.length >= MAX_ITEMS_PER_KEY) {
+        // Evict the item with the nearest expiry (soonest to expire = least valuable)
+        let minIdx = 0;
+        for (let i = 1; i < items.length; i++) {
+          const a = items[minIdx]!.expiresAt ?? Infinity;
+          const b = items[i]!.expiresAt ?? Infinity;
+          if (b < a) minIdx = i;
+        }
+        items.splice(minIdx, 1);
+      }
       const embedding = await this.embed(item.content);
-      const stored: StoredItem = { id: item.id, content: item.content, corpus: item.corpus, metadata: item.metadata, embedding };
+      const stored: StoredItem = {
+        id: item.id,
+        content: item.content,
+        corpus: item.corpus,
+        metadata: item.metadata,
+        embedding,
+        expiresAt,
+      };
       if (existing >= 0) {
         items[existing] = stored;
       } else {

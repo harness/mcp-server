@@ -80,7 +80,11 @@ function createHarnessServer(config: Config, sharedAuditManager?: AuditManager, 
   // Initialize search provider only if we created it (shared instances are pre-initialized)
   if (!sharedSearchManager) {
     searchManager.initialize().then(async () => {
-      if (searchManager.getProvider().isAvailable()) {
+      if (!searchManager.getProvider().isAvailable()) return;
+      // Always index static content (schemas, examples, resource defs) — account-agnostic
+      await searchManager.indexStaticContent(registry);
+      // Pre-index tier-1 resources only in single-user mode where account is known
+      if (config.HARNESS_MCP_MODE !== "multi-user") {
         await searchManager.initializeIndex(registry, client);
       }
     }).catch((err) => {
@@ -291,8 +295,13 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const sessions = new Map<string, Session>();
   const sharedAuditManager = createAuditManager(config);
   const sharedSearchManager = new SearchManager(config);
-  // Use a temp client+registry to pre-index — HTTP mode has no single "account" so init without pre-indexing
-  sharedSearchManager.initialize().catch((err) => {
+  // In HTTP mode: initialize + index static content using a baseline registry (no account needed)
+  const baseRegistry = new Registry(config, { auditManager: sharedAuditManager });
+  sharedSearchManager.initialize().then(async () => {
+    if (sharedSearchManager.getProvider().isAvailable()) {
+      await sharedSearchManager.indexStaticContent(baseRegistry);
+    }
+  }).catch((err) => {
     log.warn("Shared SearchManager initialization failed", { error: String(err) });
   });
 
