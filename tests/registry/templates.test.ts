@@ -198,7 +198,7 @@ describe("template_v1 global template catalog", () => {
     expect(call.params?.global_template).toBeUndefined();
   });
 
-  it("get with global=true passes global_template=true", async () => {
+  it("get with global=true routes to /v1/templates and passes global_template=true", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "k8sRollingDeployStep" });
     const client = makeClient(mockRequest);
@@ -212,8 +212,31 @@ describe("template_v1 global template catalog", () => {
     expect(mockRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "GET",
+        path: "/v1/templates/k8sRollingDeployStep/versions/1.0.7",
         params: expect.objectContaining({ global_template: true }),
       }),
     );
+  });
+
+  it("get without global uses scoped path, not /v1/templates", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "myTemplate" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template_v1", "get", {
+      template_id: "myTemplate",
+      version_label: "v1",
+      org_id: "default",
+      project_id: "my-project",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/v1/orgs/default/projects/my-project/templates/myTemplate/versions/v1",
+      }),
+    );
+    const call = mockRequest.mock.calls[0][0] as { params?: Record<string, unknown> };
+    expect(call.params?.global_template).toBeUndefined();
   });
 });
