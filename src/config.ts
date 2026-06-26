@@ -113,6 +113,11 @@ const RawConfigSchema = z.object({
     emptyStringAsUndefined,
     z.coerce.number().min(1).max(20).default(3),
   ),
+  HARNESS_SEARCH_PROVIDER: z.preprocess(
+    emptyStringAsUndefined,
+    z.enum(["none", "faiss"]).default("none"),
+  ),
+  HARNESS_SEARCH_SERVICE_URL: optionalStringFromEnv,
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {
