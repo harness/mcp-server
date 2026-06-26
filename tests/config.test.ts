@@ -120,11 +120,11 @@ describe("ConfigSchema", () => {
     }
   });
 
-  it("defaults HARNESS_SEARCH_PROVIDER to none", () => {
+  it("defaults HARNESS_SEARCH_PROVIDER to local", () => {
     const result = ConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.HARNESS_SEARCH_PROVIDER).toBe("none");
+      expect(result.data.HARNESS_SEARCH_PROVIDER).toBe("local");
     }
   });
 
