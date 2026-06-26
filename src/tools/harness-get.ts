@@ -9,6 +9,7 @@ import { asString, coerceRecord } from "../utils/type-guards.js";
 import { resolveLogContent, resolveLogDownloadUrl } from "../utils/log-resolver.js";
 import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
 import type { SearchManager } from "../search/index.js";
+import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { resourceTypeSchema } from "./input-schemas.js";
 import { getOutputSchema } from "./output-schemas.js";
 
@@ -117,7 +118,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
           const accountId = client.account;
           void provider.index({
             id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
-            content: [resourceType.replace(/_/g, " "), item["name"], item["description"], item["identifier"], item["tags"]].filter(Boolean).join(" "),
+            content: buildResourceIndexContent(resourceType, item),
             corpus: "resources",
             accountId,
             metadata: {

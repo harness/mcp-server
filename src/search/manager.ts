@@ -9,6 +9,7 @@ import "../data/examples/load-all.js";
 import { getAllExamples } from "../data/examples/index.js";
 import { SCHEMAS } from "../data/schemas/index.js";
 import { ENTITY_BUNDLED_SCHEMAS } from "../data/schemas/entities/index.js";
+import { buildResourceIndexContent } from "./embedding-content.js";
 
 const log = createLogger("search-manager");
 
@@ -168,7 +169,7 @@ export class SearchManager {
         await Promise.all(items.filter(item => item["identifier"] ?? item["id"]).map(item =>
           this.provider.index({
             id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
-            content: [resourceType.replace(/_/g, " "), item["name"], item["description"], item["identifier"], item["tags"]].filter(Boolean).join(" "),
+            content: buildResourceIndexContent(resourceType, item),
             corpus: "resources",
             accountId,
             metadata: {
