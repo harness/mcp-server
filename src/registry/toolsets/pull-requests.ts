@@ -35,7 +35,13 @@ function requiredPathPart(input: Record<string, unknown>, field: string): string
 }
 
 const PR_METADATA_FIELDS = ["title", "description"];
-const PR_MERGE_BODY_FIELDS = [
+
+interface MergeBodyField {
+  wire: string;
+  aliases?: readonly string[];
+}
+
+const PR_MERGE_BODY_FIELDS: readonly MergeBodyField[] = [
   { wire: "method" },
   { wire: "source_sha", aliases: ["sourceSha"] },
   { wire: "delete_source_branch", aliases: ["deleteSourceBranch"] },
@@ -45,7 +51,7 @@ const PR_MERGE_BODY_FIELDS = [
   { wire: "title" },
   { wire: "bypass_rules", aliases: ["bypassRules"] },
   { wire: "bypass_message", aliases: ["bypassMessage"] },
-] as const;
+];
 
 function fieldValue(
   source: Record<string, unknown> | undefined,
