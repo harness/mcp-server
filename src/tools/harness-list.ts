@@ -9,6 +9,7 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { renderListVisual } from "../utils/svg/list-visuals.js";
 import type { SearchManager } from "../search/index.js";
+import { buildResourceIndexContent } from "../search/embedding-content.js";
 import type { ListVisualType } from "../utils/svg/list-visuals.js";
 import { createLogger } from "../utils/logger.js";
 import { resourceTypeSchema } from "./input-schemas.js";
@@ -110,7 +111,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
             (result.items as Array<Record<string, unknown>>).map(item =>
               provider.index({
                 id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
-                content: [resourceType.replace(/_/g, " "), item["name"], item["description"], item["identifier"], item["tags"]].filter(Boolean).join(" "),
+                content: buildResourceIndexContent(resourceType, item),
                 corpus: "resources",
                 accountId,
                 metadata: {
