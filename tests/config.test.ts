@@ -120,6 +120,14 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("defaults HARNESS_SEARCH_PROVIDER to local", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_SEARCH_PROVIDER).toBe("local");
+    }
+  });
+
   it("treats empty LOG_LEVEL as unset and defaults to info", () => {
     const result = ConfigSchema.safeParse({ ...validConfig, LOG_LEVEL: "" });
     expect(result.success).toBe(true);
@@ -496,5 +504,22 @@ describe("loadConfig — account ID extraction", () => {
         "HARNESS_ACCOUNT_ID is required when the API key does not include an account ID segment",
       );
     });
+  });
+
+  it("defaults HARNESS_HF_CACHE_DIR to /tmp/hf-cache", () => {
+    withEnv({ HARNESS_API_KEY: "pat.acct123.tok.sec" }, () => {
+      const config = loadConfig();
+      expect(config.HARNESS_HF_CACHE_DIR).toBe("/tmp/hf-cache");
+    });
+  });
+
+  it("accepts a custom HARNESS_HF_CACHE_DIR", () => {
+    withEnv(
+      { HARNESS_API_KEY: "pat.acct123.tok.sec", HARNESS_HF_CACHE_DIR: "/data/hf-cache" },
+      () => {
+        const config = loadConfig();
+        expect(config.HARNESS_HF_CACHE_DIR).toBe("/data/hf-cache");
+      },
+    );
   });
 });

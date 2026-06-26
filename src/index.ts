@@ -19,6 +19,7 @@ import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { createHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
+import { SearchManager } from "./search/index.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "./utils/session-headers.js";
 
 
@@ -27,16 +28,18 @@ const log = createLogger("main");
 interface HarnessServerResult {
   server: McpServer;
   auditManager: AuditManager;
+  searchManager: SearchManager;
 }
 
 /**
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
  * @param sharedAuditManager When set (HTTP mode), reuse this manager instead of creating one per session.
  */
-function createHarnessServer(config: Config, sharedAuditManager?: AuditManager): HarnessServerResult {
+function createHarnessServer(config: Config, sharedAuditManager?: AuditManager, sharedSearchManager?: SearchManager): HarnessServerResult {
   const auditManager = sharedAuditManager ?? createAuditManager(config);
   const client = new HarnessClient(config);
   const registry = new Registry(config, { auditManager });
+  const searchManager = sharedSearchManager ?? new SearchManager(config);
 
   const server = new McpServer(
     {
@@ -74,11 +77,26 @@ function createHarnessServer(config: Config, sharedAuditManager?: AuditManager):
   );
 
   configureElicitation({ autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK as import("./registry/types.js").AutoApproveRisk });
-  registerAllTools(server, registry, client, config);
+  // Initialize search provider only if we created it (shared instances are pre-initialized)
+  if (!sharedSearchManager) {
+    searchManager.initialize().then(async () => {
+      if (!searchManager.getProvider().isAvailable()) return;
+      // Always index static content (schemas, examples, resource defs) — account-agnostic
+      await searchManager.indexStaticContent(registry);
+      // Pre-index tier-1 resources only in single-user mode where account is known
+      if (config.HARNESS_MCP_MODE !== "multi-user") {
+        await searchManager.initializeIndex(registry, client);
+      }
+    }).catch((err) => {
+      log.error("SearchManager initialization failed", { error: String(err) });
+    });
+  }
+
+  registerAllTools(server, registry, client, config, undefined, searchManager);
   registerAllResources(server, registry, client, config);
   registerAllPrompts(server);
 
-  return { server, auditManager };
+  return { server, auditManager, searchManager };
 }
 
 /**
@@ -276,6 +294,16 @@ async function startHttp(config: Config, port: number): Promise<void> {
   // ---- Session store ----
   const sessions = new Map<string, Session>();
   const sharedAuditManager = createAuditManager(config);
+  const sharedSearchManager = new SearchManager(config);
+  // In HTTP mode: initialize + index static content using a baseline registry (no account needed)
+  const baseRegistry = new Registry(config, { auditManager: sharedAuditManager });
+  sharedSearchManager.initialize().then(async () => {
+    if (sharedSearchManager.getProvider().isAvailable()) {
+      await sharedSearchManager.indexStaticContent(baseRegistry);
+    }
+  }).catch((err) => {
+    log.error("Shared SearchManager initialization failed", { error: String(err) });
+  });
 
   async function destroySession(sessionId: string): Promise<void> {
     const session = sessions.get(sessionId);
@@ -306,9 +334,15 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   // ---- Routes ----
 
-  // Health check (includes session count for observability)
+  // Health check (includes session count and search readiness for observability)
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", sessions: sessions.size });
+    const search = sharedSearchManager.getReadiness();
+    const degraded = search.state === "failed";
+    res.status(degraded ? 503 : 200).json({
+      status: degraded ? "degraded" : "ok",
+      sessions: sessions.size,
+      search,
+    });
   });
 
   // POST /mcp — initialize new sessions or route to existing session
@@ -347,7 +381,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
     let transport: StreamableHTTPServerTransport | undefined;
     try {
       const sessionConfig = mergeConfigWithSessionHeaders(config, req.headers);
-      const result = createHarnessServer(sessionConfig, sharedAuditManager);
+      const result = createHarnessServer(sessionConfig, sharedAuditManager, sharedSearchManager);
       server = result.server;
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
