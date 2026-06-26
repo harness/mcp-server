@@ -6,7 +6,7 @@
 - [x] Add regression coverage for `delete_source_branch: false` on merge
 - [x] Implement focused pull_request merge body fix
 - [x] Run focused and broader verification
-- [ ] Commit, push, open PR, and reply in Slack thread
+- [x] Commit, push, open PR, and reply in Slack thread
 
 ### Plan
 - Keep the fix inside the `pull_request.merge` execute action so other Harness Code resources are unchanged.
