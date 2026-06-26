@@ -38,13 +38,13 @@ merge + tier-0 semantic results
 |------|------|
 | `src/search/types.ts` | `SearchProvider` interface, `IndexableItem`, `SearchResult`, `SearchCorpus`, TTL types |
 | `src/search/null-provider.ts` | No-op, `isAvailable()=false` — used when `HARNESS_SEARCH_PROVIDER=none` |
-| `src/search/local-provider.ts` | `@huggingface/transformers` v3, `Xenova/all-MiniLM-L6-v2` (384-dim), in-memory cosine similarity, TTL eviction |
+| `src/search/local-provider.ts` | `@huggingface/transformers` v4 (optional dep), `Xenova/all-MiniLM-L6-v2` (384-dim), in-memory cosine similarity, TTL eviction, cross-key LRU + global item ceiling |
 | `src/search/manager.ts` | Loads provider, runs `indexStaticContent` + `initializeIndex` on startup |
 | `src/search/index.ts` | Re-exports |
 | `src/tools/harness-search.ts` | Semantic routing gate — narrows targetTypes before scatter-gather |
-| `src/tools/harness-list.ts` | Fire-and-forget `provider.index()` after successful list |
-| `src/tools/harness-get.ts` | Fire-and-forget `provider.index()` after successful get |
-| `src/config.ts` | `HARNESS_SEARCH_PROVIDER` (default `"local"`), `HARNESS_SEARCH_SERVICE_URL` |
+| `src/tools/harness-list.ts` | Fire-and-forget `searchManager.indexItem()` after successful list (guarded by `canIndexCorpus`) |
+| `src/tools/harness-get.ts` | Fire-and-forget `searchManager.indexItem()` after successful get (guarded by `canIndexCorpus`) |
+| `src/config.ts` | `HARNESS_SEARCH_PROVIDER` (default `"none"`, opt-in `"local"`), `HARNESS_HF_CACHE_DIR`, `HARNESS_SEARCH_SERVICE_URL` |
 
 ### Static Content Indexed at Startup (`mcp_resources` corpus, permanent)
 
@@ -59,12 +59,14 @@ merge + tier-0 semantic results
 // extractRoutingTypes: only fires if semantic score ≥ 0.5
 // Uses resource_type from metadata — works for resource_definition and example entries
 // Schema entries intentionally excluded (comma-separated types won't match any single type)
+// applyRoutingSafetyFloor: always union tier-1 types (pipeline/service/environment/connector)
 // Falls back to full scatter-gather if no high-confidence predictions
+// canIndexCorpus: blocks resources corpus indexing in multi-user + local mode
 ```
 
 ### Key Design Decisions
 
-- **`@huggingface/transformers` v3** (not faiss-node / @xenova/transformers): pure JS, no native bindings, works on darwin arm64/Node 20 without cmake
+- **`@huggingface/transformers` v4** (optional dependency, not faiss-node / @xenova/transformers): pure JS, no native bindings, works on darwin arm64/Node 20 without cmake. Default provider is `none`; opt in to `local`.
 - **Semantic gates scatter-gather** (not concurrent): the whole point is avoiding API calls, not just appending results
 - **TTL system**: `resources` corpus = 30min, `mcp_resources`/`docs` = permanent (`ttlMs: 0`)
 - **Corpus isolation**: store key `${corpus}:${accountId ?? "global"}` — account data never crosses account boundary
@@ -291,7 +293,8 @@ Current routing threshold is 0.5 (conservative). Opportunities:
 
 | Env Var | Values | Default | Notes |
 |---------|--------|---------|-------|
-| `HARNESS_SEARCH_PROVIDER` | `"none"`, `"local"`, `"harness"` | `"local"` | `"none"` skips all semantic search |
-| `HARNESS_SEARCH_SERVICE_URL` | URL | — | Required when provider=`"harness"` |
+| `HARNESS_SEARCH_PROVIDER` | `"none"`, `"local"`, `"harness"` | `"none"` | Opt in to `"local"` for in-process embeddings. Docker image sets `"local"` (model pre-baked). |
+| `HARNESS_HF_CACHE_DIR` | path | `/tmp/hf-cache` | HuggingFace model cache. Use a persistent volume in Kubernetes. Docker image uses `/app/.cache/hf`. |
+| `HARNESS_SEARCH_SERVICE_URL` | URL | — | Required when provider=`"harness"` (future) |
 
-Model cache: `/tmp/hf-cache/Xenova/all-MiniLM-L6-v2/` (~23MB, downloaded once)
+Model: `Xenova/all-MiniLM-L6-v2` (~23MB). Downloaded on first use when not pre-baked; Docker build runs `scripts/preload-hf-model.mjs`.
