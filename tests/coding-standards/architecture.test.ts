@@ -68,6 +68,14 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
   "src/audit/sinks/webhook.ts",
 ]);
 
+/** Tool-handler files allowed to call client.request() outside registry.dispatch (documented exceptions). */
+const ALLOWED_CLIENT_REQUEST_FILES = new Set([
+  "src/tools/entity-schema/live.ts", // /ng/api/yaml-schema — no registry endpoint yet
+]);
+
+/** Search module — must stay free of HTTP transport and stdio-breaking logging. */
+const SEARCH_DIR = join(SRC, "search");
+
 /** Only this file may instantiate HarnessClient in production src/. */
 const ALLOWED_HARNESS_CLIENT_FILES = new Set(["src/index.ts"]);
 
@@ -234,6 +242,53 @@ describe("Coding standards — logging and HTTP", () => {
     expect(
       violations,
       `HarnessClient must only be constructed in src/index.ts:\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("search module does not use console.log(), global fetch(), or instantiate HarnessClient", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(SEARCH_DIR)) {
+      const content = readFileSync(file, "utf8");
+      const fileRel = rel(file);
+      if (/\bconsole\.log\s*\(/.test(content)) {
+        violations.push(`${fileRel}: console.log()`);
+      }
+      if (GLOBAL_FETCH_PATTERN.test(content)) {
+        violations.push(`${fileRel}: global fetch()`);
+      }
+      if (/new\s+HarnessClient\s*\(/.test(content)) {
+        violations.push(`${fileRel}: new HarnessClient()`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("search manager routes Harness API calls through registry.dispatch", () => {
+    const managerPath = join(SEARCH_DIR, "manager.ts");
+    const content = readFileSync(managerPath, "utf8");
+    expect(content).toMatch(/registry\.dispatch\s*\(/);
+    expect(content).not.toMatch(/\bclient\.request\s*\(/);
+  });
+
+  it("tool handlers do not bypass registry with client.request() except documented exceptions", () => {
+    const violations: string[] = [];
+    const toolsDir = join(SRC, "tools");
+
+    for (const file of walkTsFiles(toolsDir)) {
+      const content = readFileSync(file, "utf8");
+      if (!/\bclient\.request\s*\(/.test(content)) continue;
+
+      const fileRel = rel(file);
+      if (!ALLOWED_CLIENT_REQUEST_FILES.has(fileRel)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `Unexpected client.request() in tool handlers (use registry.dispatch; allowed: ${[...ALLOWED_CLIENT_REQUEST_FILES].join(", ")}):\n${violations.join("\n")}`,
     ).toEqual([]);
   });
 });

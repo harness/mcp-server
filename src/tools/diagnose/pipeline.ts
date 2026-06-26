@@ -1,5 +1,6 @@
 import type { DiagnoseHandler, DiagnoseContext } from "./types.js";
 import type { HarnessClient } from "../../client/harness-client.js";
+import type { Registry } from "../../registry/index.js";
 import type { Config } from "../../config.js";
 import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
@@ -283,23 +284,19 @@ function findChildPipelineRef(
 
 async function diagnoseChildPipeline(
   client: HarnessClient,
+  registry: Registry,
   child: { executionId: string; orgId: string; projectId: string },
   signal?: AbortSignal,
 ): Promise<FailedNodeDetail[]> {
   try {
-    const response = await client.request<Record<string, unknown>>({
-      method: "GET",
-      path: `/pipeline/api/pipelines/execution/v2/${child.executionId}`,
-      params: {
-        orgIdentifier: child.orgId,
-        projectIdentifier: child.projectId,
-        renderFullBottomGraph: "true",
-      },
-      signal,
-    });
-    const responseRec = asRecord(response) ?? {};
-    const data = asRecord(responseRec.data) ?? responseRec;
-    const execGraph = asRecord(data.executionGraph);
+    const execution = await registry.dispatch(client, "execution", "get", {
+      execution_id: child.executionId,
+      org_id: child.orgId,
+      project_id: child.projectId,
+      render_full_graph: true,
+    }, signal);
+    const exec = asRecord(execution) ?? {};
+    const execGraph = asRecord(exec.executionGraph);
     const graphNodeMap = asRecord(execGraph?.nodeMap) as Record<string, ExecGraphNode> | undefined;
     if (graphNodeMap) return findFailedNodes(graphNodeMap);
   } catch (err) {
@@ -536,7 +533,7 @@ export const pipelineHandler: DiagnoseHandler = {
 
         if (result.childRef) {
           log.info("Detected chained pipeline failure, diagnosing child", result.childRef);
-          const childFailedNodes = await diagnoseChildPipeline(client, result.childRef, signal);
+          const childFailedNodes = await diagnoseChildPipeline(client, registry, result.childRef, signal);
           if (childFailedNodes.length > 0) {
             const childEntry = (f: FailedNodeDetail) => {
               const e: Record<string, unknown> = {
