@@ -168,6 +168,105 @@ describe("pull_request registry mappings", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("forwards all documented merge body fields and maps camelCase aliases", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ merged: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pull_request", "merge", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      body: {
+        method: "rebase",
+        sourceSha: "abc123def456",
+        delete_source_branch: true,
+        dryRun: true,
+        dryRunRules: true,
+        message: "Merge PR #42",
+        title: "feat: add merge tests",
+        bypassRules: true,
+        bypass_message: "emergency hotfix",
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: {
+        method: "rebase",
+        source_sha: "abc123def456",
+        delete_source_branch: true,
+        dry_run: true,
+        dry_run_rules: true,
+        message: "Merge PR #42",
+        title: "feat: add merge tests",
+        bypass_rules: true,
+        bypass_message: "emergency hotfix",
+      },
+    }));
+  });
+
+  it("preserves explicit false for bypass_rules and dry_run_rules", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ merged: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pull_request", "merge", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      method: "fast-forward",
+      bypass_rules: false,
+      dry_run_rules: false,
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: {
+        method: "fast-forward",
+        bypass_rules: false,
+        dry_run_rules: false,
+      },
+    }));
+  });
+
+  it("sends an empty merge body when no merge options are provided", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ merged: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pull_request", "merge", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: {},
+    }));
+    const call = mockRequest.mock.calls[0]![0] as { body?: Record<string, unknown> };
+    expect(call.body).not.toHaveProperty("orgIdentifier");
+    expect(call.body).not.toHaveProperty("projectIdentifier");
+    expect(call.body).not.toHaveProperty("accountIdentifier");
+  });
+
+  it("allows matching merge option values in body and params without conflict", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ merged: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pull_request", "merge", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      delete_source_branch: false,
+      body: { delete_source_branch: false, method: "squash" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: {
+        method: "squash",
+        delete_source_branch: false,
+      },
+    }));
+  });
+
   it("requires repo_id for create instead of accepting repo_identifier", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
     const mockRequest = vi.fn().mockResolvedValue({ data: { number: 1 } });
@@ -182,6 +281,15 @@ describe("pull_request registry mappings", () => {
       }),
     ).rejects.toThrow(/repo_id/);
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("pull_request merge action metadata", () => {
+  const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+  const def = registry.getResource("pull_request");
+
+  it("merge has skipScopeBodyInjection enabled", () => {
+    expect(def.executeActions?.merge?.skipScopeBodyInjection).toBe(true);
   });
 });
 

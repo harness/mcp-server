@@ -1669,6 +1669,46 @@ pipeline:
     });
   });
 
+  it("passes pull request merge options from body without injecting scope fields", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ merged: true });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_execute", {
+      resource_type: "pull_request",
+      action: "merge",
+      resource_id: "42",
+      params: { repo_id: "my-repo" },
+      body: {
+        method: "merge",
+        source_sha: "deadbeef",
+        delete_source_branch: false,
+        bypass_rules: false,
+        dry_run_rules: false,
+        message: "Squashed changes",
+      },
+      org_id: "default",
+      project_id: "test-project",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = prRequest.mock.calls[0]![0] as { body?: Record<string, unknown> };
+    expect(call.body).toEqual({
+      method: "merge",
+      source_sha: "deadbeef",
+      delete_source_branch: false,
+      bypass_rules: false,
+      dry_run_rules: false,
+      message: "Squashed changes",
+    });
+    expect(call.body).not.toHaveProperty("orgIdentifier");
+    expect(call.body).not.toHaveProperty("projectIdentifier");
+    expect(call.body).not.toHaveProperty("accountIdentifier");
+  });
+
   it("does not remap resource_id to child field when primary matches (GitOps contract)", async () => {
     const gitopsServer = makeMcpServer("accept");
     const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
