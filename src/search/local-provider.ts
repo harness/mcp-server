@@ -14,9 +14,9 @@ const MAX_RESOURCE_ACCOUNT_KEYS = 32;
 /** Global item ceiling across all store keys (safety net for long-lived multi-user processes). */
 const MAX_TOTAL_ITEMS = 20_000;
 
-/** True for per-account resources buckets (not the static global corpora keys). */
+/** True for per-account entities buckets (not the static global corpora keys). */
 export function isResourceAccountKey(key: string): boolean {
-  return key.startsWith("resources:") && !key.endsWith(":global");
+  return key.startsWith("entities:") && !key.endsWith(":global");
 }
 
 /** resources corpus is always capped; other corpora only cap TTL-backed items. */

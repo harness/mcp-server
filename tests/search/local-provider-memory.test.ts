@@ -9,10 +9,10 @@ import {
 } from "../../src/search/local-provider.js";
 
 describe("local-provider memory bounds", () => {
-  it("identifies per-account resources keys", () => {
-    expect(isResourceAccountKey("resources:acc1")).toBe(true);
-    expect(isResourceAccountKey("resources:global")).toBe(false);
-    expect(isResourceAccountKey("mcp_resources:global")).toBe(false);
+  it("identifies per-account entities keys", () => {
+    expect(isResourceAccountKey("entities:acc1")).toBe(true);
+    expect(isResourceAccountKey("entities:global")).toBe(false);
+    expect(isResourceAccountKey("knowledge:global")).toBe(false);
   });
 
   it("caps resources corpus items even when permanent", () => {
@@ -21,12 +21,12 @@ describe("local-provider memory bounds", () => {
     expect(needsPerKeyCap("docs", Date.now() + 60_000)).toBe(true);
   });
 
-  it("counts resource account keys excluding global", () => {
+  it("counts entities account keys excluding global", () => {
     const store = new Map<string, unknown[]>([
-      ["resources:acc1", []],
-      ["resources:acc2", []],
-      ["resources:global", []],
-      ["mcp_resources:global", [{}]],
+      ["entities:acc1", []],
+      ["entities:acc2", []],
+      ["entities:global", []],
+      ["knowledge:global", [{}]],
     ]);
     expect(countResourceAccountKeys(store)).toBe(2);
   });
@@ -39,17 +39,17 @@ describe("local-provider memory bounds", () => {
     expect(totalItemCount(store)).toBe(3);
   });
 
-  it("finds LRU key among resource account buckets", () => {
+  it("finds LRU key among entities account buckets", () => {
     const store = new Map<string, unknown[]>([
-      ["resources:old", []],
-      ["resources:new", []],
-      ["mcp_resources:global", []],
+      ["entities:old", []],
+      ["entities:new", []],
+      ["knowledge:global", []],
     ]);
     const accessed = new Map([
-      ["resources:old", 100],
-      ["resources:new", 500],
+      ["entities:old", 100],
+      ["entities:new", 500],
     ]);
-    expect(findLruKey(store, accessed, isResourceAccountKey)).toBe("resources:old");
+    expect(findLruKey(store, accessed, isResourceAccountKey)).toBe("entities:old");
   });
 
   it("finds soonest-to-expire item index", () => {
