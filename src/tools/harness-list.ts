@@ -103,13 +103,12 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
           }
         }
 
-        // Fire-and-forget: index items for semantic search
-        const provider = searchManager?.getProvider();
-        if (provider?.isAvailable() && isRecord(result) && Array.isArray(result.items)) {
+        // Fire-and-forget: index items for semantic search (skipped in multi-user + local)
+        if (searchManager && isRecord(result) && Array.isArray(result.items)) {
           const accountId = client.account;
           void Promise.all(
             (result.items as Array<Record<string, unknown>>).map(item =>
-              provider.index({
+              searchManager.indexItem({
                 id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
                 content: buildResourceIndexContent(resourceType, item),
                 corpus: "resources",

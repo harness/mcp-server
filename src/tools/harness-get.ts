@@ -111,12 +111,11 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
 
         const result = await registry.dispatch(client, resourceType, "get", input);
 
-        // Fire-and-forget: index item for semantic search
-        const provider = searchManager?.getProvider();
-        if (provider?.isAvailable() && result && typeof result === "object") {
+        // Fire-and-forget: index item for semantic search (skipped in multi-user + local)
+        if (searchManager && result && typeof result === "object") {
           const item = result as Record<string, unknown>;
           const accountId = client.account;
-          void provider.index({
+          void searchManager.indexItem({
             id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
             content: buildResourceIndexContent(resourceType, item),
             corpus: "resources",
