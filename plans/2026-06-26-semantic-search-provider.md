@@ -72,6 +72,131 @@ merge + tier-0 semantic results
 
 ---
 
+---
+
+## Corpus Naming (Pending Rename)
+
+Current names are confusing. Agreed rename (not yet implemented):
+
+| Current | New | Rationale |
+|---------|-----|-----------|
+| `mcp_resources` | `knowledge` | Static reference content the system knows permanently — schemas, examples, resource type definitions. "Searched knowledge base" reads better than "searched catalog" in logs. |
+| `resources` | `entities` | Live Harness objects with identity, ownership, lifecycle — pipelines, services, connectors etc. |
+| `docs` | `docs` | Unchanged — self-explanatory. |
+
+`registry` is not available — `Registry` class already exists in `src/registry/`.
+
+---
+
+## Provider × Mode Compatibility Matrix
+
+`LocalSearchProvider` was designed for **single-user stdio mode**. Multi-user HTTP mode has fundamentally different constraints:
+
+| Mode | `knowledge` corpus | `entities` corpus |
+|------|--------------------|-------------------|
+| stdio single-user | `LocalSearchProvider` ✓ | `LocalSearchProvider` ✓ (one account, bounded, 30min TTL) |
+| HTTP multi-user | `LocalSearchProvider` ✓ (read-only static, safe) | `HarnessSearchProvider` only — `LocalSearchProvider` is unsafe here |
+
+**Why `LocalSearchProvider` is fragile in multi-user `entities` mode:**
+- Multiple accounts accumulate embeddings in the same process — memory grows unbounded
+- No persistence — restart wipes all indexed live data
+- Account isolation relies entirely on in-memory store key discipline (no enforcement layer)
+- A single large account (10k pipelines × 1.5KB embedding = 15MB, ×N types) can crowd out others
+
+**Enforcement rule (must implement before enabling `entities` in production):**
+- `SearchManager` must check `HARNESS_MCP_MODE` at startup
+- In multi-user mode: disable `entities` corpus indexing entirely for `LocalSearchProvider` — skip `initializeIndex`, skip fire-and-forget indexing in `harness-list`/`harness-get`
+- Log a clear warning: `"entities corpus disabled in multi-user mode — requires HarnessSearchProvider"`
+- `HarnessSearchProvider` (search-service backed by Qdrant) is **required** for multi-user `entities` search — not optional optimization
+
+```typescript
+// SearchManager — enforce at index time, not search time
+private canIndexCorpus(corpus: SearchCorpus, mode: string): boolean {
+  if (corpus === "entities" && mode === "multi-user" && this.providerName === "local") {
+    return false;
+  }
+  return true;
+}
+```
+
+---
+
+## Classify Interface (Pending Implementation)
+
+Resource types need to declare how their items should be indexed — corpus, scope, TTL. Some types are mixed (same type, different corpus depending on item content).
+
+### Interface
+
+```typescript
+interface IndexContext {
+  accountId: string;
+  orgId?: string;
+  projectId?: string;
+}
+
+interface IndexDecision {
+  corpus: "knowledge" | "entities" | "docs";
+  scope: "global" | { accountId: string };  // explicit union — no ambiguous undefined
+  ttlMs?: number;   // undefined = permanent
+  parentId?: string;  // for hierarchical types
+}
+
+// indexing can be a static decision (common case) or a classify function (mixed types)
+type IndexingConfig =
+  | IndexDecision
+  | { classify: (item: Record<string, unknown>, ctx: IndexContext) => IndexDecision | null };
+```
+
+Always pass `accountId` via `IndexContext` — never derive from item (fragile, not always present).
+
+### Examples
+
+```typescript
+// Simple: always global, permanent
+connector_catalogue: { corpus: "knowledge", scope: "global" }
+
+// Simple: always per-account, 30min TTL
+pipeline: { corpus: "entities", scope: { accountId: ctx.accountId } }
+
+// Mixed: account-scoped templates → knowledge (global), project-scoped → entities (per-account)
+template: {
+  classify: (item, ctx) =>
+    item.scope === "account" || !item.projectIdentifier
+      ? { corpus: "knowledge", scope: "global", ttlMs: 0 }
+      : { corpus: "entities", scope: { accountId: ctx.accountId } }
+}
+```
+
+### Hierarchical Types (kg_queryable_type)
+
+Flatten each node into its own document. Do NOT store the full hierarchy as one document — embedding an aggregate kills retrieval precision for specific-node queries ("what fields does ServiceNow connector have?").
+
+```typescript
+// Each node becomes a separate IndexableItem
+{
+  id: "kg_queryable_type::connector::servicenow::fields",
+  corpus: "knowledge",
+  scope: "global",
+  content: "ServiceNow Connector fields: table_name (string, required) ...",  // parent context included
+  metadata: {
+    path: "connector > servicenow > fields",
+    resource_type: "kg_queryable_type",
+    parent_id: "kg_queryable_type::connector::servicenow",
+    depth: "2",
+  }
+}
+```
+
+Include parent path in the embedded `content` — gives the model enough signal without bloating. Store `parent_id` in metadata for post-retrieval tree traversal.
+
+### Memory Bounds
+
+- **`knowledge` corpus**: bounded by definition. Fixed number of types, schemas, examples. No cap needed.
+- **`entities` corpus**: needs per-account cap (not per-key). `MAX_ITEMS_PER_ACCOUNT = 10000` across all resource types. Evict by soonest-to-expire when at cap.
+- **Multi-user HTTP mode**: disable `entities` corpus for `LocalSearchProvider` (see matrix above).
+
+---
+
 ## Future Work
 
 ### 1. Account Isolation (Security — High Priority)
