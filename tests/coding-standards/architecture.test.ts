@@ -68,6 +68,11 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
   "src/audit/sinks/webhook.ts",
 ]);
 
+/** Files allowed to call client.request() outside registry.dispatch (documented exceptions). */
+const ALLOWED_CLIENT_REQUEST_FILES = new Set([
+  "src/tools/entity-schema/live.ts", // harness_schema: /ng/api/yaml-schema is not a registry resource
+]);
+
 /** Only this file may instantiate HarnessClient in production src/. */
 const ALLOWED_HARNESS_CLIENT_FILES = new Set(["src/index.ts"]);
 
@@ -179,6 +184,25 @@ describe("Coding standards — logging and HTTP", () => {
     }
 
     expect(violations, `console.log() found in:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("does not call client.request() from tool handlers — use registry.dispatch", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(join(SRC, "tools"))) {
+      const content = readFileSync(file, "utf8");
+      if (!/\bclient\.request\s*[<(]/.test(content)) continue;
+
+      const fileRel = rel(file);
+      if (!ALLOWED_CLIENT_REQUEST_FILES.has(fileRel)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `client.request() bypasses registry dispatch in:\n${violations.join("\n")}\nAllowed: ${[...ALLOWED_CLIENT_REQUEST_FILES].join(", ")}`,
+    ).toEqual([]);
   });
 
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {

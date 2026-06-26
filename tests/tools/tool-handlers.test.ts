@@ -1,5 +1,5 @@
 /**
- * Generic tool handler tests for all 10 MCP tools.
+ * Generic tool handler tests for all 11 MCP tools.
  *
  * Tests input validation and error handling paths with mocked registry/client.
  * Does not test actual API calls — that's covered by registry dispatch tests.

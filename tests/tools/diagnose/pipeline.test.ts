@@ -82,9 +82,15 @@ function makeExecution(overrides: {
 
 function makePipelineDispatch(
   executionData: unknown,
+  childExecutionData?: unknown,
 ) {
   return vi.fn(async (_c: unknown, resourceType: string, op: string, input: Record<string, unknown>) => {
-    if (resourceType === "execution" && op === "get") return executionData;
+    if (resourceType === "execution" && op === "get") {
+      if (childExecutionData && input.execution_id === "child-exec-001") {
+        return childExecutionData;
+      }
+      return executionData;
+    }
     if (resourceType === "execution" && op === "list") {
       return { items: [{ planExecutionId: input.execution_id ?? "exec-001" }] };
     }
@@ -93,9 +99,9 @@ function makePipelineDispatch(
   });
 }
 
-function makePipelineRegistry(exec: unknown): Registry {
+function makePipelineRegistry(exec: unknown, childExec?: unknown): Registry {
   return {
-    dispatch: makePipelineDispatch(exec),
+    dispatch: makePipelineDispatch(exec, childExec),
     dispatchExecute: vi.fn(),
     getAccountId: () => "test-account",
   } as unknown as Registry;
@@ -240,18 +246,13 @@ describe("pipelineHandler", () => {
       },
     };
 
-    const clientMock = {
-      request: vi.fn().mockResolvedValue({
-        data: {
-          executionGraph: { nodeMap: childNodeMap },
-          pipelineExecutionSummary: { planExecutionId: "child-exec-001" },
-        },
-      }),
-      account: "test-account",
-    } as unknown as HarnessClient;
+    const childExec = {
+      executionGraph: { nodeMap: childNodeMap },
+      pipelineExecutionSummary: { planExecutionId: "child-exec-001" },
+    };
 
-    const registry = makePipelineRegistry(exec);
-    const ctx = makeContext({ input: { execution_id: "exec-001" }, registry, client: clientMock, args: { summary: true } });
+    const registry = makePipelineRegistry(exec, childExec);
+    const ctx = makeContext({ input: { execution_id: "exec-001" }, registry, args: { summary: true } });
 
     const result = await pipelineHandler.diagnose(ctx);
     const execution = result.execution as Record<string, unknown>;
