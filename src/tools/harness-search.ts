@@ -45,6 +45,12 @@ interface SearchResultEntry {
 }
 
 /**
+ * Tier-1 types always included in semantic routing even when embeddings miss them.
+ * Prevents confident-but-wrong routing from silently skipping core CI/CD entities.
+ */
+export const SEMANTIC_ROUTING_SAFETY_FLOOR = ["pipeline", "service", "environment", "connector"] as const;
+
+/**
  * Routing threshold — semantic hits above this score are used to predict which
  * resource types scatter-gather should target. Higher = more conservative routing
  * (fewer types skipped, safer). Lower = more aggressive (more savings, higher miss risk).
@@ -66,7 +72,7 @@ const SEMANTIC_DISPLAY_THRESHOLD = 0.35;
  *   → "connector"). These are the primary routing signal since mcp_resources is always
  *   indexed at startup whereas resources may be sparse.
  */
-function extractRoutingTypes(semanticResults: SearchResult[], allTargetTypes: string[]): string[] | null {
+export function extractRoutingTypes(semanticResults: SearchResult[], allTargetTypes: string[]): string[] | null {
   const targetSet = new Set(allTargetTypes);
   const predicted = new Set<string>();
   for (const sr of semanticResults) {
@@ -77,6 +83,18 @@ function extractRoutingTypes(semanticResults: SearchResult[], allTargetTypes: st
     }
   }
   return predicted.size > 0 ? Array.from(predicted) : null;
+}
+
+/** Union predicted types with tier-1 safety floor types present in the candidate set. */
+export function applyRoutingSafetyFloor(predicted: string[], candidateTypes: string[]): string[] {
+  const candidateSet = new Set(candidateTypes);
+  const routed = new Set(predicted);
+  for (const rt of SEMANTIC_ROUTING_SAFETY_FLOOR) {
+    if (candidateSet.has(rt)) {
+      routed.add(rt);
+    }
+  }
+  return Array.from(routed);
 }
 
 export function registerSearchTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
@@ -136,12 +154,16 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           });
 
           if (semanticResults.length > 0) {
-            routedTypes = extractRoutingTypes(semanticResults, candidateTypes);
-            if (routedTypes) {
+            const predictedTypes = extractRoutingTypes(semanticResults, candidateTypes);
+            if (predictedTypes) {
+              routedTypes = applyRoutingSafetyFloor(predictedTypes, candidateTypes);
               semanticRouted = true;
+              const floorAdded = routedTypes.filter((rt) => !predictedTypes.includes(rt));
               log.info(`Semantic routing: narrowed from ${candidateTypes.length} → ${routedTypes.length} types`, {
                 query: args.query,
                 routed_types: routedTypes,
+                predicted_types: predictedTypes,
+                safety_floor_added: floorAdded,
                 top_score: semanticResults[0]?.score,
                 skipped: candidateTypes.length - routedTypes.length,
               });
@@ -244,12 +266,14 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           return b.match_count - a.match_count;
         });
 
-        const typesSkipped = candidateTypes.length - targetTypes.length;
+        const skippedTypes = semanticRouted
+          ? candidateTypes.filter((rt) => !targetTypes.includes(rt))
+          : [];
         return jsonResult({
           query: args.query,
           total_matches: totalMatches,
           searched_types: targetTypes.length,
-          ...(semanticRouted ? { semantic_routed: true, types_skipped: typesSkipped } : {}),
+          ...(semanticRouted ? { semantic_routed: true, types_skipped: skippedTypes } : {}),
           results: entries,
           ...(Object.keys(errors).length > 0 ? { errors } : {}),
         });
