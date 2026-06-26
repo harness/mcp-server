@@ -47,7 +47,11 @@ describe("Coding standards — registry resource contract", () => {
 
     for (const resourceType of registry.getAllResourceTypes()) {
       const def = registry.getResource(resourceType);
-      for (const [operation, spec] of Object.entries(def.operations)) {
+      const allSpecs: Array<[string, typeof def.operations[string]]> = [
+        ...Object.entries(def.operations),
+        ...Object.entries(def.executeActions ?? {}),
+      ];
+      for (const [operation, spec] of allSpecs) {
         if (!spec.operationPolicy) {
           violations.push(`${resourceType}.${operation}: missing operationPolicy`);
           continue;
