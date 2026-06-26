@@ -55,6 +55,39 @@ describe("SearchManager", () => {
     vi.restoreAllMocks();
   });
 
+  it("reports ready readiness when local provider initializes successfully", async () => {
+    vi.spyOn(LocalSearchProvider.prototype, "initialize").mockResolvedValueOnce();
+    vi.spyOn(LocalSearchProvider.prototype, "isAvailable").mockReturnValue(true);
+
+    const mgr = new SearchManager(makeConfig({ HARNESS_SEARCH_PROVIDER: "local" }) as never);
+    await mgr.initialize();
+
+    expect(mgr.getReadiness()).toEqual({
+      state: "ready",
+      configured: "local",
+      provider: "LocalSearchProvider",
+    });
+    expect(mgr.getProvider().isAvailable()).toBe(true);
+
+    vi.restoreAllMocks();
+  });
+
+  it("falls back to null provider when initialize throws", async () => {
+    vi.spyOn(LocalSearchProvider.prototype, "initialize").mockRejectedValueOnce(new Error("model load failed"));
+
+    const mgr = new SearchManager(makeConfig({ HARNESS_SEARCH_PROVIDER: "local" }) as never);
+    await mgr.initialize();
+
+    expect(mgr.getProvider()).toBeInstanceOf(NullSearchProvider);
+    expect(mgr.getReadiness()).toEqual({
+      state: "failed",
+      configured: "local",
+      error: "Error: model load failed",
+    });
+
+    vi.restoreAllMocks();
+  });
+
   describe("canIndexCorpus", () => {
     it("allows resources corpus in single-user mode with local provider", () => {
       const mgr = new SearchManager(makeConfig({
