@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Coding Standards Compliance Review (2026-06-26)
+- [x] Audit codebase against docs/coding-standards.md architecture rules
+- [x] Run `pnpm standards:check` (65 automated guardrail tests)
+- [x] Merge latest `main` and re-verify full test suite after semantic search merge
+- [x] Add `registerAllTools` wiring guardrail to architecture tests
+- [x] Confirm PR #450 pull_request merge fix follows registry/toolset patterns
+
+### Review
+- Automated enforcement lives in `tests/coding-standards/` (6 files) plus `tests/registry/structural-validation.test.ts`; CI runs `pnpm standards:check` on every PR.
+- Canonical doc is `docs/coding-standards.md` (11 consolidated tools including `harness_schema`, Zod v4) — supersedes older 10-tool / Zod v3 references.
+- All 2370 tests pass after merging `main`; standards suite is green with new `registerAllTools` handler wiring check.
+
 ## Pull Request Merge Branch Deletion Bug (2026-06-26)
 - [x] Read Slack bug thread and confirm available context
 - [x] Trace Harness Code pull request merge request construction

@@ -124,6 +124,23 @@ function extractToolsetNamesFromUnion(): Set<string> {
 }
 
 describe("Coding standards — MCP tool handlers", () => {
+  it("registerAllTools only wires the 11 allowed handler modules", () => {
+    const indexPath = join(REPO_ROOT, "src/tools/index.ts");
+    const content = readFileSync(indexPath, "utf8");
+
+    const importedHandlers = [...content.matchAll(/from\s+["']\.\/([^"']+)["']/g)]
+      .map((match) => {
+        const moduleName = match[1]!.replace(/\.js$/, "");
+        return `src/tools/${moduleName}.ts`;
+      })
+      .filter((file) => file.startsWith("src/tools/harness-"));
+
+    const registerCalls = [...content.matchAll(/register\w+Tool\s*\(/g)].map((match) => match[0]);
+
+    expect(new Set(importedHandlers)).toEqual(ALLOWED_HARNESS_HANDLER_FILES);
+    expect(registerCalls).toHaveLength(ALLOWED_HARNESS_HANDLER_FILES.size);
+  });
+
   it("registers exactly the 11 allowed consolidated MCP tools", () => {
     const registered = new Set<string>();
 
