@@ -88,9 +88,22 @@ export class SearchManager {
     log.info(`Indexed ${examples.length} examples`);
 
     // 3. Bundled pipeline/template/trigger schemas
+    // Display-only mapping: comma-separated resource types for schemas that span multiple types.
+    // NOT used for routing (comma values won't match any single type in extractRoutingTypes).
+    const SCHEMA_RESOURCE_TYPES: Record<string, string> = {
+      "pipeline": "pipeline",
+      "pipeline_v1": "pipeline_v1",
+      "template": "template,pipeline,template_v1",
+      "template_v1": "template_v1,template",
+      "trigger": "trigger,pipeline",
+      "inputSet_v1": "input_set",
+      "overlayInputSet_v1": "input_set",
+      "agent-pipeline": "pipeline,pipeline_v1",
+    };
     const schemaEntries = Object.entries(SCHEMAS);
-    await Promise.all(schemaEntries.map(([name, schema]) =>
-      this.provider.index({
+    await Promise.all(schemaEntries.map(([name, schema]) => {
+      const resourceType = SCHEMA_RESOURCE_TYPES[name] ?? name;
+      return this.provider.index({
         id: `schema:${name}`,
         content: [
           name.replace(/_/g, " ").replace(/-/g, " "),
@@ -103,11 +116,13 @@ export class SearchManager {
         ttlMs: 0,
         metadata: {
           type: "schema",
+          resource_type: resourceType,
           schema_name: name,
           uri: `schema:///${name}`,
+          action: `call harness_schema with resource_type="${name.replace("_v1", "").replace("-", "_")}"`,
         },
-      })
-    ));
+      });
+    }));
 
     // 4. Entity schemas (connector, environment, service, secret, infrastructure)
     const entityEntries = Object.entries(ENTITY_BUNDLED_SCHEMAS);
@@ -126,6 +141,9 @@ export class SearchManager {
         metadata: {
           type: "entity_schema",
           schema_name: name,
+          resource_type: name.split(".")[0] ?? name,
+          scope: name.split(".")[1] ?? "",
+          action: `call harness_schema with resource_type="${name.split(".")[0] ?? name}"`,
         },
       })
     ));
@@ -147,7 +165,7 @@ export class SearchManager {
           size: 50, limit: 50, page: 0,
         }, { tool: "search-init" }) as { items?: Array<Record<string, unknown>> };
         const items = result?.items ?? [];
-        await Promise.all(items.map(item =>
+        await Promise.all(items.filter(item => item["identifier"] ?? item["id"]).map(item =>
           this.provider.index({
             id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
             content: [resourceType.replace(/_/g, " "), item["name"], item["description"], item["identifier"], item["tags"]].filter(Boolean).join(" "),

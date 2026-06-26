@@ -6,7 +6,7 @@ import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { createLogger } from "../utils/logger.js";
-import { sendProgress, sendLog } from "../utils/progress.js";
+import { sendProgress } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import type { ResourceScope } from "../registry/types.js";
 import { searchOutputSchema } from "./output-schemas.js";
@@ -21,10 +21,8 @@ const RELEVANCE_TIERS: Record<string, number> = {
   pipeline: 1, service: 1, environment: 1, connector: 1, execution: 1,
   template: 2, trigger: 2, input_set: 2, secret: 2, fme_feature_flag: 2,
   repository: 2, infrastructure: 2,
-  // SCS types at tier 2 — same priority as other domain-specific resources
   scs_artifact_source: 2, artifact_security: 2, code_repo_security: 2,
   scs_artifact_component: 2, scs_compliance_result: 2,
-  // Everything else defaults to tier 3
 };
 
 function getTier(resourceType: string): number {
@@ -44,6 +42,41 @@ interface SearchResultEntry {
   items: unknown[];
   total: number;
   openInHarness?: string;
+}
+
+/**
+ * Routing threshold — semantic hits above this score are used to predict which
+ * resource types scatter-gather should target. Higher = more conservative routing
+ * (fewer types skipped, safer). Lower = more aggressive (more savings, higher miss risk).
+ */
+const SEMANTIC_ROUTING_THRESHOLD = 0.5;
+
+/**
+ * Display threshold — semantic hits above this (but below routing threshold) are still
+ * shown as tier-0 results even if they didn't influence routing.
+ */
+const SEMANTIC_DISPLAY_THRESHOLD = 0.35;
+
+/**
+ * Extract unique resource types from semantic results that meet the routing threshold.
+ * Uses both:
+ * - `resources` corpus hits: live Harness data already indexed for this account
+ * - `mcp_resources` corpus hits: resource_definition and entity_schema entries whose
+ *   resource_type field maps directly to a listable API type (e.g. resource-def:connector
+ *   → "connector"). These are the primary routing signal since mcp_resources is always
+ *   indexed at startup whereas resources may be sparse.
+ */
+function extractRoutingTypes(semanticResults: SearchResult[], allTargetTypes: string[]): string[] | null {
+  const targetSet = new Set(allTargetTypes);
+  const predicted = new Set<string>();
+  for (const sr of semanticResults) {
+    if (sr.score < SEMANTIC_ROUTING_THRESHOLD) continue;
+    const rt = sr.metadata["resource_type"];
+    if (rt && targetSet.has(rt)) {
+      predicted.add(rt);
+    }
+  }
+  return predicted.size > 0 ? Array.from(predicted) : null;
 }
 
 export function registerSearchTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
@@ -75,37 +108,66 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
       try {
         const signal = extra.signal;
         const mergedArgs = applyUrlDefaults(args as Record<string, unknown>, args.url, { includeResourceScope: true });
-
-        // Semantic search via provider (runs concurrently with scatter-gather)
-        const provider = searchManager?.getProvider();
-        const semanticPromise: Promise<SearchResult[]> = provider?.isAvailable()
-          ? provider.search(args.query, { corpus: "all", accountId: client.account, k: 20 })
-          : Promise.resolve([]);
         const requestedScope = asResourceScope(mergedArgs.resource_scope);
         const hasExplicitResourceTypes = (args.resource_types?.length ?? 0) > 0;
-        // Determine which resource types to search
-        let targetTypes = args.resource_types ?? [];
-        if (targetTypes.length === 0) {
-          // Search all types that support list
-          targetTypes = registry.getAllResourceTypes().filter((rt) => registry.supportsOperation(rt, "list"));
+
+        // Determine the full candidate type list (before semantic narrowing)
+        let candidateTypes = args.resource_types ?? [];
+        if (candidateTypes.length === 0) {
+          candidateTypes = registry.getAllResourceTypes().filter((rt) => registry.supportsOperation(rt, "list"));
         }
         if (requestedScope && !hasExplicitResourceTypes) {
-          targetTypes = targetTypes.filter((rt) => registry.getSupportedScopes(rt).includes(requestedScope));
+          candidateTypes = candidateTypes.filter((rt) => registry.getSupportedScopes(rt).includes(requestedScope));
         }
 
+        // --- Semantic routing ---
+        // Run semantic search first. If it returns high-confidence hits for specific
+        // resource types, narrow scatter-gather to only those types.
+        const provider = searchManager?.getProvider();
+        let semanticResults: SearchResult[] = [];
+        let routedTypes: string[] | null = null;
+        let semanticRouted = false;
+
+        if (provider?.isAvailable() && !hasExplicitResourceTypes) {
+          semanticResults = await provider.search(args.query, {
+            corpus: "all",
+            accountId: client.account,
+            k: 30,
+          });
+
+          if (semanticResults.length > 0) {
+            routedTypes = extractRoutingTypes(semanticResults, candidateTypes);
+            if (routedTypes) {
+              semanticRouted = true;
+              log.info(`Semantic routing: narrowed from ${candidateTypes.length} → ${routedTypes.length} types`, {
+                query: args.query,
+                routed_types: routedTypes,
+                top_score: semanticResults[0]?.score,
+                skipped: candidateTypes.length - routedTypes.length,
+              });
+            } else {
+              log.info(`Semantic search: no high-confidence routing hits, falling back to full scatter-gather`, {
+                query: args.query,
+                results: semanticResults.length,
+                top_score: semanticResults[0]?.score ?? 0,
+              });
+            }
+          }
+        }
+
+        const targetTypes = routedTypes ?? candidateTypes;
+
+        // --- Scatter-gather over targetTypes ---
         const entries: SearchResultEntry[] = [];
         const errors: Record<string, string> = {};
-
-        // Run searches with concurrency limit to avoid overwhelming the API
         const MAX_CONCURRENCY = 5;
         const settled: { rt: string; result: unknown; error: string | null }[] = [];
         let searched = 0;
 
         for (let i = 0; i < targetTypes.length; i += MAX_CONCURRENCY) {
-          // Check for cancellation between batches
           signal.throwIfAborted();
           const batch = targetTypes.slice(i, i + MAX_CONCURRENCY);
-          await sendProgress(extra, searched, targetTypes.length, `Searching batch ${Math.floor(i / MAX_CONCURRENCY) + 1}...`);
+          await sendProgress(extra, searched, targetTypes.length, `Searching batch ${Math.floor(i / MAX_CONCURRENCY) + 1} of ${Math.ceil(targetTypes.length / MAX_CONCURRENCY)}${semanticRouted ? " (semantic-routed)" : ""}...`);
           const batchResults = await Promise.all(
             batch.map(async (rt) => {
               try {
@@ -129,6 +191,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           settled.push(...batchResults);
           searched += batch.length;
         }
+
         await sendProgress(extra, targetTypes.length, targetTypes.length, "Processing results...");
         let totalMatches = 0;
 
@@ -154,36 +217,39 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           }
         }
 
-        // Prepend semantic hits not already covered by keyword results
-        const semanticResults = await semanticPromise;
+        // --- Merge semantic results ---
+        // Tier-0: semantic hits (schemas, examples, resource defs, and any live resources
+        // not already in keyword results) above display threshold
         const keywordIds = new Set(
           entries.flatMap(e => (e.items as Array<Record<string, unknown>>).map(i => String(i["identifier"] ?? i["id"] ?? "")))
         );
-        const SEMANTIC_SCORE_THRESHOLD = 0.35;
+        const seenSemanticIds = new Set<string>();
         for (const sr of semanticResults) {
-          if (sr.score < SEMANTIC_SCORE_THRESHOLD) continue;
-          const id = sr.metadata["identifier"] ?? "";
-          if (id && !keywordIds.has(id)) {
-            entries.push({
-              resource_type: sr.metadata["resource_type"] ?? "unknown",
-              tier: 0,
-              match_count: 1,
-              items: [{ ...sr.metadata, _semantic_score: sr.score }],
-              total: 1,
-            });
-          }
+          if (sr.score < SEMANTIC_DISPLAY_THRESHOLD) continue;
+          const dedupeId = sr.metadata["identifier"] || sr.id;
+          if (seenSemanticIds.has(dedupeId)) continue;
+          seenSemanticIds.add(dedupeId);
+          if (sr.metadata["identifier"] && keywordIds.has(sr.metadata["identifier"])) continue;
+          entries.push({
+            resource_type: sr.metadata["resource_type"] ?? sr.corpus,
+            tier: 0,
+            match_count: 1,
+            items: [{ ...sr.metadata, _id: sr.id, _semantic_score: sr.score, _corpus: sr.corpus }],
+            total: 1,
+          });
         }
 
-        // Sort by tier ascending, then by match_count descending within tier
         entries.sort((a, b) => {
           if (a.tier !== b.tier) return a.tier - b.tier;
           return b.match_count - a.match_count;
         });
 
+        const typesSkipped = candidateTypes.length - targetTypes.length;
         return jsonResult({
           query: args.query,
           total_matches: totalMatches,
           searched_types: targetTypes.length,
+          ...(semanticRouted ? { semantic_routed: true, types_skipped: typesSkipped } : {}),
           results: entries,
           ...(Object.keys(errors).length > 0 ? { errors } : {}),
         });
