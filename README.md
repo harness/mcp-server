@@ -118,7 +118,7 @@ When running in HTTP mode, the server exposes:
 | `/mcp`    | `GET`     | SSE stream for server-initiated messages (progress, elicitation) |
 | `/mcp`    | `DELETE`  | Terminate an active MCP session                                  |
 | `/mcp`    | `OPTIONS` | CORS preflight                                                   |
-| `/health` | `GET`     | Health check — returns `{ "status": "ok", "sessions": <count> }` |
+| `/health` | `GET`     | Health check — returns `{ "status": "ok"|"degraded", "sessions": <count>, "search": { "state": "disabled"|"initializing"|"ready"|"failed", ... } }`. HTTP 503 when `search.state === "failed"` (configured provider failed to initialize). |
 
 
 The HTTP transport runs in **session-based mode**. A new MCP session is created on `initialize`, the server returns an `mcp-session-id` header, and subsequent requests for that session must include the same header.
@@ -550,6 +550,9 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_SKIP_ELICITATION`  | No       | `false`                     | **Deprecated** — use `HARNESS_AUTO_APPROVE_RISK=all` instead. Kept for backward compatibility                                                                                                                                                         |
 | `HARNESS_ALLOW_HTTP`        | No       | `false`                     | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance                                                                                   |
 | `HARNESS_PIPELINE_VERSION`  | No       | `0`                         | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
+| `HARNESS_SEARCH_PROVIDER`   | No       | `none`                      | Semantic search for `harness_search`. `none` disables in-process embeddings (default). `local` enables ONNX-based routing via optional `@huggingface/transformers`. Docker images pre-bake the model and default to `local`. In multi-user HTTP mode, `local` indexes static `mcp_resources` only — live account data requires a future `harness` provider. |
+| `HARNESS_HF_CACHE_DIR`      | No       | `/tmp/hf-cache`             | HuggingFace model cache directory for `HARNESS_SEARCH_PROVIDER=local`. Use a persistent volume in Kubernetes. Docker images bake the model into `/app/.cache/hf`. |
+| `HARNESS_SEARCH_SERVICE_URL`| No       | --                          | Reserved for a future hosted search-service provider (`HARNESS_SEARCH_PROVIDER=harness`). |
 | `HARNESS_MCP_ALLOWED_HOSTS` | No       | --                          | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here                                                                                 |
 | `HARNESS_MCP_AUTH_TOKEN`    | No       | --                          | Bearer token required on `/mcp` HTTP routes when set. Required by default when HTTP transport binds to a non-loopback host                                                                                                                             |
 | `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | No | `false`         | Explicitly allow unauthenticated HTTP transport on non-loopback binds. Use only behind another authenticated control                                                                                                                                    |

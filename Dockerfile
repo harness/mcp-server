@@ -34,6 +34,8 @@ COPY --from=build /app/build build/
 COPY --from=build /app/.cache/hf /app/.cache/hf
 
 ENV HARNESS_HF_CACHE_DIR=/app/.cache/hf
+# Model is pre-baked above — enable local semantic search in hosted HTTP deployments.
+ENV HARNESS_SEARCH_PROVIDER=local
 
 # Non-root user for security
 RUN addgroup -S mcp && adduser -S mcp -G mcp
