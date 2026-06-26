@@ -18,7 +18,7 @@
 - Root cause: `pull_request.merge` forwarded only `input.body`. When agents supplied documented merge options through `harness_execute.params`, explicit values such as `delete_source_branch: false` were dropped before the POST body was built. The merge action also did not opt out of generic scope body injection.
 - Changed `src/registry/toolsets/pull-requests.ts` to build a merge-specific body from documented Harness Code API fields, preserve explicit falsy values, map common camelCase aliases to snake_case API fields, reject conflicting body/params values, and skip scope-field body injection.
 - Added regressions in `tests/registry/pull-requests.test.ts` and `tests/tools/tool-handlers.test.ts` for `delete_source_branch: false`, `dry_run: false`, params/top-level inputs, aliases, and conflict handling.
-- Verification passed: `pnpm exec vitest run tests/registry/pull-requests.test.ts tests/tools/tool-handlers.test.ts -t "pull request merge|merge options|delete_source_branch"`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, and `pnpm test` (101 files / 2319 tests).
+- Verification passed: `pnpm exec vitest run tests/registry/pull-requests.test.ts tests/tools/tool-handlers.test.ts -t "pull request merge|merge options|delete_source_branch"`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, `pnpm test` (101 files / 2319 tests), and `pnpm standards:check`.
 
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
