@@ -36,6 +36,14 @@ export interface IndexableItem {
   ttlMs?: number;
 }
 
+export type SearchProviderName = "none" | "local";
+
+export type SearchReadiness =
+  | { state: "disabled"; configured: "none" }
+  | { state: "initializing"; configured: SearchProviderName }
+  | { state: "ready"; configured: SearchProviderName; provider: string }
+  | { state: "failed"; configured: SearchProviderName; error: string };
+
 export interface SearchProvider {
   /** Called once at server startup. Must not throw — log and degrade gracefully. */
   initialize(): Promise<void>;

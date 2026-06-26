@@ -28,6 +28,33 @@ describe("SearchManager", () => {
     await expect(mgr.initialize()).resolves.toBeUndefined();
   });
 
+  it("reports disabled readiness when search provider is none", async () => {
+    const mgr = new SearchManager(makeConfig() as never);
+    expect(mgr.getReadiness()).toEqual({ state: "disabled", configured: "none" });
+    await mgr.initialize();
+    expect(mgr.getReadiness()).toEqual({ state: "disabled", configured: "none" });
+  });
+
+  it("reports failed readiness when local provider initialization fails", async () => {
+    vi.spyOn(LocalSearchProvider.prototype, "initialize").mockResolvedValueOnce();
+    vi.spyOn(LocalSearchProvider.prototype, "isAvailable").mockReturnValue(false);
+    vi.spyOn(LocalSearchProvider.prototype, "getInitError").mockReturnValue("Cannot find module '@huggingface/transformers'");
+
+    const mgr = new SearchManager(makeConfig({ HARNESS_SEARCH_PROVIDER: "local" }) as never);
+    expect(mgr.getReadiness()).toEqual({ state: "initializing", configured: "local" });
+
+    await mgr.initialize();
+
+    expect(mgr.getReadiness()).toEqual({
+      state: "failed",
+      configured: "local",
+      error: "Cannot find module '@huggingface/transformers'",
+    });
+    expect(mgr.getProvider().isAvailable()).toBe(false);
+
+    vi.restoreAllMocks();
+  });
+
   describe("canIndexCorpus", () => {
     it("allows resources corpus in single-user mode with local provider", () => {
       const mgr = new SearchManager(makeConfig({

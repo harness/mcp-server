@@ -88,7 +88,7 @@ function createHarnessServer(config: Config, sharedAuditManager?: AuditManager, 
         await searchManager.initializeIndex(registry, client);
       }
     }).catch((err) => {
-      log.warn("SearchManager initialization failed", { error: String(err) });
+      log.error("SearchManager initialization failed", { error: String(err) });
     });
   }
 
@@ -302,7 +302,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
       await sharedSearchManager.indexStaticContent(baseRegistry);
     }
   }).catch((err) => {
-    log.warn("Shared SearchManager initialization failed", { error: String(err) });
+    log.error("Shared SearchManager initialization failed", { error: String(err) });
   });
 
   async function destroySession(sessionId: string): Promise<void> {
@@ -334,9 +334,15 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   // ---- Routes ----
 
-  // Health check (includes session count for observability)
+  // Health check (includes session count and search readiness for observability)
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", sessions: sessions.size });
+    const search = sharedSearchManager.getReadiness();
+    const degraded = search.state === "failed";
+    res.status(degraded ? 503 : 200).json({
+      status: degraded ? "degraded" : "ok",
+      sessions: sessions.size,
+      search,
+    });
   });
 
   // POST /mcp — initialize new sessions or route to existing session

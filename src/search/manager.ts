@@ -1,7 +1,7 @@
 import type { Config } from "../config.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
-import type { SearchCorpus, SearchProvider, IndexableItem } from "./types.js";
+import type { SearchCorpus, SearchProvider, SearchProviderName, SearchReadiness, IndexableItem } from "./types.js";
 import { NullSearchProvider } from "./null-provider.js";
 import { LocalSearchProvider } from "./local-provider.js";
 import { createLogger } from "../utils/logger.js";
@@ -18,13 +18,17 @@ const TIER1_TYPES = ["pipeline", "service", "environment", "connector"] as const
 export class SearchManager {
   private provider: SearchProvider;
   private readonly mcpMode: Config["HARNESS_MCP_MODE"];
-  private readonly providerName: Config["HARNESS_SEARCH_PROVIDER"];
+  private readonly configuredProvider: SearchProviderName;
+  private readiness: SearchReadiness;
   private loggedResourcesCorpusDisabled = false;
 
   constructor(config: Config) {
     this.mcpMode = config.HARNESS_MCP_MODE;
-    this.providerName = config.HARNESS_SEARCH_PROVIDER;
+    this.configuredProvider = resolveConfiguredProvider(config);
     this.provider = this.loadProvider(config);
+    this.readiness = this.configuredProvider === "none"
+      ? { state: "disabled", configured: "none" }
+      : { state: "initializing", configured: this.configuredProvider };
   }
 
   /**
@@ -32,7 +36,7 @@ export class SearchManager {
    * LocalSearchProvider must not index `resources` in multi-user HTTP mode.
    */
   canIndexCorpus(corpus: SearchCorpus): boolean {
-    if (corpus === "resources" && this.mcpMode === "multi-user" && this.providerName === "local") {
+    if (corpus === "resources" && this.mcpMode === "multi-user" && this.configuredProvider === "local") {
       return false;
     }
     return true;
@@ -57,13 +61,41 @@ export class SearchManager {
     return this.provider;
   }
 
+  getReadiness(): SearchReadiness {
+    return this.readiness;
+  }
+
   async initialize(): Promise<void> {
+    if (this.configuredProvider === "none") {
+      this.readiness = { state: "disabled", configured: "none" };
+      return;
+    }
+
+    this.readiness = { state: "initializing", configured: this.configuredProvider };
     try {
       await this.provider.initialize();
-      log.info(`Search provider initialized: ${this.provider.constructor.name}, available=${this.provider.isAvailable()}`);
+      if (this.provider.isAvailable()) {
+        this.readiness = {
+          state: "ready",
+          configured: this.configuredProvider,
+          provider: this.provider.constructor.name,
+        };
+        log.info(`Search provider initialized: ${this.provider.constructor.name}, available=true`);
+        return;
+      }
+
+      const error = getProviderInitError(this.provider) ?? "provider unavailable after initialization";
+      this.readiness = { state: "failed", configured: this.configuredProvider, error };
+      log.error("Semantic search unavailable — configured provider failed to initialize", {
+        configured: this.configuredProvider,
+        provider: this.provider.constructor.name,
+        error,
+      });
     } catch (err) {
-      log.warn("Search provider initialization failed — falling back to null provider", { error: String(err) });
+      const error = String(err);
+      log.error("Search provider initialization failed — falling back to null provider", { error });
       this.provider = new NullSearchProvider();
+      this.readiness = { state: "failed", configured: this.configuredProvider, error };
     }
   }
 
@@ -225,10 +257,20 @@ export class SearchManager {
   }
 
   private loadProvider(config: Config): SearchProvider {
-    const providerName = config.HARNESS_SEARCH_PROVIDER ?? "none";
-    if (providerName === "local") {
+    if (this.configuredProvider === "local") {
       return new LocalSearchProvider({ cacheDir: config.HARNESS_HF_CACHE_DIR });
     }
     return new NullSearchProvider();
   }
+}
+
+function resolveConfiguredProvider(config: Config): SearchProviderName {
+  return config.HARNESS_SEARCH_PROVIDER ?? "none";
+}
+
+function getProviderInitError(provider: SearchProvider): string | undefined {
+  if ("getInitError" in provider && typeof provider.getInitError === "function") {
+    return provider.getInitError();
+  }
+  return undefined;
 }

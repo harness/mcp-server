@@ -105,6 +105,7 @@ export interface LocalSearchProviderOptions {
 
 export class LocalSearchProvider implements SearchProvider {
   private available = false;
+  private initError: string | undefined;
   private embed: EmbedFn | null = null;
   private readonly cacheDir: string;
   // key: `${corpus}:${accountId ?? "global"}`
@@ -131,8 +132,13 @@ export class LocalSearchProvider implements SearchProvider {
       this.evictionTimer = setInterval(() => this.evictExpired(), 10 * 60 * 1000);
       log.info("LocalSearchProvider initialized", { model: EMBEDDING_MODEL, dim: EMBEDDING_DIM, cacheDir: this.cacheDir });
     } catch (err) {
-      log.error("LocalSearchProvider initialization failed", { error: String(err) });
+      this.initError = String(err);
+      log.error("LocalSearchProvider initialization failed", { error: this.initError });
     }
+  }
+
+  getInitError(): string | undefined {
+    return this.initError;
   }
 
   isAvailable(): boolean {
