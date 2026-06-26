@@ -110,7 +110,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
             (result.items as Array<Record<string, unknown>>).map(item =>
               provider.index({
                 id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
-                content: [item["name"], item["description"], item["identifier"]].filter(Boolean).join(" "),
+                content: [resourceType.replace(/_/g, " "), item["name"], item["description"], item["identifier"], item["tags"]].filter(Boolean).join(" "),
                 corpus: "resources",
                 accountId,
                 metadata: {

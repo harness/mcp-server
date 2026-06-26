@@ -28,17 +28,18 @@ const log = createLogger("main");
 interface HarnessServerResult {
   server: McpServer;
   auditManager: AuditManager;
+  searchManager: SearchManager;
 }
 
 /**
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
  * @param sharedAuditManager When set (HTTP mode), reuse this manager instead of creating one per session.
  */
-function createHarnessServer(config: Config, sharedAuditManager?: AuditManager): HarnessServerResult {
+function createHarnessServer(config: Config, sharedAuditManager?: AuditManager, sharedSearchManager?: SearchManager): HarnessServerResult {
   const auditManager = sharedAuditManager ?? createAuditManager(config);
   const client = new HarnessClient(config);
   const registry = new Registry(config, { auditManager });
-  const searchManager = new SearchManager(config);
+  const searchManager = sharedSearchManager ?? new SearchManager(config);
 
   const server = new McpServer(
     {
@@ -76,20 +77,22 @@ function createHarnessServer(config: Config, sharedAuditManager?: AuditManager):
   );
 
   configureElicitation({ autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK as import("./registry/types.js").AutoApproveRisk });
-  // Initialize search provider and pre-index tier-1 resources in background
-  searchManager.initialize().then(async () => {
-    if (searchManager.getProvider().isAvailable()) {
-      await searchManager.initializeIndex(registry, client);
-    }
-  }).catch((err) => {
-    log.warn("SearchManager initialization failed", { error: String(err) });
-  });
+  // Initialize search provider only if we created it (shared instances are pre-initialized)
+  if (!sharedSearchManager) {
+    searchManager.initialize().then(async () => {
+      if (searchManager.getProvider().isAvailable()) {
+        await searchManager.initializeIndex(registry, client);
+      }
+    }).catch((err) => {
+      log.warn("SearchManager initialization failed", { error: String(err) });
+    });
+  }
 
   registerAllTools(server, registry, client, config, undefined, searchManager);
   registerAllResources(server, registry, client, config);
   registerAllPrompts(server);
 
-  return { server, auditManager };
+  return { server, auditManager, searchManager };
 }
 
 /**
@@ -287,6 +290,11 @@ async function startHttp(config: Config, port: number): Promise<void> {
   // ---- Session store ----
   const sessions = new Map<string, Session>();
   const sharedAuditManager = createAuditManager(config);
+  const sharedSearchManager = new SearchManager(config);
+  // Use a temp client+registry to pre-index — HTTP mode has no single "account" so init without pre-indexing
+  sharedSearchManager.initialize().catch((err) => {
+    log.warn("Shared SearchManager initialization failed", { error: String(err) });
+  });
 
   async function destroySession(sessionId: string): Promise<void> {
     const session = sessions.get(sessionId);
@@ -358,7 +366,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
     let transport: StreamableHTTPServerTransport | undefined;
     try {
       const sessionConfig = mergeConfigWithSessionHeaders(config, req.headers);
-      const result = createHarnessServer(sessionConfig, sharedAuditManager);
+      const result = createHarnessServer(sessionConfig, sharedAuditManager, sharedSearchManager);
       server = result.server;
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),

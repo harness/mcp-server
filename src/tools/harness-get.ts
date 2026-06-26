@@ -117,7 +117,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
           const accountId = client.account;
           void provider.index({
             id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
-            content: [item["name"], item["description"], item["identifier"]].filter(Boolean).join(" "),
+            content: [resourceType.replace(/_/g, " "), item["name"], item["description"], item["identifier"], item["tags"]].filter(Boolean).join(" "),
             corpus: "resources",
             accountId,
             metadata: {

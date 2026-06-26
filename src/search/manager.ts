@@ -44,7 +44,7 @@ export class SearchManager {
         await Promise.all(items.map(item =>
           this.provider.index({
             id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
-            content: [item["name"], item["description"], item["identifier"]].filter(Boolean).join(" "),
+            content: [resourceType.replace(/_/g, " "), item["name"], item["description"], item["identifier"], item["tags"]].filter(Boolean).join(" "),
             corpus: "resources",
             accountId,
             metadata: {
