@@ -207,4 +207,23 @@ describe("build-deploy-app prompt", () => {
     expect(text).toContain("manifests/");
     expect(text).toContain("helm/");
   });
+
+  it("distinguishes Harness Code repos from third-party Git for connector setup", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({
+      name: "build-deploy-app",
+      arguments: {
+        repoUrl: "https://app.harness.io/ng/account/abc/module/code/orgs/default/projects/my-project/repos/my-service",
+        imageName: "docker.io/acme/webapp",
+      },
+    });
+
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("Harness Code repo");
+    expect(text).toContain("no Git connector is needed");
+    expect(text).toContain("properties.ci.codebase.repoName");
+    expect(text).toContain("Third-party Git");
+    expect(text).toContain("store type `HarnessCode`");
+  });
 });
