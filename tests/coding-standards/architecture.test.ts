@@ -93,6 +93,26 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
 /** Only this file may instantiate HarnessClient in production src/. */
 const ALLOWED_HARNESS_CLIENT_FILES = new Set(["src/index.ts"]);
 
+/** Tool handlers may not bypass the registry with client.request (documented exceptions). */
+const ALLOWED_CLIENT_REQUEST_FILES = new Set([
+  "src/tools/entity-schema/live.ts",
+]);
+
+/** registerAllTools must wire exactly these handlers — no extras. */
+const ALLOWED_REGISTER_FUNCTIONS = [
+  "registerListTool",
+  "registerGetTool",
+  "registerCreateTool",
+  "registerUpdateTool",
+  "registerDeleteTool",
+  "registerExecuteTool",
+  "registerDiagnoseTool",
+  "registerSearchTool",
+  "registerDescribeTool",
+  "registerStatusTool",
+  "registerSchemaTool",
+] as const;
+
 /** Files that must import Zod via the v4 subpath — computed after walkTsFiles is defined. */
 function zodV4RequiredFiles(): string[] {
   return [join(SRC, "config.ts"), ...walkTsFiles(join(SRC, "tools"))];
@@ -191,6 +211,19 @@ describe("Coding standards — MCP tool handlers", () => {
     const unexpected = harnessFiles.filter((f) => !ALLOWED_HARNESS_HANDLER_FILES.has(f));
     expect(unexpected, `New harness handler files found: ${unexpected.join(", ")}`).toEqual([]);
   });
+
+  it("registerAllTools wires exactly the 11 allowed handler functions", () => {
+    const indexPath = join(SRC, "tools/index.ts");
+    const content = readFileSync(indexPath, "utf8");
+    const called = new Set<string>();
+    const callRe = /\b(register\w+Tool)\s*\(/g;
+    let match: RegExpExecArray | null;
+    while ((match = callRe.exec(content)) !== null) {
+      called.add(match[1]!);
+    }
+
+    expect([...called].sort()).toEqual([...ALLOWED_REGISTER_FUNCTIONS].sort());
+  });
 });
 
 describe("Coding standards — logging and HTTP", () => {
@@ -279,6 +312,40 @@ describe("Coding standards — logging and HTTP", () => {
       violations,
       `HarnessClient must only be constructed in src/index.ts:\n${violations.join("\n")}`,
     ).toEqual([]);
+  });
+
+  it("tool handlers use registry.dispatch instead of client.request", () => {
+    const violations: string[] = [];
+    const toolsDir = join(SRC, "tools");
+
+    for (const file of walkTsFiles(toolsDir)) {
+      const content = readFileSync(file, "utf8");
+      if (!/\bclient\.request\s*\(/.test(content)) continue;
+
+      const fileRel = rel(file);
+      if (!ALLOWED_CLIENT_REQUEST_FILES.has(fileRel)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `client.request() bypasses registry dispatch (allowed: ${[...ALLOWED_CLIENT_REQUEST_FILES].join(", ")}):\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("does not write to process.stdout in src/ (stdio JSON-RPC safety)", () => {
+    const violations: string[] = [];
+    const srcFiles = walkTsFiles(SRC);
+
+    for (const file of srcFiles) {
+      const content = readFileSync(file, "utf8");
+      if (/\bprocess\.stdout\.write\s*\(/.test(content)) {
+        violations.push(rel(file));
+      }
+    }
+
+    expect(violations, `process.stdout.write() found in:\n${violations.join("\n")}`).toEqual([]);
   });
 });
 

@@ -598,26 +598,22 @@ async function fetchInputSetHint(
   registry: Registry,
 ): Promise<string | null> {
   try {
-    const raw = await client.request<unknown>({
-      method: "GET",
-      path: "/pipeline/api/inputSets",
-      params: {
-        pipelineIdentifier: pipelineId,
-        orgIdentifier: String(input.org_id || registry.orgId),
-        projectIdentifier: String(input.project_id || registry.projectId),
-        size: "5",
-      },
+    const raw = await registry.dispatch(client, "input_set", "list", {
+      ...input,
+      pipeline_id: pipelineId,
+      size: 5,
+      page: 0,
     });
-    const data = asRecord(asRecord(raw)?.data);
-    const content = data?.content;
-    if (!Array.isArray(content) || content.length === 0) return null;
+    const data = asRecord(raw);
+    const items = data?.items;
+    if (!Array.isArray(items) || items.length === 0) return null;
 
-    const ids = content
+    const ids = items
       .map((item: unknown) => asString(asRecord(item)?.identifier))
       .filter(Boolean);
     if (ids.length === 0) return null;
 
-    const total = typeof data?.totalElements === "number" ? data.totalElements : ids.length;
+    const total = typeof data?.total === "number" ? data.total : ids.length;
     return `Available input sets for this pipeline (${total} total): [${ids.join(", ")}]. Use input_set_ids=["<id>"] to apply one.`;
   } catch {
     return null;
