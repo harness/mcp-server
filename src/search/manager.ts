@@ -7,6 +7,8 @@ import { LocalSearchProvider } from "./local-provider.js";
 import { createLogger } from "../utils/logger.js";
 import "../data/examples/load-all.js";
 import { getAllExamples } from "../data/examples/index.js";
+import { SCHEMAS } from "../data/schemas/index.js";
+import { ENTITY_BUNDLED_SCHEMAS } from "../data/schemas/entities/index.js";
 
 const log = createLogger("search-manager");
 
@@ -84,6 +86,50 @@ export class SearchManager {
       })
     ));
     log.info(`Indexed ${examples.length} examples`);
+
+    // 3. Bundled pipeline/template/trigger schemas
+    const schemaEntries = Object.entries(SCHEMAS);
+    await Promise.all(schemaEntries.map(([name, schema]) =>
+      this.provider.index({
+        id: `schema:${name}`,
+        content: [
+          name.replace(/_/g, " ").replace(/-/g, " "),
+          "schema",
+          "yaml structure",
+          schema?.title ?? "",
+          schema?.description ?? "",
+        ].filter(Boolean).join(" "),
+        corpus: "mcp_resources",
+        ttlMs: 0,
+        metadata: {
+          type: "schema",
+          schema_name: name,
+          uri: `schema:///${name}`,
+        },
+      })
+    ));
+
+    // 4. Entity schemas (connector, environment, service, secret, infrastructure)
+    const entityEntries = Object.entries(ENTITY_BUNDLED_SCHEMAS);
+    await Promise.all(entityEntries.map(([name, schema]) =>
+      this.provider.index({
+        id: `entity-schema:${name}`,
+        content: [
+          name.replace(/[._]/g, " "),
+          "schema",
+          "yaml structure",
+          schema?.title ?? "",
+          schema?.description ?? "",
+        ].filter(Boolean).join(" "),
+        corpus: "mcp_resources",
+        ttlMs: 0,
+        metadata: {
+          type: "entity_schema",
+          schema_name: name,
+        },
+      })
+    ));
+    log.info(`Indexed ${schemaEntries.length} bundled schemas, ${entityEntries.length} entity schemas`);
   }
 
   /**
