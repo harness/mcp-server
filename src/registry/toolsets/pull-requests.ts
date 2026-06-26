@@ -35,6 +35,53 @@ function requiredPathPart(input: Record<string, unknown>, field: string): string
 }
 
 const PR_METADATA_FIELDS = ["title", "description"];
+const PR_MERGE_BODY_FIELDS = [
+  { wire: "method" },
+  { wire: "source_sha", aliases: ["sourceSha"] },
+  { wire: "delete_source_branch", aliases: ["deleteSourceBranch"] },
+  { wire: "dry_run", aliases: ["dryRun"] },
+  { wire: "dry_run_rules", aliases: ["dryRunRules"] },
+  { wire: "message" },
+  { wire: "title" },
+  { wire: "bypass_rules", aliases: ["bypassRules"] },
+  { wire: "bypass_message", aliases: ["bypassMessage"] },
+] as const;
+
+function fieldValue(
+  source: Record<string, unknown> | undefined,
+  names: readonly string[],
+): { key: string; value: unknown } | undefined {
+  if (!source) return undefined;
+  for (const name of names) {
+    if (source[name] !== undefined) {
+      return { key: name, value: source[name] };
+    }
+  }
+  return undefined;
+}
+
+function pullRequestMergeBody(input: Record<string, unknown>): Record<string, unknown> {
+  const body = bodyRecord(input);
+  const merged: Record<string, unknown> = {};
+
+  for (const field of PR_MERGE_BODY_FIELDS) {
+    const names = [field.wire, ...(field.aliases ?? [])];
+    const bodyValue = fieldValue(body, names);
+    const inputValue = fieldValue(input, names);
+    if (bodyValue && inputValue && !Object.is(bodyValue.value, inputValue.value)) {
+      throw new Error(
+        `Conflicting pull_request.merge values for "${field.wire}" between ` +
+        `body.${bodyValue.key} and params/top-level ${inputValue.key}.`,
+      );
+    }
+    const selected = bodyValue ?? inputValue;
+    if (selected) {
+      merged[field.wire] = selected.value;
+    }
+  }
+
+  return merged;
+}
 
 function pullRequestUpdatePath(input: Record<string, unknown>): string {
   const repoIdentifier = requiredPathPart(input, "repo_id");
@@ -186,11 +233,12 @@ export const pullRequestsToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
-          bodyBuilder: (input) => input.body ?? {},
+          skipScopeBodyInjection: true,
+          bodyBuilder: pullRequestMergeBody,
           responseExtractor: passthrough,
           paramsSchema: REPO_PR_PARAMS,
           actionDescription:
-            "Merge a pull request. Body fields: method (merge/squash/rebase/fast-forward), source_sha, delete_source_branch (boolean), dry_run (boolean).",
+            "Merge a pull request. Body fields: method (merge/squash/rebase/fast-forward), source_sha, delete_source_branch (boolean), dry_run (boolean), dry_run_rules (boolean), message, title, bypass_rules (boolean), bypass_message.",
           bodySchema: {
             description: "Merge options",
             fields: [
@@ -198,6 +246,11 @@ export const pullRequestsToolset: ToolsetDefinition = {
               { name: "source_sha", type: "string", required: false, description: "Expected source SHA for optimistic locking" },
               { name: "delete_source_branch", type: "boolean", required: false, description: "Delete source branch after merge" },
               { name: "dry_run", type: "boolean", required: false, description: "Simulate merge without executing" },
+              { name: "dry_run_rules", type: "boolean", required: false, description: "Evaluate rules during a dry run" },
+              { name: "message", type: "string", required: false, description: "Merge commit message" },
+              { name: "title", type: "string", required: false, description: "Merge commit title" },
+              { name: "bypass_rules", type: "boolean", required: false, description: "Bypass merge rules when allowed" },
+              { name: "bypass_message", type: "string", required: false, description: "Reason for bypassing merge rules" },
             ],
           },
         },

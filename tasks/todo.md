@@ -1,5 +1,19 @@
 # Harness MCP Server — Task Tracking
 
+## Pull Request Merge Branch Deletion Bug (2026-06-26)
+- [x] Read Slack bug thread and confirm available context
+- [x] Trace Harness Code pull request merge request construction
+- [x] Add regression coverage for `delete_source_branch: false` on merge
+- [x] Implement focused pull_request merge body fix
+- [ ] Run focused and broader verification
+- [ ] Commit, push, open PR, and reply in Slack thread
+
+### Plan
+- Keep the fix inside the `pull_request.merge` execute action so other Harness Code resources are unchanged.
+- Build a stable merge body from documented Harness Code API fields, preserving explicit falsy values such as `delete_source_branch: false` and `dry_run: false`.
+- Accept merge options from either `body` or `params` because `harness_execute` documents action-specific options through `params`, while the resource `bodySchema` documents the wire body fields.
+- Skip generic scope injection for the merge endpoint so the API sees only merge options in the JSON body.
+
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap
