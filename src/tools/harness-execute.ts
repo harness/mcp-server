@@ -287,7 +287,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             );
           }
           try {
-            const yaml = await materializeInputSetsToRuntimeYaml(client, {
+            const yaml = await materializeInputSetsToRuntimeYaml(registry, client, {
               pipelineId,
               orgId,
               projectId,
@@ -331,7 +331,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             const inputsToResolve = isFlatKeyValueInputs(args.inputs)
               ? args.inputs
               : flattenInputs(args.inputs);
-            resolved = await resolveRuntimeInputs(client, inputsToResolve, {
+            resolved = await resolveRuntimeInputs(registry, client, inputsToResolve, {
               pipelineId,
               orgId: asString(input.org_id) || registry.orgId,
               projectId: asString(input.project_id) || registry.projectId,
@@ -598,18 +598,14 @@ async function fetchInputSetHint(
   registry: Registry,
 ): Promise<string | null> {
   try {
-    const raw = await client.request<unknown>({
-      method: "GET",
-      path: "/pipeline/api/inputSets",
-      params: {
-        pipelineIdentifier: pipelineId,
-        orgIdentifier: String(input.org_id || registry.orgId),
-        projectIdentifier: String(input.project_id || registry.projectId),
-        size: "5",
-      },
-    });
-    const data = asRecord(asRecord(raw)?.data);
-    const content = data?.content;
+    const result = asRecord(await registry.dispatch(client, "input_set", "list", {
+      pipeline_id: pipelineId,
+      org_id: input.org_id ?? registry.orgId,
+      project_id: input.project_id ?? registry.projectId,
+      size: 5,
+      page: 0,
+    }));
+    const content = result?.items;
     if (!Array.isArray(content) || content.length === 0) return null;
 
     const ids = content
@@ -617,7 +613,7 @@ async function fetchInputSetHint(
       .filter(Boolean);
     if (ids.length === 0) return null;
 
-    const total = typeof data?.totalElements === "number" ? data.totalElements : ids.length;
+    const total = typeof result?.total === "number" ? result.total : ids.length;
     return `Available input sets for this pipeline (${total} total): [${ids.join(", ")}]. Use input_set_ids=["<id>"] to apply one.`;
   } catch {
     return null;

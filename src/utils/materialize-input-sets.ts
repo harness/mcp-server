@@ -5,6 +5,7 @@
  */
 import YAML from "yaml";
 import type { HarnessClient } from "../client/harness-client.js";
+import type { Registry } from "../registry/index.js";
 import { HarnessApiError } from "./errors.js";
 import { asRecord, asString } from "./type-guards.js";
 
@@ -99,28 +100,19 @@ export function mergeRuntimePipelineFragments(
 }
 
 async function fetchInputSetPipelineFragment(
+  registry: Registry,
   client: HarnessClient,
   pipelineId: string,
   orgId: string,
   projectId: string,
   inputSetId: string,
 ): Promise<Record<string, unknown> | undefined> {
-  const raw = await client.request<unknown>({
-    method: "GET",
-    path: `/pipeline/api/inputSets/${encodeURIComponent(inputSetId)}`,
-    params: {
-      orgIdentifier: orgId,
-      projectIdentifier: projectId,
-      pipelineIdentifier: pipelineId,
-    },
-  });
-  const r = asRecord(raw);
-  const st = asString(r?.status);
-  if (st === "ERROR" || st === "FAILURE") {
-    const msg = asString(r?.message) ?? "Input set GET returned ERROR";
-    throw new HarnessApiError(msg, 400, asString(r?.code), asString(r?.correlationId));
-  }
-  const entity = asRecord(r?.data) ?? r;
+  const entity = asRecord(await registry.dispatch(client, "input_set", "get", {
+    pipeline_id: pipelineId,
+    org_id: orgId,
+    project_id: projectId,
+    input_set_id: inputSetId,
+  }));
   const yamlStr = asString(entity?.inputSetYaml);
   if (!yamlStr) return undefined;
 
@@ -136,6 +128,7 @@ async function fetchInputSetPipelineFragment(
  * or undefined if no ids.
  */
 export async function materializeInputSetsToRuntimeYaml(
+  registry: Registry,
   client: HarnessClient,
   params: MaterializeParams,
 ): Promise<string | undefined> {
@@ -144,6 +137,7 @@ export async function materializeInputSetsToRuntimeYaml(
   let merged: Record<string, unknown> | undefined;
   for (const id of params.inputSetIds) {
     const fragment = await fetchInputSetPipelineFragment(
+      registry,
       client,
       params.pipelineId,
       params.orgId,

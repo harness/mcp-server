@@ -71,6 +71,17 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
 /** Only this file may instantiate HarnessClient in production src/. */
 const ALLOWED_HARNESS_CLIENT_FILES = new Set(["src/index.ts"]);
 
+/**
+ * Files allowed to call client.request() outside the registry dispatch layer.
+ * All Harness API traffic from tool handlers and shared utils must go through registry.dispatch().
+ */
+const ALLOWED_CLIENT_REQUEST_FILES = new Set([
+  "src/registry/index.ts",
+  "src/client/harness-client.ts",
+  "src/utils/log-resolver.ts",
+  "src/tools/entity-schema/live.ts",
+]);
+
 /** Files that must import Zod via the v4 subpath — computed after walkTsFiles is defined. */
 function zodV4RequiredFiles(): string[] {
   return [join(SRC, "config.ts"), ...walkTsFiles(join(SRC, "tools"))];
@@ -234,6 +245,29 @@ describe("Coding standards — logging and HTTP", () => {
     expect(
       violations,
       `HarnessClient must only be constructed in src/index.ts:\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("routes Harness API calls through registry.dispatch — no client.request() in tools/utils", () => {
+    const violations: string[] = [];
+    const scanDirs = [join(SRC, "tools"), join(SRC, "utils")];
+    const clientRequestPattern = /\bclient\.request(?:Stream)?\s*[<(]/;
+
+    for (const dir of scanDirs) {
+      for (const file of walkTsFiles(dir)) {
+        const content = readFileSync(file, "utf8");
+        if (!clientRequestPattern.test(content)) continue;
+
+        const fileRel = rel(file);
+        if (!ALLOWED_CLIENT_REQUEST_FILES.has(fileRel)) {
+          violations.push(fileRel);
+        }
+      }
+    }
+
+    expect(
+      violations,
+      `client.request() must not bypass the registry (allowed: ${[...ALLOWED_CLIENT_REQUEST_FILES].join(", ")}):\n${violations.join("\n")}`,
     ).toEqual([]);
   });
 });

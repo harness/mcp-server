@@ -10,6 +10,7 @@ import {
 } from "../../src/utils/runtime-input-resolver.js";
 import { HarnessClient } from "../../src/client/harness-client.js";
 import type { Config } from "../../src/config.js";
+import type { Registry } from "../../src/registry/index.js";
 
 function makeConfig(): Config {
   return {
@@ -22,6 +23,20 @@ function makeConfig(): Config {
     HARNESS_MAX_RETRIES: 0,
     LOG_LEVEL: "error",
   };
+}
+
+function makeMockRegistry(
+  templateResolver: (pipelineId: string) => string | null | undefined,
+): { registry: Registry; dispatch: ReturnType<typeof vi.fn> } {
+  const dispatch = vi.fn(async (_client, resourceType, operation, input) => {
+    if (resourceType === "runtime_input_template" && operation === "get") {
+      const pipelineId = String((input as Record<string, unknown>).pipeline_id ?? "");
+      const yaml = templateResolver(pipelineId);
+      return { inputSetTemplateYaml: yaml ?? null };
+    }
+    throw new Error(`Unexpected dispatch: ${resourceType}.${String(operation)}`);
+  });
+  return { registry: { dispatch } as unknown as Registry, dispatch };
 }
 
 const SAMPLE_TEMPLATE_YAML = `pipeline:
@@ -287,56 +302,32 @@ describe("substituteInputs", () => {
 });
 
 describe("fetchRuntimeInputTemplate", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    fetchSpy = vi.spyOn(globalThis, "fetch");
-  });
-
-  afterEach(() => {
-    fetchSpy.mockRestore();
-  });
-
   it("returns template YAML when pipeline has runtime inputs", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "SUCCESS",
-        data: {
-          inputSetTemplateYaml: SIMPLE_TEMPLATE_YAML,
-          hasInputSets: true,
-          modules: ["ci"],
-        },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-
+    const { registry, dispatch } = makeMockRegistry(() => SIMPLE_TEMPLATE_YAML);
     const client = new HarnessClient(makeConfig());
-    const result = await fetchRuntimeInputTemplate(client, {
+    const result = await fetchRuntimeInputTemplate(registry, client, {
       pipelineId: "my-pipeline",
       orgId: "default",
       projectId: "test-project",
     });
 
     expect(result).toBe(SIMPLE_TEMPLATE_YAML);
-
-    const [url] = fetchSpy.mock.calls[0]!;
-    const urlStr = String(url);
-    expect(urlStr).toContain("/pipeline/api/inputSets/template");
-    expect(urlStr).toContain("pipelineIdentifier=my-pipeline");
+    expect(dispatch).toHaveBeenCalledWith(
+      client,
+      "runtime_input_template",
+      "get",
+      expect.objectContaining({
+        pipeline_id: "my-pipeline",
+        org_id: "default",
+        project_id: "test-project",
+      }),
+    );
   });
 
   it("returns null when pipeline has no runtime inputs", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "SUCCESS",
-        data: {
-          inputSetTemplateYaml: "",
-          hasInputSets: false,
-        },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-
+    const { registry } = makeMockRegistry(() => "");
     const client = new HarnessClient(makeConfig());
-    const result = await fetchRuntimeInputTemplate(client, {
+    const result = await fetchRuntimeInputTemplate(registry, client, {
       pipelineId: "no-inputs-pipeline",
     });
 
@@ -344,15 +335,9 @@ describe("fetchRuntimeInputTemplate", () => {
   });
 
   it("returns null when data has no template field", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "SUCCESS",
-        data: {},
-      }), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-
+    const { registry } = makeMockRegistry(() => null);
     const client = new HarnessClient(makeConfig());
-    const result = await fetchRuntimeInputTemplate(client, {
+    const result = await fetchRuntimeInputTemplate(registry, client, {
       pipelineId: "empty-pipeline",
     });
 
@@ -361,26 +346,11 @@ describe("fetchRuntimeInputTemplate", () => {
 });
 
 describe("resolveRuntimeInputs", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
-
-  beforeEach(() => {
-    fetchSpy = vi.spyOn(globalThis, "fetch");
-  });
-
-  afterEach(() => {
-    fetchSpy.mockRestore();
-  });
-
   it("resolves flat inputs against template", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "SUCCESS",
-        data: { inputSetTemplateYaml: SIMPLE_TEMPLATE_YAML },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-
+    const { registry } = makeMockRegistry(() => SIMPLE_TEMPLATE_YAML);
     const client = new HarnessClient(makeConfig());
     const result = await resolveRuntimeInputs(
+      registry,
       client,
       { tag: "v2.0.0" },
       { pipelineId: "simple_pipe", orgId: "default", projectId: "test-project" },
@@ -394,15 +364,10 @@ describe("resolveRuntimeInputs", () => {
   });
 
   it("returns empty yaml when pipeline has no inputs", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "SUCCESS",
-        data: { inputSetTemplateYaml: "" },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-
+    const { registry } = makeMockRegistry(() => "");
     const client = new HarnessClient(makeConfig());
     const result = await resolveRuntimeInputs(
+      registry,
       client,
       { someKey: "someValue" },
       { pipelineId: "no-inputs", orgId: "default", projectId: "test-project" },
@@ -414,15 +379,10 @@ describe("resolveRuntimeInputs", () => {
   });
 
   it("reports unmatched required placeholders", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "SUCCESS",
-        data: { inputSetTemplateYaml: SAMPLE_TEMPLATE_YAML },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-
+    const { registry } = makeMockRegistry(() => SAMPLE_TEMPLATE_YAML);
     const client = new HarnessClient(makeConfig());
     const result = await resolveRuntimeInputs(
+      registry,
       client,
       { branch: "main" },
       { pipelineId: "my_pipeline", orgId: "default", projectId: "test-project" },
@@ -435,15 +395,10 @@ describe("resolveRuntimeInputs", () => {
   });
 
   it("separates required and optional unmatched for mixed templates", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "SUCCESS",
-        data: { inputSetTemplateYaml: MIXED_TEMPLATE_YAML },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-
+    const { registry } = makeMockRegistry(() => MIXED_TEMPLATE_YAML);
     const client = new HarnessClient(makeConfig());
     const result = await resolveRuntimeInputs(
+      registry,
       client,
       { SERVICE_LIST: "my-svc" },
       { pipelineId: "mixed_pipe", orgId: "default", projectId: "test-project" },
@@ -458,15 +413,10 @@ describe("resolveRuntimeInputs", () => {
   });
 
   it("returns all empty arrays when all defaults-only template has no user inputs", async () => {
-    fetchSpy.mockResolvedValueOnce(
-      new Response(JSON.stringify({
-        status: "SUCCESS",
-        data: { inputSetTemplateYaml: DEFAULTS_ONLY_TEMPLATE_YAML },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-
+    const { registry } = makeMockRegistry(() => DEFAULTS_ONLY_TEMPLATE_YAML);
     const client = new HarnessClient(makeConfig());
     const result = await resolveRuntimeInputs(
+      registry,
       client,
       {},
       { pipelineId: "defaults_pipe", orgId: "default", projectId: "test-project" },
@@ -479,79 +429,54 @@ describe("resolveRuntimeInputs", () => {
 });
 
 describe("fetchRuntimeInputTemplate — caching", () => {
-  let fetchSpy: ReturnType<typeof vi.spyOn>;
-
   beforeEach(() => {
     clearTemplateCache();
-    fetchSpy = vi.spyOn(globalThis, "fetch");
   });
 
   afterEach(() => {
-    fetchSpy.mockRestore();
     clearTemplateCache();
   });
 
   it("returns cached template on second call without hitting API", async () => {
-    fetchSpy.mockResolvedValue(
-      new Response(JSON.stringify({
-        status: "SUCCESS",
-        data: { inputSetTemplateYaml: SIMPLE_TEMPLATE_YAML },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-
+    const { registry, dispatch } = makeMockRegistry(() => SIMPLE_TEMPLATE_YAML);
     const client = new HarnessClient(makeConfig());
     const opts = { pipelineId: "cached_pipe", orgId: "default", projectId: "test-project" };
 
-    const first = await fetchRuntimeInputTemplate(client, opts);
-    const second = await fetchRuntimeInputTemplate(client, opts);
+    const first = await fetchRuntimeInputTemplate(registry, client, opts);
+    const second = await fetchRuntimeInputTemplate(registry, client, opts);
 
     expect(first).toBe(second);
     expect(first).toBe(SIMPLE_TEMPLATE_YAML);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledTimes(1);
   });
 
   it("uses separate cache entries for different pipelines", async () => {
-    fetchSpy
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({
-          status: "SUCCESS",
-          data: { inputSetTemplateYaml: SIMPLE_TEMPLATE_YAML },
-        }), { status: 200, headers: { "Content-Type": "application/json" } }),
-      )
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({
-          status: "SUCCESS",
-          data: { inputSetTemplateYaml: SAMPLE_TEMPLATE_YAML },
-        }), { status: 200, headers: { "Content-Type": "application/json" } }),
-      );
-
+    const templates: Record<string, string> = {
+      pipe_a: SIMPLE_TEMPLATE_YAML,
+      pipe_b: SAMPLE_TEMPLATE_YAML,
+    };
+    const { registry, dispatch } = makeMockRegistry((pipelineId) => templates[pipelineId]);
     const client = new HarnessClient(makeConfig());
 
-    const first = await fetchRuntimeInputTemplate(client, { pipelineId: "pipe_a", orgId: "default", projectId: "proj" });
-    const second = await fetchRuntimeInputTemplate(client, { pipelineId: "pipe_b", orgId: "default", projectId: "proj" });
+    const first = await fetchRuntimeInputTemplate(registry, client, { pipelineId: "pipe_a", orgId: "default", projectId: "proj" });
+    const second = await fetchRuntimeInputTemplate(registry, client, { pipelineId: "pipe_b", orgId: "default", projectId: "proj" });
 
     expect(first).toBe(SIMPLE_TEMPLATE_YAML);
     expect(second).toBe(SAMPLE_TEMPLATE_YAML);
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenCalledTimes(2);
   });
 
   it("caches null result for pipelines with no runtime inputs", async () => {
-    fetchSpy.mockResolvedValue(
-      new Response(JSON.stringify({
-        status: "SUCCESS",
-        data: { inputSetTemplateYaml: "" },
-      }), { status: 200, headers: { "Content-Type": "application/json" } }),
-    );
-
+    const { registry, dispatch } = makeMockRegistry(() => "");
     const client = new HarnessClient(makeConfig());
     const opts = { pipelineId: "no_inputs_pipe", orgId: "default", projectId: "proj" };
 
-    const first = await fetchRuntimeInputTemplate(client, opts);
-    const second = await fetchRuntimeInputTemplate(client, opts);
+    const first = await fetchRuntimeInputTemplate(registry, client, opts);
+    const second = await fetchRuntimeInputTemplate(registry, client, opts);
 
     expect(first).toBeNull();
     expect(second).toBeNull();
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledTimes(1);
   });
 });
 

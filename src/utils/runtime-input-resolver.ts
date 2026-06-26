@@ -10,6 +10,7 @@
  */
 import YAML from "yaml";
 import type { HarnessClient } from "../client/harness-client.js";
+import type { Registry } from "../registry/index.js";
 import { createLogger } from "./logger.js";
 import { isRecord, asRecord, asString } from "./type-guards.js";
 
@@ -70,6 +71,7 @@ interface TemplateResponse {
  * Returns the raw template YAML string with `<+input>` placeholders, or null if no inputs needed.
  */
 export async function fetchRuntimeInputTemplate(
+  registry: Registry,
   client: HarnessClient,
   options: ResolveOptions,
 ): Promise<string | null> {
@@ -80,21 +82,14 @@ export async function fetchRuntimeInputTemplate(
     return cached.yaml;
   }
 
-  const params: Record<string, string> = {
-    pipelineIdentifier: options.pipelineId,
-  };
-  if (options.orgId) params.orgIdentifier = options.orgId;
-  if (options.projectId) params.projectIdentifier = options.projectId;
-  if (options.branch) params.branch = options.branch;
-
-  const raw = await client.request<unknown>({
-    method: "POST",
-    path: "/pipeline/api/inputSets/template",
-    params,
-    body: {},
+  const raw = await registry.dispatch(client, "runtime_input_template", "get", {
+    pipeline_id: options.pipelineId,
+    org_id: options.orgId,
+    project_id: options.projectId,
+    branch: options.branch,
   });
 
-  const data = asRecord(asRecord(raw)?.data);
+  const data = asRecord(raw);
   const templateYaml = asString(data?.inputSetTemplateYaml);
 
   const result = (templateYaml && templateYaml.trim() !== "") ? templateYaml : null;
@@ -293,13 +288,14 @@ export function substituteInputs(
  * unmatchedOptional: placeholders with .default() — the API fills them in.
  */
 export async function resolveRuntimeInputs(
+  registry: Registry,
   client: HarnessClient,
   flatInputs: Record<string, unknown>,
   options: ResolveOptions,
 ): Promise<ResolutionResult> {
   log.info(`Resolving runtime inputs for pipeline ${options.pipelineId}`);
 
-  const templateYaml = await fetchRuntimeInputTemplate(client, options);
+  const templateYaml = await fetchRuntimeInputTemplate(registry, client, options);
   if (!templateYaml) {
     log.info("Pipeline has no runtime inputs, ignoring user-provided inputs");
     return { yaml: "", matched: [], unmatchedRequired: [], unmatchedOptional: [], expectedKeys: [] };
