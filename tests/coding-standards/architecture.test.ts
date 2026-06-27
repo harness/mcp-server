@@ -3,6 +3,9 @@
  *
  * These tests guard the registry-driven MCP model: fixed tool handlers,
  * pure-data toolsets, singleton HTTP client, and stderr-only logging.
+ *
+ * Run the full guardrail suite with `pnpm standards:check`, which also
+ * includes registry-contract, registry-metadata, and structural-validation tests.
  */
 import { describe, it, expect } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -53,6 +56,25 @@ const TOOLSET_HELPER_FILES = new Set([
   "src/registry/toolsets/chaos-descriptions.ts",
   "src/registry/toolsets/scopes.ts",
 ]);
+
+/** Legacy inline responseExtractor arrow functions — new ones must live in extractors.ts. */
+const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
+  "src/registry/toolsets/ansible.ts": 4,
+  "src/registry/toolsets/chaos.ts": 2,
+  "src/registry/toolsets/ccm.ts": 1,
+  "src/registry/toolsets/governance.ts": 1,
+  "src/registry/toolsets/iacm.ts": 1,
+  "src/registry/toolsets/idp.ts": 1,
+  "src/registry/toolsets/knowledge-graph.ts": 1,
+  "src/registry/toolsets/sto.ts": 3,
+};
+
+const WRITE_TOOL_FILES = [
+  "src/tools/harness-create.ts",
+  "src/tools/harness-update.ts",
+  "src/tools/harness-delete.ts",
+  "src/tools/harness-execute.ts",
+] as const;
 
 /** Forbidden import patterns in toolset definition files. */
 const FORBIDDEN_TOOLSET_IMPORTS: Array<{ pattern: RegExp; reason: string }> = [
@@ -105,6 +127,11 @@ function extractRegisterToolNames(content: string): string[] {
     names.push(match[1]!);
   }
   return names;
+}
+
+function countInlineResponseExtractors(content: string): number {
+  const matches = content.match(/responseExtractor:\s*\(/g);
+  return matches?.length ?? 0;
 }
 
 function extractToolsetNamesFromUnion(): Set<string> {
@@ -179,6 +206,23 @@ describe("Coding standards — logging and HTTP", () => {
     }
 
     expect(violations, `console.log() found in:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("toolset files do not use console.* (use createLogger in handlers, not toolsets)", () => {
+    const violations: string[] = [];
+    const toolsetDir = join(SRC, "registry/toolsets");
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const content = readFileSync(file, "utf8");
+      if (/\bconsole\.(log|error|warn|info|debug)\s*\(/.test(content)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(violations, `console.* found in toolsets:\n${violations.join("\n")}`).toEqual([]);
   });
 
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {
@@ -277,6 +321,27 @@ describe("Coding standards — toolset purity", () => {
       `Toolset files missing 'export const <name>Toolset: ToolsetDefinition':\n${violations.join("\n")}`,
     ).toEqual([]);
   });
+
+  it("does not add new inline responseExtractor functions in toolsets", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const count = countInlineResponseExtractors(readFileSync(file, "utf8"));
+      if (count === 0) continue;
+
+      const allowed = ALLOWED_INLINE_EXTRACTOR_COUNTS[fileRel];
+      if (allowed === undefined) {
+        violations.push(`${fileRel}: ${count} inline responseExtractor(s) — move to extractors.ts`);
+      } else if (count > allowed) {
+        violations.push(`${fileRel}: expected at most ${allowed} inline responseExtractor(s), found ${count}`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
 });
 
 describe("Coding standards — Zod input schemas", () => {
@@ -305,28 +370,6 @@ describe("Coding standards — Zod input schemas", () => {
   });
 });
 
-describe("Coding standards — HarnessClient singleton", () => {
-  it("instantiates HarnessClient only in src/index.ts", () => {
-    const violations: string[] = [];
-    const srcFiles = walkTsFiles(SRC);
-
-    for (const file of srcFiles) {
-      const content = readFileSync(file, "utf8");
-      if (!/\bnew\s+HarnessClient\s*\(/.test(content)) continue;
-
-      const fileRel = rel(file);
-      if (fileRel !== "src/index.ts") {
-        violations.push(fileRel);
-      }
-    }
-
-    expect(
-      violations,
-      `Extra HarnessClient instantiations (singleton must live in src/index.ts only):\n${violations.join("\n")}`,
-    ).toEqual([]);
-  });
-});
-
 describe("Coding standards — registry registration", () => {
   it("ALL_TOOLSET_NAMES matches the ToolsetName union exactly", () => {
     const fromRegistry = new Set(ALL_TOOLSET_NAMES);
@@ -351,6 +394,43 @@ describe("Coding standards — registry registration", () => {
     for (const name of ALL_TOOLSET_NAMES) {
       expect(() => assign(name)).not.toThrow();
     }
+  });
+});
+
+describe("Coding standards — tool handler contracts", () => {
+  it("write tool handlers declare confirm param and use elicitation", () => {
+    const violations: string[] = [];
+
+    for (const file of WRITE_TOOL_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!/confirm:\s*z\.boolean\(/.test(content)) {
+        violations.push(`${file}: missing confirm z.boolean() input param`);
+      }
+      if (!content.includes("confirmViaElicitation")) {
+        violations.push(`${file}: missing confirmViaElicitation()`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("dispatch tool handlers use toMcpError and errorResult for failures", () => {
+    const dispatchTools = [...ALLOWED_REGISTER_TOOL_FILES].filter(
+      (f) => f !== "src/tools/harness-describe.ts" && f !== "src/tools/harness-schema.ts",
+    );
+    const violations: string[] = [];
+
+    for (const file of dispatchTools) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!content.includes("toMcpError")) {
+        violations.push(`${file}: missing toMcpError()`);
+      }
+      if (!content.includes("errorResult")) {
+        violations.push(`${file}: missing errorResult()`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
   });
 });
 

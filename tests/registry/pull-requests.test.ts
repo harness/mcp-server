@@ -102,6 +102,72 @@ describe("pull_request registry mappings", () => {
     }));
   });
 
+  it("preserves explicit false merge options without injecting scope into the body", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ branch_deleted: false, dry_run: false });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pull_request", "merge", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+      body: {
+        method: "squash",
+        delete_source_branch: false,
+        dry_run: false,
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/merge",
+      body: {
+        method: "squash",
+        delete_source_branch: false,
+        dry_run: false,
+      },
+    }));
+  });
+
+  it("accepts merge options from params/top-level input and maps aliases to API fields", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ branch_deleted: false });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pull_request", "merge", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      method: "merge",
+      deleteSourceBranch: false,
+      dryRun: false,
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: {
+        method: "merge",
+        delete_source_branch: false,
+        dry_run: false,
+      },
+    }));
+  });
+
+  it("rejects conflicting merge option values between body and params/top-level input", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pull_request", "merge", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        delete_source_branch: true,
+        body: { delete_source_branch: false },
+      }),
+    ).rejects.toThrow(/Conflicting pull_request\.merge values/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("requires repo_id for create instead of accepting repo_identifier", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
     const mockRequest = vi.fn().mockResolvedValue({ data: { number: 1 } });

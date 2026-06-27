@@ -1,5 +1,25 @@
 # Harness MCP Server — Task Tracking
 
+## Pull Request Merge Branch Deletion Bug (2026-06-26)
+- [x] Read Slack bug thread and confirm available context
+- [x] Trace Harness Code pull request merge request construction
+- [x] Add regression coverage for `delete_source_branch: false` on merge
+- [x] Implement focused pull_request merge body fix
+- [x] Run focused and broader verification
+- [x] Commit, push, open PR, and reply in Slack thread
+
+### Plan
+- Keep the fix inside the `pull_request.merge` execute action so other Harness Code resources are unchanged.
+- Build a stable merge body from documented Harness Code API fields, preserving explicit falsy values such as `delete_source_branch: false` and `dry_run: false`.
+- Accept merge options from either `body` or `params` because `harness_execute` documents action-specific options through `params`, while the resource `bodySchema` documents the wire body fields.
+- Skip generic scope injection for the merge endpoint so the API sees only merge options in the JSON body.
+
+### Review
+- Root cause: `pull_request.merge` forwarded only `input.body`. When agents supplied documented merge options through `harness_execute.params`, explicit values such as `delete_source_branch: false` were dropped before the POST body was built. The merge action also did not opt out of generic scope body injection.
+- Changed `src/registry/toolsets/pull-requests.ts` to build a merge-specific body from documented Harness Code API fields, preserve explicit falsy values, map common camelCase aliases to snake_case API fields, reject conflicting body/params values, and skip scope-field body injection.
+- Added regressions in `tests/registry/pull-requests.test.ts` and `tests/tools/tool-handlers.test.ts` for `delete_source_branch: false`, `dry_run: false`, params/top-level inputs, aliases, and conflict handling.
+- Verification passed: `pnpm exec vitest run tests/registry/pull-requests.test.ts tests/tools/tool-handlers.test.ts -t "pull request merge|merge options|delete_source_branch"`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, `pnpm test` (101 files / 2319 tests), and `pnpm standards:check`.
+
 ## Documentation Alignment Automation (2026-06-15)
 - [x] Audit recent commits and existing docs for weakly documented subsystems
 - [x] Select pipeline dynamic execution and execution input forensics as the focused documentation gap
