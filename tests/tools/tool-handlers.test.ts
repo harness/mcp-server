@@ -2093,15 +2093,34 @@ pipeline:
     expect(getCall.path).toContain("/pipeline/api/inputSets/");
     expect(getCall.path).toContain("my-input-set");
 
-    const runCall = mockRequest.mock.calls[1]![0] as { method?: string; body?: string };
+    const runCall = mockRequest.mock.calls[1]![0] as { method?: string; body?: string; params?: Record<string, unknown> };
     expect(runCall.method).toBe("POST");
     expect(runCall.body).toContain("skip_pipe");
     expect(runCall.body).toContain("branch");
     expect(runCall.body).toContain("main");
     expect(runCall.body).not.toContain("<+input>");
+    expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
   });
 
-  it("skips unresolved-input pre-flight when input_set_ids and inline inputs are present", async () => {
+  it("returns a clear error when input set materialization fails", async () => {
+    mockRequest.mockRejectedValueOnce(new HarnessApiError("Input set not found", 404));
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "skip_pipe",
+      inputs: {},
+      input_set_ids: ["missing-set"],
+    });
+
+    expect(result.isError).toBe(true);
+    const errText = JSON.stringify(parseResult(result));
+    expect(errText).toContain("Could not load input set(s) for execution");
+    expect(errText).toContain("Input set not found");
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not materialize input sets when inline runtime inputs are provided", async () => {
     const templateWithRequired = `pipeline:
   identifier: "skip_pipe"
   variables:
@@ -2131,6 +2150,10 @@ pipeline:
     const templateCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
     expect(templateCall.method).toBe("POST");
     expect(templateCall.path).toBe("/pipeline/api/inputSets/template");
+    for (const call of mockRequest.mock.calls) {
+      const path = (call[0] as { path?: string }).path ?? "";
+      expect(path).not.toContain("/pipeline/api/inputSets/my-input-set");
+    }
   });
 
   it("includes _inputResolution metadata on successful auto-resolved execution", async () => {

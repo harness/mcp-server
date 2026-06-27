@@ -15,6 +15,13 @@ export interface MaterializeParams {
   inputSetIds: string[];
 }
 
+/** True when callers did not supply effective inline runtime inputs (undefined or empty object). */
+export function hasNoInlineRuntimeInputs(inputs: unknown): boolean {
+  if (inputs === undefined) return true;
+  const record = asRecord(inputs);
+  return !!record && Object.keys(record).length === 0;
+}
+
 function mergeVariableLists(
   a: Array<Record<string, unknown>>,
   b: Array<Record<string, unknown>>,

@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { mergeRuntimePipelineFragments } from "../../src/utils/materialize-input-sets.js";
+import { hasNoInlineRuntimeInputs, mergeRuntimePipelineFragments } from "../../src/utils/materialize-input-sets.js";
+
+describe("hasNoInlineRuntimeInputs", () => {
+  it.each([
+    { label: "undefined", inputs: undefined, expected: true },
+    { label: "empty object", inputs: {}, expected: true },
+    { label: "flat key-value map", inputs: { branch: "main" }, expected: false },
+    { label: "YAML string", inputs: "pipeline:\n  identifier: p", expected: false },
+    { label: "null", inputs: null, expected: false },
+    { label: "array", inputs: [], expected: false },
+  ])("treats $label as no inline inputs = $expected", ({ inputs, expected }) => {
+    expect(hasNoInlineRuntimeInputs(inputs)).toBe(expected);
+  });
+});
 
 describe("mergeRuntimePipelineFragments", () => {
   it("overrides pipeline variables by name from the later fragment", () => {

@@ -18,4 +18,13 @@ describe("HTTP health response", () => {
       search,
     });
   });
+
+  it("reports zero active sessions without changing HTTP status", () => {
+    const search: SearchReadiness = { state: "failed", configured: "local", error: "model cache unavailable" };
+    const health = buildHttpHealthResponse(search, 0);
+
+    expect(health.statusCode).toBe(200);
+    expect(health.body.sessions).toBe(0);
+    expect(health.body.status).toBe("ok");
+  });
 });

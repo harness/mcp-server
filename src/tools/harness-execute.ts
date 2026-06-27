@@ -12,7 +12,7 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
-import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
+import { hasNoInlineRuntimeInputs, materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
 import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
@@ -23,12 +23,6 @@ const log = createLogger("execute");
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const DEFAULT_WAIT_POLL_INTERVAL_SECONDS = 3;
 const MAX_WAIT_INTERVAL_MS = 30_000;
-
-function hasNoInlineRuntimeInputs(inputs: unknown): boolean {
-  if (inputs === undefined) return true;
-  const record = asRecord(inputs);
-  return !!record && Object.keys(record).length === 0;
-}
 
 /**
  * Map `resource_id` onto the execute action's target identifier field, in
