@@ -1636,6 +1636,39 @@ pipeline:
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/43/state");
   });
 
+  it("passes pull request merge delete_source_branch=false from params to the API body", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ branch_deleted: false });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_execute", {
+      resource_type: "pull_request",
+      action: "merge",
+      resource_id: "42",
+      params: {
+        repo_id: "my-repo",
+        method: "squash",
+        delete_source_branch: false,
+        dry_run: false,
+      },
+      org_id: "default",
+      project_id: "test-project",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/merge");
+    expect(call.body).toEqual({
+      method: "squash",
+      delete_source_branch: false,
+      dry_run: false,
+    });
+  });
+
   it("does not remap resource_id to child field when primary matches (GitOps contract)", async () => {
     const gitopsServer = makeMcpServer("accept");
     const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
