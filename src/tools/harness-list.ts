@@ -73,6 +73,9 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         const rawResult = await registry.dispatch(client, resourceType, "list", input);
         const page = typeof args.page === "number" ? args.page : 0;
         const result = normalizeHarnessListPayload(rawResult, { page });
+        const itemsForIndexing = isRecord(result) && Array.isArray(result.items)
+          ? (result.items as Array<Record<string, unknown>>)
+          : [];
 
         // Apply compact mode — strip verbose metadata from list items.
         // Skip when the endpoint spec has opted out via `skipCompact` (marker
@@ -104,10 +107,10 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         }
 
         // Fire-and-forget: index items for semantic search (skipped in multi-user + local)
-        if (searchManager && isRecord(result) && Array.isArray(result.items)) {
+        if (searchManager && itemsForIndexing.length > 0) {
           const accountId = client.account;
           void Promise.all(
-            (result.items as Array<Record<string, unknown>>).map(item => {
+            itemsForIndexing.map(item => {
               const identifier = asString(item["identifier"]) ?? asString(item["id"]);
               if (!identifier) return Promise.resolve();
               return searchManager.indexItem({

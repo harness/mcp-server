@@ -182,6 +182,25 @@ describe("harness_list", () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Server error", 500));
     await expect(server.call("harness_list", { resource_type: "pipeline" })).rejects.toThrow();
   });
+
+  it("defaults template_list_type to All when listing templates without an explicit filter", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
+    client = makeClient(mockRequest);
+    const templateServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(templateServer, registry, client);
+
+    const result = await templateServer.call("harness_list", {
+      resource_type: "template",
+      org_id: "default",
+      project_id: "my-project",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.templateListType).toBe("All");
+  });
 });
 
 describe("harness_get", () => {
