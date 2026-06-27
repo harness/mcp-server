@@ -107,19 +107,21 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         if (searchManager && isRecord(result) && Array.isArray(result.items)) {
           const accountId = client.account;
           void Promise.all(
-            (result.items as Array<Record<string, unknown>>).map(item =>
-              searchManager.indexItem({
-                id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
+            (result.items as Array<Record<string, unknown>>).map(item => {
+              const identifier = asString(item["identifier"]) ?? asString(item["id"]);
+              if (!identifier) return Promise.resolve();
+              return searchManager.indexItem({
+                id: `${resourceType}:${identifier}`,
                 content: buildResourceIndexContent(resourceType, item),
                 corpus: "entities",
                 accountId,
                 metadata: {
                   resource_type: resourceType,
-                  identifier: String(item["identifier"] ?? item["id"] ?? ""),
+                  identifier,
                   name: String(item["name"] ?? ""),
                 },
-              })
-            )
+              });
+            })
           ).catch(() => { /* never surface indexing errors to caller */ });
         }
 

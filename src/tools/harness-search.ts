@@ -246,12 +246,14 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           entries.flatMap(e => (e.items as Array<Record<string, unknown>>).map(i => String(i["identifier"] ?? i["id"] ?? "")))
         );
         const seenSemanticIds = new Set<string>();
+        let semanticMatchCount = 0;
         for (const sr of semanticResults) {
           if (sr.score < SEMANTIC_DISPLAY_THRESHOLD) continue;
           const dedupeId = sr.metadata["identifier"] || sr.id;
           if (seenSemanticIds.has(dedupeId)) continue;
           seenSemanticIds.add(dedupeId);
           if (sr.metadata["identifier"] && keywordIds.has(sr.metadata["identifier"])) continue;
+          semanticMatchCount++;
           entries.push({
             resource_type: sr.metadata["resource_type"] ?? sr.corpus,
             tier: 0,
@@ -271,7 +273,7 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           : [];
         return jsonResult({
           query: args.query,
-          total_matches: totalMatches,
+          total_matches: totalMatches + semanticMatchCount,
           searched_types: targetTypes.length,
           ...(semanticRouted ? { semantic_routed: true, types_skipped: skippedTypes } : {}),
           results: entries,

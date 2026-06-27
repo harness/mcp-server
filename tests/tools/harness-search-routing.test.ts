@@ -87,6 +87,14 @@ function makeSearchManager(results: SearchResult[]): SearchManager {
   return { getProvider: () => provider } as SearchManager;
 }
 
+function makeIndexingSearchManager() {
+  const indexItem = vi.fn().mockResolvedValue(undefined);
+  return {
+    searchManager: { indexItem } as unknown as SearchManager,
+    indexItem,
+  };
+}
+
 function parseResult(result: ToolResult): unknown {
   return JSON.parse(result.content[0]!.text);
 }
@@ -261,12 +269,14 @@ describe("harness_search tier-0 semantic merge/dedup", () => {
 
     const result = await server.call("harness_search", { query: "pipeline yaml" });
     const data = parseResult(result) as {
+      total_matches: number;
       results: Array<{ tier: number; resource_type: string; items: unknown[] }>;
     };
 
     const tier0 = data.results.filter((entry) => entry.tier === 0);
     expect(tier0).toHaveLength(1);
     expect(tier0[0]!.resource_type).toBe("pipeline");
+    expect(data.total_matches).toBe(1);
   });
 
   it("deduplicates semantic hits by identifier", async () => {
@@ -321,5 +331,52 @@ describe("harness_search tier-0 semantic merge/dedup", () => {
       .filter((entry) => entry.tier !== 0)
       .flatMap((entry) => entry.items) as Array<Record<string, unknown>>;
     expect(keywordItems.some((item) => item.identifier === "existing-pipe")).toBe(true);
+  });
+});
+
+describe("live resource indexing guards", () => {
+  it("skips harness_list semantic indexing for items without a stable identifier", async () => {
+    const server = makeMcpServer();
+    const dispatch = vi.fn().mockResolvedValue({
+      items: [
+        { name: "No Id" },
+        { identifier: "stable-id", name: "Stable" },
+      ],
+      total: 2,
+    });
+    const registry = {
+      getAllFilterFields: () => [],
+      getTypesForOperation: () => ["pipeline"],
+      getResource: () => ({}),
+      dispatch,
+    } as unknown as Registry;
+    const { searchManager, indexItem } = makeIndexingSearchManager();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(server, registry, makeClient(), searchManager);
+
+    await server.call("harness_list", { resource_type: "pipeline" });
+
+    expect(indexItem).toHaveBeenCalledOnce();
+    expect(indexItem).toHaveBeenCalledWith(expect.objectContaining({
+      id: "pipeline:stable-id",
+      metadata: expect.objectContaining({ identifier: "stable-id" }),
+    }));
+  });
+
+  it("skips harness_get semantic indexing when the response has no stable identifier", async () => {
+    const server = makeMcpServer();
+    const dispatch = vi.fn().mockResolvedValue({ name: "No Id" });
+    const registry = {
+      getTypesForOperation: () => ["pipeline"],
+      getResource: () => ({ identifierFields: ["identifier"] }),
+      dispatch,
+    } as unknown as Registry;
+    const { searchManager, indexItem } = makeIndexingSearchManager();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server, registry, makeClient(), searchManager);
+
+    await server.call("harness_get", { resource_type: "pipeline", resource_id: "requested-id" });
+
+    expect(indexItem).not.toHaveBeenCalled();
   });
 });

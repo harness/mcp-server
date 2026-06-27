@@ -7,19 +7,19 @@ const DEFAULT_HF_CACHE_DIR = "/tmp/hf-cache";
 const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
 const EMBEDDING_DIM = 384;
 const CORPORA: SearchCorpus[] = ["entities", "docs", "knowledge"];
-/** Per-key cap for TTL-backed or resources corpus items. */
+/** Per-key cap for TTL-backed or live entity corpus items. */
 const MAX_ITEMS_PER_KEY = 5000;
-/** Max distinct resources:<account> buckets — cross-key LRU evicts the stalest account. */
+/** Max distinct entities:<account> buckets — cross-key LRU evicts the stalest account. */
 const MAX_RESOURCE_ACCOUNT_KEYS = 32;
 /** Global item ceiling across all store keys (safety net for long-lived multi-user processes). */
 const MAX_TOTAL_ITEMS = 20_000;
 
-/** True for per-account resources buckets (not the static global corpora keys). */
+/** True for per-account live entity buckets (not the static global corpora keys). */
 export function isResourceAccountKey(key: string): boolean {
-  return key.startsWith("resources:") && !key.endsWith(":global");
+  return key.startsWith("entities:") && !key.endsWith(":global");
 }
 
-/** resources corpus is always capped; other corpora only cap TTL-backed items. */
+/** entities corpus is always capped; other corpora only cap TTL-backed items. */
 export function needsPerKeyCap(corpus: SearchCorpus, expiresAt: number | undefined): boolean {
   return corpus === "entities" || expiresAt !== undefined;
 }
