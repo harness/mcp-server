@@ -4,7 +4,7 @@ import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("local-provider");
 const DEFAULT_HF_CACHE_DIR = "/tmp/hf-cache";
-const EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
+export const DEFAULT_EMBEDDING_MODEL = "Xenova/all-MiniLM-L6-v2";
 const EMBEDDING_DIM = 384;
 const CORPORA: SearchCorpus[] = ["entities", "docs", "knowledge"];
 /** Per-key cap for TTL-backed or live entity corpus items. */
@@ -101,6 +101,7 @@ function resolveExpiresAt(item: IndexableItem, now: number): number | undefined 
 
 export interface LocalSearchProviderOptions {
   cacheDir?: string;
+  model?: string;
 }
 
 export class LocalSearchProvider implements SearchProvider {
@@ -108,6 +109,7 @@ export class LocalSearchProvider implements SearchProvider {
   private initError: string | undefined;
   private embed: EmbedFn | null = null;
   private readonly cacheDir: string;
+  private readonly model: string;
   // key: `${corpus}:${accountId ?? "global"}`
   private store = new Map<string, StoredItem[]>();
   private keyLastAccessed = new Map<string, number>();
@@ -115,13 +117,14 @@ export class LocalSearchProvider implements SearchProvider {
 
   constructor(options: LocalSearchProviderOptions = {}) {
     this.cacheDir = options.cacheDir ?? DEFAULT_HF_CACHE_DIR;
+    this.model = options.model ?? DEFAULT_EMBEDDING_MODEL;
   }
 
   async initialize(): Promise<void> {
     try {
       const { pipeline, env } = await import("@huggingface/transformers");
       env.cacheDir = this.cacheDir;
-      const extractor = await pipeline("feature-extraction", EMBEDDING_MODEL, { dtype: "fp32" });
+      const extractor = await pipeline("feature-extraction", this.model, { dtype: "fp32" });
       this.embed = async (text: string): Promise<Float32Array> => {
         const out = await extractor(text, { pooling: "mean", normalize: true });
         const raw = out.data;
@@ -130,7 +133,8 @@ export class LocalSearchProvider implements SearchProvider {
       this.available = true;
       // Run eviction every 10 minutes
       this.evictionTimer = setInterval(() => this.evictExpired(), 10 * 60 * 1000);
-      log.info("LocalSearchProvider initialized", { model: EMBEDDING_MODEL, dim: EMBEDDING_DIM, cacheDir: this.cacheDir });
+      this.evictionTimer.unref?.();
+      log.info("LocalSearchProvider initialized", { model: this.model, dim: EMBEDDING_DIM, cacheDir: this.cacheDir });
     } catch (err) {
       this.initError = String(err);
       log.error("LocalSearchProvider initialization failed", { error: this.initError });

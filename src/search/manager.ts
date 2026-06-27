@@ -258,7 +258,10 @@ export class SearchManager {
 
   private loadProvider(config: Config): SearchProvider {
     if (this.configuredProvider === "local") {
-      return new LocalSearchProvider({ cacheDir: config.HARNESS_HF_CACHE_DIR });
+      return new LocalSearchProvider({
+        cacheDir: config.HARNESS_HF_CACHE_DIR,
+        model: process.env.HARNESS_SEARCH_MODEL,
+      });
     }
     return new NullSearchProvider();
   }
