@@ -59,6 +59,18 @@ describe("Coding standards — registry resource contract", () => {
           violations.push(`${resourceType}.${operation}: missing operationPolicy.retryPolicy`);
         }
       }
+      for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
+        if (!spec.operationPolicy) {
+          violations.push(`${resourceType}.${action}: missing operationPolicy`);
+          continue;
+        }
+        if (!spec.operationPolicy.risk) {
+          violations.push(`${resourceType}.${action}: missing operationPolicy.risk`);
+        }
+        if (!spec.operationPolicy.retryPolicy) {
+          violations.push(`${resourceType}.${action}: missing operationPolicy.retryPolicy`);
+        }
+      }
     }
 
     expect(violations, violations.join("\n")).toEqual([]);
