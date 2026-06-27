@@ -264,7 +264,8 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           normalizeRemotePipelineRunParams(input);
         }
 
-        const hasInputSets = !!(args.input_set_ids && args.input_set_ids.length > 0);
+        const inputSetIds = args.input_set_ids ?? [];
+        const hasInputSets = inputSetIds.length > 0;
         let materializedInputSets = false;
 
         // When only input_set_ids are effectively provided, fetch each input set and build runtime YAML.
@@ -299,7 +300,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               pipelineId,
               orgId,
               projectId,
-              inputSetIds: args.input_set_ids,
+              inputSetIds,
             });
             if (yaml) {
               input.inputs = yaml;
