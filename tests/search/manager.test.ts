@@ -1,7 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
 import { SearchManager } from "../../src/search/manager.js";
 import { NullSearchProvider } from "../../src/search/null-provider.js";
-import { LocalSearchProvider } from "../../src/search/local-provider.js";
+import {
+  LocalSearchProvider,
+  type LocalSearchProviderOptions,
+} from "../../src/search/local-provider.js";
+import * as localProviderModule from "../../src/search/local-provider.js";
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
@@ -16,6 +20,40 @@ describe("SearchManager", () => {
   it("returns NullSearchProvider when HARNESS_SEARCH_PROVIDER=none", () => {
     const mgr = new SearchManager(makeConfig() as never);
     expect(mgr.getProvider()).toBeInstanceOf(NullSearchProvider);
+  });
+
+  it("forwards HARNESS_SEARCH_MODEL to LocalSearchProvider constructor options", () => {
+    const previous = process.env.HARNESS_SEARCH_MODEL;
+    process.env.HARNESS_SEARCH_MODEL = "custom/search-model";
+    const captured: LocalSearchProviderOptions[] = [];
+    const Original = localProviderModule.LocalSearchProvider;
+    class CapturingLocalSearchProvider extends Original {
+      constructor(opts?: LocalSearchProviderOptions) {
+        captured.push(opts ?? {});
+        super(opts);
+      }
+    }
+    const ctorSpy = vi.spyOn(localProviderModule, "LocalSearchProvider")
+      .mockImplementation(CapturingLocalSearchProvider);
+
+    try {
+      new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "local",
+        HARNESS_HF_CACHE_DIR: "/tmp/custom-hf-cache",
+      }) as never);
+
+      expect(captured).toEqual([{
+        cacheDir: "/tmp/custom-hf-cache",
+        model: "custom/search-model",
+      }]);
+    } finally {
+      if (previous === undefined) {
+        delete process.env.HARNESS_SEARCH_MODEL;
+      } else {
+        process.env.HARNESS_SEARCH_MODEL = previous;
+      }
+      ctorSpy.mockRestore();
+    }
   });
 
   it("provider.isAvailable() is false for null provider", () => {
