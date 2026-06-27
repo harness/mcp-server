@@ -137,6 +137,14 @@ All Zod schemas in tool handlers must:
 - Make raw `fetch()` calls from tool handlers or toolset definitions
 - Bypass the client's auth, retry, or rate-limiting
 
+**Documented exceptions** for `client.request()` outside `Registry.dispatch()` (enforced by `pnpm standards:check`):
+
+| File | Reason |
+|------|--------|
+| `src/tools/entity-schema/live.ts` | Live YAML schema fetch for `harness_schema` |
+| `src/tools/diagnose/pipeline.ts` | Child pipeline execution graph for nested failure diagnosis |
+| `src/tools/harness-execute.ts` | Best-effort input-set hint before pipeline execution |
+
 **Documented exceptions** for global `fetch()` outside `HarnessClient` (enforced by `pnpm standards:check`):
 
 | File | Reason |

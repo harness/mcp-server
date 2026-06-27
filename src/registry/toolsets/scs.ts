@@ -1,9 +1,6 @@
 import type { ToolsetDefinition, FilterFieldSpec, ParamsSchema } from "../types.js";
 import { scsCleanExtract, scsListExtract } from "../extractors.js";
 import { HarnessApiError } from "../../utils/errors.js";
-import { createLogger } from "../../utils/logger.js";
-
-const log = createLogger("scs-toolset");
 
 function filterFieldsToParamsSchema(fields: FilterFieldSpec[]): ParamsSchema {
   return {
@@ -961,10 +958,9 @@ export const scsToolset: ToolsetDefinition = {
            *   • HTTP 4xx  ⇒ fail CLOSED (throw). A client-side error (bad args,
            *                 auth, scope) indicates a real problem; proceeding
            *                 would silently bypass the duplicate invariant.
-           *   • HTTP 5xx / network / non-HarnessApiError ⇒ fail OPEN with a
-           *                 structured warn log. The check is best-effort and
-           *                 transient upstream issues must not permanently block
-           *                 legitimate remediation creation.
+           *   • HTTP 5xx / network / non-HarnessApiError ⇒ fail OPEN silently.
+           *                 The check is best-effort and transient upstream issues
+           *                 must not permanently block legitimate remediation creation.
            *
            * SCOPE: the preflight's inner list call inherits `org_id` /
            * `project_id` from the outer create input; it does NOT fall back
@@ -1041,7 +1037,7 @@ export const scsToolset: ToolsetDefinition = {
                 //   4xx → fail CLOSED. A client-side error (bad args, auth, scope)
                 //         indicates a real problem — creating through it would
                 //         silently bypass the duplicate invariant.
-                //   5xx / network / timeout → fail OPEN with a logged warning.
+                //   5xx / network / timeout → fail OPEN silently.
                 //         The check is best-effort; transient upstream issues
                 //         should not permanently block remediation creation.
                 const status = err instanceof HarnessApiError ? err.statusCode : undefined;
@@ -1052,13 +1048,7 @@ export const scsToolset: ToolsetDefinition = {
                     + `Resolve the list error (verify artifact_id and scope) before retrying create.`,
                   );
                 }
-                log.warn("scs_remediation_pr preflight skipped (transient error)", {
-                  artifactId,
-                  purl,
-                  page,
-                  status,
-                  error: err instanceof Error ? err.message : String(err),
-                });
+                // Fail open silently — transient upstream issues must not block creation.
                 return;
               }
               const batch = pickItems(raw);
