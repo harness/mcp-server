@@ -1,0 +1,322 @@
+[
+  {
+    "id": "connector-kubernetes",
+    "query": "kubernetes connector",
+    "mode": "specific",
+    "expectedTypes": ["connector"],
+    "acceptableTypes": ["infrastructure"],
+    "description": "Kubernetes integration should route to connectors, with infrastructure acceptable because cluster infra references connectors."
+  },
+  {
+    "id": "connector-github",
+    "query": "github connector",
+    "mode": "specific",
+    "expectedTypes": ["connector"],
+    "acceptableTypes": ["repository", "pipeline"],
+    "description": "GitHub auth and SCM connection setup should route to connectors."
+  },
+  {
+    "id": "connector-docker-registry",
+    "query": "docker registry connector",
+    "mode": "specific",
+    "expectedTypes": ["connector"],
+    "acceptableTypes": ["registry", "artifact"],
+    "description": "Container registry connection setup should route to connectors."
+  },
+  {
+    "id": "connector-test-connection",
+    "query": "test connector connection",
+    "mode": "specific",
+    "expectedTypes": ["connector"],
+    "acceptableTypes": [],
+    "description": "Connector connectivity language should identify connector resources."
+  },
+  {
+    "id": "pipeline-cd",
+    "query": "create a CD pipeline",
+    "mode": "specific",
+    "expectedTypes": ["pipeline"],
+    "acceptableTypes": ["pipeline_v1", "template"],
+    "description": "Pipeline creation should route to pipeline resources."
+  },
+  {
+    "id": "pipeline-agent",
+    "query": "agent pipeline yaml",
+    "mode": "specific",
+    "expectedTypes": ["pipeline_v1"],
+    "acceptableTypes": ["pipeline", "template"],
+    "description": "Agent pipeline language should include v1 pipelines."
+  },
+  {
+    "id": "pipeline-execute",
+    "query": "run pipeline on main branch",
+    "mode": "specific",
+    "expectedTypes": ["pipeline"],
+    "acceptableTypes": ["pipeline_v1", "execution"],
+    "description": "Execution requests should keep pipeline routing available."
+  },
+  {
+    "id": "pipeline-execution-history",
+    "query": "pipeline execution history status",
+    "mode": "cross_domain",
+    "expectedTypes": ["execution", "pipeline"],
+    "acceptableTypes": [],
+    "description": "Historical run/status language spans pipeline and execution resources."
+  },
+  {
+    "id": "execution-logs",
+    "query": "download failed execution logs",
+    "mode": "specific",
+    "expectedTypes": ["execution"],
+    "acceptableTypes": ["pipeline"],
+    "description": "Log retrieval language should route to execution logs."
+  },
+  {
+    "id": "service-create",
+    "query": "create a service for payments api",
+    "mode": "specific",
+    "expectedTypes": ["service"],
+    "acceptableTypes": ["pipeline"],
+    "description": "Service setup should route to services."
+  },
+  {
+    "id": "environment-prod",
+    "query": "production environment",
+    "mode": "specific",
+    "expectedTypes": ["environment"],
+    "acceptableTypes": ["infrastructure"],
+    "description": "Environment language should route to environments."
+  },
+  {
+    "id": "infrastructure-k8s",
+    "query": "kubernetes infrastructure definition",
+    "mode": "specific",
+    "expectedTypes": ["infrastructure"],
+    "acceptableTypes": ["connector", "environment"],
+    "description": "Infrastructure definition should route to infrastructure resources."
+  },
+  {
+    "id": "template-pipeline",
+    "query": "pipeline template with stage template",
+    "mode": "specific",
+    "expectedTypes": ["template"],
+    "acceptableTypes": ["template_v1", "pipeline"],
+    "description": "Template authoring should route to templates."
+  },
+  {
+    "id": "template-step-group",
+    "query": "step group template",
+    "mode": "specific",
+    "expectedTypes": ["template"],
+    "acceptableTypes": ["template_v1", "pipeline"],
+    "description": "Step group template language should route to templates."
+  },
+  {
+    "id": "trigger-webhook",
+    "query": "github webhook trigger",
+    "mode": "specific",
+    "expectedTypes": ["trigger"],
+    "acceptableTypes": ["pipeline", "repository"],
+    "description": "Webhook automation should route to triggers."
+  },
+  {
+    "id": "input-set",
+    "query": "pipeline input set values",
+    "mode": "specific",
+    "expectedTypes": ["input_set"],
+    "acceptableTypes": ["pipeline"],
+    "description": "Input-set language should route to input set resources."
+  },
+  {
+    "id": "secret-github-pat",
+    "query": "github personal access token secret",
+    "mode": "specific",
+    "expectedTypes": ["secret"],
+    "acceptableTypes": ["connector"],
+    "description": "Credential storage language should route to secrets."
+  },
+  {
+    "id": "secret-ssh",
+    "query": "ssh key secret",
+    "mode": "specific",
+    "expectedTypes": ["secret"],
+    "acceptableTypes": ["connector"],
+    "description": "SSH key credential language should route to secrets."
+  },
+  {
+    "id": "repository-pr",
+    "query": "pull request comments",
+    "mode": "specific",
+    "expectedTypes": ["pull_request"],
+    "acceptableTypes": ["repository"],
+    "description": "PR collaboration language should route to pull request resources."
+  },
+  {
+    "id": "repository-code",
+    "query": "code repository branches",
+    "mode": "specific",
+    "expectedTypes": ["repository"],
+    "acceptableTypes": ["branch", "pull_request"],
+    "description": "Code repository language should route to repository resources."
+  },
+  {
+    "id": "feature-flag",
+    "query": "feature flag rollout",
+    "mode": "specific",
+    "expectedTypes": ["fme_feature_flag"],
+    "acceptableTypes": ["fme_environment", "fme_rule_based_segment", "fme_standard_segment"],
+    "description": "Feature flag rollout language should route to FME flag resources."
+  },
+  {
+    "id": "feature-flag-targeting",
+    "query": "target users with a feature flag",
+    "mode": "cross_domain",
+    "expectedTypes": ["fme_feature_flag", "fme_rule_based_segment"],
+    "acceptableTypes": ["fme_standard_segment", "fme_environment"],
+    "description": "Targeting language spans flags and segments."
+  },
+  {
+    "id": "delegate-health",
+    "query": "delegate health status",
+    "mode": "specific",
+    "expectedTypes": ["delegate"],
+    "acceptableTypes": ["delegate_token"],
+    "description": "Delegate health should route to delegate resources."
+  },
+  {
+    "id": "rbac-user",
+    "query": "invite user to account",
+    "mode": "specific",
+    "expectedTypes": ["user"],
+    "acceptableTypes": ["user_group"],
+    "description": "User management language should route to users."
+  },
+  {
+    "id": "rbac-role",
+    "query": "assign role permissions",
+    "mode": "specific",
+    "expectedTypes": ["role"],
+    "acceptableTypes": ["role_assignment", "user_group"],
+    "description": "Permission assignment language should route to RBAC resources."
+  },
+  {
+    "id": "policy-governance",
+    "query": "opa policy governance",
+    "mode": "specific",
+    "expectedTypes": ["policy"],
+    "acceptableTypes": ["policy_set"],
+    "description": "OPA governance language should route to policy resources."
+  },
+  {
+    "id": "freeze-window",
+    "query": "deployment freeze window",
+    "mode": "specific",
+    "expectedTypes": ["freeze_window"],
+    "acceptableTypes": ["pipeline", "environment"],
+    "description": "Deployment freeze language should route to freeze windows."
+  },
+  {
+    "id": "gitops-app",
+    "query": "gitops application sync status",
+    "mode": "specific",
+    "expectedTypes": ["gitops_application"],
+    "acceptableTypes": ["gitops_cluster"],
+    "description": "GitOps sync status language should route to GitOps applications."
+  },
+  {
+    "id": "chaos-experiment",
+    "query": "chaos experiment",
+    "mode": "specific",
+    "expectedTypes": ["chaos_experiment"],
+    "acceptableTypes": ["chaos_infrastructure"],
+    "description": "Chaos experiment language should route to chaos resources."
+  },
+  {
+    "id": "cost-perspective",
+    "query": "software engineering insight metrics",
+    "mode": "specific",
+    "expectedTypes": ["sei_metric"],
+    "acceptableTypes": ["sei_business_alignment"],
+    "description": "Engineering insights language should route to SEI metrics."
+  },
+  {
+    "id": "slo",
+    "query": "service level objective error budget",
+    "mode": "specific",
+    "expectedTypes": ["sei_metric"],
+    "acceptableTypes": ["sei_business_alignment"],
+    "description": "SLO and error budget language should route to SLO resources."
+  },
+  {
+    "id": "security-scan",
+    "query": "security scan vulnerabilities",
+    "mode": "specific",
+    "expectedTypes": ["artifact_security"],
+    "acceptableTypes": ["code_repo_security", "scs_compliance_result"],
+    "description": "Security scan language should route to security resources."
+  },
+  {
+    "id": "artifact-component",
+    "query": "artifact component sbom",
+    "mode": "specific",
+    "expectedTypes": ["scs_artifact_component"],
+    "acceptableTypes": ["scs_artifact_source", "artifact_security"],
+    "description": "SBOM component language should route to artifact component resources."
+  },
+  {
+    "id": "dashboard",
+    "query": "project dashboard widgets",
+    "mode": "specific",
+    "expectedTypes": ["dashboard"],
+    "acceptableTypes": [],
+    "description": "Dashboard language should route to dashboard resources."
+  },
+  {
+    "id": "audit",
+    "query": "audit trail events",
+    "mode": "specific",
+    "expectedTypes": ["audit_event"],
+    "acceptableTypes": [],
+    "description": "Audit trail language should route to audit resources."
+  },
+  {
+    "id": "file-store",
+    "query": "file store folder",
+    "mode": "specific",
+    "expectedTypes": ["file_store"],
+    "acceptableTypes": [],
+    "description": "File store language should route to file store resources."
+  },
+  {
+    "id": "dbops-instance",
+    "query": "database schema migration instance",
+    "mode": "specific",
+    "expectedTypes": ["database_instance"],
+    "acceptableTypes": ["database_schema"],
+    "description": "Database migration language should route to DBOps resources."
+  },
+  {
+    "id": "iac-workspace",
+    "query": "terraform workspace plan",
+    "mode": "specific",
+    "expectedTypes": ["iacm_workspace"],
+    "acceptableTypes": ["iacm_module"],
+    "description": "Terraform workspace language should route to IaCM resources."
+  },
+  {
+    "id": "ambiguous-github-secret",
+    "query": "github secret",
+    "mode": "ambiguous",
+    "expectedTypes": ["secret", "connector"],
+    "acceptableTypes": ["pipeline", "repository"],
+    "description": "GitHub secret can mean stored credential, connector auth, or pipeline secret reference."
+  },
+  {
+    "id": "ambiguous-prod",
+    "query": "prod deployment",
+    "mode": "ambiguous",
+    "expectedTypes": ["pipeline", "environment", "service"],
+    "acceptableTypes": ["execution", "deploy"],
+    "description": "Production deployment spans several core CD resources."
+  }
+]

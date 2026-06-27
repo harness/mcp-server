@@ -21,6 +21,7 @@
     "sync-schemas": "node scripts/sync-schemas.js",
     "sync-entity-schemas": "node scripts/sync-entity-schemas.js",
     "check-schema-coverage": "node scripts/check-schema-coverage.js",
+    "search:benchmark": "node scripts/benchmark-search-routing.mjs",
     "docs:generate": "node scripts/generate-docs.js",
     "docs:check": "node scripts/generate-docs.js --check",
     "standards:check": "vitest run tests/coding-standards tests/registry/structural-validation.test.ts",
