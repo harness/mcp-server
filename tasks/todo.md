@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-06-27)
+- [ ] Baseline current branch and identify recent behavioral commits
+- [ ] Review high-blast-radius diffs and trace candidate bugs through callers
+- [ ] Implement a minimal fix only if a concrete critical trigger is proven
+- [ ] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+
+### Plan
+- Treat commits after `v3.2.4` as the recent-change window because the branch currently matches `origin/main` after that release tag.
+- Prioritize behavioral paths that can break many users: semantic search routing, search cache limiting, tool handler safety gates, and request/response shaping in recent fixes.
+- Require a concrete trigger scenario and caller-chain proof before changing code; if confidence stays below the critical-bug bar, leave code unchanged and report the no-fix result.
+
 ## Pull Request Merge Branch Deletion Bug (2026-06-26)
 - [x] Read Slack bug thread and confirm available context
 - [x] Trace Harness Code pull request merge request construction
