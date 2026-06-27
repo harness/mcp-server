@@ -114,18 +114,21 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         // Fire-and-forget: index item for semantic search (skipped in multi-user + local)
         if (searchManager && result && typeof result === "object") {
           const item = result as Record<string, unknown>;
+          const identifier = asString(item["identifier"]) ?? asString(item["id"]);
           const accountId = client.account;
-          void searchManager.indexItem({
-            id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
-            content: buildResourceIndexContent(resourceType, item),
-            corpus: "entities",
-            accountId,
-            metadata: {
-              resource_type: resourceType,
-              identifier: String(item["identifier"] ?? item["id"] ?? ""),
-              name: String(item["name"] ?? ""),
-            },
-          }).catch(() => { /* never surface indexing errors */ });
+          if (identifier) {
+            void searchManager.indexItem({
+              id: `${resourceType}:${identifier}`,
+              content: buildResourceIndexContent(resourceType, item),
+              corpus: "entities",
+              accountId,
+              metadata: {
+                resource_type: resourceType,
+                identifier,
+                name: String(item["name"] ?? ""),
+              },
+            }).catch(() => { /* never surface indexing errors */ });
+          }
         }
 
         return jsonResult(result);
