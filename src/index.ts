@@ -21,6 +21,7 @@ import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
 import { SearchManager } from "./search/index.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "./utils/session-headers.js";
+import { buildHttpHealthResponse } from "./utils/http-health.js";
 
 
 const log = createLogger("main");
@@ -337,12 +338,8 @@ async function startHttp(config: Config, port: number): Promise<void> {
   // Health check (includes session count and search readiness for observability)
   app.get("/health", (_req, res) => {
     const search = sharedSearchManager.getReadiness();
-    const degraded = search.state === "failed";
-    res.status(degraded ? 503 : 200).json({
-      status: degraded ? "degraded" : "ok",
-      sessions: sessions.size,
-      search,
-    });
+    const health = buildHttpHealthResponse(search, sessions.size);
+    res.status(health.statusCode).json(health.body);
   });
 
   // POST /mcp — initialize new sessions or route to existing session
