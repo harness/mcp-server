@@ -198,8 +198,12 @@ describe("template_v1 global template catalog", () => {
     expect(call.params?.global_template).toBeUndefined();
   });
 
-  it("get with global=true passes global_template=true", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+  it("get with global=true routes to /v1/templates and passes global_template=true", async () => {
+    const registry = new Registry(makeConfig({
+      HARNESS_TOOLSETS: "templates",
+      HARNESS_ORG: "default",
+      HARNESS_PROJECT: "test-project",
+    }));
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "k8sRollingDeployStep" });
     const client = makeClient(mockRequest);
 
@@ -207,13 +211,84 @@ describe("template_v1 global template catalog", () => {
       template_id: "k8sRollingDeployStep",
       version_label: "1.0.7",
       global: true,
+      org_id: "default",
+      project_id: "my-project",
     });
 
     expect(mockRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "GET",
+        path: "/v1/templates/k8sRollingDeployStep/versions/1.0.7",
         params: expect.objectContaining({ global_template: true }),
       }),
     );
+  });
+
+  it("get with global=true and no version_label routes to stable global template path", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "k8sRollingDeployStep" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template_v1", "get", {
+      template_id: "k8sRollingDeployStep",
+      global: true,
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/v1/templates/k8sRollingDeployStep",
+        params: expect.objectContaining({ global_template: true }),
+      }),
+    );
+  });
+});
+
+describe("template_v1 list filter metadata", () => {
+  it("exposes global and entity_type filters for built-in catalog discovery", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const def = registry.getResource("template_v1");
+    const names = def.listFilterFields!.map((f) => f.name);
+
+    expect(names).toContain("global");
+    expect(names).toContain("entity_type");
+
+    const entityType = def.listFilterFields!.find((f) => f.name === "entity_type");
+    expect(entityType?.enum).toEqual(expect.arrayContaining(["Step", "Stage", "Agent"]));
+  });
+});
+
+describe("template_v1 create body builder", () => {
+  it("preserves is_stable=false instead of dropping it via truthiness", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "draft_step" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "template_v1", "create", {
+      org_id: "default",
+      project_id: "my-project",
+      body: {
+        template_yaml: "version: 1\ntemplate:\n  identifier: draft_step\n  name: Draft\n  step:\n    run:\n      script: echo hi\n",
+        is_stable: false,
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { body: Record<string, unknown> };
+    expect(call.body.is_stable).toBe(false);
+  });
+
+  it("throws when identifier cannot be resolved from body or template_id", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "template_v1", "create", {
+        org_id: "default",
+        project_id: "my-project",
+        body: {
+          template_yaml: "version: 1\ntemplate:\n  name: Missing Id\n  step:\n    run:\n      script: echo hi\n",
+        },
+      }),
+    ).rejects.toThrow(/identifier is required/i);
   });
 });
