@@ -1,9 +1,6 @@
 import type { ToolsetDefinition, FilterFieldSpec, ParamsSchema } from "../types.js";
 import { scsCleanExtract, scsListExtract } from "../extractors.js";
 import { HarnessApiError } from "../../utils/errors.js";
-import { createLogger } from "../../utils/logger.js";
-
-const log = createLogger("scs-toolset");
 
 function filterFieldsToParamsSchema(fields: FilterFieldSpec[]): ParamsSchema {
   return {
@@ -1052,13 +1049,7 @@ export const scsToolset: ToolsetDefinition = {
                     + `Resolve the list error (verify artifact_id and scope) before retrying create.`,
                   );
                 }
-                log.warn("scs_remediation_pr preflight skipped (transient error)", {
-                  artifactId,
-                  purl,
-                  page,
-                  status,
-                  error: err instanceof Error ? err.message : String(err),
-                });
+                // Fail open silently — duplicate check is best-effort on transient errors.
                 return;
               }
               const batch = pickItems(raw);

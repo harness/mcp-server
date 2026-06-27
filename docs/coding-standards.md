@@ -46,6 +46,7 @@ Files in `src/registry/toolsets/*.ts` must export a `ToolsetDefinition` object (
 They must NOT:
 
 - Import `HarnessClient`, `McpServer`, or `Registry`
+- Import `createLogger` or write to `console.*` (logging belongs in tool handlers)
 - Make HTTP calls directly (use `preflight` hooks with structural client interfaces from `PreflightContext` when needed)
 - Contain business logic beyond field mapping
 - Use `console.log()` (or any stdout writes)
@@ -144,6 +145,14 @@ All Zod schemas in tool handlers must:
 | `src/client/harness-client.ts` | Core HTTP transport |
 | `src/utils/log-resolver.ts` | Pre-signed CDN/S3 blob URLs must not receive API auth headers (would invalidate signatures) |
 | `src/audit/sinks/webhook.ts` | Best-effort POST to a user-configured external audit webhook URL |
+
+**Documented exceptions** for `client.request()` in tool handlers (bypass registry dispatch for multi-step workflows):
+
+| File | Reason |
+|------|--------|
+| `src/tools/harness-execute.ts` | Pipeline input-set materialization and runtime-input resolution before execute |
+| `src/tools/entity-schema/live.ts` | Live schema fetch from Harness schema registry endpoints |
+| `src/tools/diagnose/pipeline.ts` | Multi-step pipeline failure forensics (execution + logs) |
 
 ### 11. File Organization Rules
 
@@ -260,7 +269,7 @@ Before every commit, verify:
 - [ ] **No `console.log()`** — only `createLogger()` for stderr output
 - [ ] **No direct `fetch()` calls** — all Harness API HTTP goes through `HarnessClient` (exceptions: log blob CDN URLs, audit webhooks — see rule 10)
 - [ ] **No new `harness-*.ts` handler files** — the 11 handlers are fixed
-- [ ] **Toolset files are pure data** — no imports of `HarnessClient`, `McpServer`, or `Registry`
+- [ ] **Toolset files are pure data** — no imports of `HarnessClient`, `McpServer`, `Registry`, or `createLogger`
 - [ ] **All Zod params have `.describe()` after `.optional()`/`.default()`** — Zod 4 chaining order matters for MCP
 - [ ] **Response extractors are from `extractors.ts`** — reuse shared extractors
 - [ ] **Scope is declared correctly** — `"project"`, `"org"`, or `"account"`

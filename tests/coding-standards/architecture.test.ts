@@ -93,6 +93,13 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
 /** Only this file may instantiate HarnessClient in production src/. */
 const ALLOWED_HARNESS_CLIENT_FILES = new Set(["src/index.ts"]);
 
+/** Tool handlers allowed to call client.request() directly (bypass registry dispatch). */
+const ALLOWED_CLIENT_REQUEST_FILES = new Set([
+  "src/tools/harness-execute.ts",
+  "src/tools/entity-schema/live.ts",
+  "src/tools/diagnose/pipeline.ts",
+]);
+
 /** Files that must import Zod via the v4 subpath — computed after walkTsFiles is defined. */
 function zodV4RequiredFiles(): string[] {
   return [join(SRC, "config.ts"), ...walkTsFiles(join(SRC, "tools"))];
@@ -225,6 +232,26 @@ describe("Coding standards — logging and HTTP", () => {
     expect(violations, `console.* found in toolsets:\n${violations.join("\n")}`).toEqual([]);
   });
 
+  it("toolset files do not import createLogger (logging belongs in handlers)", () => {
+    const violations: string[] = [];
+    const toolsetDir = join(SRC, "registry/toolsets");
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const content = readFileSync(file, "utf8");
+      if (/from\s+["'][^"']*\/utils\/logger/.test(content) || /\bcreateLogger\s*\(/.test(content)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `createLogger found in toolsets (use silent fail-open in preflight, log in handlers):\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {
     const violations: string[] = [];
     const scanDirs = [join(SRC, "tools"), join(SRC, "registry/toolsets")];
@@ -278,6 +305,26 @@ describe("Coding standards — logging and HTTP", () => {
     expect(
       violations,
       `HarnessClient must only be constructed in src/index.ts:\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("client.request() is only used in documented handler exceptions", () => {
+    const violations: string[] = [];
+    const toolsDir = join(SRC, "tools");
+
+    for (const file of walkTsFiles(toolsDir)) {
+      const content = readFileSync(file, "utf8");
+      if (!/client\.request\s*[<(]/.test(content)) continue;
+
+      const fileRel = rel(file);
+      if (!ALLOWED_CLIENT_REQUEST_FILES.has(fileRel)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `Unexpected client.request() usage (allowed: ${[...ALLOWED_CLIENT_REQUEST_FILES].join(", ")}):\n${violations.join("\n")}`,
     ).toEqual([]);
   });
 });
