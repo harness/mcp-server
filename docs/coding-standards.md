@@ -135,6 +135,7 @@ All Zod schemas in tool handlers must:
 
 - Create additional `HarnessClient` instances
 - Make raw `fetch()` calls from tool handlers or toolset definitions
+- Call `client.request()` from tool handlers except the documented `entity-schema/live.ts` exception — route Harness API calls through `registry.dispatch()`
 - Bypass the client's auth, retry, or rate-limiting
 
 **Documented exceptions** for global `fetch()` outside `HarnessClient` (enforced by `pnpm standards:check`):
@@ -144,6 +145,12 @@ All Zod schemas in tool handlers must:
 | `src/client/harness-client.ts` | Core HTTP transport |
 | `src/utils/log-resolver.ts` | Pre-signed CDN/S3 blob URLs must not receive API auth headers (would invalidate signatures) |
 | `src/audit/sinks/webhook.ts` | Best-effort POST to a user-configured external audit webhook URL |
+
+**Documented exception** for `client.request()` outside `registry.dispatch()` in `src/tools/`:
+
+| File | Reason |
+|------|--------|
+| `src/tools/entity-schema/live.ts` | `harness_schema` fetches `/ng/api/yaml-schema` — schema metadata, not a registry resource type |
 
 ### 11. File Organization Rules
 

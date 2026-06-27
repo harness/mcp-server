@@ -90,6 +90,14 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
   "src/audit/sinks/webhook.ts",
 ]);
 
+/** Files allowed to call client.request() outside registry.dispatch (documented exceptions). */
+const ALLOWED_CLIENT_REQUEST_FILES = new Set([
+  "src/tools/entity-schema/live.ts", // harness_schema: /ng/api/yaml-schema is not a registry resource
+]);
+
+/** Search module — must stay free of HTTP transport and stdio-breaking logging. */
+const SEARCH_DIR = join(SRC, "search");
+
 /** Only this file may instantiate HarnessClient in production src/. */
 const ALLOWED_HARNESS_CLIENT_FILES = new Set(["src/index.ts"]);
 
@@ -223,6 +231,53 @@ describe("Coding standards — logging and HTTP", () => {
     }
 
     expect(violations, `console.* found in toolsets:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("does not call client.request() from tool handlers — use registry.dispatch", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(join(SRC, "tools"))) {
+      const content = readFileSync(file, "utf8");
+      if (!/\bclient\.request\s*[<(]/.test(content)) continue;
+
+      const fileRel = rel(file);
+      if (!ALLOWED_CLIENT_REQUEST_FILES.has(fileRel)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `client.request() bypasses registry dispatch in:\n${violations.join("\n")}\nAllowed: ${[...ALLOWED_CLIENT_REQUEST_FILES].join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("search module does not use console.log(), global fetch(), or instantiate HarnessClient", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(SEARCH_DIR)) {
+      const content = readFileSync(file, "utf8");
+      const fileRel = rel(file);
+
+      if (/\bconsole\.log\s*\(/.test(content)) {
+        violations.push(`${fileRel}: console.log()`);
+      }
+      if (GLOBAL_FETCH_PATTERN.test(content)) {
+        violations.push(`${fileRel}: global fetch()`);
+      }
+      if (/\bnew\s+HarnessClient\s*\(/.test(content)) {
+        violations.push(`${fileRel}: HarnessClient instantiation`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("search manager routes Harness API calls through registry.dispatch", () => {
+    const managerPath = join(SEARCH_DIR, "manager.ts");
+    const content = readFileSync(managerPath, "utf8");
+    expect(content).toMatch(/registry\.dispatch\s*\(/);
+    expect(content).not.toMatch(/\bclient\.request\s*\(/);
   });
 
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {
