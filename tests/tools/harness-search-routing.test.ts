@@ -320,6 +320,7 @@ describe("harness_search tier-0 semantic merge/dedup", () => {
 
     const result = await server.call("harness_search", { query: "existing-pipe" });
     const data = parseResult(result) as {
+      total_matches: number;
       results: Array<{ tier: number; items: Array<Record<string, unknown>> }>;
     };
 
@@ -331,6 +332,66 @@ describe("harness_search tier-0 semantic merge/dedup", () => {
       .filter((entry) => entry.tier !== 0)
       .flatMap((entry) => entry.items) as Array<Record<string, unknown>>;
     expect(keywordItems.some((item) => item.identifier === "existing-pipe")).toBe(true);
+    expect(data.total_matches).toBe(1);
+  });
+
+  it("adds unique semantic hits to total_matches alongside keyword matches", async () => {
+    const clientWithKeywordHit = makeClient(vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "keyword-pipe" }], totalElements: 1 },
+    }));
+    const searchManager = makeSearchManager([
+      makeSemanticResult(0.7, {
+        resource_type: "pipeline",
+        identifier: "semantic-only",
+      }, { id: "semantic-only" }),
+    ]);
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(server, registry, clientWithKeywordHit, searchManager);
+
+    const result = await server.call("harness_search", { query: "pipeline deploy" });
+    const data = parseResult(result) as { total_matches: number };
+
+    expect(data.total_matches).toBe(2);
+  });
+
+  it("does not count semantic hits below the display threshold in total_matches", async () => {
+    const searchManager = makeSearchManager([
+      makeSemanticResult(DISPLAY_THRESHOLD - 0.05, {
+        resource_type: "pipeline",
+        identifier: "below-threshold",
+      }),
+    ]);
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(server, registry, client, searchManager);
+
+    const result = await server.call("harness_search", { query: "pipeline" });
+    const data = parseResult(result) as {
+      total_matches: number;
+      results: Array<{ tier: number }>;
+    };
+
+    expect(data.results.filter((entry) => entry.tier === 0)).toHaveLength(0);
+    expect(data.total_matches).toBe(0);
+  });
+
+  it("counts deduplicated semantic hits once in total_matches", async () => {
+    const searchManager = makeSearchManager([
+      makeSemanticResult(0.6, {
+        resource_type: "pipeline",
+        identifier: "dup-id",
+      }, { id: "hit-1" }),
+      makeSemanticResult(0.55, {
+        resource_type: "pipeline",
+        identifier: "dup-id",
+      }, { id: "hit-2" }),
+    ]);
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(server, registry, client, searchManager);
+
+    const result = await server.call("harness_search", { query: "pipeline" });
+    const data = parseResult(result) as { total_matches: number };
+
+    expect(data.total_matches).toBe(1);
   });
 });
 
@@ -376,6 +437,101 @@ describe("live resource indexing guards", () => {
     registerGetTool(server, registry, makeClient(), searchManager);
 
     await server.call("harness_get", { resource_type: "pipeline", resource_id: "requested-id" });
+
+    expect(indexItem).not.toHaveBeenCalled();
+  });
+
+  it("indexes harness_get responses with a string identifier", async () => {
+    const server = makeMcpServer();
+    const dispatch = vi.fn().mockResolvedValue({
+      identifier: "pipe-1",
+      name: "Deploy Pipeline",
+    });
+    const registry = {
+      getTypesForOperation: () => ["pipeline"],
+      getResource: () => ({ identifierFields: ["identifier"] }),
+      dispatch,
+    } as unknown as Registry;
+    const { searchManager, indexItem } = makeIndexingSearchManager();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server, registry, makeClient(), searchManager);
+
+    await server.call("harness_get", { resource_type: "pipeline", resource_id: "pipe-1" });
+
+    expect(indexItem).toHaveBeenCalledOnce();
+    expect(indexItem).toHaveBeenCalledWith(expect.objectContaining({
+      id: "pipeline:pipe-1",
+      corpus: "entities",
+      metadata: expect.objectContaining({ identifier: "pipe-1", name: "Deploy Pipeline" }),
+    }));
+  });
+
+  it("indexes harness_get responses using the id field when identifier is absent", async () => {
+    const server = makeMcpServer();
+    const dispatch = vi.fn().mockResolvedValue({
+      id: "legacy-id",
+      name: "Legacy Pipeline",
+    });
+    const registry = {
+      getTypesForOperation: () => ["pipeline"],
+      getResource: () => ({ identifierFields: ["identifier"] }),
+      dispatch,
+    } as unknown as Registry;
+    const { searchManager, indexItem } = makeIndexingSearchManager();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server, registry, makeClient(), searchManager);
+
+    await server.call("harness_get", { resource_type: "pipeline", resource_id: "legacy-id" });
+
+    expect(indexItem).toHaveBeenCalledOnce();
+    expect(indexItem).toHaveBeenCalledWith(expect.objectContaining({
+      id: "pipeline:legacy-id",
+      metadata: expect.objectContaining({ identifier: "legacy-id" }),
+    }));
+  });
+
+  it("indexes harness_list items using the id field when identifier is absent", async () => {
+    const server = makeMcpServer();
+    const dispatch = vi.fn().mockResolvedValue({
+      items: [{ id: "legacy-id", name: "Legacy" }],
+      total: 1,
+    });
+    const registry = {
+      getAllFilterFields: () => [],
+      getTypesForOperation: () => ["pipeline"],
+      getResource: () => ({}),
+      dispatch,
+    } as unknown as Registry;
+    const { searchManager, indexItem } = makeIndexingSearchManager();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(server, registry, makeClient(), searchManager);
+
+    await server.call("harness_list", { resource_type: "pipeline" });
+
+    expect(indexItem).toHaveBeenCalledOnce();
+    expect(indexItem).toHaveBeenCalledWith(expect.objectContaining({
+      id: "pipeline:legacy-id",
+      metadata: expect.objectContaining({ identifier: "legacy-id" }),
+    }));
+  });
+
+  it("does not index harness_list items when identifier and id are non-string values", async () => {
+    const server = makeMcpServer();
+    const dispatch = vi.fn().mockResolvedValue({
+      items: [{ identifier: 123, id: 456, name: "Numeric Ids" }],
+      total: 1,
+    });
+    const registry = {
+      getAllFilterFields: () => [],
+      getTypesForOperation: () => ["pipeline"],
+      getResource: () => ({}),
+      dispatch,
+    } as unknown as Registry;
+    const { searchManager, indexItem } = makeIndexingSearchManager();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(server, registry, makeClient(), searchManager);
+
+    await server.call("harness_list", { resource_type: "pipeline" });
 
     expect(indexItem).not.toHaveBeenCalled();
   });
