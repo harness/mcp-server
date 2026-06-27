@@ -113,6 +113,17 @@ const RawConfigSchema = z.object({
     emptyStringAsUndefined,
     z.coerce.number().min(1).max(20).default(3),
   ),
+  HARNESS_SEARCH_PROVIDER: z.preprocess(
+    emptyStringAsUndefined,
+    z.enum(["none", "local"]).default("local"),
+  ),
+  HARNESS_SEARCH_SERVICE_URL: optionalStringFromEnv,
+  // Directory for @huggingface/transformers model cache (local search provider).
+  // Use a persistent volume in production; Docker image bakes models into /app/.cache/hf.
+  HARNESS_HF_CACHE_DIR: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().default("/tmp/hf-cache"),
+  ),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {

@@ -8,6 +8,8 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, coerceRecord } from "../utils/type-guards.js";
 import { resolveLogContent, resolveLogDownloadUrl } from "../utils/log-resolver.js";
 import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
+import type { SearchManager } from "../search/index.js";
+import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { resourceTypeSchema } from "./input-schemas.js";
 import { getOutputSchema } from "./output-schemas.js";
 
@@ -15,7 +17,7 @@ function isTrue(value: unknown): boolean {
   return value === true || value === "true";
 }
 
-export function registerGetTool(server: McpServer, registry: Registry, client: HarnessClient): void {
+export function registerGetTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
   const gettableTypes = registry.getTypesForOperation("get");
 
   server.registerTool(
@@ -108,6 +110,24 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         }
 
         const result = await registry.dispatch(client, resourceType, "get", input);
+
+        // Fire-and-forget: index item for semantic search (skipped in multi-user + local)
+        if (searchManager && result && typeof result === "object") {
+          const item = result as Record<string, unknown>;
+          const accountId = client.account;
+          void searchManager.indexItem({
+            id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
+            content: buildResourceIndexContent(resourceType, item),
+            corpus: "entities",
+            accountId,
+            metadata: {
+              resource_type: resourceType,
+              identifier: String(item["identifier"] ?? item["id"] ?? ""),
+              name: String(item["name"] ?? ""),
+            },
+          }).catch(() => { /* never surface indexing errors */ });
+        }
+
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);

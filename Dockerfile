@@ -12,7 +12,12 @@ RUN pnpm install --frozen-lockfile
 # Copy source and compile
 COPY tsconfig.json ./
 COPY src/ src/
+COPY scripts/preload-hf-model.mjs scripts/
 RUN pnpm build
+
+# Bake the local-search embedding model into the image (~23MB)
+ENV HARNESS_HF_CACHE_DIR=/app/.cache/hf
+RUN node scripts/preload-hf-model.mjs /app/.cache/hf
 
 # Stage 2 — production
 FROM node:22-alpine AS production
@@ -24,8 +29,11 @@ RUN corepack enable && corepack prepare pnpm@10.18.2 --activate
 COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
-# Copy compiled output from build stage
+# Copy compiled output and pre-downloaded model cache from build stage
 COPY --from=build /app/build build/
+COPY --from=build /app/.cache/hf /app/.cache/hf
+
+ENV HARNESS_HF_CACHE_DIR=/app/.cache/hf
 
 # Non-root user for security
 RUN addgroup -S mcp && adduser -S mcp -G mcp

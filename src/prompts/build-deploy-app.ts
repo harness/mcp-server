@@ -64,12 +64,13 @@ Present the full plan and generated YAML for review before creating anything.
 ### Step 5 — Ensure connectors exist
 - **Harness Artifact Registry (HAR)**: If the user mentions "Harness Artifact Registry", "HAR", or a HAR registry was found in Step 4 — no Docker connector is needed. Skip Docker connector creation entirely.
 - **Third-party registry** (DockerHub, ECR, GCR, ACR, etc.): If no Docker registry connector exists, generate connector YAML and present for review.
-- If no Git connector exists for "${repoUrl}": generate a Git connector YAML and present it for review
+- **Harness Code repo**: If "${repoUrl}" is a Harness Code repository (URL contains app.harness.io or the user says "Harness Code") — no Git connector is needed. The platform clones natively using just \`repoName\` in the codebase config.
+- **Third-party Git** (GitHub, GitLab, Bitbucket, etc.): If no Git connector exists for "${repoUrl}": generate a Git connector YAML and present it for review
 - Create any missing connectors using harness_create with resource_type="connector" (only after user confirmation)
 
 ### Step 6 — Generate CI pipeline YAML
 Generate a Harness CI pipeline that:
-- Clones "${repoUrl}" using the Git connector
+- Clones "${repoUrl}" — if it's a Harness Code repo, use \`properties.ci.codebase.repoName\` (no connectorRef needed); otherwise use the Git connector
 - Builds the Docker image from the Dockerfile found in Step 1
 - Tags the image with \`latest\` and \`<+pipeline.sequenceId>\`
 - Includes a build test step if the repo has tests (e.g. npm test, go test, pytest)
@@ -158,7 +159,7 @@ If still failing after 5 attempts:
 ### Step 9 — Create Harness service & environment
 - Create (or update) a Harness service definition that references the K8s manifests from the repo:
   - Service type: Kubernetes
-  - Manifest source: the Git connector from Step 5 pointing to the manifest path in the repo
+  - Manifest source: for Harness Code repos, use store type \`HarnessCode\` with \`repoName\`, \`branch\`, \`paths\` (no connectorRef needed). For external Git repos, use the Git connector pointing to the manifest path.
   - Artifact source: use \`registryRef\` for Harness Artifact Registry or \`connectorRef\` for third-party (same pattern as the BuildAndPush step — never mix both fields)
 - Ensure a target environment exists (or create one) for the ${namespace || "default"} namespace
 - Present the service and environment YAML for review before creating

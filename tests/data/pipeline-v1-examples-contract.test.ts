@@ -8,7 +8,13 @@
 import { describe, it, expect } from "vitest";
 import { parse as parseYaml } from "yaml";
 import { getExamplesForResource } from "../../src/data/examples/index.js";
+import { Registry } from "../../src/registry/index.js";
 import "../../src/data/examples/load-all.js";
+
+const MINIMAL_CONFIG = {
+  HARNESS_API_KEY: "pat.testaccount.testtoken.testsecret",
+  HARNESS_BASE_URL: "https://app.harness.io",
+} as const;
 
 const PIPELINE_ROOT_KEYS = new Set([
   "clone",
@@ -248,5 +254,16 @@ describe("pipeline_v1 example PR #428 regression guards", () => {
     const runtime = parseYaml(ex!.yaml).pipeline.stages[0].runtime;
     expect(runtime.kubernetes.namespace).toBe("harness-builds");
     expect(runtime.kubernetes.node).toEqual({});
+  });
+});
+
+describe("pipeline_v1 registry description contract", () => {
+  it("documents valid step keys without the removed agent step type", () => {
+    const registry = new Registry(MINIMAL_CONFIG);
+    const def = registry.getResource("pipeline_v1");
+
+    expect(def.description).toContain("run, action, template, approval");
+    expect(def.description).not.toMatch(/\brun,\s*agent,\s*action\b/);
+    expect(def.description).not.toMatch(/top-level step types.*\bagent\b/);
   });
 });

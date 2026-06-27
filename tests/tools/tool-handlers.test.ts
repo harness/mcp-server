@@ -1,5 +1,5 @@
 /**
- * Generic tool handler tests for all 10 MCP tools.
+ * Generic tool handler tests for all 11 MCP tools.
  *
  * Tests input validation and error handling paths with mocked registry/client.
  * Does not test actual API calls — that's covered by registry dispatch tests.
@@ -1685,6 +1685,39 @@ pipeline:
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/43/state");
   });
 
+  it("passes pull request merge delete_source_branch=false from params to the API body", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ branch_deleted: false });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient);
+
+    const result = await prServer.call("harness_execute", {
+      resource_type: "pull_request",
+      action: "merge",
+      resource_id: "42",
+      params: {
+        repo_id: "my-repo",
+        method: "squash",
+        delete_source_branch: false,
+        dry_run: false,
+      },
+      org_id: "default",
+      project_id: "test-project",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/merge");
+    expect(call.body).toEqual({
+      method: "squash",
+      delete_source_branch: false,
+      dry_run: false,
+    });
+  });
+
   it("does not remap resource_id to child field when primary matches (GitOps contract)", async () => {
     const gitopsServer = makeMcpServer("accept");
     const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
@@ -2134,6 +2167,27 @@ pipeline:
     expect(data._inputResolution.mode).toBe("auto_resolved");
     expect(data._inputResolution.matched).toContain("tag");
     expect(data._inputResolution.defaulted).toContain("REGISTRY");
+  });
+
+  it("fails closed when auto-resolving pipeline runtime inputs fails", async () => {
+    mockRequest.mockRejectedValueOnce(new Error("template service unavailable"));
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "fail_closed_pipe",
+      inputs: { branch: "main" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Could not auto-resolve runtime inputs"),
+    });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "POST",
+      path: "/pipeline/api/inputSets/template",
+    });
   });
 
   it("includes structural field hints in pre-flight error", async () => {

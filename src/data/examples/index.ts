@@ -12,6 +12,11 @@ export function registerExamples(examples: ResourceExample[]): void {
   ALL_EXAMPLES.push(...examples);
 }
 
+/** Get all registered examples. */
+export function getAllExamples(): ResourceExample[] {
+  return [...ALL_EXAMPLES];
+}
+
 /** Fetch a single example by exact name. */
 export function getExample(name: string): ResourceExample | undefined {
   return ALL_EXAMPLES.find((e) => e.name === name);
