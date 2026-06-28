@@ -5,7 +5,7 @@
 - [x] Prioritize high-blast-radius behavioral changes from recent history
 - [x] Trace candidate issues through caller and downstream paths
 - [x] Patch only a proven critical bug with focused tests, if found
-- [ ] Run appropriate verification for any fix or report no critical bug
+- [x] Run appropriate verification for any fix or report no critical bug
 
 ### Plan
 - Fetch current `origin/main` and inspect recent commits touching runtime behavior, authentication/authorization, write execution, body builders, and large payload/log paths.
@@ -17,6 +17,7 @@
 - Found that HTTP `/health` returned 503 whenever the optional semantic search provider reported `state: "failed"`. With the default local search provider, an unavailable Hugging Face dependency/model cache can fail semantic routing while core MCP routes remain usable; Kubernetes readiness/liveness probes and Docker health checks would still mark the server unhealthy and restart or de-route it.
 - Fixed `/health` to keep returning HTTP 200 for optional search degradation while preserving `status: "degraded"` and the full `search` readiness payload for observability.
 - Added focused utility regressions for ready and failed search readiness health responses, and updated README `/health` response documentation.
+- Verification passed: `pnpm exec vitest run tests/utils/http-health.test.ts tests/search/manager.test.ts`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, `pnpm standards:check`, and `pnpm test` (110 files / 2389 tests).
 
 ## Pull Request Merge Branch Deletion Bug (2026-06-26)
 - [x] Read Slack bug thread and confirm available context
