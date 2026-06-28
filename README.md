@@ -118,7 +118,7 @@ When running in HTTP mode, the server exposes:
 | `/mcp`    | `GET`     | SSE stream for server-initiated messages (progress, elicitation) |
 | `/mcp`    | `DELETE`  | Terminate an active MCP session                                  |
 | `/mcp`    | `OPTIONS` | CORS preflight                                                   |
-| `/health` | `GET`     | Health check — returns `{ "status": "ok", "sessions": <count> }` |
+| `/health` | `GET`     | Health check — returns `{ "status": "ok"|"degraded", "sessions": <count>, "search": <readiness> }` |
 
 
 The HTTP transport runs in **session-based mode**. A new MCP session is created on `initialize`, the server returns an `mcp-session-id` header, and subsequent requests for that session must include the same header.

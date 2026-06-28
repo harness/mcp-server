@@ -1,5 +1,23 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Inspection Automation (2026-06-28)
+- [x] Baseline branch against current `origin/main` and recent commits
+- [x] Prioritize high-blast-radius behavioral changes from recent history
+- [x] Trace candidate issues through caller and downstream paths
+- [x] Patch only a proven critical bug with focused tests, if found
+- [ ] Run appropriate verification for any fix or report no critical bug
+
+### Plan
+- Fetch current `origin/main` and inspect recent commits touching runtime behavior, authentication/authorization, write execution, body builders, and large payload/log paths.
+- Use prior lessons/memory as bug-pattern seeds, but require a concrete trigger scenario before changing code.
+- If a critical bug is proven, keep the fix narrow, add a regression that fails on the bad behavior, then commit/push and open a PR.
+- If no high-confidence critical bug is found, leave code untouched and post the expected Slack summary.
+
+### Review
+- Found that HTTP `/health` returned 503 whenever the optional semantic search provider reported `state: "failed"`. With the default local search provider, an unavailable Hugging Face dependency/model cache can fail semantic routing while core MCP routes remain usable; Kubernetes readiness/liveness probes and Docker health checks would still mark the server unhealthy and restart or de-route it.
+- Fixed `/health` to keep returning HTTP 200 for optional search degradation while preserving `status: "degraded"` and the full `search` readiness payload for observability.
+- Added focused utility regressions for ready and failed search readiness health responses, and updated README `/health` response documentation.
+
 ## Pull Request Merge Branch Deletion Bug (2026-06-26)
 - [x] Read Slack bug thread and confirm available context
 - [x] Trace Harness Code pull request merge request construction
