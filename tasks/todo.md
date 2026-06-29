@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-06-27)
+- [x] Baseline current branch and identify recent behavioral commits
+- [x] Review high-blast-radius diffs and trace candidate bugs through callers
+- [x] Implement a minimal fix only if a concrete critical trigger is proven
+- [x] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+
+### Plan
+- Treat commits after `v3.2.4` as the recent-change window because the branch currently matches `origin/main` after that release tag.
+- Prioritize behavioral paths that can break many users: semantic search routing, search cache limiting, tool handler safety gates, and request/response shaping in recent fixes.
+- Require a concrete trigger scenario and caller-chain proof before changing code; if confidence stays below the critical-bug bar, leave code unchanged and report the no-fix result.
+
+### Review
+- Found a pipeline execution regression in `harness_execute(resource_type="pipeline", action="run")`: callers that supplied `input_set_ids` plus an empty `inputs: {}` object skipped input-set materialization, auto-resolved the runtime template with no values, and sent unresolved `<+input>` placeholders while bypassing the unmatched-required pre-flight because input sets were present.
+- Fixed the input-set path by treating `undefined` and `{}` as no effective inline runtime inputs, materializing saved input sets in both cases, and preventing the later runtime-input resolver from overwriting the materialized YAML.
+- Found an HTTP deployment regression from semantic search: optional local search initialization failures set search readiness to `failed`, and `/health` returned HTTP 503 even though the MCP server had already fallen back to keyword/null search. Kubernetes probes use `/health`, so a missing/unavailable embedding model could remove otherwise working pods.
+- Fixed `/health` so server health remains HTTP 200 with `status: "ok"` while exposing the optional search failure in the `search` readiness payload for observability.
+- Verification passed: `pnpm exec vitest run tests/tools/tool-handlers.test.ts -t "input_set_ids|input set|runtime inputs" tests/utils/http-health.test.ts`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, `pnpm exec vitest run tests/tools/tool-handlers.test.ts tests/utils/http-health.test.ts`, `pnpm test` (110 files / 2392 tests), and `pnpm standards:check`.
+
 ## Pull Request Merge Branch Deletion Bug (2026-06-26)
 - [x] Read Slack bug thread and confirm available context
 - [x] Trace Harness Code pull request merge request construction

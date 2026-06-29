@@ -2065,11 +2065,50 @@ pipeline:
     expect(result.isError).toBeUndefined();
   });
 
-  it("skips pre-flight when input_set_ids are present", async () => {
+  it("materializes input_set_ids when inputs is an empty object", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "skip_pipe"
+    variables:
+      - name: "branch"
+        type: "String"
+        value: "main"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-skip" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "skip_pipe",
+      inputs: {},
+      input_set_ids: ["my-input-set"],
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    const getCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("/pipeline/api/inputSets/");
+    expect(getCall.path).toContain("my-input-set");
+
+    const runCall = mockRequest.mock.calls[1]![0] as { method?: string; body?: string };
+    expect(runCall.method).toBe("POST");
+    expect(runCall.body).toContain("skip_pipe");
+    expect(runCall.body).toContain("branch");
+    expect(runCall.body).toContain("main");
+    expect(runCall.body).not.toContain("<+input>");
+  });
+
+  it("skips unresolved-input pre-flight when input_set_ids and inline inputs are present", async () => {
     const templateWithRequired = `pipeline:
   identifier: "skip_pipe"
   variables:
     - name: "branch"
+      type: "String"
+      value: "<+input>"
+    - name: "environment"
       type: "String"
       value: "<+input>"
 `;
@@ -2081,13 +2120,17 @@ pipeline:
       resource_type: "pipeline",
       action: "run",
       resource_id: "skip_pipe",
-      inputs: {},
+      inputs: { branch: "feature" },
       input_set_ids: ["my-input-set"],
     });
 
-    // Should NOT error even though "branch" is required and unmatched,
+    // Should NOT error even though "environment" is required and unmatched,
     // because input_set_ids are present to cover it
     expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    const templateCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(templateCall.method).toBe("POST");
+    expect(templateCall.path).toBe("/pipeline/api/inputSets/template");
   });
 
   it("includes _inputResolution metadata on successful auto-resolved execution", async () => {

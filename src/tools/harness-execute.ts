@@ -24,6 +24,12 @@ const DEFAULT_WAIT_TIMEOUT_SECONDS = 600;
 const DEFAULT_WAIT_POLL_INTERVAL_SECONDS = 3;
 const MAX_WAIT_INTERVAL_MS = 30_000;
 
+function hasNoInlineRuntimeInputs(inputs: unknown): boolean {
+  if (inputs === undefined) return true;
+  const record = asRecord(inputs);
+  return !!record && Object.keys(record).length === 0;
+}
+
 /**
  * Map `resource_id` onto the execute action's target identifier field, in
  * place. Mirrors the remap performed inline in the dispatch path so that
@@ -258,15 +264,18 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           normalizeRemotePipelineRunParams(input);
         }
 
-        // When only input_set_ids are provided, fetch each input set and build runtime YAML.
+        const inputSetIds = args.input_set_ids ?? [];
+        const hasInputSets = inputSetIds.length > 0;
+        let materializedInputSets = false;
+
+        // When only input_set_ids are effectively provided, fetch each input set and build runtime YAML.
         // Harness execute often does not apply `inputSetIdentifiers` from the query string alone;
         // sending the merged `pipeline` fragment as the YAML body matches the working UI path.
         if (
           resourceType === "pipeline" &&
           args.action === "run" &&
-          args.input_set_ids &&
-          args.input_set_ids.length > 0 &&
-          args.inputs === undefined
+          hasInputSets &&
+          hasNoInlineRuntimeInputs(args.inputs)
         ) {
           const pipelineId = asString(input.pipeline_id) ?? resourceId;
           const orgId = asString(input.org_id) || registry.orgId;
@@ -291,11 +300,12 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               pipelineId,
               orgId,
               projectId,
-              inputSetIds: args.input_set_ids,
+              inputSetIds,
             });
             if (yaml) {
               input.inputs = yaml;
               delete input.input_set_ids;
+              materializedInputSets = true;
             }
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
@@ -305,11 +315,11 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
         // Auto-resolve flat key-value runtime inputs for pipeline run
         let resolved: ResolutionResult | undefined;
-        const hasInputSets = args.input_set_ids && args.input_set_ids.length > 0;
 
         if (
           resourceType === "pipeline" &&
           args.action === "run" &&
+          !materializedInputSets &&
           isResolvableInputs(args.inputs)
         ) {
           // Apply declarative input expansions (e.g. {branch: "main"} -> full build structure)
