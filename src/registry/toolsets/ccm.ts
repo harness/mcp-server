@@ -3,6 +3,13 @@ import type { PathBuilderConfig } from "../types.js";
 import type { HarnessClient } from "../../client/harness-client.js";
 import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
 
+/** Extract anomaly list: returns { items, total } so skipCompact marker survives normalization. */
+const anomalyListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: unknown[] };
+  const items = Array.isArray(r?.data) ? r.data : [];
+  return { items, total: items.length };
+};
+
 // ---------------------------------------------------------------------------
 // GraphQL queries — ported from the official Go MCP server
 // (client/ccmcommons/ccmgraphqlqueries.go)
@@ -1065,6 +1072,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
         list: {
           method: "POST",
           path: "/ccm/api/anomaly/v2/list",
+          skipCompact: true,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             perspective_id: "perspectiveId",
@@ -1130,7 +1138,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
 
             return { anomalyFilterPropertiesDTO: filters };
           },
-          responseExtractor: ngExtract,
+          responseExtractor: anomalyListExtract,
           description:
             "List cost anomalies using v2 API. Filter by status, perspective_id, anomaly_view (RESOURCE/PERSPECTIVE), search_text, time range, ordering, min thresholds.",
         },
@@ -1205,11 +1213,12 @@ For cost time-series data, use harness_get with start_time and end_time.`,
         list: {
           method: "GET",
           path: "/ccm/api/anomaly/v2/drill-down/list",
+          skipCompact: true,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             anomaly_id: "anomalyId",
           },
-          responseExtractor: ngExtract,
+          responseExtractor: anomalyListExtract,
           description:
             "List drill-down sub-items for a specific anomaly. Returns breakdown of contributing resources/services.",
         },
