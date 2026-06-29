@@ -789,7 +789,7 @@ export const dbopsToolset: ToolsetDefinition = {
         "Both branches require the same common inputs: conversation_id, schema_id, instance_id, changeset. " +
         "Two branches (exactly one must be set): " +
         "(a) custom-pipeline — pass pipeline_identifier (resolved by the skill from the " +
-        "project-level NG setting `dbops_llm_authoring_pipeline_id`) plus optional runtime_inputs; " +
+        "project-level NG setting `dbops_llm_authoring_pipeline`) plus optional runtime_inputs; " +
         "(b) default-pipeline — pass use_default_pipeline=true and the server performs " +
         "get-or-create of the canonical default pipeline. " +
         "Reserved runtime-input keys (schemaId, instanceId, changeset) are rejected by the server. " +
@@ -889,7 +889,7 @@ export const dbopsToolset: ToolsetDefinition = {
                 type: "string",
                 required: false,
                 description:
-                  "Custom-pipeline branch — value of NG setting `dbops_llm_authoring_pipeline_id` " +
+                  "Custom-pipeline branch — value of NG setting `dbops_llm_authoring_pipeline` " +
                   "(alias: pipeline_identifier). Mutually exclusive with useDefaultPipeline.",
               },
               {
