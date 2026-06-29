@@ -102,12 +102,14 @@ function resolveExpiresAt(item: IndexableItem, now: number): number | undefined 
 export interface LocalSearchProviderOptions {
   cacheDir?: string;
   model?: string;
+  embed?: EmbedFn;
 }
 
 export class LocalSearchProvider implements SearchProvider {
   private available = false;
   private initError: string | undefined;
   private embed: EmbedFn | null = null;
+  private readonly injectedEmbed: EmbedFn | undefined;
   private readonly cacheDir: string;
   private readonly model: string;
   // key: `${corpus}:${accountId ?? "global"}`
@@ -118,10 +120,19 @@ export class LocalSearchProvider implements SearchProvider {
   constructor(options: LocalSearchProviderOptions = {}) {
     this.cacheDir = options.cacheDir ?? DEFAULT_HF_CACHE_DIR;
     this.model = options.model ?? DEFAULT_EMBEDDING_MODEL;
+    this.injectedEmbed = options.embed;
   }
 
   async initialize(): Promise<void> {
     try {
+      if (this.injectedEmbed) {
+        this.embed = this.injectedEmbed;
+        this.available = true;
+        this.startEvictionTimer();
+        log.info("LocalSearchProvider initialized with injected embedder");
+        return;
+      }
+
       const { pipeline, env } = await import("@huggingface/transformers");
       env.cacheDir = this.cacheDir;
       const extractor = await pipeline("feature-extraction", this.model, { dtype: "fp32" });
@@ -131,9 +142,7 @@ export class LocalSearchProvider implements SearchProvider {
         return raw instanceof Float32Array ? raw : new Float32Array(raw as ArrayLike<number>);
       };
       this.available = true;
-      // Run eviction every 10 minutes
-      this.evictionTimer = setInterval(() => this.evictExpired(), 10 * 60 * 1000);
-      this.evictionTimer.unref?.();
+      this.startEvictionTimer();
       log.info("LocalSearchProvider initialized", { model: this.model, dim: EMBEDDING_DIM, cacheDir: this.cacheDir });
     } catch (err) {
       this.initError = String(err);
@@ -147,6 +156,13 @@ export class LocalSearchProvider implements SearchProvider {
 
   isAvailable(): boolean {
     return this.available;
+  }
+
+  private startEvictionTimer(): void {
+    if (this.evictionTimer) return;
+    // Run eviction every 10 minutes
+    this.evictionTimer = setInterval(() => this.evictExpired(), 10 * 60 * 1000);
+    this.evictionTimer.unref?.();
   }
 
   evictExpired(): void {

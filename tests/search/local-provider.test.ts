@@ -1,14 +1,27 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { LocalSearchProvider } from "../../src/search/local-provider.js";
 
-// These tests download the model on first run (~23MB); subsequent runs use cache
+const EMBED_DIM = 64;
+
+async function deterministicEmbed(text: string): Promise<Float32Array> {
+  const vector = new Float32Array(EMBED_DIM);
+  for (const token of text.toLowerCase().match(/[a-z0-9]+/g) ?? []) {
+    let hash = 0;
+    for (let i = 0; i < token.length; i++) {
+      hash = (hash * 31 + token.charCodeAt(i)) >>> 0;
+    }
+    vector[hash % EMBED_DIM] += 1;
+  }
+  return vector;
+}
+
 describe("LocalSearchProvider", () => {
   let provider: LocalSearchProvider;
 
   beforeAll(async () => {
-    provider = new LocalSearchProvider();
+    provider = new LocalSearchProvider({ embed: deterministicEmbed });
     await provider.initialize();
-  }, 60_000); // model download can take a moment
+  });
 
   it("is available after initialize", () => {
     expect(provider.isAvailable()).toBe(true);

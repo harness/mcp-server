@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { SearchManager } from "../../src/search/manager.js";
 import { NullSearchProvider } from "../../src/search/null-provider.js";
 import { LocalSearchProvider } from "../../src/search/local-provider.js";
@@ -13,6 +13,10 @@ function makeConfig(overrides: Record<string, unknown> = {}) {
 }
 
 describe("SearchManager", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("returns NullSearchProvider when HARNESS_SEARCH_PROVIDER=none", () => {
     const mgr = new SearchManager(makeConfig() as never);
     expect(mgr.getProvider()).toBeInstanceOf(NullSearchProvider);
@@ -51,8 +55,6 @@ describe("SearchManager", () => {
       error: "Cannot find module '@huggingface/transformers'",
     });
     expect(mgr.getProvider().isAvailable()).toBe(false);
-
-    vi.restoreAllMocks();
   });
 
   describe("canIndexCorpus", () => {
@@ -102,15 +104,16 @@ describe("SearchManager", () => {
     });
 
     it("indexes resources in single-user mode with local provider", async () => {
+      vi.spyOn(LocalSearchProvider.prototype, "initialize").mockResolvedValueOnce();
+      vi.spyOn(LocalSearchProvider.prototype, "isAvailable").mockReturnValue(true);
+
       const mgr = new SearchManager(makeConfig({
         HARNESS_SEARCH_PROVIDER: "local",
         HARNESS_MCP_MODE: "single-user",
       }) as never);
       await mgr.initialize();
       const provider = mgr.getProvider();
-      if (!(provider instanceof LocalSearchProvider) || !provider.isAvailable()) {
-        return;
-      }
+      expect(provider).toBeInstanceOf(LocalSearchProvider);
       const indexSpy = vi.spyOn(provider, "index");
 
       await mgr.indexItem({
