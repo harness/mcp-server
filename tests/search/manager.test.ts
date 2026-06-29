@@ -102,16 +102,15 @@ describe("SearchManager", () => {
     });
 
     it("indexes resources in single-user mode with local provider", async () => {
+      vi.spyOn(LocalSearchProvider.prototype, "initialize").mockResolvedValue();
+      vi.spyOn(LocalSearchProvider.prototype, "isAvailable").mockReturnValue(true);
+      const indexSpy = vi.spyOn(LocalSearchProvider.prototype, "index").mockResolvedValue();
+
       const mgr = new SearchManager(makeConfig({
         HARNESS_SEARCH_PROVIDER: "local",
         HARNESS_MCP_MODE: "single-user",
       }) as never);
       await mgr.initialize();
-      const provider = mgr.getProvider();
-      if (!(provider instanceof LocalSearchProvider) || !provider.isAvailable()) {
-        return;
-      }
-      const indexSpy = vi.spyOn(provider, "index");
 
       await mgr.indexItem({
         id: "pipeline:foo",
@@ -122,6 +121,7 @@ describe("SearchManager", () => {
       });
 
       expect(indexSpy).toHaveBeenCalledOnce();
+      vi.restoreAllMocks();
     });
   });
 });

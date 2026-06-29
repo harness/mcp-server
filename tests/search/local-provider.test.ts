@@ -1,14 +1,14 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { LocalSearchProvider } from "../../src/search/local-provider.js";
+import { testEmbed } from "./test-embed.js";
 
-// These tests download the model on first run (~23MB); subsequent runs use cache
 describe("LocalSearchProvider", () => {
   let provider: LocalSearchProvider;
 
   beforeAll(async () => {
-    provider = new LocalSearchProvider();
+    provider = new LocalSearchProvider({ embedFn: testEmbed });
     await provider.initialize();
-  }, 60_000); // model download can take a moment
+  });
 
   it("is available after initialize", () => {
     expect(provider.isAvailable()).toBe(true);
