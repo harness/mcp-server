@@ -1878,6 +1878,27 @@ pipeline:
     expect(runCall.body).toContain("x");
   });
 
+  it("fails closed when input_set_ids materialization fails", async () => {
+    mockRequest.mockRejectedValueOnce(new HarnessApiError("Input set missing", 404, "NOT_FOUND"));
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "mat_pipe",
+      input_set_ids: ["missing_set"],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Could not load input set(s) for execution"),
+    });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "GET",
+      path: expect.stringContaining("/pipeline/api/inputSets/missing_set"),
+    });
+  });
+
   it("falls back to fresh run when retry returns 405", async () => {
     // First call (retry) throws 405, second call (run) succeeds
     mockRequest

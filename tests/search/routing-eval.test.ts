@@ -63,6 +63,33 @@ describe("validateGoldenCases", () => {
     expect(errors).toContain("Duplicate golden case id: duplicate");
     expect(errors).toContain('duplicate: unknown resource type "missing_type"');
   });
+
+  it("reports missing query, invalid mode, and empty expectedTypes", () => {
+    const errors = validateGoldenCases([
+      {
+        id: "no-query",
+        query: "",
+        mode: "specific",
+        expectedTypes: ["pipeline"],
+      },
+      {
+        id: "bad-mode",
+        query: "list secrets",
+        mode: "invalid" as "specific",
+        expectedTypes: ["secret"],
+      },
+      {
+        id: "no-types",
+        query: "list secrets",
+        mode: "specific",
+        expectedTypes: [],
+      },
+    ], ["pipeline", "secret"]);
+
+    expect(errors).toContain("no-query: query is required");
+    expect(errors).toContain("bad-mode: invalid mode invalid");
+    expect(errors).toContain("no-types: expectedTypes must contain at least one resource type");
+  });
 });
 
 describe("evaluateRoutingCase", () => {
@@ -123,6 +150,45 @@ describe("evaluateRoutingCase", () => {
 
     expect(result.passed).toBe(true);
     expect(result.missingExpectedTypes).toEqual(["pipeline", "environment"]);
+  });
+
+  it("fails a cross_domain case when any expected type is missing", () => {
+    const result = evaluateRoutingCase({
+      id: "cross_domain",
+      query: "deploy service to production",
+      mode: "cross_domain",
+      expectedTypes: ["pipeline", "service", "environment"],
+      acceptableTypes: ["connector"],
+      routedTypes: ["pipeline", "service"],
+      semanticRouted: true,
+      searchedTypes: 2,
+      candidateTypes: 10,
+      topScore: 0.7,
+      latencyMs: 15,
+    });
+
+    expect(result.passed).toBe(false);
+    expect(result.missingExpectedTypes).toEqual(["environment"]);
+    expect(result.expectedRecall).toBeCloseTo(2 / 3);
+  });
+
+  it("passes a cross_domain case when every expected type is routed", () => {
+    const result = evaluateRoutingCase({
+      id: "cross_domain_ok",
+      query: "deploy service to production",
+      mode: "cross_domain",
+      expectedTypes: ["pipeline", "service"],
+      acceptableTypes: ["environment"],
+      routedTypes: ["pipeline", "service", "environment"],
+      semanticRouted: true,
+      searchedTypes: 3,
+      candidateTypes: 10,
+      topScore: 0.75,
+      latencyMs: 18,
+    });
+
+    expect(result.passed).toBe(true);
+    expect(result.extraRoutedTypes).toEqual([]);
   });
 });
 
