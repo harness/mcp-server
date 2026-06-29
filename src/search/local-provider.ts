@@ -102,6 +102,8 @@ function resolveExpiresAt(item: IndexableItem, now: number): number | undefined 
 export interface LocalSearchProviderOptions {
   cacheDir?: string;
   model?: string;
+  /** Test-only: skip model download and use a deterministic embed function. */
+  embedFn?: EmbedFn;
 }
 
 export class LocalSearchProvider implements SearchProvider {
@@ -118,9 +120,14 @@ export class LocalSearchProvider implements SearchProvider {
   constructor(options: LocalSearchProviderOptions = {}) {
     this.cacheDir = options.cacheDir ?? DEFAULT_HF_CACHE_DIR;
     this.model = options.model ?? DEFAULT_EMBEDDING_MODEL;
+    if (options.embedFn) {
+      this.embed = options.embedFn;
+      this.available = true;
+    }
   }
 
   async initialize(): Promise<void> {
+    if (this.available && this.embed) return;
     try {
       const { pipeline, env } = await import("@huggingface/transformers");
       env.cacheDir = this.cacheDir;
