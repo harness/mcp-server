@@ -162,6 +162,34 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("defaults MCP_SESSION_TTL_MS to 5 minutes for HTTP session reaping", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.MCP_SESSION_TTL_MS).toBe(5 * 60_000);
+    }
+  });
+
+  it("coerces MCP_SESSION_TTL_MS from env strings", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      MCP_SESSION_TTL_MS: "120000",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.MCP_SESSION_TTL_MS).toBe(120_000);
+    }
+  });
+
+  it("rejects MCP_SESSION_TTL_MS below 1", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        MCP_SESSION_TTL_MS: "0",
+      }),
+    ).toThrow();
+  });
+
   it("coerces string numbers for timeout and retries", () => {
     const result = ConfigSchema.safeParse({
       ...validConfig,
