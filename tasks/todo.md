@@ -4,7 +4,7 @@
 - [x] Baseline current branch and identify recent behavioral commits after `v3.2.4`
 - [x] Review high-blast-radius diffs and trace candidate bugs through callers
 - [x] Implement a minimal fix for a concrete critical HTTP session lifecycle bug
-- [ ] Run focused and broad verification
+- [x] Run focused and broad verification
 - [ ] Commit, push, open PR, and report outcome in Slack
 
 ### Plan
@@ -16,6 +16,7 @@
 - Found a regression in HTTP mode: `MCP_SESSION_TTL_MS` defaults to 5 minutes while `harness_execute(..., wait: true)` can hold a single POST request for 10 minutes by default, and SSE streams may also stay open without new inbound requests. The TTL reaper only checked `lastActivity`, so it could close a session while an active tool call or stream was still running, causing broken MCP responses and orphaned Harness operations.
 - Fixed session activity tracking so POST/GET/DELETE handlers mark active transport work, SSE streams remain active until the response closes, and the reaper only expires sessions with `activeRequests === 0` whose last completed activity is older than the TTL.
 - Added focused session-activity tests and updated HTTP lifecycle test coverage for expired-but-active sessions. Also surfaced `MCP_SESSION_TTL_MS` in `.env.example`, README, and packaged manifests.
+- Verification passed: `pnpm exec vitest run tests/utils/http-sessions.test.ts tests/integration/http-transport.test.ts tests/release-metadata.test.ts`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, `pnpm test` (111 files / 2399 tests), and `pnpm standards:check`.
 
 ## Critical Bug Investigation Automation (2026-06-27)
 - [x] Baseline current branch and identify recent behavioral commits
