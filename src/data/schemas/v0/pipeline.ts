@@ -83688,11 +83688,20 @@ const schema: Record<string, any> = {
                 ],
                 "properties": {
                   "healthSources": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/steps/cd/AIVerifyNGHealthSource"
-                    },
-                    "minItems": 1
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/pipeline/steps/cd/AIVerifyNGHealthSource"
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
                   },
                   "dataCollectionWindow": {
                     "description": "Data collection window as a duration string '<n>m' (minutes) or '<n>h' (hours), e.g. '30m', '1h', '2h'; may also be a runtime expression.",
@@ -83808,11 +83817,20 @@ const schema: Record<string, any> = {
             ],
             "properties": {
               "healthSources": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/pipeline/steps/cd/AIVerifyNGHealthSource"
-                },
-                "minItems": 1
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/cd/AIVerifyNGHealthSource"
+                    },
+                    "minItems": 1
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
               },
               "dataCollectionWindow": {
                 "description": "Data collection window as a duration string '<n>m' (minutes) or '<n>h' (hours), e.g. '30m', '1h', '2h'; may also be a runtime expression.",
@@ -116968,6 +116986,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/AIVerifyNGStepNode"
                   }
                 ]
               },
