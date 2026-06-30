@@ -88,6 +88,7 @@ Based on requirements, recommend and verify with the user:
    - Only add if user confirms runtime parameters are needed
    - Map each input to what the agent needs (repo, branch, executionId, thresholds, etc.)
    - **Always set a \`default\` value for every non-required input** — if \`\${{inputs.fieldName}}\` is referenced in \`PLUGIN_TASK\` or any env var and no value is supplied at runtime nor a default exists, the agent will error at execution time
+   - Always include \`allowedDomains\` so users understand and control non-LLM/non-MCP network access
 
 3. **Connectors**:
    - LLM connector for model access (required for all agents) - User must create via Harness UI or MCP
@@ -118,6 +119,7 @@ agent:
                 <step-by-step task instructions>
               PLUGIN_MAX_TURNS: 150
               PLUGIN_HARNESS_CONNECTOR: \${{inputs.llmConnector.id}}
+              PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}
 \`\`\`
 
 **Required environment variables:**
@@ -127,6 +129,7 @@ env:
     <step-by-step instructions>
   PLUGIN_MAX_TURNS: 150                            # Adjust 100-200 based on task complexity
   PLUGIN_HARNESS_CONNECTOR: \${{inputs.llmConnector.id}}  # References llmConnector input's id property
+  PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}      # Regexes for additional network access
 \`\`\`
 
 **MCP configuration (only if external services needed):**
@@ -153,7 +156,13 @@ agent:
       ui:
         connectorCategories:
           - AI
+
+    allowedDomains:
+      type: string
+      default: "*"
 \`\`\`
+
+**Network access:** Agent network access is limited to the LLM connector, configured MCP connectors, and domains matching \`allowedDomains\`. \`allowedDomains\` accepts regexes separated by \`|\`. Default to \`*\` if the user does not specify domains; if they do specify domains, work with them to build the right regex.
 
 **Optional inputs (add as needed):**
 \`\`\`yaml
@@ -184,7 +193,7 @@ agent:
 
 **\`layout\` block (always include, only list fields that are present as inputs):**
 
-The \`layout\` block controls what appears in the agent configuration UI. It contains **at most three items** — \`llmConnector\`, \`modelName\`, and \`mcpConnectors\` — and only those that exist as first-class input fields in the \`inputs\` section. Never include any other fields (e.g. custom inputs like \`repo_name\`) in the layout block:
+The \`layout\` block controls what appears in the agent configuration UI. It contains **at most four items** — \`llmConnector\`, \`allowedDomains\`, \`modelName\`, and \`mcpConnectors\` — and only those that exist as first-class input fields in the \`inputs\` section. Never include any other fields (e.g. custom inputs like \`repo_name\`) in the layout block:
 
 \`\`\`yaml
 agent:
@@ -192,6 +201,7 @@ agent:
     - title: Agent Configuration
       items:
         - llmConnector          # always present
+        - allowedDomains        # always present
         - modelName             # only if modelName input exists
         - mcpConnectors         # only if mcpConnectors input exists
 \`\`\`
@@ -214,16 +224,19 @@ Assemble the complete agent YAML specification (\`spec\` field):
      - \`PLUGIN_TASK:\` — multiline string with step-by-step instructions and \`## RULES\` section
      - \`PLUGIN_MAX_TURNS: 150\` (adjust 100-200 based on complexity)
      - \`PLUGIN_HARNESS_CONNECTOR: \${{inputs.llmConnector.id}}\`
+     - \`PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}\`
      - \`PLUGIN_MCP_FORMAT: harness\` (only if MCPs needed)
      - \`PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>\` (only if MCPs needed)
      - \`ANTHROPIC_MODEL: \${{inputs.modelName}}\` (**only** if user explicitly requests a \`modelName\` input)
 3. Add \`agent.inputs\` section with:
    - \`llmConnector\` (required) with \`ui.connectorCategories: [AI]\`
+   - \`allowedDomains\` (default \`*\`) to allow additional network domains using regexes
    - \`mcpConnectors\` (optional - only if needed) with \`ui.component: array\`, \`ui.input.inputType: connector\`, and \`ui.input.inputConfig.connectorTypes: [Mcp]\`
    - \`modelName\` (optional - **only** if user explicitly requests it)
    - Custom inputs (as needed)
 4. Add \`agent.layout\` block — only include items that are present as inputs:
    - Always include \`llmConnector\`
+   - Always include \`allowedDomains\`
    - Include \`modelName\` only if that input exists
    - Include \`mcpConnectors\` only if that input exists
 
@@ -324,6 +337,7 @@ agent:
                 - Suggest specific code improvements
               PLUGIN_MAX_TURNS: 150
               PLUGIN_HARNESS_CONNECTOR: \${{inputs.llmConnector.id}}
+              PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}
               PLUGIN_MCP_FORMAT: harness
               PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>
 
@@ -335,6 +349,10 @@ agent:
       ui:
         connectorCategories:
           - AI
+
+    allowedDomains:
+      type: string
+      default: "*"
 
     mcpConnectors:
       type: array
@@ -360,6 +378,7 @@ agent:
     - title: Agent Configuration
       items:
         - llmConnector
+        - allowedDomains
         - mcpConnectors
 \`\`\`
 
@@ -378,6 +397,7 @@ agent:
 | **Task in env**            | Task instructions go in \`PLUGIN_TASK\` env var (multiline string). Max turns in \`PLUGIN_MAX_TURNS\`. There is no \`with:\` block.                                                |
 | **Expression syntax**      | Use \`\${{inputs.fieldName}}\` inside env values. Use \`<+connectorInputs.resolveList(...)>\` for MCP server resolution.                                                          |
 | **modelName is optional**  | Do NOT add \`modelName\` input or \`ANTHROPIC_MODEL\` env var by default — only add when the user explicitly requests it                                                         |
+| **Allowed domains**       | Always include \`PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}\`, an \`allowedDomains\` string input with default \`*\`, and \`allowedDomains\` in layout. If the user specifies domains, help build the regex. |
 | **Input defaults**         | Every non-required input that is referenced via \`\${{inputs.fieldName}}\` **must have a \`default\` value** — omitting it causes a runtime error if the caller does not supply the value  |
 | **Connector placeholders** | Always use placeholders like \`your_llm_connector_id\` and \`your_mcp_connector_id\` and notify users to replace both LLM and MCP connector IDs with actual values before running the agent |
 | **No clone/platform**      | Do NOT add \`clone\`, \`platform\`, \`os\`, \`arch\`, or \`allowed_tools\` sections — agents are standalone with simplified structure                                                  |
