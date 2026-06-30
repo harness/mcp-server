@@ -209,7 +209,7 @@ describe("Coding standards — logging and HTTP", () => {
     expect(violations, `console.log() found in:\n${violations.join("\n")}`).toEqual([]);
   });
 
-  it("toolset files do not use console.* (use createLogger in handlers, not toolsets)", () => {
+  it("toolset files do not use console.* (logging belongs in handlers, not toolsets)", () => {
     const violations: string[] = [];
     const toolsetDir = join(SRC, "registry/toolsets");
 
@@ -224,6 +224,25 @@ describe("Coding standards — logging and HTTP", () => {
     }
 
     expect(violations, `console.* found in toolsets:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("toolset files do not import or call createLogger (pure data — no side effects)", () => {
+    const violations: string[] = [];
+    const toolsetDir = join(SRC, "registry/toolsets");
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const content = readFileSync(file, "utf8");
+      if (/from\s+["'][^"']*logger/.test(content)) {
+        violations.push(`${fileRel}: createLogger import`);
+      } else if (/\bcreateLogger\s*\(/.test(content)) {
+        violations.push(`${fileRel}: createLogger() call`);
+      }
+    }
+
+    expect(violations, `createLogger in toolsets:\n${violations.join("\n")}`).toEqual([]);
   });
 
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {
