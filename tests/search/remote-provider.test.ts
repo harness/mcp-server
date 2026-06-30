@@ -57,7 +57,7 @@ describe("RemoteSearchProvider", () => {
   describe("search", () => {
     const serviceResult = {
       results: [
-        { id: "pipeline:p1", content: "deploy payments", metadata: { resource_type: "pipeline", identifier: "p1", corpus: "entities" }, score: 0.9 },
+        { id: "pipeline:p1", content: "deploy payments", metadata: { resource_type: "pipeline", identifier: "p1" }, score: 0.9 },
       ],
       total_count: 1,
       query: "deploy",
@@ -77,15 +77,27 @@ describe("RemoteSearchProvider", () => {
       expect(results).toEqual([]);
     });
 
-    it("sends query and tenant_id to /v1/search", async () => {
+    it("sends collection_name and tenant_id for entities corpus", async () => {
       await provider.search("deploy", { corpus: "entities", accountId: "acct-123", k: 5 });
       const calls = fetchSpy.mock.calls.map(c => String(c[0]));
       const searchCall = calls.find(u => u.includes("/v1/search"));
       expect(searchCall).toBeDefined();
       expect(searchCall).toContain("q=deploy");
       expect(searchCall).toContain("tenant_id=acct-123");
-      expect(searchCall).toContain("metadata.corpus=entities");
+      expect(searchCall).toContain("collection_name=mcp_entities");
       expect(searchCall).toContain("k=5");
+    });
+
+    it("omits tenant_id for static corpora, uses correct collection", async () => {
+      fetchSpy = mockFetch([{ ok: true }, { ok: true, body: { results: [], total_count: 0 } }]);
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.initialize();
+      await p.search("schema", { corpus: "knowledge", accountId: "acct-123" });
+      const calls = fetchSpy.mock.calls.map(c => String(c[0]));
+      const searchCall = calls.find(u => u.includes("/v1/search"));
+      expect(searchCall).toContain("collection_name=mcp_knowledge");
+      expect(searchCall).not.toContain("tenant_id");
     });
 
     it("sends bearer token when Authorization header provided", async () => {
@@ -117,17 +129,6 @@ describe("RemoteSearchProvider", () => {
       expect(headers["Authorization"]).toBeUndefined();
     });
 
-    it("uses global tenant for static corpora", async () => {
-      fetchSpy = mockFetch([{ ok: true }, { ok: true, body: { results: [], total_count: 0 } }]);
-      vi.stubGlobal("fetch", fetchSpy);
-      const p2 = new RemoteSearchProvider({ baseUrl: BASE_URL });
-      await p2.initialize();
-      await p2.search("schema", { corpus: "knowledge", accountId: "acct-123" });
-      const calls = fetchSpy.mock.calls.map(c => String(c[0]));
-      const searchCall = calls.find(u => u.includes("/v1/search"));
-      expect(searchCall).toContain("tenant_id=global");
-    });
-
     it("maps service results to SearchResult shape", async () => {
       const results = await provider.search("deploy", { corpus: "entities", accountId: "acct-123" });
       expect(results).toHaveLength(1);
@@ -151,8 +152,11 @@ describe("RemoteSearchProvider", () => {
       await p.initialize();
       await p.search("pipeline", { corpus: "all", accountId: "acct-123" });
       const searchCalls = fetchSpy.mock.calls.filter(c => String(c[0]).includes("/v1/search"));
-      // One call per corpus (entities, docs, knowledge)
       expect(searchCalls).toHaveLength(3);
+      const urls = searchCalls.map(c => String(c[0]));
+      expect(urls.some(u => u.includes("collection_name=mcp_entities"))).toBe(true);
+      expect(urls.some(u => u.includes("collection_name=mcp_knowledge"))).toBe(true);
+      expect(urls.some(u => u.includes("collection_name=mcp_docs"))).toBe(true);
     });
 
     it("returns [] and does not throw when service returns non-200", async () => {
@@ -174,7 +178,7 @@ describe("RemoteSearchProvider", () => {
 
     afterEach(() => vi.unstubAllGlobals());
 
-    it("posts to /v1/ingest with correct tenant_id for entities", async () => {
+    it("posts to mcp_entities collection with tenant_id for entities", async () => {
       await provider.index({
         id: "pipeline:p1",
         content: "deploy payments",
@@ -186,11 +190,12 @@ describe("RemoteSearchProvider", () => {
       expect(ingestCall).toBeDefined();
       const body = JSON.parse(ingestCall![1].body as string);
       expect(body.tenant_id).toBe("acct-123");
+      expect(body.collection_name).toBe("mcp_entities");
       expect(body.document_id).toBe("pipeline:p1");
-      expect(body.metadata.corpus).toBe("entities");
+      expect(body.metadata.corpus).toBeUndefined();
     });
 
-    it("uses global tenant for knowledge corpus", async () => {
+    it("posts to mcp_knowledge collection with no tenant_id for knowledge corpus", async () => {
       await provider.index({
         id: "schema:pipeline",
         content: "pipeline schema",
@@ -200,8 +205,8 @@ describe("RemoteSearchProvider", () => {
       });
       const ingestCall = fetchSpy.mock.calls.find(c => String(c[0]).includes("/v1/ingest"));
       const body = JSON.parse(ingestCall![1].body as string);
-      expect(body.tenant_id).toBe("global");
-      expect(body.metadata.corpus).toBe("knowledge");
+      expect(body.tenant_id).toBeUndefined();
+      expect(body.collection_name).toBe("mcp_knowledge");
     });
 
     it("does not throw when service returns non-200", async () => {

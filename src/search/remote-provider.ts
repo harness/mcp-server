@@ -5,11 +5,18 @@ const log = createLogger("remote-search-provider");
 const CORPORA: SearchCorpus[] = ["entities", "docs", "knowledge"];
 
 /**
- * Static corpora are shared across all tenants; in the search service they live
- * under tenant_id="global". Per-account entity data uses the accountId as tenant_id.
+ * Each corpus maps to its own collection in the search service.
+ * Static corpora (docs, knowledge) are shared across all tenants — no tenant_id filter needed.
+ * Entity corpus is per-account — tenant_id scopes results to the requesting account.
  */
 const STATIC_CORPORA = new Set<SearchCorpus>(["docs", "knowledge"]);
-const GLOBAL_TENANT = "global";
+
+/** Collection name in the search service for each corpus. */
+const CORPUS_COLLECTION: Record<SearchCorpus, string> = {
+  knowledge: "mcp_knowledge",
+  docs: "mcp_docs",
+  entities: "mcp_entities",
+};
 
 export interface RemoteSearchProviderOptions {
   baseUrl: string;
@@ -41,6 +48,7 @@ interface ServiceIngestRequest {
   metadata: Record<string, string>;
   tenant_id?: string;
   document_id?: string;
+  collection_name?: string;
 }
 
 export class RemoteSearchProvider implements SearchProvider {
@@ -90,19 +98,22 @@ export class RemoteSearchProvider implements SearchProvider {
       const { corpus = "all", accountId, k = 10 } = options;
       const corpora: SearchCorpus[] = corpus === "all" ? CORPORA : [corpus as SearchCorpus];
 
-      // Fan out only when we need both global (static) and account-specific (entities) buckets.
-      // Each bucket is one request with a corpus filter so the service can apply it server-side.
-      const buckets: Array<{ tenantId: string; corpus: SearchCorpus }> = corpora.map(c => ({
-        tenantId: STATIC_CORPORA.has(c) ? GLOBAL_TENANT : (accountId ?? GLOBAL_TENANT),
-        corpus: c,
-      }));
-
+      // One request per corpus — each targets its own collection.
+      // Static corpora omit tenant_id (whole collection is shared).
+      // Entities corpus passes accountId as tenant_id for per-account scoping.
       const allResults = await Promise.all(
-        buckets.map(async ({ tenantId, corpus: c }) => {
-          const params = new URLSearchParams({ q: query, k: String(k), tenant_id: tenantId, "metadata.corpus": c });
+        corpora.map(async (c) => {
+          const params = new URLSearchParams({
+            q: query,
+            k: String(k),
+            collection_name: CORPUS_COLLECTION[c],
+          });
+          if (!STATIC_CORPORA.has(c) && accountId) {
+            params.set("tenant_id", accountId);
+          }
           const res = await this.doFetch(`/v1/search?${params}`);
           if (!res.ok) {
-            log.warn("Remote search request failed", { status: res.status, tenantId, corpus: c });
+            log.warn("Remote search request failed", { status: res.status, corpus: c });
             return [] as SearchResult[];
           }
           const body = await res.json() as ServiceSearchResponse;
@@ -129,19 +140,18 @@ export class RemoteSearchProvider implements SearchProvider {
   async index(item: IndexableItem): Promise<void> {
     if (!this.available) return;
     try {
-      const tenantId = STATIC_CORPORA.has(item.corpus)
-        ? GLOBAL_TENANT
-        : (item.accountId ?? GLOBAL_TENANT);
-
       const body: ServiceIngestRequest = {
         content: item.content,
         metadata: {
           ...item.metadata,
-          corpus: item.corpus,
           ...(item.ttlMs !== undefined ? { ttl_ms: String(item.ttlMs) } : {}),
         },
-        tenant_id: tenantId,
+        collection_name: CORPUS_COLLECTION[item.corpus],
         document_id: item.id,
+        // Entities are per-account; static corpora have no tenant scoping.
+        ...(!STATIC_CORPORA.has(item.corpus) && item.accountId
+          ? { tenant_id: item.accountId }
+          : {}),
       };
 
       const res = await this.doFetch("/v1/ingest", {
