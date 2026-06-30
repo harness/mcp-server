@@ -159,10 +159,10 @@ agent:
 
     allowedDomains:
       type: string
-      default: "*"
+      default: ""
 \`\`\`
 
-**Network access:** Agent network access is limited to the LLM connector, configured MCP connectors, and domains matching \`allowedDomains\`. \`allowedDomains\` accepts regexes separated by \`|\`. Default to \`*\` if the user does not specify domains; if they do specify domains, work with them to build the right regex.
+**Network access:** Agent network access is limited to the LLM connector, configured MCP connectors, and domains matching \`allowedDomains\`. \`allowedDomains\` accepts regexes separated by \`|\`. Default to an empty string if the user does not specify domains; if they do specify domains, work with them to build the right regex.
 
 **Optional inputs (add as needed):**
 \`\`\`yaml
@@ -230,7 +230,7 @@ Assemble the complete agent YAML specification (\`spec\` field):
      - \`ANTHROPIC_MODEL: \${{inputs.modelName}}\` (**only** if user explicitly requests a \`modelName\` input)
 3. Add \`agent.inputs\` section with:
    - \`llmConnector\` (required) with \`ui.connectorCategories: [AI]\`
-   - \`allowedDomains\` (default \`*\`) to allow additional network domains using regexes
+   - \`allowedDomains\` (default \`""\`) to allow additional network domains using regexes
    - \`mcpConnectors\` (optional - only if needed) with \`ui.component: array\`, \`ui.input.inputType: connector\`, and \`ui.input.inputConfig.connectorTypes: [Mcp]\`
    - \`modelName\` (optional - **only** if user explicitly requests it)
    - Custom inputs (as needed)
@@ -352,7 +352,7 @@ agent:
 
     allowedDomains:
       type: string
-      default: "*"
+      default: ""
 
     mcpConnectors:
       type: array
@@ -397,7 +397,7 @@ agent:
 | **Task in env**            | Task instructions go in \`PLUGIN_TASK\` env var (multiline string). Max turns in \`PLUGIN_MAX_TURNS\`. There is no \`with:\` block.                                                |
 | **Expression syntax**      | Use \`\${{inputs.fieldName}}\` inside env values. Use \`<+connectorInputs.resolveList(...)>\` for MCP server resolution.                                                          |
 | **modelName is optional**  | Do NOT add \`modelName\` input or \`ANTHROPIC_MODEL\` env var by default — only add when the user explicitly requests it                                                         |
-| **Allowed domains**       | Always include \`PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}\`, an \`allowedDomains\` string input with default \`*\`, and \`allowedDomains\` in layout. If the user specifies domains, help build the regex. |
+| **Allowed domains**       | Always include \`PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}\`, an \`allowedDomains\` string input with default \`""\`, and \`allowedDomains\` in layout. If the user specifies domains, help build the regex. |
 | **Input defaults**         | Every non-required input that is referenced via \`\${{inputs.fieldName}}\` **must have a \`default\` value** — omitting it causes a runtime error if the caller does not supply the value  |
 | **Connector placeholders** | Always use placeholders like \`your_llm_connector_id\` and \`your_mcp_connector_id\` and notify users to replace both LLM and MCP connector IDs with actual values before running the agent |
 | **No clone/platform**      | Do NOT add \`clone\`, \`platform\`, \`os\`, \`arch\`, or \`allowed_tools\` sections — agents are standalone with simplified structure                                                  |
