@@ -130,7 +130,7 @@ Operational constraints in HTTP mode:
 - `POST /mcp` without `mcp-session-id` must be an `initialize` request.
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
 - `GET /mcp` is used for SSE notifications (progress updates and elicitation prompts).
-- Idle sessions are reaped after 30 minutes.
+- Idle sessions are reaped after `MCP_SESSION_TTL_MS` milliseconds once no request or SSE stream is active (default `300000`, or 5 minutes).
 - `GET /health` is the only non-MCP endpoint.
 - Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
 - Set `x-harness-pipeline-version: 0` or `1` on the `initialize` request to select V0 or V1 pipeline resources for that HTTP session.
@@ -2087,7 +2087,7 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | `Unknown transport: "..."` on startup                                            | Unsupported CLI transport arg                                                                        | Use `stdio` or `http` only                                                                                                           |
 | `Invalid HARNESS_TOOLSETS: ...` on startup                                       | One or more toolset names are not recognized                                                         | Use only names from [Toolset Filtering](#toolset-filtering) (exact match)                                                            |
 | HTTP `mcp-session-id header is required...`                                      | A session request was sent without session header                                                    | Send `initialize` first, then include `mcp-session-id` on `POST/GET/DELETE /mcp`                                                     |
-| HTTP `Session not found...`                                                      | Session expired (30 min idle TTL) or already closed                                                  | Re-run `initialize` to create a new session, then retry with new header                                                              |
+| HTTP `Session not found...`                                                      | Session expired after `MCP_SESSION_TTL_MS` idle milliseconds or already closed                        | Re-run `initialize` to create a new session, then retry with new header                                                              |
 | HTTP `405 Method Not Allowed` on `/mcp`                                          | Unsupported method for MCP endpoint                                                                  | Use `POST`, `GET`, `DELETE`, or `OPTIONS` only                                                                                       |
 | HTTP `Invalid request`                                                           | Invalid JSON body or request body exceeded `HARNESS_MAX_BODY_SIZE_MB`                                | Validate JSON payload size/shape; increase `HARNESS_MAX_BODY_SIZE_MB` if needed                                                      |
 | `Unknown resource_type "..."` from tools                                         | Resource type is misspelled or filtered out via `HARNESS_TOOLSETS`                                   | Call `harness_describe` (with optional `search_term`) to discover valid types                                                        |

@@ -22,6 +22,7 @@ import { createAuditManager, type AuditManager } from "./audit/index.js";
 import { SearchManager } from "./search/index.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "./utils/session-headers.js";
 import { buildHttpHealthResponse } from "./utils/http-health.js";
+import { beginSessionRequest, endSessionRequest, isSessionExpired, type HttpSessionActivity } from "./utils/http-sessions.js";
 
 
 const log = createLogger("main");
@@ -226,10 +227,9 @@ async function startStdio(config: Config): Promise<void> {
 // ---------------------------------------------------------------------------
 // Session store — maps session IDs to their MCP server + transport instances.
 // ---------------------------------------------------------------------------
-interface Session {
+interface Session extends HttpSessionActivity {
   server: McpServer;
   transport: StreamableHTTPServerTransport;
-  lastActivity: number;
 }
 
 const REAP_INTERVAL_MS = 60_000; // check every minute
@@ -318,7 +318,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const reaper = setInterval(() => {
     const now = Date.now();
     for (const [id, session] of sessions) {
-      if (now - session.lastActivity > config.MCP_SESSION_TTL_MS) {
+      if (isSessionExpired(session, config.MCP_SESSION_TTL_MS, now)) {
         log.info("Reaping idle session", { sessionId: id });
         destroySession(id);
       }
@@ -356,7 +356,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
         });
         return;
       }
-      session.lastActivity = Date.now();
+      beginSessionRequest(session);
       try {
         await session.transport.handleRequest(req, res, req.body);
       } catch (err) {
@@ -368,6 +368,8 @@ async function startHttp(config: Config, port: number): Promise<void> {
             id: null,
           });
         }
+      } finally {
+        endSessionRequest(session);
       }
       return;
     }
@@ -382,7 +384,12 @@ async function startHttp(config: Config, port: number): Promise<void> {
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
-          sessions.set(id, { server: server!, transport: transport!, lastActivity: Date.now() });
+          sessions.set(id, {
+            server: server!,
+            transport: transport!,
+            lastActivity: Date.now(),
+            activeRequests: 0,
+          });
           log.info("Session created", { sessionId: id, total: sessions.size });
         },
       });
@@ -442,7 +449,14 @@ async function startHttp(config: Config, port: number): Promise<void> {
       return;
     }
 
-    session.lastActivity = Date.now();
+    beginSessionRequest(session);
+    let streamClosed = false;
+    const markStreamClosed = (): void => {
+      if (streamClosed) return;
+      streamClosed = true;
+      endSessionRequest(session);
+    };
+    res.once("close", markStreamClosed);
     try {
       await session.transport.handleRequest(req, res);
     } catch (err) {
@@ -453,6 +467,11 @@ async function startHttp(config: Config, port: number): Promise<void> {
           error: { code: -32000, message: "Failed to establish SSE stream" },
           id: null,
         });
+      }
+      markStreamClosed();
+    } finally {
+      if (res.writableEnded) {
+        markStreamClosed();
       }
     }
   });
@@ -479,10 +498,13 @@ async function startHttp(config: Config, port: number): Promise<void> {
       return;
     }
 
+    beginSessionRequest(session);
     try {
       await session.transport.handleRequest(req, res);
     } catch (err) {
       log.error("Error handling DELETE request", { sessionId, error: String(err) });
+    } finally {
+      endSessionRequest(session);
     }
     destroySession(sessionId);
   });

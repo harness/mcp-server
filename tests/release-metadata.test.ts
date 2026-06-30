@@ -46,4 +46,15 @@ describe("release metadata", () => {
       });
     }
   });
+
+  it("exposes HTTP session TTL config in packaged manifests", () => {
+    for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
+      expect(manifest.server.mcp_config.env.MCP_SESSION_TTL_MS).toBe("${user_config.MCP_SESSION_TTL_MS}");
+      expect(manifest.user_config.MCP_SESSION_TTL_MS).toMatchObject({
+        default: "300000",
+        required: false,
+        sensitive: false,
+      });
+    }
+  });
 });
