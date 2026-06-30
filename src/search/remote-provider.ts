@@ -99,6 +99,8 @@ export class RemoteSearchProvider implements SearchProvider {
       const corpora: SearchCorpus[] = corpus === "all" ? CORPORA : [corpus as SearchCorpus];
 
       // One request per corpus — each targets its own collection.
+      // Use hybrid search (vector + BM25); the service gracefully degrades to
+      // vector-only when the collection is not hybrid-capable.
       // Static corpora omit tenant_id (whole collection is shared).
       // Entities corpus passes accountId as tenant_id for per-account scoping.
       const allResults = await Promise.all(
@@ -111,7 +113,7 @@ export class RemoteSearchProvider implements SearchProvider {
           if (!STATIC_CORPORA.has(c) && accountId) {
             params.set("tenant_id", accountId);
           }
-          const res = await this.doFetch(`/v1/search?${params}`);
+          const res = await this.doFetch(`/v1/hybrid?${params}`);
           if (!res.ok) {
             log.warn("Remote search request failed", { status: res.status, corpus: c });
             return [] as SearchResult[];

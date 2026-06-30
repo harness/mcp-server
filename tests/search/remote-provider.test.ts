@@ -80,7 +80,7 @@ describe("RemoteSearchProvider", () => {
     it("sends collection_name and tenant_id for entities corpus", async () => {
       await provider.search("deploy", { corpus: "entities", accountId: "acct-123", k: 5 });
       const calls = fetchSpy.mock.calls.map(c => String(c[0]));
-      const searchCall = calls.find(u => u.includes("/v1/search"));
+      const searchCall = calls.find(u => u.includes("/v1/hybrid"));
       expect(searchCall).toBeDefined();
       expect(searchCall).toContain("q=deploy");
       expect(searchCall).toContain("tenant_id=acct-123");
@@ -95,7 +95,7 @@ describe("RemoteSearchProvider", () => {
       await p.initialize();
       await p.search("schema", { corpus: "knowledge", accountId: "acct-123" });
       const calls = fetchSpy.mock.calls.map(c => String(c[0]));
-      const searchCall = calls.find(u => u.includes("/v1/search"));
+      const searchCall = calls.find(u => u.includes("/v1/hybrid"));
       expect(searchCall).toContain("collection_name=mcp_knowledge");
       expect(searchCall).not.toContain("tenant_id");
     });
@@ -151,7 +151,7 @@ describe("RemoteSearchProvider", () => {
       const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
       await p.initialize();
       await p.search("pipeline", { corpus: "all", accountId: "acct-123" });
-      const searchCalls = fetchSpy.mock.calls.filter(c => String(c[0]).includes("/v1/search"));
+      const searchCalls = fetchSpy.mock.calls.filter(c => String(c[0]).includes("/v1/hybrid"));
       expect(searchCalls).toHaveLength(3);
       const urls = searchCalls.map(c => String(c[0]));
       expect(urls.some(u => u.includes("collection_name=mcp_entities"))).toBe(true);
