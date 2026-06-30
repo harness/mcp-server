@@ -16,6 +16,7 @@ export type {
 } from "./routing-eval.js";
 export { NullSearchProvider } from "./null-provider.js";
 export { LocalSearchProvider } from "./local-provider.js";
+export { RemoteSearchProvider } from "./remote-provider.js";
 export { SearchManager } from "./manager.js";
 export {
   validateGoldenCases,

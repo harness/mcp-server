@@ -4,6 +4,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import type { SearchCorpus, SearchProvider, SearchProviderName, SearchReadiness, IndexableItem } from "./types.js";
 import { NullSearchProvider } from "./null-provider.js";
 import { LocalSearchProvider } from "./local-provider.js";
+import { RemoteSearchProvider } from "./remote-provider.js";
 import { createLogger } from "../utils/logger.js";
 import "../data/examples/load-all.js";
 import { getAllExamples } from "../data/examples/index.js";
@@ -33,7 +34,8 @@ export class SearchManager {
 
   /**
    * Whether live customer data may be indexed into the given corpus.
-   * LocalSearchProvider must not index `resources` in multi-user HTTP mode.
+   * In multi-user mode the local in-process store must not hold per-account entity data
+   * (no isolation between accounts). The remote provider handles this correctly via tenant_id.
    */
   canIndexCorpus(corpus: SearchCorpus): boolean {
     if (corpus === "entities" && this.mcpMode === "multi-user" && this.configuredProvider === "local") {
@@ -263,12 +265,39 @@ export class SearchManager {
         model: process.env.HARNESS_SEARCH_MODEL,
       });
     }
+    if (this.configuredProvider === "remote") {
+      if (!config.HARNESS_SEARCH_SERVICE_URL) {
+        log.error("HARNESS_SEARCH_PROVIDER=remote requires HARNESS_SEARCH_SERVICE_URL to be set");
+        return new NullSearchProvider();
+      }
+      return new RemoteSearchProvider({
+        baseUrl: config.HARNESS_SEARCH_SERVICE_URL,
+        headers: parseSearchServiceHeaders(config.HARNESS_SEARCH_SERVICE_HEADERS),
+        timeoutMs: config.HARNESS_API_TIMEOUT_MS,
+      });
+    }
     return new NullSearchProvider();
   }
 }
 
 function resolveConfiguredProvider(config: Config): SearchProviderName {
   return config.HARNESS_SEARCH_PROVIDER ?? "none";
+}
+
+function parseSearchServiceHeaders(raw: string | undefined): Record<string, string> | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return Object.fromEntries(
+        Object.entries(parsed).filter(([, v]) => typeof v === "string")
+      ) as Record<string, string>;
+    }
+    log.warn("HARNESS_SEARCH_SERVICE_HEADERS is not a JSON object — ignoring");
+  } catch {
+    log.warn("HARNESS_SEARCH_SERVICE_HEADERS is not valid JSON — ignoring");
+  }
+  return undefined;
 }
 
 function getProviderInitError(provider: SearchProvider): string | undefined {

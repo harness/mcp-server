@@ -36,7 +36,7 @@ export interface IndexableItem {
   ttlMs?: number;
 }
 
-export type SearchProviderName = "none" | "local";
+export type SearchProviderName = "none" | "local" | "remote";
 
 export type SearchReadiness =
   | { state: "disabled"; configured: "none" }
