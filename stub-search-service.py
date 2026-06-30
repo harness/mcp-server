@@ -6,7 +6,7 @@ Run: .venv-stub/bin/uvicorn stub-search-service:app --port 8080
 import math
 import uuid
 from typing import Optional
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Request
 from pydantic import BaseModel
 
 app = FastAPI()
@@ -86,17 +86,26 @@ def ingest(req: IngestRequest):
 
 @app.get("/v1/search", response_model=SearchResponse)
 def search(
+    request: Request,
     q: str = Query(...),
     k: int = Query(10),
     tenant_id: Optional[str] = Query(None),
-    corpus: Optional[str] = Query(None),
 ):
+    # Collect arbitrary metadata.* filter params from query string
+    excluded = {"q", "k", "tenant_id"}
+    extra_filters = {key: value for key, value in request.query_params.items() if key not in excluded}
+
     qvec = simple_embed(q)
     candidates = docs
     if tenant_id:
         candidates = [d for d in candidates if d["tenant_id"] == tenant_id]
-    if corpus:
-        candidates = [d for d in candidates if d["metadata"].get("corpus") == corpus]
+    for key, value in extra_filters.items():
+        # metadata.foo=bar maps to doc["metadata"]["foo"] == "bar"
+        if key.startswith("metadata."):
+            meta_key = key[len("metadata."):]
+            candidates = [d for d in candidates if d["metadata"].get(meta_key) == value]
+        else:
+            candidates = [d for d in candidates if d.get(key) == value]
 
     scored = sorted(
         [{"doc": d, "score": cosine(qvec, d["embedding"])} for d in candidates],

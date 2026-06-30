@@ -99,7 +99,7 @@ export class RemoteSearchProvider implements SearchProvider {
 
       const allResults = await Promise.all(
         buckets.map(async ({ tenantId, corpus: c }) => {
-          const params = new URLSearchParams({ q: query, k: String(k), tenant_id: tenantId, corpus: c });
+          const params = new URLSearchParams({ q: query, k: String(k), tenant_id: tenantId, "metadata.corpus": c });
           const res = await this.doFetch(`/v1/search?${params}`);
           if (!res.ok) {
             log.warn("Remote search request failed", { status: res.status, tenantId, corpus: c });

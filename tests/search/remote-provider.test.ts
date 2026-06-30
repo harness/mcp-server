@@ -84,7 +84,7 @@ describe("RemoteSearchProvider", () => {
       expect(searchCall).toBeDefined();
       expect(searchCall).toContain("q=deploy");
       expect(searchCall).toContain("tenant_id=acct-123");
-      expect(searchCall).toContain("corpus=entities");
+      expect(searchCall).toContain("metadata.corpus=entities");
       expect(searchCall).toContain("k=5");
     });
 
