@@ -159,6 +159,51 @@ describe("harness_schema live entities", () => {
     expect(parsed.resource_type).toBe("pipeline");
   });
 
+  it("drills into a live entity section via path and inlines nested refs", async () => {
+    requestMock.mockResolvedValueOnce({
+      data: {
+        definitions: {
+          connector: {
+            connector: {
+              type: "object",
+              properties: { name: { type: "string" } },
+            },
+          },
+          shared: {
+            ConnectorSpecDTO: {
+              type: "object",
+              title: "ConnectorSpecDTO",
+              properties: { url: { type: "string" } },
+            },
+          },
+        },
+      },
+    });
+
+    const result = await server.call("harness_schema", {
+      resource_type: "connector",
+      path: "shared.ConnectorSpecDTO",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("shared.ConnectorSpecDTO");
+    expect(parsed.source).toBe("ng-yaml-schema");
+    expect((parsed.schema as Record<string, unknown>).title).toBe("ConnectorSpecDTO");
+  });
+
+  it("errors with available sections when live path is not found", async () => {
+    const result = await server.call("harness_schema", {
+      resource_type: "connector",
+      path: "DoesNotExist",
+    });
+    const parsed = parseResult(result) as { error: string };
+
+    expect(result.isError).toBe(true);
+    expect(parsed.error).toMatch(/not found/);
+    expect(parsed.error).toContain("connector");
+  });
+
   it("rejects project scope without org_id before bundled or live fetch", async () => {
     vi.spyOn(
       await import("../../src/tools/entity-schema/bundled.js"),
@@ -308,6 +353,59 @@ describe("harness_schema nested static definition lookup", () => {
     expect(result.isError).toBeFalsy();
     expect(parsed.path).toBe("stages.unified.EnvironmentV1");
     expect(parsed.requested_path).toBe("EnvironmentV1");
+  });
+
+  it("inlines $ref pointers in the returned schema section", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, {
+      ref_demo: {
+        schema: {
+          definitions: {
+            ref_demo: {
+              ref_demo: { type: "object" },
+              wrapper: {
+                type: "object",
+                properties: {
+                  leaf: { $ref: "#/definitions/ref_demo/leaf" },
+                },
+              },
+              leaf: {
+                type: "object",
+                title: "LeafDef",
+                properties: { id: { type: "string" } },
+              },
+            },
+          },
+        },
+        description: "Ref inlining test schema",
+        group: "test",
+      },
+    });
+
+    const result = await server.call("harness_schema", {
+      resource_type: "ref_demo",
+      path: "wrapper",
+    });
+    const parsed = parseResult(result) as { schema: Record<string, unknown> };
+    const leaf = (parsed.schema.properties as Record<string, unknown>).leaf as Record<string, unknown>;
+
+    expect(leaf.title).toBe("LeafDef");
+    expect(leaf).not.toHaveProperty("$ref");
+  });
+
+  it("returns trigger_source section from bundled trigger schema", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "trigger",
+      path: "trigger_source",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("trigger_source");
+    expect(parsed.source).toBe("harness-schema");
+    expect((parsed.schema as Record<string, unknown>).title).toBe("trigger_source");
   });
 });
 

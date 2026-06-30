@@ -416,6 +416,16 @@ describe("kg_grammar get extractor", () => {
 
     expect(result).toEqual({ grammar: "" });
   });
+
+  it("passes through raw response when grammar key is absent", async () => {
+    const raw = { status: "SUCCESS", data: { debug: true } };
+    const mockRequest = vi.fn().mockResolvedValue(raw);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "kg_grammar", "get", {});
+
+    expect(result).toEqual(raw);
+  });
 });
 
 // ---------------------------------------------------------------------------
