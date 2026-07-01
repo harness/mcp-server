@@ -1,13 +1,7 @@
 import type { ToolsetDefinition, PreflightContext, ParamsSchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
-import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
+import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, anomalyListExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
 
-/** Extract anomaly list: returns { items, total } so skipCompact marker survives normalization. */
-const anomalyListExtract = (raw: unknown): { items: unknown[]; total: number } => {
-  const r = raw as { data?: unknown[] };
-  const items = Array.isArray(r?.data) ? r.data : [];
-  return { items, total: items.length };
-};
 /** Narrow preflight client for CCM perspective create defaults fetch. */
 interface CcmPreflightClient {
   readonly account: string;
