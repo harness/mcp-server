@@ -3,15 +3,21 @@
 ## AI Evals API Drift Review (2026-07-01)
 - [x] Read Slack thread and confirm available context
 - [x] Inspect PR #529 metadata/diff and local AI evals toolset
-- [ ] Align local AI evals public schemas/hints with current control-plane contract
-- [ ] Add focused regression coverage for changed AI evals fields and request payloads
-- [ ] Run focused and guardrail verification
+- [x] Align local AI evals public schemas/hints with current control-plane contract
+- [x] Add focused regression coverage for changed AI evals fields and request payloads
+- [x] Run focused and guardrail verification
 - [ ] Commit, push, open PR, and report outcome in Slack
 
 ### Plan
 - Keep the implementation in `src/registry/toolsets/ai-evals.ts`, matching PR #529's API drift corrections without broad toolset refactors.
 - Add tests in `tests/registry/ai-evals.test.ts` that lock the public body schemas, stale-field removals, and direct dispatch body shapes for metric create, annotation create/update, and online trace evaluation.
 - Run focused AI evals tests first, then build/docs/typecheck/test guardrails before pushing.
+
+### Review
+- Root cause: the `ai-evals` toolset public body schemas drifted from the current control-plane contracts. `eval_metric.create` omitted required `dimension`, `eval_annotation.create/update` omitted `thumbs_up`, and `online_eval.evaluate` still advertised deprecated `metric_ids`/metric references instead of `metric_set_id` plus `judge_llm_connector_ref`.
+- Changed `src/registry/toolsets/ai-evals.ts` to expose the current fields and update online evaluation diagnostic/action/relationship metadata to point agents at `eval_metric_set`.
+- Added focused regressions in `tests/registry/ai-evals.test.ts` for schema metadata and registry dispatch request bodies, including preservation of `thumbs_up: false`.
+- Verification passed: `pnpm exec vitest run tests/registry/ai-evals.test.ts`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, `pnpm test` (116 files / 2479 tests), and `pnpm standards:check` (9 files / 75 tests).
 
 ## Critical Bug Investigation Automation (2026-06-30)
 - [x] Baseline current branch and identify recent behavioral commits after `v3.2.4`
