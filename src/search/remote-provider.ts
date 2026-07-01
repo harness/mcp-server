@@ -103,6 +103,8 @@ export class RemoteSearchProvider implements SearchProvider {
       // vector-only when the collection is not hybrid-capable.
       // Static corpora omit tenant_id (whole collection is shared).
       // Entities corpus passes accountId as tenant_id for per-account scoping.
+      const { filters } = options;
+
       const allResults = await Promise.all(
         corpora.map(async (c) => {
           const params = new URLSearchParams({
@@ -113,13 +115,20 @@ export class RemoteSearchProvider implements SearchProvider {
           if (!STATIC_CORPORA.has(c) && accountId) {
             params.set("tenant_id", accountId);
           }
+          if (filters) {
+            for (const [key, value] of Object.entries(filters)) {
+              params.set(key, value);
+            }
+          }
           const res = await this.doFetch(`/v1/hybrid?${params}`);
           if (!res.ok) {
             log.warn("Remote search request failed", { status: res.status, corpus: c });
+            await res.text().catch(() => undefined);
             return [] as SearchResult[];
           }
           const body = await res.json() as ServiceSearchResponse;
-          return body.results.map(r => ({
+          const results = body?.results ?? [];
+          return results.map(r => ({
             id: r.id,
             content: r.content,
             score: r.score,
@@ -164,6 +173,7 @@ export class RemoteSearchProvider implements SearchProvider {
 
       if (!res.ok) {
         log.warn("Remote index request failed", { id: item.id, status: res.status });
+        await res.text().catch(() => undefined);
       }
     } catch (err) {
       log.error("RemoteSearchProvider index failed", { id: item.id, error: String(err) });

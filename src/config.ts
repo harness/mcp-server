@@ -118,7 +118,10 @@ const RawConfigSchema = z.object({
     emptyStringAsUndefined,
     z.enum(["none", "local", "remote"]).default("local"),
   ),
-  HARNESS_SEARCH_SERVICE_URL: optionalStringFromEnv,
+  HARNESS_SEARCH_SERVICE_URL: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().url().optional(),
+  ),
   // Extra headers sent with every request to the remote search service.
   // JSON object, e.g.: {"Authorization":"Bearer tok"} or {"x-api-key":"key","x-harness-token":"svc"}
   // Supports any auth scheme: Bearer tokens, API keys, internal service-to-service headers.

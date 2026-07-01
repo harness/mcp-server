@@ -289,6 +289,10 @@ function parseSearchServiceHeaders(raw: string | undefined): Record<string, stri
   try {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const dropped = Object.entries(parsed).filter(([, v]) => typeof v !== "string").map(([k]) => k);
+      if (dropped.length > 0) {
+        log.warn("HARNESS_SEARCH_SERVICE_HEADERS: non-string values ignored", { keys: dropped });
+      }
       return Object.fromEntries(
         Object.entries(parsed).filter(([, v]) => typeof v === "string")
       ) as Record<string, string>;
