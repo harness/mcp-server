@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { SearchManager } from "../../src/search/manager.js";
 import { NullSearchProvider } from "../../src/search/null-provider.js";
 import { LocalSearchProvider } from "../../src/search/local-provider.js";
+import * as RemoteSearchProviderModule from "../../src/search/remote-provider.js";
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
@@ -53,6 +54,40 @@ describe("SearchManager", () => {
     expect(mgr.getProvider().isAvailable()).toBe(false);
 
     vi.restoreAllMocks();
+  });
+
+  it("passes only string header values to RemoteSearchProvider", () => {
+    const ctorSpy = vi.spyOn(RemoteSearchProviderModule, "RemoteSearchProvider");
+
+    new SearchManager(makeConfig({
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      HARNESS_SEARCH_SERVICE_HEADERS: JSON.stringify({
+        Authorization: "Bearer tok",
+        retries: 3,
+        nested: { key: "val" },
+      }),
+    }) as never);
+
+    expect(ctorSpy).toHaveBeenCalledWith(expect.objectContaining({
+      headers: { Authorization: "Bearer tok" },
+    }));
+
+    ctorSpy.mockRestore();
+  });
+
+  it("falls back to NullSearchProvider when remote is configured without service URL", () => {
+    const ctorSpy = vi.spyOn(RemoteSearchProviderModule, "RemoteSearchProvider");
+
+    const mgr = new SearchManager(makeConfig({
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: undefined,
+    }) as never);
+
+    expect(ctorSpy).not.toHaveBeenCalled();
+    expect(mgr.getProvider()).toBeInstanceOf(NullSearchProvider);
+
+    ctorSpy.mockRestore();
   });
 
   describe("canIndexCorpus", () => {
