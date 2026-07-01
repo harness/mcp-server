@@ -6,7 +6,7 @@
 - [x] Align local AI evals public schemas/hints with current control-plane contract
 - [x] Add focused regression coverage for changed AI evals fields and request payloads
 - [x] Run focused and guardrail verification
-- [ ] Commit, push, open PR, and report outcome in Slack
+- [x] Commit, push, open PR, and report outcome in Slack
 
 ### Plan
 - Keep the implementation in `src/registry/toolsets/ai-evals.ts`, matching PR #529's API drift corrections without broad toolset refactors.
@@ -18,6 +18,7 @@
 - Changed `src/registry/toolsets/ai-evals.ts` to expose the current fields and update online evaluation diagnostic/action/relationship metadata to point agents at `eval_metric_set`.
 - Added focused regressions in `tests/registry/ai-evals.test.ts` for schema metadata and registry dispatch request bodies, including preservation of `thumbs_up: false`.
 - Verification passed: `pnpm exec vitest run tests/registry/ai-evals.test.ts`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, `pnpm test` (116 files / 2479 tests), and `pnpm standards:check` (9 files / 75 tests).
+- Opened PR: https://github.com/harness/mcp-server/pull/530. Slack thread reply could not be posted because the trigger channel `C08SYT1FWJD` is not configured in the available Slack send tool; no message was posted to another channel.
 
 ## Critical Bug Investigation Automation (2026-06-30)
 - [x] Baseline current branch and identify recent behavioral commits after `v3.2.4`
