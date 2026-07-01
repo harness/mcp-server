@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { SearchManager } from "../../src/search/manager.js";
 import { NullSearchProvider } from "../../src/search/null-provider.js";
 import { LocalSearchProvider } from "../../src/search/local-provider.js";
+import { RemoteSearchProvider } from "../../src/search/remote-provider.js";
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
@@ -122,6 +123,44 @@ describe("SearchManager", () => {
       });
 
       expect(indexSpy).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("remote provider wiring", () => {
+    it("returns NullSearchProvider when remote is configured without HARNESS_SEARCH_SERVICE_URL", () => {
+      const mgr = new SearchManager(makeConfig({ HARNESS_SEARCH_PROVIDER: "remote" }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(NullSearchProvider);
+    });
+
+    it("uses RemoteSearchProvider when remote URL is configured", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(RemoteSearchProvider);
+    });
+
+    it("filters non-string values from HARNESS_SEARCH_SERVICE_HEADERS before wiring", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) });
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+        HARNESS_SEARCH_SERVICE_HEADERS: JSON.stringify({
+          Authorization: "Bearer good-token",
+          "x-api-key": 12345,
+          nested: { bad: true },
+        }),
+      }) as never);
+      await mgr.initialize();
+
+      const headers = fetchSpy.mock.calls[0]![1]?.headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer good-token");
+      expect(headers["x-api-key"]).toBeUndefined();
+      expect(headers.nested).toBeUndefined();
+
+      vi.unstubAllGlobals();
     });
   });
 });

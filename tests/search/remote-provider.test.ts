@@ -160,12 +160,66 @@ describe("RemoteSearchProvider", () => {
     });
 
     it("returns [] and does not throw when service returns non-200", async () => {
-      fetchSpy = mockFetch([{ ok: true }, { ok: false, status: 500 }]);
+      const textSpy = vi.fn().mockResolvedValue("error body");
+      fetchSpy = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({}) })
+        .mockResolvedValueOnce({ ok: false, status: 500, text: textSpy, json: () => Promise.resolve({}) });
       vi.stubGlobal("fetch", fetchSpy);
       const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
       await p.initialize();
       const results = await p.search("test", { corpus: "knowledge" });
       expect(results).toEqual([]);
+      expect(textSpy).toHaveBeenCalledOnce();
+    });
+
+    it("forwards filters as query params on hybrid search", async () => {
+      await provider.search("deploy", {
+        corpus: "entities",
+        accountId: "acct-123",
+        filters: { "metadata.resource_type": "pipeline", "metadata.org_id": "my-org" },
+      });
+      const searchCall = fetchSpy.mock.calls.find((c) => String(c[0]).includes("/v1/hybrid"));
+      expect(searchCall).toBeDefined();
+      const url = String(searchCall![0]);
+      expect(url).toContain("metadata.resource_type=pipeline");
+      expect(url).toContain("metadata.org_id=my-org");
+    });
+
+    it("returns [] when service response omits results (null-safe)", async () => {
+      fetchSpy = mockFetch([{ ok: true }, { ok: true, body: { total_count: 0 } }]);
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.initialize();
+      const results = await p.search("test", { corpus: "knowledge" });
+      expect(results).toEqual([]);
+    });
+
+    it("sorts merged corpus=all results by score and applies global k limit", async () => {
+      fetchSpy = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({}) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            results: [{ id: "low", content: "c", metadata: {}, score: 0.1 }],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            results: [{ id: "high", content: "c", metadata: {}, score: 0.9 }],
+          }),
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: () => Promise.resolve({
+            results: [{ id: "mid", content: "c", metadata: {}, score: 0.5 }],
+          }),
+        });
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.initialize();
+      const results = await p.search("pipeline", { corpus: "all", accountId: "acct-123", k: 2 });
+      expect(results.map((r) => r.id)).toEqual(["high", "mid"]);
     });
   });
 
@@ -210,11 +264,15 @@ describe("RemoteSearchProvider", () => {
     });
 
     it("does not throw when service returns non-200", async () => {
-      fetchSpy = mockFetch([{ ok: true }, { ok: false, status: 503 }]);
+      const textSpy = vi.fn().mockResolvedValue("error body");
+      fetchSpy = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve({}) })
+        .mockResolvedValueOnce({ ok: false, status: 503, text: textSpy, json: () => Promise.resolve({}) });
       vi.stubGlobal("fetch", fetchSpy);
       const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
       await p.initialize();
       await expect(p.index({ id: "x", content: "y", corpus: "knowledge", metadata: {} })).resolves.toBeUndefined();
+      expect(textSpy).toHaveBeenCalledOnce();
     });
   });
 
