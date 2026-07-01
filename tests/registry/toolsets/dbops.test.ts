@@ -129,6 +129,16 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
   it("run action uses low_write risk (intentional — billing side-effect is scoped to the Accept & Commit flow)", () => {
     expect(runAction.operationPolicy?.risk).toBe("low_write");
   });
+
+  it("documents the correct NG setting key for the custom-pipeline branch (not the retired _id suffix)", () => {
+    const pipelineIdField = runAction.bodySchema?.fields?.find(
+      (f) => f.name === "pipelineIdentifier",
+    );
+    expect(pipelineIdField?.description).toContain("`dbops_llm_authoring_pipeline`");
+    expect(pipelineIdField?.description).not.toContain("dbops_llm_authoring_pipeline_id");
+    expect(executeResource.description).toContain("`dbops_llm_authoring_pipeline`");
+    expect(executeResource.description).not.toContain("dbops_llm_authoring_pipeline_id");
+  });
 });
 
 describe("listOutputSchema primitive widening", () => {
