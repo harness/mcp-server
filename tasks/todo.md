@@ -1,5 +1,23 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-01)
+- [x] Baseline current branch and identify recent high-blast-radius commits
+- [x] Review remote search, HTTP session, and pipeline execution changes with subagents
+- [x] Trace confirmed pipeline input-set plus inline-override execution bug through the public tool path
+- [x] Implement a minimal input materialization fix with focused regressions
+- [ ] Commit and push implementation checkpoint before validation
+- [ ] Run focused and broad verification
+- [ ] Open PR and report outcome in Slack
+
+### Plan
+- Treat commits since `v3.2.5` and the current release head as the recent-change window.
+- Prioritize correctness paths that can affect deployments or multi-user isolation: semantic search tenancy, HTTP session lifecycle, and pipeline execute/runtime input construction.
+- Patch only a concrete critical trigger with a narrow change. The confirmed trigger is `harness_execute(resource_type="pipeline", action="run", input_set_ids=[...], inputs={...})`: the tool documented this as "input set base + simple overrides" but skipped input-set materialization when overrides were present, then skipped unresolved-required validation because input sets existed.
+- Preserve the existing input-set-only behavior while changing the combined mode to materialize the base input set, apply only matched inline overrides, and fail closed if required fields remain uncovered.
+
+### Review
+- Pending validation.
+
 ## Critical Bug Investigation Automation (2026-06-30)
 - [x] Baseline current branch and identify recent behavioral commits after `v3.2.4`
 - [x] Review high-blast-radius diffs and trace candidate bugs through callers

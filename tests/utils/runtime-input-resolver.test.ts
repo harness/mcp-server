@@ -4,6 +4,7 @@ import {
   isResolvableInputs,
   flattenInputs,
   substituteInputs,
+  substituteInputsIntoBaseYaml,
   fetchRuntimeInputTemplate,
   resolveRuntimeInputs,
   clearTemplateCache,
@@ -283,6 +284,68 @@ describe("substituteInputs", () => {
     expect(result.unmatchedRequired).toContain("build");
     expect(result.unmatchedOptional).toContain("DEPLOY");
     expect(result.unmatchedOptional).toContain("HAR_REGISTRY");
+  });
+});
+
+describe("substituteInputsIntoBaseYaml", () => {
+  it("applies only matched inline overrides onto materialized input-set YAML", () => {
+    const baseYaml = `pipeline:
+  identifier: "mixed_pipe"
+  variables:
+    - name: "environment"
+      type: "String"
+      value: "prod"
+    - name: "branch"
+      type: "String"
+      value: "main"
+`;
+
+    const result = substituteInputsIntoBaseYaml(
+      `pipeline:
+  identifier: "mixed_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "<+input>"
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`,
+      { branch: "feature" },
+      baseYaml,
+    );
+
+    expect(result.matched).toContain("branch");
+    expect(result.unmatchedRequired).toHaveLength(0);
+    expect(result.yaml).toContain("feature");
+    expect(result.yaml).toContain("prod");
+    expect(result.yaml).not.toContain("<+input>");
+  });
+
+  it("reports required fields that neither overrides nor the base input set cover", () => {
+    const result = substituteInputsIntoBaseYaml(
+      `pipeline:
+  identifier: "mixed_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "<+input>"
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`,
+      { branch: "feature" },
+      `pipeline:
+  identifier: "mixed_pipe"
+  variables:
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`,
+    );
+
+    expect(result.matched).toContain("branch");
+    expect(result.unmatchedRequired).toEqual(["environment"]);
   });
 });
 
