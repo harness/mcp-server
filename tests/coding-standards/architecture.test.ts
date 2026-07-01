@@ -226,6 +226,26 @@ describe("Coding standards — logging and HTTP", () => {
     expect(violations, `console.* found in toolsets:\n${violations.join("\n")}`).toEqual([]);
   });
 
+  it("toolset files do not import or call createLogger (pure data — log in handlers)", () => {
+    const violations: string[] = [];
+    const toolsetDir = join(SRC, "registry/toolsets");
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const content = readFileSync(file, "utf8");
+      if (/from\s+["'][^"']*\/utils\/logger/.test(content)) {
+        violations.push(`${fileRel}: createLogger import`);
+      }
+      if (/\bcreateLogger\s*\(/.test(content)) {
+        violations.push(`${fileRel}: createLogger() call`);
+      }
+    }
+
+    expect(violations, `createLogger in toolsets:\n${violations.join("\n")}`).toEqual([]);
+  });
+
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {
     const violations: string[] = [];
     const scanDirs = [join(SRC, "tools"), join(SRC, "registry/toolsets")];
