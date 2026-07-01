@@ -309,6 +309,36 @@ describe("harness_schema nested static definition lookup", () => {
     expect(parsed.path).toBe("stages.unified.EnvironmentV1");
     expect(parsed.requested_path).toBe("EnvironmentV1");
   });
+
+  it("resolves newly synced K8sProgressiveCanaryRollback step definition from v0 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "K8sProgressiveCanaryRollbackStepNode",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("steps.cd.K8sProgressiveCanaryRollbackStepNode");
+    expect(parsed.requested_path).toBe("K8sProgressiveCanaryRollbackStepNode");
+    const schema = parsed.schema as { properties?: { type?: { enum?: string[] } } };
+    expect(schema.properties?.type?.enum).toContain("K8sProgressiveCanaryRollback");
+  });
+
+  it("resolves v1 Clone definition with upstream user field", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline_v1",
+      path: "Clone",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    const schema = parsed.schema as { properties?: Record<string, { description?: string }> };
+    expect(schema.properties?.user?.description).toContain("clone container");
+  });
 });
 
 // Wrapper definitions that are grouping objects (not schema nodes) must still
