@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 218 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 216 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,8 +8,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 218 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 38 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
+- **11 tools, 216 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 36 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **32 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -1197,7 +1197,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-218 resource types organized across 38 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+216 resource types organized across 36 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1755,7 +1755,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, 38 of 39 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
+By default, 36 of 37 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 
@@ -1852,8 +1852,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  38 Toolsets      |      (data files, not code)
-                |  218 Resource Types|
+                |  36 Toolsets      |      (data files, not code)
+                |  216 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
