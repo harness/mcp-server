@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { SearchManager } from "../../src/search/manager.js";
 import { NullSearchProvider } from "../../src/search/null-provider.js";
 import { LocalSearchProvider } from "../../src/search/local-provider.js";
+import { RemoteSearchProvider } from "../../src/search/remote-provider.js";
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
@@ -78,6 +79,70 @@ describe("SearchManager", () => {
         HARNESS_MCP_MODE: "multi-user",
       }) as never);
       expect(mgr.canIndexCorpus("knowledge")).toBe(true);
+    });
+  });
+
+  describe("remote provider wiring", () => {
+    it("falls back to NullSearchProvider when remote is configured without a service URL", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: undefined,
+      }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(NullSearchProvider);
+    });
+
+    it("constructs RemoteSearchProvider when remote is configured with a service URL", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+        HARNESS_SEARCH_SERVICE_HEADERS: JSON.stringify({ Authorization: "Bearer tok" }),
+        HARNESS_API_TIMEOUT_MS: 15_000,
+      }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(RemoteSearchProvider);
+    });
+
+    it("ignores non-string header values when parsing HARNESS_SEARCH_SERVICE_HEADERS", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve(""),
+      }));
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+        HARNESS_SEARCH_SERVICE_HEADERS: JSON.stringify({
+          Authorization: "Bearer good",
+          "x-bad-number": 42,
+          "x-bad-object": { nested: true },
+        }),
+      }) as never);
+      await mgr.initialize();
+      const fetchMock = vi.mocked(globalThis.fetch);
+      const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer good");
+      expect(headers["x-bad-number"]).toBeUndefined();
+      expect(headers["x-bad-object"]).toBeUndefined();
+      vi.unstubAllGlobals();
+    });
+
+    it("ignores invalid HARNESS_SEARCH_SERVICE_HEADERS JSON", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve(""),
+      }));
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+        HARNESS_SEARCH_SERVICE_HEADERS: "not-json",
+      }) as never);
+      await mgr.initialize();
+      const fetchMock = vi.mocked(globalThis.fetch);
+      const headers = fetchMock.mock.calls[0]?.[1]?.headers as Record<string, string> | undefined;
+      expect(headers?.Authorization).toBeUndefined();
+      vi.unstubAllGlobals();
     });
   });
 
