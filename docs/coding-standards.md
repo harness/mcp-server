@@ -45,10 +45,10 @@ Files in `src/registry/toolsets/*.ts` must export a `ToolsetDefinition` object (
 
 They must NOT:
 
-- Import `HarnessClient`, `McpServer`, or `Registry`
+- Import `HarnessClient`, `McpServer`, `Registry`, or `createLogger`
 - Make HTTP calls directly (use `preflight` hooks with structural client interfaces from `PreflightContext` when needed)
 - Contain business logic beyond field mapping
-- Use `console.log()` (or any stdout writes)
+- Use `console.log()` (or any stdout writes) or `createLogger()` — logging belongs in tool handlers
 
 ### 3. Use Shared Response Extractors
 
@@ -144,6 +144,7 @@ All Zod schemas in tool handlers must:
 | `src/client/harness-client.ts` | Core HTTP transport |
 | `src/utils/log-resolver.ts` | Pre-signed CDN/S3 blob URLs must not receive API auth headers (would invalidate signatures) |
 | `src/audit/sinks/webhook.ts` | Best-effort POST to a user-configured external audit webhook URL |
+| `src/search/remote-provider.ts` | Optional external search service (not the Harness API); uses its own auth headers and timeout |
 
 ### 11. File Organization Rules
 
