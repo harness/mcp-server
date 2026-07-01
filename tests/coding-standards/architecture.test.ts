@@ -81,7 +81,21 @@ const FORBIDDEN_TOOLSET_IMPORTS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /from\s+["'][^"']*harness-client/, reason: "HarnessClient import" },
   { pattern: /from\s+["']@modelcontextprotocol\/sdk/, reason: "McpServer/MCP SDK import" },
   { pattern: /from\s+["'][^"']*\/registry\/index/, reason: "Registry import" },
+  { pattern: /from\s+["'][^"']*\/utils\/logger/, reason: "createLogger import — logging belongs in handlers" },
 ];
+
+/**
+ * Tool handlers may call client.request() only in documented exceptions.
+ * Prefer registry.dispatch() for all Harness API calls.
+ */
+const ALLOWED_CLIENT_REQUEST_FILES = new Set([
+  "src/tools/harness-execute.ts",
+  "src/tools/entity-schema/live.ts",
+  "src/tools/diagnose/pipeline.ts",
+]);
+
+/** Search module must not bypass HarnessClient or write to stdout. */
+const SEARCH_DIR = join(SRC, "search");
 
 /** Files allowed to call the global fetch() API (documented exceptions). */
 const ALLOWED_GLOBAL_FETCH_FILES = new Set([
@@ -209,7 +223,7 @@ describe("Coding standards — logging and HTTP", () => {
     expect(violations, `console.log() found in:\n${violations.join("\n")}`).toEqual([]);
   });
 
-  it("toolset files do not use console.* (use createLogger in handlers, not toolsets)", () => {
+  it("toolset files do not use console.* (logging belongs in handlers, not toolsets)", () => {
     const violations: string[] = [];
     const toolsetDir = join(SRC, "registry/toolsets");
 
@@ -224,6 +238,25 @@ describe("Coding standards — logging and HTTP", () => {
     }
 
     expect(violations, `console.* found in toolsets:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("toolset files do not import or call createLogger (pure data — no side effects)", () => {
+    const violations: string[] = [];
+    const toolsetDir = join(SRC, "registry/toolsets");
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const content = readFileSync(file, "utf8");
+      if (/from\s+["'][^"']*logger/.test(content)) {
+        violations.push(`${fileRel}: createLogger import`);
+      } else if (/\bcreateLogger\s*\(/.test(content)) {
+        violations.push(`${fileRel}: createLogger() call`);
+      }
+    }
+
+    expect(violations, `createLogger in toolsets:\n${violations.join("\n")}`).toEqual([]);
   });
 
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {
@@ -280,6 +313,47 @@ describe("Coding standards — logging and HTTP", () => {
       violations,
       `HarnessClient must only be constructed in src/index.ts:\n${violations.join("\n")}`,
     ).toEqual([]);
+  });
+
+  it("client.request() is only used in documented handler exceptions", () => {
+    const violations: string[] = [];
+    const toolsDir = join(SRC, "tools");
+
+    for (const file of walkTsFiles(toolsDir)) {
+      const content = readFileSync(file, "utf8");
+      if (!/client\.request\s*[<(]/.test(content)) continue;
+
+      const fileRel = rel(file);
+      if (!ALLOWED_CLIENT_REQUEST_FILES.has(fileRel)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `Unexpected client.request() usage (allowed: ${[...ALLOWED_CLIENT_REQUEST_FILES].join(", ")}):\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("search module does not use console.log, raw fetch(), or HarnessClient", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(SEARCH_DIR)) {
+      const content = readFileSync(file, "utf8");
+      const fileRel = rel(file);
+
+      if (/\bconsole\.log\s*\(/.test(content)) {
+        violations.push(`${fileRel}: console.log()`);
+      }
+      if (GLOBAL_FETCH_PATTERN.test(content)) {
+        violations.push(`${fileRel}: raw fetch()`);
+      }
+      if (/new\s+HarnessClient\s*\(/.test(content)) {
+        violations.push(`${fileRel}: new HarnessClient()`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
   });
 });
 
