@@ -167,6 +167,28 @@ describe("RemoteSearchProvider", () => {
       const results = await p.search("test", { corpus: "knowledge" });
       expect(results).toEqual([]);
     });
+
+    it("returns [] when service response omits results (malformed body must not throw)", async () => {
+      fetchSpy = mockFetch([{ ok: true }, { ok: true, body: { total_count: 0 } }]);
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.initialize();
+      const results = await p.search("test", { corpus: "knowledge" });
+      expect(results).toEqual([]);
+    });
+
+    it("does not forward filters query params to the hybrid endpoint", async () => {
+      await provider.search("deploy", {
+        corpus: "entities",
+        accountId: "acct-123",
+        filters: { resource_type: "pipeline", org_id: "myOrg" },
+      });
+      const calls = fetchSpy.mock.calls.map(c => String(c[0]));
+      const searchCall = calls.find(u => u.includes("/v1/hybrid"));
+      expect(searchCall).toBeDefined();
+      expect(searchCall).not.toContain("resource_type=");
+      expect(searchCall).not.toContain("org_id=");
+    });
   });
 
   describe("index", () => {
