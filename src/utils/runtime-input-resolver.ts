@@ -400,11 +400,18 @@ function getCoveredValue(root: unknown, path: PathSegment[], variableNameRaw: st
     if (variable && typeof leaf === "string") {
       return variable[leaf];
     }
+    return undefined;
   }
   return getAtPath(root, path);
 }
 
-function setOverrideValue(root: unknown, path: PathSegment[], value: unknown, variableNameRaw: string | undefined): void {
+function setOverrideValue(
+  root: unknown,
+  path: PathSegment[],
+  value: unknown,
+  variableNameRaw: string | undefined,
+  templateVariable?: Record<string, unknown>,
+): void {
   if (variableNameRaw) {
     const variable = findVariableRecord(root, path.slice(0, -1), variableNameRaw);
     const leaf = path[path.length - 1];
@@ -412,6 +419,14 @@ function setOverrideValue(root: unknown, path: PathSegment[], value: unknown, va
       variable[leaf] = value;
       return;
     }
+    const variableList = getAtPath(root, path.slice(0, -2));
+    if (Array.isArray(variableList) && typeof leaf === "string") {
+      variableList.push({
+        ...(templateVariable ?? { name: variableNameRaw }),
+        [leaf]: value,
+      });
+    }
+    return;
   }
   setAtPath(root, path, value);
 }
@@ -470,7 +485,7 @@ export function substituteInputsIntoBaseYaml(
 
     const replacement = replacementForPath(path, normalizedInputs, variableNameRaw);
     if (replacement.value !== undefined) {
-      setOverrideValue(outputRoot, path, replacement.value, variableNameRaw);
+      setOverrideValue(outputRoot, path, replacement.value, variableNameRaw, parentRecord);
       matched.push(replacement.matchedAs ?? displayName);
       return;
     }
