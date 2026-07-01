@@ -10,7 +10,7 @@ import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit
 import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
-import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, type ResolutionResult } from "../utils/runtime-input-resolver.js";
+import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, resolveRuntimeInputsWithBaseYaml, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
 import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
@@ -267,6 +267,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const inputSetIds = args.input_set_ids ?? [];
         const hasInputSets = inputSetIds.length > 0;
         let materializedInputSets = false;
+        let materializedInputSetYaml: string | undefined;
 
         // When only input_set_ids are effectively provided, fetch each input set and build runtime YAML.
         // Harness execute often does not apply `inputSetIdentifiers` from the query string alone;
@@ -275,7 +276,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           resourceType === "pipeline" &&
           args.action === "run" &&
           hasInputSets &&
-          hasNoInlineRuntimeInputs(args.inputs)
+          (hasNoInlineRuntimeInputs(args.inputs) || isResolvableInputs(args.inputs))
         ) {
           const pipelineId = asString(input.pipeline_id) ?? resourceId;
           const orgId = asString(input.org_id) || registry.orgId;
@@ -296,14 +297,14 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             );
           }
           try {
-            const yaml = await materializeInputSetsToRuntimeYaml(client, {
+            materializedInputSetYaml = await materializeInputSetsToRuntimeYaml(client, {
               pipelineId,
               orgId,
               projectId,
               inputSetIds,
             });
-            if (yaml) {
-              input.inputs = yaml;
+            if (materializedInputSetYaml && hasNoInlineRuntimeInputs(args.inputs)) {
+              input.inputs = materializedInputSetYaml;
               delete input.input_set_ids;
               materializedInputSets = true;
             }
@@ -341,15 +342,19 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             const inputsToResolve = isFlatKeyValueInputs(args.inputs)
               ? args.inputs
               : flattenInputs(args.inputs);
-            resolved = await resolveRuntimeInputs(client, inputsToResolve, {
+            const resolveOptions = {
               pipelineId,
               orgId: asString(input.org_id) || registry.orgId,
               projectId: asString(input.project_id) || registry.projectId,
               branch: asString(input.branch),
-            });
+            };
+            resolved = materializedInputSetYaml
+              ? await resolveRuntimeInputsWithBaseYaml(client, inputsToResolve, resolveOptions, materializedInputSetYaml)
+              : await resolveRuntimeInputs(client, inputsToResolve, resolveOptions);
 
-            // Smart pre-flight: only block on required unmatched fields when no input sets cover them
-            if (!hasInputSets && resolved.unmatchedRequired.length > 0) {
+            // Smart pre-flight: block when required fields remain uncovered after
+            // applying any input-set base and inline overrides.
+            if (resolved.unmatchedRequired.length > 0) {
               const parts: string[] = [];
               if (resolved.matched.length > 0) {
                 parts.push(`Matched ${resolved.matched.length} input(s): ${resolved.matched.join(", ")}.`);
@@ -379,6 +384,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             }
 
             input.inputs = resolved.yaml;
+            if (materializedInputSetYaml) {
+              delete input.input_set_ids;
+              materializedInputSets = true;
+            }
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             log.warn("Failed to auto-resolve runtime inputs", { error: msg });

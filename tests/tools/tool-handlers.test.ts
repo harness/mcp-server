@@ -2171,7 +2171,18 @@ pipeline:
     expect(runCall.body).not.toContain("<+input>");
   });
 
-  it("skips unresolved-input pre-flight when input_set_ids and inline inputs are present", async () => {
+  it("materializes input_set_ids before applying inline input overrides", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "skip_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "prod"
+      - name: "branch"
+        type: "String"
+        value: "main"
+`;
     const templateWithRequired = `pipeline:
   identifier: "skip_pipe"
   variables:
@@ -2183,6 +2194,7 @@ pipeline:
       value: "<+input>"
 `;
     mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } }) // input set
       .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: templateWithRequired } }) // template
       .mockResolvedValueOnce({ data: { planExecutionId: "exec-skip" } }); // execute
 
@@ -2194,13 +2206,30 @@ pipeline:
       input_set_ids: ["my-input-set"],
     });
 
-    // Should NOT error even though "environment" is required and unmatched,
-    // because input_set_ids are present to cover it
     expect(result.isError).toBeUndefined();
-    expect(mockRequest).toHaveBeenCalledTimes(2);
-    const templateCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(mockRequest).toHaveBeenCalledTimes(3);
+
+    const getCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("/pipeline/api/inputSets/");
+    expect(getCall.path).toContain("my-input-set");
+
+    const templateCall = mockRequest.mock.calls[1]![0] as { method?: string; path?: string };
     expect(templateCall.method).toBe("POST");
     expect(templateCall.path).toBe("/pipeline/api/inputSets/template");
+
+    const runCall = mockRequest.mock.calls[2]![0] as {
+      method?: string;
+      body?: string;
+      params?: Record<string, string | string[] | undefined>;
+    };
+    expect(runCall.method).toBe("POST");
+    expect(runCall.body).toContain("branch");
+    expect(runCall.body).toContain("feature");
+    expect(runCall.body).toContain("environment");
+    expect(runCall.body).toContain("prod");
+    expect(runCall.body).not.toContain("<+input>");
+    expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
   });
 
   it("includes _inputResolution metadata on successful auto-resolved execution", async () => {
