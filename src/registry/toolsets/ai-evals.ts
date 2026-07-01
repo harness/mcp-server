@@ -166,6 +166,7 @@ const createMetricSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: true, description: "Metric name" },
     { name: "type", type: "string", required: true, description: "heuristic | llm | embedding | code | composite" },
+    { name: "dimension", type: "string", required: true, description: "Evaluation dimension: correctness | groundedness | safety | trajectory | performance" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "kind", type: "string", required: false, description: "harness-evals metric kind identifier (e.g. exact_match, contains, levenshtein, json_diff, latency, rubric_judge, geval)" },
     {
@@ -410,6 +411,7 @@ const createAnnotationSchema: BodySchema = {
     { name: "span_id", type: "string", required: false, description: "Span id" },
     { name: "label", type: "string", required: false, description: "Label" },
     { name: "score", type: "number", required: false, description: "Score 0-1" },
+    { name: "thumbs_up", type: "boolean", required: false, description: "Thumbs up/down feedback: true=up, false=down, null=unset" },
     { name: "comment", type: "string", required: false, description: "Comment" },
     { name: "metadata", type: "object", required: false, description: "Metadata" },
     { name: "annotator_type", type: "string", required: false, description: "human | automated (default human)" },
@@ -421,6 +423,7 @@ const updateAnnotationSchema: BodySchema = {
   fields: [
     { name: "label", type: "string", required: false, description: "Label" },
     { name: "score", type: "number", required: false, description: "Score 0-1" },
+    { name: "thumbs_up", type: "boolean", required: false, description: "Thumbs up/down feedback: true=up, false=down, null=unset" },
     { name: "comment", type: "string", required: false, description: "Comment" },
     { name: "metadata", type: "object", required: false, description: "Metadata" },
   ],
@@ -527,22 +530,17 @@ const evaluateTraceSchema: BodySchema = {
   description: "Evaluate a production trace with selected metrics",
   fields: [
     { name: "span_id", type: "string", required: false, description: "Specific span to evaluate (defaults to root span)" },
-    {
-      name: "metric_ids",
-      type: "array",
-      required: false,
-      description: "UUIDs of existing metrics to evaluate against (list with harness_list resource_type=eval_metric)",
-      itemType: "string",
-    },
+    { name: "metric_set_id", type: "string", required: false, description: "UUID of a MetricSet (includes metrics + judge model). List with harness_list resource_type=eval_metric_set" },
     {
       name: "metrics",
       type: "array",
       required: false,
       description:
         "Inline metric definitions for ad-hoc evaluation: [{ type: 'heuristic'|'llm', kind?: string, score_name: string, config?: object, threshold?: 0-1 }]. " +
-        "At least one of metric_ids or metrics is required.",
+        "At least one of metric_set_id or metrics is required.",
       itemType: "object",
     },
+    { name: "judge_llm_connector_ref", type: "string", required: false, description: "Harness LLM connector identifier for judge model" },
     {
       name: "options",
       type: "object",
@@ -1646,11 +1644,11 @@ export const aiEvalsToolset: ToolsetDefinition = {
       headerBasedScoping: true,
       identifierFields: ["trace_id"],
       diagnosticHint:
-        "Evaluate a trace from production observability data. Pass metric_ids (existing metric UUIDs) " +
-        "or inline metric definitions via 'metrics'. Results are persisted as annotations (eval_annotation). " +
+        "Evaluate a trace from production observability data. Pass metric_set_id (an existing MetricSet UUID) " +
+        "or inline metric definitions via 'metrics' — at least one is required. Results are persisted as annotations (eval_annotation). " +
         "Get trace_id from your observability/tracing system.",
       relatedResources: [
-        { resourceType: "eval_metric", relationship: "uses", description: "References metrics by metric_ids" },
+        { resourceType: "eval_metric_set", relationship: "uses", description: "References a metric set by metric_set_id" },
         { resourceType: "eval_annotation", relationship: "produces", description: "Creates annotations with scores" },
       ],
       operations: {},
@@ -1666,7 +1664,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription:
             "Evaluate a production trace with metrics. Returns scores, summary (pass_rate), and trace metadata. " +
-            "Provide at least one of metric_ids or inline metrics.",
+            "Provide at least one of metric_set_id or inline metrics.",
         },
       },
     },
