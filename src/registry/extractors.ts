@@ -377,6 +377,13 @@ export const ccmViewsExtract = (raw: unknown): { items: unknown[]; total: number
   };
 };
 
+/** Extract anomaly list: returns { items, total } so skipCompact marker survives normalization. */
+export const anomalyListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: unknown[] };
+  const items = Array.isArray(r?.data) ? r.data : [];
+  return { items, total: items.length };
+};
+
 /**
  * Extracts CCM cost breakdown data from GraphQL perspectiveGrid response.
  * Maps `data.perspectiveGrid.data` → `items` and `data.perspectiveTotalCount` → `total`.
