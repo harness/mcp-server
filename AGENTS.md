@@ -65,7 +65,7 @@ The "Sunil On Demand Architecture Review" bot reviews every PR and reliably catc
 - **Policy is consistent, not ad-hoc.** Read-only/confirmation gating keys off `operationPolicy.risk`, mirroring `registry.dispatchExecute()` — never gate by tool family or hardcode an action allowlist. Classify `risk` by what the endpoint actually does (a no-mutation query is `risk: "read"`).
 - **No silent data loss.** Body builders use `!= null` (not truthiness) so `0`/`false` survive; metadata strippers preserve meaningful empty collections but prune `{}` placeholder rows; reattached raw fields are re-stripped.
 - **Tests cover the contract, not just the request.** Add a response-shape/extractor test (envelope dropped, empty/edge cases) and a request-shape test for every new extractor and body builder — "no focused coverage" is itself a review finding.
-- **Guardrails are green locally.** Run `pnpm build` THEN `pnpm docs:generate`, plus `pnpm typecheck` and `pnpm test`, before pushing. `docs:check` reads from `build/`.
+- **Guardrails are green locally.** Run `pnpm build` THEN `pnpm docs:generate`, plus `pnpm typecheck`, `pnpm test`, and `pnpm standards:check` before pushing. `docs:check` reads from `build/`.
 - **No internal Jira IDs in external PRs.** This is a public OSS repo — do not put Harness-internal ticket IDs (e.g. `AIDEVOPS-1234`, `AIDEVOSP-1830`) in PR titles, descriptions, or commit messages. Describe the user-facing problem and fix instead; link internal tickets only in private channels or the internal tracker.
 
 ---
@@ -664,6 +664,7 @@ See `package.json` scripts. Key commands:
 - `pnpm build` — compile TypeScript to `build/`
 - `pnpm typecheck` — type-check without emitting
 - `pnpm test` — run vitest unit tests (1458 tests, ~12s)
+- `pnpm standards:check` — automated architecture/coding-standards guardrails (`docs/coding-standards.md`)
 - `pnpm start` — run server in stdio mode (requires `HARNESS_API_KEY`)
 - `pnpm start:http` — run server in HTTP mode on port 3000
 - `pnpm dev` — watch mode for TypeScript compilation

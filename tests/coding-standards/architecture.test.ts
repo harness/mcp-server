@@ -480,4 +480,59 @@ describe("Coding standards — Zod and tool annotations", () => {
 
     expect(violations, violations.join("\n")).toEqual([]);
   });
+
+  it("read handlers set readOnlyHint: true and write handlers set readOnlyHint: false", () => {
+    const readHandlers = new Set([
+      "src/tools/harness-list.ts",
+      "src/tools/harness-get.ts",
+      "src/tools/harness-describe.ts",
+      "src/tools/harness-search.ts",
+      "src/tools/harness-status.ts",
+      "src/tools/harness-diagnose.ts",
+      "src/tools/harness-schema.ts",
+    ]);
+    const writeHandlers = new Set([
+      "src/tools/harness-create.ts",
+      "src/tools/harness-update.ts",
+      "src/tools/harness-delete.ts",
+      "src/tools/harness-execute.ts",
+    ]);
+    const violations: string[] = [];
+
+    for (const file of ALLOWED_REGISTER_TOOL_FILES) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (readHandlers.has(file)) {
+        if (!/readOnlyHint\s*:\s*true/.test(content)) {
+          violations.push(`${file}: read handler must set readOnlyHint: true`);
+        }
+        if (/destructiveHint\s*:\s*true/.test(content)) {
+          violations.push(`${file}: read handler must not set destructiveHint: true`);
+        }
+      } else if (writeHandlers.has(file)) {
+        if (!/readOnlyHint\s*:\s*false/.test(content)) {
+          violations.push(`${file}: write handler must set readOnlyHint: false`);
+        }
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("destructive handlers set destructiveHint: true", () => {
+    const destructiveHandlers = new Set([
+      "src/tools/harness-delete.ts",
+      "src/tools/harness-update.ts",
+      "src/tools/harness-execute.ts",
+    ]);
+    const violations: string[] = [];
+
+    for (const file of destructiveHandlers) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!/destructiveHint\s*:\s*true/.test(content)) {
+        violations.push(`${file}: must set destructiveHint: true`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
 });

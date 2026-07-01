@@ -144,6 +144,7 @@ All Zod schemas in tool handlers must:
 | `src/client/harness-client.ts` | Core HTTP transport |
 | `src/utils/log-resolver.ts` | Pre-signed CDN/S3 blob URLs must not receive API auth headers (would invalidate signatures) |
 | `src/audit/sinks/webhook.ts` | Best-effort POST to a user-configured external audit webhook URL |
+| `src/search/remote-provider.ts` | Calls an external hybrid search service (not the Harness API); uses its own auth headers |
 
 ### 11. File Organization Rules
 
