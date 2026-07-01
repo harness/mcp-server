@@ -81,6 +81,7 @@ const FORBIDDEN_TOOLSET_IMPORTS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /from\s+["'][^"']*harness-client/, reason: "HarnessClient import" },
   { pattern: /from\s+["']@modelcontextprotocol\/sdk/, reason: "McpServer/MCP SDK import" },
   { pattern: /from\s+["'][^"']*\/registry\/index/, reason: "Registry import" },
+  { pattern: /from\s+["'][^"']*\/utils\/logger/, reason: "createLogger import (toolsets are pure data)" },
 ];
 
 /** Files allowed to call the global fetch() API (documented exceptions). */
@@ -209,7 +210,7 @@ describe("Coding standards — logging and HTTP", () => {
     expect(violations, `console.log() found in:\n${violations.join("\n")}`).toEqual([]);
   });
 
-  it("toolset files do not use console.* (use createLogger in handlers, not toolsets)", () => {
+  it("toolset files do not use console.* or createLogger (logging belongs in handlers/registry)", () => {
     const violations: string[] = [];
     const toolsetDir = join(SRC, "registry/toolsets");
 
@@ -219,11 +220,14 @@ describe("Coding standards — logging and HTTP", () => {
 
       const content = readFileSync(file, "utf8");
       if (/\bconsole\.(log|error|warn|info|debug)\s*\(/.test(content)) {
-        violations.push(fileRel);
+        violations.push(`${fileRel}: console.* usage`);
+      }
+      if (/\bcreateLogger\s*\(/.test(content)) {
+        violations.push(`${fileRel}: createLogger() usage`);
       }
     }
 
-    expect(violations, `console.* found in toolsets:\n${violations.join("\n")}`).toEqual([]);
+    expect(violations, `Logging found in toolsets:\n${violations.join("\n")}`).toEqual([]);
   });
 
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {
@@ -479,5 +483,24 @@ describe("Coding standards — Zod and tool annotations", () => {
     }
 
     expect(violations, violations.join("\n")).toEqual([]);
+  });
+});
+
+describe("Coding standards — docs alignment", () => {
+  const standardsPath = join(REPO_ROOT, "docs/coding-standards.md");
+
+  it("docs/coding-standards.md forbids createLogger in toolset definitions", () => {
+    const content = readFileSync(standardsPath, "utf8");
+    expect(content).toMatch(/Import `createLogger`/);
+    expect(content).toMatch(/no imports of `HarnessClient`, `McpServer`, `Registry`, or `createLogger`/);
+  });
+
+  it("docs/coding-standards.md documents every ALLOWED_GLOBAL_FETCH_FILES exception", () => {
+    const content = readFileSync(standardsPath, "utf8");
+    const missing = [...ALLOWED_GLOBAL_FETCH_FILES].filter((file) => !content.includes(file));
+    expect(
+      missing,
+      `docs/coding-standards.md missing fetch() exception entries for: ${missing.join(", ")}`,
+    ).toEqual([]);
   });
 });

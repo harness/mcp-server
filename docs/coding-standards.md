@@ -46,6 +46,7 @@ Files in `src/registry/toolsets/*.ts` must export a `ToolsetDefinition` object (
 They must NOT:
 
 - Import `HarnessClient`, `McpServer`, or `Registry`
+- Import `createLogger` or write logs (`console.*`) — toolsets are pure data; logging belongs in handlers and the registry
 - Make HTTP calls directly (use `preflight` hooks with structural client interfaces from `PreflightContext` when needed)
 - Contain business logic beyond field mapping
 - Use `console.log()` (or any stdout writes)
@@ -144,6 +145,7 @@ All Zod schemas in tool handlers must:
 | `src/client/harness-client.ts` | Core HTTP transport |
 | `src/utils/log-resolver.ts` | Pre-signed CDN/S3 blob URLs must not receive API auth headers (would invalidate signatures) |
 | `src/audit/sinks/webhook.ts` | Best-effort POST to a user-configured external audit webhook URL |
+| `src/search/remote-provider.ts` | Optional remote search index service (separate from Harness API auth) |
 
 ### 11. File Organization Rules
 
@@ -260,7 +262,7 @@ Before every commit, verify:
 - [ ] **No `console.log()`** — only `createLogger()` for stderr output
 - [ ] **No direct `fetch()` calls** — all Harness API HTTP goes through `HarnessClient` (exceptions: log blob CDN URLs, audit webhooks — see rule 10)
 - [ ] **No new `harness-*.ts` handler files** — the 11 handlers are fixed
-- [ ] **Toolset files are pure data** — no imports of `HarnessClient`, `McpServer`, or `Registry`
+- [ ] **Toolset files are pure data** — no imports of `HarnessClient`, `McpServer`, `Registry`, or `createLogger`
 - [ ] **All Zod params have `.describe()` after `.optional()`/`.default()`** — Zod 4 chaining order matters for MCP
 - [ ] **Response extractors are from `extractors.ts`** — reuse shared extractors
 - [ ] **Scope is declared correctly** — `"project"`, `"org"`, or `"account"`
