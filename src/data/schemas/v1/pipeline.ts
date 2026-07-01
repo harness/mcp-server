@@ -238,6 +238,17 @@ const schema: Record<string, any> = {
             "description": "Resources defines container resource limits.",
             "$ref": "#/definitions/pipeline_v1/Resource"
           },
+          "user": {
+            "description": "User ID to run the clone container as. Supports expressions.",
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
           "sparse-checkout": {
             "description": "SparseCheckout defines paths to limit the clone to specific directories.",
             "oneOf": [
