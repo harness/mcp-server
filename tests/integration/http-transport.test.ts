@@ -106,6 +106,28 @@ describe("HTTP transport session management", () => {
       expect(sessions.has("in-flight")).toBe(true);
     });
 
+    it("SSE stream close handler only ends session activity once", () => {
+      const session = { lastActivity: 1_000, activeRequests: 0 };
+      session.activeRequests += 1;
+      session.lastActivity = 2_000;
+
+      let streamClosed = false;
+      const markStreamClosed = (): void => {
+        if (streamClosed) return;
+        streamClosed = true;
+        session.activeRequests = Math.max(0, session.activeRequests - 1);
+        session.lastActivity = 3_000;
+      };
+
+      markStreamClosed();
+      markStreamClosed();
+
+      expect(session).toEqual({
+        lastActivity: 3_000,
+        activeRequests: 0,
+      });
+    });
+
     it("session lastActivity is updated on request", () => {
       const sessions = new Map<string, { lastActivity: number }>();
       const id = "test-session";

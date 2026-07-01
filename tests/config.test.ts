@@ -120,6 +120,34 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("defaults MCP_SESSION_TTL_MS to five minutes", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.MCP_SESSION_TTL_MS).toBe(5 * 60_000);
+    }
+  });
+
+  it("coerces MCP_SESSION_TTL_MS from env strings", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      MCP_SESSION_TTL_MS: "600000",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.MCP_SESSION_TTL_MS).toBe(600_000);
+    }
+  });
+
+  it("rejects non-positive MCP_SESSION_TTL_MS values", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        MCP_SESSION_TTL_MS: "0",
+      }),
+    ).toThrow();
+  });
+
   it("defaults HARNESS_SEARCH_PROVIDER to local", () => {
     const result = ConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);
