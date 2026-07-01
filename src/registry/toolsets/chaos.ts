@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import YAML from "yaml";
 import type { ToolsetDefinition, ParamsSchema } from "../types.js";
 import {
   passthrough,
@@ -90,6 +91,7 @@ import {
   descLoadtestDurationSec, descLoadtestRampUpSec, descLoadtestWorkerCount,
   descLoadtestScriptSource, descLoadtestScriptImage,
   descLoadtestScriptEntrypoint, descLoadtestLoadArgs,
+  descLoadtestHostUrl, descLoadtestRpsLimit, descLoadtestIterations, descLoadtestEnvVars,
   descHubIdentityExact, descHubName, descHubNameUpdate,
   descHubDescription, descHubDescriptionUpdate,
   descHubTags, descHubTagsReplace,
@@ -191,6 +193,285 @@ function coerceBody(input: Record<string, unknown>): Record<string, unknown> {
     }
   }
   return raw as Record<string, unknown>;
+}
+
+// ── Load test helpers ────────────────────────────────────────────────
+// The load-test backend now carries every recognised tunable (run params, target
+// URL, image fields, worker count) inside a flat `inputs: TemplateInput[]` array
+// instead of the legacy top-level `defaultUsers/...` fields. The MCP keeps its
+// LLM surface as ergonomic snake_case scalars and translates them into the wire
+// shape here, so agents never construct the array, base64, or YAML themselves.
+
+type LoadtestInput = {
+  name: string;
+  value: number | string;
+  type: "Integer" | "String";
+  required?: true;
+};
+
+/**
+ * Map ergonomic snake_case scalars to the canonical TemplateInput[] array the
+ * load-test backend expects. Only emits entries for values the caller provided
+ * (plus the three always-present run params and the K8s-only workerCount).
+ */
+function buildLoadtestInputs(
+  b: Record<string, unknown>,
+  opts: { targetType: string; scriptSource: string },
+): LoadtestInput[] {
+  const inputs: LoadtestInput[] = [];
+
+  // Run params: always emitted (backend treats targetUsers as required).
+  const users = b.users != null ? (b.users as number) : 100;
+  const duration = b.duration_sec != null ? (b.duration_sec as number) : 600;
+  const rampUp = b.ramp_up_sec != null ? (b.ramp_up_sec as number) : 120;
+  inputs.push({ name: "targetUsers", value: users, type: "Integer", required: true });
+  inputs.push({ name: "durationSeconds", value: duration, type: "Integer" });
+  inputs.push({ name: "rampUpTimeSec", value: rampUp, type: "Integer" });
+
+  // workerCount is Kubernetes-only (0 = standalone, N > 0 = distributed).
+  if (opts.targetType === "kubernetes") {
+    const workerCount = b.worker_count != null ? (b.worker_count as number) : 0;
+    inputs.push({ name: "workerCount", value: workerCount, type: "Integer" });
+  }
+
+  // Target URL: present on every load test (backend treats it as the host under test).
+  const targetUrl = (b.target_url ?? b.targetUrl) as string | undefined;
+  if (targetUrl != null) {
+    inputs.push({ name: "targetUrl", value: targetUrl, type: "String" });
+  }
+
+  // Image-mode tunables (Custom Image): scriptImage/scriptEntrypoint are
+  // mandatory in image mode (marked required), loadArgs is optional.
+  if (opts.scriptSource === "image") {
+    const scriptImage = (b.script_image ?? b.scriptImage) as string | undefined;
+    if (scriptImage != null) {
+      inputs.push({ name: "scriptImage", value: scriptImage, type: "String", required: true });
+    }
+    const entrypoint = (b.script_entrypoint ?? b.scriptEntrypoint) as string | undefined;
+    if (entrypoint != null) {
+      inputs.push({ name: "scriptEntrypoint", value: entrypoint, type: "String", required: true });
+    }
+    const loadArgs = (b.load_args ?? b.loadArgs) as string | undefined;
+    if (loadArgs != null) {
+      inputs.push({ name: "loadArgs", value: loadArgs, type: "String" });
+    }
+  }
+
+  return inputs;
+}
+
+// ── K6-specific helpers ──────────────────────────────────────────────
+// K6 is a Kubernetes-only load test runner. Script mode wraps the K6 JS source
+// in a `toolConfig` object (rather than top-level `scriptContent` like Locust).
+// Env vars and secret references live exclusively in `toolConfig.envVars`.
+
+// Reserved K6 env-var names (case-insensitive). Mirrors
+// loadTestManager/internal/domain/ReservedEnvVarNames; the frontend list is at
+// hce-saas/web/src/services/loadTest/loadTestVariables.ts:337-372.
+const RESERVED_K6_ENV_VAR_NAMES = new Set<string>([
+  "RUN_ID", "LOAD_TEST_ID", "TARGET_USERS", "SPAWN_RATE", "SCRIPT_CONTENT_BASE64",
+  "TARGET_URL", "ACCOUNT_ID", "ORG_ID", "PROJECT_ID", "ENV_ID", "DURATION_SECONDS",
+  "CONTROL_PLANE_URL", "CONTROL_PLANE_TOKEN", "HARNESS_CUSTOM_VAR_NAMES",
+  "METRICS_PUSH_INTERVAL", "INFRA_ID", "ACCESS_KEY", "TENANT_ID",
+  "PYTHONPATH", "PATH", "HOME", "USER", "SHELL", "LANG", "TERM", "HOSTNAME",
+  "PWD", "LD_LIBRARY_PATH", "LD_PRELOAD", "TMPDIR", "TMP", "TEMP",
+]);
+const K6_ENV_VAR_KEY_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+type K6EnvVarWire = { key: string; value: string; secret?: true };
+
+// Build the HSM secret reference: account → "account.<id>", org → "org.<id>", project → "<id>".
+// Matches the Harness UI convention (scope prefix encodes which secret manager the value lives in).
+function buildSecretReference(secretId: string, scope: "account" | "org" | "project"): string {
+  const prefix = scope === "account" ? "account." : scope === "org" ? "org." : "";
+  return `secrets.getValue("${prefix}${secretId}")`;
+}
+
+// Validate + project the structured env_vars input into the wire shape K6 expects.
+// Each entry sets exactly one of:
+//   - { key, value }                              → literal env var
+//   - { key, secret_id, secret_scope?: "..." }    → MCP builds the secrets.getValue(...) string
+function buildK6EnvVars(raw: unknown): K6EnvVarWire[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) {
+    throw new Error("env_vars must be an array of {key, value | secret_id, secret_scope?} entries.");
+  }
+  const seen = new Set<string>();
+  return raw.map((entry, idx) => {
+    const ev = entry as Record<string, unknown>;
+    const key = ev.key as string | undefined;
+    if (!key || typeof key !== "string") {
+      throw new Error(`env_vars[${idx}].key is required.`);
+    }
+    if (!K6_ENV_VAR_KEY_REGEX.test(key)) {
+      throw new Error(
+        `env_vars[${idx}].key '${key}' is invalid: must match /^[A-Za-z_][A-Za-z0-9_]*$/.`,
+      );
+    }
+    if (RESERVED_K6_ENV_VAR_NAMES.has(key.toUpperCase())) {
+      throw new Error(
+        `env_vars[${idx}].key '${key}' is a reserved name and cannot be used as a custom env var.`,
+      );
+    }
+    if (seen.has(key)) {
+      throw new Error(`env_vars[${idx}].key '${key}' is duplicated.`);
+    }
+    seen.add(key);
+
+    const hasValue = ev.value != null;
+    const hasSecretId = ev.secret_id != null;
+    if (hasValue === hasSecretId) {
+      throw new Error(
+        `env_vars[${idx}] must set exactly one of 'value' (literal) or 'secret_id' (with optional secret_scope).`,
+      );
+    }
+    if (hasSecretId) {
+      const scopeRaw = (ev.secret_scope as string | undefined) ?? "project";
+      if (scopeRaw !== "account" && scopeRaw !== "org" && scopeRaw !== "project") {
+        throw new Error(
+          `env_vars[${idx}].secret_scope '${scopeRaw}' must be 'account', 'org', or 'project'.`,
+        );
+      }
+      return { key, value: buildSecretReference(ev.secret_id as string, scopeRaw), secret: true };
+    }
+    return { key, value: String(ev.value) };
+  });
+}
+
+// Strip path/query/fragment, keep <protocol>//<host>. Mirrors K6LoadTestService's
+// resolveBaseHost (web/src/services/loadTest/K6LoadTestService.ts:117-129).
+function parseHostOrigin(rawUrl: string | undefined): string | undefined {
+  if (!rawUrl) return undefined;
+  try {
+    const u = new URL(rawUrl);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return rawUrl;
+  }
+}
+
+// Build the K6 `toolConfig` object for script or image mode (UI mode is deferred).
+// Script mode: enforces the mandatory `export default function` rule client-side so the
+// agent gets a clear error before the API trip. Image mode: wires the prebuilt container
+// image (+ optional entrypoint) into customImage. hostUrl / options / envVars are shared.
+function buildK6ToolConfig(
+  b: Record<string, unknown>,
+  args: { scriptSource: string; script?: string; targetUrl?: string },
+): Record<string, unknown> {
+  const hostUrl =
+    (b.host_url as string | undefined) ??
+    (b.hostUrl as string | undefined) ??
+    parseHostOrigin(args.targetUrl);
+  const rpsLimit = b.rps_limit != null ? (b.rps_limit as number) : undefined;
+  const envVars = buildK6EnvVars(b.env_vars);
+
+  const options: Record<string, unknown> = {};
+  if (rpsLimit != null && rpsLimit > 0) options.rpsLimit = rpsLimit;
+
+  // Build the mode-specific payload first; shared keys (hostUrl, options, envVars,
+  // iterations) are appended after so we get a stable key order matching the studio.
+  let toolConfig: Record<string, unknown>;
+  if (args.scriptSource === "image") {
+    // Custom Image: image + optional entrypoint live in toolConfig.customImage.
+    // Note: load_args is NOT part of customImage for K6 — it rides only in inputs[]
+    // (matches K6LoadTestService.ts:487-495 where customImage only has image/entrypoint).
+    const scriptImage = (b.script_image ?? b.scriptImage) as string | undefined;
+    if (scriptImage == null) {
+      // Defensive — the early image-mode gate in bodyBuilder already throws this.
+      throw new Error("K6 image mode requires 'script_image'.");
+    }
+    const customImage: Record<string, unknown> = { image: scriptImage };
+    const entrypoint = (b.script_entrypoint ?? b.scriptEntrypoint) as string | undefined;
+    if (entrypoint != null) customImage.entrypoint = entrypoint;
+    toolConfig = { mode: "image", customImage };
+  } else {
+    // Script mode: base64 JS source. Mandatory client-side rule (matches Harness UI:
+    // validateScriptContent at K6LoadTestService.ts:767-774). Substring check (not
+    // full AST) matches the UI exactly.
+    if (args.script == null) {
+      throw new Error("K6 script mode requires 'script' (the raw JavaScript K6 source).");
+    }
+    if (!args.script.includes("export default")) {
+      throw new Error(
+        "K6 script must export a default function (export default function ...).",
+      );
+    }
+    toolConfig = {
+      mode: "script",
+      scriptContent: Buffer.from(args.script, "utf8").toString("base64"),
+    };
+    // iterations is K6 script-mode-only (matches K6LoadTestService.ts:483-484).
+    const iterations = b.iterations != null ? (b.iterations as number) : undefined;
+    if (iterations != null && iterations > 0) toolConfig.iterations = iterations;
+  }
+
+  if (hostUrl) toolConfig.hostUrl = hostUrl;
+  if (Object.keys(options).length > 0) toolConfig.options = options;
+  if (envVars.length > 0) toolConfig.envVars = envVars;
+  return toolConfig;
+}
+
+/**
+ * Build the canonical LoadTest YAML manifest. Mirrors the studio's
+ * formDataToManifest shape (kind: LoadTest, apiVersion: v1alpha1, spec.{...}).
+ *
+ * scriptContent inside the YAML is PLAIN TEXT (so the manifest is human-
+ * readable); only the JSON request body's top-level scriptContent is base64.
+ * Caller base64-encodes the returned string into the `yaml` request field.
+ */
+function buildLoadtestYamlManifest(args: {
+  name: string;
+  description?: string;
+  tags?: string[];
+  identity: string;
+  toolType: "Locust" | "K6";
+  targetType: string;
+  scriptSource: string;
+  script?: string;                         // Locust inline source OR K6 source (plain text)
+  k6ToolConfig?: Record<string, unknown>;  // wire-shape K6 toolConfig (with base64 scriptContent)
+  environmentIdentifier: string;
+  infraIdentifier: string;
+  inputs: LoadtestInput[];
+}): string {
+  const infraType = args.targetType === "kubernetes" ? "kubernetes" : "linux";
+  const manifest: Record<string, unknown> = {
+    kind: "LoadTest",
+    apiVersion: "v1alpha1",
+    name: args.name,
+  };
+  if (args.description) manifest.description = args.description;
+  if (args.tags && args.tags.length) manifest.tags = args.tags;
+
+  const spec: Record<string, unknown> = {
+    identity: args.identity,
+    toolType: args.toolType,
+    infraType,
+    targetType: args.targetType,
+    scriptSource: args.scriptSource,
+  };
+  // Locust inline only: readable scriptContent at the manifest root (plain text).
+  // K6 keeps the script inside spec.toolConfig instead.
+  if (args.toolType === "Locust" && args.scriptSource === "inline" && args.script) {
+    spec.scriptContent = args.script;
+  }
+  spec.infraId = args.infraIdentifier;
+  spec.envId = args.environmentIdentifier;
+  spec.inputs = args.inputs;
+
+  // K6: emit spec.toolConfig with PLAIN TEXT scriptContent (decode the base64 from
+  // the wire-shape toolConfig so the YAML view is human-readable). Other
+  // toolConfig keys (mode, hostUrl, options, envVars, iterations) pass through.
+  if (args.toolType === "K6" && args.k6ToolConfig) {
+    const tc: Record<string, unknown> = { ...args.k6ToolConfig };
+    if (typeof tc.scriptContent === "string" && args.script) {
+      tc.scriptContent = args.script; // plain text for YAML readability
+    }
+    spec.toolConfig = tc;
+  }
+
+  manifest.spec = spec;
+
+  return YAML.stringify(manifest);
 }
 
 export const chaosToolset: ToolsetDefinition = {
@@ -1469,80 +1750,130 @@ export const chaosToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const b = coerceBody(input);
             const name = (b.name as string) ?? "";
-            // Backend constraint: name allows only lowercase letters, numbers and dashes.
-            if (name && !/^[a-z0-9-]+$/.test(name)) {
+            if (!name) {
+              throw new Error("name is required.");
+            }
+
+            // identity is the slug-constrained key; auto-derive from name when omitted.
+            // The display name is permissive (any non-empty string) — only the identity
+            // must be a slug. We strip non-alphanumerics from name as a sensible default;
+            // a fully-blank slug falls back to a UUID so we never write an empty id.
+            const slug = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "");
+            const identity = (b.identity as string) || slug(name) || randomUUID();
+            if (!/^[a-zA-Z0-9_]+$/.test(identity)) {
               throw new Error(
-                `Invalid load test name '${name}': only lowercase letters, numbers and dashes are allowed.`,
+                `Invalid identity '${identity}': only letters, numbers and underscores are allowed (derived from name when omitted).`,
               );
             }
-            const slug = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "");
+
             const targetType = (b.target_type as string) ?? "machine-chaos-linux";
-            const tags = b.tags;
-            const environmentIdentifier = b.environment_id ?? b.environmentIdentifier;
-            const infraIdentifier = b.infra_id ?? b.infraIdentifier;
-            const targetUrl = b.target_url ?? b.targetUrl;
+            const environmentIdentifier = (b.environment_id ?? b.environmentIdentifier) as
+              | string
+              | undefined;
+            const infraIdentifier = (b.infra_id ?? b.infraIdentifier) as string | undefined;
+            const targetUrl = (b.target_url ?? b.targetUrl) as string | undefined;
             const script = b.script as string | undefined;
             const scriptImage = (b.script_image ?? b.scriptImage) as string | undefined;
-            // Resolve test-definition source: explicit script_source wins, else infer
-            // "image" when an image is supplied, otherwise "inline" (Python script).
+            // Explicit script_source wins, else infer "image" when an image is supplied.
             const scriptSource =
               (b.script_source as string) ?? (scriptImage != null ? "image" : "inline");
 
-            const body: Record<string, unknown> = {
-              identity: (b.identity as string) || slug(name) || randomUUID(),
+            // Mode-specific required fields (fail loudly before we touch the wire).
+            // Tool-agnostic message: Locust = Python locust source, K6 = JavaScript with 'export default'.
+            // The K6-specific 'export default' rule is enforced later in buildK6ToolConfig.
+            if (scriptSource === "inline" && script == null) {
+              throw new Error("script is required when script_source='inline'.");
+            }
+            if (scriptSource === "image" && scriptImage == null) {
+              throw new Error("script_image is required when script_source='image'.");
+            }
+
+            // Tool type: Locust (default) or K6. K6 is Kubernetes-only and supports
+            // script and image modes (UI mode is deferred).
+            const toolType = ((b.tool_type as string) ?? "Locust") as "Locust" | "K6";
+            if (toolType !== "Locust" && toolType !== "K6") {
+              throw new Error(`tool_type '${toolType}' must be 'Locust' or 'K6'.`);
+            }
+            if (toolType === "K6" && targetType !== "kubernetes") {
+              throw new Error(
+                "K6 load tests require target_type='kubernetes' (LinuxVM is not supported).",
+              );
+            }
+
+            // Normalise tags (accept array or comma-separated string; default []).
+            const rawTags = b.tags;
+            const tags: string[] = Array.isArray(rawTags)
+              ? (rawTags as string[])
+              : typeof rawTags === "string"
+                ? (rawTags as string).split(",").map((t) => t.trim()).filter(Boolean)
+                : [];
+
+            // Build the canonical inputs[] array (well-known tunables → TemplateInput[]).
+            // inputs[] is identical between Locust and K6 script/image modes.
+            const inputs = buildLoadtestInputs(b, { targetType, scriptSource });
+
+            // K6 wraps the script in a toolConfig object (no top-level scriptContent).
+            // Built up-front so the same value drives both the JSON body and the YAML view.
+            let k6ToolConfig: Record<string, unknown> | undefined;
+            if (toolType === "K6") {
+              k6ToolConfig = buildK6ToolConfig(b, { scriptSource, script, targetUrl });
+            }
+
+            // Build the canonical LoadTest YAML manifest, then base64-encode for the wire.
+            // The manifest carries plain-text scriptContent (Locust inline) OR plain-text
+            // toolConfig.scriptContent (K6), so the YAML view is human-readable; the JSON
+            // body's base64 lives only on the wire.
+            const yamlManifest = buildLoadtestYamlManifest({
               name,
+              description: b.description as string | undefined,
+              tags,
+              identity,
+              toolType,
+              targetType,
+              scriptSource,
+              script,
+              k6ToolConfig,
+              environmentIdentifier: environmentIdentifier as string,
+              infraIdentifier: infraIdentifier as string,
+              inputs,
+            });
+
+            const body: Record<string, unknown> = {
+              identity,
+              name,
+              description: (b.description as string) ?? "",
+              tags,
               environmentIdentifier,
               infraIdentifier,
-              targetType,
-              toolType: (b.tool_type as string) ?? "Locust",
-              targetUrl,
               scriptSource,
-              defaultUsers: b.users != null ? b.users : 100,
-              defaultDurationSec: b.duration_sec != null ? b.duration_sec : 600,
-              defaultRampUpTimeSec: b.ramp_up_sec != null ? b.ramp_up_sec : 120,
+              targetType,
+              toolType,
+              inputs,
+              yaml: Buffer.from(yamlManifest, "utf8").toString("base64"),
             };
-            // Emit snake_case aliases for the required fields whose API key is a
-            // camelCase rename, so the registry's required-field validator (which
-            // checks the built body against the snake_case bodySchema field names)
-            // sees them. The load-test backend reads the camelCase keys and ignores
-            // the extra ones (same pattern as chaos_action create).
+
+            // Top-level scriptContent rules:
+            //   - Locust inline: base64 of the raw Python script.
+            //   - Locust image:  omitted (script_image rides in inputs[]).
+            //   - K6 script:     OMITTED at top level — the K6 script lives in
+            //                    toolConfig.scriptContent only (top-level would be
+            //                    treated as a Locust-style script and double-encoded).
+            //   - K6 image:      not yet supported (rejected earlier).
+            if (toolType === "Locust" && scriptSource === "inline") {
+              body.scriptContent = Buffer.from(script as string, "utf8").toString("base64");
+            }
+            if (toolType === "K6" && k6ToolConfig) {
+              body.toolConfig = k6ToolConfig;
+            }
+
+            // Emit snake_case aliases for the registry's required-field validator (which
+            // checks the built body against the snake_case bodySchema field names). The
+            // load-test backend reads the camelCase / inputs[] keys and ignores extras
+            // (same pattern as chaos_action create).
             if (environmentIdentifier != null) body.environment_id = environmentIdentifier;
             if (infraIdentifier != null) body.infra_id = infraIdentifier;
             if (targetUrl != null) body.target_url = targetUrl;
-            if (b.description != null) body.description = b.description;
-            if (tags != null) {
-              body.tags = Array.isArray(tags)
-                ? tags
-                : (tags as string).split(",").map((t: string) => t.trim()).filter(Boolean);
-            }
 
-            if (scriptSource === "image") {
-              // Custom Image mode (Kubernetes): prebuilt container image as the source.
-              if (scriptImage == null) {
-                throw new Error("script_image is required when script_source='image'.");
-              }
-              body.scriptImage = scriptImage;
-              const entrypoint = b.script_entrypoint ?? b.scriptEntrypoint;
-              if (entrypoint != null) body.scriptEntrypoint = entrypoint;
-              const loadArgs = b.load_args ?? b.loadArgs;
-              if (loadArgs != null) body.loadArgs = loadArgs;
-            } else {
-              // Inline (Python script) mode: base64-encode the raw locust script.
-              if (script == null) {
-                throw new Error(
-                  "script is required when script_source='inline' (the raw Python locust script).",
-                );
-              }
-              body.scriptContent = Buffer.from(script, "utf8").toString("base64");
-            }
-
-            // Kubernetes always carries a worker count (0 = standalone, N = distributed).
-            if (targetType === "kubernetes") {
-              const workerCount = b.worker_count != null ? b.worker_count : 0;
-              body.variables = {
-                workerCount: { type: "fixed", valueType: "int", value: workerCount },
-              };
-            }
             return body;
           },
           responseExtractor: chaosLoadTestExtract,
@@ -1568,6 +1899,10 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "duration_sec", type: "number", required: false, description: descLoadtestDurationSec },
               { name: "ramp_up_sec", type: "number", required: false, description: descLoadtestRampUpSec },
               { name: "worker_count", type: "number", required: false, description: descLoadtestWorkerCount },
+              { name: "host_url", type: "string", required: false, description: descLoadtestHostUrl },
+              { name: "rps_limit", type: "number", required: false, description: descLoadtestRpsLimit },
+              { name: "iterations", type: "number", required: false, description: descLoadtestIterations },
+              { name: "env_vars", type: "array", required: false, description: descLoadtestEnvVars },
             ],
           },
         },
@@ -1586,6 +1921,9 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}/runs`,
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { loadtest_id: "loadtestId" },
+          // TODO(runtime-inputs): accept { values: TemplateInputMinimum[] } when runtime
+          // inputs ('<+input>' sentinel) are added (see deferred follow-up plan). The empty
+          // body is correct while runtime inputs are unsupported on the create side.
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: descRunLoadtest,

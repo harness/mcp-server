@@ -618,15 +618,30 @@ export const chaosK8sInfraListExtract = (raw: unknown): { items: unknown[]; tota
   };
 };
 
+type LoadtestInputLike = { name?: unknown; value?: unknown; type?: unknown; required?: unknown };
+
+// Read a well-known input value from the inputs[] slice by name.
+const readLoadtestInput = (inputs: LoadtestInputLike[] | undefined, name: string): unknown =>
+  (inputs ?? []).find((i) => i?.name === name)?.value;
+
 /**
  * Project a single load test (InternalApiLoadTestResponse) to a stable shape.
- * Drops backend user-detail envelopes and the large base64 scriptContent
- * (scriptSource is retained). Mirrors `identity` into `loadtestId` so the
- * deep-link resolver fills {loadtestId} instead of falling back to the name.
+ *
+ * The new wire format carries every recognised tunable inside `inputs[]`
+ * (TemplateInput) and user-defined non-secrets inside `variables[]`
+ * (TemplateVariable). We pass both arrays through as-is for fidelity AND
+ * surface derived convenience scalars (target_url / users / duration_sec / ...)
+ * that mirror the create-side LLM surface so round-trips are intuitive.
+ *
+ * Drops the large base64 scriptContent and backend user-detail envelopes.
+ * Mirrors `identity` into `loadtestId` so the deep-link resolver fills
+ * {loadtestId} instead of falling back to the name.
  */
 export const chaosLoadTestExtract = (raw: unknown): unknown => {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const t = raw as Record<string, unknown>;
+  const inputs = Array.isArray(t.inputs) ? (t.inputs as LoadtestInputLike[]) : undefined;
+  const variables = Array.isArray(t.variables) ? (t.variables as unknown[]) : undefined;
   return {
     loadtestId: t.identity,
     identity: t.identity,
@@ -636,14 +651,21 @@ export const chaosLoadTestExtract = (raw: unknown): unknown => {
     environmentIdentifier: t.environmentIdentifier,
     infraIdentifier: t.infraIdentifier,
     targetType: t.targetType,
-    targetUrl: t.targetUrl,
     toolType: t.toolType,
     scriptSource: t.scriptSource,
-    defaultUsers: t.defaultUsers,
-    defaultDurationSec: t.defaultDurationSec,
-    defaultRampUpTimeSec: t.defaultRampUpTimeSec,
-    defaultWorkerCount: t.defaultWorkerCount,
-    variables: t.variables,
+    // Canonical slices — passed through as-is for fidelity.
+    inputs,
+    variables,
+    yaml: t.yaml,
+    // Derived convenience scalars (read-side mirror of the create-side LLM surface).
+    target_url: readLoadtestInput(inputs, "targetUrl"),
+    users: readLoadtestInput(inputs, "targetUsers"),
+    duration_sec: readLoadtestInput(inputs, "durationSeconds"),
+    ramp_up_sec: readLoadtestInput(inputs, "rampUpTimeSec"),
+    worker_count: readLoadtestInput(inputs, "workerCount"),
+    script_image: readLoadtestInput(inputs, "scriptImage"),
+    script_entrypoint: readLoadtestInput(inputs, "scriptEntrypoint"),
+    load_args: readLoadtestInput(inputs, "loadArgs"),
     lastExecuted: t.lastExecuted,
     createdAt: t.createdAt,
     updatedAt: t.updatedAt,

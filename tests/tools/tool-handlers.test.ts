@@ -2114,6 +2114,27 @@ pipeline:
     expect(result.isError).toBeUndefined();
   });
 
+  it("fails closed when input set materialization returns ERROR", async () => {
+    mockRequest.mockResolvedValueOnce({
+      status: "ERROR",
+      message: "Input set not found",
+      code: "INPUT_SET_NOT_FOUND",
+    });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "mat_pipe",
+      input_set_ids: ["missing-set"],
+    });
+
+    expect(result.isError).toBe(true);
+    const text = result.content[0]?.text ?? "";
+    expect(text).toContain("Could not load input set(s) for execution");
+    expect(text).toContain("Input set not found");
+    expect(mockRequest).toHaveBeenCalledOnce();
+  });
+
   it("materializes input_set_ids when inputs is an empty object", async () => {
     const inputSetYaml = `inputSet:
   pipeline:
