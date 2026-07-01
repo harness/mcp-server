@@ -1902,6 +1902,26 @@ pipeline:
     expect(data).toMatchObject({ success: true, result: true });
   });
 
+  it("fails closed when input set materialization throws", async () => {
+    mockRequest.mockRejectedValueOnce(new HarnessApiError("Input set missing", 404, "NOT_FOUND"));
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "mat_fail_pipe",
+      input_set_ids: ["missing_set"],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Could not load input set(s) for execution"),
+    });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    const getCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("missing_set");
+  });
+
   it("materializes input_set_ids by GETting each input set then POSTing merged pipeline YAML", async () => {
     const inputSetYaml = `inputSet:\n  pipeline:\n    identifier: mat_pipe\n    variables:\n      - name: x\n        type: String\n        value: "1"\n`;
     mockRequest

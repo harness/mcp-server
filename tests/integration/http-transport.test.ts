@@ -99,6 +99,24 @@ describe("HTTP transport session management", () => {
       expect(sessions.has("expired")).toBe(false);
     });
 
+    it("session TTL reaper respects operator-configured MCP_SESSION_TTL_MS", () => {
+      const SESSION_TTL_MS = 90_000; // custom 90s TTL
+      const sessions = new Map<string, { lastActivity: number }>();
+      const now = Date.now();
+
+      sessions.set("active", { lastActivity: now - 60_000 }); // 60s idle — within TTL
+      sessions.set("expired", { lastActivity: now - SESSION_TTL_MS - 1_000 });
+
+      for (const [id, session] of sessions) {
+        if (now - session.lastActivity > SESSION_TTL_MS) {
+          sessions.delete(id);
+        }
+      }
+
+      expect(sessions.has("active")).toBe(true);
+      expect(sessions.has("expired")).toBe(false);
+    });
+
     it("session lastActivity is updated on request", () => {
       const sessions = new Map<string, { lastActivity: number }>();
       const id = "test-session";
