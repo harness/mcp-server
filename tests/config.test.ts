@@ -128,6 +128,41 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("accepts HARNESS_SEARCH_PROVIDER=remote with service URL", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_SEARCH_PROVIDER).toBe("remote");
+      expect(result.data.HARNESS_SEARCH_SERVICE_URL).toBe("http://search-svc:8080");
+    }
+  });
+
+  it("accepts HARNESS_SEARCH_SERVICE_HEADERS as optional JSON string", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      HARNESS_SEARCH_SERVICE_HEADERS: '{"Authorization":"Bearer tok"}',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_SEARCH_SERVICE_HEADERS).toBe('{"Authorization":"Bearer tok"}');
+    }
+  });
+
+  it("rejects invalid HARNESS_SEARCH_PROVIDER values", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        HARNESS_SEARCH_PROVIDER: "bogus",
+      }),
+    ).toThrow();
+  });
+
   it("treats empty LOG_LEVEL as unset and defaults to info", () => {
     const result = ConfigSchema.safeParse({ ...validConfig, LOG_LEVEL: "" });
     expect(result.success).toBe(true);

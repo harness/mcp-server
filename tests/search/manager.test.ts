@@ -2,12 +2,15 @@ import { describe, it, expect, vi } from "vitest";
 import { SearchManager } from "../../src/search/manager.js";
 import { NullSearchProvider } from "../../src/search/null-provider.js";
 import { LocalSearchProvider } from "../../src/search/local-provider.js";
+import { RemoteSearchProvider } from "../../src/search/remote-provider.js";
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
     HARNESS_MCP_MODE: "single-user" as const,
     HARNESS_SEARCH_PROVIDER: "none" as const,
     HARNESS_SEARCH_SERVICE_URL: undefined,
+    HARNESS_SEARCH_SERVICE_HEADERS: undefined,
+    HARNESS_API_TIMEOUT_MS: 30_000,
     ...overrides,
   };
 }
@@ -122,6 +125,90 @@ describe("SearchManager", () => {
       });
 
       expect(indexSpy).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("remote provider", () => {
+    it("returns RemoteSearchProvider when HARNESS_SEARCH_PROVIDER=remote with service URL", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(RemoteSearchProvider);
+    });
+
+    it("falls back to NullSearchProvider when remote is configured without service URL", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: undefined,
+      }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(NullSearchProvider);
+    });
+
+    it("allows entities corpus indexing in multi-user mode with remote provider", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+        HARNESS_MCP_MODE: "multi-user",
+      }) as never);
+      expect(mgr.canIndexCorpus("entities")).toBe(true);
+    });
+
+    it("reports ready readiness after remote provider health check succeeds", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({}),
+        }),
+      );
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      }) as never);
+      await mgr.initialize();
+
+      expect(mgr.getReadiness()).toEqual({
+        state: "ready",
+        configured: "remote",
+        provider: "RemoteSearchProvider",
+      });
+      expect(mgr.getProvider().isAvailable()).toBe(true);
+
+      vi.unstubAllGlobals();
+    });
+
+    it("indexes entities in multi-user mode when remote provider is available", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockResolvedValue({
+          ok: true,
+          status: 200,
+          json: () => Promise.resolve({}),
+        }),
+      );
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+        HARNESS_MCP_MODE: "multi-user",
+      }) as never);
+      await mgr.initialize();
+      const provider = mgr.getProvider();
+      const indexSpy = vi.spyOn(provider, "index");
+
+      await mgr.indexItem({
+        id: "pipeline:foo",
+        content: "pipeline foo",
+        corpus: "entities",
+        accountId: "acct-1",
+        metadata: { resource_type: "pipeline", identifier: "foo", name: "foo" },
+      });
+
+      expect(indexSpy).toHaveBeenCalledOnce();
+      vi.unstubAllGlobals();
     });
   });
 });
