@@ -285,6 +285,7 @@ Before every commit, verify:
 | Import `HarnessClient` in a toolset file | Toolsets are pure data — they don't execute HTTP directly |
 | Use `console.log()` | Corrupts stdio JSON-RPC transport |
 | Make raw `fetch()` calls | Bypasses auth, retry, rate limiting |
+| Call `client.request()` from tool handlers | Bypasses registry dispatch — use `registry.dispatch()` (exception: `entity-schema/live.ts`) |
 | Create a new HTTP client instance | Singleton pattern — one client, injected everywhere |
 | Hardcode `accountIdentifier` | Client injects it automatically |
 | Return raw API responses | Always use response extractors to normalize |
