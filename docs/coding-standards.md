@@ -45,10 +45,10 @@ Files in `src/registry/toolsets/*.ts` must export a `ToolsetDefinition` object (
 
 They must NOT:
 
-- Import `HarnessClient`, `McpServer`, or `Registry`
+- Import `HarnessClient`, `McpServer`, `Registry`, or `createLogger`
 - Make HTTP calls directly (use `preflight` hooks with structural client interfaces from `PreflightContext` when needed)
 - Contain business logic beyond field mapping
-- Use `console.log()` (or any stdout writes)
+- Use `console.log()` (or any stdout writes) — logging belongs in tool handlers and registry dispatch, not toolset definitions
 
 ### 3. Use Shared Response Extractors
 
@@ -260,7 +260,7 @@ Before every commit, verify:
 - [ ] **No `console.log()`** — only `createLogger()` for stderr output
 - [ ] **No direct `fetch()` calls** — all Harness API HTTP goes through `HarnessClient` (exceptions: log blob CDN URLs, audit webhooks — see rule 10)
 - [ ] **No new `harness-*.ts` handler files** — the 11 handlers are fixed
-- [ ] **Toolset files are pure data** — no imports of `HarnessClient`, `McpServer`, or `Registry`
+- [ ] **Toolset files are pure data** — no imports of `HarnessClient`, `McpServer`, `Registry`, or `createLogger`
 - [ ] **All Zod params have `.describe()` after `.optional()`/`.default()`** — Zod 4 chaining order matters for MCP
 - [ ] **Response extractors are from `extractors.ts`** — reuse shared extractors
 - [ ] **Scope is declared correctly** — `"project"`, `"org"`, or `"account"`
@@ -280,7 +280,7 @@ Before every commit, verify:
 | Anti-Pattern | Why It Breaks Things |
 |-------------|---------------------|
 | Add a new `server.registerTool()` call | Breaks the consolidated tool model — use the registry instead |
-| Import `HarnessClient` in a toolset file | Toolsets are pure data — they don't execute HTTP directly |
+| Import `HarnessClient` or `createLogger` in a toolset file | Toolsets are pure data — they don't execute HTTP or emit logs |
 | Use `console.log()` | Corrupts stdio JSON-RPC transport |
 | Make raw `fetch()` calls | Bypasses auth, retry, rate limiting |
 | Create a new HTTP client instance | Singleton pattern — one client, injected everywhere |
