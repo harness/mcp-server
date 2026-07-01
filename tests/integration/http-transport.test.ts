@@ -14,6 +14,7 @@ import type { AddressInfo } from "node:net";
 import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { resolveHttpHostValidationOptions } from "../../src/utils/http-hosts.js";
 import { createHttpAuthMiddleware } from "../../src/utils/http-auth.js";
+import { isSessionExpired } from "../../src/utils/http-sessions.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "../../src/utils/session-headers.js";
 
 // We can't easily test the full HTTP server without starting it,
@@ -68,35 +69,41 @@ async function getWithHost(baseUrl: string, host: string): Promise<{ status: num
 describe("HTTP transport session management", () => {
   describe("session store behavior", () => {
     it("sessions are created with a UUID and initial lastActivity", () => {
-      const sessions = new Map<string, { lastActivity: number }>();
+      const sessions = new Map<string, { lastActivity: number; activeRequests: number }>();
       const id = crypto.randomUUID();
       const now = Date.now();
 
-      sessions.set(id, { lastActivity: now });
+      sessions.set(id, { lastActivity: now, activeRequests: 0 });
 
       expect(sessions.has(id)).toBe(true);
-      expect(sessions.get(id)!.lastActivity).toBe(now);
+      expect(sessions.get(id)).toMatchObject({
+        lastActivity: now,
+        activeRequests: 0,
+      });
     });
 
-    it("session TTL reaper removes idle sessions", () => {
+    it("session TTL reaper removes idle sessions while preserving active requests", () => {
       const SESSION_TTL_MS = 5 * 60_000; // matches MCP_SESSION_TTL_MS default
-      const sessions = new Map<string, { lastActivity: number }>();
+      const sessions = new Map<string, { lastActivity: number; activeRequests: number }>();
 
       // Active session
-      sessions.set("active", { lastActivity: Date.now() });
+      sessions.set("active", { lastActivity: Date.now(), activeRequests: 0 });
       // Expired session (6 minutes ago)
-      sessions.set("expired", { lastActivity: Date.now() - SESSION_TTL_MS - 60_000 });
+      sessions.set("expired", { lastActivity: Date.now() - SESSION_TTL_MS - 60_000, activeRequests: 0 });
+      // In-flight session older than the TTL
+      sessions.set("in-flight", { lastActivity: Date.now() - SESSION_TTL_MS - 60_000, activeRequests: 1 });
 
       // Simulate reaper
       const now = Date.now();
       for (const [id, session] of sessions) {
-        if (now - session.lastActivity > SESSION_TTL_MS) {
+        if (isSessionExpired(session, SESSION_TTL_MS, now)) {
           sessions.delete(id);
         }
       }
 
       expect(sessions.has("active")).toBe(true);
       expect(sessions.has("expired")).toBe(false);
+      expect(sessions.has("in-flight")).toBe(true);
     });
 
     it("session TTL reaper honors operator-configured TTL values", () => {
