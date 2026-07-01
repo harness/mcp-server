@@ -1,24 +1,30 @@
 import { randomUUID } from "node:crypto";
-import type { ToolsetDefinition } from "../types.js";
+import YAML from "yaml";
+import type { ToolsetDefinition, ParamsSchema } from "../types.js";
 import {
   passthrough,
   ngExtract,
   chaosPageExtract,
+  chaosExperimentListExtract,
+  chaosInputSetListExtract,
   chaosAppMapPageExtract,
   chaosProbeListExtract,
   chaosInfraListExtract,
   chaosK8sInfraListExtract,
+  chaosLoadTestListExtract,
+  chaosLoadTestExtract,
   chaosHubListExtract,
   chaosDRTestListExtract,
   sdPageExtract,
   chaosRunTimeInputsExtract,
+  chaosActionExtract,
 } from "../extractors.js";
 import {
   descToolsetChaos,
   // Resource descriptions
   descChaosExperiment, descChaosExperimentRun, descChaosProbe,
   descChaosExperimentTemplate, descChaosExperimentVariable,
-  descChaosInfrastructure, descChaosLoadtest, descChaosK8sInfrastructure,
+  descChaosInfrastructure, descChaosLoadtest, descChaosK8sInfrastructure, descChaosEnabledInfrastructure,
   descChaosHub, descChaosFault, descChaosFaultExperimentRun, descChaosFaultTemplate,
   descChaosProbeTemplate, descChaosActionTemplate,
   descChaosHubFault, descChaosEnvironment,
@@ -36,7 +42,7 @@ import {
   descListExperimentVariables, descGetComponentVariable, descCreateExperiment,
   descListLinuxInfra,
   descListLoadtests, descGetLoadtest, descCreateLoadtest, descDeleteLoadtest,
-  descListK8sInfra, descGetK8sInfra,
+  descListK8sInfra, descGetK8sInfra, descListChaosEnabledInfra,
   descListHubs, descGetHub, descCreateHub, descUpdateHub, descDeleteHub,
   descListFaults, descGetFault,
   descListFaultTemplates, descGetFaultTemplate, descDeleteFaultTemplate,
@@ -56,6 +62,10 @@ import {
   descListProbesInRun,
   descGetFaultVariables, descGetFaultYaml, descListFaultExperimentRuns, descDeleteFault,
   descListActions, descGetAction, descGetActionManifest, descDeleteAction,
+  descCreateAction, descBodyActionCreate, descActionName, descActionIdentityCreate,
+  descActionEntityTypeCreate, descActionInfraTypeCreate, descActionPropertiesBody,
+  descActionDurationShorthand, descActionDescriptionCreate, descActionTagsCreate,
+  descActionVariablesBody, descActionRunPropertiesBody, descActionInputsBody,
   // Action descriptions
   descRunExperiment, descStopExperiment, descDeleteExperiment,
   descEnableProbe, descVerifyProbe,
@@ -75,6 +85,13 @@ import {
   descExperimentName, descExperimentIdentity, descInfraRef,
   descExperimentId, descInfraStatus,
   descLoadtestName, descLoadtestType,
+  descLoadtestIdentity, descLoadtestDescription, descLoadtestTags,
+  descLoadtestEnvId, descLoadtestInfraId, descLoadtestTargetType,
+  descLoadtestTargetUrl, descLoadtestScript, descLoadtestUsers,
+  descLoadtestDurationSec, descLoadtestRampUpSec, descLoadtestWorkerCount,
+  descLoadtestScriptSource, descLoadtestScriptImage,
+  descLoadtestScriptEntrypoint, descLoadtestLoadArgs,
+  descLoadtestHostUrl, descLoadtestRpsLimit, descLoadtestIterations, descLoadtestEnvVars,
   descHubIdentityExact, descHubName, descHubNameUpdate,
   descHubDescription, descHubDescriptionUpdate,
   descHubTags, descHubTagsReplace,
@@ -88,6 +105,7 @@ import {
   descEntityTypeProbe, descEntityTypeAction,
   descEntityTypeFault, descPermissionsRequiredEnum, descOnlyTemplatisedFaults,
   descEnvironmentId, descK8sInfraStatus, descIncludeLegacyInfra, descSearchK8sInfra,
+  descChaosEnabledInfraType, descInfraScope, descInfraAiEnabled,
   descSearchTermEnv, descSortEnv, descEnvironmentType,
   descGuardSearch, descGuardInfraType, descGuardTags, descGuardEnabled,
   descExperimentRunIdStop, descNotifyId, descForce,
@@ -177,6 +195,285 @@ function coerceBody(input: Record<string, unknown>): Record<string, unknown> {
   return raw as Record<string, unknown>;
 }
 
+// ── Load test helpers ────────────────────────────────────────────────
+// The load-test backend now carries every recognised tunable (run params, target
+// URL, image fields, worker count) inside a flat `inputs: TemplateInput[]` array
+// instead of the legacy top-level `defaultUsers/...` fields. The MCP keeps its
+// LLM surface as ergonomic snake_case scalars and translates them into the wire
+// shape here, so agents never construct the array, base64, or YAML themselves.
+
+type LoadtestInput = {
+  name: string;
+  value: number | string;
+  type: "Integer" | "String";
+  required?: true;
+};
+
+/**
+ * Map ergonomic snake_case scalars to the canonical TemplateInput[] array the
+ * load-test backend expects. Only emits entries for values the caller provided
+ * (plus the three always-present run params and the K8s-only workerCount).
+ */
+function buildLoadtestInputs(
+  b: Record<string, unknown>,
+  opts: { targetType: string; scriptSource: string },
+): LoadtestInput[] {
+  const inputs: LoadtestInput[] = [];
+
+  // Run params: always emitted (backend treats targetUsers as required).
+  const users = b.users != null ? (b.users as number) : 100;
+  const duration = b.duration_sec != null ? (b.duration_sec as number) : 600;
+  const rampUp = b.ramp_up_sec != null ? (b.ramp_up_sec as number) : 120;
+  inputs.push({ name: "targetUsers", value: users, type: "Integer", required: true });
+  inputs.push({ name: "durationSeconds", value: duration, type: "Integer" });
+  inputs.push({ name: "rampUpTimeSec", value: rampUp, type: "Integer" });
+
+  // workerCount is Kubernetes-only (0 = standalone, N > 0 = distributed).
+  if (opts.targetType === "kubernetes") {
+    const workerCount = b.worker_count != null ? (b.worker_count as number) : 0;
+    inputs.push({ name: "workerCount", value: workerCount, type: "Integer" });
+  }
+
+  // Target URL: present on every load test (backend treats it as the host under test).
+  const targetUrl = (b.target_url ?? b.targetUrl) as string | undefined;
+  if (targetUrl != null) {
+    inputs.push({ name: "targetUrl", value: targetUrl, type: "String" });
+  }
+
+  // Image-mode tunables (Custom Image): scriptImage/scriptEntrypoint are
+  // mandatory in image mode (marked required), loadArgs is optional.
+  if (opts.scriptSource === "image") {
+    const scriptImage = (b.script_image ?? b.scriptImage) as string | undefined;
+    if (scriptImage != null) {
+      inputs.push({ name: "scriptImage", value: scriptImage, type: "String", required: true });
+    }
+    const entrypoint = (b.script_entrypoint ?? b.scriptEntrypoint) as string | undefined;
+    if (entrypoint != null) {
+      inputs.push({ name: "scriptEntrypoint", value: entrypoint, type: "String", required: true });
+    }
+    const loadArgs = (b.load_args ?? b.loadArgs) as string | undefined;
+    if (loadArgs != null) {
+      inputs.push({ name: "loadArgs", value: loadArgs, type: "String" });
+    }
+  }
+
+  return inputs;
+}
+
+// ── K6-specific helpers ──────────────────────────────────────────────
+// K6 is a Kubernetes-only load test runner. Script mode wraps the K6 JS source
+// in a `toolConfig` object (rather than top-level `scriptContent` like Locust).
+// Env vars and secret references live exclusively in `toolConfig.envVars`.
+
+// Reserved K6 env-var names (case-insensitive). Mirrors
+// loadTestManager/internal/domain/ReservedEnvVarNames; the frontend list is at
+// hce-saas/web/src/services/loadTest/loadTestVariables.ts:337-372.
+const RESERVED_K6_ENV_VAR_NAMES = new Set<string>([
+  "RUN_ID", "LOAD_TEST_ID", "TARGET_USERS", "SPAWN_RATE", "SCRIPT_CONTENT_BASE64",
+  "TARGET_URL", "ACCOUNT_ID", "ORG_ID", "PROJECT_ID", "ENV_ID", "DURATION_SECONDS",
+  "CONTROL_PLANE_URL", "CONTROL_PLANE_TOKEN", "HARNESS_CUSTOM_VAR_NAMES",
+  "METRICS_PUSH_INTERVAL", "INFRA_ID", "ACCESS_KEY", "TENANT_ID",
+  "PYTHONPATH", "PATH", "HOME", "USER", "SHELL", "LANG", "TERM", "HOSTNAME",
+  "PWD", "LD_LIBRARY_PATH", "LD_PRELOAD", "TMPDIR", "TMP", "TEMP",
+]);
+const K6_ENV_VAR_KEY_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+type K6EnvVarWire = { key: string; value: string; secret?: true };
+
+// Build the HSM secret reference: account → "account.<id>", org → "org.<id>", project → "<id>".
+// Matches the Harness UI convention (scope prefix encodes which secret manager the value lives in).
+function buildSecretReference(secretId: string, scope: "account" | "org" | "project"): string {
+  const prefix = scope === "account" ? "account." : scope === "org" ? "org." : "";
+  return `secrets.getValue("${prefix}${secretId}")`;
+}
+
+// Validate + project the structured env_vars input into the wire shape K6 expects.
+// Each entry sets exactly one of:
+//   - { key, value }                              → literal env var
+//   - { key, secret_id, secret_scope?: "..." }    → MCP builds the secrets.getValue(...) string
+function buildK6EnvVars(raw: unknown): K6EnvVarWire[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) {
+    throw new Error("env_vars must be an array of {key, value | secret_id, secret_scope?} entries.");
+  }
+  const seen = new Set<string>();
+  return raw.map((entry, idx) => {
+    const ev = entry as Record<string, unknown>;
+    const key = ev.key as string | undefined;
+    if (!key || typeof key !== "string") {
+      throw new Error(`env_vars[${idx}].key is required.`);
+    }
+    if (!K6_ENV_VAR_KEY_REGEX.test(key)) {
+      throw new Error(
+        `env_vars[${idx}].key '${key}' is invalid: must match /^[A-Za-z_][A-Za-z0-9_]*$/.`,
+      );
+    }
+    if (RESERVED_K6_ENV_VAR_NAMES.has(key.toUpperCase())) {
+      throw new Error(
+        `env_vars[${idx}].key '${key}' is a reserved name and cannot be used as a custom env var.`,
+      );
+    }
+    if (seen.has(key)) {
+      throw new Error(`env_vars[${idx}].key '${key}' is duplicated.`);
+    }
+    seen.add(key);
+
+    const hasValue = ev.value != null;
+    const hasSecretId = ev.secret_id != null;
+    if (hasValue === hasSecretId) {
+      throw new Error(
+        `env_vars[${idx}] must set exactly one of 'value' (literal) or 'secret_id' (with optional secret_scope).`,
+      );
+    }
+    if (hasSecretId) {
+      const scopeRaw = (ev.secret_scope as string | undefined) ?? "project";
+      if (scopeRaw !== "account" && scopeRaw !== "org" && scopeRaw !== "project") {
+        throw new Error(
+          `env_vars[${idx}].secret_scope '${scopeRaw}' must be 'account', 'org', or 'project'.`,
+        );
+      }
+      return { key, value: buildSecretReference(ev.secret_id as string, scopeRaw), secret: true };
+    }
+    return { key, value: String(ev.value) };
+  });
+}
+
+// Strip path/query/fragment, keep <protocol>//<host>. Mirrors K6LoadTestService's
+// resolveBaseHost (web/src/services/loadTest/K6LoadTestService.ts:117-129).
+function parseHostOrigin(rawUrl: string | undefined): string | undefined {
+  if (!rawUrl) return undefined;
+  try {
+    const u = new URL(rawUrl);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return rawUrl;
+  }
+}
+
+// Build the K6 `toolConfig` object for script or image mode (UI mode is deferred).
+// Script mode: enforces the mandatory `export default function` rule client-side so the
+// agent gets a clear error before the API trip. Image mode: wires the prebuilt container
+// image (+ optional entrypoint) into customImage. hostUrl / options / envVars are shared.
+function buildK6ToolConfig(
+  b: Record<string, unknown>,
+  args: { scriptSource: string; script?: string; targetUrl?: string },
+): Record<string, unknown> {
+  const hostUrl =
+    (b.host_url as string | undefined) ??
+    (b.hostUrl as string | undefined) ??
+    parseHostOrigin(args.targetUrl);
+  const rpsLimit = b.rps_limit != null ? (b.rps_limit as number) : undefined;
+  const envVars = buildK6EnvVars(b.env_vars);
+
+  const options: Record<string, unknown> = {};
+  if (rpsLimit != null && rpsLimit > 0) options.rpsLimit = rpsLimit;
+
+  // Build the mode-specific payload first; shared keys (hostUrl, options, envVars,
+  // iterations) are appended after so we get a stable key order matching the studio.
+  let toolConfig: Record<string, unknown>;
+  if (args.scriptSource === "image") {
+    // Custom Image: image + optional entrypoint live in toolConfig.customImage.
+    // Note: load_args is NOT part of customImage for K6 — it rides only in inputs[]
+    // (matches K6LoadTestService.ts:487-495 where customImage only has image/entrypoint).
+    const scriptImage = (b.script_image ?? b.scriptImage) as string | undefined;
+    if (scriptImage == null) {
+      // Defensive — the early image-mode gate in bodyBuilder already throws this.
+      throw new Error("K6 image mode requires 'script_image'.");
+    }
+    const customImage: Record<string, unknown> = { image: scriptImage };
+    const entrypoint = (b.script_entrypoint ?? b.scriptEntrypoint) as string | undefined;
+    if (entrypoint != null) customImage.entrypoint = entrypoint;
+    toolConfig = { mode: "image", customImage };
+  } else {
+    // Script mode: base64 JS source. Mandatory client-side rule (matches Harness UI:
+    // validateScriptContent at K6LoadTestService.ts:767-774). Substring check (not
+    // full AST) matches the UI exactly.
+    if (args.script == null) {
+      throw new Error("K6 script mode requires 'script' (the raw JavaScript K6 source).");
+    }
+    if (!args.script.includes("export default")) {
+      throw new Error(
+        "K6 script must export a default function (export default function ...).",
+      );
+    }
+    toolConfig = {
+      mode: "script",
+      scriptContent: Buffer.from(args.script, "utf8").toString("base64"),
+    };
+    // iterations is K6 script-mode-only (matches K6LoadTestService.ts:483-484).
+    const iterations = b.iterations != null ? (b.iterations as number) : undefined;
+    if (iterations != null && iterations > 0) toolConfig.iterations = iterations;
+  }
+
+  if (hostUrl) toolConfig.hostUrl = hostUrl;
+  if (Object.keys(options).length > 0) toolConfig.options = options;
+  if (envVars.length > 0) toolConfig.envVars = envVars;
+  return toolConfig;
+}
+
+/**
+ * Build the canonical LoadTest YAML manifest. Mirrors the studio's
+ * formDataToManifest shape (kind: LoadTest, apiVersion: v1alpha1, spec.{...}).
+ *
+ * scriptContent inside the YAML is PLAIN TEXT (so the manifest is human-
+ * readable); only the JSON request body's top-level scriptContent is base64.
+ * Caller base64-encodes the returned string into the `yaml` request field.
+ */
+function buildLoadtestYamlManifest(args: {
+  name: string;
+  description?: string;
+  tags?: string[];
+  identity: string;
+  toolType: "Locust" | "K6";
+  targetType: string;
+  scriptSource: string;
+  script?: string;                         // Locust inline source OR K6 source (plain text)
+  k6ToolConfig?: Record<string, unknown>;  // wire-shape K6 toolConfig (with base64 scriptContent)
+  environmentIdentifier: string;
+  infraIdentifier: string;
+  inputs: LoadtestInput[];
+}): string {
+  const infraType = args.targetType === "kubernetes" ? "kubernetes" : "linux";
+  const manifest: Record<string, unknown> = {
+    kind: "LoadTest",
+    apiVersion: "v1alpha1",
+    name: args.name,
+  };
+  if (args.description) manifest.description = args.description;
+  if (args.tags && args.tags.length) manifest.tags = args.tags;
+
+  const spec: Record<string, unknown> = {
+    identity: args.identity,
+    toolType: args.toolType,
+    infraType,
+    targetType: args.targetType,
+    scriptSource: args.scriptSource,
+  };
+  // Locust inline only: readable scriptContent at the manifest root (plain text).
+  // K6 keeps the script inside spec.toolConfig instead.
+  if (args.toolType === "Locust" && args.scriptSource === "inline" && args.script) {
+    spec.scriptContent = args.script;
+  }
+  spec.infraId = args.infraIdentifier;
+  spec.envId = args.environmentIdentifier;
+  spec.inputs = args.inputs;
+
+  // K6: emit spec.toolConfig with PLAIN TEXT scriptContent (decode the base64 from
+  // the wire-shape toolConfig so the YAML view is human-readable). Other
+  // toolConfig keys (mode, hostUrl, options, envVars, iterations) pass through.
+  if (args.toolType === "K6" && args.k6ToolConfig) {
+    const tc: Record<string, unknown> = { ...args.k6ToolConfig };
+    if (typeof tc.scriptContent === "string" && args.script) {
+      tc.scriptContent = args.script; // plain text for YAML readability
+    }
+    spec.toolConfig = tc;
+  }
+
+  manifest.spec = spec;
+
+  return YAML.stringify(manifest);
+}
+
 export const chaosToolset: ToolsetDefinition = {
   name: "chaos",
   displayName: "Chaos Engineering",
@@ -191,7 +488,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["experiment_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/experiments/{experimentId}/chaos-studio",
       searchAliases: [
         "chaos test", "fault injection", "fault injection experiment",
         "blast radius experiment", "resilience test", "chaos engineering test",
@@ -248,7 +545,7 @@ export const chaosToolset: ToolsetDefinition = {
             my_experiments: "myExperiments",
             exclude_automation: "excludeAutomation",
           },
-          responseExtractor: chaosPageExtract,
+          responseExtractor: chaosExperimentListExtract,
           description: descListExperiments,
         },
         get: {
@@ -425,7 +722,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["experiment_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/experiments/{experimentId}/runs",
       operations: {
         get: {
           method: "GET",
@@ -448,6 +745,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["probe_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/probes/{probeId}",
       listFilterFields: [
         { name: "search", description: descSearchProbes },
         { name: "tags", description: descTags },
@@ -1193,7 +1491,6 @@ export const chaosToolset: ToolsetDefinition = {
         { name: "experiment_id", description: descExperimentId, required: true },
         { name: "is_identity", description: descIsIdentity, type: "boolean" },
       ],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/chaos/experiments/{experimentId}",
       operations: {
         list: {
           method: "GET",
@@ -1217,11 +1514,6 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["identifier"],
-      listFilterFields: [
-        { name: "type", description: descComponentType, required: true, enum: ["Fault", "Probe", "Action"] },
-        { name: "identifier", description: descComponentIdentifier, required: true },
-        { name: "hub_reference", description: descComponentHubReference },
-      ],
       relatedResources: [
         { resourceType: "chaos_probe", relationship: "parent", description: "The probe whose variables are being retrieved. Use harness_get with resource_type=chaos_probe to fetch the full probe definition." },
         { resourceType: "chaos_fault", relationship: "parent", description: "The fault whose variables are being retrieved. Use harness_get with resource_type=chaos_fault to fetch the full fault definition." },
@@ -1239,8 +1531,13 @@ export const chaosToolset: ToolsetDefinition = {
           },
           // Registry only enforces listFilterFields.required for operation==="list"
           // and this resource has only `get`, so we validate locally via preflight.
-          // Keeps the `required: true` flags on listFilterFields as accurate docs
-          // for harness_describe while also failing loudly before any HTTP call.
+          paramsSchema: {
+            fields: [
+              { name: "type", required: true, description: `${descComponentType} (Fault | Probe | Action)` },
+              { name: "identifier", required: true, description: descComponentIdentifier },
+              { name: "hub_reference", required: false, description: descComponentHubReference },
+            ],
+          } satisfies ParamsSchema,
           preflight: async ({ input }) => {
             const missing: string[] = [];
             if (input.type === undefined || input.type === "") missing.push("type");
@@ -1267,6 +1564,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["experiment_id", "inputset_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/experiments/{experimentId}/inputsets",
       listFilterFields: [
         { name: "experiment_id", description: descExperimentId, required: true },
         { name: "is_identity", description: descIsIdentity, type: "boolean" },
@@ -1283,7 +1581,7 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { experiment_id: "experimentId" },
           queryParams: { page: "page", limit: "limit", size: "limit", is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "false" },
-          responseExtractor: chaosPageExtract,
+          responseExtractor: chaosInputSetListExtract,
           description: descListInputSets,
         },
         get: {
@@ -1410,14 +1708,16 @@ export const chaosToolset: ToolsetDefinition = {
     // ── Load Tests ─────────────────────────────────────────────────────
     // Note: Load test API uses a different service path (loadTest/manager/api)
     // than the chaos manager (chaos/manager/api), per v1 Go code.
-    // Also uses standard orgIdentifier (no scopeParams override).
+    // Like the chaos REST API, it scopes via organizationIdentifier (CHAOS_SCOPE).
     {
       resourceType: "chaos_loadtest",
       displayName: "Chaos Load Test",
       description: descChaosLoadtest,
       toolset: "chaos",
       scope: "project",
+      scopeParams: CHAOS_SCOPE,
       identifierFields: ["loadtest_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/load-tests/{loadtestId}",
       operations: {
         list: {
           method: "GET",
@@ -1426,8 +1726,12 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: {
             page: "page",
             limit: "limit",
+            size: "limit",
+            search: "search",
+            search_term: "search",
+            environment_id: "environmentIdentifier",
           },
-          responseExtractor: passthrough,
+          responseExtractor: chaosLoadTestListExtract,
           description: descListLoadtests,
         },
         get: {
@@ -1435,21 +1739,170 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { loadtest_id: "loadtestId" },
-          responseExtractor: passthrough,
+          responseExtractor: chaosLoadTestExtract,
           description: descGetLoadtest,
         },
         create: {
           method: "POST",
           path: `${CHAOS_LOADTEST}/v1/load-tests`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input) => input.body ?? {},
-          responseExtractor: passthrough,
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const name = (b.name as string) ?? "";
+            if (!name) {
+              throw new Error("name is required.");
+            }
+
+            // identity is the slug-constrained key; auto-derive from name when omitted.
+            // The display name is permissive (any non-empty string) — only the identity
+            // must be a slug. We strip non-alphanumerics from name as a sensible default;
+            // a fully-blank slug falls back to a UUID so we never write an empty id.
+            const slug = (s: string) => s.replace(/[^a-zA-Z0-9]/g, "");
+            const identity = (b.identity as string) || slug(name) || randomUUID();
+            if (!/^[a-zA-Z0-9_]+$/.test(identity)) {
+              throw new Error(
+                `Invalid identity '${identity}': only letters, numbers and underscores are allowed (derived from name when omitted).`,
+              );
+            }
+
+            const targetType = (b.target_type as string) ?? "machine-chaos-linux";
+            const environmentIdentifier = (b.environment_id ?? b.environmentIdentifier) as
+              | string
+              | undefined;
+            const infraIdentifier = (b.infra_id ?? b.infraIdentifier) as string | undefined;
+            const targetUrl = (b.target_url ?? b.targetUrl) as string | undefined;
+            const script = b.script as string | undefined;
+            const scriptImage = (b.script_image ?? b.scriptImage) as string | undefined;
+            // Explicit script_source wins, else infer "image" when an image is supplied.
+            const scriptSource =
+              (b.script_source as string) ?? (scriptImage != null ? "image" : "inline");
+
+            // Mode-specific required fields (fail loudly before we touch the wire).
+            // Tool-agnostic message: Locust = Python locust source, K6 = JavaScript with 'export default'.
+            // The K6-specific 'export default' rule is enforced later in buildK6ToolConfig.
+            if (scriptSource === "inline" && script == null) {
+              throw new Error("script is required when script_source='inline'.");
+            }
+            if (scriptSource === "image" && scriptImage == null) {
+              throw new Error("script_image is required when script_source='image'.");
+            }
+
+            // Tool type: Locust (default) or K6. K6 is Kubernetes-only and supports
+            // script and image modes (UI mode is deferred).
+            const toolType = ((b.tool_type as string) ?? "Locust") as "Locust" | "K6";
+            if (toolType !== "Locust" && toolType !== "K6") {
+              throw new Error(`tool_type '${toolType}' must be 'Locust' or 'K6'.`);
+            }
+            if (toolType === "K6" && targetType !== "kubernetes") {
+              throw new Error(
+                "K6 load tests require target_type='kubernetes' (LinuxVM is not supported).",
+              );
+            }
+
+            // Normalise tags (accept array or comma-separated string; default []).
+            const rawTags = b.tags;
+            const tags: string[] = Array.isArray(rawTags)
+              ? (rawTags as string[])
+              : typeof rawTags === "string"
+                ? (rawTags as string).split(",").map((t) => t.trim()).filter(Boolean)
+                : [];
+
+            // Build the canonical inputs[] array (well-known tunables → TemplateInput[]).
+            // inputs[] is identical between Locust and K6 script/image modes.
+            const inputs = buildLoadtestInputs(b, { targetType, scriptSource });
+
+            // K6 wraps the script in a toolConfig object (no top-level scriptContent).
+            // Built up-front so the same value drives both the JSON body and the YAML view.
+            let k6ToolConfig: Record<string, unknown> | undefined;
+            if (toolType === "K6") {
+              k6ToolConfig = buildK6ToolConfig(b, { scriptSource, script, targetUrl });
+            }
+
+            // Build the canonical LoadTest YAML manifest, then base64-encode for the wire.
+            // The manifest carries plain-text scriptContent (Locust inline) OR plain-text
+            // toolConfig.scriptContent (K6), so the YAML view is human-readable; the JSON
+            // body's base64 lives only on the wire.
+            const yamlManifest = buildLoadtestYamlManifest({
+              name,
+              description: b.description as string | undefined,
+              tags,
+              identity,
+              toolType,
+              targetType,
+              scriptSource,
+              script,
+              k6ToolConfig,
+              environmentIdentifier: environmentIdentifier as string,
+              infraIdentifier: infraIdentifier as string,
+              inputs,
+            });
+
+            const body: Record<string, unknown> = {
+              identity,
+              name,
+              description: (b.description as string) ?? "",
+              tags,
+              environmentIdentifier,
+              infraIdentifier,
+              scriptSource,
+              targetType,
+              toolType,
+              inputs,
+              yaml: Buffer.from(yamlManifest, "utf8").toString("base64"),
+            };
+
+            // Top-level scriptContent rules:
+            //   - Locust inline: base64 of the raw Python script.
+            //   - Locust image:  omitted (script_image rides in inputs[]).
+            //   - K6 script:     OMITTED at top level — the K6 script lives in
+            //                    toolConfig.scriptContent only (top-level would be
+            //                    treated as a Locust-style script and double-encoded).
+            //   - K6 image:      not yet supported (rejected earlier).
+            if (toolType === "Locust" && scriptSource === "inline") {
+              body.scriptContent = Buffer.from(script as string, "utf8").toString("base64");
+            }
+            if (toolType === "K6" && k6ToolConfig) {
+              body.toolConfig = k6ToolConfig;
+            }
+
+            // Emit snake_case aliases for the registry's required-field validator (which
+            // checks the built body against the snake_case bodySchema field names). The
+            // load-test backend reads the camelCase / inputs[] keys and ignores extras
+            // (same pattern as chaos_action create).
+            if (environmentIdentifier != null) body.environment_id = environmentIdentifier;
+            if (infraIdentifier != null) body.infra_id = infraIdentifier;
+            if (targetUrl != null) body.target_url = targetUrl;
+
+            return body;
+          },
+          responseExtractor: chaosLoadTestExtract,
           description: descCreateLoadtest,
           bodySchema: {
             description: descBodyLoadtestDefinition,
             fields: [
               { name: "name", type: "string", required: true, description: descLoadtestName },
-              { name: "type", type: "string", required: false, description: descLoadtestType },
+              { name: "environment_id", type: "string", required: true, description: descLoadtestEnvId },
+              { name: "infra_id", type: "string", required: true, description: descLoadtestInfraId },
+              { name: "target_url", type: "string", required: true, description: descLoadtestTargetUrl },
+              { name: "script", type: "string", required: false, description: descLoadtestScript },
+              { name: "script_source", type: "string", required: false, description: descLoadtestScriptSource },
+              { name: "script_image", type: "string", required: false, description: descLoadtestScriptImage },
+              { name: "script_entrypoint", type: "string", required: false, description: descLoadtestScriptEntrypoint },
+              { name: "load_args", type: "string", required: false, description: descLoadtestLoadArgs },
+              { name: "identity", type: "string", required: false, description: descLoadtestIdentity },
+              { name: "description", type: "string", required: false, description: descLoadtestDescription },
+              { name: "tags", type: "array", required: false, description: descLoadtestTags },
+              { name: "target_type", type: "string", required: false, description: descLoadtestTargetType },
+              { name: "tool_type", type: "string", required: false, description: descLoadtestType },
+              { name: "users", type: "number", required: false, description: descLoadtestUsers },
+              { name: "duration_sec", type: "number", required: false, description: descLoadtestDurationSec },
+              { name: "ramp_up_sec", type: "number", required: false, description: descLoadtestRampUpSec },
+              { name: "worker_count", type: "number", required: false, description: descLoadtestWorkerCount },
+              { name: "host_url", type: "string", required: false, description: descLoadtestHostUrl },
+              { name: "rps_limit", type: "number", required: false, description: descLoadtestRpsLimit },
+              { name: "iterations", type: "number", required: false, description: descLoadtestIterations },
+              { name: "env_vars", type: "array", required: false, description: descLoadtestEnvVars },
             ],
           },
         },
@@ -1468,6 +1921,9 @@ export const chaosToolset: ToolsetDefinition = {
           path: `${CHAOS_LOADTEST}/v1/load-tests/{loadtestId}/runs`,
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { loadtest_id: "loadtestId" },
+          // TODO(runtime-inputs): accept { values: TemplateInputMinimum[] } when runtime
+          // inputs ('<+input>' sentinel) are added (see deferred follow-up plan). The empty
+          // body is correct while runtime inputs are unsupported on the create side.
           bodyBuilder: () => ({}),
           responseExtractor: passthrough,
           actionDescription: descRunLoadtest,
@@ -1548,6 +2004,72 @@ export const chaosToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           actionDescription: descCheckK8sHealth,
           bodySchema: { description: descBodyNoBody, fields: [] },
+        },
+      },
+    },
+
+    // ── Chaos-Enabled Infrastructure (ready to run experiments) ──────
+    {
+      resourceType: "chaos_enabled_infrastructure",
+      displayName: "Chaos-Enabled Infrastructure",
+      description: descChaosEnabledInfrastructure,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["infra_id"],
+      diagnosticHint:
+        "Returns only infrastructures that are ready to run chaos experiments (chaos-enabled AND ACTIVE). " +
+        "Empty result usually means no chaos infrastructure is installed/connected for this project/environment yet — " +
+        "register/connect one, or use chaos_k8s_infrastructure to see infra that exist but are not chaos-enabled.",
+      relatedResources: [
+        {
+          resourceType: "chaos_k8s_infrastructure",
+          relationship: "alternative",
+          description:
+            "Full K8s infra inventory (all statuses, chaos-enabled or not) plus get + check_health. Use chaos_enabled_infrastructure only to pick a ready-to-use infra.",
+        },
+        {
+          resourceType: "chaos_experiment",
+          relationship: "used_by",
+          description:
+            "The infraID/identity returned here is the infra_ref/infra selector when creating or running an experiment.",
+        },
+      ],
+      listFilterFields: [
+        { name: "environment_id", description: descEnvironmentId },
+        { name: "infra_type", description: descChaosEnabledInfraType, enum: ["Kubernetes", "KubernetesV2", "All"] },
+        { name: "infra_scope", description: descInfraScope, enum: ["NAMESPACE", "CLUSTER"] },
+        { name: "is_ai_enabled", description: descInfraAiEnabled, type: "boolean" },
+        { name: "search", description: descSearchK8sInfra },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: `${CHAOS}/rest/v2/infrastructures/chaos-enabled`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            size: "limit",
+            environment_id: "environmentIdentifier",
+            search: "search",
+            search_term: "search",
+          },
+          bodyBuilder: (input) => {
+            const filter: Record<string, unknown> = {};
+            if (input.infra_type) {
+              filter.infraTypeFilter = String(input.infra_type).toUpperCase();
+            }
+            if (input.infra_scope) {
+              filter.infraScope = input.infra_scope;
+            }
+            if (input.is_ai_enabled != null) {
+              filter.isAIEnabled = input.is_ai_enabled;
+            }
+            return Object.keys(filter).length > 0 ? { filter } : {};
+          },
+          responseExtractor: chaosK8sInfraListExtract,
+          description: descListChaosEnabledInfra,
         },
       },
     },
@@ -1665,6 +2187,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["fault_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/faults/{identity}",
       listFilterFields: [
         { name: "search", description: descFaultSearch },
         { name: "type", description: descFaultListType },
@@ -1771,6 +2294,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["fault_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/faults/{faultId}?tab=execution-history",
       listFilterFields: [
         { name: "fault_id", description: descFaultIdentityParam, required: true },
         { name: "is_enterprise", description: descIsEnterpriseRuns, type: "boolean" },
@@ -1802,6 +2326,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["template_identity"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/hubs/{hubRef}?tab=FAULTS",
       listFilterFields: [
         { name: "hub_identity", description: descHubIdentity },
         { name: "search", description: descTemplateSearch },
@@ -1964,6 +2489,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["template_identity"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/hubs/{hubRef}?tab=PROBES",
       listFilterFields: [
         { name: "hub_identity", description: descHubIdentity },
         { name: "search", description: descTemplateSearch },
@@ -2048,6 +2574,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["template_identity"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/hubs/{hubRef}?tab=ACTIONS",
       listFilterFields: [
         { name: "hub_identity", description: descHubIdentity },
         { name: "search", description: descTemplateSearch },
@@ -2179,6 +2706,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["action_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/chaos/actions/{identity}",
       listFilterFields: [
         { name: "hub_identity", description: descHubIdentityActions },
         { name: "search", description: descSearchActionsParam },
@@ -2219,6 +2747,63 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { action_id: "actionId" },
           responseExtractor: passthrough,
           description: descDeleteAction,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/rest/actions`,
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const name = b.name;
+            // UI derives identity from name; backend does NOT auto-generate it.
+            const identity = b.identity ?? name;
+            const type = b.type ?? b.action_type ?? b.actionType;
+            const infrastructureType = b.infrastructure_type ?? b.infrastructureType ?? b.infra_type;
+            const tags = b.tags;
+            // delay shorthand: build delayAction from `duration` when action_properties absent
+            let actionProperties = b.action_properties ?? b.actionProperties;
+            const duration = b.duration;
+            if (actionProperties == null && type === "delay" && duration != null) {
+              actionProperties = { delayAction: { duration } };
+            }
+            const runProperties = b.run_properties ?? b.runProperties;
+            return {
+              ...(identity != null ? { identity } : {}),
+              ...(name != null ? { name } : {}),
+              ...(b.description != null ? { description: b.description } : {}),
+              ...(tags != null
+                ? { tags: Array.isArray(tags) ? tags : String(tags).split(",").map((t: string) => t.trim()).filter(Boolean) }
+                : {}),
+              // Emit snake_case alias too so the registry's required-field
+              // validator (which checks the built body against bodySchema field
+              // names) sees `infrastructure_type`; the backend reads the
+              // camelCase `infrastructureType` and ignores the extra key.
+              ...(infrastructureType != null ? { infrastructureType, infrastructure_type: infrastructureType } : {}),
+              ...(type != null ? { type } : {}),
+              ...(b.variables != null ? { variables: b.variables } : {}),
+              ...(actionProperties != null ? { actionProperties } : {}),
+              ...(runProperties != null ? { runProperties } : {}),
+              inputs: Array.isArray(b.inputs) ? b.inputs : [],
+            };
+          },
+          responseExtractor: chaosActionExtract,
+          description: descCreateAction,
+          bodySchema: {
+            description: descBodyActionCreate,
+            fields: [
+              { name: "name", type: "string", required: true, description: descActionName },
+              { name: "type", type: "string", required: true, description: descActionEntityTypeCreate },
+              { name: "infrastructure_type", type: "string", required: true, description: descActionInfraTypeCreate },
+              { name: "action_properties", type: "object", required: false, description: descActionPropertiesBody },
+              { name: "duration", type: "string", required: false, description: descActionDurationShorthand },
+              { name: "identity", type: "string", required: false, description: descActionIdentityCreate },
+              { name: "description", type: "string", required: false, description: descActionDescriptionCreate },
+              { name: "tags", type: "array", required: false, description: descActionTagsCreate },
+              { name: "variables", type: "array", required: false, description: descActionVariablesBody },
+              { name: "run_properties", type: "object", required: false, description: descActionRunPropertiesBody },
+              { name: "inputs", type: "array", required: false, description: descActionInputsBody },
+            ],
+          },
         },
       },
       executeActions: {

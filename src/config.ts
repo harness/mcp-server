@@ -78,6 +78,7 @@ const RawConfigSchema = z.object({
   HARNESS_DEFAULT_PROJECT_ID: optionalStringFromEnv,
   HARNESS_API_TIMEOUT_MS: z.coerce.number().default(30000),
   HARNESS_MAX_RETRIES: z.coerce.number().default(3),
+  MCP_SESSION_TTL_MS: z.coerce.number().min(1).default(5 * 60_000),
   LOG_LEVEL: z.preprocess(
     (val) => (val === "" ? undefined : val),
     z.enum(["debug", "info", "warn", "error"]).default("info"),
@@ -112,6 +113,24 @@ const RawConfigSchema = z.object({
   HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: z.preprocess(
     emptyStringAsUndefined,
     z.coerce.number().min(1).max(20).default(3),
+  ),
+  HARNESS_SEARCH_PROVIDER: z.preprocess(
+    emptyStringAsUndefined,
+    z.enum(["none", "local", "remote"]).default("local"),
+  ),
+  HARNESS_SEARCH_SERVICE_URL: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().url().optional(),
+  ),
+  // Extra headers sent with every request to the remote search service.
+  // JSON object, e.g.: {"Authorization":"Bearer tok"} or {"x-api-key":"key","x-harness-token":"svc"}
+  // Supports any auth scheme: Bearer tokens, API keys, internal service-to-service headers.
+  HARNESS_SEARCH_SERVICE_HEADERS: optionalStringFromEnv,
+  // Directory for @huggingface/transformers model cache (local search provider).
+  // Use a persistent volume in production; Docker image bakes models into /app/.cache/hf.
+  HARNESS_HF_CACHE_DIR: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().default("/tmp/hf-cache"),
   ),
 });
 

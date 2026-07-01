@@ -5,7 +5,7 @@ import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
-import { confirmViaElicitation } from "../utils/elicitation.js";
+import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
@@ -30,7 +30,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         ]).describe("The updated resource definition body. For pipelines: pass a YAML string directly, or an object with yamlPipeline (YAML string) or pipeline (JSON object)"),
         org_id: z.string().optional().describe("Organization identifier (overrides default)"),
         project_id: z.string().optional().describe("Project identifier (overrides default)"),
-        confirm: z.boolean().optional().describe("Set to true to confirm the operation. Required when the client does not support interactive confirmation prompts (e.g. managed MCP)."),
+        confirm: z.boolean().optional().describe("Set to true to confirm the operation. Only required when the operation risk is medium_write or above AND the client cannot surface a confirmation prompt — e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Has no effect for low-risk updates. Does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers (e.g. pipeline_id for triggers/input sets, version_label for templates)."),
       },
       outputSchema: updateOutputSchema,
@@ -70,8 +70,27 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         if (!resolvedResourceId) {
           return errorResult("resource_id is required for harness_update unless url contains the resource ID or params includes the resource-specific ID field.");
         }
+        // Populate the primary identifier on the input map BEFORE any
+        // pre-dispatch audit emission so pathBuilder-backed updates resolve
+        // a stable http_path on blocked-attempt audit rows.
+        if (primaryField) {
+          input[primaryField] = resolvedResourceId;
+        }
 
         const risk = def.operations.update!.operationPolicy.risk;
+        // Fail fast on HARNESS_READ_ONLY before elicitation — see
+        // harness_create.ts for the rationale. Mirrors registry.dispatch().
+        if (config?.HARNESS_READ_ONLY) {
+          const reason = `Read-only mode is enabled (HARNESS_READ_ONLY=true). "update" operations are not allowed.`;
+          registry.auditBlockedAttempt(
+            args.resource_type,
+            "update",
+            input,
+            { tool: "harness_update", confirmation: "blocked", resource_id: resolvedResourceId },
+            reason,
+          );
+          return errorResult(reason);
+        }
         const bodyPreview = formatBodyPreview(args.body);
         const elicit = await confirmViaElicitation({
           server,
@@ -82,12 +101,14 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
-          return errorResult(
-            `Operation ${elicit.reason} by user. Hint: if your client does not support interactive confirmation, pass confirm: true to proceed.`,
+          registry.auditBlockedAttempt(
+            args.resource_type,
+            "update",
+            input,
+            { tool: "harness_update", confirmation: elicit.method, resource_id: resolvedResourceId },
+            describeBlockedAudit(elicit),
           );
-        }
-        if (primaryField) {
-          input[primaryField] = resolvedResourceId;
+          return errorResult(describeElicitationFailure(elicit));
         }
         const versionLabel = asString(input.version_label);
         if (versionLabel) { /* already set via params */ }

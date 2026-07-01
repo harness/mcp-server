@@ -1475,3 +1475,51 @@ describe("gitops pagination", () => {
     expect(call.body.pageSize).toBe(5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// supportedScopes — account/org/project (regression: scopeOptional resources
+// without supportedScopes rejected resource_scope:"account")
+// ---------------------------------------------------------------------------
+
+describe("gitops supportedScopes", () => {
+  const multiScopeResources = [
+    "gitops_agent",
+    "gitops_cluster",
+    "gitops_repository",
+    "gitops_repo_credential",
+  ] as const;
+
+  it.each(multiScopeResources)("declares account/org/project supportedScopes for %s", (resourceType) => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    expect(registry.getResource(resourceType).supportedScopes).toEqual(["account", "org", "project"]);
+    expect(registry.getSupportedScopes(resourceType)).toEqual(["account", "org", "project"]);
+  });
+
+  it.each(multiScopeResources)(
+    "accepts explicit resource_scope account for %s list without scope validation error",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+      const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+      const client = makeClient(mockRequest);
+
+      await expect(
+        registry.dispatch(client, resourceType, "list", { resource_scope: "account" }),
+      ).resolves.toBeDefined();
+
+      const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    },
+  );
+
+  it("rejects account scope when supportedScopes is absent (documents fallback behavior)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const client = makeClient(vi.fn());
+
+    // gitops_application is scopeOptional but does NOT declare supportedScopes —
+    // getSupportedScopes falls back to [def.scope] = ["project"] only.
+    await expect(
+      registry.dispatch(client, "gitops_application", "list", { resource_scope: "account" }),
+    ).rejects.toThrow(/gitops_application does not support account scope/);
+  });
+});

@@ -2,7 +2,7 @@
   "manifest_version": "0.3",
   "name": "harness-mcp-server",
   "display_name": "Harness",
-  "version": "3.1.7",
+  "version": "3.2.6",
   "description": "Connect AI agents to Harness for CI/CD, code repositories, pull requests, services, environments, and feature flags.",
   "long_description": "The Harness MCP Server gives MCP-compatible clients access to Harness platform workflows through consolidated tools, resources, and prompts. It supports local stdio usage and can be bundled as a Node-based MCPB extension.",
   "author": {
@@ -47,7 +47,8 @@
         "HARNESS_ACCOUNT_ID": "${user_config.HARNESS_ACCOUNT_ID}",
         "HARNESS_ORG": "${user_config.HARNESS_ORG}",
         "HARNESS_PROJECT": "${user_config.HARNESS_PROJECT}",
-        "HARNESS_BASE_URL": "${user_config.HARNESS_BASE_URL}"
+        "HARNESS_BASE_URL": "${user_config.HARNESS_BASE_URL}",
+        "MCP_SESSION_TTL_MS": "${user_config.MCP_SESSION_TTL_MS}"
       }
     }
   },
@@ -110,6 +111,14 @@
       "title": "Harness Base URL",
       "description": "Harness API/UI base URL for this local MCP server. Use the default for public Harness SaaS, or set an environment such as https://harness0.harness.io when running the server yourself.",
       "default": "https://app.harness.io",
+      "required": false,
+      "sensitive": false
+    },
+    "MCP_SESSION_TTL_MS": {
+      "type": "string",
+      "title": "HTTP Session TTL (ms)",
+      "description": "Idle HTTP session lifetime in milliseconds. Sessions are not considered idle while a request or SSE stream is active.",
+      "default": "300000",
       "required": false,
       "sensitive": false
     }

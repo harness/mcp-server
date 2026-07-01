@@ -307,6 +307,28 @@ describe("HarnessClient", () => {
       expect(headers.has("x-api-key")).toBe(false);
     });
 
+    it("preserves caller-provided FME auth regardless of header casing", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({
+        HARNESS_API_KEY: "pat.internal.internal.dummy",
+        HARNESS_FME_API_KEY: undefined,
+      }));
+
+      await client.request({
+        path: "/internal/api/v2/workspaces",
+        product: "fme",
+        headers: {
+          authorization: "PlatformService service-jwt",
+          "X-Api-Key": "pat.internal.internal.dummy",
+        },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("PlatformService service-jwt");
+      expect(headers.has("x-api-key")).toBe(false);
+    });
+
     it("fails before sending placeholder credentials to Split.io", async () => {
       const client = new HarnessClient(makeConfig({
         HARNESS_API_KEY: "pat.internal.internal.dummy",
@@ -345,6 +367,35 @@ describe("HarnessClient", () => {
       expect(headers["Harness-Account"]).toBe("test-account");
     });
 
+    it("preserves caller-provided non-FME auth regardless of header casing", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/ng/api/projects",
+        headers: { authorization: "Bearer session-token" },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("Bearer session-token");
+      expect(headers.has("x-api-key")).toBe(false);
+    });
+
+    it("does not inject x-api-key when caller already provided it with alternate casing", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/ng/api/projects",
+        headers: { "X-Api-Key": "caller-provided-key" },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("x-api-key")).toBe("caller-provided-key");
+    });
+
     it("preserves explicit FME bearer auth instead of injecting configured placeholder token", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig({ HARNESS_API_KEY: "dummy" }));
@@ -371,6 +422,46 @@ describe("HarnessClient", () => {
 
       const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
       expect(headers["Harness-Account"]).toBe("resolved-account");
+    });
+
+    it.each([
+      "/query-service/grpc/io.harness.platform.query.service.api.v1.QueryServiceGrpc/getGrammar",
+      "/schema-service/grpc/io.harness.platform.schema.service.api.v1.SchemaServiceGrpc/getType",
+      "/config-service/grpc/io.harness.platform.config.service.api.v1.ConfigServiceGrpc/getConfig",
+    ])("sets x-tenant-id for gRPC proxy paths via request(): %s", async (path) => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ method: "POST", path });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["x-tenant-id"]).toBe("test-account");
+      expect(headers["Harness-Account"]).toBe("test-account");
+    });
+
+    it.each([
+      "/query-service/grpc/io.harness.platform.query.service.api.v1.QueryServiceGrpc/executeQuery",
+      "/schema-service/grpc/io.harness.platform.schema.service.api.v1.SchemaServiceGrpc/getType",
+      "/config-service/grpc/io.harness.platform.config.service.api.v1.ConfigServiceGrpc/getConfig",
+    ])("sets x-tenant-id for gRPC proxy paths via requestStream(): %s", async (path) => {
+      fetchSpy.mockResolvedValue(new Response("ok", { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+      client.setAccountIdResolver(() => "resolved-tenant");
+
+      await client.requestStream({ method: "POST", path });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["x-tenant-id"]).toBe("resolved-tenant");
+    });
+
+    it("omits x-tenant-id for non-gRPC-proxy paths", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ path: "/ng/api/projects" });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["x-tenant-id"]).toBeUndefined();
     });
 
     it("sets Content-Type to application/json for object body", async () => {
@@ -433,6 +524,59 @@ describe("HarnessClient", () => {
         expect(e.harnessCode).toBe("INVALID");
         expect(e.correlationId).toBe("corr-1");
       }
+    });
+
+    it.each([
+      {
+        path: "/chaos/manager/api/rest/v2/experiment",
+        description: "Probe identifier already exists in this chaos hub",
+      },
+      {
+        path: "/loadTest/manager/api/v1/load-tests",
+        description: "Load test name must be unique within the project",
+      },
+    ])("appends API description to error message for $path", async ({ path, description }) => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({ message: "Request failed", description }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path })).rejects.toMatchObject({
+        message: `Request failed — ${description}`,
+        statusCode: 400,
+      });
+    });
+
+    it("does not append description field for non-chaos/loadTest paths", async () => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({ message: "Request failed", description: "ignored detail" }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path: "/ng/api/projects" })).rejects.toMatchObject({
+        message: "Request failed",
+        statusCode: 400,
+      });
+    });
+
+    it("appends chaos description on requestStream errors", async () => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({
+          message: "Experiment validation failed",
+          description: "Target namespace is required",
+        }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(
+        client.requestStream({ method: "POST", path: "/chaos/manager/api/rest/v2/experiment" }),
+      ).rejects.toMatchObject({
+        message: "Experiment validation failed — Target namespace is required",
+        statusCode: 400,
+      });
     });
 
     it("throws HarnessApiError with raw body on non-JSON error", async () => {
@@ -781,6 +925,74 @@ describe("HarnessClient", () => {
       expect(headers["Content-Type"]).toBe("application/yaml");
       const url = new URL(fetchSpy.mock.calls[0][0] as string);
       expect(url.searchParams.get("inputSetIdentifiers")).toBe("mcp_default_runtime_inputs");
+    });
+  });
+
+  describe("getCurrentUserId", () => {
+    it("resolves UUID from /ng/api/user/currentUser", async () => {
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify({ data: { uuid: "user-uuid-123" } }), { status: 200 }),
+      );
+      const client = new HarnessClient(makeConfig());
+
+      const uuid = await client.getCurrentUserId();
+
+      expect(uuid).toBe("user-uuid-123");
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.pathname).toBe("/ng/api/user/currentUser");
+    });
+
+    it("caches UUID for subsequent calls", async () => {
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify({ data: { uuid: "cached-uuid" } }), { status: 200 }),
+      );
+      const client = new HarnessClient(makeConfig());
+
+      await client.getCurrentUserId();
+      await client.getCurrentUserId();
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("dedupes concurrent getCurrentUserId calls", async () => {
+      let resolveFetch: (value: Response) => void = () => {};
+      const fetchPromise = new Promise<Response>((resolve) => {
+        resolveFetch = resolve;
+      });
+      fetchSpy.mockImplementation(() => fetchPromise);
+      const client = new HarnessClient(makeConfig());
+
+      const p1 = client.getCurrentUserId();
+      const p2 = client.getCurrentUserId();
+      resolveFetch(new Response(JSON.stringify({ data: { uuid: "deduped-uuid" } }), { status: 200 }));
+
+      const [uuid1, uuid2] = await Promise.all([p1, p2]);
+
+      expect(uuid1).toBe("deduped-uuid");
+      expect(uuid2).toBe("deduped-uuid");
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it("throws HarnessApiError when currentUser response has no uuid", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: {} }), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await expect(client.getCurrentUserId()).rejects.toThrow("Could not resolve current user UUID");
+    });
+
+    it("clears inflight promise on failure so a retry can succeed", async () => {
+      fetchSpy
+        .mockResolvedValueOnce(new Response(JSON.stringify({ data: {} }), { status: 200 }))
+        .mockResolvedValueOnce(
+          new Response(JSON.stringify({ data: { uuid: "retry-uuid" } }), { status: 200 }),
+        );
+      const client = new HarnessClient(makeConfig());
+
+      await expect(client.getCurrentUserId()).rejects.toThrow(HarnessApiError);
+      const uuid = await client.getCurrentUserId();
+
+      expect(uuid).toBe("retry-uuid");
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
   });
 });

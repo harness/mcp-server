@@ -388,6 +388,37 @@ describe("kg_type get body validation", () => {
 });
 
 // ---------------------------------------------------------------------------
+// kg_grammar — get response shape
+// ---------------------------------------------------------------------------
+
+describe("kg_grammar get extractor", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("wraps grammar text in an object for MCP output validation", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ grammar: "grammar Hql; /* ... */" });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "kg_grammar", "get", {});
+
+    expect(result).toEqual({ grammar: "grammar Hql; /* ... */" });
+    expect(typeof result).toBe("object");
+  });
+
+  it("preserves an empty grammar string", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ grammar: "" });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "kg_grammar", "get", {});
+
+    expect(result).toEqual({ grammar: "" });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // hql_query run — read-only mode policy
 // ---------------------------------------------------------------------------
 

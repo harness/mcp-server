@@ -523,9 +523,9 @@ describe("P3-8: scs_component_dependencies resource", () => {
     expect(res.description).toContain("transitive");
   });
 
-  it("has purl as required listFilterField", () => {
-    const res = findResource("scs_component_dependencies");
-    const purlField = res.listFilterFields?.find((f) => f.name === "purl");
+  it("has purl as required get param", () => {
+    const spec = getOp("scs_component_dependencies", "get");
+    const purlField = spec.paramsSchema?.fields.find((f) => f.name === "purl");
     expect(purlField).toBeDefined();
     expect(purlField!.required).toBe(true);
   });
@@ -595,9 +595,9 @@ describe("P3-6: scs_component_remediation resource", () => {
     expect(res.description).toContain("scs_remediation_pr");
   });
 
-  it("has purl as required listFilterField", () => {
-    const res = findResource("scs_component_remediation");
-    const purlField = res.listFilterFields?.find((f) => f.name === "purl");
+  it("has purl as required get param", () => {
+    const spec = getOp("scs_component_remediation", "get");
+    const purlField = spec.paramsSchema?.fields.find((f) => f.name === "purl");
     expect(purlField).toBeDefined();
     expect(purlField!.required).toBe(true);
   });
@@ -927,9 +927,9 @@ describe("P3-8: scs_component_dependencies resource", () => {
     expect(siblingRef!.relationship).toBe("sibling");
   });
 
-  it("purl is a required listFilterField", () => {
-    const res = findResource("scs_component_dependencies");
-    const purlField = res.listFilterFields!.find((f) => f.name === "purl");
+  it("purl is a required get param", () => {
+    const spec = getOp("scs_component_dependencies", "get");
+    const purlField = spec.paramsSchema!.fields.find((f) => f.name === "purl");
     expect(purlField).toBeDefined();
     expect(purlField!.required).toBe(true);
   });
@@ -1046,16 +1046,16 @@ describe("P3-11: scs_component_enrichment resource", () => {
     expect(vulnRef!.relationship).toBe("sibling");
   });
 
-  it("purl is a required listFilterField", () => {
-    const res = findResource("scs_component_enrichment");
-    const purlField = res.listFilterFields!.find((f) => f.name === "purl");
+  it("purl is a required get param", () => {
+    const spec = getOp("scs_component_enrichment", "get");
+    const purlField = spec.paramsSchema!.fields.find((f) => f.name === "purl");
     expect(purlField).toBeDefined();
     expect(purlField!.required).toBe(true);
   });
 
-  it("artifact_id is an optional listFilterField", () => {
-    const res = findResource("scs_component_enrichment");
-    const artifactField = res.listFilterFields!.find((f) => f.name === "artifact_id");
+  it("artifact_id is an optional get param", () => {
+    const spec = getOp("scs_component_enrichment", "get");
+    const artifactField = spec.paramsSchema!.fields.find((f) => f.name === "artifact_id");
     expect(artifactField).toBeDefined();
     expect(artifactField!.required).toBeFalsy();
   });

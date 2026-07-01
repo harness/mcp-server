@@ -1,10 +1,11 @@
 import fs from "fs";
 import path from "path";
+import { rewriteDefinitionKeys, schemaKey } from "./sync-schemas-lib.js";
 
 const BASE_URL = "https://raw.githubusercontent.com/harness/harness-schema/main";
 
 const V0_SCHEMAS = ["pipeline", "template", "trigger"];
-const V1_SCHEMAS = ["pipeline", "template", "trigger", "inputSet", "overlayInputSet", "service", "infra"];
+const V1_SCHEMAS = ["pipeline", "template", "inputSet", "overlayInputSet"];
 
 /**
  * MCP-local schemas not published under harness-schema.
@@ -23,47 +24,9 @@ const LOCAL_SCHEMA_ENTRIES = [
 const V1_DEF_NAMESPACE = {
   pipeline: "pipeline",
   template: "pipeline",
-  trigger: "trigger",
   inputSet: null,
   overlayInputSet: null,
-  service: "serviceEntity",
-  infra: "infraStructureEntity",
 };
-
-/**
- * Rewrite a v1 schema's `definitions` keys and all `$ref` pointers so the
- * harness_schema tool can navigate via `definitions[schemaKey]`.
- *
- * For example, v1/pipeline.json has `definitions.pipeline` but the tool
- * looks for `definitions.pipeline_v1`, so we rename the namespace.
- */
-function rewriteDefinitionKeys(json, originalNamespace, targetNamespace) {
-  if (!originalNamespace || originalNamespace === targetNamespace) return json;
-
-  const text = JSON.stringify(json);
-  const rewritten = text
-    .replaceAll(
-      `"#/definitions/${originalNamespace}/`,
-      `"#/definitions/${targetNamespace}/`,
-    )
-    .replaceAll(
-      `"#/definitions/${originalNamespace}"`,
-      `"#/definitions/${targetNamespace}"`,
-    );
-
-  const parsed = JSON.parse(rewritten);
-
-  if (parsed.definitions?.[originalNamespace]) {
-    parsed.definitions[targetNamespace] = parsed.definitions[originalNamespace];
-    delete parsed.definitions[originalNamespace];
-  }
-
-  return parsed;
-}
-
-function schemaKey(version, name) {
-  return version === "v0" ? name : `${name}_v1`;
-}
 
 function camelCase(str) {
   return str.replace(/[-_]([a-z])/g, (_, c) => c.toUpperCase());

@@ -13,7 +13,17 @@ export function registerPipelineYamlResource(server: McpServer, registry: Regist
 
   const template = new ResourceTemplate("pipeline:///{pipelineId}", {
     list: async () => {
-      const pipelineDef = registry.getResource(pipelineResourceType);
+      let pipelineDef: ReturnType<Registry["getResource"]>;
+      try {
+        pipelineDef = registry.getResource(pipelineResourceType);
+      } catch (err) {
+        log.debug("Skipping pipeline resource discovery: resource unavailable", {
+          resourceType: pipelineResourceType,
+          error: String(err),
+        });
+        return { resources: [] };
+      }
+
       if (!pipelineDef.scopeOptional && !hasRequiredDiscoveryScope(pipelineDef.scope, config)) {
         log.debug("Skipping pipeline resource discovery: missing required scope", {
           resourceType: pipelineResourceType,
@@ -71,6 +81,22 @@ export function registerPipelineYamlResource(server: McpServer, registry: Regist
       }
 
       log.info("Fetching pipeline YAML", { pipelineId, orgId, projectId });
+
+      try {
+        registry.getResource(pipelineResourceType);
+      } catch (err) {
+        log.debug("Skipping pipeline YAML read: resource unavailable", {
+          resourceType: pipelineResourceType,
+          error: String(err),
+        });
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: "application/x-yaml",
+            text: "# Pipeline resource unavailable\nresource unavailable: pipeline toolset is not enabled\n",
+          }],
+        };
+      }
 
       const result = await registry.dispatch(client, pipelineResourceType, "get", {
         pipeline_id: pipelineId,

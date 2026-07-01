@@ -24,7 +24,7 @@ describe("release metadata", () => {
     const rootManifest = readJson("manifest.json");
     const directoryManifest = readJson("mcp-directory/manifest.json");
 
-    expect(packageJson.version).toBe("3.1.7");
+    expect(packageJson.version).toBe("3.2.6");
     expect(rootManifest.version).toBe(packageJson.version);
     expect(directoryManifest.version).toBe(packageJson.version);
   });
@@ -41,6 +41,17 @@ describe("release metadata", () => {
       );
       expect(manifest.user_config.HARNESS_FME_BASE_URL).toMatchObject({
         default: "https://api.split.io",
+        required: false,
+        sensitive: false,
+      });
+    }
+  });
+
+  it("exposes HTTP session TTL config in packaged manifests", () => {
+    for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
+      expect(manifest.server.mcp_config.env.MCP_SESSION_TTL_MS).toBe("${user_config.MCP_SESSION_TTL_MS}");
+      expect(manifest.user_config.MCP_SESSION_TTL_MS).toMatchObject({
+        default: "300000",
         required: false,
         sensitive: false,
       });

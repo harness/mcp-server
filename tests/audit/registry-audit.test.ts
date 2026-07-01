@@ -126,6 +126,149 @@ describe("Registry audit emission", () => {
     expect(event.confirmation).toBe("elicited");
   });
 
+  it("auditBlockedAttempt emits a pre-dispatch audit row with outcome=blocked and the caller's confirmation method", async () => {
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig();
+    const registry = new Registry(config as any, { auditManager });
+
+    // The caller passes the actual elicitation method (here "elicited" for an
+    // explicit user decline) — the audit row's outcome="blocked" is what
+    // signals "operation did not run", not the confirmation value.
+    registry.auditBlockedAttempt(
+      "pipeline",
+      "delete",
+      { resource_id: "my-pipe" },
+      { tool: "harness_delete", confirmation: "elicited", resource_id: "my-pipe" },
+      "Operation declined by user (elicited)",
+    );
+
+    expect(sink.events).toHaveLength(1);
+    const event = sink.events[0]!;
+    expect(event.tool).toBe("harness_delete");
+    expect(event.operation).toBe("delete");
+    expect(event.resource_type).toBe("pipeline");
+    expect(event.confirmation).toBe("elicited");
+    expect(event.outcome).toBe("blocked");
+    expect(event.error).toContain("declined");
+    expect(event.duration_ms).toBe(0);
+    expect(event.risk).toBe("destructive");
+  });
+
+  it("auditBlockedAttempt records confirmation=blocked when the client failed to surface a prompt", async () => {
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig();
+    const registry = new Registry(config as any, { auditManager });
+
+    registry.auditBlockedAttempt(
+      "pipeline",
+      "delete",
+      { resource_id: "my-pipe" },
+      { tool: "harness_delete", confirmation: "blocked", resource_id: "my-pipe" },
+      "Operation blocked pre-dispatch: client could not surface a confirmation prompt (cancelled)",
+    );
+
+    expect(sink.events).toHaveLength(1);
+    const event = sink.events[0]!;
+    expect(event.confirmation).toBe("blocked");
+    expect(event.outcome).toBe("blocked");
+    expect(event.error).toContain("blocked pre-dispatch");
+    // Critical: blocked-path audit error must NOT misattribute to the user.
+    expect(event.error).not.toContain("by user");
+  });
+
+  it("auditBlockedAttempt is a no-op when auditManager is not configured", () => {
+    const config = makeConfig();
+    const registry = new Registry(config as any);
+    expect(() =>
+      registry.auditBlockedAttempt(
+        "pipeline",
+        "delete",
+        {},
+        { tool: "harness_delete", confirmation: "blocked" },
+        "blocked",
+      ),
+    ).not.toThrow();
+  });
+
+  it("auditBlockedAttempt does not throw when a pathBuilder requires unset identifiers", async () => {
+    // Regression for the case where the blocked attempt happens before the
+    // tool handler has populated identifier fields on the input map.
+    // template.delete's pathBuilder throws "template_id is required" if
+    // input.template_id is unset — auditBlockedAttempt must swallow that
+    // and still emit a row with the static path (placeholders intact).
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig({ HARNESS_TOOLSETS: "templates" });
+    const registry = new Registry(config as any, { auditManager });
+
+    expect(() =>
+      registry.auditBlockedAttempt(
+        "template",
+        "delete",
+        { resource_id: "tmpl-1" }, // template_id intentionally not set
+        { tool: "harness_delete", confirmation: "blocked", resource_id: "tmpl-1" },
+        "Operation declined by user (blocked)",
+      ),
+    ).not.toThrow();
+
+    expect(sink.events).toHaveLength(1);
+    const event = sink.events[0]!;
+    expect(event.tool).toBe("harness_delete");
+    expect(event.resource_type).toBe("template");
+    expect(event.confirmation).toBe("blocked");
+    // Falls back to the static path template since pathBuilder threw.
+    expect(event.http_path).toBe("/template/api/templates/{templateIdentifier}/{versionLabel}");
+  });
+
+  it("auditBlockedAttempt resolves the spec for execute actions", async () => {
+    const sink = collectingSink();
+    const auditManager = new AuditManager();
+    auditManager.addSink(sink);
+
+    const config = makeConfig();
+    const registry = new Registry(config as any, { auditManager });
+
+    registry.auditBlockedAttempt(
+      "pipeline",
+      "execute",
+      { pipeline_id: "p1" },
+      { tool: "harness_execute", confirmation: "blocked", action: "run", resource_id: "p1" },
+      "Operation declined by user (blocked)",
+    );
+
+    expect(sink.events).toHaveLength(1);
+    const event = sink.events[0]!;
+    expect(event.operation).toBe("execute");
+    expect(event.action).toBe("run");
+    expect(event.confirmation).toBe("blocked");
+    expect(event.risk).toBe("high_write");
+  });
+
+  it("legacy logAudit() accepts outcome=\"blocked\" (compat surface widened to match AuditOutcome)", async () => {
+    // Cursor PR #351 finding: AuditOutcome widened to "success" | "error"
+    // | "blocked" but the deprecated logger.AuditEntry stayed two-state,
+    // breaking any TS consumer trying to log a blocked row through the
+    // legacy API. The compat type is widened additively.
+    const { logAudit } = await import("../../src/utils/logger.js");
+    expect(() =>
+      logAudit({
+        operation: "delete",
+        resource_type: "pipeline",
+        resource_id: "p1",
+        outcome: "blocked",
+        error: "Operation blocked pre-dispatch: client could not surface a confirmation prompt",
+      }),
+    ).not.toThrow();
+  });
+
   it("backward compatible — dispatch still works with AbortSignal", async () => {
     const sink = collectingSink();
     const auditManager = new AuditManager();

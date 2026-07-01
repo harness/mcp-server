@@ -251,6 +251,59 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       expect(urlStr).toContain("orgIdentifier=custom-org");
       expect(urlStr).toContain("projectIdentifier=custom-project");
     });
+
+    it("injects org and project inside bodyWrapperKey wrapper on connector create", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({ status: "SUCCESS", data: { connector: { identifier: "k8s" } } }),
+      );
+
+      const config = makeConfig();
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      await registry.dispatch(client, "connector", "create", {
+        org_id: "scoped-org",
+        project_id: "scoped-project",
+        body: {
+          connector: {
+            identifier: "k8s",
+            name: "K8s",
+            type: "K8sCluster",
+            spec: { credential: { type: "InheritFromDelegate" } },
+          },
+        },
+      });
+
+      const [, options] = fetchSpy.mock.calls[0]!;
+      const body = JSON.parse((options as RequestInit).body as string) as {
+        connector: Record<string, unknown>;
+        orgIdentifier?: string;
+        projectIdentifier?: string;
+      };
+
+      expect(body.connector.orgIdentifier).toBe("scoped-org");
+      expect(body.connector.projectIdentifier).toBe("scoped-project");
+      expect(body.orgIdentifier).toBeUndefined();
+      expect(body.projectIdentifier).toBeUndefined();
+    });
+
+    it("validates bodySchema required fields inside bodyWrapperKey wrapper", async () => {
+      const config = makeConfig();
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      await expect(
+        registry.dispatch(client, "connector", "create", {
+          body: {
+            connector: {
+              name: "Missing required fields",
+            },
+          },
+        }),
+      ).rejects.toThrow(/Missing required fields for connector: identifier, type, spec/);
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
   });
 
   describe("body building", () => {

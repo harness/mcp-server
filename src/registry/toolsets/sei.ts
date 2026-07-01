@@ -1,4 +1,4 @@
-import type { ResourceDefinition, ToolsetDefinition, FilterFieldSpec } from "../types.js";
+import type { ResourceDefinition, ToolsetDefinition, FilterFieldSpec, ParamsSchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
 import { passthrough } from "../extractors.js";
 
@@ -53,6 +53,36 @@ const AI_FILTER_FIELDS: FilterFieldSpec[] = [
 const GRANULARITY_FIELD: FilterFieldSpec = {
   name: "granularity", description: "Time granularity", enum: ["DAILY", "WEEKLY", "MONTHLY"],
 };
+
+function filterFieldsToParamsSchema(fields: FilterFieldSpec[]): ParamsSchema {
+  return {
+    fields: fields.map((f) => ({
+      name: f.name,
+      required: f.required ?? false,
+      description: f.description,
+    })),
+  };
+}
+
+const PRODUCTIVITY_GET_PARAMS = filterFieldsToParamsSchema([
+  { name: "team_ref_id", description: "Team reference identifier" },
+  { name: "date_start", description: "Start date (YYYY-MM-DD)" },
+  { name: "date_end", description: "End date (YYYY-MM-DD)" },
+  { name: "feature_type", description: "Productivity feature type", enum: ["PR_VELOCITY"] },
+  { name: "granularity", description: "Time granularity", enum: ["WEEKLY", "MONTHLY"] },
+]);
+
+const DORA_GET_PARAMS = filterFieldsToParamsSchema(DORA_FILTER_FIELDS);
+
+const AI_IMPACT_GET_PARAMS = filterFieldsToParamsSchema([
+  {
+    name: "aspect",
+    description: "Which impact metric to fetch",
+    enum: ["pr_velocity", "rework"],
+  },
+  ...AI_FILTER_FIELDS,
+  GRANULARITY_FIELD,
+]);
 
 const METRIC_TYPE_FIELD: FilterFieldSpec = {
   name: "metric_type",
@@ -228,13 +258,6 @@ export const seiToolset: ToolsetDefinition = {
       scope: "project",
       headerBasedScoping: true,
       identifierFields: [],
-      listFilterFields: [
-        { name: "team_ref_id", description: "Team reference identifier" },
-        { name: "date_start", description: "Start date (YYYY-MM-DD)" },
-        { name: "date_end", description: "End date (YYYY-MM-DD)" },
-        { name: "feature_type", description: "Productivity feature type", enum: ["PR_VELOCITY"] },
-        { name: "granularity", description: "Time granularity", enum: ["WEEKLY", "MONTHLY"] },
-      ],
       deepLinkTemplate: "/ng/account/{accountId}/module/sei/insights/productivity",
       operations: {
         get: {
@@ -258,6 +281,7 @@ export const seiToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Get productivity feature metrics (e.g. PR velocity) for a team",
+          paramsSchema: PRODUCTIVITY_GET_PARAMS,
         },
       },
     },
@@ -272,7 +296,6 @@ export const seiToolset: ToolsetDefinition = {
       scope: "project",
       headerBasedScoping: true,
       identifierFields: [],
-      listFilterFields: [...DORA_FILTER_FIELDS],
       deepLinkTemplate: DORA_DEEP_LINK,
       operations: {
         get: {
@@ -283,6 +306,7 @@ export const seiToolset: ToolsetDefinition = {
           bodyBuilder: doraBuildBody,
           responseExtractor: passthrough,
           description: "Get DORA metric. Pass metric (deployment_frequency, change_failure_rate, mttr, lead_time, or *_drilldown variants), team_ref_id, date_start, date_end, granularity.",
+          paramsSchema: DORA_GET_PARAMS,
         },
       },
     },
@@ -539,15 +563,6 @@ export const seiToolset: ToolsetDefinition = {
       scope: "project",
       headerBasedScoping: true,
       identifierFields: [],
-      listFilterFields: [
-        {
-          name: "aspect",
-          description: "Which impact metric to fetch",
-          enum: ["pr_velocity", "rework"],
-        },
-        ...AI_FILTER_FIELDS,
-        GRANULARITY_FIELD,
-      ],
       deepLinkTemplate: AI_DEEP_LINK,
       operations: {
         get: {
@@ -558,6 +573,7 @@ export const seiToolset: ToolsetDefinition = {
           bodyBuilder: aiInsightBuildBody,
           responseExtractor: passthrough,
           description: "Get AI impact on PR velocity or rework. Pass aspect (pr_velocity|rework), team_ref_id, date_start, date_end.",
+          paramsSchema: AI_IMPACT_GET_PARAMS,
         },
       },
     },

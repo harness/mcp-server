@@ -39,11 +39,15 @@ describe("harness-schema resource", () => {
     it("returns true for v1 schema names", () => {
       expect(isValidSchemaName("pipeline_v1")).toBe(true);
       expect(isValidSchemaName("template_v1")).toBe(true);
-      expect(isValidSchemaName("trigger_v1")).toBe(true);
       expect(isValidSchemaName("inputSet_v1")).toBe(true);
       expect(isValidSchemaName("overlayInputSet_v1")).toBe(true);
-      expect(isValidSchemaName("service_v1")).toBe(true);
-      expect(isValidSchemaName("infra_v1")).toBe(true);
+    });
+
+    it("returns false for v1 schema names removed upstream", () => {
+      // harness-schema dropped these v1 JSON files; they are no longer bundled.
+      expect(isValidSchemaName("trigger_v1")).toBe(false);
+      expect(isValidSchemaName("service_v1")).toBe(false);
+      expect(isValidSchemaName("infra_v1")).toBe(false);
     });
 
     it("returns true for local schema names", () => {

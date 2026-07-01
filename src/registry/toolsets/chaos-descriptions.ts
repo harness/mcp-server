@@ -103,14 +103,44 @@ export const descChaosExperimentVariable = `Variables for a chaos experiment. Li
 
 export const descChaosInfrastructure = `Linux/machine infrastructure registered for chaos experiments and load testing. For Kubernetes infrastructure, use chaos_k8s_infrastructure. Supports list.`;
 
-export const descChaosLoadtest = `Load test instance. Supports list, get, create, and delete. Run/stop via execute actions.`;
+export const descChaosLoadtest = `Load test (Resilience Testing) instance. Supports list, get, create, delete; run/stop via execute actions.
+Locust is supported on Linux VM and Kubernetes (script + image modes). K6 is supported on Kubernetes only (script + image modes; UI mode deferred) — LinuxVM K6 is not supported. JMeter is coming soon.
+To create one, first pick a load-runner infrastructure: for Linux VM use chaos_infrastructure (loadEnabled infras), for Kubernetes use chaos_enabled_infrastructure. Then pass its environment_id + infra_id with target_url and the Python (locust) script.
+
+Response / read schema (what list/get returns — agents NEVER need to construct these on create; MCP builds them automatically):
+- inputs: array of {name, value, type ("Integer" | "String"), required?: true}. Well-known names the backend recognises:
+    targetUsers (Integer, required), durationSeconds (Integer), rampUpTimeSec (Integer),
+    workerCount (Integer; Kubernetes only), targetUrl (String),
+    scriptImage (String, required in image mode), scriptEntrypoint (String, required in image mode),
+    loadArgs (String; image mode only).
+- variables: array of {name, value, type ("String" | "Number")} — user-defined non-secret env vars (currently always empty; custom variables are a deferred feature).
+- yaml: base64-encoded LoadTest manifest. Decoded shape:
+    kind: LoadTest
+    apiVersion: v1alpha1
+    name: <name>
+    description: <optional>
+    tags: [<optional>]
+    spec:
+      identity: <slug>
+      toolType: Locust
+      infraType: kubernetes | linux           # derived from targetType
+      targetType: kubernetes | machine-chaos-linux | linux-chaos
+      scriptSource: inline | image
+      scriptContent: <PLAIN TEXT inside YAML; inline mode only>
+      infraId: <id>
+      envId: <id>
+      inputs: [<same shape as response.inputs>]
+- scriptContent: base64-encoded Python script (inline mode). Large — dropped from list responses.
+- Derived convenience scalars (read-side projection of inputs[] by MCP, matching the create-side scalars):
+    target_url, users, duration_sec, ramp_up_sec, worker_count, script_image, script_entrypoint, load_args.`;
 
 export const descChaosK8sInfrastructure = `Kubernetes chaos infrastructure available for running experiments.
 Use chaos_environment list first to get an environmentId, then pass it here to filter infrastructures for that environment.
 Returns infrastructure details including identity, infraID, name, environmentID, status, infraType, infraScope, and isChaosEnabled.
 The infraID is used as the infra_ref parameter in create_from_template.
 IMPORTANT: Only infrastructures with status=ACTIVE AND isChaosEnabled=true can be used to create chaos experiments. Always check both fields before selecting an infrastructure.
-Supports filtering by status (ACTIVE, INACTIVE, PENDING), search, and optional inclusion of legacy V1 infrastructures.`;
+Supports filtering by status (ACTIVE, INACTIVE, PENDING), search, and optional inclusion of legacy V1 infrastructures.
+To list ONLY infrastructures that are ready to run experiments (chaos-enabled AND ACTIVE) with correct totals/pagination, use chaos_enabled_infrastructure instead.`;
 
 export const descChaosHub = `ChaosHub — a Git-backed repository that provides version-controlled chaos fault, experiment, probe, and action templates.
 Every project includes a default Enterprise ChaosHub with pre-built templates; custom hubs can be created to bring in organization-specific chaos artifacts.
@@ -366,7 +396,109 @@ export const descListLinuxInfra = `List chaos Linux infrastructures (load runner
 
 export const descListLoadtests = `List load test instances`;
 export const descGetLoadtest = `Get load test instance details`;
-export const descCreateLoadtest = `Create a sample load test instance`;
+export const descCreateLoadtest = `Creates a Locust load test (Resilience Testing) on a Linux VM or Kubernetes load-runner infrastructure.
+
+IMPORTANT: You MUST NOT auto-select, assume, or pre-fill any value on behalf of the user.
+At every step below, present the options / ask for the value and wait for explicit user confirmation before proceeding.
+Do NOT assume org/project/infrastructure/script/URL based on previous activity — the user may choose differently each time.
+Locust (Python) and K6 (JavaScript) are supported. JMeter is coming soon. K6 requires Kubernetes (LinuxVM K6 is not supported). For K6, "Upload K6 script" and "Custom Image" modes are supported via MCP; "Define test via UI" is deferred.
+
+Required workflow — follow in order, pausing for user input after each step:
+
+Step 1 — Select the execution environment target type:
+  Ask whether the load test runs on "Linux VM" (target_type=machine-chaos-linux) or "Kubernetes" (target_type=kubernetes). Wait for the user to choose.
+
+Step 1b — Select the tool type:
+  Linux VM only supports Locust. Kubernetes supports Locust or K6 — ask which. Pass tool_type='Locust' (default) or 'K6'.
+  K6 is JavaScript; Locust is Python. K6 currently supports script-mode only (Custom Image and UI are deferred).
+
+Step 2 — Select a load-runner infrastructure:
+  Linux VM: call harness_list resource_type=chaos_infrastructure, show the list, wait for the user to pick one. Only infras with loadEnabled=true and status ACTIVE can run load tests.
+  Kubernetes: call harness_list resource_type=chaos_enabled_infrastructure, show the list, wait for the user to pick one (results are always ACTIVE and chaos-enabled).
+  From the chosen row take environmentID -> environment_id and infraID -> infra_id. Do NOT choose an infrastructure yourself.
+
+Step 3 — Collect the target (host) URL:
+  Ask for the base URL of the application under test (e.g. https://www.google.com) -> target_url. Do NOT assume it.
+
+Step 4 — Test configuration (branch on tool_type from Step 1b):
+  Locust (Linux VM or Kubernetes):
+    (a) Upload Python script (script_source=inline): ask for the raw Python locust script -> script (verbatim; do NOT generate or pre-encode). MCP base64-encodes it into top-level scriptContent.
+    (b) Custom Image (script_source=image, Kubernetes only): ask for script_image (+ optional script_entrypoint, load_args).
+  K6 (Kubernetes only):
+    (a) Upload K6 script (script_source=inline): ask the user to paste the raw K6 JavaScript source. Pass it verbatim in 'script'. MANDATORY rule: the script MUST contain 'export default function ...'. If it does not, REJECT before calling MCP — MCP will throw and no load test will be created. MCP base64-encodes the script into toolConfig.scriptContent; do NOT pre-encode.
+    (b) Custom Image (script_source=image): ask for the container image -> script_image (e.g. my-registry/my-load-test:latest); optionally an entrypoint inside the image -> script_entrypoint (e.g. /script.js); optional container args -> load_args. MCP routes script_image and script_entrypoint into BOTH toolConfig.customImage (image, entrypoint) AND inputs[] (scriptImage required:true, scriptEntrypoint required:true); load_args rides ONLY in inputs[name=loadArgs]. No script is needed.
+    (c) Define test via UI: NOT YET SUPPORTED via MCP. Inform the user it is deferred and stop.
+  Optional K6-only knobs to ask the user about (skip if user says no):
+    - host_url: origin of the target system (protocol+host, no path). Defaults to the origin of target_url.
+    - rps_limit: requests-per-second cap (toolConfig.options.rpsLimit). Optional.
+    - iterations: total iteration cap (toolConfig.iterations). Optional.
+    - env_vars: see Step 4c.
+
+Step 4c — Optional K6 environment variables (env_vars):
+  The env_vars param is a structured array. Each entry sets EITHER a literal value OR a secret reference:
+    - Literal:           {key: "FOO", value: "bar"}
+    - Secret reference:  {key: "TOKEN", secret_id: "<harness-secret-identifier>", secret_scope: "account"|"org"|"project"}
+  To discover available secrets, call harness_list resource_type=secret type=SecretText. Each list item has
+  a nested secret.{identifier, orgIdentifier?, projectIdentifier?}. Derive secret_scope from the response:
+    - no orgIdentifier AND no projectIdentifier  → secret_scope: "account"
+    - orgIdentifier only                          → secret_scope: "org"
+    - both orgIdentifier AND projectIdentifier   → secret_scope: "project"
+  MCP builds the wire string 'secrets.getValue("<prefix><id>")' (account.<id> / org.<id> / <id>) and sets
+  secret: true automatically — do NOT construct the secrets.getValue(...) string yourself.
+  Disallowed keys (reserved, case-insensitive): RUN_ID, LOAD_TEST_ID, TARGET_USERS, SPAWN_RATE,
+  SCRIPT_CONTENT_BASE64, TARGET_URL, ACCOUNT_ID, ORG_ID, PROJECT_ID, ENV_ID, DURATION_SECONDS,
+  CONTROL_PLANE_URL, CONTROL_PLANE_TOKEN, HARNESS_CUSTOM_VAR_NAMES, METRICS_PUSH_INTERVAL, INFRA_ID,
+  ACCESS_KEY, TENANT_ID, PYTHONPATH, PATH, HOME, USER, SHELL, LANG, TERM, HOSTNAME, PWD,
+  LD_LIBRARY_PATH, LD_PRELOAD, TMPDIR, TMP, TEMP.
+  Key pattern: /^[A-Za-z_][A-Za-z0-9_]*$/.
+
+Step 5 — Load configuration:
+  Ask users, duration_sec, ramp_up_sec (defaults 100 / 600 / 120 only if user accepts).
+  K8s: also ask worker_count — do NOT skip (default 0). VM: skip worker_count.
+
+Step 6 — Collect name and optional metadata:
+  Ask for a name (any non-empty string). identity is auto-derived from name by stripping non-alphanumerics unless the user provides one (must be letters/numbers/underscores). description and tags are optional — ask, but do not require them.
+
+Only after the user confirms all of the above should you call harness_create resource_type=chaos_loadtest.
+
+HOW THE BODY IS BUILT (you do NOT construct any of this — MCP handles it):
+- Your scalars (users / duration_sec / ramp_up_sec / worker_count / target_url / script_image / script_entrypoint / load_args)
+  are translated into a canonical inputs[] array with backend-wire names
+  (targetUsers / durationSeconds / rampUpTimeSec / workerCount / targetUrl / scriptImage / scriptEntrypoint / loadArgs).
+- Inline mode (Locust): your raw 'script' is base64-encoded into top-level scriptContent.
+- Image mode (Locust): scriptContent is omitted; script_image / script_entrypoint / load_args ride in inputs[].
+- K6 script mode: top-level scriptContent is OMITTED. The base64 script lives in toolConfig.scriptContent only.
+  toolConfig also carries hostUrl, optional options.rpsLimit, optional iterations, and optional envVars.
+- env_vars (K6): structured only. {key, value} for literals; {key, secret_id, secret_scope?} for secrets —
+  MCP builds the wire 'secrets.getValue("<prefix><id>")' string and sets secret: true automatically.
+- A canonical LoadTest YAML manifest is synthesized and base64-encoded into the 'yaml' request field.
+- description defaults to "", tags defaults to []. tool_type is fixed to "Locust" server-side (K6/JMeter coming).
+
+INPUT FIELDS:
+  name (string, required): Display name for the load test. Any non-empty string (e.g. "My Load Test", "locust-1").
+  environment_id (string, required): environmentID of the chosen infrastructure (Step 2).
+  infra_id (string, required): infraID of the chosen infrastructure (Step 2).
+  target_url (string, required): Base URL of the application under test (Step 3). Goes into inputs[name=targetUrl].
+  script (string): Raw Python locust script. VM always requires this; K8s when inline. MCP base64-encodes it into the top-level scriptContent field — do NOT pre-encode.
+  script_source (string): "inline" (default) or "image". "image" is K8s-only; VM is always "inline". Inferred as "image" when script_image is set.
+  script_image (string): K8s + image mode only — prebuilt container image. Required when script_source=image. Goes into inputs[name=scriptImage, required:true].
+  script_entrypoint (string): Custom Image mode — entrypoint file inside the image. Goes into inputs[name=scriptEntrypoint, required:true] when provided.
+  load_args (string): Custom Image mode — container args as "k=v,v2;k2=v" pairs. Goes into inputs[name=loadArgs] when provided.
+  target_type (string): machine-chaos-linux (Linux VM, default), linux-chaos, or kubernetes.
+  users (number, default 100): Number of simulated users. Goes into inputs[name=targetUsers, required:true].
+  duration_sec (number, default 600): Total test duration in seconds. Goes into inputs[name=durationSeconds].
+  ramp_up_sec (number, default 120): Ramp-up duration in seconds. Goes into inputs[name=rampUpTimeSec].
+  worker_count (number, default 0): K8s — agent must ask; default 0. VM: N/A. Goes into inputs[name=workerCount].
+  tool_type (string, default "Locust"): "Locust" or "K6". K6 requires target_type=kubernetes.
+  host_url (string, K6 only): K6 host origin (protocol://host, no path). Defaults to origin of target_url. Goes into toolConfig.hostUrl.
+  rps_limit (number, K6 only): requests-per-second cap. Goes into toolConfig.options.rpsLimit when > 0.
+  iterations (number, K6 only): total iteration cap. Goes into toolConfig.iterations when > 0.
+  env_vars (array, K6 only): environment variables. Array of {key, value} (literal) or {key, secret_id, secret_scope?} (secret reference). See Step 4c.
+  identity (string): Stable slug-safe identifier (letters / numbers / underscores). Auto-derived from name by stripping non-alphanumerics when omitted.
+  description (string): Optional human-readable description. Defaults to "".
+  tags (string[]): Optional tags. Defaults to [].
+
+Returns the created load test (identity, name, environment/infra, targetType, toolType, scriptSource, inputs[], plus derived target_url/users/duration_sec/ramp_up_sec/worker_count convenience scalars) and an openInHarness deep link.`;
 export const descDeleteLoadtest = `Delete a load test instance`;
 
 export const descListK8sInfra = `List Kubernetes chaos infrastructures available for running experiments.
@@ -375,6 +507,26 @@ Returns infrastructure details including identity, infraID, name, environmentID,
 IMPORTANT: Only infrastructures with status=ACTIVE AND isChaosEnabled=true can be used to create chaos experiments.
 Supports filtering by status (ACTIVE, INACTIVE, PENDING) and optional inclusion of legacy V1 infrastructures.`;
 export const descGetK8sInfra = `Get Kubernetes chaos infrastructure details`;
+
+export const descChaosEnabledInfrastructure = `Kubernetes chaos infrastructures that are READY to run experiments — i.e. chaos-enabled AND status=ACTIVE. Every result has isChaosEnabled=true and status=ACTIVE, so no post-filtering is needed.
+Backed by a dedicated endpoint (POST /rest/v2/infrastructures/chaos-enabled) that queries the chaos infrastructure store directly, so pagination and total counts reflect ONLY ready-to-use infra (correct totals).
+Returns infrastructure details including identity, infraID, name, environmentID, status, infraType, infraScope, and isChaosEnabled. The infraID/identity is what you pass as infra_ref in chaos_experiment create_from_template, or as the infra selector when creating/running an experiment.
+Use chaos_environment list first to get an environmentId, then pass it here to scope to that environment.
+WHEN TO USE THIS vs chaos_k8s_infrastructure:
+- Use chaos_enabled_infrastructure when the goal is to PICK an infrastructure to run a chaos experiment, or to count/list ONLY infra that can actually run experiments (correct totals).
+- Use chaos_k8s_infrastructure for the FULL inventory (including not-yet-chaos-enabled and INACTIVE/PENDING infra), single-infra detail (get), health checks (check_health), or filtering by a specific non-ACTIVE status. Its pagination/totals span all platform infra, not just chaos-ready ones, so client-side isChaosEnabled filtering there gives wrong page sizes/counts.
+Supports list only. Filter by environment_id, infra_type (KubernetesV2/All query the V2 chaos store; Kubernetes returns legacy V1), infra_scope, is_ai_enabled, and search. There is no status filter because results are always ACTIVE.`;
+
+export const descListChaosEnabledInfra = `List Kubernetes chaos infrastructures that are ready to run experiments (chaos-enabled AND status=ACTIVE).
+Unlike chaos_k8s_infrastructure (which lists ALL infra and stamps isChaosEnabled per row), this returns ONLY ready-to-use infra with pagination/total scoped to that set.
+Returns identity, infraID, name, environmentID, status (always ACTIVE), infraType, infraScope, and isChaosEnabled. Use the infraID/identity as infra_ref when creating experiments.
+Filter by environment_id, infra_type, infra_scope, is_ai_enabled, and search.`;
+
+export const descChaosEnabledInfraType = `Filter by Kubernetes infrastructure type. 'KubernetesV2' and 'All' query the V2 chaos store; 'Kubernetes' returns legacy V1 infrastructures instead. Omit to return all chaos-enabled V2 infrastructures.`;
+
+export const descInfraScope = `Filter by infrastructure scope: 'NAMESPACE' (chaos limited to a single namespace) or 'CLUSTER' (cluster-wide chaos).`;
+
+export const descInfraAiEnabled = `When true, return only AI-enabled chaos infrastructures; when false, only non-AI-enabled ones.`;
 
 export const descListHubs = `List ChaosHubs (Git-connected repositories containing fault, experiment, probe, and action templates).
 Returns hub details including repository info, connector configuration, template counts, and sync status.
@@ -667,7 +819,15 @@ Requires the template identity, hub identity, and two revision numbers.`;
 export const descBodyExperimentRun = `Optional runtime inputs for the chaos experiment. Use chaos_experiment_variable list to discover required variables first.`;
 export const descBodyNoBody = `No body required. Resource identified by path parameter.`;
 export const descBodyCreateFromTemplate = `Chaos experiment from template`;
-export const descBodyLoadtestDefinition = `Load test instance definition`;
+export const descBodyLoadtestDefinition = `Locust load test definition. Required: name, environment_id, infra_id, target_url. Mode: either 'script' (inline Python, script_source=inline, default) or 'script_image' (Custom Image, script_source=image).
+MCP translates your scalars into the wire shape automatically:
+  - users / duration_sec / ramp_up_sec  → inputs[targetUsers / durationSeconds / rampUpTimeSec] (Integer)
+  - target_url                          → inputs[targetUrl] (String)
+  - worker_count                        → inputs[workerCount] (Integer; Kubernetes only)
+  - script_image / script_entrypoint / load_args → inputs[scriptImage / scriptEntrypoint / loadArgs] (String; image mode)
+  - script (raw Python)                 → top-level scriptContent (base64)
+  - A canonical LoadTest YAML manifest is built and base64-encoded into a 'yaml' field.
+You never construct inputs[], scriptContent base64, or the yaml field — pass scalars only.`;
 
 // ── Field Descriptions ───────────────────────────────────────────────
 
@@ -679,8 +839,28 @@ export const descExperimentIdentity = `Experiment identity (auto-generated from 
 export const descInfraRef = `Infrastructure reference in format: environmentId/infraId. Use chaos_environment list to find environments, then chaos_k8s_infrastructure list to find infraIDs.`;
 export const descExperimentId = `Chaos experiment identifier. Accepts either the internal UUID (default, with is_identity=false) or the human-readable identity slug (set is_identity=true). Use harness_list with resource_type=chaos_experiment to find experiment IDs.`;
 export const descInfraStatus = `Filter by infra status: Active (default) or All`;
-export const descLoadtestName = `Load test name`;
-export const descLoadtestType = `Load test type`;
+export const descLoadtestName = `Display name for the load test. Any non-empty string (e.g. "My Load Test", "locust-1"). The slug-safe identifier rule applies to 'identity' (auto-derived from name) — not to name.`;
+export const descLoadtestType = `Load test tool type: "Locust" (default; Python on Linux VM or Kubernetes) or "K6" (JavaScript on Kubernetes only). JMeter is coming soon. K6 supports script mode and Custom Image mode; "Define test via UI" is deferred.`;
+export const descLoadtestIdentity = `Stable identifier (letters, numbers and underscores). Auto-derived from name by stripping non-alphanumerics when omitted.`;
+export const descLoadtestDescription = `Optional human-readable description. Defaults to "".`;
+export const descLoadtestTags = `Optional tags (array of strings, or comma-separated string). Defaults to [].`;
+export const descLoadtestEnvId = `Environment identifier of the load-runner infrastructure. Use the 'environmentID' from chaos_infrastructure (Linux VM) or chaos_enabled_infrastructure (Kubernetes).`;
+export const descLoadtestInfraId = `Load-runner infrastructure identifier. Use the 'infraID' from chaos_infrastructure (Linux VM) or chaos_enabled_infrastructure (Kubernetes).`;
+export const descLoadtestTargetType = `Execution environment target type: "machine-chaos-linux" (Linux VM, default), "linux-chaos", or "kubernetes". "workerCount" is only emitted into inputs[] for "kubernetes".`;
+export const descLoadtestTargetUrl = `Base URL of the application under test (e.g. https://www.google.com). Sent as an entry in inputs[] with name="targetUrl", type="String".`;
+export const descLoadtestScript = `Raw script contents for inline mode (script_source=inline). Locust expects Python (locustfile.py); K6 expects JavaScript and MUST contain 'export default function ...' (mandatory — MCP rejects scripts without it). MCP base64-encodes onto the wire — do NOT pre-encode. For Locust this lands at top-level scriptContent; for K6 it lands at toolConfig.scriptContent (and top-level scriptContent is omitted). Required for inline mode; omit for Custom Image mode.`;
+export const descLoadtestScriptSource = `Test definition source: "inline" (default — upload a raw Python locust script via 'script') or "image" (use a prebuilt container image via 'script_image'). "image" is K8s-only; VM is always "inline". Inferred as "image" when script_image is set, otherwise "inline".`;
+export const descLoadtestScriptImage = `Custom Image mode (both Locust and K6, Kubernetes only): prebuilt container image used as the load test source, e.g. "my-registry/my-load-test:latest". Required when script_source=image. Sent as inputs[name=scriptImage, type=String, required:true]. For K6 also wired into toolConfig.customImage.image.`;
+export const descLoadtestScriptEntrypoint = `Custom Image mode (optional, both Locust and K6): entrypoint file inside the image, e.g. "locustfile.py" (Locust) or "/script.js" (K6). Sent as inputs[name=scriptEntrypoint, type=String, required:true] when provided. For K6 also wired into toolConfig.customImage.entrypoint.`;
+export const descLoadtestLoadArgs = `Custom Image mode (optional, both Locust and K6): arguments passed to the container as key=value pairs — comma-separated for multiple values per key, separated by ';'. Example: "tags=smoke,random;headless=true". Sent as inputs[name=loadArgs, type=String] only — for K6 this does NOT go into toolConfig.customImage.`;
+export const descLoadtestUsers = `Number of simulated users. Default: 100. Sent as inputs[name=targetUsers, type=Integer, required:true].`;
+export const descLoadtestDurationSec = `Total test duration in seconds. Default: 600. Sent as inputs[name=durationSeconds, type=Integer].`;
+export const descLoadtestRampUpSec = `Ramp-up duration in seconds. Default: 120. Sent as inputs[name=rampUpTimeSec, type=Integer].`;
+export const descLoadtestWorkerCount = `K8s: agent must ask; default 0 (0 = standalone). VM: N/A. Sent as inputs[name=workerCount, type=Integer]. Ignored for Linux target types.`;
+export const descLoadtestHostUrl = `K6 only: host origin (protocol+host with no path, e.g. https://api.example.com). Defaults to the origin parsed from target_url when omitted. Goes into toolConfig.hostUrl.`;
+export const descLoadtestRpsLimit = `K6 only: requests-per-second cap. Goes into toolConfig.options.rpsLimit when > 0. Omitted from the wire when unset or 0.`;
+export const descLoadtestIterations = `K6 only: total iteration cap. Goes into toolConfig.iterations when > 0. Omitted from the wire when unset or 0.`;
+export const descLoadtestEnvVars = `K6 only: environment variables for the K6 runner. Array of entries — each sets EITHER {key, value} for a literal OR {key, secret_id, secret_scope?: "account"|"org"|"project"} for a Harness secret (default secret_scope = "project"). MCP builds the wire 'secrets.getValue("<prefix><id>")' string and sets secret: true automatically — do NOT construct that string yourself. Discover secrets via harness_list resource_type=secret type=SecretText and read each item's secret.{identifier, orgIdentifier?, projectIdentifier?} to derive scope. Key pattern: /^[A-Za-z_][A-Za-z0-9_]*$/. Reserved names (case-insensitive) are rejected: RUN_ID, LOAD_TEST_ID, TARGET_USERS, SPAWN_RATE, SCRIPT_CONTENT_BASE64, TARGET_URL, ACCOUNT_ID, ORG_ID, PROJECT_ID, ENV_ID, DURATION_SECONDS, CONTROL_PLANE_URL, CONTROL_PLANE_TOKEN, HARNESS_CUSTOM_VAR_NAMES, METRICS_PUSH_INTERVAL, INFRA_ID, ACCESS_KEY, TENANT_ID, PYTHONPATH, PATH, HOME, USER, SHELL, LANG, TERM, HOSTNAME, PWD, LD_LIBRARY_PATH, LD_PRELOAD, TMPDIR, TMP, TEMP.`;
 
 export const descHubIdentityExact = `The unique identity of the ChaosHub. Use harness_list with resource_type=chaos_hub to find hub identities.`;
 export const descHubName = `Display name for the ChaosHub.`;
@@ -779,7 +959,7 @@ export const descGuardEnabled = `Set to true to enable the rule, false to disabl
 // ── Chaos Action Resource ────────────────────────────────────────────
 
 export const descChaosAction = `Chaos action — a reusable step (delay, custom script, container) that can be embedded in chaos experiment workflows.
-Supports list, get, delete, and get_manifest execute action.
+Supports list, get, create, delete, and get_manifest execute action.
 Returns identity, name, type, infrastructureType, actionProperties, variables, and audit info.`;
 
 export const descChaosProbeInRun = `Probe execution results within one or more chaos experiment runs — the primary way to check which probes ran and whether they passed or failed.
@@ -903,6 +1083,28 @@ export const descIsEnterpriseRuns = `When true, list runs for an enterprise faul
 export const descActionIdentityParam = `Unique identity of the action. Use chaos_action list to find action identities.`;
 export const descSearchActionsParam = `Filter actions by name.`;
 export const descHubIdentityActions = `Filter actions by chaos hub identity.`;
+export const descCreateAction = `Create a chaos action (POST /rest/actions). A chaos action is a reusable step embedded in chaos experiment workflows.
+There are exactly 3 kinds, set via 'type': "delay" | "customScript" | "container". If the user has not said which kind, ASK them before calling — do not guess.
+Also ask which infrastructure_type to use before creating — delay and customScript support Kubernetes, Windows, or Linux; container is always Kubernetes.
+Required: name, type, infrastructure_type, and the matching action_properties sub-object for the chosen type. identity defaults to name when omitted (must be unique in the project).
+action_properties shape by type:
+  - delay:        { "delayAction": { "duration": "5s" } }   (or use the 'duration' shorthand)
+  - customScript: { "customScriptAction": { "command": "...", "args": ["..."], "env": [{ "name": "...", "value": "..." }] } }
+  - container:    { "containerAction": { "image": "<required>", "command": ["..."], "args": "...", "env": [{ "name": "...", "value": "..." }], "namespace": "...", "imagePullPolicy": "IfNotPresent" } }
+For container: image is REQUIRED, command is a string ARRAY, args is a single STRING (opposite of customScript), namespace is optional (inherits from the experiment when omitted). Advanced container fields (volumes, volumeMounts, resources, nodeSelector, tolerations, affinity, security contexts, etc.) are also accepted under containerAction.
+customScript and container actions also accept run_properties { timeout, interval, initialDelay, maxRetries, iterations, stopOnFailure, verbosity }; delay ignores run_properties.`;
+export const descBodyActionCreate = `Body for creating a chaos action. Provide name, type, infrastructure_type, and action_properties (matching the type). For delay actions you may pass 'duration' instead of action_properties.`;
+export const descActionName = `Display name of the action (required). Also used as the default identity when identity is omitted.`;
+export const descActionIdentityCreate = `Unique action identifier within the project. Optional — defaults to name when omitted. Must be unique (create fails with "action identifier ... already exists" otherwise).`;
+export const descActionEntityTypeCreate = `Kind of action to create. One of: delay, customScript, container. If unspecified by the user, ask which kind before creating.`;
+export const descActionInfraTypeCreate = `Infrastructure the action runs on. delay and customScript actions support: Kubernetes, Windows, Linux. container actions support: Kubernetes only. ALWAYS ask the user which infrastructure they want before creating (except container, which is always Kubernetes) — do not assume.`;
+export const descActionPropertiesBody = `Action configuration object keyed by type. delay: { delayAction: { duration } }. customScript: { customScriptAction: { command (string), args (string[]), env [{name,value}] } }. container: { containerAction: { image (required), command (string[]), args (string), env [{name,value}], namespace, imagePullPolicy ("Always"|"IfNotPresent"|"Never") } }. Required unless 'duration' is provided for a delay action. Note command/args are swapped between customScript and container.`;
+export const descActionDurationShorthand = `Shorthand for delay actions only: the delay duration (e.g. "5s", "1m"). When provided and action_properties is omitted, builds action_properties.delayAction.duration.`;
+export const descActionDescriptionCreate = `Optional description for the action.`;
+export const descActionTagsCreate = `Optional tags as an array of strings (e.g. ["op:tag1","op:tag2"]). A comma-separated string is also accepted and split.`;
+export const descActionVariablesBody = `Optional variables array. Each item: { name, type ("String"|"Number"), value, description?, required? }.`;
+export const descActionRunPropertiesBody = `Optional run properties for customScript and container actions (camelCase keys; durations like "10s"): timeout, interval, initialDelay, maxRetries, iterations, stopOnFailure, verbosity. Ignored for delay actions.`;
+export const descActionInputsBody = `Optional inputs array (template inputs). Defaults to [] when omitted.`;
 export const descExperimentVariablesParam = `Optional experiment variables as an array of objects where each object has a name and value.`;
 export const descTasksParam = `Optional task-level variables as an object where each key is a task name and the value is an object with variable name-value pairs.`;
 export const descEnvironmentIdCreate = `Unique identifier for an environment. Use chaos_environment list to find environment IDs.`;

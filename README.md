@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 215 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 218 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,8 +8,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 215 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 36 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
+- **11 tools, 218 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 38 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **32 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -130,7 +130,7 @@ Operational constraints in HTTP mode:
 - `POST /mcp` without `mcp-session-id` must be an `initialize` request.
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
 - `GET /mcp` is used for SSE notifications (progress updates and elicitation prompts).
-- Idle sessions are reaped after 30 minutes.
+- Idle sessions are reaped after `MCP_SESSION_TTL_MS` milliseconds once no request or SSE stream is active (default `300000`, or 5 minutes).
 - `GET /health` is the only non-MCP endpoint.
 - Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
 - Set `x-harness-pipeline-version: 0` or `1` on the `initialize` request to select V0 or V1 pipeline resources for that HTTP session.
@@ -560,7 +560,66 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_AUDIT_WEBHOOK_BATCH_SIZE` | No | `10`                       | Number of audit events to batch before webhook flush                                                                                                                                                                                                   |
 | `HARNESS_AUDIT_WEBHOOK_FLUSH_MS` | No  | `5000`                     | Max time to hold audit events before webhook flush                                                                                                                                                                                                     |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No     | --                          | Enables OpenTelemetry audit spans when the optional OpenTelemetry packages are installed                                                                                                                                                               |
+| `HARNESS_SEARCH_PROVIDER`   | No       | `local`                     | Semantic search backend: `local` (in-process ONNX embeddings, default), `remote` (external search service via HTTP, required for multi-user mode), or `none` (disable semantic search, fall back to keyword scatter-gather only). Use `none` in air-gapped environments or when startup model loading is undesirable |
+| `HARNESS_SEARCH_SERVICE_URL` | No      | --                          | Base URL of the remote search service when `HARNESS_SEARCH_PROVIDER=remote` (e.g. `http://search-svc:8080`). Required when using the `remote` provider |
+| `HARNESS_SEARCH_SERVICE_HEADERS` | No  | --                          | JSON object of headers sent with every request to the remote search service. Supports any auth scheme: `{"Authorization":"Bearer tok"}`, `{"x-api-key":"key"}`, or multiple internal service-to-service headers |
+| `HARNESS_HF_CACHE_DIR`      | No       | `/tmp/hf-cache`             | Directory for the `@huggingface/transformers` model cache used by the `local` search provider. The Docker image pre-bakes the model into `/app/.cache/hf` to avoid runtime downloads. Set to a persistent volume path in production deployments       |
 
+
+### Semantic Search
+
+`harness_search` uses semantic routing to narrow scatter-gather API calls before fanning out to Harness. Three search providers are available:
+
+| Provider | When to use |
+|----------|-------------|
+| `local` (default) | Single-user stdio mode. Runs `all-MiniLM-L6-v2` in-process via `@huggingface/transformers`. Downloads ~23 MB model on first use; subsequent starts use the cache. |
+| `remote` | Multi-user HTTP mode (Harness-hosted). Delegates embedding and retrieval to an external search service. Tenant isolation is enforced via `tenant_id` — static knowledge/docs use `global`, per-account entity data uses the account ID. |
+| `none` | Disable semantic search entirely; falls back to keyword scatter-gather across all resource types. |
+
+**Remote provider configuration:**
+
+```bash
+HARNESS_SEARCH_PROVIDER=remote
+HARNESS_SEARCH_SERVICE_URL=http://search-svc:8080
+
+# Auth — any scheme via HARNESS_SEARCH_SERVICE_HEADERS (JSON object):
+HARNESS_SEARCH_SERVICE_HEADERS='{"Authorization":"Bearer <token>"}'   # standard bearer
+HARNESS_SEARCH_SERVICE_HEADERS='{"x-api-key":"<key>"}'               # API key header
+HARNESS_SEARCH_SERVICE_HEADERS='{"x-harness-token":"<svc-token>"}'   # internal service-to-service
+# Multiple headers (e.g. service mesh + tenant routing):
+HARNESS_SEARCH_SERVICE_HEADERS='{"x-harness-token":"<tok>","x-tenant":"<id>"}'
+# No auth (service mesh / mTLS handles it):
+# omit HARNESS_SEARCH_SERVICE_HEADERS entirely
+```
+
+**Testing the remote provider locally** with the included stub service (no external dependencies):
+
+```bash
+# 1. Create a venv and install FastAPI
+python3 -m venv .venv-stub
+.venv-stub/bin/pip install fastapi uvicorn
+
+# 2. Start the stub (in-memory, cosine similarity, corpus + tenant filtering)
+.venv-stub/bin/uvicorn stub-search-service:app --port 8082
+
+# 3. Build the MCP server
+pnpm build
+
+# 4. Run the integration smoke test
+node test-remote-provider.mjs
+# Expected output:
+#   available: true
+#   indexed 2 docs
+#   entity search results: pipeline:ts-test score=... corpus=entities
+#   knowledge search results: schema:trigger score=...
+#   all-corpus search results: (merged, sorted by score)
+#   isolation check (other-acct, should be empty): PASS
+
+# 5. Tear down
+kill $(lsof -ti :8082)
+```
+
+The stub (`stub-search-service.py`) implements the same `/v1/health`, `/v1/ingest`, and `/v1/search` contract as the production search service. It uses a simple bag-of-chars embedding so no model download is required — results are semantically plausible but not production-quality.
 
 ### HTTPS Enforcement
 
@@ -607,7 +666,7 @@ Current multi-scope resources include `connector`, `service`, `environment`, `in
 | `harness_update`   | Update an existing resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation).                                                                                                                                                                        |
 | `harness_delete`   | Delete a resource. Prompts for user confirmation via [elicitation](#elicitation). Destructive.                                                                                                                                                                                                                        |
 | `harness_execute`  | Execute an action on a resource (run/retry pipeline, import pipeline from Git, toggle flag, sync app). Prompts for user confirmation via [elicitation](#elicitation). For pipeline runs, use the runtime-input workflow below (supports `branch`/`tag`/`pr_number`/`commit_sha` shorthand expansion).                 |
-| `harness_search`   | Search across multiple resource types in parallel with a single query.                                                                                                                                                                                                                                                |
+| `harness_search`   | Search across Harness resource types with a single query. Uses semantic routing (local `all-MiniLM-L6-v2` ONNX embeddings, 384-dim) to predict relevant resource types from a `knowledge` corpus indexed at startup — typically narrowing from ~163 types to 1–8 before scatter-gather. Falls back to full keyword scatter-gather when semantic confidence is low. Response includes `semantic_routed` and `types_skipped` when routing fires. See `docs/search-guidelines.md` for how to make new resource types discoverable. |
 | `harness_diagnose` | Diagnose `pipeline`, `connector`, `delegate`, and `gitops_application` resources (aliases: `execution` -> `pipeline`, `gitops_app` -> `gitops_application`). For pipelines, returns stage/step timing and failure details; for connectors/delegates/GitOps apps, returns targeted health and troubleshooting signals. |
 | `harness_status`   | Get a real-time project health dashboard — recent executions, failure rates, and deep links.                                                                                                                                                                                                                          |
 
@@ -616,7 +675,7 @@ Current multi-scope resources include `connector`, `service`, `environment`, `in
 
 Use `harness_schema` before creating or updating YAML-backed resources so agents can copy exact field names and constraints instead of guessing from prose.
 
-- Bundled schemas include `pipeline`, `template`, `trigger`, `pipeline_v1`, `template_v1`, `trigger_v1`, `inputSet_v1`, `overlayInputSet_v1`, `service_v1`, `infra_v1`, and `agent-pipeline`.
+- Bundled schemas include `pipeline`, `template`, `trigger`, `pipeline_v1`, `template_v1`, `inputSet_v1`, `overlayInputSet_v1`, and `agent-pipeline`.
 - Entity schemas include `connector`, `environment`, `service`, `secret`, and `infrastructure`. They are scope-aware (`account`, `org`, or `project`) and require `org_id`/`project_id` when the selected scope requires them.
 - Vendored entity snapshots are used first when they match the runtime account; otherwise the tool falls back to the Harness NG `/yaml-schema` API and caches the result.
 - Omit `path` for a field/section summary, then pass a dot-separated `path` to inspect a nested definition.
@@ -839,6 +898,62 @@ Use this sequence to reduce execution-time input errors:
   - Use `input_set_ids` for the base shape and `inputs` for simple overrides.
 
 If required fields are unresolved, the tool returns a pre-flight error with expected keys and suggested input sets. You can inspect available shorthand mappings with `harness_describe(resource_type="pipeline")` (`executeActions.run.inputShorthands`).
+
+### Dynamic Pipeline Execution
+
+Use `pipeline_dynamic_execution.run` when an agent or external system generates the full v0 pipeline YAML at runtime and needs to run it against an existing Harness pipeline shell. This is not a replacement for normal `pipeline.run`: the saved v0 pipeline must already exist, account-level and pipeline-level **Allow Dynamic Execution** must be enabled, and the caller needs Edit plus Execute permissions on the pipeline.
+
+```json
+{
+  "resource_type": "pipeline_dynamic_execution",
+  "action": "run",
+  "resource_id": "deploy_app",
+  "body": {
+    "yaml": "pipeline:\n  identifier: deploy_app\n  name: Deploy App\n  stages: []"
+  },
+  "params": {
+    "module_type": "CD",
+    "notes": "agent-generated dynamic run",
+    "notify_only_user": true
+  }
+}
+```
+
+Constraints:
+
+- `body` must be an object with a `yaml` field. Raw string bodies are rejected by the public `harness_execute` schema.
+- `body.yaml` may be a YAML string or a JSON pipeline object; JSON is serialized to YAML before the request.
+- Runtime `<+input>` placeholders are not resolved by this API. Submit fully resolved YAML.
+- Input sets, selective stage execution, retry, and triggers are not supported by the dynamic execution endpoint.
+- The action is `high_write` and uses the normal confirmation/auto-approval path. The response projects the API envelope to `{ "execution_id": "...", "status": "..." }` and includes an `openInHarness` execution link when scope data is available.
+
+If Harness rejects the run as not enabled, check both the account-level Allow Dynamic Execution setting and the pipeline-level toggle under Pipeline -> Advanced Options -> Dynamic Execution Settings.
+
+### Execution Input Forensics
+
+Use `execution_inputs` after a run to inspect the merged input YAML that produced a specific execution. This is useful when a failure depends on input-set merging, Git-backed input set branches, or trigger/runtime values that are hard to reconstruct from the execution page alone.
+
+```json
+{
+  "resource_type": "execution_inputs",
+  "resource_id": "PLAN_EXECUTION_ID",
+  "params": {
+    "resolve_expressions": true,
+    "resolve_expressions_type": "RESOLVE_ALL_EXPRESSIONS"
+  }
+}
+```
+
+The get response is projected to:
+
+- `executionId` - the plan execution ID from `resource_id`.
+- `inputSetYaml` - merged runtime input YAML used for the run, or `null`.
+- `inputSetTemplateYaml` - input template at execution time, or `null`.
+- `resolvedYaml` - expression-resolved YAML when `resolve_expressions=true`, otherwise usually `null`.
+- `inputSetDetails` - contributing saved input sets as `{ identifier, name }` pairs.
+- `inputSetBranchName` - source branch for Git-backed input sets, or `null`.
+
+`execution_inputs` is get-only and read-risk. If `resolve_expressions` is omitted, the server omits the API query parameters and Harness uses its default `UNKNOWN` resolution mode.
 
 ### Pipeline Execute Wait Mode
 
@@ -1082,7 +1197,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-215 resource types organized across 36 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+218 resource types organized across 38 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1640,7 +1755,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, 36 of 37 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
+By default, 38 of 39 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 
@@ -1737,8 +1852,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  36 Toolsets      |      (data files, not code)
-                |  215 Resource Types|
+                |  38 Toolsets      |      (data files, not code)
+                |  218 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
@@ -1919,14 +2034,14 @@ tests/
 
 ## Elicitation
 
-Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use [MCP elicitation](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/elicitation) to prompt the user for confirmation before making changes. This gives real human-in-the-loop approval — the user sees what's about to happen and accepts or declines.
+The write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_execute`) use [MCP elicitation](https://modelcontextprotocol.io/specification/2025-03-26/server/utilities/elicitation) to prompt the user for confirmation when the action's risk requires it — `medium_write`, `high_write`, and `destructive` operations only. Low-risk creates / updates / reads (e.g. `pipeline.create`, `pipeline.update`, `hql_query.run`) proceed silently with no prompt. When a prompt is surfaced, the user sees what's about to happen and accepts or declines, giving real human-in-the-loop approval for the operations that actually mutate or run things.
 
 **How it works:**
 
-1. The LLM calls a write tool (e.g. `harness_create` with a pipeline body)
-2. The server sends an elicitation request to the client with a summary of the operation
-3. The user sees the details and clicks **Accept** or **Decline**
-4. If accepted, the operation proceeds. If declined, it's blocked and the LLM is told
+1. The LLM calls a write tool with `medium_write`+ risk (e.g. `harness_delete`, `harness_execute pipeline.run`). Low-risk creates / updates / reads do not surface a prompt.
+2. The server sends an elicitation request to the client with a summary of the operation and a `confirm` checkbox (default checked).
+3. The user sees the details and clicks **Accept** (with `confirm` checked) or **Decline / Cancel**.
+4. If accepted with `confirm: true`, the operation proceeds. If accepted with `confirm` unchecked, declined, or cancelled, it's blocked and the LLM is told (an explicit decline is **authoritative** and not bypassed by `confirm: true` on the tool call).
 
 **Client support:**
 
@@ -1943,15 +2058,16 @@ Write tools (`harness_create`, `harness_update`, `harness_delete`, `harness_exec
 Elicitation behavior varies by operation risk when client support is missing:
 
 
-| Risk Level                                    | Client supports elicitation | Behavior                                          |
-| --------------------------------------------- | --------------------------- | ------------------------------------------------- |
-| `read`, `low_write`                           | any                         | Proceed silently (no confirmation needed)         |
-| `medium_write`, `high_write`, `destructive`   | Yes                         | Prompt user — proceed on accept, block on decline |
-| `medium_write`, `high_write`, `destructive`   | No                          | **BLOCK** (return error)                          |
-| any (at or below `HARNESS_AUTO_APPROVE_RISK`) | any                         | Auto-approve without prompting                    |
+| Risk Level                                    | Client supports elicitation | `confirm: true` passed | Behavior                                          |
+| --------------------------------------------- | --------------------------- | ---------------------- | ------------------------------------------------- |
+| `read`, `low_write`                           | any                         | any                    | Proceed silently — no prompt is surfaced (`confirm` has no effect at this risk tier) |
+| `medium_write`, `high_write`, `destructive`   | Yes                         | any                    | Prompt user. Proceed only if user accepts **with** `confirm: true` (the schema's default). An explicit decline, cancel, or accept with `confirm: false` (user unchecked the box) is **authoritative** and is not bypassed by `confirm: true` on the tool call. An accept missing the `confirm` field is treated as the client failing to surface a usable prompt — recoverable by retrying with `confirm: true` |
+| `medium_write`, `high_write`, `destructive`   | No                          | No                     | **BLOCK** (return error with hint to retry with `confirm: true`) |
+| `medium_write`, `high_write`, `destructive`   | No                          | Yes                    | Proceed (explicit opt-in for non-interactive automation) |
+| any (at or below `HARNESS_AUTO_APPROVE_RISK`) | any                         | any                    | Auto-approve without prompting                    |
 
 
-If elicitation fails at runtime, operations at `medium_write` or above are blocked.
+If `elicitInput` fails at runtime (transport error, unsupported method) for a `medium_write`+ operation, the call is blocked unless the caller passes `confirm: true`. `confirm: true` is honored as a fallback when the client could not surface a prompt or returned a degenerate accept (`{action: "accept"}` without the confirm field), but it does **not** override an explicit decline/cancel from a client that completed the elicitation handshake.
 
 ### Autonomous Mode
 
@@ -2005,7 +2121,7 @@ HARNESS_AUTO_APPROVE_RISK=high_write
 ## Safety
 
 - **Secrets are never exposed.** The `secret` resource type returns metadata only (name, type, scope) — secret values are never included in any response.
-- **Write operations use elicitation when available.** `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` attempt MCP elicitation before proceeding (see [Elicitation](#elicitation)).
+- **Confirmation-requiring operations use elicitation when available.** When a write or execute action has `medium_write`, `high_write`, or `destructive` risk, `harness_create`, `harness_update`, `harness_delete`, and `harness_execute` attempt MCP elicitation before proceeding (see [Elicitation](#elicitation)). Low-risk actions (`read`, `low_write` — e.g. `pipeline.create`, `pipeline.update`, `hql_query.run`) proceed silently with no prompt.
 - **Medium-risk and above fail closed.** If confirmation cannot be obtained for `medium_write`, `high_write`, or `destructive` operations, they are blocked instead of executing blindly. Override with `HARNESS_AUTO_APPROVE_RISK` for autonomous workflows.
 - **CORS restricted to same-origin.** The HTTP transport only allows same-origin requests, preventing CSRF attacks from malicious websites targeting the MCP server on localhost.
 - **HTTP rate limiting.** The HTTP transport enforces 60 requests per minute per IP to prevent request flooding.
@@ -2028,7 +2144,7 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | `Unknown transport: "..."` on startup                                            | Unsupported CLI transport arg                                                                        | Use `stdio` or `http` only                                                                                                           |
 | `Invalid HARNESS_TOOLSETS: ...` on startup                                       | One or more toolset names are not recognized                                                         | Use only names from [Toolset Filtering](#toolset-filtering) (exact match)                                                            |
 | HTTP `mcp-session-id header is required...`                                      | A session request was sent without session header                                                    | Send `initialize` first, then include `mcp-session-id` on `POST/GET/DELETE /mcp`                                                     |
-| HTTP `Session not found...`                                                      | Session expired (30 min idle TTL) or already closed                                                  | Re-run `initialize` to create a new session, then retry with new header                                                              |
+| HTTP `Session not found...`                                                      | Session expired after `MCP_SESSION_TTL_MS` idle milliseconds or already closed                        | Re-run `initialize` to create a new session, then retry with new header                                                              |
 | HTTP `405 Method Not Allowed` on `/mcp`                                          | Unsupported method for MCP endpoint                                                                  | Use `POST`, `GET`, `DELETE`, or `OPTIONS` only                                                                                       |
 | HTTP `Invalid request`                                                           | Invalid JSON body or request body exceeded `HARNESS_MAX_BODY_SIZE_MB`                                | Validate JSON payload size/shape; increase `HARNESS_MAX_BODY_SIZE_MB` if needed                                                      |
 | `Unknown resource_type "..."` from tools                                         | Resource type is misspelled or filtered out via `HARNESS_TOOLSETS`                                   | Call `harness_describe` (with optional `search_term`) to discover valid types                                                        |
@@ -2041,7 +2157,8 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | `wait: true` returned `_wait.error`                                              | The pipeline trigger succeeded, but server-side polling failed                                       | Recheck the `execution_id` with `harness_get(resource_type="execution", ...)` before deciding whether to rerun                        |
 | `wait: true` returned `execution_timed_out: true`                                | The execution did not reach a terminal status before `wait_timeout_seconds`                          | Use the returned `execution_id` to recheck status or diagnose the still-running execution                                             |
 | Execution logs are empty or blob downloads return 403                           | Harness-hosted log blob URLs require the configured Harness client/auth path, especially for internal or self-managed hosts | Keep `HARNESS_BASE_URL` pointed at the target Harness host and use `harness_get(resource_type="execution_log", ...)` or `harness_diagnose(..., include_logs=true)` rather than bypassing the MCP client |
-| `Operation declined by user`                                                     | User declined the elicitation confirmation dialog                                                    | The user chose not to proceed — verify the operation details and retry if intended                                                   |
+| `Operation declined by user` / `Operation cancelled by user`                     | User declined or cancelled the elicitation confirmation dialog — authoritative                       | Verify operation details with the user; `confirm: true` does **not** bypass an explicit decline. The user must accept the prompt   |
+| `Operation blocked: the client could not surface a usable confirmation prompt`   | Client lacks elicitation support, `elicitInput` failed, or returned a degenerate accept              | Retry with `confirm: true` for non-interactive automation, or use a client that supports elicitation                                |
 | `body.template_yaml (or body.yaml) is required` for template create/update       | Template APIs expect full YAML payload                                                               | Provide full `template_yaml` string in `body`; for deletes, pass `version_label` to delete one version (omit to delete all versions) |
 | `HARNESS_BASE_URL must use HTTPS` on startup                                     | `HARNESS_BASE_URL` is set to an HTTP URL                                                             | Use HTTPS, or set `HARNESS_ALLOW_HTTP=true` for local development                                                                    |
 

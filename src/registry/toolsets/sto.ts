@@ -1,6 +1,10 @@
 import type { ToolsetDefinition } from "../types.js";
 import { passthrough, stoExemptionsExtract } from "../extractors.js";
-import type { HarnessClient } from "../../client/harness-client.js";
+
+/** Narrow preflight client for STO exemption create (getCurrentUserId only). */
+interface StoPreflightClient {
+  getCurrentUserId(): Promise<string>;
+}
 
 /**
  * Injects a redirect hint into every security_issue list response.
@@ -431,7 +435,7 @@ export const stoToolset: ToolsetDefinition = {
                 `Use harness_describe(resource_type="security_exemption") to see the schema.`
               );
             }
-            const harnessClient = client as unknown as HarnessClient;
+            const harnessClient = client as unknown as StoPreflightClient;
             body.requester_id = await harnessClient.getCurrentUserId();
             input.body = body;
           },
@@ -516,7 +520,7 @@ export const stoToolset: ToolsetDefinition = {
               input.project_id = "";
             }
 
-            const harnessClient = client as unknown as HarnessClient;
+            const harnessClient = client as unknown as StoPreflightClient;
             if (!b.approver_id) {
               b.approver_id = await harnessClient.getCurrentUserId();
               input.body = b;
@@ -565,7 +569,7 @@ export const stoToolset: ToolsetDefinition = {
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { exemption_id: "exemptionId" },
           preflight: async ({ client, input }) => {
-            const harnessClient = client as unknown as HarnessClient;
+            const harnessClient = client as unknown as StoPreflightClient;
             const body = ((input.body as Record<string, unknown> | undefined) ?? {});
             if (!body.approver_id) {
               body.approver_id = await harnessClient.getCurrentUserId();
@@ -681,7 +685,7 @@ export const stoToolset: ToolsetDefinition = {
 
             // Auto-derive requester from the authenticated PAT, same as the
             // single-create path.
-            const harnessClient = client as unknown as HarnessClient;
+            const harnessClient = client as unknown as StoPreflightClient;
             body.requester_id = await harnessClient.getCurrentUserId();
             input.body = body;
           },

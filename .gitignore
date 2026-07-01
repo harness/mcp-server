@@ -12,6 +12,11 @@ dist/
 *.swo
 *~
 .idea/
+.serena/
+
+# Python
+__pycache__/
+.venv-stub/
 
 # Generated pipeline files
 pipelines/

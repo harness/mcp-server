@@ -1,4 +1,4 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, ParamsSchema } from "../types.js";
 import { passthrough, ngExtract, pageExtract } from "../extractors.js";
 
 function gitopsListBody(
@@ -191,6 +191,7 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["agent_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter GitOps agents by name or keyword" },
@@ -569,6 +570,7 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["agent_id", "cluster_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter clusters by name or keyword" },
@@ -614,6 +616,7 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["agent_id", "repo_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter repositories by name or URL" },
@@ -863,6 +866,7 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["agent_id", "credential_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter repository credentials by name or keyword" },
@@ -935,12 +939,6 @@ export const gitopsToolset: ToolsetDefinition = {
       toolset: "gitops",
       scope: "project",
       identifierFields: ["agent_id", "app_name"],
-      listFilterFields: [
-        { name: "pod_name", description: "Pod name filter" },
-        { name: "namespace", description: "Kubernetes namespace filter" },
-        { name: "container", description: "Container name filter" },
-        { name: "tail_lines", description: "Number of log lines to tail", type: "number" },
-      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/gitops/applications/{appName}",
       operations: {
         get: {
@@ -959,6 +957,14 @@ export const gitopsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Get pod logs for a GitOps application",
+          paramsSchema: {
+            fields: [
+              { name: "pod_name", required: false, description: "Pod name filter" },
+              { name: "namespace", required: false, description: "Kubernetes namespace filter" },
+              { name: "container", required: false, description: "Container name filter" },
+              { name: "tail_lines", required: false, description: "Number of log lines to tail" },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },

@@ -30,13 +30,15 @@ Each resource has its own subdirectory containing:
 
 | # | Resource | Test Plan | Test Report | Tests |
 |---|----------|-----------|-------------|-------|
-| 13 | Services | [test_plan](services/test_plan.md) | [test_report](services/test_report.md) | SVC-001 → SVC-010 |
-| 14 | Environments | [test_plan](environments/test_plan.md) | [test_report](environments/test_report.md) | ENV-001 → ENV-011 |
+| 13 | Services | [test_plan](service/test_plan.md) | [test_report](service/test_report.md) | SVC-001 → SVC-010 |
+| 14 | Environments | [test_plan](environment/test_plan.md) | [test_report](environment/test_report.md) | ENV-001 → ENV-011 |
 | 15 | Infrastructure | [test_plan](infrastructure/test_plan.md) | [test_report](infrastructure/test_report.md) | INF-001 → INF-008 |
-| 16 | Pipelines | [test_plan](pipeline_tests/test_plan.md) | [test_report](pipeline_tests/test_report.md) | PIP-001 → PIP-012 |
-| 17 | Executions | [test_plan](executions/test_plan.md) | [test_report](executions/test_report.md) | EXE-001 → EXE-009 |
-| 18 | Triggers | [test_plan](triggers/test_plan.md) | [test_report](triggers/test_report.md) | TRG-001 → TRG-007 |
-| 19 | Input Sets | [test_plan](input_sets/test_plan.md) | [test_report](input_sets/test_report.md) | INS-001 → INS-005 |
+| 16 | Pipelines | [test_plan](pipeline/test_plan.md) | [test_report](pipeline/test_report.md) | PIP-001 → PIP-012 |
+| 17 | Pipeline Dynamic Execution | [test_plan](pipeline_dynamic_execution/test_plan.md) | [test_report](pipeline_dynamic_execution/test_report.md) | TC-pdyn-001 → TC-pdyn-011 |
+| 18 | Execution Inputs | [test_plan](execution_inputs/test_plan.md) | [test_report](execution_inputs/test_report.md) | TC-einp-001 → TC-einp-012 |
+| 19 | Executions | [test_plan](execution/test_plan.md) | [test_report](execution/test_report.md) | EXE-001 → EXE-009 |
+| 20 | Triggers | [test_plan](trigger/test_plan.md) | [test_report](trigger/test_report.md) | TRG-001 → TRG-007 |
+| 21 | Input Sets | [test_plan](input_set/test_plan.md) | [test_report](input_set/test_report.md) | INS-001 → INS-005 |
 
 ## CODE Module
 

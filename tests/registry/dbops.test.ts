@@ -698,16 +698,17 @@ describe("database_instance skipScopeBodyInjection", () => {
   });
 });
 
-describe("database_execute_llm_authoring_pipeline create", () => {
-  it("maps body aliases to the DBOPS API payload without scope injection", async () => {
+describe("database_execute_llm_authoring_pipeline run", () => {
+  it("maps body aliases to the new /v1/llm-authoring/execute-pipeline payload (default-pipeline branch)", async () => {
     const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({
-      pipelineExecutionId: "exec-1",
-      pipelineIdentifier: "authoring-pipeline",
+      executionId: "exec-1",
+      pipelineIdentifier: "dbops_default_pipeline",
+      openInHarness: "https://app.harness.io/...",
     });
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "database_execute_llm_authoring_pipeline", "create", {
+    await registry.dispatchExecute(client, "database_execute_llm_authoring_pipeline", "run", {
       org_id: "default",
       project_id: "test-project",
       body: {
@@ -715,20 +716,63 @@ describe("database_execute_llm_authoring_pipeline create", () => {
         instance_id: "instance_1",
         conversation_id: "conversation-1",
         changeset: "databaseChangeLog: []",
+        use_default_pipeline: true,
       },
     });
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
-    expect(call.path).toBe("/dbops/v1/orgs/default/projects/test-project/execute-llm-authoring-pipeline");
+    expect(call.path).toBe(
+      "/v1/orgs/default/projects/test-project/llm-authoring/execute-pipeline",
+    );
     expect(call.body).toEqual({
-      schemaIdentifier: "schema_1",
-      instanceIdentifier: "instance_1",
       conversationId: "conversation-1",
+      schemaId: "schema_1",
+      instanceId: "instance_1",
       changeset: "databaseChangeLog: []",
+      useDefaultPipeline: true,
     });
     expect(call.body).not.toHaveProperty("orgIdentifier");
     expect(call.body).not.toHaveProperty("projectIdentifier");
+    expect(call.body).not.toHaveProperty("pipelineIdentifier");
+  });
+
+  it("forwards the custom-pipeline branch with runtime_inputs", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      executionId: "exec-2",
+      pipelineIdentifier: "my-pipe",
+      openInHarness: "https://app.harness.io/...",
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "database_execute_llm_authoring_pipeline", "run", {
+      org_id: "default",
+      project_id: "test-project",
+      body: {
+        schema_id: "schema_1",
+        instance_id: "instance_1",
+        conversation_id: "conversation-1",
+        changeset: "databaseChangeLog: []",
+        pipeline_identifier: "my-pipe",
+        runtime_inputs: { releaseCodename: "phoenix" },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe(
+      "/v1/orgs/default/projects/test-project/llm-authoring/execute-pipeline",
+    );
+    expect(call.body).toEqual({
+      conversationId: "conversation-1",
+      schemaId: "schema_1",
+      instanceId: "instance_1",
+      changeset: "databaseChangeLog: []",
+      pipelineIdentifier: "my-pipe",
+      runtimeInputs: { releaseCodename: "phoenix" },
+    });
+    expect(call.body).not.toHaveProperty("useDefaultPipeline");
   });
 });
 

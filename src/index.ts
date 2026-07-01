@@ -19,7 +19,10 @@ import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { createHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
+import { SearchManager } from "./search/index.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "./utils/session-headers.js";
+import { buildHttpHealthResponse } from "./utils/http-health.js";
+import { beginSessionRequest, endSessionRequest, isSessionExpired, type HttpSessionActivity } from "./utils/http-sessions.js";
 
 
 const log = createLogger("main");
@@ -27,16 +30,18 @@ const log = createLogger("main");
 interface HarnessServerResult {
   server: McpServer;
   auditManager: AuditManager;
+  searchManager: SearchManager;
 }
 
 /**
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
  * @param sharedAuditManager When set (HTTP mode), reuse this manager instead of creating one per session.
  */
-function createHarnessServer(config: Config, sharedAuditManager?: AuditManager): HarnessServerResult {
+function createHarnessServer(config: Config, sharedAuditManager?: AuditManager, sharedSearchManager?: SearchManager): HarnessServerResult {
   const auditManager = sharedAuditManager ?? createAuditManager(config);
   const client = new HarnessClient(config);
   const registry = new Registry(config, { auditManager });
+  const searchManager = sharedSearchManager ?? new SearchManager(config);
 
   const server = new McpServer(
     {
@@ -74,11 +79,26 @@ function createHarnessServer(config: Config, sharedAuditManager?: AuditManager):
   );
 
   configureElicitation({ autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK as import("./registry/types.js").AutoApproveRisk });
-  registerAllTools(server, registry, client, config);
+  // Initialize search provider only if we created it (shared instances are pre-initialized)
+  if (!sharedSearchManager) {
+    searchManager.initialize().then(async () => {
+      if (!searchManager.getProvider().isAvailable()) return;
+      // Always index static content (schemas, examples, resource defs) — account-agnostic
+      await searchManager.indexStaticContent(registry);
+      // Pre-index tier-1 resources only in single-user mode where account is known
+      if (config.HARNESS_MCP_MODE !== "multi-user") {
+        await searchManager.initializeIndex(registry, client);
+      }
+    }).catch((err) => {
+      log.error("SearchManager initialization failed", { error: String(err) });
+    });
+  }
+
+  registerAllTools(server, registry, client, config, undefined, searchManager);
   registerAllResources(server, registry, client, config);
   registerAllPrompts(server);
 
-  return { server, auditManager };
+  return { server, auditManager, searchManager };
 }
 
 /**
@@ -207,14 +227,12 @@ async function startStdio(config: Config): Promise<void> {
 // ---------------------------------------------------------------------------
 // Session store — maps session IDs to their MCP server + transport instances.
 // ---------------------------------------------------------------------------
-interface Session {
+interface Session extends HttpSessionActivity {
   server: McpServer;
   transport: StreamableHTTPServerTransport;
-  lastActivity: number;
 }
 
-const SESSION_TTL_MS = 30 * 60_000; // 30 minutes
-const REAP_INTERVAL_MS = 60_000;    // check every minute
+const REAP_INTERVAL_MS = 60_000; // check every minute
 
 /**
  * Start the server in HTTP mode — stateful, session-based.
@@ -276,6 +294,16 @@ async function startHttp(config: Config, port: number): Promise<void> {
   // ---- Session store ----
   const sessions = new Map<string, Session>();
   const sharedAuditManager = createAuditManager(config);
+  const sharedSearchManager = new SearchManager(config);
+  // In HTTP mode: initialize + index static content using a baseline registry (no account needed)
+  const baseRegistry = new Registry(config, { auditManager: sharedAuditManager });
+  sharedSearchManager.initialize().then(async () => {
+    if (sharedSearchManager.getProvider().isAvailable()) {
+      await sharedSearchManager.indexStaticContent(baseRegistry);
+    }
+  }).catch((err) => {
+    log.error("Shared SearchManager initialization failed", { error: String(err) });
+  });
 
   async function destroySession(sessionId: string): Promise<void> {
     const session = sessions.get(sessionId);
@@ -290,7 +318,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
   const reaper = setInterval(() => {
     const now = Date.now();
     for (const [id, session] of sessions) {
-      if (now - session.lastActivity > SESSION_TTL_MS) {
+      if (isSessionExpired(session, config.MCP_SESSION_TTL_MS, now)) {
         log.info("Reaping idle session", { sessionId: id });
         destroySession(id);
       }
@@ -306,9 +334,11 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   // ---- Routes ----
 
-  // Health check (includes session count for observability)
+  // Health check (includes session count and search readiness for observability)
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", sessions: sessions.size });
+    const search = sharedSearchManager.getReadiness();
+    const health = buildHttpHealthResponse(search, sessions.size);
+    res.status(health.statusCode).json(health.body);
   });
 
   // POST /mcp — initialize new sessions or route to existing session
@@ -326,7 +356,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
         });
         return;
       }
-      session.lastActivity = Date.now();
+      beginSessionRequest(session);
       try {
         await session.transport.handleRequest(req, res, req.body);
       } catch (err) {
@@ -338,6 +368,8 @@ async function startHttp(config: Config, port: number): Promise<void> {
             id: null,
           });
         }
+      } finally {
+        endSessionRequest(session);
       }
       return;
     }
@@ -347,12 +379,17 @@ async function startHttp(config: Config, port: number): Promise<void> {
     let transport: StreamableHTTPServerTransport | undefined;
     try {
       const sessionConfig = mergeConfigWithSessionHeaders(config, req.headers);
-      const result = createHarnessServer(sessionConfig, sharedAuditManager);
+      const result = createHarnessServer(sessionConfig, sharedAuditManager, sharedSearchManager);
       server = result.server;
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
         onsessioninitialized: (id) => {
-          sessions.set(id, { server: server!, transport: transport!, lastActivity: Date.now() });
+          sessions.set(id, {
+            server: server!,
+            transport: transport!,
+            lastActivity: Date.now(),
+            activeRequests: 0,
+          });
           log.info("Session created", { sessionId: id, total: sessions.size });
         },
       });
@@ -412,7 +449,14 @@ async function startHttp(config: Config, port: number): Promise<void> {
       return;
     }
 
-    session.lastActivity = Date.now();
+    beginSessionRequest(session);
+    let streamClosed = false;
+    const markStreamClosed = (): void => {
+      if (streamClosed) return;
+      streamClosed = true;
+      endSessionRequest(session);
+    };
+    res.once("close", markStreamClosed);
     try {
       await session.transport.handleRequest(req, res);
     } catch (err) {
@@ -423,6 +467,11 @@ async function startHttp(config: Config, port: number): Promise<void> {
           error: { code: -32000, message: "Failed to establish SSE stream" },
           id: null,
         });
+      }
+      markStreamClosed();
+    } finally {
+      if (res.writableEnded) {
+        markStreamClosed();
       }
     }
   });
@@ -449,10 +498,13 @@ async function startHttp(config: Config, port: number): Promise<void> {
       return;
     }
 
+    beginSessionRequest(session);
     try {
       await session.transport.handleRequest(req, res);
     } catch (err) {
       log.error("Error handling DELETE request", { sessionId, error: String(err) });
+    } finally {
+      endSessionRequest(session);
     }
     destroySession(sessionId);
   });

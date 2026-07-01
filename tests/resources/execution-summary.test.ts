@@ -86,6 +86,19 @@ describe("execution-summary resource", () => {
     expect(registry.dispatch).not.toHaveBeenCalled();
   });
 
+  it("skips fetch when the execution toolset is disabled", async () => {
+    const { registry, readHandler } = setupResource();
+    registry.getResource.mockImplementation(() => {
+      throw new Error("Unknown resource_type: execution");
+    });
+
+    const result = await readHandler(fakeUri);
+    const body = JSON.parse(result.contents[0].text);
+
+    expect(body).toEqual({ items: [], total: 0, skipped: "resource unavailable" });
+    expect(registry.dispatch).not.toHaveBeenCalled();
+  });
+
   it("fetches executions when org and project are available", async () => {
     const { client, registry, readHandler } = setupResource({
       HARNESS_ORG: "org",
