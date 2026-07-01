@@ -1269,6 +1269,151 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
     },
 
     // ------------------------------------------------------------------
+    // 7b. cost_budget — REST CRUD for CCM budgets (/ccm/api/budgets)
+    // ------------------------------------------------------------------
+    {
+      resourceType: "cost_budget",
+      displayName: "Cost Budget",
+      description:
+        "Cloud cost budgets — set spend targets and receive alerts when costs exceed (or are forecasted to exceed) the budget. Use harness_list to see all budgets, harness_get with budget_id for details, harness_create/harness_update to manage them. Use the clone action to copy a budget and bulk_delete to delete several at once.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["budget_id"],
+      deepLinkTemplate: "/ng/account/{accountId}/ce/budget",
+      listFilterFields: [
+        { name: "budget_sort_type", description: "Sort field", enum: ["BUDGET_AMOUNT", "NAME", "PERSPECTIVE", "ACTUAL_COST", "LAST_MONTH_COST", "FORECAST_COST"] },
+        { name: "sort_order", description: "Sort direction", enum: ["ASCENDING", "DESCENDING"] },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/ccm/api/budgets",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            budget_sort_type: "budgetSortType",
+            sort_order: "sortOrder",
+          },
+          responseExtractor: ngExtract,
+          description: "List all budgets for the account. Optionally sort with budget_sort_type and sort_order.",
+        },
+        get: {
+          method: "GET",
+          path: "/ccm/api/budgets/{budgetId}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { budget_id: "budgetId" },
+          responseExtractor: ngExtract,
+          description: "Get budget details by ID",
+        },
+        create: {
+          method: "POST",
+          path: "/ccm/api/budgets",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          injectAccountInBody: "accountId",
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Budget definition. accountId is injected automatically; the budget is created as a NextGen budget. budgetAmount is required for type SPECIFIED_AMOUNT.",
+            fields: [
+              { name: "name", type: "string", required: true, description: "Budget name (1-80 chars)" },
+              { name: "type", type: "string", required: false, description: "How the budget amount is determined: SPECIFIED_AMOUNT (fixed), PREVIOUS_MONTH_SPEND, or PREVIOUS_PERIOD_SPEND. Default SPECIFIED_AMOUNT." },
+              { name: "budgetAmount", type: "number", required: false, description: "Budget amount (required when type is SPECIFIED_AMOUNT)" },
+              { name: "period", type: "string", required: false, description: "Budget period: DAILY | WEEKLY | MONTHLY | QUARTERLY | YEARLY" },
+              { name: "growthRate", type: "number", required: false, description: "Expected growth rate (%) applied per period for PREVIOUS_*_SPEND types" },
+              { name: "startTime", type: "number", required: false, description: "Budget start time (epoch ms)" },
+              { name: "scope", type: "object", required: false, description: "What the budget applies to (polymorphic, discriminated by 'type'). Perspective budget: { type: 'PERSPECTIVE', viewId: string, viewName: string }. Also supports CLUSTER, APPLICATION, COST_BUCKET." },
+              {
+                name: "alertThresholds", type: "array", required: false,
+                description: "Alert thresholds. Each: { percentage: number, basedOn: 'ACTUAL_COST'|'FORECASTED_COST'|'PARTIAL_COST'|'YEARLY_ACTUAL_COST'|'YEARLY_FORECASTED_COST', emailAddresses?: string[], userGroupIds?: string[], slackWebhooks?: string[] }",
+                itemType: "{ percentage: number, basedOn: string, emailAddresses?: string[], userGroupIds?: string[], slackWebhooks?: string[] }",
+              },
+              { name: "emailAddresses", type: "array", required: false, description: "Email addresses to notify (string array)" },
+              { name: "userGroupIds", type: "array", required: false, description: "User group IDs to notify (string array)" },
+              { name: "notifyOnSlack", type: "boolean", required: false, description: "Whether to send alert notifications to Slack" },
+              { name: "folderId", type: "string", required: false, description: "Perspective folder ID the budget belongs to" },
+              { name: "budgetMonthlyBreakdown", type: "object", required: false, description: "Monthly breakdown for yearly budgets: { budgetBreakdown: 'MONTHLY'|'YEARLY', budgetMonthlyAmount?: [{ key, value }] }" },
+              { name: "customAlertMessage", type: "string", required: false, description: "Custom message included in alerts" },
+              { name: "disableCurrencyWarning", type: "boolean", required: false, description: "Suppress currency mismatch warning" },
+            ],
+          },
+          responseExtractor: ngExtract,
+          description: "Create a new budget. The accountId is injected automatically.",
+        },
+        update: {
+          method: "PUT",
+          path: "/ccm/api/budgets/{budgetId}",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { budget_id: "budgetId" },
+          bodyBuilder: (input) => input.body,
+          bodySchema: {
+            description: "Full budget object to replace the existing one. Fetch the budget via harness_get first, modify fields, and send the whole object back. Include alertThresholds only when you intend to update them.",
+            fields: [
+              { name: "uuid", type: "string", required: true, description: "Budget UUID (from harness_get)" },
+              { name: "name", type: "string", required: true, description: "Budget name (1-80 chars)" },
+              { name: "type", type: "string", required: false, description: "SPECIFIED_AMOUNT | PREVIOUS_MONTH_SPEND | PREVIOUS_PERIOD_SPEND" },
+              { name: "budgetAmount", type: "number", required: false, description: "Budget amount (required when type is SPECIFIED_AMOUNT)" },
+              { name: "period", type: "string", required: false, description: "DAILY | WEEKLY | MONTHLY | QUARTERLY | YEARLY" },
+              { name: "growthRate", type: "number", required: false, description: "Expected growth rate (%) per period" },
+              { name: "startTime", type: "number", required: false, description: "Budget start time (epoch ms)" },
+              { name: "scope", type: "object", required: false, description: "What the budget applies to (discriminated by 'type'). Perspective: { type: 'PERSPECTIVE', viewId, viewName }" },
+              {
+                name: "alertThresholds", type: "array", required: false,
+                description: "Alert thresholds. Each: { percentage, basedOn: 'ACTUAL_COST'|'FORECASTED_COST'|..., emailAddresses?, userGroupIds?, slackWebhooks? }",
+                itemType: "{ percentage: number, basedOn: string, emailAddresses?: string[], userGroupIds?: string[], slackWebhooks?: string[] }",
+              },
+              { name: "emailAddresses", type: "array", required: false, description: "Email addresses to notify" },
+              { name: "userGroupIds", type: "array", required: false, description: "User group IDs to notify" },
+              { name: "notifyOnSlack", type: "boolean", required: false, description: "Send alerts to Slack" },
+              { name: "folderId", type: "string", required: false, description: "Perspective folder ID" },
+              { name: "budgetMonthlyBreakdown", type: "object", required: false, description: "Monthly breakdown for yearly budgets" },
+              { name: "customAlertMessage", type: "string", required: false, description: "Custom alert message" },
+              { name: "disableCurrencyWarning", type: "boolean", required: false, description: "Suppress currency mismatch warning" },
+            ],
+          },
+          responseExtractor: ngExtract,
+          description: "Update an existing budget (full replacement)",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/ccm/api/budgets/{budgetId}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { budget_id: "budgetId" },
+          responseExtractor: ngExtract,
+          description: "Delete a budget by ID",
+        },
+      },
+      executeActions: {
+        clone: {
+          method: "POST",
+          path: "/ccm/api/budgets/{budgetId}",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { budget_id: "budgetId" },
+          queryParams: { clone_name: "cloneName" },
+          bodyBuilder: () => ({}),
+          bodySchema: { description: "No body required. Clone is parameterized via budget_id and clone_name.", fields: [] },
+          responseExtractor: ngExtract,
+          actionDescription: "Clone a budget. Requires budget_id (the source budget) and clone_name (the new budget's name).",
+        },
+        bulk_delete: {
+          method: "POST",
+          path: "/ccm/api/budgets/bulk/delete",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            const budgetIds = input.budget_ids ?? body.budgetIds;
+            return { budgetIds };
+          },
+          bodySchema: {
+            description: "Delete multiple budgets in one async bulk operation.",
+            fields: [
+              { name: "budgetIds", type: "array", required: true, description: "Array of budget IDs to delete. Alternatively pass budget_ids at the top level." },
+            ],
+          },
+          responseExtractor: ngExtract,
+          actionDescription: "Delete several budgets at once. Pass budgetIds (array of budget IDs) in the body, or budget_ids at the top level.",
+        },
+      },
+    },
+
+    // ------------------------------------------------------------------
     // 8. cost_account_overview — REST overview endpoint (account-level)
     // ------------------------------------------------------------------
     {
