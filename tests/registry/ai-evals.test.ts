@@ -61,6 +61,10 @@ function findResource(type: string): ResourceDefinition {
   return res;
 }
 
+function fieldNames(fields: { name: string }[]): string[] {
+  return fields.map((field) => field.name);
+}
+
 // ─── Pagination mapping ─────────────────────────────────────────────────────
 
 describe("AI Evals pagination mapping", () => {
@@ -187,6 +191,60 @@ describe("AI Evals online_eval resource", () => {
     const res = findResource("online_eval");
     expect(res.diagnosticHint).toBeDefined();
     expect(res.diagnosticHint).toContain("trace");
+  });
+
+  it("evaluate schema uses metric_set_id and judge_llm_connector_ref, not deprecated metric_ids", () => {
+    const res = findResource("online_eval");
+    const action = res.executeActions!.evaluate;
+    const fields = fieldNames(action.bodySchema!.fields);
+
+    expect(fields).toContain("metric_set_id");
+    expect(fields).toContain("judge_llm_connector_ref");
+    expect(fields).not.toContain("metric_ids");
+  });
+
+  it("evaluate metadata no longer references metric_ids", () => {
+    const res = findResource("online_eval");
+    const action = res.executeActions!.evaluate;
+    const metadataText = JSON.stringify({
+      diagnosticHint: res.diagnosticHint,
+      relatedResources: res.relatedResources,
+      actionDescription: action.actionDescription,
+      bodySchema: action.bodySchema,
+    });
+
+    expect(metadataText).toContain("metric_set_id");
+    expect(metadataText).toContain("eval_metric_set");
+    expect(metadataText).not.toContain("metric_ids");
+  });
+
+  it("evaluate dispatch sends metric_set_id and judge_llm_connector_ref in the API body", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ id: "annotation-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "online_eval", "evaluate", {
+      org_id: "myorg",
+      project_id: "myproj",
+      trace_id: "trace-123",
+      body: {
+        span_id: "span-456",
+        metric_set_id: "metric-set-1",
+        judge_llm_connector_ref: "account.openai",
+        options: { include_trajectory: false },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/traces/trace-123/evaluate");
+    expect(call.body).toEqual({
+      span_id: "span-456",
+      metric_set_id: "metric-set-1",
+      judge_llm_connector_ref: "account.openai",
+      options: { include_trajectory: false },
+    });
+    expect(call.body).not.toHaveProperty("metric_ids");
   });
 });
 
@@ -315,6 +373,109 @@ describe("AI Evals LLM connector ref migration", () => {
     const hasModelId = fields.some((f) => f.name === "model_id");
     expect(hasConnectorRef).toBe(true);
     expect(hasModelId).toBe(false);
+  });
+});
+
+// ─── Control-plane API drift ────────────────────────────────────────────────
+
+describe("AI Evals control-plane API drift", () => {
+  it("metric create body schema requires dimension", () => {
+    const res = findResource("eval_metric");
+    const createOp = res.operations.create!;
+    const dimensionField = createOp.bodySchema!.fields.find((field) => field.name === "dimension");
+
+    expect(dimensionField).toMatchObject({
+      name: "dimension",
+      type: "string",
+      required: true,
+    });
+  });
+
+  it("metric create dispatch preserves dimension in the API body", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ id: "metric-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "eval_metric", "create", {
+      org_id: "myorg",
+      project_id: "myproj",
+      body: {
+        name: "Correctness Judge",
+        type: "llm",
+        dimension: "correctness",
+        kind: "rubric_judge",
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/metrics");
+    expect(call.body).toEqual({
+      name: "Correctness Judge",
+      type: "llm",
+      dimension: "correctness",
+      kind: "rubric_judge",
+    });
+  });
+
+  it("annotation create and update body schemas expose thumbs_up", () => {
+    const res = findResource("eval_annotation");
+    const createFields = fieldNames(res.operations.create!.bodySchema!.fields);
+    const updateFields = fieldNames(res.operations.update!.bodySchema!.fields);
+
+    expect(createFields).toContain("thumbs_up");
+    expect(updateFields).toContain("thumbs_up");
+  });
+
+  it("annotation create dispatch preserves thumbs_up false in the API body", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ id: "annotation-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "eval_annotation", "create", {
+      org_id: "myorg",
+      project_id: "myproj",
+      body: {
+        trace_id: "trace-123",
+        label: "human-feedback",
+        thumbs_up: false,
+        comment: "Incorrect answer",
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/observe/annotations");
+    expect(call.body).toEqual({
+      trace_id: "trace-123",
+      label: "human-feedback",
+      thumbs_up: false,
+      comment: "Incorrect answer",
+    });
+  });
+
+  it("annotation update dispatch preserves thumbs_up true in the API body", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ id: "annotation-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "eval_annotation", "update", {
+      org_id: "myorg",
+      project_id: "myproj",
+      annotation_id: "annotation-1",
+      body: {
+        thumbs_up: true,
+        comment: "Resolved after review",
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("PATCH");
+    expect(call.path).toBe("/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/observe/annotations/annotation-1");
+    expect(call.body).toEqual({
+      thumbs_up: true,
+      comment: "Resolved after review",
+    });
   });
 });
 
