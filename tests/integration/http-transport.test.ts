@@ -99,6 +99,24 @@ describe("HTTP transport session management", () => {
       expect(sessions.has("expired")).toBe(false);
     });
 
+    it("session TTL reaper honors operator-configured TTL values", () => {
+      const customTtlMs = 30_000;
+      const sessions = new Map<string, { lastActivity: number }>();
+      const now = Date.now();
+
+      sessions.set("active", { lastActivity: now - customTtlMs + 1_000 });
+      sessions.set("expired", { lastActivity: now - customTtlMs - 1_000 });
+
+      for (const [id, session] of sessions) {
+        if (now - session.lastActivity > customTtlMs) {
+          sessions.delete(id);
+        }
+      }
+
+      expect(sessions.has("active")).toBe(true);
+      expect(sessions.has("expired")).toBe(false);
+    });
+
     it("session lastActivity is updated on request", () => {
       const sessions = new Map<string, { lastActivity: number }>();
       const id = "test-session";

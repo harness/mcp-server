@@ -162,6 +162,33 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("defaults MCP_SESSION_TTL_MS to five minutes", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.MCP_SESSION_TTL_MS).toBe(5 * 60_000);
+    }
+  });
+
+  it("coerces MCP_SESSION_TTL_MS from string env values", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      MCP_SESSION_TTL_MS: "120000",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.MCP_SESSION_TTL_MS).toBe(120_000);
+    }
+  });
+
+  it("rejects MCP_SESSION_TTL_MS below one millisecond", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      MCP_SESSION_TTL_MS: "0",
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("coerces string numbers for timeout and retries", () => {
     const result = ConfigSchema.safeParse({
       ...validConfig,
