@@ -2201,6 +2201,14 @@ describe("scs_remediation_pr create preflight", () => {
       ).resolves.toBeUndefined();
     });
   });
+
+  it("create description documents silent fail-open on transient list errors", () => {
+    const spec = getOp("scs_remediation_pr", "create" as "list");
+    expect(spec.description).toMatch(/fail-closed/i);
+    expect(spec.description).toMatch(/fail-open/i);
+    expect(spec.description).not.toMatch(/with a warning/i);
+    expect(spec.description).toMatch(/silently/i);
+  });
 });
 
 // ─── Registry short-circuit: preflight throws → outbound request never made ──

@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { SearchManager } from "../../src/search/manager.js";
 import { NullSearchProvider } from "../../src/search/null-provider.js";
 import { LocalSearchProvider } from "../../src/search/local-provider.js";
+import { RemoteSearchProvider } from "../../src/search/remote-provider.js";
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
@@ -53,6 +54,65 @@ describe("SearchManager", () => {
     expect(mgr.getProvider().isAvailable()).toBe(false);
 
     vi.restoreAllMocks();
+  });
+
+  describe("remote provider configuration", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("falls back to NullSearchProvider when remote is configured without HARNESS_SEARCH_SERVICE_URL", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: undefined,
+      }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(NullSearchProvider);
+    });
+
+    it("uses RemoteSearchProvider when remote URL is configured", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(RemoteSearchProvider);
+    });
+
+    it("drops non-string HARNESS_SEARCH_SERVICE_HEADERS entries before remote requests", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: true });
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+        HARNESS_SEARCH_SERVICE_HEADERS: '{"Authorization":"Bearer tok","ignored":42,"also":true}',
+        HARNESS_API_TIMEOUT_MS: 5000,
+      }) as never);
+
+      await mgr.initialize();
+
+      expect(fetchSpy).toHaveBeenCalled();
+      const headers = fetchSpy.mock.calls[0]![1]?.headers as Record<string, string>;
+      expect(headers.Authorization).toBe("Bearer tok");
+      expect(headers.ignored).toBeUndefined();
+      expect(headers.also).toBeUndefined();
+    });
+
+    it("reports failed readiness when remote provider health check fails", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: false, status: 503 });
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      }) as never);
+
+      await mgr.initialize();
+
+      expect(mgr.getReadiness()).toEqual({
+        state: "failed",
+        configured: "remote",
+        error: "Health check returned HTTP 503",
+      });
+      expect(mgr.getProvider().isAvailable()).toBe(false);
+    });
   });
 
   describe("canIndexCorpus", () => {

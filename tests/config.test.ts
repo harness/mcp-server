@@ -128,6 +128,28 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("treats empty HARNESS_SEARCH_SERVICE_URL as unset", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_SEARCH_SERVICE_URL: "",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_SEARCH_SERVICE_URL).toBeUndefined();
+    }
+  });
+
+  it("accepts HARNESS_SEARCH_SERVICE_URL without Zod URL validation (runtime HTTP client validates reachability)", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_SEARCH_SERVICE_URL).toBe("http://search-svc:8080");
+    }
+  });
+
   it("treats empty LOG_LEVEL as unset and defaults to info", () => {
     const result = ConfigSchema.safeParse({ ...validConfig, LOG_LEVEL: "" });
     expect(result.success).toBe(true);

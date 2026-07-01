@@ -1100,7 +1100,7 @@ export const scsToolset: ToolsetDefinition = {
             + "MCP preflight: automatically lists existing remediation PRs for this artifact and blocks the create "
             + "if any ACTIVE PR (OPEN/CREATED/PENDING/IN_PROGRESS/DRAFT/QUEUED) already covers the same purl or package_name. "
             + "Historical PRs in terminal states (CLOSED/MERGED/DISMISSED/REJECTED/FAILED/ERROR) are IGNORED and will not block a later upgrade. "
-            + "If the list call fails with 4xx the create is refused (fail-closed); 5xx / network errors skip the check with a warning (fail-open).",
+            + "If the list call fails with 4xx the create is refused (fail-closed); 5xx / network errors skip the check silently (fail-open).",
           bodySchema: {
             description: "Remediation PR creation payload — component PURL and target upgrade version",
             fields: [
