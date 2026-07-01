@@ -81,6 +81,7 @@ const FORBIDDEN_TOOLSET_IMPORTS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /from\s+["'][^"']*harness-client/, reason: "HarnessClient import" },
   { pattern: /from\s+["']@modelcontextprotocol\/sdk/, reason: "McpServer/MCP SDK import" },
   { pattern: /from\s+["'][^"']*\/registry\/index/, reason: "Registry import" },
+  { pattern: /from\s+["'][^"']*\/utils\/logger/, reason: "createLogger import — use handlers/registry for logging" },
 ];
 
 /** Files allowed to call the global fetch() API (documented exceptions). */
@@ -209,7 +210,7 @@ describe("Coding standards — logging and HTTP", () => {
     expect(violations, `console.log() found in:\n${violations.join("\n")}`).toEqual([]);
   });
 
-  it("toolset files do not use console.* (use createLogger in handlers, not toolsets)", () => {
+  it("toolset files do not use console.* or createLogger (use handlers/registry for logging)", () => {
     const violations: string[] = [];
     const toolsetDir = join(SRC, "registry/toolsets");
 
@@ -219,11 +220,14 @@ describe("Coding standards — logging and HTTP", () => {
 
       const content = readFileSync(file, "utf8");
       if (/\bconsole\.(log|error|warn|info|debug)\s*\(/.test(content)) {
-        violations.push(fileRel);
+        violations.push(`${fileRel}: console.*`);
+      }
+      if (/\bcreateLogger\s*\(/.test(content)) {
+        violations.push(`${fileRel}: createLogger()`);
       }
     }
 
-    expect(violations, `console.* found in toolsets:\n${violations.join("\n")}`).toEqual([]);
+    expect(violations, `Logging in toolsets:\n${violations.join("\n")}`).toEqual([]);
   });
 
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {
