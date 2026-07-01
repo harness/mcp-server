@@ -93,4 +93,36 @@ describe("schema bundle contract", () => {
     expect(definitions).not.toHaveProperty("pipeline");
     expect(SCHEMAS.template_v1.title).toBe("template_v1");
   });
+
+  it("includes upstream K8sProgressiveCanaryRollback step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("K8sProgressiveCanaryRollbackStepNode");
+    expect(cdSteps).toHaveProperty("K8sProgressiveCanaryRollbackStepInfo");
+
+    const stepNode = cdSteps.K8sProgressiveCanaryRollbackStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("K8sProgressiveCanaryRollback");
+  });
+
+  it("includes upstream K8sProgressiveCanaryRollback step definitions in v0 template", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = templateDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("K8sProgressiveCanaryRollbackStepNode");
+    expect(cdSteps).toHaveProperty("K8sProgressiveCanaryRollbackStepNode_template");
+  });
+
+  it("includes upstream clone user field in v1 pipeline and template Clone definitions", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const ns = key;
+      const clone = defs[ns].Clone as { properties: Record<string, { description?: string }> };
+
+      expect(clone.properties).toHaveProperty("user");
+      expect(clone.properties.user.description).toContain("clone container");
+    }
+  });
 });

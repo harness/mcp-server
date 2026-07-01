@@ -209,7 +209,7 @@ describe("Coding standards — logging and HTTP", () => {
     expect(violations, `console.log() found in:\n${violations.join("\n")}`).toEqual([]);
   });
 
-  it("toolset files do not use console.* (use createLogger in handlers, not toolsets)", () => {
+  it("toolset files do not use console.* or createLogger (logging belongs in handlers)", () => {
     const violations: string[] = [];
     const toolsetDir = join(SRC, "registry/toolsets");
 
@@ -219,11 +219,14 @@ describe("Coding standards — logging and HTTP", () => {
 
       const content = readFileSync(file, "utf8");
       if (/\bconsole\.(log|error|warn|info|debug)\s*\(/.test(content)) {
-        violations.push(fileRel);
+        violations.push(`${fileRel}: console.* usage`);
+      }
+      if (/from\s+["'][^"']*\/utils\/logger/.test(content) || /\bcreateLogger\s*\(/.test(content)) {
+        violations.push(`${fileRel}: createLogger import/usage — toolsets are pure data`);
       }
     }
 
-    expect(violations, `console.* found in toolsets:\n${violations.join("\n")}`).toEqual([]);
+    expect(violations, `Logging found in toolsets:\n${violations.join("\n")}`).toEqual([]);
   });
 
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {

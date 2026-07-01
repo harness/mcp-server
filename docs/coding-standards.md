@@ -49,6 +49,7 @@ They must NOT:
 - Make HTTP calls directly (use `preflight` hooks with structural client interfaces from `PreflightContext` when needed)
 - Contain business logic beyond field mapping
 - Use `console.log()` (or any stdout writes)
+- Import or call `createLogger()` — logging belongs in tool handlers, not toolsets
 
 ### 3. Use Shared Response Extractors
 
@@ -257,7 +258,7 @@ pnpm inspect
 Before every commit, verify:
 
 - [ ] **No new `server.registerTool()` calls** — only toolset definitions added/modified
-- [ ] **No `console.log()`** — only `createLogger()` for stderr output
+- [ ] **No `console.log()` or `createLogger()` in toolsets** — logging belongs in tool handlers only
 - [ ] **No direct `fetch()` calls** — all Harness API HTTP goes through `HarnessClient` (exceptions: log blob CDN URLs, audit webhooks — see rule 10)
 - [ ] **No new `harness-*.ts` handler files** — the 11 handlers are fixed
 - [ ] **Toolset files are pure data** — no imports of `HarnessClient`, `McpServer`, or `Registry`
@@ -281,7 +282,7 @@ Before every commit, verify:
 |-------------|---------------------|
 | Add a new `server.registerTool()` call | Breaks the consolidated tool model — use the registry instead |
 | Import `HarnessClient` in a toolset file | Toolsets are pure data — they don't execute HTTP directly |
-| Use `console.log()` | Corrupts stdio JSON-RPC transport |
+| Use `console.log()` or `createLogger()` in toolsets | Corrupts stdio JSON-RPC or violates pure-data toolset model — log in handlers only |
 | Make raw `fetch()` calls | Bypasses auth, retry, rate limiting |
 | Create a new HTTP client instance | Singleton pattern — one client, injected everywhere |
 | Hardcode `accountIdentifier` | Client injects it automatically |
