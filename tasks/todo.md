@@ -5,8 +5,8 @@
 - [x] Review remote search, HTTP session, and pipeline execution changes with subagents
 - [x] Trace confirmed pipeline input-set plus inline-override execution bug through the public tool path
 - [x] Implement a minimal input materialization fix with focused regressions
-- [ ] Commit and push implementation checkpoint before validation
-- [ ] Run focused and broad verification
+- [x] Commit and push implementation checkpoint before validation
+- [x] Run focused and broad verification
 - [ ] Open PR and report outcome in Slack
 
 ### Plan
@@ -16,7 +16,10 @@
 - Preserve the existing input-set-only behavior while changing the combined mode to materialize the base input set, apply only matched inline overrides, and fail closed if required fields remain uncovered.
 
 ### Review
-- Pending validation.
+- Found a high-severity pipeline execution correctness bug in the documented "input set base + simple overrides" flow. When callers supplied both `input_set_ids` and non-empty inline `inputs`, `harness_execute` skipped input-set materialization, resolved only the inline keys against the runtime template, and skipped unmatched-required validation because an input set was present. A concrete deployment run could therefore send a YAML body containing unresolved `<+input>` placeholders for fields that the saved input set should have supplied, while also relying on query-string `inputSetIdentifiers` that prior fixes documented as unreliable.
+- Fixed the combined path so pipeline runs materialize saved input sets first, apply only matched inline overrides onto that materialized YAML, remove `inputSetIdentifiers` after constructing the final YAML body, and fail closed if required fields remain uncovered. The merge helper updates variables by `name` rather than list position, so reordered or partially-present input set variables cannot corrupt neighboring values.
+- Added utility-level regressions for preserving input-set values while applying overrides and for required fields not covered by either source, plus a public `harness_execute` regression proving the input set is fetched and the execute body contains both the override and base values with no `<+input>` placeholders.
+- Verification passed: `pnpm exec vitest run tests/utils/runtime-input-resolver.test.ts tests/tools/tool-handlers.test.ts -t "substituteInputsIntoBaseYaml|materializes input_set_ids before applying inline input overrides"`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, `pnpm exec vitest run tests/utils/runtime-input-resolver.test.ts tests/tools/tool-handlers.test.ts` (190 tests), `pnpm test` (116 files / 2473 tests), and `pnpm standards:check` (9 files / 75 tests).
 
 ## Critical Bug Investigation Automation (2026-06-30)
 - [x] Baseline current branch and identify recent behavioral commits after `v3.2.4`
