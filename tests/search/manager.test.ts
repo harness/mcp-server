@@ -124,4 +124,29 @@ describe("SearchManager", () => {
       expect(indexSpy).toHaveBeenCalledOnce();
     });
   });
+
+  describe("indexStaticContent", () => {
+    it("indexes bundled resource definitions and schemas when provider is available", async () => {
+      vi.spyOn(LocalSearchProvider.prototype, "initialize").mockResolvedValueOnce();
+      vi.spyOn(LocalSearchProvider.prototype, "isAvailable").mockReturnValue(true);
+      const indexSpy = vi.spyOn(LocalSearchProvider.prototype, "index").mockResolvedValue();
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "local",
+        HARNESS_MCP_MODE: "single-user",
+      }) as never);
+      await mgr.initialize();
+
+      const registry = new (await import("../../src/registry/index.js")).Registry(makeConfig() as never);
+      await mgr.indexStaticContent(registry);
+
+      const indexedIds = indexSpy.mock.calls.map((call) => (call[0] as { id: string }).id);
+      expect(indexedIds.some((id) => id.startsWith("resource-def:"))).toBe(true);
+      expect(indexedIds.some((id) => id.startsWith("example:"))).toBe(true);
+      expect(indexedIds.some((id) => id.startsWith("schema:"))).toBe(true);
+      expect(indexedIds.some((id) => id.startsWith("entity-schema:"))).toBe(true);
+
+      vi.restoreAllMocks();
+    });
+  });
 });
