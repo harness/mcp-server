@@ -2191,6 +2191,16 @@ describe("scs_remediation_pr create preflight", () => {
       ).resolves.toBeUndefined();
     });
 
+    it("fails OPEN on 503 from the list call (transient upstream)", async () => {
+      const preflight = getPreflight();
+      const dispatch = async () => {
+        throw new HarnessApiError("service unavailable", 503);
+      };
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
+      ).resolves.toBeUndefined();
+    });
+
     it("fails OPEN on network / non-HarnessApiError errors", async () => {
       const preflight = getPreflight();
       const dispatch = async () => {
@@ -2199,6 +2209,40 @@ describe("scs_remediation_pr create preflight", () => {
       await expect(
         preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
       ).resolves.toBeUndefined();
+    });
+
+    it("fails OPEN on 5xx during mid-pagination (partial scan is best-effort)", async () => {
+      const preflight = getPreflight();
+      const fullPage = () => Array.from({ length: 100 }, (_, i) => ({
+        id: `pr-${i}`,
+        purl: `pkg:npm/other${i}@1.0.0`,
+        pr_number: i,
+        pr_status: "CREATED",
+      }));
+      const dispatch = async (_c: unknown, _rt: unknown, _op: unknown, input: Record<string, unknown>) => {
+        if (input.page === 0) return fullPage();
+        throw new HarnessApiError("upstream timeout", 504);
+      };
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
+      ).resolves.toBeUndefined();
+    });
+
+    it("fails CLOSED on 4xx during mid-pagination (client error after partial scan)", async () => {
+      const preflight = getPreflight();
+      const fullPage = () => Array.from({ length: 100 }, (_, i) => ({
+        id: `pr-${i}`,
+        purl: `pkg:npm/other${i}@1.0.0`,
+        pr_number: i,
+        pr_status: "CREATED",
+      }));
+      const dispatch = async (_c: unknown, _rt: unknown, _op: unknown, input: Record<string, unknown>) => {
+        if (input.page === 0) return fullPage();
+        throw new HarnessApiError("forbidden", 403);
+      };
+      await expect(
+        preflight(buildCtx({ artifact_id: "a1", body: { purl: "pkg:npm/foo@1.0.0" } }, dispatch)),
+      ).rejects.toThrow(/preflight check failed \(HTTP 403\)/i);
     });
   });
 });

@@ -485,3 +485,22 @@ describe("Coding standards — Zod and tool annotations", () => {
     expect(violations, violations.join("\n")).toEqual([]);
   });
 });
+
+describe("Coding standards — docs alignment", () => {
+  const standardsPath = join(REPO_ROOT, "docs/coding-standards.md");
+
+  it("docs/coding-standards.md forbids createLogger in toolset definitions", () => {
+    const content = readFileSync(standardsPath, "utf8");
+    expect(content).toMatch(/Import `createLogger`/);
+    expect(content).toMatch(/no imports of `HarnessClient`, `McpServer`, `Registry`, or `createLogger`/);
+  });
+
+  it("docs/coding-standards.md documents every ALLOWED_GLOBAL_FETCH_FILES exception", () => {
+    const content = readFileSync(standardsPath, "utf8");
+    const missing = [...ALLOWED_GLOBAL_FETCH_FILES].filter((file) => !content.includes(file));
+    expect(
+      missing,
+      `docs/coding-standards.md missing fetch() exception entries for: ${missing.join(", ")}`,
+    ).toEqual([]);
+  });
+});
