@@ -116,9 +116,13 @@ const RawConfigSchema = z.object({
   ),
   HARNESS_SEARCH_PROVIDER: z.preprocess(
     emptyStringAsUndefined,
-    z.enum(["none", "local"]).default("local"),
+    z.enum(["none", "local", "remote"]).default("local"),
   ),
   HARNESS_SEARCH_SERVICE_URL: optionalStringFromEnv,
+  // Extra headers sent with every request to the remote search service.
+  // JSON object, e.g.: {"Authorization":"Bearer tok"} or {"x-api-key":"key","x-harness-token":"svc"}
+  // Supports any auth scheme: Bearer tokens, API keys, internal service-to-service headers.
+  HARNESS_SEARCH_SERVICE_HEADERS: optionalStringFromEnv,
   // Directory for @huggingface/transformers model cache (local search provider).
   // Use a persistent volume in production; Docker image bakes models into /app/.cache/hf.
   HARNESS_HF_CACHE_DIR: z.preprocess(

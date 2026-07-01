@@ -88,6 +88,7 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
   "src/client/harness-client.ts",
   "src/utils/log-resolver.ts",
   "src/audit/sinks/webhook.ts",
+  "src/search/remote-provider.ts",
 ]);
 
 /** Only this file may instantiate HarnessClient in production src/. */

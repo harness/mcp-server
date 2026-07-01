@@ -560,9 +560,66 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_AUDIT_WEBHOOK_BATCH_SIZE` | No | `10`                       | Number of audit events to batch before webhook flush                                                                                                                                                                                                   |
 | `HARNESS_AUDIT_WEBHOOK_FLUSH_MS` | No  | `5000`                     | Max time to hold audit events before webhook flush                                                                                                                                                                                                     |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | No     | --                          | Enables OpenTelemetry audit spans when the optional OpenTelemetry packages are installed                                                                                                                                                               |
-| `HARNESS_SEARCH_PROVIDER`   | No       | `local`                     | Semantic search backend: `local` (in-process ONNX embeddings, default) or `none` (disable semantic search, fall back to keyword scatter-gather only). Use `none` in air-gapped environments or when startup model loading is undesirable              |
+| `HARNESS_SEARCH_PROVIDER`   | No       | `local`                     | Semantic search backend: `local` (in-process ONNX embeddings, default), `remote` (external search service via HTTP, required for multi-user mode), or `none` (disable semantic search, fall back to keyword scatter-gather only). Use `none` in air-gapped environments or when startup model loading is undesirable |
+| `HARNESS_SEARCH_SERVICE_URL` | No      | --                          | Base URL of the remote search service when `HARNESS_SEARCH_PROVIDER=remote` (e.g. `http://search-svc:8080`). Required when using the `remote` provider |
+| `HARNESS_SEARCH_SERVICE_HEADERS` | No  | --                          | JSON object of headers sent with every request to the remote search service. Supports any auth scheme: `{"Authorization":"Bearer tok"}`, `{"x-api-key":"key"}`, or multiple internal service-to-service headers |
 | `HARNESS_HF_CACHE_DIR`      | No       | `/tmp/hf-cache`             | Directory for the `@huggingface/transformers` model cache used by the `local` search provider. The Docker image pre-bakes the model into `/app/.cache/hf` to avoid runtime downloads. Set to a persistent volume path in production deployments       |
 
+
+### Semantic Search
+
+`harness_search` uses semantic routing to narrow scatter-gather API calls before fanning out to Harness. Three search providers are available:
+
+| Provider | When to use |
+|----------|-------------|
+| `local` (default) | Single-user stdio mode. Runs `all-MiniLM-L6-v2` in-process via `@huggingface/transformers`. Downloads ~23 MB model on first use; subsequent starts use the cache. |
+| `remote` | Multi-user HTTP mode (Harness-hosted). Delegates embedding and retrieval to an external search service. Tenant isolation is enforced via `tenant_id` — static knowledge/docs use `global`, per-account entity data uses the account ID. |
+| `none` | Disable semantic search entirely; falls back to keyword scatter-gather across all resource types. |
+
+**Remote provider configuration:**
+
+```bash
+HARNESS_SEARCH_PROVIDER=remote
+HARNESS_SEARCH_SERVICE_URL=http://search-svc:8080
+
+# Auth — any scheme via HARNESS_SEARCH_SERVICE_HEADERS (JSON object):
+HARNESS_SEARCH_SERVICE_HEADERS='{"Authorization":"Bearer <token>"}'   # standard bearer
+HARNESS_SEARCH_SERVICE_HEADERS='{"x-api-key":"<key>"}'               # API key header
+HARNESS_SEARCH_SERVICE_HEADERS='{"x-harness-token":"<svc-token>"}'   # internal service-to-service
+# Multiple headers (e.g. service mesh + tenant routing):
+HARNESS_SEARCH_SERVICE_HEADERS='{"x-harness-token":"<tok>","x-tenant":"<id>"}'
+# No auth (service mesh / mTLS handles it):
+# omit HARNESS_SEARCH_SERVICE_HEADERS entirely
+```
+
+**Testing the remote provider locally** with the included stub service (no external dependencies):
+
+```bash
+# 1. Create a venv and install FastAPI
+python3 -m venv .venv-stub
+.venv-stub/bin/pip install fastapi uvicorn
+
+# 2. Start the stub (in-memory, cosine similarity, corpus + tenant filtering)
+.venv-stub/bin/uvicorn stub-search-service:app --port 8082
+
+# 3. Build the MCP server
+pnpm build
+
+# 4. Run the integration smoke test
+node test-remote-provider.mjs
+# Expected output:
+#   available: true
+#   indexed 2 docs
+#   entity search results: pipeline:ts-test score=... corpus=entities
+#   knowledge search results: schema:trigger score=...
+#   all-corpus search results: (merged, sorted by score)
+#   isolation check (other-acct, should be empty): PASS
+
+# 5. Tear down
+kill $(lsof -ti :8082)
+```
+
+The stub (`stub-search-service.py`) implements the same `/v1/health`, `/v1/ingest`, and `/v1/search` contract as the production search service. It uses a simple bag-of-chars embedding so no model download is required — results are semantically plausible but not production-quality.
 
 ### HTTPS Enforcement
 
