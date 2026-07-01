@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { SearchManager } from "../../src/search/manager.js";
 import { NullSearchProvider } from "../../src/search/null-provider.js";
 import { LocalSearchProvider } from "../../src/search/local-provider.js";
+import { RemoteSearchProvider } from "../../src/search/remote-provider.js";
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
@@ -78,6 +79,130 @@ describe("SearchManager", () => {
         HARNESS_MCP_MODE: "multi-user",
       }) as never);
       expect(mgr.canIndexCorpus("knowledge")).toBe(true);
+    });
+
+    it("allows entities corpus in multi-user mode with remote provider", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+        HARNESS_MCP_MODE: "multi-user",
+      }) as never);
+      expect(mgr.canIndexCorpus("entities")).toBe(true);
+    });
+  });
+
+  describe("remote provider", () => {
+    it("falls back to NullSearchProvider when remote is configured without service URL", () => {
+      const mgr = new SearchManager(makeConfig({ HARNESS_SEARCH_PROVIDER: "remote" }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(NullSearchProvider);
+    });
+
+    it("loads RemoteSearchProvider when remote is configured with service URL", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+      }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(RemoteSearchProvider);
+    });
+
+    it("reports ready readiness when remote provider initializes successfully", async () => {
+      vi.spyOn(RemoteSearchProvider.prototype, "initialize").mockResolvedValueOnce();
+      vi.spyOn(RemoteSearchProvider.prototype, "isAvailable").mockReturnValue(true);
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+      }) as never);
+      await mgr.initialize();
+
+      expect(mgr.getReadiness()).toEqual({
+        state: "ready",
+        configured: "remote",
+        provider: "RemoteSearchProvider",
+      });
+
+      vi.restoreAllMocks();
+    });
+
+    it("reports failed readiness when remote provider health check fails", async () => {
+      vi.spyOn(RemoteSearchProvider.prototype, "initialize").mockResolvedValueOnce();
+      vi.spyOn(RemoteSearchProvider.prototype, "isAvailable").mockReturnValue(false);
+      vi.spyOn(RemoteSearchProvider.prototype, "getInitError").mockReturnValue("Health check returned HTTP 503");
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+      }) as never);
+      await mgr.initialize();
+
+      expect(mgr.getReadiness()).toEqual({
+        state: "failed",
+        configured: "remote",
+        error: "Health check returned HTTP 503",
+      });
+
+      vi.restoreAllMocks();
+    });
+
+    it("passes parsed service headers to RemoteSearchProvider and filters non-string values", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) });
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+        HARNESS_SEARCH_SERVICE_HEADERS: '{"Authorization":"Bearer tok","x-api-key":"key","skip":123}',
+      }) as never);
+      await mgr.initialize();
+
+      const headers = fetchSpy.mock.calls[0]![1]?.headers as Record<string, string>;
+      expect(headers["Authorization"]).toBe("Bearer tok");
+      expect(headers["x-api-key"]).toBe("key");
+      expect(headers["skip"]).toBeUndefined();
+
+      vi.unstubAllGlobals();
+    });
+
+    it("ignores invalid HARNESS_SEARCH_SERVICE_HEADERS JSON without crashing", async () => {
+      const fetchSpy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: () => Promise.resolve({}) });
+      vi.stubGlobal("fetch", fetchSpy);
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+        HARNESS_SEARCH_SERVICE_HEADERS: "not-json",
+      }) as never);
+      await expect(mgr.initialize()).resolves.toBeUndefined();
+
+      const headers = fetchSpy.mock.calls[0]![1]?.headers as Record<string, string>;
+      expect(headers["Authorization"]).toBeUndefined();
+
+      vi.unstubAllGlobals();
+    });
+
+    it("indexes entities in multi-user mode with remote provider", async () => {
+      vi.spyOn(RemoteSearchProvider.prototype, "initialize").mockResolvedValueOnce();
+      vi.spyOn(RemoteSearchProvider.prototype, "isAvailable").mockReturnValue(true);
+      const indexSpy = vi.spyOn(RemoteSearchProvider.prototype, "index").mockResolvedValueOnce();
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+        HARNESS_MCP_MODE: "multi-user",
+      }) as never);
+      await mgr.initialize();
+
+      await mgr.indexItem({
+        id: "pipeline:foo",
+        content: "pipeline foo",
+        corpus: "entities",
+        accountId: "acct-1",
+        metadata: { resource_type: "pipeline", identifier: "foo", name: "foo" },
+      });
+
+      expect(indexSpy).toHaveBeenCalledOnce();
+
+      vi.restoreAllMocks();
     });
   });
 
