@@ -76,6 +76,35 @@ describe("mergeRuntimePipelineFragments", () => {
     expect(out.identifier).toBe("new-id");
     expect(out.variables).toEqual([{ name: "x", value: "1" }]);
   });
+
+  it("merges stage variables by name when both fragments target the same stage id", () => {
+    const base = {
+      stages: [{
+        stage: {
+          identifier: "deploy",
+          variables: [
+            { name: "replicas", type: "Number", value: "2" },
+            { name: "env", type: "String", value: "dev" },
+          ],
+        },
+      }],
+    };
+    const next = {
+      stages: [{
+        stage: {
+          identifier: "deploy",
+          variables: [{ name: "replicas", type: "Number", value: "5" }],
+        },
+      }],
+    };
+
+    const out = mergeRuntimePipelineFragments(base, next);
+    const stage = (out.stages as unknown[])[0] as { stage: { variables: unknown[] } };
+    expect(stage.stage.variables).toEqual([
+      { name: "replicas", type: "Number", value: "5" },
+      { name: "env", type: "String", value: "dev" },
+    ]);
+  });
 });
 
 describe("materializeInputSetsToRuntimeYaml", () => {

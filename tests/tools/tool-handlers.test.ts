@@ -754,6 +754,24 @@ describe("harness_create", () => {
     expect(callArgs.body.pipeline_yaml).not.toContain("identifier:");
   });
 
+  it("prefers explicit identifier over pipeline.id when both are provided for v1 create", async () => {
+    const result = await server.call("harness_create", {
+      resource_type: "pipeline_v1",
+      body: {
+        identifier: "explicit_id",
+        pipeline: {
+          id: "yaml_id",
+          name: "Dual ID Build",
+          stages: [],
+        },
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(callArgs.body).toMatchObject({ identifier: "explicit_id" });
+  });
+
   it("coerces JSON-string bodies before dispatch", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { uuid: "category-1" } });
@@ -932,6 +950,29 @@ describe("harness_update", () => {
     });
     expect(result.isError).toBeUndefined();
     expect(mockRequest).toHaveBeenCalledOnce();
+  });
+
+  it("extracts v1 pipeline identifier from pipeline.id on update when body omits identifier", async () => {
+    const yaml = [
+      "pipeline:",
+      "  id: v1_update_pipe",
+      "  name: V1 Updated",
+      "  stages: []",
+    ].join("\n");
+
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline_v1",
+      resource_id: "v1_update_pipe",
+      body: yaml,
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(callArgs.body).toMatchObject({
+      identifier: "v1_update_pipe",
+      name: "V1 Updated",
+      version: "1",
+    });
   });
 
   it("coerces JSON-string bodies before dispatch", async () => {
@@ -2133,6 +2174,58 @@ pipeline:
     expect(text).toContain("Could not load input set(s) for execution");
     expect(text).toContain("Input set not found");
     expect(mockRequest).toHaveBeenCalledOnce();
+  });
+
+  it("requires org_id when materializing input_set_ids without HARNESS_ORG default", async () => {
+    const scopedServer = makeMcpServer("accept");
+    const scopedRegistry = new Registry(makeConfig({
+      HARNESS_TOOLSETS: "pipelines",
+      HARNESS_ORG: undefined,
+      HARNESS_PROJECT: "test-project",
+    }));
+    const scopedRequest = vi.fn();
+    const scopedClient = makeClient(scopedRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(scopedServer, scopedRegistry, scopedClient);
+
+    const result = await scopedServer.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "mat_pipe",
+      input_set_ids: ["saved_set"],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("org_id is required when using input_set_ids"),
+    });
+    expect(scopedRequest).not.toHaveBeenCalled();
+  });
+
+  it("requires project_id when materializing input_set_ids without HARNESS_PROJECT default", async () => {
+    const scopedServer = makeMcpServer("accept");
+    const scopedRegistry = new Registry(makeConfig({
+      HARNESS_TOOLSETS: "pipelines",
+      HARNESS_ORG: "default",
+      HARNESS_PROJECT: undefined,
+    }));
+    const scopedRequest = vi.fn();
+    const scopedClient = makeClient(scopedRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(scopedServer, scopedRegistry, scopedClient);
+
+    const result = await scopedServer.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "mat_pipe",
+      input_set_ids: ["saved_set"],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("project_id is required when using input_set_ids"),
+    });
+    expect(scopedRequest).not.toHaveBeenCalled();
   });
 
   it("materializes input_set_ids when inputs is an empty object", async () => {
