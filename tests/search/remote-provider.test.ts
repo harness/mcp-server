@@ -100,6 +100,16 @@ describe("RemoteSearchProvider", () => {
       expect(searchCall).not.toContain("tenant_id");
     });
 
+    it("omits tenant_id for entities corpus when accountId is absent", async () => {
+      await provider.search("deploy", { corpus: "entities", k: 5 });
+      const calls = fetchSpy.mock.calls.map(c => String(c[0]));
+      const searchCall = calls.find(u =>
+        u.includes("/v1/hybrid") && u.includes("collection_name=mcp_entities"),
+      );
+      expect(searchCall).toBeDefined();
+      expect(searchCall).not.toContain("tenant_id");
+    });
+
     it("sends bearer token when Authorization header provided", async () => {
       fetchSpy = mockFetch([{ ok: true }, { ok: true, body: { results: [], total_count: 0 } }]);
       vi.stubGlobal("fetch", fetchSpy);
@@ -166,6 +176,37 @@ describe("RemoteSearchProvider", () => {
       await p.initialize();
       const results = await p.search("test", { corpus: "knowledge" });
       expect(results).toEqual([]);
+    });
+
+    it("merges and sorts results across corpora for corpus=all, capped at k", async () => {
+      fetchSpy = mockFetch([
+        { ok: true },
+        { ok: true, body: { results: [{ id: "e1", content: "entity", metadata: {}, score: 0.9 }], total_count: 1 } },
+        { ok: true, body: { results: [{ id: "d1", content: "docs", metadata: {}, score: 0.7 }], total_count: 1 } },
+        { ok: true, body: { results: [{ id: "k1", content: "knowledge", metadata: {}, score: 0.5 }], total_count: 1 } },
+      ]);
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.initialize();
+      const results = await p.search("test", { corpus: "all", accountId: "acct", k: 2 });
+      expect(results).toHaveLength(2);
+      expect(results[0]!.id).toBe("e1");
+      expect(results[1]!.id).toBe("d1");
+    });
+
+    it("returns partial results when one corpus fails in corpus=all", async () => {
+      fetchSpy = mockFetch([
+        { ok: true },
+        { ok: false, status: 500 },
+        { ok: true, body: { results: [{ id: "k1", content: "knowledge", metadata: {}, score: 0.8 }], total_count: 1 } },
+        { ok: true, body: { results: [], total_count: 0 } },
+      ]);
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.initialize();
+      const results = await p.search("test", { corpus: "all", accountId: "acct" });
+      expect(results).toHaveLength(1);
+      expect(results[0]!.id).toBe("k1");
     });
   });
 

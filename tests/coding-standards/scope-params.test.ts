@@ -54,6 +54,25 @@ describe("Coding standards — scope params on dispatch handlers", () => {
     expect(violations, violations.join("\n")).toEqual([]);
   });
 
+  it("API-dispatch handlers pass scope through to registry.dispatch", () => {
+    const violations: string[] = [];
+
+    for (const file of SCOPE_AWARE_HANDLERS) {
+      const content = readFileSync(join(REPO_ROOT, file), "utf8");
+      if (!content.includes("registry.dispatch")) {
+        violations.push(`${file}: missing registry.dispatch call`);
+      }
+      if (!content.includes("org_id")) {
+        violations.push(`${file}: org_id not referenced in handler`);
+      }
+      if (!content.includes("project_id")) {
+        violations.push(`${file}: project_id not referenced in handler`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
+
   it("local-only handlers are exempt from org_id/project_id requirements", () => {
     for (const file of LOCAL_ONLY_HANDLERS) {
       const content = readFileSync(join(REPO_ROOT, file), "utf8");

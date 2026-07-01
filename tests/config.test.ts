@@ -128,6 +128,57 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("accepts remote as HARNESS_SEARCH_PROVIDER", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_SEARCH_PROVIDER).toBe("remote");
+      expect(result.data.HARNESS_SEARCH_SERVICE_URL).toBe("http://search:8080");
+    }
+  });
+
+  it("preserves HARNESS_SEARCH_SERVICE_HEADERS for remote provider auth", () => {
+    const headers = '{"Authorization":"Bearer tok","x-api-key":"key"}';
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+      HARNESS_SEARCH_SERVICE_HEADERS: headers,
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_SEARCH_SERVICE_HEADERS).toBe(headers);
+    }
+  });
+
+  it("defaults MCP_SESSION_TTL_MS to 5 minutes", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.MCP_SESSION_TTL_MS).toBe(5 * 60_000);
+    }
+  });
+
+  it("coerces MCP_SESSION_TTL_MS from string env values", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      MCP_SESSION_TTL_MS: "120000",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.MCP_SESSION_TTL_MS).toBe(120_000);
+    }
+  });
+
+  it("rejects MCP_SESSION_TTL_MS below 1", () => {
+    expect(ConfigSchema.safeParse({ ...validConfig, MCP_SESSION_TTL_MS: "0" }).success).toBe(false);
+    expect(ConfigSchema.safeParse({ ...validConfig, MCP_SESSION_TTL_MS: "-1" }).success).toBe(false);
+  });
+
   it("treats empty LOG_LEVEL as unset and defaults to info", () => {
     const result = ConfigSchema.safeParse({ ...validConfig, LOG_LEVEL: "" });
     expect(result.success).toBe(true);

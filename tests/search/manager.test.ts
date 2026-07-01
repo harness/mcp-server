@@ -2,12 +2,15 @@ import { describe, it, expect, vi } from "vitest";
 import { SearchManager } from "../../src/search/manager.js";
 import { NullSearchProvider } from "../../src/search/null-provider.js";
 import { LocalSearchProvider } from "../../src/search/local-provider.js";
+import { RemoteSearchProvider } from "../../src/search/remote-provider.js";
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
     HARNESS_MCP_MODE: "single-user" as const,
     HARNESS_SEARCH_PROVIDER: "none" as const,
     HARNESS_SEARCH_SERVICE_URL: undefined,
+    HARNESS_SEARCH_SERVICE_HEADERS: undefined,
+    HARNESS_API_TIMEOUT_MS: 30_000,
     ...overrides,
   };
 }
@@ -122,6 +125,94 @@ describe("SearchManager", () => {
       });
 
       expect(indexSpy).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("remote provider", () => {
+    it("falls back to NullSearchProvider when remote is configured without service URL", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: undefined,
+      }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(NullSearchProvider);
+    });
+
+    it("loads RemoteSearchProvider when remote URL is configured", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+      }) as never);
+      expect(mgr.getProvider()).toBeInstanceOf(RemoteSearchProvider);
+    });
+
+    it("allows entities indexing in multi-user mode with remote provider", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+        HARNESS_MCP_MODE: "multi-user",
+      }) as never);
+      expect(mgr.canIndexCorpus("entities")).toBe(true);
+    });
+
+    it("indexes entities in multi-user mode when remote provider is available", async () => {
+      vi.spyOn(RemoteSearchProvider.prototype, "initialize").mockResolvedValueOnce();
+      vi.spyOn(RemoteSearchProvider.prototype, "isAvailable").mockReturnValue(true);
+      const indexSpy = vi.spyOn(RemoteSearchProvider.prototype, "index").mockResolvedValueOnce();
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+        HARNESS_MCP_MODE: "multi-user",
+      }) as never);
+      await mgr.initialize();
+
+      await mgr.indexItem({
+        id: "pipeline:foo",
+        content: "pipeline foo",
+        corpus: "entities",
+        accountId: "acct-1",
+        metadata: { resource_type: "pipeline", identifier: "foo", name: "foo" },
+      });
+
+      expect(indexSpy).toHaveBeenCalledOnce();
+      vi.restoreAllMocks();
+    });
+
+    it("reports ready readiness when remote provider initializes successfully", async () => {
+      vi.spyOn(RemoteSearchProvider.prototype, "initialize").mockResolvedValueOnce();
+      vi.spyOn(RemoteSearchProvider.prototype, "isAvailable").mockReturnValue(true);
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+      }) as never);
+      await mgr.initialize();
+
+      expect(mgr.getReadiness()).toEqual({
+        state: "ready",
+        configured: "remote",
+        provider: "RemoteSearchProvider",
+      });
+      vi.restoreAllMocks();
+    });
+
+    it("reports failed readiness when remote provider health check fails", async () => {
+      vi.spyOn(RemoteSearchProvider.prototype, "initialize").mockResolvedValueOnce();
+      vi.spyOn(RemoteSearchProvider.prototype, "isAvailable").mockReturnValue(false);
+      vi.spyOn(RemoteSearchProvider.prototype, "getInitError").mockReturnValue("Health check returned HTTP 503");
+
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search:8080",
+      }) as never);
+      await mgr.initialize();
+
+      expect(mgr.getReadiness()).toEqual({
+        state: "failed",
+        configured: "remote",
+        error: "Health check returned HTTP 503",
+      });
+      vi.restoreAllMocks();
     });
   });
 });
