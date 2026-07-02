@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-02)
+- [x] Baseline current branch and identify recent behavioral commits after `v3.2.5`
+- [x] Review high-blast-radius diffs and trace candidate bugs through callers
+- [x] Implement a minimal fix only if a concrete critical trigger is proven
+- [x] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [x] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+
+### Plan
+- Treat commits after `v3.2.5` as the primary recent-change window because the branch currently matches `origin/main` at `v3.2.6`.
+- Prioritize behavioral changes with operational blast radius: remote semantic search routing/provider hardening, HTTP/session lifecycle behavior, generated schema/tool contract changes, and any create/execute payload handling touched by recent commits.
+- Require a concrete trigger scenario and caller-chain proof before changing code; if confidence stays below the critical-bug bar, leave runtime code unchanged and report the no-fix result.
+
+### Review
+- Found a semantic search indexing correctness bug in the recent remote-search path: live entity documents were keyed as only `resourceType:identifier` and carried no org/project scope metadata. Two project-scoped resources with the same identifier (for example `pipeline:deploy` in two projects) could overwrite each other in the remote entity collection or be merged back into `harness_search` tier-0 results for the wrong project.
+- Fixed entity indexing to build document IDs from account, effective scope, org, project, resource type, and identifier; list/get/startup pre-index now attach the same scope metadata. `harness_search` filters entity semantic hits to the effective requested/default scope before routing and tier-0 display.
+- Found an HTTP transport bug: `createMcpExpressApp()` installs `express.json()` with Express's default 100 KB limit before this server's auth middleware and configured `HARNESS_MAX_BODY_SIZE_MB` parser. Valid HTTP MCP requests with large pipeline YAML/payloads could fail with 413 despite the documented 10 MB default.
+- Fixed HTTP app construction to apply the SDK host-header protection without the SDK factory's default parser, preserving the intended order: CORS, auth, rate limit, then a single configured JSON parser.
+- Verification passed: `pnpm exec vitest run tests/tools/harness-search-routing.test.ts`, `pnpm exec vitest run tests/search/remote-provider.test.ts tests/search/manager.test.ts`, `pnpm exec vitest run tests/integration/http-transport.test.ts`, `pnpm build`, `pnpm docs:generate`, `pnpm typecheck`, `pnpm docs:check`, `pnpm standards:check`, and `pnpm test` (116 files / 2474 tests).
+
 ## Critical Bug Investigation Automation (2026-06-30)
 - [x] Baseline current branch and identify recent behavioral commits after `v3.2.4`
 - [x] Review high-blast-radius diffs and trace candidate bugs through callers

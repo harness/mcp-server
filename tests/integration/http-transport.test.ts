@@ -8,14 +8,14 @@
  * without starting a real HTTP server — we test the route logic directly.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import type { Express } from "express";
+import { json, type Express } from "express";
 import { request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
-import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
 import { resolveHttpHostValidationOptions } from "../../src/utils/http-hosts.js";
 import { createHttpAuthMiddleware } from "../../src/utils/http-auth.js";
 import { isSessionExpired } from "../../src/utils/http-sessions.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "../../src/utils/session-headers.js";
+import { createHarnessHttpExpressApp } from "../../src/utils/http-app.js";
 
 // We can't easily test the full HTTP server without starting it,
 // so we test the session management patterns and transport lifecycle
@@ -215,9 +215,9 @@ describe("HTTP transport session management", () => {
     });
   });
 
-  describe("SDK Host-header validation", () => {
+  describe("HTTP app host-header validation", () => {
     it("accepts hosted MCP host and rejects unexpected hosts for localhost binds", async () => {
-      const app = createMcpExpressApp(resolveHttpHostValidationOptions("127.0.0.1", {}));
+      const app = createHarnessHttpExpressApp(resolveHttpHostValidationOptions("127.0.0.1", {}));
       app.get("/probe", (_req, res) => {
         res.json({ ok: true });
       });
@@ -367,9 +367,9 @@ function buildInitializeBody(): unknown {
 function buildAuthTestApp(opts: {
   authToken?: string;
   multiUser?: boolean;
+  bodyLimit?: string;
 }): Express {
-  const { json } = require("express");
-  const app = createMcpExpressApp(resolveHttpHostValidationOptions("127.0.0.1", {}));
+  const app = createHarnessHttpExpressApp(resolveHttpHostValidationOptions("127.0.0.1", {}));
 
   // Mirror src/index.ts ordering: CORS → auth → rate limit → body parse → route
   app.use((_req: any, res: any, next: any) => {
@@ -377,7 +377,7 @@ function buildAuthTestApp(opts: {
     next();
   });
   app.use(createHttpAuthMiddleware(opts.authToken));
-  app.use(json({ limit: "1mb" }));
+  app.use(json({ limit: opts.bodyLimit ?? "1mb" }));
 
   app.post("/mcp", (req: any, res: any) => {
     // Simulate multi-user credential check from src/index.ts POST /mcp handler
@@ -477,6 +477,20 @@ describe("HTTP /mcp route-level auth", () => {
           "x-harness-account-id": "myaccount",
         },
       });
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ jsonrpc: "2.0", id: 1, result: { ok: true } });
+    });
+  });
+
+  it("honors configured JSON body limits above the SDK default parser limit", async () => {
+    const app = buildAuthTestApp({ bodyLimit: "1mb" });
+    const body = buildInitializeBody() as {
+      params: { _meta?: Record<string, string> };
+    };
+    body.params._meta = { padding: "x".repeat(150 * 1024) };
+
+    await withListeningApp(app, async (baseUrl) => {
+      const res = await postMcp(baseUrl, { body });
       expect(res.status).toBe(200);
       expect(res.body).toMatchObject({ jsonrpc: "2.0", id: 1, result: { ok: true } });
     });
