@@ -128,6 +128,40 @@ describe("ConfigSchema", () => {
     }
   });
 
+  it("accepts HARNESS_SEARCH_PROVIDER=remote with a valid service URL", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_SEARCH_PROVIDER).toBe("remote");
+      expect(result.data.HARNESS_SEARCH_SERVICE_URL).toBe("http://search-svc:8080");
+    }
+  });
+
+  it("rejects malformed HARNESS_SEARCH_SERVICE_URL values", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "not-a-url",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("treats empty HARNESS_SEARCH_SERVICE_URL as unset", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_SEARCH_SERVICE_URL).toBeUndefined();
+    }
+  });
+
   it("treats empty LOG_LEVEL as unset and defaults to info", () => {
     const result = ConfigSchema.safeParse({ ...validConfig, LOG_LEVEL: "" });
     expect(result.success).toBe(true);

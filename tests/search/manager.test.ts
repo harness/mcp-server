@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { SearchManager } from "../../src/search/manager.js";
 import { NullSearchProvider } from "../../src/search/null-provider.js";
 import { LocalSearchProvider } from "../../src/search/local-provider.js";
+import { RemoteSearchProvider } from "../../src/search/remote-provider.js";
 
 function makeConfig(overrides: Record<string, unknown> = {}) {
   return {
@@ -33,6 +34,45 @@ describe("SearchManager", () => {
     expect(mgr.getReadiness()).toEqual({ state: "disabled", configured: "none" });
     await mgr.initialize();
     expect(mgr.getReadiness()).toEqual({ state: "disabled", configured: "none" });
+  });
+
+  it("falls back to NullSearchProvider when remote is configured without a service URL", () => {
+    const mgr = new SearchManager(makeConfig({
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: undefined,
+    }) as never);
+    expect(mgr.getProvider()).toBeInstanceOf(NullSearchProvider);
+  });
+
+  it("uses RemoteSearchProvider when remote is configured with a service URL", () => {
+    const mgr = new SearchManager(makeConfig({
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+    }) as never);
+    expect(mgr.getProvider()).toBeInstanceOf(RemoteSearchProvider);
+  });
+
+  it("passes only string header values from HARNESS_SEARCH_SERVICE_HEADERS", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const mgr = new SearchManager(makeConfig({
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      HARNESS_SEARCH_SERVICE_HEADERS: '{"Authorization":"Bearer tok","num":42,"nested":{"a":"b"}}',
+    }) as never);
+
+    await mgr.initialize();
+
+    const headers = fetchSpy.mock.calls[0]![1]?.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer tok");
+    expect(headers["num"]).toBeUndefined();
+    expect(headers["nested"]).toBeUndefined();
   });
 
   it("reports failed readiness when local provider initialization fails", async () => {
@@ -123,5 +163,10 @@ describe("SearchManager", () => {
 
       expect(indexSpy).toHaveBeenCalledOnce();
     });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 });
