@@ -166,6 +166,28 @@ function extractToolsetNamesFromUnion(): Set<string> {
 }
 
 describe("Coding standards — MCP tool handlers", () => {
+  it("registerAllTools wires exactly the 11 allowed handlers (no extra register* calls)", () => {
+    const indexPath = join(SRC, "tools/index.ts");
+    const content = readFileSync(indexPath, "utf8");
+    const registerCalls = [...content.matchAll(/\bregister(\w+)Tool\s*\(/g)].map((m) => m[1]!);
+    const expected = [
+      "List",
+      "Get",
+      "Create",
+      "Update",
+      "Delete",
+      "Execute",
+      "Diagnose",
+      "Search",
+      "Describe",
+      "Status",
+      "Schema",
+    ];
+
+    expect([...registerCalls].sort()).toEqual([...expected].sort());
+    expect(registerCalls).toHaveLength(11);
+  });
+
   it("registers exactly the 11 allowed consolidated MCP tools", () => {
     const registered = new Set<string>();
 
