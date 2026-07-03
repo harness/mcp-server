@@ -5,11 +5,30 @@
 import { describe, it, expect } from "vitest";
 import {
   ccmViewsExtract,
+  anomalyListExtract,
   ccmBreakdownExtract,
   ccmTimeseriesExtract,
   ccmSummaryExtract,
   ccmRecommendationsExtract,
 } from "../../src/registry/extractors.js";
+
+describe("anomalyListExtract", () => {
+  it("maps data array to items/total (v2 anomaly list shape)", () => {
+    const raw = {
+      data: [{ anomalyId: "a1", anomalousSpend: 500 }],
+    };
+    expect(anomalyListExtract(raw)).toEqual({
+      items: [{ anomalyId: "a1", anomalousSpend: 500 }],
+      total: 1,
+    });
+  });
+
+  it("returns empty defaults when data is missing or not an array", () => {
+    expect(anomalyListExtract({})).toEqual({ items: [], total: 0 });
+    expect(anomalyListExtract({ data: null })).toEqual({ items: [], total: 0 });
+    expect(anomalyListExtract({ data: "unexpected" })).toEqual({ items: [], total: 0 });
+  });
+});
 
 describe("ccmViewsExtract", () => {
   it("maps views and totalCount to items/total", () => {

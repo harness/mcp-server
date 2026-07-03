@@ -327,6 +327,66 @@ describe("AI Evals dataset export removed", () => {
   });
 });
 
+// ─── Control-plane API schema alignment (PR #529) ───────────────────────────
+
+describe("AI Evals control-plane schema alignment", () => {
+  function fieldNames(schema: { fields: Array<{ name: string }> }): string[] {
+    return schema.fields.map((f) => f.name);
+  }
+
+  it("metric create requires dimension field", () => {
+    const res = findResource("eval_metric");
+    const fields = fieldNames(res.operations.create!.bodySchema!);
+    expect(fields).toContain("dimension");
+    expect(fields).not.toContain("metric_ids");
+  });
+
+  it("annotation create/update schemas expose thumbs_up feedback", () => {
+    const createRes = findResource("eval_annotation");
+    const updateRes = findResource("eval_annotation");
+    expect(fieldNames(createRes.operations.create!.bodySchema!)).toContain("thumbs_up");
+    expect(fieldNames(updateRes.operations.update!.bodySchema!)).toContain("thumbs_up");
+  });
+
+  it("online_eval evaluate schema uses metric_set_id and judge_llm_connector_ref", () => {
+    const res = findResource("online_eval");
+    const fields = fieldNames(res.executeActions!.evaluate.bodySchema!);
+    expect(fields).toContain("metric_set_id");
+    expect(fields).toContain("judge_llm_connector_ref");
+    expect(fields).not.toContain("metric_ids");
+  });
+
+  it("online_eval references eval_metric_set not eval_metric", () => {
+    const res = findResource("online_eval");
+    const related = res.relatedResources ?? [];
+    expect(related.some((r) => r.resourceType === "eval_metric_set")).toBe(true);
+    expect(related.some((r) => r.resourceType === "eval_metric")).toBe(false);
+    expect(res.diagnosticHint).toContain("metric_set_id");
+    expect(res.executeActions?.evaluate.actionDescription).toContain("metric_set_id");
+  });
+
+  it("online_eval evaluate passes metric_set_id through to API body", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ scores: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "online_eval", "evaluate", {
+      org_id: "myorg",
+      project_id: "myproj",
+      trace_id: "trace-abc",
+      body: {
+        metric_set_id: "ms-uuid-1",
+        judge_llm_connector_ref: "llm-connector",
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(call.body.metric_set_id).toBe("ms-uuid-1");
+    expect(call.body.judge_llm_connector_ref).toBe("llm-connector");
+    expect(call.body).not.toHaveProperty("metric_ids");
+  });
+});
+
 // ─── Extractors ─────────────────────────────────────────────────────────────
 
 describe("AI Evals extractors", () => {
