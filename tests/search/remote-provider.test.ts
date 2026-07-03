@@ -25,6 +25,15 @@ describe("RemoteSearchProvider", () => {
   });
 
   describe("initialize", () => {
+    it("strips trailing slash from baseUrl before calling the service", async () => {
+      fetchSpy = mockFetch([{ ok: true }]);
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: `${BASE_URL}/` });
+      await p.initialize();
+      expect(fetchSpy.mock.calls[0]![0]).toBe(`${BASE_URL}/v1/health`);
+      vi.unstubAllGlobals();
+    });
+
     it("marks available when health check returns 200", async () => {
       fetchSpy = mockFetch([{ ok: true }]);
       vi.stubGlobal("fetch", fetchSpy);
@@ -207,6 +216,66 @@ describe("RemoteSearchProvider", () => {
       expect(results).toEqual([]);
       expect(textSpy).toHaveBeenCalledOnce();
     });
+
+    it("merges corpus=all hits by score and caps at k", async () => {
+      fetchSpy = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}), text: async () => "" })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            results: [{ id: "entities:low", content: "low", metadata: {}, score: 0.4 }],
+            total_count: 1,
+          }),
+          text: async () => "",
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            results: [{ id: "knowledge:high", content: "high", metadata: {}, score: 0.95 }],
+            total_count: 1,
+          }),
+          text: async () => "",
+        })
+        .mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            results: [{ id: "docs:mid", content: "mid", metadata: {}, score: 0.7 }],
+            total_count: 1,
+          }),
+          text: async () => "",
+        });
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.initialize();
+      const results = await p.search("test", { corpus: "all", accountId: "acct-123", k: 2 });
+      expect(results).toHaveLength(2);
+      expect(results[0]!.id).toBe("knowledge:high");
+      expect(results[1]!.id).toBe("docs:mid");
+    });
+
+    it("returns [] when the hybrid request throws", async () => {
+      fetchSpy = vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}), text: async () => "" })
+        .mockRejectedValueOnce(new Error("network down"));
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.initialize();
+      const results = await p.search("test", { corpus: "knowledge" });
+      expect(results).toEqual([]);
+    });
+
+    it("omits tenant_id for entities corpus when accountId is missing", async () => {
+      fetchSpy = mockFetch([{ ok: true }, { ok: true, body: { results: [], total_count: 0 } }]);
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.initialize();
+      await p.search("pipeline", { corpus: "entities" });
+      const searchCall = fetchSpy.mock.calls.find((c) => String(c[0]).includes("/v1/hybrid"));
+      expect(String(searchCall![0])).not.toContain("tenant_id");
+    });
   });
 
   describe("index", () => {
@@ -267,6 +336,31 @@ describe("RemoteSearchProvider", () => {
       await p.initialize();
       await p.index({ id: "x", content: "y", corpus: "knowledge", metadata: {} });
       expect(textSpy).toHaveBeenCalledOnce();
+    });
+
+    it("is a no-op when the provider is unavailable", async () => {
+      fetchSpy = vi.fn();
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.index({ id: "x", content: "y", corpus: "knowledge", metadata: {} });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
+    it("posts to mcp_docs collection for docs corpus", async () => {
+      fetchSpy = mockFetch([{ ok: true }, { ok: true, body: { id: "doc:1", success: true } }]);
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.initialize();
+      await p.index({
+        id: "doc:1",
+        content: "Harness docs",
+        corpus: "docs",
+        metadata: { type: "doc" },
+      });
+      const ingestCall = fetchSpy.mock.calls.find((c) => String(c[0]).includes("/v1/ingest"));
+      const body = JSON.parse(ingestCall![1].body as string);
+      expect(body.collection_name).toBe("mcp_docs");
+      expect(body.tenant_id).toBeUndefined();
     });
   });
 

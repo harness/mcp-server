@@ -52,6 +52,48 @@ describe("SearchManager", () => {
     expect(mgr.getProvider()).toBeInstanceOf(RemoteSearchProvider);
   });
 
+  it("ignores invalid HARNESS_SEARCH_SERVICE_HEADERS JSON", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const mgr = new SearchManager(makeConfig({
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      HARNESS_SEARCH_SERVICE_HEADERS: "not-json",
+    }) as never);
+
+    await mgr.initialize();
+
+    const headers = fetchSpy.mock.calls[0]![1]?.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBeUndefined();
+  });
+
+  it("ignores non-object HARNESS_SEARCH_SERVICE_HEADERS JSON", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const mgr = new SearchManager(makeConfig({
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      HARNESS_SEARCH_SERVICE_HEADERS: '["Authorization","Bearer tok"]',
+    }) as never);
+
+    await mgr.initialize();
+
+    const headers = fetchSpy.mock.calls[0]![1]?.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBeUndefined();
+  });
+
   it("passes only string header values from HARNESS_SEARCH_SERVICE_HEADERS", async () => {
     const fetchSpy = vi.fn().mockResolvedValue({
       ok: true,
@@ -73,6 +115,30 @@ describe("SearchManager", () => {
     expect(headers["Authorization"]).toBe("Bearer tok");
     expect(headers["num"]).toBeUndefined();
     expect(headers["nested"]).toBeUndefined();
+  });
+
+  it("reports failed readiness when remote provider health check fails", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({}),
+      text: async () => "",
+    });
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const mgr = new SearchManager(makeConfig({
+      HARNESS_SEARCH_PROVIDER: "remote",
+      HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+    }) as never);
+
+    await mgr.initialize();
+
+    expect(mgr.getReadiness()).toEqual({
+      state: "failed",
+      configured: "remote",
+      error: "Health check returned HTTP 503",
+    });
+    expect(mgr.getProvider().isAvailable()).toBe(false);
   });
 
   it("reports failed readiness when local provider initialization fails", async () => {
@@ -110,6 +176,15 @@ describe("SearchManager", () => {
         HARNESS_MCP_MODE: "multi-user",
       }) as never);
       expect(mgr.canIndexCorpus("entities")).toBe(false);
+    });
+
+    it("allows entities corpus in multi-user mode with remote provider", () => {
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+        HARNESS_MCP_MODE: "multi-user",
+      }) as never);
+      expect(mgr.canIndexCorpus("entities")).toBe(true);
     });
 
     it("always allows mcp_resources corpus regardless of mode", () => {
