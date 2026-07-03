@@ -41,4 +41,11 @@ describe("buildResourceIndexContent", () => {
     expect(content).toBe("pipeline Deploy Prod deploy deploy_prod env:prod");
     expect(content).not.toContain("[object Object]");
   });
+
+  it("builds content from identifier-only items", () => {
+    const content = buildResourceIndexContent("service", {
+      identifier: "payments_svc",
+    });
+    expect(content).toBe("service payments_svc");
+  });
 });

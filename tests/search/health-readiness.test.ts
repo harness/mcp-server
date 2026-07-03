@@ -104,4 +104,24 @@ describe("/health search readiness", () => {
 
     vi.restoreAllMocks();
   });
+
+  it("returns 200 ok when search is ready", async () => {
+    const mgr = new SearchManager(makeConfig({ HARNESS_SEARCH_PROVIDER: "local" }) as never);
+    vi.spyOn(LocalSearchProvider.prototype, "initialize").mockResolvedValueOnce();
+    vi.spyOn(LocalSearchProvider.prototype, "isAvailable").mockReturnValue(true);
+    await mgr.initialize();
+
+    await withHealthServer(mgr, async (baseUrl) => {
+      const { status, body } = await getHealth(baseUrl);
+      expect(status).toBe(200);
+      expect(body.status).toBe("ok");
+      expect(body.search).toEqual({
+        state: "ready",
+        configured: "local",
+        provider: "LocalSearchProvider",
+      });
+    });
+
+    vi.restoreAllMocks();
+  });
 });

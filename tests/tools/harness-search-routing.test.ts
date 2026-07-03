@@ -76,11 +76,14 @@ function makeMcpServer() {
   };
 }
 
-function makeSearchManager(results: SearchResult[]): SearchManager {
+function makeSearchManager(
+  results: SearchResult[],
+  searchFn?: SearchProvider["search"],
+): SearchManager {
   const provider: SearchProvider = {
     initialize: async () => {},
     isAvailable: () => true,
-    search: async () => results,
+    search: searchFn ?? (async () => results),
     index: async () => {},
     evictExpired: () => {},
   };
@@ -216,6 +219,39 @@ describe("harness_search semantic routing integration", () => {
     expect(data.types_skipped).not.toContain("pipeline");
     expect(data.types_skipped).not.toContain("connector");
     expect(mockRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it("skips semantic routing when resource_types are explicitly provided", async () => {
+    const searchFn = vi.fn().mockResolvedValue([
+      makeSemanticResult(0.9, { resource_type: "connector" }),
+    ]);
+    const searchManager = makeSearchManager([], searchFn);
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(server, registry, client, searchManager);
+
+    const result = await server.call("harness_search", {
+      query: "github connector",
+      resource_types: ["connector"],
+    });
+    const data = parseResult(result) as { semantic_routed?: boolean; searched_types: number };
+
+    expect(searchFn).not.toHaveBeenCalled();
+    expect(data.semantic_routed).toBeUndefined();
+    expect(data.searched_types).toBe(1);
+  });
+
+  it("narrows scatter-gather using entities corpus semantic hits", async () => {
+    const searchManager = makeSearchManager([
+      makeSemanticResult(0.85, { resource_type: "connector" }, { corpus: "entities" }),
+    ]);
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(server, registry, client, searchManager);
+
+    const result = await server.call("harness_search", { query: "github connector" });
+    const data = parseResult(result) as { semantic_routed?: boolean; searched_types: number };
+
+    expect(data.semantic_routed).toBe(true);
+    expect(data.searched_types).toBe(2);
   });
 
   it("falls back to full scatter-gather when routing scores are below threshold", async () => {
