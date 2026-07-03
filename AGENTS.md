@@ -274,7 +274,7 @@ annotations: {
 - **NEVER** expose secret values — only metadata (name, type, scope)
 - **NEVER** delete pipelines/services/environments without explicit confirmation flow
 - **NEVER** auto-execute pipelines — always return the execution plan first
-- Write operations require `confirmation: true` input param
+- Write operations gate on operation risk via elicitation; pass `confirm: true` only when the client cannot prompt
 - Rate limit to max 10 requests/second client-side
 
 ---
