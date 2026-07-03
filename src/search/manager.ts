@@ -11,6 +11,7 @@ import { getAllExamples } from "../data/examples/index.js";
 import { SCHEMAS } from "../data/schemas/index.js";
 import { ENTITY_BUNDLED_SCHEMAS } from "../data/schemas/entities/index.js";
 import { buildResourceIndexContent } from "./embedding-content.js";
+import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "./entity-index.js";
 
 const log = createLogger("search-manager");
 
@@ -234,22 +235,25 @@ export class SearchManager {
 
     for (const resourceType of types) {
       try {
-        const result = await registry.dispatch(client, resourceType, "list", {
+        const input = {
           size: 50, limit: 50, page: 0,
+        };
+        const result = await registry.dispatch(client, resourceType, "list", {
+          ...input,
         }, { tool: "search-init" }) as { items?: Array<Record<string, unknown>> };
         const items = result?.items ?? [];
         await Promise.all(items.filter(item => item["identifier"] ?? item["id"]).map(item =>
-          this.indexItem({
-            id: `${resourceType}:${String(item["identifier"] ?? item["id"] ?? "")}`,
-            content: buildResourceIndexContent(resourceType, item),
-            corpus: "entities",
-            accountId,
-            metadata: {
-              resource_type: resourceType,
-              identifier: String(item["identifier"] ?? item["id"] ?? ""),
-              name: String(item["name"] ?? ""),
-            },
-          })
+          {
+            const identifier = String(item["identifier"] ?? item["id"] ?? "");
+            const entityScope = resolveEntityScope(registry, resourceType, input);
+            return this.indexItem({
+              id: buildEntityDocumentId(accountId, resourceType, identifier, entityScope),
+              content: buildResourceIndexContent(resourceType, item),
+              corpus: "entities",
+              accountId,
+              metadata: buildEntityMetadata(resourceType, identifier, String(item["name"] ?? ""), entityScope),
+            });
+          }
         ));
         log.info(`Pre-indexed ${items.length} ${resourceType} items`);
       } catch (err) {

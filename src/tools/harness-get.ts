@@ -10,6 +10,7 @@ import { resolveLogContent, resolveLogDownloadUrl } from "../utils/log-resolver.
 import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
 import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
+import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
 import { resourceTypeSchema } from "./input-schemas.js";
 import { getOutputSchema } from "./output-schemas.js";
 
@@ -117,16 +118,13 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
           const identifier = asString(item["identifier"]) ?? asString(item["id"]);
           const accountId = client.account;
           if (identifier) {
+            const entityScope = resolveEntityScope(registry, resourceType, input);
             void searchManager.indexItem({
-              id: `${resourceType}:${identifier}`,
+              id: buildEntityDocumentId(accountId, resourceType, identifier, entityScope),
               content: buildResourceIndexContent(resourceType, item),
               corpus: "entities",
               accountId,
-              metadata: {
-                resource_type: resourceType,
-                identifier,
-                name: String(item["name"] ?? ""),
-              },
+              metadata: buildEntityMetadata(resourceType, identifier, String(item["name"] ?? ""), entityScope),
             }).catch(() => { /* never surface indexing errors */ });
           }
         }

@@ -10,6 +10,7 @@ import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { renderListVisual } from "../utils/svg/list-visuals.js";
 import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
+import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
 import type { ListVisualType } from "../utils/svg/list-visuals.js";
 import { createLogger } from "../utils/logger.js";
 import { resourceTypeSchema } from "./input-schemas.js";
@@ -110,16 +111,13 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
             (result.items as Array<Record<string, unknown>>).map(item => {
               const identifier = asString(item["identifier"]) ?? asString(item["id"]);
               if (!identifier) return Promise.resolve();
+              const entityScope = resolveEntityScope(registry, resourceType, input);
               return searchManager.indexItem({
-                id: `${resourceType}:${identifier}`,
+                id: buildEntityDocumentId(accountId, resourceType, identifier, entityScope),
                 content: buildResourceIndexContent(resourceType, item),
                 corpus: "entities",
                 accountId,
-                metadata: {
-                  resource_type: resourceType,
-                  identifier,
-                  name: String(item["name"] ?? ""),
-                },
+                metadata: buildEntityMetadata(resourceType, identifier, String(item["name"] ?? ""), entityScope),
               });
             })
           ).catch(() => { /* never surface indexing errors to caller */ });

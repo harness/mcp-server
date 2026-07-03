@@ -5,7 +5,7 @@ import { appendFileSync } from "node:fs";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { createMcpExpressApp } from "@modelcontextprotocol/sdk/server/express.js";
+import { json } from "express";
 import { loadConfig, type Config } from "./config.js";
 import { setLogLevel, createLogger } from "./utils/logger.js";
 import { HarnessClient } from "./client/harness-client.js";
@@ -23,6 +23,7 @@ import { SearchManager } from "./search/index.js";
 import { mergeConfigWithSessionHeaders, MissingSessionCredentialsError } from "./utils/session-headers.js";
 import { buildHttpHealthResponse } from "./utils/http-health.js";
 import { beginSessionRequest, endSessionRequest, isSessionExpired, type HttpSessionActivity } from "./utils/http-sessions.js";
+import { createHarnessHttpExpressApp } from "./utils/http-app.js";
 
 
 const log = createLogger("main");
@@ -248,7 +249,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   validateHttpAuthForBindHost(host, config);
 
-  const app = createMcpExpressApp(resolveHttpHostValidationOptions(host, config));
+  const app = createHarnessHttpExpressApp(resolveHttpHostValidationOptions(host, config));
 
   // CORS — allow GET, POST, DELETE for session-based MCP
   app.use((_req, res, next) => {
@@ -288,7 +289,6 @@ async function startHttp(config: Config, port: number): Promise<void> {
   });
 
   const maxBodySize = config.HARNESS_MAX_BODY_SIZE_MB * 1024 * 1024;
-  const { json } = await import("express");
   app.use(json({ limit: maxBodySize }));
 
   // ---- Session store ----

@@ -12,6 +12,7 @@ import type { ResourceScope } from "../registry/types.js";
 import { searchOutputSchema } from "./output-schemas.js";
 import type { SearchManager } from "../search/index.js";
 import type { SearchResult } from "../search/types.js";
+import { entityResultMatchesEffectiveScope } from "../search/entity-index.js";
 
 const log = createLogger("search");
 const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
@@ -152,6 +153,9 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
             accountId: client.account,
             k: 30,
           });
+          semanticResults = semanticResults.filter((result) =>
+            entityResultMatchesEffectiveScope(result, registry, mergedArgs)
+          );
 
           if (semanticResults.length > 0) {
             const predictedTypes = extractRoutingTypes(semanticResults, candidateTypes);

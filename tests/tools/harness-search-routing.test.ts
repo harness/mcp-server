@@ -332,6 +332,46 @@ describe("harness_search tier-0 semantic merge/dedup", () => {
       .flatMap((entry) => entry.items) as Array<Record<string, unknown>>;
     expect(keywordItems.some((item) => item.identifier === "existing-pipe")).toBe(true);
   });
+
+  it("does not display entity semantic hits from a different effective project scope", async () => {
+    registry = new Registry(makeConfig({
+      HARNESS_TOOLSETS: "pipelines",
+      HARNESS_ORG: "org-a",
+      HARNESS_PROJECT: "project-a",
+    }));
+    const searchManager = makeSearchManager([
+      makeSemanticResult(0.9, {
+        resource_type: "pipeline",
+        identifier: "deploy",
+        name: "Deploy from another project",
+        scope: "project",
+        org_id: "org-b",
+        project_id: "project-b",
+      }, { id: "entity:test-account:project:org-b:project-b:pipeline:deploy", corpus: "entities" }),
+      makeSemanticResult(0.8, {
+        resource_type: "pipeline",
+        identifier: "deploy",
+        name: "Deploy in requested project",
+        scope: "project",
+        org_id: "org-a",
+        project_id: "project-a",
+      }, { id: "entity:test-account:project:org-a:project-a:pipeline:deploy", corpus: "entities" }),
+    ]);
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(server, registry, client, searchManager);
+
+    const result = await server.call("harness_search", { query: "deploy" });
+    const data = parseResult(result) as {
+      results: Array<{ tier: number; items: Array<Record<string, unknown>> }>;
+    };
+
+    const tier0Items = data.results
+      .filter((entry) => entry.tier === 0)
+      .flatMap((entry) => entry.items);
+    expect(tier0Items).toHaveLength(1);
+    expect(tier0Items[0]!._id).toBe("entity:test-account:project:org-a:project-a:pipeline:deploy");
+    expect(tier0Items[0]!.project_id).toBe("project-a");
+  });
 });
 
 describe("live resource indexing guards", () => {
@@ -347,8 +387,10 @@ describe("live resource indexing guards", () => {
     const registry = {
       getAllFilterFields: () => [],
       getTypesForOperation: () => ["pipeline"],
-      getResource: () => ({}),
+      getResource: () => ({ scope: "project" }),
       dispatch,
+      get orgId() { return "default-org"; },
+      get projectId() { return "default-project"; },
     } as unknown as Registry;
     const { searchManager, indexItem } = makeIndexingSearchManager();
     const { registerListTool } = await import("../../src/tools/harness-list.js");
@@ -358,8 +400,53 @@ describe("live resource indexing guards", () => {
 
     expect(indexItem).toHaveBeenCalledOnce();
     expect(indexItem).toHaveBeenCalledWith(expect.objectContaining({
-      id: "pipeline:stable-id",
-      metadata: expect.objectContaining({ identifier: "stable-id" }),
+      id: "entity:test-account:project:default-org:default-project:pipeline:stable-id",
+      metadata: expect.objectContaining({
+        identifier: "stable-id",
+        scope: "project",
+        org_id: "default-org",
+        project_id: "default-project",
+      }),
+    }));
+  });
+
+  it("scope-qualifies semantic indexing for duplicate resource identifiers", async () => {
+    const server = makeMcpServer();
+    const dispatch = vi.fn().mockResolvedValue({
+      items: [{ identifier: "deploy", name: "Deploy" }],
+      total: 1,
+    });
+    const registry = {
+      getAllFilterFields: () => [],
+      getTypesForOperation: () => ["pipeline"],
+      getResource: () => ({ scope: "project" }),
+      dispatch,
+      get orgId() { return "default-org"; },
+      get projectId() { return "default-project"; },
+    } as unknown as Registry;
+    const { searchManager, indexItem } = makeIndexingSearchManager();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(server, registry, makeClient(), searchManager);
+
+    await server.call("harness_list", {
+      resource_type: "pipeline",
+      org_id: "org-a",
+      project_id: "project-a",
+    });
+    await server.call("harness_list", {
+      resource_type: "pipeline",
+      org_id: "org-b",
+      project_id: "project-b",
+    });
+
+    expect(indexItem).toHaveBeenCalledTimes(2);
+    expect(indexItem).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      id: "entity:test-account:project:org-a:project-a:pipeline:deploy",
+      metadata: expect.objectContaining({ org_id: "org-a", project_id: "project-a" }),
+    }));
+    expect(indexItem).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      id: "entity:test-account:project:org-b:project-b:pipeline:deploy",
+      metadata: expect.objectContaining({ org_id: "org-b", project_id: "project-b" }),
     }));
   });
 
