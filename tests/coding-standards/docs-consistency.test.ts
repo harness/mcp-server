@@ -8,6 +8,11 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
+const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
+const CLAUDE_PATH = join(REPO_ROOT, "CLAUDE.md");
+
+const ELICITATION_SAFETY_RULE =
+  "Write operations gate on operation risk via elicitation; pass `confirm: true` only when the client cannot prompt";
 
 const REQUIRED_TOOLS = [
   "harness_list",
@@ -45,4 +50,20 @@ describe("Coding standards — documentation consistency", () => {
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
+});
+
+describe("Coding standards — agent guide consistency", () => {
+  for (const [label, path] of [
+    ["AGENTS.md", AGENTS_PATH],
+    ["CLAUDE.md", CLAUDE_PATH],
+  ] as const) {
+    describe(label, () => {
+      const content = readFileSync(path, "utf8");
+
+      it("documents elicitation-based write gating (not legacy confirmation: true param)", () => {
+        expect(content).toContain(ELICITATION_SAFETY_RULE);
+        expect(content).not.toContain("confirmation: true` input param");
+      });
+    });
+  }
 });
