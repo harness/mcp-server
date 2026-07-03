@@ -59,6 +59,8 @@ export interface ResolutionResult {
   expectedKeys: string[];
 }
 
+type PathSegment = string | number;
+
 interface TemplateResponse {
   inputSetTemplateYaml?: string;
   replacedExpressions?: string[];
@@ -284,6 +286,232 @@ export function substituteInputs(
   };
 }
 
+function normalizeInputs(userInputs: Record<string, unknown>): Map<string, unknown> {
+  const normalizedInputs = new Map<string, unknown>();
+  for (const [key, value] of Object.entries(userInputs)) {
+    normalizedInputs.set(key.toLowerCase(), value);
+  }
+  return normalizedInputs;
+}
+
+function replacementForPath(
+  path: PathSegment[],
+  normalizedInputs: Map<string, unknown>,
+  variableNameRaw?: string,
+): { value: unknown; matchedAs: string | undefined } {
+  const rawLeafKey = String(path[path.length - 1] ?? "");
+  const leafKey = rawLeafKey.toLowerCase();
+  const fullPath = path.map(String).join(".").toLowerCase();
+  const variableNameLower = variableNameRaw?.toLowerCase();
+
+  if (variableNameLower && normalizedInputs.has(variableNameLower)) {
+    return { value: normalizedInputs.get(variableNameLower), matchedAs: variableNameLower };
+  }
+  if (normalizedInputs.has(leafKey)) {
+    return { value: normalizedInputs.get(leafKey), matchedAs: leafKey };
+  }
+  if (normalizedInputs.has(fullPath)) {
+    return { value: normalizedInputs.get(fullPath), matchedAs: fullPath };
+  }
+
+  for (let i = 1; i < path.length - 1; i++) {
+    const suffix = path.slice(i).map(String).join(".").toLowerCase();
+    if (normalizedInputs.has(suffix)) {
+      return { value: normalizedInputs.get(suffix), matchedAs: suffix };
+    }
+  }
+
+  return { value: undefined, matchedAs: undefined };
+}
+
+function getAtPath(root: unknown, path: PathSegment[]): unknown {
+  let current = root;
+  for (const segment of path) {
+    if (typeof segment === "number") {
+      if (!Array.isArray(current)) return undefined;
+      current = current[segment];
+      continue;
+    }
+    const record = asRecord(current);
+    if (!record) return undefined;
+    current = record[segment];
+  }
+  return current;
+}
+
+function setAtPath(root: unknown, path: PathSegment[], value: unknown): boolean {
+  if (path.length === 0) return false;
+  let current = root;
+  for (let i = 0; i < path.length - 1; i++) {
+    const segment = path[i]!;
+    const nextSegment = path[i + 1]!;
+    if (typeof segment === "number") {
+      if (!Array.isArray(current)) return false;
+      if (current[segment] === undefined) {
+        current[segment] = typeof nextSegment === "number" ? [] : {};
+      }
+      current = current[segment];
+      continue;
+    }
+
+    const record = asRecord(current);
+    if (!record) return false;
+    if (record[segment] === undefined) {
+      record[segment] = typeof nextSegment === "number" ? [] : {};
+    }
+    current = record[segment];
+  }
+
+  const leaf = path[path.length - 1]!;
+  if (typeof leaf === "number") {
+    if (!Array.isArray(current)) return false;
+    current[leaf] = value;
+    return true;
+  }
+  const record = asRecord(current);
+  if (!record) return false;
+  record[leaf] = value;
+  return true;
+}
+
+function findVariableRecord(root: unknown, parentPath: PathSegment[], variableNameRaw: string): Record<string, unknown> | undefined {
+  const variableName = variableNameRaw.toLowerCase();
+  const directParent = asRecord(getAtPath(root, parentPath));
+  if (asString(directParent?.name)?.toLowerCase() === variableName) {
+    return directParent;
+  }
+
+  const maybeVariableList = getAtPath(root, parentPath.slice(0, -1));
+  if (!Array.isArray(maybeVariableList)) return undefined;
+
+  for (const item of maybeVariableList) {
+    const record = asRecord(item);
+    if (asString(record?.name)?.toLowerCase() === variableName) {
+      return record;
+    }
+  }
+  return undefined;
+}
+
+function getCoveredValue(root: unknown, path: PathSegment[], variableNameRaw: string | undefined): unknown {
+  if (variableNameRaw) {
+    const variable = findVariableRecord(root, path.slice(0, -1), variableNameRaw);
+    const leaf = path[path.length - 1];
+    if (variable && typeof leaf === "string") {
+      return variable[leaf];
+    }
+    return undefined;
+  }
+  return getAtPath(root, path);
+}
+
+function setOverrideValue(
+  root: unknown,
+  path: PathSegment[],
+  value: unknown,
+  variableNameRaw: string | undefined,
+  templateVariable?: Record<string, unknown>,
+): void {
+  if (variableNameRaw) {
+    const variable = findVariableRecord(root, path.slice(0, -1), variableNameRaw);
+    const leaf = path[path.length - 1];
+    if (variable && typeof leaf === "string") {
+      variable[leaf] = value;
+      return;
+    }
+    const variableList = getAtPath(root, path.slice(0, -2));
+    if (Array.isArray(variableList) && typeof leaf === "string") {
+      variableList.push({
+        ...(templateVariable ?? { name: variableNameRaw }),
+        [leaf]: value,
+      });
+    }
+    return;
+  }
+  setAtPath(root, path, value);
+}
+
+function isCoveredByBaseInput(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  return !(typeof value === "string" && INPUT_PLACEHOLDER.test(value));
+}
+
+/**
+ * Apply simple inline overrides onto already-materialized input-set YAML.
+ *
+ * The runtime template is used only as a map from public input keys to exact
+ * runtime locations. Fields that the caller did not provide are left from the
+ * input set, instead of leaking unresolved `<+input>` placeholders from the
+ * template into the execute body.
+ */
+export function substituteInputsIntoBaseYaml(
+  templateYaml: string,
+  userInputs: Record<string, unknown>,
+  baseYaml: string,
+): ResolutionResult {
+  const templateRoot = YAML.parse(templateYaml) as unknown;
+  const outputRoot = YAML.parse(baseYaml) as unknown;
+  const normalizedInputs = normalizeInputs(userInputs);
+  const matched: string[] = [];
+  const unmatchedRequired: string[] = [];
+  const unmatchedOptional: string[] = [];
+  const expectedKeys: string[] = [];
+
+  function walk(node: unknown, path: PathSegment[], parentRecord?: Record<string, unknown>): void {
+    if (Array.isArray(node)) {
+      node.forEach((item, index) => walk(item, [...path, index], undefined));
+      return;
+    }
+
+    const record = asRecord(node);
+    if (record) {
+      for (const [key, value] of Object.entries(record)) {
+        walk(value, [...path, key], record);
+      }
+      return;
+    }
+
+    if (typeof node !== "string" || !INPUT_PLACEHOLDER.test(node)) {
+      return;
+    }
+
+    const rawLeafKey = String(path[path.length - 1] ?? "");
+    const variableNameRaw = (rawLeafKey.toLowerCase() === "value" || rawLeafKey.toLowerCase() === "default")
+      ? asString(parentRecord?.name)
+      : undefined;
+    const displayName = variableNameRaw ?? rawLeafKey ?? path.map(String).join(".");
+    const isOptional = HAS_DEFAULT.test(node);
+    expectedKeys.push(displayName);
+
+    const replacement = replacementForPath(path, normalizedInputs, variableNameRaw);
+    if (replacement.value !== undefined) {
+      setOverrideValue(outputRoot, path, replacement.value, variableNameRaw, parentRecord);
+      matched.push(replacement.matchedAs ?? displayName);
+      return;
+    }
+
+    if (isCoveredByBaseInput(getCoveredValue(outputRoot, path, variableNameRaw))) {
+      return;
+    }
+
+    if (isOptional) {
+      unmatchedOptional.push(displayName);
+    } else {
+      unmatchedRequired.push(displayName);
+    }
+  }
+
+  walk(templateRoot, [], undefined);
+
+  return {
+    yaml: YAML.stringify(outputRoot),
+    matched,
+    unmatchedRequired,
+    unmatchedOptional,
+    expectedKeys,
+  };
+}
+
 /**
  * High-level resolver: fetches the template and substitutes user inputs.
  * Returns the resolved YAML string ready for the pipeline execute API.
@@ -317,6 +545,35 @@ export async function resolveRuntimeInputs(
   }
   if (result.unmatchedOptional.length > 0) {
     log.debug(`${result.unmatchedOptional.length} optional placeholders (have defaults): ${result.unmatchedOptional.join(", ")}`);
+  }
+
+  return result;
+}
+
+export async function resolveRuntimeInputsWithBaseYaml(
+  client: HarnessClient,
+  flatInputs: Record<string, unknown>,
+  options: ResolveOptions,
+  baseYaml: string,
+): Promise<ResolutionResult> {
+  log.info(`Resolving runtime input overrides for pipeline ${options.pipelineId}`);
+
+  const templateYaml = await fetchRuntimeInputTemplate(client, options);
+  if (!templateYaml) {
+    log.info("Pipeline has no runtime input template, using materialized input set YAML as-is");
+    return { yaml: baseYaml, matched: [], unmatchedRequired: [], unmatchedOptional: [], expectedKeys: [] };
+  }
+
+  const result = substituteInputsIntoBaseYaml(templateYaml, flatInputs, baseYaml);
+
+  if (result.matched.length > 0) {
+    log.info(`Applied ${result.matched.length} runtime input override(s): ${result.matched.join(", ")}`);
+  }
+  if (result.unmatchedRequired.length > 0) {
+    log.warn(`${result.unmatchedRequired.length} required placeholders unresolved after input set merge: ${result.unmatchedRequired.join(", ")}`);
+  }
+  if (result.unmatchedOptional.length > 0) {
+    log.debug(`${result.unmatchedOptional.length} optional placeholders still defaulted after input set merge: ${result.unmatchedOptional.join(", ")}`);
   }
 
   return result;
