@@ -144,6 +144,76 @@ describe("SearchManager", () => {
       expect(headers?.Authorization).toBeUndefined();
       vi.unstubAllGlobals();
     });
+
+    it("reports ready readiness when remote provider health check succeeds", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve(""),
+      }));
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      }) as never);
+      await mgr.initialize();
+      expect(mgr.getReadiness()).toEqual({
+        state: "ready",
+        configured: "remote",
+        provider: "RemoteSearchProvider",
+      });
+      expect(mgr.getProvider().isAvailable()).toBe(true);
+      vi.unstubAllGlobals();
+    });
+
+    it("reports failed readiness when remote provider health check fails", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+        json: () => Promise.resolve({}),
+        text: () => Promise.resolve("service unavailable"),
+      }));
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+      }) as never);
+      await mgr.initialize();
+      expect(mgr.getReadiness()).toEqual({
+        state: "failed",
+        configured: "remote",
+        error: "Health check returned HTTP 503",
+      });
+      expect(mgr.getProvider().isAvailable()).toBe(false);
+      vi.unstubAllGlobals();
+    });
+
+    it("allows entities indexing in multi-user mode with remote provider", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve({ id: "pipeline:p1", success: true }),
+        text: () => Promise.resolve(""),
+      }));
+      const mgr = new SearchManager(makeConfig({
+        HARNESS_SEARCH_PROVIDER: "remote",
+        HARNESS_SEARCH_SERVICE_URL: "http://search-svc:8080",
+        HARNESS_MCP_MODE: "multi-user",
+      }) as never);
+      await mgr.initialize();
+      expect(mgr.canIndexCorpus("entities")).toBe(true);
+
+      const provider = mgr.getProvider();
+      const indexSpy = vi.spyOn(provider, "index");
+      await mgr.indexItem({
+        id: "pipeline:foo",
+        content: "pipeline foo",
+        corpus: "entities",
+        accountId: "acct-1",
+        metadata: { resource_type: "pipeline", identifier: "foo", name: "foo" },
+      });
+      expect(indexSpy).toHaveBeenCalledOnce();
+      vi.unstubAllGlobals();
+    });
   });
 
   describe("indexItem", () => {
