@@ -125,4 +125,32 @@ describe("schema bundle contract", () => {
       expect(clone.properties.user.description).toContain("clone container");
     }
   });
+
+  it("includes upstream DeployGoogleAgentRuntimeRevision step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("DeployGoogleAgentRuntimeRevisionStepNode");
+    expect(cdSteps).toHaveProperty("DeployGoogleAgentRuntimeRevisionStepInfo");
+
+    const stepNode = cdSteps.DeployGoogleAgentRuntimeRevisionStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("DeployGoogleAgentRuntimeRevision");
+
+    const stepInfo = cdSteps.DeployGoogleAgentRuntimeRevisionStepInfo as {
+      properties: Record<string, unknown>;
+    };
+    expect(stepInfo.properties).toHaveProperty("connectorRef");
+    expect(stepInfo.properties).toHaveProperty("waitReady");
+  });
+
+  it("includes upstream DeployGoogleAgentRuntimeRevision step definitions in v0 template", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = templateDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("DeployGoogleAgentRuntimeRevisionStepNode");
+    expect(cdSteps).toHaveProperty("DeployGoogleAgentRuntimeRevisionStepNode_template");
+    expect(cdSteps).toHaveProperty("DeployGoogleAgentRuntimeRevisionStepInfo");
+  });
 });
