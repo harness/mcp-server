@@ -18,6 +18,14 @@ jobs:
         with:
           node-version: 20
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Check schema coverage
         run: node scripts/check-schema-coverage.js
         env:
@@ -25,6 +33,9 @@ jobs:
 
       - name: Run sync script
         run: node scripts/sync-schemas.js
+
+      - name: Coding standards guardrails
+        run: pnpm standards:check
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6

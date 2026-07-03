@@ -9,13 +9,10 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 
+import { TOOLSET_HELPER_FILES } from "./allowed-tools.js";
+
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const TOOLSET_DIR = join(REPO_ROOT, "src/registry/toolsets");
-
-const TOOLSET_HELPER_FILES = new Set([
-  "src/registry/toolsets/chaos-descriptions.ts",
-  "src/registry/toolsets/scopes.ts",
-]);
 
 /** CamelCase scope keys must not be used as tool-input keys in queryParams. */
 const FORBIDDEN_SCOPE_INPUT_KEYS = new Set([
