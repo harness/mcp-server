@@ -166,6 +166,33 @@ function extractToolsetNamesFromUnion(): Set<string> {
 }
 
 describe("Coding standards — MCP tool handlers", () => {
+  it("registerAllTools wires every allowed handler (no drift from src/tools/index.ts)", async () => {
+    const { registerAllTools } = await import("../../src/tools/index.js");
+    const { Registry } = await import("../../src/registry/index.js");
+    const { HarnessClient } = await import("../../src/client/harness-client.js");
+    const { vi } = await import("vitest");
+
+    const config = {
+      HARNESS_API_KEY: "pat.testaccount.testtoken.testsecret",
+      HARNESS_BASE_URL: "https://app.harness.io",
+      HARNESS_API_TIMEOUT_MS: 30000,
+      HARNESS_MAX_RETRIES: 3,
+      LOG_LEVEL: "info" as const,
+    };
+    const registry = new Registry(config);
+    const client = new HarnessClient(config);
+    const registered = new Set<string>();
+    const server = {
+      registerTool: vi.fn((name: string) => {
+        registered.add(name);
+      }),
+    };
+
+    registerAllTools(server as never, registry, client, config);
+
+    expect([...registered].sort()).toEqual([...ALLOWED_MCP_TOOLS].sort());
+  });
+
   it("registers exactly the 11 allowed consolidated MCP tools", () => {
     const registered = new Set<string>();
 

@@ -18,6 +18,11 @@ jobs:
         with:
           node-version: 20
 
+      - uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Sync entity schemas from Harness NG API
         run: node scripts/sync-entity-schemas.js
         env:
@@ -26,6 +31,9 @@ jobs:
           HARNESS_ORG: ${{ secrets.HARNESS_ENTITY_SCHEMA_SYNC_ORG }}
           HARNESS_PROJECT: ${{ secrets.HARNESS_ENTITY_SCHEMA_SYNC_PROJECT }}
           HARNESS_BASE_URL: ${{ secrets.HARNESS_ENTITY_SCHEMA_SYNC_BASE_URL }}
+
+      - name: Verify coding standards after sync
+        run: pnpm standards:check
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
