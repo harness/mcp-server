@@ -370,7 +370,12 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
             input.inputs = resolved.yaml;
           } catch (err) {
-            log.warn("Failed to auto-resolve runtime inputs, passing through as-is", { error: String(err) });
+            const msg = err instanceof Error ? err.message : String(err);
+            log.warn("Failed to auto-resolve runtime inputs", { error: msg });
+            return errorResult(
+              `Could not auto-resolve runtime inputs for pipeline execution: ${msg}. ` +
+              "Pass full runtime YAML in inputs, use input_set_ids, or retry after checking runtime_input_template.",
+            );
           }
         }
 
@@ -598,18 +603,14 @@ async function fetchInputSetHint(
   registry: Registry,
 ): Promise<string | null> {
   try {
-    const raw = await client.request<unknown>({
-      method: "GET",
-      path: "/pipeline/api/inputSets",
-      params: {
-        pipelineIdentifier: pipelineId,
-        orgIdentifier: String(input.org_id || registry.orgId),
-        projectIdentifier: String(input.project_id || registry.projectId),
-        size: "5",
-      },
+    const result = await registry.dispatch(client, "input_set", "list", {
+      pipeline_id: pipelineId,
+      org_id: String(input.org_id || registry.orgId),
+      project_id: String(input.project_id || registry.projectId),
+      size: 5,
     });
-    const data = asRecord(asRecord(raw)?.data);
-    const content = data?.content;
+    const list = asRecord(result);
+    const content = list?.items;
     if (!Array.isArray(content) || content.length === 0) return null;
 
     const ids = content
@@ -617,7 +618,7 @@ async function fetchInputSetHint(
       .filter(Boolean);
     if (ids.length === 0) return null;
 
-    const total = typeof data?.totalElements === "number" ? data.totalElements : ids.length;
+    const total = typeof list?.total === "number" ? list.total : ids.length;
     return `Available input sets for this pipeline (${total} total): [${ids.join(", ")}]. Use input_set_ids=["<id>"] to apply one.`;
   } catch {
     return null;
