@@ -2232,6 +2232,96 @@ pipeline:
     expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
   });
 
+  it("blocks when input_set_ids plus inline overrides still leave required fields uncovered", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "partial_pipe"
+    variables:
+      - name: "branch"
+        type: "String"
+        value: "main"
+`;
+    const templateWithRequired = `pipeline:
+  identifier: "partial_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "<+input>"
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: templateWithRequired } })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { content: [{ identifier: "other-set" }], totalElements: 1 } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "partial_pipe",
+      inputs: { branch: "feature" },
+      input_set_ids: ["partial-set"],
+    });
+
+    expect(result.isError).toBe(true);
+    const errText = JSON.stringify(parseResult(result));
+    expect(errText).toContain("required field");
+    expect(errText).toContain("environment");
+    expect(mockRequest).toHaveBeenCalledTimes(3);
+    const executeCalls = mockRequest.mock.calls.filter(
+      (call) => (call[0] as { path?: string }).path?.includes("/pipeline/api/pipeline/execute"),
+    );
+    expect(executeCalls).toHaveLength(0);
+  });
+
+  it("includes _inputResolution metadata with input_set_with_overrides mode", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "meta_override_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "prod"
+      - name: "branch"
+        type: "String"
+        value: "main"
+`;
+    const templateWithRequired = `pipeline:
+  identifier: "meta_override_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "<+input>"
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+    - name: "DEPLOY"
+      type: "String"
+      value: "<+input>.default(true)"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: templateWithRequired } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-meta-override" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "meta_override_pipe",
+      inputs: { branch: "feature" },
+      input_set_ids: ["saved-set"],
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as {
+      _inputResolution: { mode: string; matched: string[]; defaulted?: string[] };
+    };
+    expect(data._inputResolution.mode).toBe("input_set_with_overrides");
+    expect(data._inputResolution.matched).toContain("branch");
+    expect(data._inputResolution.defaulted).toContain("DEPLOY");
+  });
+
   it("includes _inputResolution metadata on successful auto-resolved execution", async () => {
     const simpleTemplate = `pipeline:
   identifier: "meta_pipe"

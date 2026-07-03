@@ -7,6 +7,7 @@ import {
   substituteInputsIntoBaseYaml,
   fetchRuntimeInputTemplate,
   resolveRuntimeInputs,
+  resolveRuntimeInputsWithBaseYaml,
   clearTemplateCache,
 } from "../../src/utils/runtime-input-resolver.js";
 import { HarnessClient } from "../../src/client/harness-client.js";
@@ -346,6 +347,203 @@ describe("substituteInputsIntoBaseYaml", () => {
 
     expect(result.matched).toContain("branch");
     expect(result.unmatchedRequired).toEqual(["environment"]);
+  });
+
+  it("updates variables by name when base list order differs from template", () => {
+    const templateYaml = `pipeline:
+  identifier: "reorder_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "<+input>"
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`;
+    const baseYaml = `pipeline:
+  identifier: "reorder_pipe"
+  variables:
+    - name: "environment"
+      type: "String"
+      value: "prod"
+    - name: "branch"
+      type: "String"
+      value: "main"
+`;
+
+    const result = substituteInputsIntoBaseYaml(templateYaml, { branch: "feature" }, baseYaml);
+
+    expect(result.matched).toContain("branch");
+    expect(result.unmatchedRequired).toHaveLength(0);
+    expect(result.yaml).toContain("feature");
+    expect(result.yaml).toContain("prod");
+
+    const YAML = require("yaml");
+    const parsed = YAML.parse(result.yaml);
+    const variables = parsed.pipeline.variables as Array<{ name: string; value: string }>;
+    expect(variables.find((v) => v.name === "branch")?.value).toBe("feature");
+    expect(variables.find((v) => v.name === "environment")?.value).toBe("prod");
+  });
+
+  it("appends a missing variable entry instead of writing by template list index", () => {
+    const templateYaml = `pipeline:
+  identifier: "append_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "<+input>"
+`;
+    const baseYaml = `pipeline:
+  identifier: "append_pipe"
+  variables:
+    - name: "environment"
+      type: "String"
+      value: "prod"
+`;
+
+    const result = substituteInputsIntoBaseYaml(templateYaml, { branch: "feature" }, baseYaml);
+
+    expect(result.matched).toContain("branch");
+    expect(result.unmatchedRequired).toHaveLength(0);
+    expect(result.yaml).toContain("name: branch");
+    expect(result.yaml).toContain("feature");
+    expect(result.yaml).toContain("environment");
+    expect(result.yaml).toContain("prod");
+  });
+
+  it("treats optional placeholders as covered when the base input set already supplies a value", () => {
+    const templateYaml = `pipeline:
+  identifier: "optional_pipe"
+  variables:
+    - name: "DEPLOY"
+      type: "String"
+      value: "<+input>.default(true)"
+`;
+    const baseYaml = `pipeline:
+  identifier: "optional_pipe"
+  variables:
+    - name: "DEPLOY"
+      type: "String"
+      value: "false"
+`;
+
+    const result = substituteInputsIntoBaseYaml(templateYaml, {}, baseYaml);
+
+    expect(result.matched).toHaveLength(0);
+    expect(result.unmatchedRequired).toHaveLength(0);
+    expect(result.unmatchedOptional).toHaveLength(0);
+    expect(result.yaml).toContain("false");
+    expect(result.yaml).not.toContain("<+input>");
+  });
+
+  it("matches override keys case-insensitively against variable names", () => {
+    const templateYaml = `pipeline:
+  identifier: "case_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "<+input>"
+`;
+    const baseYaml = `pipeline:
+  identifier: "case_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "main"
+`;
+
+    const result = substituteInputsIntoBaseYaml(templateYaml, { BRANCH: "feature" }, baseYaml);
+
+    expect(result.matched).toContain("branch");
+    expect(result.yaml).toContain("feature");
+  });
+});
+
+describe("resolveRuntimeInputsWithBaseYaml", () => {
+  let fetchSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    clearTemplateCache();
+    fetchSpy = vi.spyOn(globalThis, "fetch");
+  });
+
+  afterEach(() => {
+    fetchSpy.mockRestore();
+    clearTemplateCache();
+  });
+
+  it("applies inline overrides onto materialized input-set YAML from the template map", async () => {
+    const templateYaml = `pipeline:
+  identifier: "merge_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "<+input>"
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`;
+    const baseYaml = `pipeline:
+  identifier: "merge_pipe"
+  variables:
+    - name: "environment"
+      type: "String"
+      value: "prod"
+    - name: "branch"
+      type: "String"
+      value: "main"
+`;
+
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        status: "SUCCESS",
+        data: { inputSetTemplateYaml: templateYaml },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+
+    const client = new HarnessClient(makeConfig());
+    const result = await resolveRuntimeInputsWithBaseYaml(
+      client,
+      { branch: "feature" },
+      { pipelineId: "merge_pipe", orgId: "default", projectId: "test-project" },
+      baseYaml,
+    );
+
+    expect(result.matched).toContain("branch");
+    expect(result.unmatchedRequired).toHaveLength(0);
+    expect(result.yaml).toContain("feature");
+    expect(result.yaml).toContain("prod");
+    expect(result.yaml).not.toContain("<+input>");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns the base YAML unchanged when the pipeline has no runtime template", async () => {
+    const baseYaml = `pipeline:
+  identifier: "static_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "main"
+`;
+
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({
+        status: "SUCCESS",
+        data: { inputSetTemplateYaml: "" },
+      }), { status: 200, headers: { "Content-Type": "application/json" } }),
+    );
+
+    const client = new HarnessClient(makeConfig());
+    const result = await resolveRuntimeInputsWithBaseYaml(
+      client,
+      { branch: "feature" },
+      { pipelineId: "static_pipe", orgId: "default", projectId: "test-project" },
+      baseYaml,
+    );
+
+    expect(result.yaml).toContain("main");
+    expect(result.matched).toHaveLength(0);
+    expect(result.unmatchedRequired).toHaveLength(0);
   });
 });
 
