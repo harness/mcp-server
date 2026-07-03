@@ -1,6 +1,6 @@
 import type { ToolsetDefinition, PreflightContext, ParamsSchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
-import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
+import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, anomalyListExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
 
 /** Narrow preflight client for CCM perspective create defaults fetch. */
 interface CcmPreflightClient {
@@ -1039,7 +1039,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
     },
 
     // ------------------------------------------------------------------
-    // 6. cost_anomaly — REST only (rich filtering)
+    // 6. cost_anomaly — REST v2 (rich filtering with time, ordering, views)
     //    Replaces: list_ccm_anomalies, list_all_ccm_anomalies,
     //              list_ccm_ignored_anomalies, get_ccm_anomalies_for_perspective
     //    All consolidated into one parameterized resource type
@@ -1050,7 +1050,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
       displayName: "Cost Anomaly",
       description: `Detected cloud cost anomalies — unexpected cost spikes. Answers "are there any unusual charges?"
 
-Filter by: perspective_id, status (ACTIVE, IGNORED, ARCHIVED, RESOLVED), min_amount, min_anomalous_spend, limit, offset.
+Filter by: perspective_id, status (ACTIVE, IGNORED, ARCHIVED, RESOLVED), anomaly_view (RESOURCE, PERSPECTIVE), search_text, time_filter or start_time/end_time, order_by, group_by, min_amount, min_anomalous_spend, limit, offset.
 All the separate anomaly tools from the official server (list, list_all, list_ignored, by_perspective) are unified here via filter parameters.`,
       toolset: "ccm",
       scope: "account",
@@ -1058,15 +1058,23 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
       listFilterFields: [
         { name: "perspective_id", description: "Cost perspective identifier" },
         { name: "status", description: "Anomaly status filter", enum: ["ACTIVE", "IGNORED", "ARCHIVED", "RESOLVED"] },
-        { name: "min_amount", description: "Minimum amount threshold", type: "number" },
+        { name: "anomaly_view", description: "View type for anomaly grouping", enum: ["RESOURCE", "PERSPECTIVE"] },
+        { name: "search_text", description: "Search text to filter anomalies by name or resource" },
+        { name: "time_filter", description: "Predefined time range filter", enum: [...VALID_TIME_FILTERS] },
+        { name: "start_time", description: "Custom start time in epoch milliseconds (overrides time_filter)", type: "number" },
+        { name: "end_time", description: "Custom end time in epoch milliseconds (overrides time_filter)", type: "number" },
+        { name: "order_by_field", description: "Field to order by", enum: ["ANOMALOUS_SPEND", "TIME", "ACTUAL_SPEND"] },
+        { name: "order_by_direction", description: "Order direction", enum: ["ASCENDING", "DESCENDING"] },
+        { name: "min_amount", description: "Minimum actual amount threshold", type: "number" },
         { name: "min_anomalous_spend", description: "Minimum anomalous spend threshold", type: "number" },
-        { name: "limit", description: "Result limit", type: "number" },
+        { name: "limit", description: "Result limit (default 10)", type: "number" },
         { name: "offset", description: "Pagination offset", type: "number" },
       ],
       operations: {
         list: {
           method: "POST",
-          path: "/ccm/api/anomaly",
+          path: "/ccm/api/anomaly/v2/list",
+          skipCompact: true,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             perspective_id: "perspectiveId",
@@ -1074,25 +1082,67 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           bodyBuilder: (input) => {
             const filters: Record<string, unknown> = {
               filterType: "Anomaly",
-              limit: (input.limit as number) ?? 25,
+              limit: (input.limit as number) ?? 10,
               offset: (input.offset as number) ?? 0,
+              anomalyView: (input.anomaly_view as string) ?? "RESOURCE",
+              groupBy: [],
             };
 
+            // Search text
+            if (input.search_text) {
+              filters.searchText = Array.isArray(input.search_text)
+                ? input.search_text
+                : [input.search_text];
+            } else {
+              filters.searchText = [""];
+            }
+
+            // Time filters — prefer explicit start/end, fall back to predefined
+            if (input.start_time != null || input.end_time != null) {
+              const timeFilters: Record<string, unknown>[] = [];
+              if (input.start_time != null) {
+                timeFilters.push({ operator: "AFTER", timestamp: input.start_time });
+              }
+              if (input.end_time != null) {
+                timeFilters.push({ operator: "BEFORE", timestamp: input.end_time });
+              }
+              filters.timeFilters = timeFilters;
+            } else {
+              const timeRange = (input.time_filter as string) ?? "LAST_30_DAYS";
+              const builtFilters = buildTimeFilters(timeRange);
+              const timeFilters: Record<string, unknown>[] = [];
+              for (const f of builtFilters) {
+                const tf = (f as { timeFilter?: { operator?: string; value?: number } }).timeFilter;
+                if (tf) {
+                  timeFilters.push({ operator: tf.operator, timestamp: tf.value });
+                }
+              }
+              filters.timeFilters = timeFilters;
+            }
+
+            // Status
             if (input.status) {
               filters.status = Array.isArray(input.status) ? input.status : [input.status];
             }
-            if (input.min_amount) {
+
+            // Min thresholds
+            if (input.min_amount != null) {
               filters.minActualAmount = input.min_amount;
             }
-            if (input.min_anomalous_spend) {
+            if (input.min_anomalous_spend != null) {
               filters.minAnomalousSpend = input.min_anomalous_spend;
             }
 
+            // Ordering
+            const orderByField = (input.order_by_field as string) ?? "ANOMALOUS_SPEND";
+            const orderByDirection = (input.order_by_direction as string) ?? "DESCENDING";
+            filters.orderBy = [{ field: orderByField, order: orderByDirection }];
+
             return { anomalyFilterPropertiesDTO: filters };
           },
-          responseExtractor: ngExtract,
+          responseExtractor: anomalyListExtract,
           description:
-            "List cost anomalies. Filter by status (ACTIVE/IGNORED/ARCHIVED/RESOLVED), perspective_id, min_amount, min_anomalous_spend.",
+            "List cost anomalies using v2 API. Filter by status, perspective_id, anomaly_view (RESOURCE/PERSPECTIVE), search_text, time range, ordering, min thresholds.",
         },
       },
       executeActions: {
@@ -1121,7 +1171,64 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
     },
 
     // ------------------------------------------------------------------
-    // 6b. cost_anomaly_summary — anomaly summary stats
+    // 6b. cost_anomaly_drilldown — drill into a specific anomaly
+    //    Three views: details (get), cost time-series, sub-item list
+    //    Answers: "Why did this anomaly happen? What does the cost trend look like?"
+    // ------------------------------------------------------------------
+    {
+      resourceType: "cost_anomaly_drilldown",
+      displayName: "Cost Anomaly Drilldown",
+      description: `Drill-down into a specific cost anomaly. Answers "why did this anomaly happen?" and "what does the cost trend look like?"
+
+harness_get: Returns anomaly details (resource, expected vs actual spend, anomaly attributes).
+harness_list: Returns drill-down sub-items for the anomaly.
+
+For cost time-series data, use harness_get with start_time and end_time.`,
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["anomaly_id"],
+      listFilterFields: [
+        { name: "start_time", description: "Start time in epoch milliseconds (for time-series view)", type: "number" },
+        { name: "end_time", description: "End time in epoch milliseconds (for time-series view)", type: "number" },
+      ],
+      deepLinkTemplate: "/ng/account/{accountId}/ce/anomaly-detection",
+      operations: {
+        get: {
+          method: "GET",
+          path: "/ccm/api/anomaly/v2/drill-down",
+          pathBuilder: (input) => {
+            if (input.start_time != null && input.end_time != null) {
+              return "/ccm/api/anomaly/v2/drill-down/cost/time-series";
+            }
+            return "/ccm/api/anomaly/v2/drill-down";
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            anomaly_id: "anomalyId",
+            start_time: "startTime",
+            end_time: "endTime",
+          },
+          responseExtractor: ngExtract,
+          description:
+            "Get anomaly drill-down details. Without start_time/end_time: returns anomaly details (resource info, expected vs actual cost). With start_time/end_time (epoch ms): returns cost time-series for the anomaly period.",
+        },
+        list: {
+          method: "GET",
+          path: "/ccm/api/anomaly/v2/drill-down/list",
+          skipCompact: true,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            anomaly_id: "anomalyId",
+          },
+          responseExtractor: anomalyListExtract,
+          description:
+            "List drill-down sub-items for a specific anomaly. Returns breakdown of contributing resources/services.",
+        },
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 6c. cost_anomaly_summary — anomaly summary stats
     // ------------------------------------------------------------------
     {
       resourceType: "cost_anomaly_summary",
