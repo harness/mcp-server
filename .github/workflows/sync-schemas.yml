@@ -13,10 +13,19 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Architecture guardrails
+        run: pnpm standards:check
 
       - name: Check schema coverage
         run: node scripts/check-schema-coverage.js
@@ -25,6 +34,9 @@ jobs:
 
       - name: Run sync script
         run: node scripts/sync-schemas.js
+
+      - name: Re-check architecture guardrails after sync
+        run: pnpm standards:check
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
