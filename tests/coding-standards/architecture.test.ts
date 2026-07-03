@@ -12,44 +12,16 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import { ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { ToolsetName } from "../../src/registry/types.js";
+import { ALLOWED_MCP_TOOLS, ALLOWED_REGISTER_TOOL_FILES } from "./constants.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const SRC = join(REPO_ROOT, "src");
 
-/** The only MCP tools allowed in the server. */
-const ALLOWED_MCP_TOOLS = new Set([
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-]);
-
-/** Only these files may call server.registerTool(). */
-const ALLOWED_REGISTER_TOOL_FILES = new Set([
-  "src/tools/harness-list.ts",
-  "src/tools/harness-get.ts",
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-  "src/tools/harness-diagnose.ts",
-  "src/tools/harness-search.ts",
-  "src/tools/harness-describe.ts",
-  "src/tools/harness-status.ts",
-  "src/tools/harness-schema.ts",
-]);
+const ALLOWED_MCP_TOOL_SET = new Set<string>(ALLOWED_MCP_TOOLS);
+const ALLOWED_REGISTER_TOOL_FILE_SET = new Set<string>(ALLOWED_REGISTER_TOOL_FILES);
 
 /** Only these harness-*.ts handler files may exist under src/tools/. */
-const ALLOWED_HARNESS_HANDLER_FILES = new Set([
-  ...ALLOWED_REGISTER_TOOL_FILES,
-]);
+const ALLOWED_HARNESS_HANDLER_FILES = new Set([...ALLOWED_REGISTER_TOOL_FILES]);
 
 /** Toolset helper modules — not required to export a ToolsetDefinition. */
 const TOOLSET_HELPER_FILES = new Set([
@@ -81,7 +53,21 @@ const FORBIDDEN_TOOLSET_IMPORTS: Array<{ pattern: RegExp; reason: string }> = [
   { pattern: /from\s+["'][^"']*harness-client/, reason: "HarnessClient import" },
   { pattern: /from\s+["']@modelcontextprotocol\/sdk/, reason: "McpServer/MCP SDK import" },
   { pattern: /from\s+["'][^"']*\/registry\/index/, reason: "Registry import" },
+  { pattern: /from\s+["'][^"']*\/utils\/logger/, reason: "createLogger import — logging belongs in handlers" },
 ];
+
+/**
+ * Tool handlers may call client.request() only in documented exceptions.
+ * Prefer registry.dispatch() for all Harness API calls.
+ */
+const ALLOWED_CLIENT_REQUEST_FILES = new Set([
+  "src/tools/harness-execute.ts",
+  "src/tools/entity-schema/live.ts",
+  "src/tools/diagnose/pipeline.ts",
+]);
+
+/** Search module must not bypass HarnessClient or write to stdout. */
+const SEARCH_DIR = join(SRC, "search");
 
 /** Files allowed to call the global fetch() API (documented exceptions). */
 const ALLOWED_GLOBAL_FETCH_FILES = new Set([
@@ -151,6 +137,28 @@ function extractToolsetNamesFromUnion(): Set<string> {
 }
 
 describe("Coding standards — MCP tool handlers", () => {
+  it("registerAllTools wires exactly the 11 allowed handlers (no extra register* calls)", () => {
+    const indexPath = join(SRC, "tools/index.ts");
+    const content = readFileSync(indexPath, "utf8");
+    const registerCalls = [...content.matchAll(/\bregister(\w+)Tool\s*\(/g)].map((m) => m[1]!);
+    const expected = [
+      "List",
+      "Get",
+      "Create",
+      "Update",
+      "Delete",
+      "Execute",
+      "Diagnose",
+      "Search",
+      "Describe",
+      "Status",
+      "Schema",
+    ];
+
+    expect([...registerCalls].sort()).toEqual([...expected].sort());
+    expect(registerCalls).toHaveLength(11);
+  });
+
   it("registers exactly the 11 allowed consolidated MCP tools", () => {
     const registered = new Set<string>();
 
@@ -161,7 +169,7 @@ describe("Coding standards — MCP tool handlers", () => {
       }
     }
 
-    expect([...registered].sort()).toEqual([...ALLOWED_MCP_TOOLS].sort());
+    expect([...registered].sort()).toEqual([...ALLOWED_MCP_TOOL_SET].sort());
   });
 
   it("only allows registerTool() in the 11 harness handler files", () => {
@@ -173,7 +181,7 @@ describe("Coding standards — MCP tool handlers", () => {
       if (!content.includes("registerTool")) continue;
 
       const fileRel = rel(file);
-      if (!ALLOWED_REGISTER_TOOL_FILES.has(fileRel)) {
+      if (!ALLOWED_REGISTER_TOOL_FILE_SET.has(fileRel)) {
         const tools = extractRegisterToolNames(content);
         violations.push(`${fileRel} calls registerTool for: ${tools.join(", ") || "(dynamic)"}`);
       }
@@ -208,7 +216,7 @@ describe("Coding standards — logging and HTTP", () => {
     expect(violations, `console.log() found in:\n${violations.join("\n")}`).toEqual([]);
   });
 
-  it("toolset files do not use console.* (use createLogger in handlers, not toolsets)", () => {
+  it("toolset files do not use console.* (logging belongs in handlers, not toolsets)", () => {
     const violations: string[] = [];
     const toolsetDir = join(SRC, "registry/toolsets");
 
@@ -223,6 +231,25 @@ describe("Coding standards — logging and HTTP", () => {
     }
 
     expect(violations, `console.* found in toolsets:\n${violations.join("\n")}`).toEqual([]);
+  });
+
+  it("toolset files do not import or call createLogger (pure data — no side effects)", () => {
+    const violations: string[] = [];
+    const toolsetDir = join(SRC, "registry/toolsets");
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const content = readFileSync(file, "utf8");
+      if (/from\s+["'][^"']*logger/.test(content)) {
+        violations.push(`${fileRel}: createLogger import`);
+      } else if (/\bcreateLogger\s*\(/.test(content)) {
+        violations.push(`${fileRel}: createLogger() call`);
+      }
+    }
+
+    expect(violations, `createLogger in toolsets:\n${violations.join("\n")}`).toEqual([]);
   });
 
   it("does not use raw fetch() in tool handlers or toolset definitions", () => {
@@ -279,6 +306,47 @@ describe("Coding standards — logging and HTTP", () => {
       violations,
       `HarnessClient must only be constructed in src/index.ts:\n${violations.join("\n")}`,
     ).toEqual([]);
+  });
+
+  it("client.request() is only used in documented handler exceptions", () => {
+    const violations: string[] = [];
+    const toolsDir = join(SRC, "tools");
+
+    for (const file of walkTsFiles(toolsDir)) {
+      const content = readFileSync(file, "utf8");
+      if (!/client\.request\s*[<(]/.test(content)) continue;
+
+      const fileRel = rel(file);
+      if (!ALLOWED_CLIENT_REQUEST_FILES.has(fileRel)) {
+        violations.push(fileRel);
+      }
+    }
+
+    expect(
+      violations,
+      `Unexpected client.request() usage (allowed: ${[...ALLOWED_CLIENT_REQUEST_FILES].join(", ")}):\n${violations.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("search module does not use console.log, undocumented fetch(), or HarnessClient", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(SEARCH_DIR)) {
+      const content = readFileSync(file, "utf8");
+      const fileRel = rel(file);
+
+      if (/\bconsole\.log\s*\(/.test(content)) {
+        violations.push(`${fileRel}: console.log()`);
+      }
+      if (GLOBAL_FETCH_PATTERN.test(content) && !ALLOWED_GLOBAL_FETCH_FILES.has(fileRel)) {
+        violations.push(`${fileRel}: raw fetch()`);
+      }
+      if (/new\s+HarnessClient\s*\(/.test(content)) {
+        violations.push(`${fileRel}: new HarnessClient()`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
   });
 });
 
@@ -470,7 +538,7 @@ describe("Coding standards — Zod and tool annotations", () => {
   it("every harness handler explicitly sets openWorldHint in annotations", () => {
     const violations: string[] = [];
 
-    for (const file of ALLOWED_REGISTER_TOOL_FILES) {
+    for (const file of ALLOWED_REGISTER_TOOL_FILES as readonly string[]) {
       const content = readFileSync(join(REPO_ROOT, file), "utf8");
       if (!/openWorldHint\s*:/.test(content)) {
         violations.push(`${file}: missing openWorldHint in annotations`);

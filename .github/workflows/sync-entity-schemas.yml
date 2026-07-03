@@ -13,10 +13,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify coding standards (guard against accidental src/ changes)
+        run: |
+          pnpm build
+          pnpm standards:check
 
       - name: Sync entity schemas from Harness NG API
         run: node scripts/sync-entity-schemas.js
@@ -40,7 +51,7 @@ jobs:
             - `HARNESS_ENTITY_SCHEMA_SYNC_ACCOUNT_ID`
             - `HARNESS_ENTITY_SCHEMA_SYNC_ORG` (for org/project scope snapshots)
             - `HARNESS_ENTITY_SCHEMA_SYNC_PROJECT` (for project scope snapshots)
-            - `HARNESS_ENTITY_SCHEMA_SYNC_BASE_URL` (optional)
+            - `HARNESS_BASE_URL` (optional)
 
             Snapshots are vendored under `src/data/schemas/entities/` for CI, offline fallback,
             and startup cache warm-up. Runtime tool calls still prefer live API fetch when available.
