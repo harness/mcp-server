@@ -241,6 +241,23 @@ describe("RemoteSearchProvider", () => {
       expect(results).toHaveLength(2);
       expect(results.map(r => r.id)).toEqual(["entities:high", "knowledge:mid"]);
     });
+
+    it("forwards metadata identifier filters as query params to the hybrid endpoint", async () => {
+      fetchSpy = mockFetch([{ ok: true }, { ok: true, body: { results: [], total_count: 0 } }]);
+      vi.stubGlobal("fetch", fetchSpy);
+      const p = new RemoteSearchProvider({ baseUrl: BASE_URL });
+      await p.initialize();
+      await p.search("pipeline", {
+        corpus: "entities",
+        accountId: "acct-123",
+        filters: { "metadata.resource_type": "pipeline", "metadata.identifier": "deploy" },
+      });
+      const searchCall = fetchSpy.mock.calls.find((c) => String(c[0]).includes("/v1/hybrid"));
+      expect(searchCall).toBeDefined();
+      const url = String(searchCall![0]);
+      expect(url).toContain("metadata.resource_type=pipeline");
+      expect(url).toContain("metadata.identifier=deploy");
+    });
   });
 
   describe("index", () => {

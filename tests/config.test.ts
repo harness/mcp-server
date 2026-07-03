@@ -128,7 +128,7 @@ describe("ConfigSchema", () => {
     }
   });
 
-  it("accepts a valid HARNESS_SEARCH_SERVICE_URL", () => {
+  it("accepts HARNESS_SEARCH_PROVIDER=remote with a valid service URL", () => {
     const result = ConfigSchema.safeParse({
       ...validConfig,
       HARNESS_SEARCH_PROVIDER: "remote",
@@ -136,11 +136,12 @@ describe("ConfigSchema", () => {
     });
     expect(result.success).toBe(true);
     if (result.success) {
+      expect(result.data.HARNESS_SEARCH_PROVIDER).toBe("remote");
       expect(result.data.HARNESS_SEARCH_SERVICE_URL).toBe("http://search-svc:8080");
     }
   });
 
-  it("rejects an invalid HARNESS_SEARCH_SERVICE_URL", () => {
+  it("rejects malformed HARNESS_SEARCH_SERVICE_URL values", () => {
     const result = ConfigSchema.safeParse({
       ...validConfig,
       HARNESS_SEARCH_PROVIDER: "remote",
@@ -152,6 +153,7 @@ describe("ConfigSchema", () => {
   it("treats empty HARNESS_SEARCH_SERVICE_URL as unset", () => {
     const result = ConfigSchema.safeParse({
       ...validConfig,
+      HARNESS_SEARCH_PROVIDER: "remote",
       HARNESS_SEARCH_SERVICE_URL: "",
     });
     expect(result.success).toBe(true);
