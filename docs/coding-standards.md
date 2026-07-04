@@ -130,7 +130,13 @@ All Zod schemas in tool handlers must:
 - Rate limit enforced client-side via `RateLimiter`
 - Every `EndpointSpec` must declare `operationPolicy` with appropriate `risk` and `retryPolicy`
 
-### 10. HTTP Client Is Singleton
+### 10. Error Handling Principles
+
+- **Fail loudly** — never swallow errors. Surface Harness API errors with full context (status code, message, correlationId). Use `toMcpError()` to convert `HarnessApiError` to a typed MCP error, and `enrichErrorWithHint()` to attach diagnostic context.
+- **Idempotent reads** — all read operations (`harness_list`, `harness_get`, `harness_search`) must be safe to call repeatedly with identical results. No side effects on GET-equivalent paths.
+- **No `any` in error paths** — catch blocks must type-narrow before accessing properties. Use `instanceof HarnessApiError` (from `src/utils/errors.ts`) rather than accessing `.message` on unknown values directly.
+
+### 11. HTTP Client Is Singleton
 
 `HarnessClient` is instantiated once in `src/index.ts` and passed via dependency injection to the registry and tool handlers. Do NOT:
 
@@ -155,7 +161,7 @@ All Zod schemas in tool handlers must:
 | `src/tools/entity-schema/live.ts` | Live schema fetch from Harness schema registry endpoints |
 | `src/tools/diagnose/pipeline.ts` | Multi-step pipeline failure forensics (execution + logs) |
 
-### 11. File Organization Rules
+### 12. File Organization Rules
 
 | Change Type | Where It Goes |
 |-------------|---------------|
@@ -262,13 +268,31 @@ pnpm inspect
 
 ---
 
+## Where to Put New Agent Guidance
+
+The MCP server exposes an `instructions` string in `src/index.ts` sent to every agent on session init — keep it under ~20 lines. For anything more specific, use structured metadata on `EndpointSpec` or `ResourceDefinition` instead of expanding the global instructions block.
+
+| Guidance type | Where it goes |
+|---|---|
+| Universal pattern (applies to ALL tools) | `instructions` in `src/index.ts` |
+| Resource-specific operation details | `description` on the `EndpointSpec` |
+| Execute action usage | `actionDescription` + `executeHint` on the resource |
+| Input shorthands / expansions | `inputExpansions` on `EndpointSpec` (surfaced by `harness_describe` as `inputShorthands`) |
+| Required fields / body format | `bodySchema` on the `EndpointSpec` |
+| Debugging / troubleshooting | `diagnosticHint` on the resource |
+| Filter fields for list operations | `listFilterFields` on the resource |
+
+The `harness_describe` tool surfaces `inputExpansions` (as `inputShorthands`), `bodySchema`, `diagnosticHint`, and `listFilterFields` — prefer data over prose in the instructions block.
+
+---
+
 ## Commit Checklist
 
 Before every commit, verify:
 
 - [ ] **No new `server.registerTool()` calls** — only toolset definitions added/modified
 - [ ] **No `console.log()`** — only `createLogger()` for stderr output
-- [ ] **No direct `fetch()` calls** — all Harness API HTTP goes through `HarnessClient` (exceptions: log blob CDN URLs, audit webhooks — see rule 10)
+- [ ] **No direct `fetch()` calls** — all Harness API HTTP goes through `HarnessClient` (exceptions: log blob CDN URLs, audit webhooks — see rule 11)
 - [ ] **No new `harness-*.ts` handler files** — the 11 handlers are fixed
 - [ ] **Toolset files are pure data** — no imports of `HarnessClient`, `McpServer`, `Registry`, or `createLogger`
 - [ ] **All Zod params have `.describe()` after `.optional()`/`.default()`** — Zod 4 chaining order matters for MCP
