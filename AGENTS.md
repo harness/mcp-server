@@ -11,7 +11,8 @@ pnpm install           # install deps
 pnpm build             # tsc → build/
 pnpm dev               # tsc --watch
 pnpm typecheck         # tsc --noEmit
-pnpm test              # vitest run (277 test files, ~12s)
+pnpm test              # vitest run (118 test files, 2510 tests, ~9s)
+pnpm standards:check   # run coding-standards and structural validation tests
 pnpm start             # stdio transport (requires HARNESS_API_KEY)
 pnpm start:http        # HTTP transport (node build/index.js http)
 pnpm inspect           # MCP Inspector against stdio build
@@ -30,13 +31,15 @@ src/
 ├── registry/
 │   ├── index.ts        # Core dispatch (~50K) — ResourceDefinition, EndpointSpec
 │   ├── types.ts        # Registry types: ResourceDefinition, EndpointSpec, OperationPolicy
-│   └── extractors.ts   # Response shape extractors for all resource types
+│   ├── extractors.ts   # Response shape extractors for all resource types
+│   ├── scope-utils.ts  # Scope resolution utilities
+│   └── toolsets/       # 41 declarative toolset definition files (pure data — add new resources here)
 ├── tools/              # 11 consolidated tool handlers
-├── prompts/            # 30+ prompt templates (one per workflow)
+├── prompts/            # ~33 prompt templates (one per workflow)
 ├── resources/          # MCP resources (pipeline YAML, execution summary)
 ├── client/
 │   └── harness-client.ts  # HTTP client — auth, retry, pagination
-├── data/               # Declarative resource + toolset definitions
+├── data/               # Example data and JSON schemas for entity validation
 ├── search/             # Cross-resource keyword search
 ├── audit/              # Audit manager
 └── utils/              # Errors, logger, elicitation, deep-links, body normalizer
@@ -71,7 +74,7 @@ z.string().describe("Org ID").min(1).optional()  // ❌ description lost — eac
 
 ### Adding a new Harness resource
 
-Add a declarative data file in `src/data/` — no new tool registration, no schema changes, no prompt updates needed. The 11 tools stay fixed; dispatch is data-driven. Do NOT add per-endpoint tool handlers.
+Add a declarative toolset file in `src/registry/toolsets/` — no new tool registration, no schema changes, no prompt updates needed. The 11 tools stay fixed; dispatch is data-driven. Do NOT add per-endpoint tool handlers.
 
 ### docs:generate requires a fresh build
 
@@ -108,7 +111,7 @@ See `.env.example` for the full list. Non-obvious ones:
 | `HARNESS_MCP_MODE` | `single-user` (default) or `multi-user` |
 | `HARNESS_TOOLSETS` | Comma-separated toolset names to restrict exposed tools |
 | `HARNESS_READ_ONLY` | Block all write operations (`true`/`false`) |
-| `HARNESS_AUTO_APPROVE_RISK` | Auto-approve operations at or below this risk level |
+| `HARNESS_AUTO_APPROVE_RISK` | Auto-approve operations at or below this risk level (`none` \| `read` \| `low_write` \| `medium_write` \| `high_write` \| `destructive` \| `all`; default `none`) |
 | `HARNESS_FME_API_KEY` | Feature Management Engine (Split.io) key; falls back to `HARNESS_API_KEY` if unset |
 | `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | Set `true` for local HTTP dev without auth token |
 | `HARNESS_MCP_ALLOWED_HOSTS` | Comma-separated allowed hostnames for HTTP Host-header validation |
@@ -139,7 +142,7 @@ Deprecated aliases (still work, emit deprecation warning to stderr):
 ### ⚠️ Ask first
 - Add or remove npm packages
 - Change public tool contract (tool names, input/output schema) in `src/tools/`
-- Add new tool handlers (vs. adding declarative data in `src/data/`)
+- Add new tool handlers (vs. adding a declarative toolset in `src/registry/toolsets/`)
 
 ### 🚫 Never
 - Use `console.log()` — stdout is the JSON-RPC transport
