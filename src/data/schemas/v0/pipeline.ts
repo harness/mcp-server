@@ -63975,6 +63975,222 @@ const schema: Record<string, any> = {
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
+          "GitOpsRollbackStepNode": {
+            "title": "GitOpsRollbackStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "GitOpsRollback"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "GitOpsRollback"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/GitOpsRollbackStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "GitOpsRollbackStepInfo": {
+            "title": "GitOpsRollbackStepInfo",
+            "type": "object",
+            "required": [
+              "applicationsList"
+            ],
+            "properties": {
+              "applicationsList": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/cd/AgentApplicationRollbackTargets"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "rollBackSteps": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "prune": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "waitTillHealthy": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "failOnTimeout": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "dependencies": {
+                  "failOnTimeout": [
+                    "waitTillHealthy"
+                  ]
+                }
+              }
+            ],
+            "$ref": "#/definitions/pipeline/common/StepSpecType"
+          },
+          "AgentApplicationRollbackTargets": {
+            "title": "AgentApplicationRollbackTargets",
+            "type": "object",
+            "required": [
+              "agentId",
+              "applicationName"
+            ],
+            "properties": {
+              "agentId": {
+                "type": "string"
+              },
+              "applicationName": {
+                "type": "string"
+              },
+              "historyId": {
+                "oneOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "rollBackSteps": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "GitOpsRolloutStepNode": {
             "title": "GitOpsRolloutStepNode",
             "type": "object",
@@ -91239,6 +91455,254 @@ const schema: Record<string, any> = {
               }
             }
           },
+          "RollbackGoogleAgentRuntimeRevisionStepNode": {
+            "title": "RollbackGoogleAgentRuntimeRevisionStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for RollbackGoogleAgentRuntimeRevisionStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "RollbackGoogleAgentRuntimeRevision"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "RollbackGoogleAgentRuntimeRevision"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/RollbackGoogleAgentRuntimeRevisionStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "RollbackGoogleAgentRuntimeRevisionStepInfo": {
+            "title": "RollbackGoogleAgentRuntimeRevisionStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "connectorRef": {
+                    "type": "string"
+                  },
+                  "delegateSelectors": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "image": {
+                    "type": "string"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "privileged": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "runAsUser": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "preExecution": {
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "connectorRef": {
+                "type": "string"
+              },
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "image": {
+                "type": "string"
+              },
+              "imagePullPolicy": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Always",
+                      "Never",
+                      "IfNotPresent"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "privileged": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "runAsUser": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "preExecution": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for RollbackGoogleAgentRuntimeRevisionStepInfo"
+              }
+            }
+          },
           "GoogleCloudRunTrafficShiftStepNode": {
             "title": "GoogleCloudRunTrafficShiftStepNode",
             "type": "object",
@@ -104423,6 +104887,9 @@ const schema: Record<string, any> = {
                 },
                 {
                   "$ref": "#/definitions/pipeline/stages/drtest/DRTestStageNode"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/stages/compositeloadtest/CompositeLoadTestStageNode"
                 }
               ]
             }
@@ -105980,6 +106447,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/cd/SyncStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/cd/GitOpsRollbackStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/cd/GitOpsRolloutStepNode"
                   },
                   {
@@ -106440,6 +106910,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/DeployGoogleAgentRuntimeRevisionStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/RollbackGoogleAgentRuntimeRevisionStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/GoogleCloudRunTrafficShiftStepNode"
@@ -118489,6 +118962,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/cd/DeployGoogleAgentRuntimeRevisionStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/cd/RollbackGoogleAgentRuntimeRevisionStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/cd/GoogleCloudRunTrafficShiftStepNode"
                   },
                   {
@@ -119677,6 +120153,454 @@ const schema: Record<string, any> = {
                 "type": "array",
                 "items": {
                   "$ref": "#/definitions/pipeline/stages/drtest/ExecutionWrapperConfig"
+                },
+                "maxItems": 2147483647,
+                "minItems": 1
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "template": {
+                "$ref": "#/definitions/pipeline/steps/custom/TemplateLinkConfig"
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for StepGroupElementConfig"
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
+                    }
+                  ]
+                }
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "oneOf": [
+                  {
+                    "required": [
+                      "template"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "steps"
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        "compositeloadtest": {
+          "CompositeLoadTestStageNode": {
+            "title": "CompositeLoadTestStageNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for CompositeLoadTestStageNode"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][-0-9a-zA-Z_\\s]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "tags": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "CompositeLoadTest"
+                ]
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "$ref": "#/definitions/pipeline/common/NumberNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/SecretNGVariable"
+                    },
+                    {
+                      "$ref": "#/definitions/pipeline/common/StringNGVariable"
+                    }
+                  ]
+                }
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/StageWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "CompositeLoadTest"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/compositeloadtest/CompositeLoadTestStageConfigImpl"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "CompositeLoadTestStageConfigImpl": {
+            "title": "CompositeLoadTestStageConfigImpl",
+            "type": "object",
+            "required": [
+              "execution"
+            ],
+            "properties": {
+              "execution": {
+                "$ref": "#/definitions/pipeline/stages/compositeloadtest/ExecutionElementConfig"
+              },
+              "description": {
+                "desc": "This is the description for CompositeLoadTestStageConfigImpl"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ExecutionElementConfig": {
+            "title": "ExecutionElementConfig",
+            "type": "object",
+            "required": [
+              "steps"
+            ],
+            "properties": {
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/stages/compositeloadtest/ExecutionWrapperConfig"
+                }
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ExecutionWrapperConfig": {
+            "title": "ExecutionWrapperConfig",
+            "type": "object",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/ExecutionWrapperValidation"
+              }
+            ],
+            "properties": {
+              "parallel": {
+                "$ref": "#/definitions/pipeline/stages/compositeloadtest/ParallelStepElementConfig"
+              },
+              "insert": {
+                "$ref": "#/definitions/pipeline/stages/compositeloadtest/InsertStepsNode"
+              },
+              "step": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepElementConfig"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ShellScriptStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ContainerStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/PolicyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/TemplateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosProbeNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosActionNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/ChaosFaultNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/resiliencetesting/LoadTestStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/EmailStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/HttpStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/WaitStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/EventListenerStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/HarnessApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/CustomApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/JiraApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowApprovalStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/JiraCreateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/JiraUpdateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/BarrierStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/QueueStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowCreateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowUpdateStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ServiceNowImportSetStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
+                  }
+                ]
+              },
+              "stepGroup": {
+                "$ref": "#/definitions/pipeline/stages/compositeloadtest/StepGroupElementConfig"
+              },
+              "description": {
+                "desc": "This is the description for ExecutionWrapperConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ParallelStepElementConfig": {
+            "title": "ParallelStepElementConfig",
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/pipeline/stages/compositeloadtest/ExecutionWrapperConfig"
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "InsertStepsNode": {
+            "title": "InsertStepsNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "steps"
+            ],
+            "properties": {
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "steps": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/stages/compositeloadtest/ExecutionWrapperConfig"
+                    },
+                    "maxItems": 2147483647,
+                    "minItems": 1
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^[\\s]*$"
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "StepGroupElementConfig": {
+            "title": "StepGroupElementConfig",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name"
+            ],
+            "properties": {
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "sharedPaths": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "stepGroupInfra": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/K8sDirectInfra"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/common/VMInfra"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/common/ECSDirectInfra"
+                  }
+                ]
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/stages/compositeloadtest/ExecutionWrapperConfig"
                 },
                 "maxItems": 2147483647,
                 "minItems": 1

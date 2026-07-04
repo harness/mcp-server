@@ -3301,10 +3301,7 @@ const schema: Record<string, any> = {
                 "properties": {
                   "items": {
                     "description": "List of environments for multi-environment deployment.",
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentItem"
-                    }
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentItems"
                   },
                   "sequential": {
                     "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
@@ -3414,6 +3411,22 @@ const schema: Record<string, any> = {
                   }
                 },
                 "additionalProperties": false
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "EnvironmentItems": {
+            "title": "EnvironmentItems",
+            "description": "List of environments for multi-environment deployment, or an expression.",
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentItem"
+                }
+              },
+              {
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
             ],
             "$schema": "http://json-schema.org/draft-07/schema#"
@@ -3613,28 +3626,13 @@ const schema: Record<string, any> = {
               },
               "items": {
                 "description": "List of environments from the group.",
-                "type": "array",
-                "items": {
-                  "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentItem"
-                }
+                "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentItems"
               },
               "filters": {
                 "description": "Filters for selecting environments and infrastructures.",
                 "$ref": "#/definitions/pipeline_v1/stages/unified/Filters"
               }
             },
-            "oneOf": [
-              {
-                "required": [
-                  "items"
-                ]
-              },
-              {
-                "required": [
-                  "filters"
-                ]
-              }
-            ],
             "additionalProperties": false,
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
