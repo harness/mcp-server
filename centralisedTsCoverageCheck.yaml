@@ -1,0 +1,859 @@
+pipeline:
+  projectIdentifier: Harness_Commons
+  orgIdentifier: PROD
+  tags:
+    Owner: DEVX
+  stages:
+    - stage:
+        name: Build
+        identifier: Build
+        description: ""
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            override: true
+            paths: []
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: DetectTypeScriptProject
+                  identifier: DetectTypeScriptProject
+                  spec:
+                    shell: Bash
+                    command: |-
+                      #!/usr/bin/env bash
+                      set -euo pipefail
+
+                      REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+                      cd "$REPO_ROOT"
+
+                      WORKDIR_IN="${WORKDIR:-auto}"
+                      NODE_VERSION_IN="${NODE_VERSION:-auto}"
+                      PM_IN="${PACKAGE_MANAGER:-auto}"
+
+                      [ -n "$WORKDIR_IN" ] && [ "$WORKDIR_IN" != "null" ] || WORKDIR_IN="auto"
+                      [ -n "$NODE_VERSION_IN" ] && [ "$NODE_VERSION_IN" != "null" ] || NODE_VERSION_IN="auto"
+                      [ -n "$PM_IN" ] && [ "$PM_IN" != "null" ] || PM_IN="auto"
+
+                      echo "Inputs: WORKDIR=$WORKDIR_IN  NODE_VERSION=$NODE_VERSION_IN  PACKAGE_MANAGER=$PM_IN"
+
+                      #############################################
+                      # 1. Detect WORKDIR
+                      #############################################
+                      DETECTED_WORKDIR="."
+
+                      if [ "$WORKDIR_IN" != "auto" ]; then
+                        [ "$WORKDIR_IN" = "." ] || [ -d "$WORKDIR_IN" ] || { echo "❌ WORKDIR '$WORKDIR_IN' not found"; exit 1; }
+                        DETECTED_WORKDIR="$WORKDIR_IN"
+                      else
+                        if [ -f "package.json" ]; then
+                          DETECTED_WORKDIR="."
+                        else
+                          pkg=$(find . -maxdepth 4 -type f -name "package.json" \
+                            ! -path "./.git/*" \
+                            ! -path "./**/node_modules/**" \
+                            ! -path "./**/dist/**" \
+                            ! -path "./**/build/**" \
+                            ! -path "./**/out/**" 2>/dev/null | head -n 1)
+                          if [ -n "$pkg" ]; then
+                            d="$(dirname "$pkg")"
+                            DETECTED_WORKDIR="${d#./}"
+                            [ -n "$DETECTED_WORKDIR" ] || DETECTED_WORKDIR="."
+                          fi
+                        fi
+                        echo "✅ Auto-detected WORKDIR='$DETECTED_WORKDIR'"
+                      fi
+
+                      #############################################
+                      # 2. Detect Node major version
+                      #############################################
+                      DETECTED_NODE_VERSION="18"
+
+                      extract_major() {
+                        local s="${1:-}"
+                        s="$(printf '%s' "$s" | tr -d '\r' | sed -e 's/^v//' -e 's/[[:space:]]//g')"
+                        # Prefer common LTS majors if present in a constraint like "18 || 20"
+                        if echo "$s" | grep -qE '(^|[^0-9])18([^0-9]|$)'; then echo "18"; return; fi
+                        if echo "$s" | grep -qE '(^|[^0-9])20([^0-9]|$)'; then echo "20"; return; fi
+                        echo "$s" | grep -oE '[0-9]+' | head -n 1 || true
+                      }
+
+                      if [ "$NODE_VERSION_IN" != "auto" ]; then
+                        m="$(extract_major "$NODE_VERSION_IN")"
+                        [ -n "$m" ] && DETECTED_NODE_VERSION="$m" || DETECTED_NODE_VERSION="$NODE_VERSION_IN"
+                      else
+                        # Pin files (prefer workdir)
+                        for f in "${DETECTED_WORKDIR}/.nvmrc" ".nvmrc" "${DETECTED_WORKDIR}/.node-version" ".node-version" "${DETECTED_WORKDIR}/.tool-versions" ".tool-versions"; do
+                          f="${f#./}"
+                          [ -f "$f" ] || continue
+                          if [ "$(basename "$f")" = ".tool-versions" ]; then
+                            v="$(grep -E '^[[:space:]]*nodejs[[:space:]]+' "$f" | head -n 1 | awk '{print $2}' || true)"
+                          else
+                            v="$(head -n 1 "$f" || true)"
+                          fi
+                          m="$(extract_major "$v")"
+                          if [ -n "$m" ]; then
+                            DETECTED_NODE_VERSION="$m"
+                            echo "✅ Detected Node version from $f: $DETECTED_NODE_VERSION"
+                            break
+                          fi
+                        done
+
+                        # engines.node (if still default)
+                        if [ "$DETECTED_NODE_VERSION" = "18" ]; then
+                          PJ="${DETECTED_WORKDIR}/package.json"
+                          [ "$DETECTED_WORKDIR" = "." ] && PJ="package.json"
+
+                          if [ -f "$PJ" ]; then
+                            engines_node=$(
+                              awk '
+                                BEGIN{insec=0}
+                                /"engines"[[:space:]]*:[[:space:]]*{/{insec=1}
+                                insec && /"node"[[:space:]]*:/{
+                                  gsub(/\r/,"")
+                                  sub(/.*"node"[[:space:]]*:[[:space:]]*/,"")
+                                  gsub(/[,"]/,"")
+                                  gsub(/^[[:space:]]*/,"")
+                                  gsub(/[[:space:]]*$/,"")
+                                  print
+                                  exit
+                                }
+                                insec && /}/{ if(insec){ insec=0 } }
+                              ' "$PJ" 2>/dev/null || true
+                            )
+                            engines_node="$(printf '%s' "${engines_node:-}" | tr -d '\r')"
+                            if [ -n "$engines_node" ]; then
+                              m="$(extract_major "$engines_node")"
+                              if [ -n "$m" ]; then
+                                # For loose lower bounds like ">=16", keep default 18
+                                if echo "$engines_node" | grep -qE '^>=' && [ "$m" -lt 18 ] 2>/dev/null; then
+                                  m="18"
+                                fi
+                                DETECTED_NODE_VERSION="$m"
+                              fi
+                              echo "✅ Detected Node version from $PJ engines.node: $DETECTED_NODE_VERSION ($engines_node)"
+                            fi
+                          fi
+                        fi
+                      fi
+
+                      #############################################
+                      # 3. Detect package manager
+                      #############################################
+                      DETECTED_PACKAGE_MANAGER="npm"
+
+                      if [ "$PM_IN" != "auto" ]; then
+                        DETECTED_PACKAGE_MANAGER="$PM_IN"
+                      else
+                        if [ -f "${DETECTED_WORKDIR}/pnpm-lock.yaml" ] || [ -f "pnpm-lock.yaml" ]; then
+                          DETECTED_PACKAGE_MANAGER="pnpm"
+                        elif [ -f "${DETECTED_WORKDIR}/yarn.lock" ] || [ -f "yarn.lock" ]; then
+                          DETECTED_PACKAGE_MANAGER="yarn"
+                        elif [ -f "${DETECTED_WORKDIR}/package-lock.json" ] || [ -f "package-lock.json" ]; then
+                          DETECTED_PACKAGE_MANAGER="npm"
+                        else
+                          PJ="${DETECTED_WORKDIR}/package.json"
+                          [ "$DETECTED_WORKDIR" = "." ] && PJ="package.json"
+                          if [ -f "$PJ" ] && grep -q '"packageManager"[[:space:]]*:[[:space:]]*"yarn@' "$PJ"; then
+                            DETECTED_PACKAGE_MANAGER="yarn"
+                          elif [ -f "$PJ" ] && grep -q '"packageManager"[[:space:]]*:[[:space:]]*"pnpm@' "$PJ"; then
+                            DETECTED_PACKAGE_MANAGER="pnpm"
+                          fi
+                        fi
+                        echo "✅ Auto-detected package manager: $DETECTED_PACKAGE_MANAGER"
+                      fi
+
+                      echo "DETECTED_WORKDIR=${DETECTED_WORKDIR}"
+                      echo "DETECTED_NODE_VERSION=${DETECTED_NODE_VERSION}"
+                      echo "DETECTED_PACKAGE_MANAGER=${DETECTED_PACKAGE_MANAGER}"
+                    outputVariables:
+                      - name: DETECTED_WORKDIR
+                      - name: DETECTED_NODE_VERSION
+                      - name: DETECTED_PACKAGE_MANAGER
+              - step:
+                  type: Action
+                  name: NodeVersionInstall
+                  identifier: NodeVersionInstall
+                  spec:
+                    uses: actions/setup-node@v4
+                    with:
+                      node-version: <+execution.steps.DetectTypeScriptProject.output.outputVariables.DETECTED_NODE_VERSION>
+              - step:
+                  type: Run
+                  name: uiTestsWithCoverage
+                  identifier: uiTestsWithCoverage
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsFailure
+                  spec:
+                    shell: Bash
+                    command: |-
+                      #!/usr/bin/env bash
+                      set -euo pipefail
+
+                      RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; BLUE='\033[0;34m'; NC='\033[0m'
+                      print_header() { echo -e "\n${BLUE}==== $1 ====${NC}"; }
+                      die()          { echo -e "\n${RED}❌ ERROR: $1${NC}"; exit 1; }
+                      ok()           { echo -e "${GREEN}✅ $1${NC}"; }
+                      warn()         { echo -e "${YELLOW}⚠️  $1${NC}"; }
+
+                      WORKDIR="${WORKDIR:-.}"
+                      PACKAGE_MANAGER="${PACKAGE_MANAGER:-npm}"
+
+                      [ -n "$WORKDIR" ] && [ "$WORKDIR" != "null" ] || WORKDIR="."
+                      [ -n "$PACKAGE_MANAGER" ] && [ "$PACKAGE_MANAGER" != "null" ] || PACKAGE_MANAGER="npm"
+
+                      export LC_ALL=en_US.UTF-8
+                      export LC_CTYPE=en_US.UTF-8
+                      export CI=true
+
+                      REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+                      cd "$REPO_ROOT"
+                      [ "$WORKDIR" = "." ] || [ -d "$WORKDIR" ] || die "WORKDIR '${WORKDIR}' not found"
+
+                      print_header "Tooling"
+                      command -v node >/dev/null 2>&1 || die "node not found (setup-node failed?)"
+                      echo "Node: $(node --version)"
+                      echo "npm:  $(npm --version 2>/dev/null || echo 'n/a')"
+
+                      # Enable corepack (yarn/pnpm) if available
+                      if command -v corepack >/dev/null 2>&1; then
+                        corepack enable >/dev/null 2>&1 || true
+                      fi
+
+                      #############################################
+                      # Auth for private registries (optional)
+                      #############################################
+                      print_header "Registry auth (optional)"
+                      if [ -n "${NPM_TOKEN:-}" ] && [ "$NPM_TOKEN" != "null" ]; then
+                        ok "NPM_TOKEN provided (will be used for GitHub Packages / Yarn npmAuthToken)"
+
+                        # For repos that use npm/yarn classic + GitHub Packages (no .yarnrc.yml),
+                        # ensure an auth token line exists without overriding an existing @harness registry.
+                        ensure_github_packages_auth() {
+                          local npmrc="$1"
+                          mkdir -p "$(dirname "$npmrc")" 2>/dev/null || true
+                          touch "$npmrc"
+
+                          if ! grep -q "npm.pkg.github.com/:_authToken" "$npmrc" 2>/dev/null; then
+                            {
+                              echo ""
+                              echo "# Added by CI for GitHub Packages auth"
+                              if ! grep -qE '^[[:space:]]*@harness:registry=' "$npmrc" 2>/dev/null; then
+                                echo "@harness:registry=https://npm.pkg.github.com"
+                              fi
+                              echo "//npm.pkg.github.com/:_authToken=${NPM_TOKEN}"
+                              echo "always-auth=true"
+                            } >> "$npmrc"
+                          fi
+                        }
+
+                        # If the repo already has a project-level .npmrc, update it in-place.
+                        # Otherwise write to ~/.npmrc (home) to avoid introducing a new project-level
+                        # file that would make yarn think the lockfile is stale (--frozen-lockfile).
+                        if [ -f "${REPO_ROOT}/.npmrc" ]; then
+                          ensure_github_packages_auth "${REPO_ROOT}/.npmrc"
+                        else
+                          ensure_github_packages_auth "$HOME/.npmrc"
+                        fi
+                      else
+                        warn "NPM_TOKEN not provided (install may fail if repo depends on private @harness packages)"
+                      fi
+
+                      #############################################
+                      # Git dep workarounds (SSL + checksum)
+                      #############################################
+                      HAS_GIT_DEPS=false
+                      # Regex: match URLs ending in .git followed by # or " or end-of-line
+                      # This avoids false positives like npm.pkg.github.com
+                      GIT_URL_RE='https://[^"'"'"' #]+\.git(#|"|$)'
+                      for lf in "${WORKDIR}/yarn.lock" yarn.lock "${WORKDIR}/package-lock.json" package-lock.json "${WORKDIR}/pnpm-lock.yaml" pnpm-lock.yaml; do
+                        [ -f "$lf" ] || continue
+                        if grep -qE "$GIT_URL_RE" "$lf" 2>/dev/null; then
+                          HAS_GIT_DEPS=true
+                          # Disable SSL verify for git dep hosts (mirrors repo Dockerfiles)
+                          grep -oE 'https://[^"'"'"' #]+\.git' "$lf" 2>/dev/null | grep -E '\.git$' | sort -u | while IFS= read -r url; do
+                            git config --global --bool --add "http.${url}.sslverify" false
+                            ok "Disabled SSL verify for git dep: $url"
+                          done
+                          # Strip non-deterministic checksums from git deps (Yarn 3 YN0018)
+                          # Git deps are packed on-the-fly; different environments produce different
+                          # tarballs, so the lockfile checksum never matches in CI.
+                          if echo "$lf" | grep -q 'yarn.lock'; then
+                            if grep -q 'resolution:.*\.git#' "$lf" 2>/dev/null; then
+                              awk '
+                                /resolution:.*\.git#/ { in_git=1 }
+                                in_git && /^  checksum:/ { in_git=0; next }
+                                /^[^ "[:space:]]/ || /^$/ || /^"/ { in_git=0 }
+                                { print }
+                              ' "$lf" > "${lf}.tmp" && mv "${lf}.tmp" "$lf"
+                              ok "Stripped non-deterministic checksums from git deps in yarn.lock"
+                            fi
+                          fi
+                        fi
+                        break
+                      done
+
+                      #############################################
+                      # Install dependencies
+                      #############################################
+                      print_header "Installing dependencies"
+                      ok "Package manager: ${PACKAGE_MANAGER}"
+
+                      pushd "$WORKDIR" >/dev/null
+                      case "$PACKAGE_MANAGER" in
+                        yarn)
+                          command -v yarn >/dev/null 2>&1 || die "yarn not found (corepack enable failed?)"
+                          YARN_VER="$(yarn --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
+                          echo "yarn: ${YARN_VER}"
+
+                          if [ "${YARN_VER%%.*}" -ge 2 ] 2>/dev/null; then
+                            # Yarn Berry (2+): use --immutable unless git deps were patched
+                            if [ "$HAS_GIT_DEPS" = true ]; then
+                              warn "Git deps detected — using non-immutable install (checksum was stripped)"
+                              yarn install
+                            else
+                              yarn install --immutable
+                            fi
+                          else
+                            # Yarn Classic (1.x)
+                            if [ "$HAS_GIT_DEPS" = true ]; then
+                              warn "Git deps detected — using non-frozen install (checksum was stripped)"
+                              yarn install
+                            else
+                              # Try strict mode first; fall back to lenient if lockfile is stale.
+                              # Some repos (e.g. idp-settings-ui) never maintained a frozen-clean
+                              # lockfile — their existing CI and Dockerfiles use plain 'yarn install'.
+                              set +e
+                              yarn install --frozen-lockfile 2>&1
+                              YARN_RC=$?
+                              set -e
+                              if [ $YARN_RC -ne 0 ]; then
+                                warn "yarn --frozen-lockfile failed (lockfile may be stale). Retrying with plain 'yarn install'..."
+                                warn "Consider running 'yarn install' locally and committing the updated yarn.lock."
+                                yarn install
+                              fi
+                            fi
+                          fi
+                          ;;
+                        pnpm)
+                          command -v pnpm >/dev/null 2>&1 || die "pnpm not found (corepack enable failed?)"
+                          echo "pnpm: $(pnpm --version)"
+                          pnpm install --frozen-lockfile
+                          ;;
+                        npm)
+                          if [ -f package-lock.json ]; then
+                            npm ci
+                          else
+                            npm install
+                          fi
+                          ;;
+                        *)
+                          die "Unsupported PACKAGE_MANAGER: $PACKAGE_MANAGER (expected: yarn|pnpm|npm)"
+                          ;;
+                      esac
+                      popd >/dev/null
+
+                      ok "Dependencies installed"
+
+                      #############################################
+                      # Run tests with coverage
+                      #############################################
+                      print_header "Running tests with coverage"
+
+                      PKG_JSON="${WORKDIR}/package.json"
+                      [ "$WORKDIR" = "." ] && PKG_JSON="package.json"
+                      [ -f "$PKG_JSON" ] || die "package.json not found at $PKG_JSON"
+
+                      # Pick best available script (uses Node to parse JSON reliably)
+                      SCRIPT=$(
+                        node -e '
+                          const fs = require("fs");
+                          const pkg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+                          const s = pkg.scripts || {};
+                          const pref = ["test:coverage","test-coverage","coverage","test:all","test:ci","test"];
+                          for (const k of pref) { if (s[k]) { console.log(k); process.exit(0); } }
+                          process.exit(1);
+                        ' "$PKG_JSON" 2>/dev/null
+                      ) || die "No test script found in $PKG_JSON (expected one of: test:coverage, test-coverage, coverage, test:all, test:ci, test)"
+
+                      ok "Selected script: $SCRIPT"
+
+                      # Determine run prefix (word-splitting intentional on PM_RUN)
+                      case "$PACKAGE_MANAGER" in
+                        yarn) PM_RUN="yarn" ;;
+                        pnpm) PM_RUN="pnpm" ;;
+                        npm)  PM_RUN="npm run" ;;
+                        *)    die "Unsupported PACKAGE_MANAGER: $PACKAGE_MANAGER" ;;
+                      esac
+
+                      set +e
+                      pushd "$WORKDIR" >/dev/null
+                      if [ "$SCRIPT" = "test" ]; then
+                        # "test" alone may not include --coverage; force it
+                        $PM_RUN test -- --coverage
+                      else
+                        $PM_RUN "$SCRIPT"
+                      fi
+                      rc=$?
+                      popd >/dev/null
+                      set -e
+
+                      if [ $rc -ne 0 ]; then
+                        warn "Tests exited with code $rc. Checking coverage output for Sonar..."
+                      fi
+
+                      #############################################
+                      # Validate coverage exists (lcov.info)
+                      #############################################
+                      print_header "Checking lcov coverage reports"
+
+                      echo "--- lcov files ---"
+                      LCOV_FILES=$(find . \
+                        \( -name node_modules -o -name dist -o -name build -o -name .yarn \) -prune -o \
+                        -type f -name "lcov.info" -print 2>/dev/null | sort)
+                      echo "${LCOV_FILES:-"(none)"}"
+
+                      [ -n "${LCOV_FILES:-}" ] || die "No lcov.info found. Ensure the test command generates lcov coverage."
+
+                      ok "lcov report(s) found"
+
+                      if [ $rc -ne 0 ]; then
+                        die "Tests failed (exit code: $rc). Coverage reports were still generated for Sonar."
+                      fi
+
+                      ok "All tests passed — coverage reports generated, proceeding to Sonar."
+                    envVariables:
+                      WORKDIR: <+execution.steps.DetectTypeScriptProject.output.outputVariables.DETECTED_WORKDIR>
+                      PACKAGE_MANAGER: <+execution.steps.DetectTypeScriptProject.output.outputVariables.DETECTED_PACKAGE_MANAGER>
+                      NPM_TOKEN: <+pipeline.variables.Github_Token>
+                    imagePullPolicy: Always
+              - parallel:
+                  - step:
+                      type: Run
+                      name: sonarScan
+                      identifier: sonarScan
+                      when:
+                        stageStatus: All
+                      spec:
+                        registryRef: account.devx-images
+                        image: java-go-cie-agent:17.0.18_8-amd64
+                        shell: Sh
+                        command: |-
+                          #!/bin/bash
+                          set -e
+
+                          RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[0;33m'; NC='\033[0m'
+
+                          # === Harness variable injection ===
+                          SONAR_TOKEN="<+pipeline.variables.SONAR_TOKEN>"
+                          REPO_NAME="<+pipeline.variables.REPO_NAME>"
+                          PR_NUMBER="<+pipeline.variables.PR_NUMBER>"
+                          SOURCE_BRANCH="<+pipeline.variables.SOURCE_BRANCH>"
+                          TARGET_BRANCH="<+pipeline.variables.TARGET_BRANCH>"
+                          WORKDIR="<+execution.steps.DetectTypeScriptProject.output.outputVariables.DETECTED_WORKDIR>"
+                          HC_USER="bot"
+                          HC_TOKEN="<+pipeline.variables.HC_TOKEN>"
+
+                          [ -n "$WORKDIR" ] && [ "$WORKDIR" != "null" ] || WORKDIR="."
+
+                          REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+                          cd "$REPO_ROOT"
+
+                          # === Mode detection ===
+                          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
+                            MODE="PR"
+                            printf "${GREEN}• PR Analysis: #${PR_NUMBER}${NC}\n"
+                          else
+                            MODE="BRANCH"
+                            printf "${GREEN}• Branch Analysis: ${TARGET_BRANCH}${NC}\n"
+                          fi
+
+                          # === Fetch target branch (PR mode) ===
+                          if [ "$MODE" = "PR" ]; then
+                            printf "${YELLOW}• Configuring authenticated remote...${NC}\n"
+                            git remote set-url origin "https://${HC_USER}:${HC_TOKEN}@git0.harness.io/l7B_kbSEQD2wjrM7PShm5w/PROD/Harness_Commons/${REPO_NAME}.git"
+                            if ! git rev-parse --verify "origin/${TARGET_BRANCH}" >/dev/null 2>&1; then
+                              printf "${YELLOW}• Fetching origin/${TARGET_BRANCH}...${NC}\n"
+                              git fetch origin "+refs/heads/${TARGET_BRANCH}:refs/remotes/origin/${TARGET_BRANCH}"
+                            fi
+                          fi
+
+                          # === Helper: collect unique existing paths ===
+                          collect_paths() {
+                            local kind="$1"; shift
+                            local -A seen=()
+                            local results=()
+                            for p in "$@"; do
+                              [ -${kind} "$p" ] || continue
+                              [ -z "${seen[$p]+x}" ] || continue
+                              seen[$p]=1; results+=("$p")
+                            done
+                            while IFS= read -r p; do
+                              [ -z "${seen[$p]+x}" ] || continue
+                              seen[$p]=1; results+=("$p")
+                            done
+                            IFS=,; echo "${results[*]}"
+                          }
+
+                          # === lcov coverage reports ===
+                          printf "${YELLOW}• Detecting lcov.info coverage reports...${NC}\n"
+
+                          LCOV_REPORTS=$(collect_paths f \
+                            "/harness/${WORKDIR}/coverage/lcov.info" \
+                            "/harness/coverage/lcov.info" \
+                            < <(find /harness \
+                                  \( -name node_modules -o -name .yarn -o -name dist -o -name build \) -prune -o \
+                                  -type f -name "lcov.info" -print 2>/dev/null | sort))
+
+                          if [ -z "$LCOV_REPORTS" ]; then
+                            printf "${RED}No lcov.info reports found under /harness.${NC}\n"
+                            printf "${RED}Ensure tests run with coverage and generate lcov.${NC}\n"
+                            exit 1
+                          fi
+                          printf "${GREEN}• lcov reports: ${LCOV_REPORTS}${NC}\n"
+
+                          HEAD_COMMIT=$(git rev-parse HEAD)
+                          PROJECT_KEY="${REPO_NAME}-overall"
+
+                          # === Ensure Sonar project exists + tag ===
+                          curl -s -o /dev/null -u "$SONAR_TOKEN:" \
+                            -X POST "https://sonar.harness.io/api/projects/create" \
+                            -d "name=${REPO_NAME}&project=${PROJECT_KEY}" || true
+
+                          # curl -s -u "$SONAR_TOKEN:" \
+                          #   -X POST "https://sonar.harness.io/api/project_tags/set" \
+                          #   -d "project=${PROJECT_KEY}&tags=typescript" >/dev/null
+
+                          # === Exclusions (.sonarignore) ===
+                          BASE_EXCLUSIONS="**/.git/**,**/.github/**,**/.harness/**,**/.engops/**,**/.vscode/**,**/.idea/**,**/node_modules/**,**/dist/**,**/build/**,**/out/**,**/coverage/**,**/.next/**,**/.nuxt/**,**/.cache/**,**/.turbo/**,**/.yarn/**,**/.pnp.*,"\
+                          "**/*.d.ts,**/*.spec.ts,**/*.spec.tsx,**/*.test.ts,**/*.test.tsx,**/__tests__/**,**/__test__/**,**/cypress/**,**/playwright/**,**/e2e/**,**/*.snap,**/*.stories.tsx,**/*.story.tsx,"\
+                          "**/*.yaml,**/*.yml,**/*.json,**/*.md,**/*.sh,**/charts/**,Dockerfile*"
+                          SONAR_EXCLUSIONS="$BASE_EXCLUSIONS"
+
+                          load_sonarignore() {
+                            [ -f "$1" ] || return 0
+                            sed -e 's/#.*$//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' "$1" \
+                              | tr -d '\r' | awk 'NF' | tr '\n' ',' | sed 's/,$//'
+                          }
+
+                          extra="$(load_sonarignore ".sonarignore")"
+                          [ -n "$extra" ] && SONAR_EXCLUSIONS="${SONAR_EXCLUSIONS},${extra}"
+                          if [ "$WORKDIR" != "." ]; then
+                            extra2="$(load_sonarignore "${WORKDIR}/.sonarignore")"
+                            [ -n "$extra2" ] && SONAR_EXCLUSIONS="${SONAR_EXCLUSIONS},${extra2}"
+                          fi
+
+                          SONAR_SOURCES="."
+                          [ "$WORKDIR" != "." ] && SONAR_SOURCES="$WORKDIR"
+
+                          # Avoid repo-provided sonar-project.properties changing behavior (centralised config)
+                          EMPTY_SETTINGS="/tmp/sonar-project.properties"
+                          : > "$EMPTY_SETTINGS"
+
+                          # === Build Sonar args ===
+                          ARGS=(
+                            -Dproject.settings="$EMPTY_SETTINGS"
+                            -Dsonar.projectKey="$PROJECT_KEY"
+                            -Dsonar.projectName="$REPO_NAME"
+                            -Dsonar.host.url="https://sonar.harness.io"
+                            -Dsonar.token="$SONAR_TOKEN"
+                            -Dsonar.sources="$SONAR_SOURCES"
+                            -Dsonar.exclusions="$SONAR_EXCLUSIONS"
+                            -Dsonar.javascript.lcov.reportPaths="$LCOV_REPORTS"
+                            -Dsonar.scm.provider="git"
+                            -Dsonar.scm.revision="$HEAD_COMMIT"
+                            -Dsonar.javascript.node.maxspace=8192
+                          )
+
+                          if [ "$MODE" = "PR" ]; then
+                            ARGS+=(
+                              -Dsonar.pullrequest.key="$PR_NUMBER"
+                              -Dsonar.pullrequest.branch="$SOURCE_BRANCH"
+                              -Dsonar.pullrequest.base="${TARGET_BRANCH:-main}"
+                              -Dsonar.analysis.mode="publish"
+                            )
+                          else
+                            ARGS+=(-Dsonar.branch.name="$TARGET_BRANCH")
+                          fi
+
+                          # === Run Sonar Scanner ===
+                          printf "${GREEN}🚀 Running SonarQube ${MODE} analysis...${NC}\n"
+                          sonar-scanner "${ARGS[@]}"
+
+                          # === Extract ceTaskId from report-task.txt ===
+                          # The scanner writes this file on every run. It is the only reliable source for ceTaskId —
+                          # the value is not printed to stdout and cannot be extracted from scanner output.
+                          REPORT_TASK_FILE="/harness/.scannerwork/report-task.txt"
+
+                          if [ ! -f "$REPORT_TASK_FILE" ]; then
+                            printf "${RED}report-task.txt not found at ${REPORT_TASK_FILE}. Cannot verify task completion.${NC}\n"
+                            exit 1
+                          fi
+
+                          CE_TASK_ID=$(grep "^ceTaskId=" "$REPORT_TASK_FILE" | cut -d'=' -f2 | tr -d '[:space:]')
+
+                          if [ -z "$CE_TASK_ID" ]; then
+                            printf "${RED}Could not extract ceTaskId from report-task.txt.${NC}\n"
+                            exit 1
+                          fi
+
+                          printf "${YELLOW}• CE task ID: ${CE_TASK_ID}${NC}\n"
+
+                          # === Wait for CE background task to complete ===
+                          printf "${YELLOW}• Waiting for CE task to complete (task ID: ${CE_TASK_ID})...${NC}\n"
+
+                          CE_MAX_RETRIES=30
+                          CE_RETRY_INTERVAL=10
+                          CE_RETRY_COUNT=0
+                          CE_TASK_STATUS=""
+                          ANALYSIS_ID=""
+
+                          set +e
+                          while [ $CE_RETRY_COUNT -lt $CE_MAX_RETRIES ]; do
+                            CE_RESPONSE=$(curl -s -u "${SONAR_TOKEN}:" \
+                              "https://sonar.harness.io/api/ce/task?id=${CE_TASK_ID}")
+
+                            CE_TASK_STATUS=$(echo "$CE_RESPONSE" | grep -o '"status":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+                            case "$CE_TASK_STATUS" in
+                              SUCCESS)
+                                # analysisId is only populated in the CE response once the task reaches SUCCESS.
+                                # We extract it here to use as a precise anchor for the quality gate query below.
+                                ANALYSIS_ID=$(echo "$CE_RESPONSE" | grep -o '"analysisId":"[^"]*"' | cut -d'"' -f4)
+                                printf "${GREEN}• CE task completed successfully. Analysis ID: ${ANALYSIS_ID}${NC}\n"
+                                break
+                                ;;
+                              ERROR|FAILED|CANCELED)
+                                printf "${RED}• CE task ended with status: ${CE_TASK_STATUS}${NC}\n"
+                                printf "${RED}  Response: ${CE_RESPONSE}${NC}\n"
+                                exit 1
+                                ;;
+                              IN_PROGRESS|PENDING)
+                                printf "${YELLOW}• CE task status: ${CE_TASK_STATUS:-unknown} (${CE_RETRY_COUNT}/${CE_MAX_RETRIES}). Retrying in ${CE_RETRY_INTERVAL}s...${NC}\n"
+                                sleep $CE_RETRY_INTERVAL
+                                ((CE_RETRY_COUNT++))
+                                ;;
+                              *)
+                                printf "${YELLOW}• Unexpected CE task status: ${CE_TASK_STATUS}. Retrying...${NC}\n"
+                                sleep $CE_RETRY_INTERVAL
+                                ((CE_RETRY_COUNT++))
+                                ;;
+                            esac
+                          done
+                          set -e
+
+                          if [ "$CE_TASK_STATUS" != "SUCCESS" ]; then
+                            printf "${RED}CE task did not complete after $((CE_MAX_RETRIES * CE_RETRY_INTERVAL))s. Final status: ${CE_TASK_STATUS}${NC}\n"
+                            exit 1
+                          fi
+
+                          if [ -z "$ANALYSIS_ID" ]; then
+                            printf "${RED}Could not extract analysisId from CE task response. Cannot safely query quality gate.${NC}\n"
+                            exit 1
+                          fi
+
+                          # === Quality Gate Check (PR mode only) ===
+                          if [ "$MODE" = "PR" ]; then
+                            # We query by analysisId (not projectKey+pullRequest) to pin results to THIS exact analysis run.
+                            printf "${YELLOW}• Checking Quality Gate using analysisId: ${ANALYSIS_ID}${NC}\n"
+                            printf "${YELLOW}  (Project-level updates can be tracked at projectKey: ${PROJECT_KEY})${NC}\n"
+
+                            MAX_RETRIES=20
+                            RETRY_INTERVAL=30
+                            RETRY_COUNT=0
+                            QG_STATUS=""
+
+                            set +e
+                            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+                              QG_RESPONSE=$(curl -s -u "${SONAR_TOKEN}:" \
+                                "https://sonar.harness.io/api/qualitygates/project_status?analysisId=${ANALYSIS_ID}")
+
+                              # === DEBUG: log raw qualitygates/project_status API response ===
+                              printf "${YELLOW}[DEBUG] qualitygates/project_status response (attempt $((RETRY_COUNT + 1))/${MAX_RETRIES}): ${QG_RESPONSE}${NC}\n"
+
+                              QG_STATUS=$(echo "$QG_RESPONSE" | grep -o '"projectStatus":{"status":"[^"]*' | grep -o '[^"]*$')
+
+                              if [ "$QG_STATUS" = "OK" ] || [ "$QG_STATUS" = "ERROR" ] || [ "$QG_STATUS" = "WARN" ] || [ "$QG_STATUS" = "NONE" ]; then
+                                break
+                              fi
+
+                              printf "${YELLOW}• Quality gate pending (${RETRY_COUNT}/${MAX_RETRIES}). Retrying in ${RETRY_INTERVAL}s...${NC}\n"
+                              sleep $RETRY_INTERVAL
+                              ((RETRY_COUNT++))
+                            done
+                            set -e
+
+                            if [ "$RETRY_COUNT" -ge "$MAX_RETRIES" ] && [ "$QG_STATUS" != "OK" ] && [ "$QG_STATUS" != "ERROR" ] && [ "$QG_STATUS" != "WARN" ] && [ "$QG_STATUS" != "NONE" ]; then
+                              printf "${RED}Quality gate status did not resolve after $((MAX_RETRIES * RETRY_INTERVAL))s. Final status: '${QG_STATUS}'. Blocking PR.${NC}\n"
+                              exit 1
+                            fi
+
+                            if [ "$QG_STATUS" = "NONE" ]; then
+                              printf "${RED}❌ No quality gate is assigned to project '${PROJECT_KEY}'. Blocking PR until gate is configured.${NC}\n"
+                              exit 1
+                            fi
+
+                            printf "${YELLOW}• Quality Gate Status: ${QG_STATUS}${NC}\n"
+
+                            if [ "$QG_STATUS" = "OK" ]; then
+                              printf "${GREEN}Quality Gate PASSED${NC}\n"
+                            else
+                              printf "${YELLOW}Quality Gate reported issues${NC}\n\n"
+
+                              COVERAGE_FAILED=false
+                              CONDITIONS_ARRAY=$(echo "$QG_RESPONSE" | grep -o '"conditions":\[[^]]*\]' | sed 's/"conditions":\[//' | sed 's/\]$//')
+
+                              if [ -z "$CONDITIONS_ARRAY" ]; then
+                                printf "${YELLOW}• Response missing conditions. Check dashboard manually.${NC}\n"
+                              else
+                                while IFS= read -r condition; do
+                                  [ -z "$condition" ] && continue
+                                  if [[ "$condition" == *'"status":"ERROR"'* ]]; then
+                                    metricKey=$(echo "$condition" | grep -o '"metricKey":"[^"]*"' | cut -d'"' -f4)
+                                    errorThreshold=$(echo "$condition" | grep -o '"errorThreshold":"[^"]*"' | cut -d'"' -f4)
+                                    actualValue=$(echo "$condition" | grep -o '"actualValue":"[^"]*"' | cut -d'"' -f4)
+
+                                    case "$metricKey" in
+                                      "new_coverage")
+                                        th=$(echo "$errorThreshold" | sed 's/\.0$//')
+                                        av=$(echo "$actualValue" | sed 's/\([0-9]*\.[0-9]\).*/\1/')
+                                        printf "${RED}• Coverage: ≥ ${th}%% required (actual: ${av}%%) [BLOCKING]${NC}\n"
+                                        COVERAGE_FAILED=true
+                                        ;;
+                                      "new_violations")
+                                        printf "${YELLOW}• Issues: 0 required (actual: ${actualValue}) [WARNING ONLY]${NC}\n"
+                                        ;;
+                                      "new_duplicated_lines_density")
+                                        th=$(echo "$errorThreshold" | sed 's/\.0$//')
+                                        av=$(echo "$actualValue" | sed 's/\([0-9]*\.[0-9][0-9]\).*/\1/')
+                                        printf "${YELLOW}• Duplication: ≤ ${th}%% required (actual: ${av}%%) [WARNING ONLY]${NC}\n"
+                                        ;;
+                                      "new_security_hotspots_reviewed")
+                                        th=$(echo "$errorThreshold" | sed 's/\.0$//')
+                                        av=$(echo "$actualValue" | sed 's/\([0-9]*\.[0-9]\).*/\1/')
+                                        printf "${YELLOW}• Security Hotspots Reviewed: ${th}%% required (actual: ${av}%%) [WARNING ONLY]${NC}\n"
+                                        ;;
+                                      *)
+                                        printf "${YELLOW}• ${metricKey}: threshold=${errorThreshold}, actual=${actualValue} [WARNING ONLY]${NC}\n"
+                                        ;;
+                                    esac
+                                  fi
+                                done < <(echo "$CONDITIONS_ARRAY" | sed 's/},\s*{/}\n{/g')
+                              fi
+
+                              echo
+
+                              if [ "$COVERAGE_FAILED" = true ]; then
+                                printf "${RED}❌ PR BLOCKED: Coverage requirement not met${NC}\n"
+                                printf "${RED}Fix coverage and re-run. To trigger, comment 'trigger sonar' in PR.${NC}\n"
+                                printf "${YELLOW}Dashboard: https://sonar.harness.io/dashboard?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER}${NC}\n"
+                                printf "${YELLOW}Login via OKTA SAML.${NC}\n"
+                                exit 1
+                              else
+                                printf "${GREEN}✅ Coverage requirement met - PR allowed to proceed${NC}\n"
+                                printf "${YELLOW}⚠️  Note: Other quality gate criteria have warnings (see above)${NC}\n"
+                              fi
+                            fi
+                          fi
+
+                          # === Final ===
+                          if [ "$MODE" = "PR" ]; then
+                            DASHBOARD_URL="https://sonar.harness.io/dashboard?id=${PROJECT_KEY}&pullRequest=${PR_NUMBER}"
+                          else
+                            DASHBOARD_URL="https://sonar.harness.io/dashboard?id=${PROJECT_KEY}&branch=${TARGET_BRANCH}"
+                          fi
+
+                          printf "${GREEN}Analysis completed successfully.${NC}\n"
+                          printf "${YELLOW}Report: ${DASHBOARD_URL}${NC}\n"
+                  - step:
+                      name: harnessCoverage
+                      identifier: harnessCoverage
+                      when:
+                        stageStatus: Success
+                      template:
+                        templateRef: account.codeCoverage
+                        versionLabel: v1
+                        templateInputs:
+                          type: Run
+                          spec:
+                            envVariables:
+                              patch_coverage_percent: "80"
+                              file_path: ""
+                              overall_coverage_percent: ""
+                              ignore_failure: "true"
+                              exclude: "**/node_modules/**,**/dist/**,**/build/**,**/*.spec.ts,**/*.spec.tsx,**/*.test.ts,**/*.test.tsx"
+  properties:
+    ci:
+      codebase:
+        repoName: <+trigger.payload.repo.identifier>
+        build: <+input>
+        prCloneStrategy: SourceBranch
+        sparseCheckout: []
+  variables:
+    - name: SOURCE_BRANCH
+      type: String
+      description: ""
+      required: false
+      value: <+input>
+    - name: TARGET_BRANCH
+      type: String
+      description: ""
+      required: false
+      value: <+input>
+    - name: SOURCE_SHA
+      type: String
+      description: ""
+      required: false
+      value: <+input>
+    - name: PR_NUMBER
+      type: String
+      description: ""
+      required: false
+      value: <+input>
+    - name: HC_USER
+      type: String
+      description: ""
+      required: false
+      value: bot
+    - name: HC_TOKEN
+      type: Secret
+      description: ""
+      required: false
+      value: account.bot_harness_account_token
+    - name: COMMENT
+      type: String
+      description: ""
+      required: false
+      value: <+input>.default(<+trigger.payload.comment.text>)
+    - name: REPO_NAME
+      type: String
+      description: ""
+      required: false
+      value: <+input>.default(<+trigger.payload.repo.identifier>)
+    - name: SONAR_TOKEN
+      type: Secret
+      description: ""
+      required: false
+      value: account.sonarkeyee
+    - name: Github_Token
+      type: Secret
+      description: ""
+      required: false
+      value: org.githubbotharnesstoken
+  identifier: centralisedTsCoverageCheck
+  description: Centralised TypeScript UI PR checks for running tests with lcov coverage and publishing SonarQube analysis.
+  name: centralisedTsCoverageCheck
+
