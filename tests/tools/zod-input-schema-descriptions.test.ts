@@ -147,6 +147,7 @@ describe("Zod 4 input schema descriptions (PR #398 regression)", () => {
       "project_id",
       "resource_scope",
       "params",
+      "return_download_url",
     ]);
   });
 
