@@ -602,7 +602,7 @@ describe("harness_create", () => {
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "new-pipe" } });
     client = makeClient(mockRequest);
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(server, registry, client);
+    registerCreateTool(server, registry, client, makeConfig());
   });
 
   it("keeps optional input descriptions visible in the registered schema", () => {
@@ -628,7 +628,7 @@ describe("harness_create", () => {
     const fullRegistry = new Registry(makeConfig());
     const fullServer = makeMcpServer("accept");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(fullServer, fullRegistry, client);
+    registerCreateTool(fullServer, fullRegistry, client, makeConfig());
 
     const result = await fullServer.call("harness_create", {
       resource_type: "execution",
@@ -645,7 +645,7 @@ describe("harness_create", () => {
     // is never called).
     const declineServer = makeMcpServer("decline");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(declineServer, registry, client);
+    registerCreateTool(declineServer, registry, client, makeConfig());
 
     const result = await declineServer.call("harness_create", {
       resource_type: "pipeline",
@@ -760,7 +760,7 @@ describe("harness_create", () => {
     client = makeClient(mockRequest);
     const ccmServer = makeMcpServer("accept");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(ccmServer, registry, client);
+    registerCreateTool(ccmServer, registry, client, makeConfig());
 
     const result = await ccmServer.call("harness_create", {
       resource_type: "cost_category",
@@ -784,7 +784,7 @@ describe("harness_create", () => {
     client = makeClient(mockRequest);
     const connectorServer = makeMcpServer("accept");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(connectorServer, registry, client);
+    registerCreateTool(connectorServer, registry, client, makeConfig());
 
     const result = await connectorServer.call("harness_create", {
       resource_type: "connector",
@@ -809,7 +809,7 @@ describe("harness_create", () => {
     client = makeClient(mockRequest);
     const fileStoreServer = makeMcpServer("accept");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(fileStoreServer, registry, client);
+    registerCreateTool(fileStoreServer, registry, client, makeConfig());
 
     const result = await fileStoreServer.call("harness_create", {
       resource_type: "file_store",
@@ -834,7 +834,7 @@ describe("harness_create", () => {
     client = makeClient(mockRequest);
     const fileStoreServer = makeMcpServer("accept");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(fileStoreServer, registry, client);
+    registerCreateTool(fileStoreServer, registry, client, makeConfig());
     const contentBase64 = Buffer.from("sensitive file payload").toString("base64");
 
     const result = await fileStoreServer.call("harness_create", {
@@ -859,7 +859,7 @@ describe("harness_create", () => {
     client = makeClient(mockRequest);
     const fileStoreServer = makeMcpServer("accept");
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(fileStoreServer, registry, client);
+    registerCreateTool(fileStoreServer, registry, client, makeConfig());
     const contentBase64 = Buffer.from("sensitive json body payload").toString("base64");
 
     const result = await fileStoreServer.call("harness_create", {
@@ -891,14 +891,14 @@ describe("harness_update", () => {
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "my-pipe" } });
     client = makeClient(mockRequest);
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(server, registry, client);
+    registerUpdateTool(server, registry, client, makeConfig());
   });
 
   it("returns error for resource with no update operation", async () => {
     const fullRegistry = new Registry(makeConfig());
     const fullServer = makeMcpServer("accept");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(fullServer, fullRegistry, client);
+    registerUpdateTool(fullServer, fullRegistry, client, makeConfig());
 
     const result = await fullServer.call("harness_update", {
       resource_type: "execution",
@@ -914,7 +914,7 @@ describe("harness_update", () => {
     // requiresConfirmation(risk) which kicks in at medium_write.
     const declineServer = makeMcpServer("decline");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(declineServer, registry, client);
+    registerUpdateTool(declineServer, registry, client, makeConfig());
 
     const result = await declineServer.call("harness_update", {
       resource_type: "pipeline",
@@ -940,7 +940,7 @@ describe("harness_update", () => {
     client = makeClient(mockRequest);
     const platformServer = makeMcpServer("accept");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(platformServer, registry, client);
+    registerUpdateTool(platformServer, registry, client, makeConfig());
 
     const result = await platformServer.call("harness_update", {
       resource_type: "project",
@@ -962,7 +962,7 @@ describe("harness_update", () => {
     client = makeClient(mockRequest);
     const connectorServer = makeMcpServer("accept");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(connectorServer, registry, client);
+    registerUpdateTool(connectorServer, registry, client, makeConfig());
 
     const result = await connectorServer.call("harness_update", {
       resource_type: "connector",
@@ -990,7 +990,7 @@ connector:
     client = makeClient(mockRequest);
     const connectorServer = makeMcpServer("accept");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(connectorServer, registry, client);
+    registerUpdateTool(connectorServer, registry, client, makeConfig());
 
     const result = await connectorServer.call("harness_update", {
       resource_type: "connector",
@@ -1020,7 +1020,7 @@ connector:
     client = makeClient(mockRequest);
     const environmentServer = makeMcpServer("accept");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(environmentServer, registry, client);
+    registerUpdateTool(environmentServer, registry, client, makeConfig());
 
     const result = await environmentServer.call("harness_update", {
       resource_type: "environment",
@@ -1051,7 +1051,7 @@ environment:
     client = makeClient(mockRequest);
     const fileStoreServer = makeMcpServer("accept");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(fileStoreServer, registry, client);
+    registerUpdateTool(fileStoreServer, registry, client, makeConfig());
 
     const result = await fileStoreServer.call("harness_update", {
       resource_type: "file_store",
@@ -1078,7 +1078,7 @@ environment:
     client = makeClient(mockRequest);
     const fileStoreServer = makeMcpServer("accept");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(fileStoreServer, registry, client);
+    registerUpdateTool(fileStoreServer, registry, client, makeConfig());
 
     const result = await fileStoreServer.call("harness_update", {
       resource_type: "file_store",
@@ -1104,7 +1104,7 @@ environment:
     client = makeClient(mockRequest);
     const fileStoreServer = makeMcpServer("accept");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(fileStoreServer, registry, client);
+    registerUpdateTool(fileStoreServer, registry, client, makeConfig());
     const content = "sensitive replacement file payload";
 
     const result = await fileStoreServer.call("harness_update", {
@@ -1130,7 +1130,7 @@ environment:
     client = makeClient(mockRequest);
     const fileStoreServer = makeMcpServer("accept");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(fileStoreServer, registry, client);
+    registerUpdateTool(fileStoreServer, registry, client, makeConfig());
     const content = "sensitive json replacement file payload";
 
     const result = await fileStoreServer.call("harness_update", {
@@ -1202,7 +1202,7 @@ describe("harness_update — pull request", () => {
     const prRequest = vi.fn().mockResolvedValue({ number: 42, title: "New Title" });
     const prClient = makeClient(prRequest);
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(prServer, prRegistry, prClient);
+    registerUpdateTool(prServer, prRegistry, prClient, makeConfig());
 
     const result = await prServer.call("harness_update", {
       resource_type: "pull_request",
@@ -1225,7 +1225,7 @@ describe("harness_update — pull request", () => {
     const prRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });
     const prClient = makeClient(prRequest);
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(prServer, prRegistry, prClient);
+    registerUpdateTool(prServer, prRegistry, prClient, makeConfig());
 
     const result = await prServer.call("harness_update", {
       resource_type: "pull_request",
@@ -1247,7 +1247,7 @@ describe("harness_update — pull request", () => {
     const prRequest = vi.fn().mockResolvedValue({});
     const prClient = makeClient(prRequest);
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(prServer, prRegistry, prClient);
+    registerUpdateTool(prServer, prRegistry, prClient, makeConfig());
 
     const result = await prServer.call("harness_update", {
       resource_type: "pull_request",
@@ -1276,14 +1276,14 @@ describe("harness_delete", () => {
     mockRequest = vi.fn().mockResolvedValue({ data: true });
     client = makeClient(mockRequest);
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
   });
 
   it("returns error for resource with no delete operation", async () => {
     const fullRegistry = new Registry(makeConfig());
     const fullServer = makeMcpServer("accept");
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(fullServer, fullRegistry, client);
+    registerDeleteTool(fullServer, fullRegistry, client, makeConfig());
 
     const result = await fullServer.call("harness_delete", {
       resource_type: "execution",
@@ -1296,7 +1296,7 @@ describe("harness_delete", () => {
   it("returns error when user declines destructive operation", async () => {
     const declineServer = makeMcpServer("decline");
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(declineServer, registry, client);
+    registerDeleteTool(declineServer, registry, client, makeConfig());
 
     const result = await declineServer.call("harness_delete", {
       resource_type: "pipeline",
@@ -1326,7 +1326,7 @@ describe("harness_delete", () => {
       version_label: "1.0.0",
     });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(templateServer, templateRegistry, client);
+    registerDeleteTool(templateServer, templateRegistry, client, makeConfig());
 
     const result = await templateServer.call("harness_delete", {
       resource_type: "template_v1",
@@ -1358,7 +1358,7 @@ describe("harness_delete", () => {
     client = makeClient(mockRequest);
     const fileStoreServer = makeMcpServer("accept");
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(fileStoreServer, registry, client);
+    registerDeleteTool(fileStoreServer, registry, client, makeConfig());
 
     const result = await fileStoreServer.call("harness_delete", {
       resource_type: "file_store",
@@ -1379,7 +1379,7 @@ describe("harness_delete", () => {
     client = makeClient(mockRequest);
     const fileStoreServer = makeMcpServer("accept");
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(fileStoreServer, registry, client);
+    registerDeleteTool(fileStoreServer, registry, client, makeConfig());
 
     const result = await fileStoreServer.call("harness_delete", {
       resource_type: "file_store",
@@ -1427,7 +1427,7 @@ describe("harness_delete", () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
     const conflictServer = makeMcpServer("accept");
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(conflictServer, registry, client);
+    registerDeleteTool(conflictServer, registry, client, makeConfig());
 
     const result = await conflictServer.call("harness_delete", {
       resource_type: "pipeline",
@@ -1454,7 +1454,7 @@ describe("harness_execute", () => {
     mockRequest = vi.fn().mockResolvedValue({ data: { planExecutionId: "exec-123" } });
     client = makeClient(mockRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(server, registry, client);
+    registerExecuteTool(server, registry, client, makeConfig());
   });
 
   it("returns error when resource_type is missing", async () => {
@@ -1505,7 +1505,7 @@ describe("harness_execute", () => {
   it("returns error when user declines", async () => {
     const declineServer = makeMcpServer("decline");
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(declineServer, registry, client);
+    registerExecuteTool(declineServer, registry, client, makeConfig());
 
     const result = await declineServer.call("harness_execute", {
       resource_type: "pipeline",
@@ -1631,7 +1631,7 @@ pipeline:
     const prRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });
     const prClient = makeClient(prRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(prServer, prRegistry, prClient);
+    registerExecuteTool(prServer, prRegistry, prClient, makeConfig());
 
     const result = await prServer.call("harness_execute", {
       url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
@@ -1652,7 +1652,7 @@ pipeline:
     const prRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });
     const prClient = makeClient(prRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(prServer, prRegistry, prClient);
+    registerExecuteTool(prServer, prRegistry, prClient, makeConfig());
 
     const result = await prServer.call("harness_execute", {
       resource_type: "pull_request",
@@ -1672,7 +1672,7 @@ pipeline:
     const prRequest = vi.fn().mockResolvedValue({ number: 43, state: "closed" });
     const prClient = makeClient(prRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(prServer, prRegistry, prClient);
+    registerExecuteTool(prServer, prRegistry, prClient, makeConfig());
 
     const result = await prServer.call("harness_execute", {
       url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
@@ -1691,7 +1691,7 @@ pipeline:
     const prRequest = vi.fn().mockResolvedValue({ branch_deleted: false });
     const prClient = makeClient(prRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(prServer, prRegistry, prClient);
+    registerExecuteTool(prServer, prRegistry, prClient, makeConfig());
 
     const result = await prServer.call("harness_execute", {
       resource_type: "pull_request",
@@ -1724,7 +1724,7 @@ pipeline:
     const gitopsRequest = vi.fn().mockResolvedValue({});
     const gitopsClient = makeClient(gitopsRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(gitopsServer, gitopsRegistry, gitopsClient);
+    registerExecuteTool(gitopsServer, gitopsRegistry, gitopsClient, makeConfig());
 
     const result = await gitopsServer.call("harness_execute", {
       resource_type: "gitops_application",
@@ -1744,7 +1744,7 @@ pipeline:
     const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
     const fileStoreClient = makeClient(fileStoreRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient, makeConfig());
 
     const result = await fileStoreServer.call("harness_execute", {
       resource_type: "file_store",
@@ -1767,7 +1767,7 @@ pipeline:
     const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
     const fileStoreClient = makeClient(fileStoreRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient, makeConfig());
 
     const result = await fileStoreServer.call("harness_execute", {
       resource_type: "file_store",
@@ -1789,7 +1789,7 @@ pipeline:
     const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
     const fileStoreClient = makeClient(fileStoreRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient, makeConfig());
 
     const result = await fileStoreServer.call("harness_execute", {
       url: "https://app.harness.io/ng/account/test-account/all/settings/file-store/folder123",
@@ -1810,7 +1810,7 @@ pipeline:
     const fileStoreRequest = vi.fn().mockResolvedValue({ data: { nodes: [] } });
     const fileStoreClient = makeClient(fileStoreRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient);
+    registerExecuteTool(fileStoreServer, fileStoreRegistry, fileStoreClient, makeConfig());
 
     const result = await fileStoreServer.call("harness_execute", {
       resource_type: "file_store",
@@ -1832,7 +1832,7 @@ pipeline:
     const fmeRequest = vi.fn().mockResolvedValue({});
     const fmeClient = makeClient(fmeRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(fmeServer, fmeRegistry, fmeClient);
+    registerExecuteTool(fmeServer, fmeRegistry, fmeClient, makeConfig());
 
     const result = await fmeServer.call("harness_execute", {
       resource_type: "fme_rule_based_segment_definition",
@@ -1859,7 +1859,7 @@ pipeline:
       getCurrentUserId: vi.fn().mockResolvedValue("user-uuid-1"),
     } as unknown as HarnessClient;
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(stoServer, stoRegistry, stoClient);
+    registerExecuteTool(stoServer, stoRegistry, stoClient, makeConfig());
 
     const result = await stoServer.call("harness_execute", {
       resource_type: "security_exemption",
@@ -1883,7 +1883,7 @@ pipeline:
     const fmeRequest = vi.fn().mockResolvedValue(true);
     const fmeClient = makeClient(fmeRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(fmeServer, fmeRegistry, fmeClient);
+    registerExecuteTool(fmeServer, fmeRegistry, fmeClient, makeConfig());
 
     const result = await fmeServer.call("harness_execute", {
       resource_type: "fme_feature_flag",

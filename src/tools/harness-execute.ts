@@ -98,7 +98,7 @@ function extractExecutionId(result: unknown, resourceType: string): string | und
     ?? asString(rec.executionId);
 }
 
-export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
+export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const executableTypes = registry.getTypesWithExecuteActions();
 
   server.registerTool(
@@ -180,7 +180,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         // mode. For everything else we don't ask the user to approve a
         // write that can never run, AND we capture the rejection as a
         // pre-dispatch "blocked" audit row.
-        if (config?.HARNESS_READ_ONLY && risk !== "read") {
+        if (config.HARNESS_READ_ONLY && risk !== "read") {
           const reason = `Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${args.action}" is not allowed.`;
           registry.auditBlockedAttempt(
             resourceType,
@@ -197,7 +197,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           toolName: "harness_execute",
           message: `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
           risk,
-          autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
+          autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
@@ -220,7 +220,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           // Fail fast on policy errors before fan-out — mirrors registry.dispatchExecute()
           // risk-based enforcement: read-safe actions (e.g. hql validate/run) are allowed in
           // read-only mode; write actions are blocked before any query is dispatched.
-          if (config?.HARNESS_READ_ONLY && risk !== "read") {
+          if (config.HARNESS_READ_ONLY && risk !== "read") {
             return errorResult(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${args.action}" is not allowed.`);
           }
 

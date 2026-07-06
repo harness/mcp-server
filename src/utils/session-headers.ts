@@ -2,6 +2,9 @@ import type { IncomingHttpHeaders } from "node:http";
 import type { Config } from "../config.js";
 import { extractAccountIdFromToken } from "../config.js";
 import { RISK_SEVERITY, type RiskLevel } from "../registry/types.js";
+import { createLogger } from "./logger.js";
+
+const log = createLogger("session-headers");
 
 export const PIPELINE_VERSION_HEADER = "x-harness-pipeline-version";
 export const AUTO_APPROVE_RISK_HEADER = "x-harness-auto-approve-risk";
@@ -39,6 +42,13 @@ export function parseAutoApproveRiskHeader(
   ) {
     return normalized as Config["HARNESS_AUTO_APPROVE_RISK"];
   }
+  // Unrecognized value (e.g. "read", a typo) — warn rather than silently fall
+  // back to the deployment default, which would give the client a different
+  // security posture than it intended without any signal.
+  log.warn("Ignoring unrecognized X-Harness-Auto-Approve-Risk header value; using deployment default", {
+    value,
+    allowed: "none | low_write | medium_write | high_write | all",
+  });
   return undefined;
 }
 
