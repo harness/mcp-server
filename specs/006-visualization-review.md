@@ -1,14 +1,18 @@
 # 006 — Visualization Architecture Review
 
-**Status**: Review  
+**Status**: Removed (2026-07-06)  
 **Author**: @sunil.gattupalle  
 **Created**: 2026-05-02  
 
 ---
 
+> **Update (2026-07-06):** Following a production incident, the entire visualization feature was removed outright rather than migrated through the gradual Phase 0–3 plan below. Removed: the `src/utils/svg/` rendering pipeline, the `@resvg/resvg-js` dependency, the `include_visual` / `visual_type` / `visual_width` tool-input params on `harness_list` / `harness_diagnose` / `harness_status`, the metadata-only `visualizations` toolset (7 `visual_*` resource types), and the `imageResult` / `mixedResult` response helpers. The Phase 3 preconditions were satisfied — audit specs 004 and 005 do not depend on the `image` content-block shape. This document is retained for historical context; the migration plan below was **not** followed.
+
+---
+
 ## Summary
 
-The MCP server currently bundles a full SVG chart rendering pipeline and a native PNG rasterizer (`@resvg/resvg-js`) to return inline images in tool responses. This spec documents the current implementation, its known issues, and a recommended migration path toward client-side rendering.
+The MCP server previously bundled a full SVG chart rendering pipeline and a native PNG rasterizer (`@resvg/resvg-js`) to return inline images in tool responses. This spec documented the implementation, its known issues, and a recommended migration path toward client-side rendering. The feature has since been removed (see update above).
 
 ---
 

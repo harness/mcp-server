@@ -367,20 +367,6 @@
 >
 > **Important param notes**: `granularity` must be `"MONTHLY"` (uppercase) for adoption/impact endpoints. `integration_type: "cursor"` (not `"all_assistants"`) required for `top_languages` and `sei_ai_impact`.
 
-### Visualizations (`visualizations.ts`) — 7 resources
-
-| Resource Type            | Operation | Result | Deep Link | Notes                              |
-| ------------------------ | --------- | ------ | --------- | ---------------------------------- |
-| `visual_timeline`        | describe  | ✅      | N/A       | Returns usage instructions         |
-| `visual_stage_flow`      | describe  | ✅      | N/A       | Returns usage instructions         |
-| `visual_health_dashboard`| describe  | ✅      | N/A       | Returns usage instructions         |
-| `visual_pie_chart`       | describe  | ✅      | N/A       | Returns usage instructions         |
-| `visual_bar_chart`       | describe  | ✅      | N/A       | Returns usage instructions         |
-| `visual_timeseries`      | describe  | ✅      | N/A       | Returns usage instructions         |
-| `visual_architecture`    | describe  | ✅      | N/A       | Returns usage instructions         |
-
-> Visualization resources have no CRUD operations; they're metadata-only. `harness_describe` works for all 7.
-
 ### Execution Log (`logs.ts`) — 1 resource
 
 | Resource Type   | Operation | Result | Deep Link | Notes                            |

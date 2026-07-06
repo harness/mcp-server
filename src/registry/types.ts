@@ -134,7 +134,6 @@ export type ToolsetName =
   | "platform"
   | "file_store"
 
-  | "visualizations"
   | "governance"
   | "freeze"
   | "overrides"
