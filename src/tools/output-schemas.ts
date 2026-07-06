@@ -8,7 +8,6 @@ export const listOutputSchema = z.object({
   items: z.array(z.union([dynamicObject, z.string(), z.number(), z.boolean()])).optional().describe("Array of resource objects or primitive values when the API returns a canonical list"),
   total: z.number().optional().describe("Total number of matching resources when provided by the API"),
   page: z.number().optional().describe("Current page number (0-indexed) when provided by the API"),
-  analysis: z.string().optional().describe("Visual analysis summary (when include_visual=true)"),
 }).catchall(z.unknown());
 
 // --- harness_get ---

@@ -39,7 +39,6 @@ import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
 import { fileStoreToolset } from "./toolsets/file-store.js";
 
-import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
@@ -154,7 +153,6 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   platformToolset,
   fileStoreToolset,
 
-  visualizationsToolset,
   governanceToolset,
   freezeToolset,
   overridesToolset,

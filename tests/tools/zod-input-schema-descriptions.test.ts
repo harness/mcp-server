@@ -67,7 +67,7 @@ describe("Zod 4 input schema descriptions (PR #398 regression)", () => {
     server = makeMcpServer();
   });
 
-  it("harness_list exposes descriptions on default-backed pagination and visual fields", async () => {
+  it("harness_list exposes descriptions on default-backed pagination fields", async () => {
     const { registerListTool } = await import("../../src/tools/harness-list.js");
     registerListTool(server as never, registry, client);
 
@@ -75,8 +75,6 @@ describe("Zod 4 input schema descriptions (PR #398 regression)", () => {
       "page",
       "size",
       "compact",
-      "include_visual",
-      "visual_type",
       "org_id",
       "project_id",
       "resource_scope",
@@ -97,13 +95,12 @@ describe("Zod 4 input schema descriptions (PR #398 regression)", () => {
     ]);
   });
 
-  it("harness_status exposes descriptions on default-backed limit and visual fields", async () => {
+  it("harness_status exposes descriptions on default-backed limit fields", async () => {
     const { registerStatusTool } = await import("../../src/tools/harness-status.js");
     registerStatusTool(server as never, registry, client);
 
     expectFieldDescriptions(server.schema("harness_status").inputSchema, [
       "limit",
-      "include_visual",
       "org_id",
       "project_id",
       "url",
