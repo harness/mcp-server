@@ -2,16 +2,6 @@ import type { ToolsetDefinition, PreflightContext, ParamsSchema } from "../types
 import type { PathBuilderConfig } from "../types.js";
 import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, anomalyListExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
 
-/** Narrow preflight client for CCM perspective create defaults fetch. */
-interface CcmPreflightClient {
-  readonly account: string;
-  request<T>(opts: {
-    method: string;
-    path: string;
-    params?: Record<string, string>;
-  }): Promise<T>;
-}
-
 // ---------------------------------------------------------------------------
 // GraphQL queries — ported from the official Go MCP server
 // (client/ccmcommons/ccmgraphqlqueries.go)
@@ -454,16 +444,16 @@ function deepMerge(base: Record<string, unknown>, override: Record<string, unkno
  * mcpServerInternal/mcp-server-pkg/common/pkg/tools/ccmperspectives.go
  */
 async function perspectiveCreatePreflight(ctx: PreflightContext): Promise<void> {
-  const harnessClient = ctx.client as unknown as CcmPreflightClient;
+  const { client } = ctx;
   const input = ctx.input as { body?: Record<string, unknown> };
   if (!input.body) input.body = {};
 
-  const accountId = harnessClient.account;
+  const accountId = client.account;
   if (!accountId) return;
 
   // Fetch account preference defaults
   try {
-    const resp = await harnessClient.request<{ resource?: SettingsValue[]; data?: SettingsValue[] } | SettingsValue[]>({
+    const resp = await client.request<{ resource?: SettingsValue[]; data?: SettingsValue[] } | SettingsValue[]>({
       method: "GET",
       path: "/ng/api/settings",
       params: {

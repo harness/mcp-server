@@ -36,9 +36,8 @@ const ansibleListExtract = (
 // ─── Preflight guards ────────────────────────────────────────────────────────
 
 const requireProjectScope = async (ctx: PreflightContext): Promise<void> => {
-  const cfg = (ctx.registry as unknown as { config: { HARNESS_ORG?: string; HARNESS_PROJECT?: string } }).config ?? {};
-  const orgId = ctx.input["org_id"] ?? cfg.HARNESS_ORG;
-  const projectId = ctx.input["project_id"] ?? cfg.HARNESS_PROJECT;
+  const orgId = ctx.input["org_id"] ?? ctx.registry.orgId;
+  const projectId = ctx.input["project_id"] ?? ctx.registry.projectId;
   const missing: string[] = [];
   if (!orgId) missing.push("org_id");
   if (!projectId) missing.push("project_id");
