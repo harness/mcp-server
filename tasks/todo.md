@@ -11,11 +11,15 @@ Slack report: hosted/remote Harness MCP sessions are cutting out and forcing cli
 - [x] Raise the HTTP session idle TTL to a remote-client-friendly default and keep docs/manifests in sync.
 - [x] Add proxy trust configuration so per-IP rate limiting works correctly behind load balancers.
 - [x] Update Kubernetes manifests to avoid routing in-memory MCP sessions across pods.
-- [ ] Run focused config/release checks plus typecheck/build validation.
+- [x] Run focused config/release checks plus typecheck/build validation.
 - [ ] Commit, push, open PR, and reply in the Slack thread.
 
 ### Review
-- Pending.
+- Root cause: HTTP MCP sessions are process-local (`src/index.ts` stores them in an in-memory `Map`). With the shipped Kubernetes deployment at two replicas and no sticky routing, follow-up requests could land on a different pod and return `404 Session not found`, which clients surface as re-authentication/re-enable prompts. The previous five-minute idle TTL also reaped quiet remote-client sessions between prompts.
+- Fixed runtime/config by raising the default `MCP_SESSION_TTL_MS` to 30 minutes, adding `HARNESS_MCP_TRUST_PROXY` for hosted/load-balanced per-IP rate limiting, and wiring it into Express before the rate limiter reads `req.ip`.
+- Fixed shipped operational manifests by setting the Kubernetes deployment to one replica while sessions remain in-memory and adding `ClientIP` service affinity as a direct-Service guardrail; README now documents the sticky-routing requirement before horizontal scaling.
+- Kept public config surfaces aligned across `.env.example`, `manifest.json`, `mcp-directory/manifest.json`, README, AGENTS.md, and regression tests.
+- Verification passed: `pnpm exec vitest run tests/config.test.ts tests/release-metadata.test.ts tests/integration/http-transport.test.ts`, `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, `pnpm standards:check`, and `pnpm test` (112 files / 2460 tests).
 
 ## Remove Visualization Resources / SVG + Image Generation (2026-07-06)
 
