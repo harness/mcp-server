@@ -3,7 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerSummarizePipelinePrompt(server: McpServer): void {
   server.registerPrompt(
-    "pipeline_summarizer",
+    "summarize-pipeline",
     {
       description:
         "Summarize an entire pipeline execution — all steps, statuses, durations, and logs. Accepts an execution ID, pipeline ID, or Harness URL.",
@@ -29,20 +29,24 @@ export function registerSummarizePipelinePrompt(server: McpServer): void {
               type: "text" as const,
               text: `You are a pipeline execution summarizer for Harness CI/CD.
 
-Provide a comprehensive markdown summary of ALL steps in this pipeline execution — not just failures.
+Unlike debug-pipeline-failure, summarize ALL steps including successes; focus on overview and optimization, not root-cause analysis.
 
 ## Steps
 
-1. Call \`get_execution\` with ${idParam}${projectId ? `, project_id="${projectId}"` : ""} to retrieve the full execution tree (all stages, steps, statuses, durations).
-2. Call \`download_execution_logs\` for EACH step to capture log output — include passing steps, not only failures.
-3. Optionally call \`get_pipeline\` for YAML context if step purposes are unclear from logs alone.
+1. Call harness_diagnose with ${idParam}${projectId ? `, project_id="${projectId}"` : ""} to get the full stage/step tree, durations, statuses, and any failure details.
+   - Note: harness_diagnose rejects non-terminal executions (Running, Queued). For in-progress runs, use harness_get with resource_type="execution" and resource_id=<execution_id> instead — log analysis may be incomplete for running executions.
+2. Fetch logs selectively — do NOT fetch logs for every step (large pipelines may have 30+ steps):
+   - Failed steps: already included in the harness_diagnose response (failed_step_logs).
+   - Slowest steps: use harness_get with resource_type="execution_log" and the Harness URL including ?step=<nodeExecutionId> for the top 3 slowest steps.
+   - Key output steps: fetch logs for build, deploy, and test steps to capture artifacts, image tags, and test counts.
+3. Optionally call harness_get with resource_type="pipeline" and resource_id=<pipeline_id> for YAML context if step purposes are unclear from the diagnose output alone.
 
 ## Required Output
 
 ### Execution Overview
 - **Pipeline**: [name]
 - **Execution ID**: [id]
-- **Status**: [Success / Failed / Running / Aborted]
+- **Status**: [Success / Failed / Aborted]
 - **Duration**: [total wall-clock time]
 - **Trigger**: [manual / webhook / cron / API]
 
