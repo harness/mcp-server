@@ -29,6 +29,7 @@ function makeConfig(overrides?: Partial<Config>): Config {
     HARNESS_MCP_ALLOWED_HOSTS: undefined,
     HARNESS_MCP_AUTH_TOKEN: undefined,
     HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+    HARNESS_MCP_TRUST_PROXY: 0,
     HARNESS_FME_API_KEY: undefined,
     HARNESS_FME_BASE_URL: "https://api.split.io",
     HARNESS_LOG_UNSAFE_BODIES: false,

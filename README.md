@@ -130,7 +130,8 @@ Operational constraints in HTTP mode:
 - `POST /mcp` without `mcp-session-id` must be an `initialize` request.
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
 - `GET /mcp` is used for SSE notifications (progress updates and elicitation prompts).
-- Idle sessions are reaped after `MCP_SESSION_TTL_MS` milliseconds once no request or SSE stream is active (default `300000`, or 5 minutes).
+- Idle sessions are reaped after `MCP_SESSION_TTL_MS` milliseconds once no request or SSE stream is active (default `1800000`, or 30 minutes).
+- HTTP MCP sessions are stored in-process. Multi-replica deployments must use sticky routing to the pod that created the session, or externalize the session/event store before scaling out.
 - `GET /health` is the only non-MCP endpoint.
 - Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
 - Set `x-harness-pipeline-version: 0` or `1` on the `initialize` request to select V0 or V1 pipeline resources for that HTTP session.
@@ -175,7 +176,7 @@ curl -X DELETE http://localhost:3000/mcp \
   -H "mcp-session-id: <session-id>"
 ```
 
-`HARNESS_MCP_ALLOWED_HOSTS` controls Host-header validation for DNS-rebinding protection, and CORS limits browser origins. Neither is authentication; use `HARNESS_MCP_AUTH_TOKEN` or an authenticated gateway/reverse proxy for access control.
+`HARNESS_MCP_ALLOWED_HOSTS` controls Host-header validation for DNS-rebinding protection, and CORS limits browser origins. Neither is authentication; use `HARNESS_MCP_AUTH_TOKEN` or an authenticated gateway/reverse proxy for access control. If the server runs behind a reverse proxy or load balancer, set `HARNESS_MCP_TRUST_PROXY` to the number of trusted hops so per-IP rate limiting uses the real client address.
 
 ### Client Configuration
 
@@ -553,6 +554,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_ALLOWED_HOSTS` | No       | --                          | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here                                                                                 |
 | `HARNESS_MCP_AUTH_TOKEN`    | No       | --                          | Bearer token required on `/mcp` HTTP routes when set. Required by default when HTTP transport binds to a non-loopback host                                                                                                                             |
 | `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | No | `false`         | Explicitly allow unauthenticated HTTP transport on non-loopback binds. Use only behind another authenticated control                                                                                                                                    |
+| `HARNESS_MCP_TRUST_PROXY`   | No       | `0`                         | Number of reverse proxy/load-balancer hops Express should trust for client IP resolution. Set this in hosted deployments so per-IP rate limiting keys on the real client instead of the proxy socket peer                                             |
 | `HARNESS_MCP_LOG_FILE`      | No       | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available                                                                                                                                                               |
 | `HARNESS_AUDIT_FILE`        | No       | --                          | Append audit events to a newline-delimited JSON file for durable local collection                                                                                                                                                                      |
 | `HARNESS_AUDIT_WEBHOOK_URL` | No       | --                          | HTTPS endpoint that receives batched audit events. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development                                                                                                                                   |

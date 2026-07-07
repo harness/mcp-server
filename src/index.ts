@@ -251,6 +251,10 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   const app = createHarnessHttpExpressApp(resolveHttpHostValidationOptions(host, config));
 
+  if (config.HARNESS_MCP_TRUST_PROXY > 0) {
+    app.set("trust proxy", config.HARNESS_MCP_TRUST_PROXY);
+  }
+
   // CORS — allow GET, POST, DELETE for session-based MCP
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);

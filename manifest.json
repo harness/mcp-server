@@ -48,7 +48,8 @@
         "HARNESS_ORG": "${user_config.HARNESS_ORG}",
         "HARNESS_PROJECT": "${user_config.HARNESS_PROJECT}",
         "HARNESS_BASE_URL": "${user_config.HARNESS_BASE_URL}",
-        "MCP_SESSION_TTL_MS": "${user_config.MCP_SESSION_TTL_MS}"
+        "MCP_SESSION_TTL_MS": "${user_config.MCP_SESSION_TTL_MS}",
+        "HARNESS_MCP_TRUST_PROXY": "${user_config.HARNESS_MCP_TRUST_PROXY}"
       }
     }
   },
@@ -118,7 +119,15 @@
       "type": "string",
       "title": "HTTP Session TTL (ms)",
       "description": "Idle HTTP session lifetime in milliseconds. Sessions are not considered idle while a request or SSE stream is active.",
-      "default": "300000",
+      "default": "1800000",
+      "required": false,
+      "sensitive": false
+    },
+    "HARNESS_MCP_TRUST_PROXY": {
+      "type": "string",
+      "title": "HTTP Trust Proxy Hops",
+      "description": "Number of reverse proxy/load-balancer hops Express should trust for client IP resolution. Use 0 unless the server runs behind a trusted proxy.",
+      "default": "0",
       "required": false,
       "sensitive": false
     }

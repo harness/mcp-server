@@ -83,12 +83,12 @@ describe("HTTP transport session management", () => {
     });
 
     it("session TTL reaper removes idle sessions while preserving active requests", () => {
-      const SESSION_TTL_MS = 5 * 60_000; // matches MCP_SESSION_TTL_MS default
+      const SESSION_TTL_MS = 30 * 60_000; // matches MCP_SESSION_TTL_MS default
       const sessions = new Map<string, { lastActivity: number; activeRequests: number }>();
 
       // Active session
       sessions.set("active", { lastActivity: Date.now(), activeRequests: 0 });
-      // Expired session (6 minutes ago)
+      // Expired session
       sessions.set("expired", { lastActivity: Date.now() - SESSION_TTL_MS - 60_000, activeRequests: 0 });
       // In-flight session older than the TTL
       sessions.set("in-flight", { lastActivity: Date.now() - SESSION_TTL_MS - 60_000, activeRequests: 1 });

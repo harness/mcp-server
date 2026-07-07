@@ -6,7 +6,12 @@ metadata:
   labels:
     app.kubernetes.io/name: harness-mcp-server
 spec:
-  replicas: 2
+  # MCP HTTP sessions live in an in-memory Map inside one pod. A follow-up
+  # request routed to a different pod cannot find that session and returns
+  # "Session not found", which clients surface as re-authentication. Keep one
+  # replica until the session/event store is externalized and every ingress/load
+  # balancer in front of the Service is configured for sticky routing.
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: harness-mcp-server

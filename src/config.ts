@@ -78,7 +78,10 @@ const RawConfigSchema = z.object({
   HARNESS_DEFAULT_PROJECT_ID: optionalStringFromEnv,
   HARNESS_API_TIMEOUT_MS: z.coerce.number().default(30000),
   HARNESS_MAX_RETRIES: z.coerce.number().default(3),
-  MCP_SESSION_TTL_MS: z.coerce.number().min(1).default(5 * 60_000),
+  // Idle HTTP sessions are reaped after this many ms once no request or SSE
+  // stream is active. Keep this long enough for interactive remote clients that
+  // do not keep an SSE stream open between user prompts.
+  MCP_SESSION_TTL_MS: z.coerce.number().min(1).default(30 * 60_000),
   LOG_LEVEL: z.preprocess(
     (val) => (val === "" ? undefined : val),
     z.enum(["debug", "info", "warn", "error"]).default("info"),
@@ -96,6 +99,9 @@ const RawConfigSchema = z.object({
   HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
   HARNESS_MCP_AUTH_TOKEN: optionalStringFromEnv,
   HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: booleanFromEnv.default(false),
+  // Express trust proxy hop count for deployments behind reverse proxies/LBs.
+  // Default 0 preserves direct-bind behavior and avoids trusting spoofed XFF.
+  HARNESS_MCP_TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   HARNESS_FME_API_KEY: optionalStringFromEnv,
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),

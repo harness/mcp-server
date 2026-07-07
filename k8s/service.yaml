@@ -7,6 +7,13 @@ metadata:
     app.kubernetes.io/name: harness-mcp-server
 spec:
   type: ClusterIP
+  # Direct Service traffic should stay on the pod that owns the in-memory MCP
+  # session. L7 ingress/proxy layers must configure their own sticky routing.
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      # Match the app's default MCP_SESSION_TTL_MS (30m).
+      timeoutSeconds: 1800
   selector:
     app.kubernetes.io/name: harness-mcp-server
   ports:

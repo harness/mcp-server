@@ -1,5 +1,22 @@
 # Harness MCP Server — Task Tracking
 
+## Remote HTTP MCP Session Re-Authentication Fix (2026-07-07)
+
+### Context
+Slack report: hosted/remote Harness MCP sessions are cutting out and forcing clients to re-enable or re-authenticate during a conversation. The referenced proposal identified `404 Session not found` responses from HTTP mode as the user-visible trigger.
+
+### Plan
+- [x] Read the Slack thread and referenced PR context.
+- [x] Trace HTTP session storage, idle reaping, Kubernetes routing, and config surfaces.
+- [x] Raise the HTTP session idle TTL to a remote-client-friendly default and keep docs/manifests in sync.
+- [x] Add proxy trust configuration so per-IP rate limiting works correctly behind load balancers.
+- [x] Update Kubernetes manifests to avoid routing in-memory MCP sessions across pods.
+- [ ] Run focused config/release checks plus typecheck/build validation.
+- [ ] Commit, push, open PR, and reply in the Slack thread.
+
+### Review
+- Pending.
+
 ## Remove Visualization Resources / SVG + Image Generation (2026-07-06)
 
 ### Context
