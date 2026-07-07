@@ -5,8 +5,14 @@
 - [x] Trace current `harness_diagnose` pipeline execution handling and referenced PR #569
 - [x] Implement a shared terminal-status gate before pipeline diagnosis proceeds
 - [x] Add focused regressions for running, terminal, and error-swallowing behavior
-- [ ] Run focused verification and typecheck/build as needed
+- [x] Run focused verification and typecheck/build as needed
 - [ ] Commit, push, open PR if code changes are made, and reply in Slack thread
+
+### Verification
+- `pnpm exec vitest run tests/utils/poll-execution.test.ts tests/tools/tool-handlers.test.ts -t "TERMINAL_STATUSES|harness_diagnose|in-progress pipeline executions|terminal pipeline executions"`
+- `pnpm typecheck`
+- `pnpm build`
+- `pnpm test`
 
 ## Remove Visualization Resources / SVG + Image Generation (2026-07-06)
 
