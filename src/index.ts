@@ -251,6 +251,14 @@ async function startHttp(config: Config, port: number): Promise<void> {
 
   const app = createHarnessHttpExpressApp(resolveHttpHostValidationOptions(host, config));
 
+  // Trust reverse proxies / load balancers in front of the server so req.ip
+  // resolves to the real client (from X-Forwarded-For) instead of the proxy
+  // socket peer. Without this, per-IP rate limiting buckets every client
+  // behind the LB into a single counter. Default 0 = trust nothing.
+  if (config.HARNESS_MCP_TRUST_PROXY > 0) {
+    app.set("trust proxy", config.HARNESS_MCP_TRUST_PROXY);
+  }
+
   // CORS — allow GET, POST, DELETE for session-based MCP
   app.use((_req, res, next) => {
     res.setHeader("Access-Control-Allow-Origin", `http://${host}:${port}`);
