@@ -5,8 +5,25 @@ import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
 import { isRecord, asRecord, asString, asNumber } from "../../utils/type-guards.js";
 import { resolveLogContent, resolveLogDownloadUrl } from "../../utils/log-resolver.js";
+import { TERMINAL_STATUSES, isTerminalExecutionStatus } from "../../utils/poll-execution.js";
 
 const log = createLogger("diagnose:pipeline");
+const TERMINAL_STATUS_LIST = Array.from(TERMINAL_STATUSES).join(", ");
+
+class InProgressExecutionDiagnoseError extends Error {
+  constructor(status: string) {
+    super(
+      `Cannot diagnose execution with status '${status}'. Diagnosis is only available after the execution reaches a terminal status (${TERMINAL_STATUS_LIST}). Please wait for the execution to complete.`,
+    );
+    this.name = "InProgressExecutionDiagnoseError";
+  }
+}
+
+function assertExecutionIsTerminal(status: string | undefined): void {
+  if (status && !isTerminalExecutionStatus(status)) {
+    throw new InProgressExecutionDiagnoseError(status);
+  }
+}
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -523,6 +540,7 @@ export const pipelineHandler: DiagnoseHandler = {
       const exec = asRecord(execution) ?? {};
       const pes = asRecord(exec.pipelineExecutionSummary);
       resolvedPipelineId = asString(pes?.pipelineIdentifier);
+      assertExecutionIsTerminal(asString(pes?.status));
 
       // Always extract the full graph node map — needed for both failed-step
       // log fetching and the explicit step log lookup below.
@@ -583,6 +601,7 @@ export const pipelineHandler: DiagnoseHandler = {
         currentStep++;
       }
     } catch (err) {
+      if (err instanceof InProgressExecutionDiagnoseError) throw err;
       diagnostic.execution_error = String(err);
     }
 

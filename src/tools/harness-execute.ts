@@ -14,7 +14,7 @@ import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntime
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
 import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
-import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
+import { pollExecutionToTerminal, isFailureExecutionStatus, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
 import { executeOutputSchema } from "./output-schemas.js";
 
@@ -513,7 +513,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
                 envelope._wait = {
                   hint: `Execution still running after ${pollResult.elapsed_ms}ms (last status: ${pollResult.status}). Recheck with harness_get(resource_type='execution', execution_id='${executionId}'), or get diagnostics so far with harness_diagnose(resource_type='execution', options={execution_id: '${executionId}'}).`,
                 };
-              } else if (FAILURE_STATUSES.has(pollResult.status)) {
+              } else if (isFailureExecutionStatus(pollResult.status)) {
                 envelope._diagnose_hint = `Execution ${pollResult.status}. Call harness_diagnose(resource_type='execution', options={execution_id: '${executionId}'}) for the failed step, error message, and log snippet.`;
               }
             } catch (err) {

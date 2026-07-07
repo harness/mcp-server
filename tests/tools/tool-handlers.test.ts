@@ -2946,4 +2946,83 @@ describe("harness_diagnose", () => {
       expect(data.error).not.toContain("not supported");
     }
   });
+
+  it("rejects in-progress pipeline executions instead of returning a partial diagnostic", async () => {
+    for (const status of [
+      "Running",
+      "AsyncWaiting",
+      "TaskWaiting",
+      "TimedWaiting",
+      "NotStarted",
+      "Queued",
+      "Paused",
+      "ResourceWaiting",
+      "InterventionWaiting",
+      "ApprovalWaiting",
+      "WaitStepRunning",
+      "QueuedLicenseLimitReached",
+      "QueuedExecutionConcurrencyReached",
+      "Pausing",
+      "InputWaiting",
+      "UploadWaiting",
+      "QueuedGlobalInfraCapacityReached",
+      "Discontinuing",
+    ]) {
+      mockRequest.mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            status,
+            pipelineIdentifier: "test",
+            planExecutionId: "e1",
+            layoutNodeMap: {},
+          },
+        },
+      });
+
+      const result = await server.call("harness_diagnose", {
+        options: { execution_id: "e1" },
+      });
+
+      expect(result.isError).toBe(true);
+      const data = parseResult(result) as { error: string };
+      expect(data.error).toContain(`Cannot diagnose execution with status '${status}'`);
+      expect(data.error).toContain("Diagnosis is only available after the execution reaches a terminal status");
+    }
+  });
+
+  it("allows terminal pipeline executions through diagnosis", async () => {
+    for (const status of [
+      "Success",
+      "Failed",
+      "Errored",
+      "IgnoreFailed",
+      "Expired",
+      "Aborted",
+      "Skipped",
+      "ApprovalRejected",
+      "Suspended",
+      "AbortedByFreeze",
+      "APPROVAL_REJECTED",
+    ]) {
+      mockRequest.mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            status,
+            pipelineIdentifier: "test",
+            planExecutionId: "e1",
+            layoutNodeMap: {},
+          },
+        },
+      });
+
+      const result = await server.call("harness_diagnose", {
+        options: { execution_id: "e1" },
+      });
+
+      expect(result.isError).toBeUndefined();
+      const data = parseResult(result) as { execution?: { execution?: { status?: string } }; error?: string };
+      expect(data.error).toBeUndefined();
+      expect(data.execution?.execution?.status).toBe(status);
+    }
+  });
 });

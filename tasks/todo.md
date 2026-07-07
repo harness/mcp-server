@@ -1,5 +1,13 @@
 # Harness MCP Server — Task Tracking
 
+## Block Diagnose for Running Executions (2026-07-07)
+
+- [x] Trace current `harness_diagnose` pipeline execution handling and referenced PR #569
+- [x] Implement a shared terminal-status gate before pipeline diagnosis proceeds
+- [x] Add focused regressions for running, terminal, and error-swallowing behavior
+- [ ] Run focused verification and typecheck/build as needed
+- [ ] Commit, push, open PR if code changes are made, and reply in Slack thread
+
 ## Remove Visualization Resources / SVG + Image Generation (2026-07-06)
 
 ### Context

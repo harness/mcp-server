@@ -33,7 +33,9 @@ export const TERMINAL_STATUSES: ReadonlySet<string> = new Set([
   "Errored",
   "AbortedByFreeze",
   "IgnoreFailed",
+  "ApprovalRejected",
   "Skipped",
+  "Suspended",
 ]);
 
 /** Statuses that indicate the execution failed and is worth diagnosing. */
@@ -44,7 +46,29 @@ export const FAILURE_STATUSES: ReadonlySet<string> = new Set([
   "Expired",
   "AbortedByFreeze",
   "IgnoreFailed",
+  "ApprovalRejected",
 ]);
+
+const NORMALIZED_TERMINAL_STATUSES = new Set(
+  Array.from(TERMINAL_STATUSES, (status) => normalizeExecutionStatus(status)),
+);
+const NORMALIZED_FAILURE_STATUSES = new Set(
+  Array.from(FAILURE_STATUSES, (status) => normalizeExecutionStatus(status)),
+);
+
+function normalizeExecutionStatus(status: string): string {
+  return status.replace(/[_\s-]/g, "").toLowerCase();
+}
+
+export function isTerminalExecutionStatus(status: string): boolean {
+  return TERMINAL_STATUSES.has(status) ||
+    NORMALIZED_TERMINAL_STATUSES.has(normalizeExecutionStatus(status));
+}
+
+export function isFailureExecutionStatus(status: string): boolean {
+  return FAILURE_STATUSES.has(status) ||
+    NORMALIZED_FAILURE_STATUSES.has(normalizeExecutionStatus(status));
+}
 
 export interface PollOptions {
   executionId: string;
@@ -191,7 +215,7 @@ export async function pollExecutionToTerminal(
         log.warn("onPoll callback threw — ignoring", { error: String(err) });
       }
 
-      if (TERMINAL_STATUSES.has(status)) {
+      if (isTerminalExecutionStatus(status)) {
         return buildResult(opts.executionId, lastSnapshot, true, false, Date.now() - startedAt, pollCount);
       }
     } catch (err) {

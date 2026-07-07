@@ -6,6 +6,8 @@ import {
   nextPollIntervalMs,
   TERMINAL_STATUSES,
   FAILURE_STATUSES,
+  isTerminalExecutionStatus,
+  isFailureExecutionStatus,
   AbortError,
 } from "../../src/utils/poll-execution.js";
 
@@ -64,7 +66,16 @@ describe("nextPollIntervalMs", () => {
 
 describe("TERMINAL_STATUSES / FAILURE_STATUSES", () => {
   it("includes the expected terminal statuses", () => {
-    for (const s of ["Success", "Failed", "Aborted", "Expired", "Errored", "AbortedByFreeze"]) {
+    for (const s of [
+      "Success",
+      "Failed",
+      "Aborted",
+      "Expired",
+      "Errored",
+      "AbortedByFreeze",
+      "ApprovalRejected",
+      "Suspended",
+    ]) {
       expect(TERMINAL_STATUSES.has(s)).toBe(true);
     }
   });
@@ -75,9 +86,16 @@ describe("TERMINAL_STATUSES / FAILURE_STATUSES", () => {
     }
   });
 
+  it("recognizes legacy normalized terminal status variants", () => {
+    expect(isTerminalExecutionStatus("APPROVAL_REJECTED")).toBe(true);
+    expect(isTerminalExecutionStatus("Aborted By Freeze")).toBe(true);
+    expect(isTerminalExecutionStatus("INTERVENTION_WAITING")).toBe(false);
+  });
+
   it("identifies failure statuses", () => {
     expect(FAILURE_STATUSES.has("Failed")).toBe(true);
     expect(FAILURE_STATUSES.has("Errored")).toBe(true);
+    expect(isFailureExecutionStatus("APPROVAL_REJECTED")).toBe(true);
     expect(FAILURE_STATUSES.has("Success")).toBe(false);
   });
 });
