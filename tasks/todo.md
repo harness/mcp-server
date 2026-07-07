@@ -1,6 +1,19 @@
 # Harness MCP Server — Task Tracking
 
-## PR 569 Review Automation (2026-07-07)
+## Coding Standards Compliance Review (2026-07-07)
+- [x] Run `pnpm standards:check` and full test suite against current main
+- [x] Audit user-provided standards snapshot vs canonical `docs/coding-standards.md`
+- [x] Add security guardrails (secret read-only, RateLimiter, log redaction, confirmation preview)
+- [x] Expand docs-consistency tests and AGENTS.md coding-standards pointer
+- [x] Commit, push, and open PR
+
+### Review
+- Baseline: 80 standards tests already passed; CI runs `pnpm standards:check` on every PR.
+- User snapshot listed **10 tools** and **Zod v3** — canonical docs/tests enforce **11 tools** (includes `harness_schema`) and **Zod v4** (`zod/v4`).
+- Added `tests/coding-standards/security.test.ts` (+4 tests) for secret metadata read-only contract, `RateLimiter` in `HarnessClient`, default log redaction, and `formatBodyPreview` on write confirmations.
+- Expanded `docs-consistency.test.ts` (+4 tests) so key architecture/safety rules in `docs/coding-standards.md` cannot drift silently.
+- Verification passed: `pnpm standards:check` (88 tests), `pnpm test` (2470 tests).
+
 - [x] Read Slack trigger thread and confirm report context
 - [x] Inspect PR #569 diff, CI/review state, and affected code paths
 - [x] Identify any concrete bug/root cause introduced or left unresolved
