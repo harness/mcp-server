@@ -64,7 +64,16 @@ describe("nextPollIntervalMs", () => {
 
 describe("TERMINAL_STATUSES / FAILURE_STATUSES", () => {
   it("includes the expected terminal statuses", () => {
-    for (const s of ["Success", "Failed", "Aborted", "Expired", "Errored", "AbortedByFreeze"]) {
+    for (const s of [
+      "Success",
+      "Failed",
+      "Aborted",
+      "Expired",
+      "Errored",
+      "AbortedByFreeze",
+      "ApprovalRejected",
+      "Suspended",
+    ]) {
       expect(TERMINAL_STATUSES.has(s)).toBe(true);
     }
   });
@@ -78,7 +87,9 @@ describe("TERMINAL_STATUSES / FAILURE_STATUSES", () => {
   it("identifies failure statuses", () => {
     expect(FAILURE_STATUSES.has("Failed")).toBe(true);
     expect(FAILURE_STATUSES.has("Errored")).toBe(true);
+    expect(FAILURE_STATUSES.has("ApprovalRejected")).toBe(true);
     expect(FAILURE_STATUSES.has("Success")).toBe(false);
+    expect(FAILURE_STATUSES.has("Suspended")).toBe(false);
   });
 });
 
@@ -142,6 +153,31 @@ describe("pollExecutionToTerminal", () => {
     expect(result.poll_count).toBe(3);
     expect(FAILURE_STATUSES.has(result.status)).toBe(true);
   });
+
+  it.each(["ApprovalRejected", "Suspended"])(
+    "stops polling when execution reaches terminal status %s",
+    async (status) => {
+      const { registry } = makeRegistry([
+        snapshot("Running"),
+        snapshot(status),
+      ]);
+
+      const promise = pollExecutionToTerminal(registry, fakeClient, {
+        executionId: `exec-${status}`,
+        timeoutMs: 60_000,
+        initialIntervalMs: 100,
+        maxIntervalMs: 500,
+      });
+
+      await flushAll();
+      const result = await promise;
+
+      expect(result.status).toBe(status);
+      expect(result.is_terminal).toBe(true);
+      expect(result.timed_out).toBe(false);
+      expect(result.poll_count).toBe(2);
+    },
+  );
 
   it("reports timed_out=true when execution never reaches terminal", async () => {
     // Always Running

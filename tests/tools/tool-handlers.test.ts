@@ -2022,6 +2022,48 @@ pipeline:
     expect(data._diagnose_hint).toEqual(expect.stringContaining("exec-wait-fail"));
   });
 
+  it("does not suggest diagnose when wait times out before a terminal status", async () => {
+    vi.useFakeTimers();
+    try {
+      mockRequest
+        .mockResolvedValueOnce({ data: { planExecutionId: "exec-wait-running", status: "RUNNING" } })
+        .mockResolvedValue({
+          data: {
+            pipelineExecutionSummary: {
+              planExecutionId: "exec-wait-running",
+              status: "Running",
+              name: "Running Pipeline",
+              pipelineIdentifier: "running_pipe",
+              startTs: 1_700_000_000_000,
+            },
+          },
+        });
+
+      const pending = server.call("harness_execute", {
+        resource_type: "pipeline",
+        action: "run",
+        resource_id: "running_pipe",
+        wait: true,
+        wait_poll_interval_seconds: 2,
+        wait_timeout_seconds: 10,
+      });
+
+      for (let i = 0; i < 50; i++) {
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+
+      const result = await pending;
+      expect(result.isError).toBeUndefined();
+      const data = parseResult(result) as { _wait?: { hint?: string }; execution_timed_out?: boolean };
+      expect(data.execution_timed_out).toBe(true);
+      expect(data._wait?.hint).toContain("wait for a terminal status");
+      expect(data._wait?.hint).not.toContain("harness_diagnose");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("preserves trigger response and surfaces wait error when execution polling fails persistently", async () => {
     vi.useFakeTimers();
     try {
@@ -3082,6 +3124,88 @@ describe("harness_diagnose", () => {
     if (result.isError) {
       const data = parseResult(result) as { error: string };
       expect(data.error).not.toContain("not supported");
+    }
+  });
+
+  it("rejects in-progress pipeline executions", async () => {
+    const inProgressStatuses = [
+      "Running",
+      "AsyncWaiting",
+      "TaskWaiting",
+      "TimedWaiting",
+      "NotStarted",
+      "Queued",
+      "Paused",
+      "ResourceWaiting",
+      "InterventionWaiting",
+      "ApprovalWaiting",
+      "WaitStepRunning",
+      "QueuedLicenseLimitReached",
+      "QueuedExecutionConcurrencyReached",
+      "Pausing",
+      "InputWaiting",
+      "UploadWaiting",
+      "QueuedGlobalInfraCapacityReached",
+      "Discontinuing",
+    ];
+
+    for (const status of inProgressStatuses) {
+      mockRequest.mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            status,
+            pipelineIdentifier: "test",
+            planExecutionId: "e1",
+            layoutNodeMap: {},
+          },
+        },
+      });
+
+      const result = await server.call("harness_diagnose", {
+        options: { execution_id: "e1" },
+      });
+
+      expect(result.isError).toBe(true);
+      const data = parseResult(result) as { error: string };
+      expect(data.error).toContain(`Cannot diagnose execution with status '${status}'`);
+      expect(data.error).toContain("Diagnosis is only available for completed executions");
+    }
+  });
+
+  it("allows pipeline executions with shared terminal statuses", async () => {
+    const terminalStatuses = [
+      "Success",
+      "Failed",
+      "Errored",
+      "IgnoreFailed",
+      "Expired",
+      "Aborted",
+      "Skipped",
+      "ApprovalRejected",
+      "Suspended",
+      "AbortedByFreeze",
+    ];
+
+    for (const status of terminalStatuses) {
+      mockRequest.mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            status,
+            pipelineIdentifier: "test",
+            planExecutionId: "e1",
+            layoutNodeMap: {},
+          },
+        },
+      });
+
+      const result = await server.call("harness_diagnose", {
+        options: { execution_id: "e1" },
+      });
+
+      if (result.isError) {
+        const data = parseResult(result) as { error: string };
+        expect(data.error).not.toContain("Cannot diagnose execution with status");
+      }
     }
   });
 });
