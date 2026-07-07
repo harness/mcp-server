@@ -524,6 +524,27 @@ export const pipelineHandler: DiagnoseHandler = {
       const pes = asRecord(exec.pipelineExecutionSummary);
       resolvedPipelineId = asString(pes?.pipelineIdentifier);
 
+      // Block diagnosis of running executions — only allow terminal statuses.
+      // Terminal statuses are: Success, Failed, Errored, IgnoreFailed, Expired, Aborted,
+      // Skipped, ApprovalRejected, Suspended, AbortedByFreeze.
+      // All other statuses (Running, Queued, Paused, etc.) are in-progress and rejected.
+      const executionStatus = asString(pes?.status);
+      const terminalStatuses = [
+        "Success",
+        "Failed",
+        "Errored",
+        "IgnoreFailed",
+        "Expired",
+        "Aborted",
+        "Skipped",
+        "ApprovalRejected",
+        "Suspended",
+        "AbortedByFreeze",
+      ];
+      if (executionStatus && !terminalStatuses.includes(executionStatus)) {
+        throw new Error(`Cannot diagnose execution with status '${executionStatus}'. Diagnosis is only available for completed executions (Success, Failed, Aborted, Expired, etc.). Please wait for the execution to complete.`);
+      }
+
       // Always extract the full graph node map — needed for both failed-step
       // log fetching and the explicit step log lookup below.
       const execGraph = asRecord(exec.executionGraph);
@@ -583,6 +604,11 @@ export const pipelineHandler: DiagnoseHandler = {
         currentStep++;
       }
     } catch (err) {
+      // Re-throw errors about running executions — these are user errors that
+      // should be surfaced immediately, not logged as execution_error
+      if (err instanceof Error && err.message.includes("Cannot diagnose execution with status")) {
+        throw err;
+      }
       diagnostic.execution_error = String(err);
     }
 
