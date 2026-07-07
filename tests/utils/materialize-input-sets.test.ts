@@ -271,4 +271,61 @@ describe("materializeInputSetsToRuntimeYaml", () => {
       },
     });
   });
+
+  it("forwards git context on every input set GET when multiple ids are provided", async () => {
+    const gitContext = {
+      branch: "feature/x",
+      repoName: "my-repo",
+      connectorRef: "gh_conn",
+      storeType: "REMOTE",
+    };
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        status: "SUCCESS",
+        data: {
+          inputSetYaml: `inputSet:
+  pipeline:
+    identifier: my-pipe
+    variables:
+      - name: env
+        type: String
+        value: dev
+`,
+        },
+      })
+      .mockResolvedValueOnce({
+        status: "SUCCESS",
+        data: {
+          inputSetYaml: `inputSet:
+  pipeline:
+    identifier: my-pipe
+    variables:
+      - name: env
+        type: String
+        value: prod
+`,
+        },
+      });
+    const client = makeClient(request);
+
+    await materializeInputSetsToRuntimeYaml(client, {
+      ...baseParams,
+      inputSetIds: ["set-a", "set-b"],
+      gitContext,
+    });
+
+    expect(request).toHaveBeenCalledTimes(2);
+    for (const call of request.mock.calls) {
+      expect(call[0]).toMatchObject({
+        method: "GET",
+        params: expect.objectContaining({
+          branch: "feature/x",
+          repoName: "my-repo",
+          connectorRef: "gh_conn",
+          storeType: "REMOTE",
+        }),
+      });
+    }
+  });
 });

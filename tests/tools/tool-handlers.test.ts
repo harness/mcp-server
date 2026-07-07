@@ -2213,6 +2213,86 @@ pipeline:
     expect(getCall.params?.storeType).toBe("REMOTE");
   });
 
+  it("prefers pipeline_branch over branch when materializing remote input sets", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "remote_pipe"
+    variables:
+      - name: "env"
+        type: "String"
+        value: "prod"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-branch-pref" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "remote_pipe",
+      input_set_ids: ["remote-set"],
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "gh_conn",
+        repo_name: "my-repo",
+        pipeline_branch: "feature/pipeline-branch",
+        branch: "feature/codebase-branch",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const getCall = mockRequest.mock.calls[0]![0] as {
+      params?: Record<string, string | undefined>;
+    };
+    // pipeline_branch selects which git branch the input set YAML is read from;
+    // branch is the CI codebase checkout and must not clobber input-set resolution.
+    expect(getCall.params?.branch).toBe("feature/pipeline-branch");
+  });
+
+  it("forwards git context on input set GET when merging with full pipeline YAML inputs", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "str_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "prod"
+`;
+    const inlineYaml = `pipeline:
+  identifier: "str_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "feature"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-remote-merge" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "str_pipe",
+      inputs: inlineYaml,
+      input_set_ids: ["remote-set"],
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "gh_conn",
+        repo_name: "my-repo",
+        branch: "feature/x",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const getCall = mockRequest.mock.calls[0]![0] as {
+      params?: Record<string, string | undefined>;
+    };
+    expect(getCall.params?.branch).toBe("feature/x");
+    expect(getCall.params?.repoName).toBe("my-repo");
+    expect(getCall.params?.connectorRef).toBe("gh_conn");
+    expect(getCall.params?.storeType).toBe("REMOTE");
+  });
+
   it("materializes input_set_ids before applying inline input overrides", async () => {
     const inputSetYaml = `inputSet:
   pipeline:
