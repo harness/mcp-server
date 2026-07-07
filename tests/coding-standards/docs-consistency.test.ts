@@ -45,4 +45,27 @@ describe("Coding standards — documentation consistency", () => {
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
+
+  it("docs/coding-standards.md documents stderr-only logging (no console.log)", () => {
+    expect(content).toMatch(/NEVER write to stdout/);
+    expect(content).toMatch(/console\.log\(\)/);
+    expect(content).toMatch(/createLogger/);
+  });
+
+  it("docs/coding-standards.md documents HarnessClient singleton and fetch exceptions", () => {
+    expect(content).toMatch(/instantiated once in `src\/index\.ts`/);
+    expect(content).toMatch(/src\/client\/harness-client\.ts/);
+    expect(content).toMatch(/src\/utils\/log-resolver\.ts/);
+  });
+
+  it("docs/coding-standards.md documents pure-data toolset constraints", () => {
+    expect(content).toMatch(/Toolset Definitions Are Pure Data/);
+    expect(content).toMatch(/Import `HarnessClient`/);
+    expect(content).toMatch(/Import or call `createLogger`/);
+  });
+
+  it("docs/coding-standards.md documents write confirmation and secret-metadata safety", () => {
+    expect(content).toMatch(/Never.*expose secret values/i);
+    expect(content).toMatch(/confirmViaElicitation|confirm: true/);
+  });
 });
