@@ -6,13 +6,17 @@
 - [x] Implement a shared terminal-status gate before pipeline diagnosis proceeds
 - [x] Add focused regressions for running, terminal, and error-swallowing behavior
 - [x] Run focused verification and typecheck/build as needed
-- [ ] Commit, push, open PR if code changes are made, and reply in Slack thread
+- [x] Commit, push, open PR if code changes are made, and reply in Slack thread
 
 ### Verification
 - `pnpm exec vitest run tests/utils/poll-execution.test.ts tests/tools/tool-handlers.test.ts -t "TERMINAL_STATUSES|harness_diagnose|in-progress pipeline executions|terminal pipeline executions"`
 - `pnpm typecheck`
 - `pnpm build`
 - `pnpm test`
+
+### Report
+- Opened PR #574.
+- Slack reply to the original thread was attempted, but the trigger channel `C08SYT1FWJD` was not in the automation tool's allowed send targets. No message was posted to another channel.
 
 ## Remove Visualization Resources / SVG + Image Generation (2026-07-06)
 
