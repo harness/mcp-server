@@ -5,7 +5,13 @@
 - [x] Inspect PR #569 diff, CI/review state, and affected code paths
 - [x] Identify any concrete bug/root cause introduced or left unresolved
 - [x] Implement a focused fix with regression coverage if needed
+- [x] Run focused and broad verification
 - [ ] Commit, push, open PR if fixed, and reply in the Slack thread
+
+### Review
+- Found that PR #569's non-terminal diagnosis guard duplicated the execution terminal-status list instead of sharing the existing wait-mode utility, which would leave wait mode and `harness_diagnose` inconsistent for statuses such as approval rejection.
+- Fixed `harness_diagnose` to use the shared terminal-status set, expanded the shared set to include `ApprovalRejected` and `Suspended`, and updated wait timeout guidance so it no longer recommends diagnosing still-running executions.
+- Verification passed: focused Vitest status/diagnose tests, `pnpm build`, `pnpm typecheck`, `pnpm docs:check`, `pnpm test`, and `pnpm standards:check`.
 
 ## Remove Visualization Resources / SVG + Image Generation (2026-07-06)
 
