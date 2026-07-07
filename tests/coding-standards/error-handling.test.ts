@@ -7,33 +7,15 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { API_DISPATCH_HANDLERS, LOCAL_ONLY_HANDLERS } from "./allowed-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
-
-/** Handlers that call HarnessClient / registry dispatch against the live API. */
-const API_HANDLERS = [
-  "src/tools/harness-list.ts",
-  "src/tools/harness-get.ts",
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-  "src/tools/harness-diagnose.ts",
-  "src/tools/harness-search.ts",
-  "src/tools/harness-status.ts",
-];
-
-/** Local metadata / schema tools — no toMcpError required. */
-const LOCAL_ONLY_HANDLERS = [
-  "src/tools/harness-describe.ts",
-  "src/tools/harness-schema.ts",
-];
 
 describe("Coding standards — error handling pattern", () => {
   it("API-calling handlers import and use toMcpError for infrastructure failures", () => {
     const violations: string[] = [];
 
-    for (const file of API_HANDLERS) {
+    for (const file of API_DISPATCH_HANDLERS) {
       const content = readFileSync(join(REPO_ROOT, file), "utf8");
       if (!content.includes("toMcpError")) {
         violations.push(`${file}: missing toMcpError import/usage`);

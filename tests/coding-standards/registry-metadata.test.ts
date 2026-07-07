@@ -5,26 +5,11 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { Registry } from "../../src/registry/index.js";
+import { ALL_HANDLER_FILES, WRITE_HANDLER_FILES } from "./allowed-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 
-const WRITE_HANDLER_FILES = [
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-];
-
-const HANDLER_FILES = [
-  "src/tools/harness-list.ts",
-  "src/tools/harness-get.ts",
-  ...WRITE_HANDLER_FILES,
-  "src/tools/harness-diagnose.ts",
-  "src/tools/harness-search.ts",
-  "src/tools/harness-describe.ts",
-  "src/tools/harness-status.ts",
-  "src/tools/harness-schema.ts",
-];
+const HANDLER_FILES = ALL_HANDLER_FILES;
 
 const MINIMAL_CONFIG = {
   HARNESS_API_KEY: "pat.testaccount.testtoken.testsecret",

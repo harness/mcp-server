@@ -8,26 +8,12 @@
 import { describe, it, expect } from "vitest";
 import { readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
+import { ALLOWED_TOOLS_ROOT_FILES } from "./allowed-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const TOOLS_DIR = join(REPO_ROOT, "src/tools");
 
-const ALLOWED_TOOLS_ROOT_FILES = new Set([
-  "harness-list.ts",
-  "harness-get.ts",
-  "harness-create.ts",
-  "harness-update.ts",
-  "harness-delete.ts",
-  "harness-execute.ts",
-  "harness-diagnose.ts",
-  "harness-search.ts",
-  "harness-describe.ts",
-  "harness-status.ts",
-  "harness-schema.ts",
-  "index.ts",
-  "input-schemas.ts",
-  "output-schemas.ts",
-]);
+const ALLOWED_TOOLS_ROOT_FILES_SET = new Set<string>(ALLOWED_TOOLS_ROOT_FILES);
 
 const ALLOWED_TOOLS_SUBDIRS = new Set(["diagnose", "entity-schema"]);
 
@@ -50,7 +36,7 @@ describe("Coding standards — file organization", () => {
         continue;
       }
 
-      if (!ALLOWED_TOOLS_ROOT_FILES.has(entry)) {
+      if (!ALLOWED_TOOLS_ROOT_FILES_SET.has(entry)) {
         violations.push(`src/tools/${entry} — unexpected file (new API domains go in src/registry/toolsets/)`);
       }
     }
