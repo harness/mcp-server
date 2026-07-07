@@ -1,5 +1,12 @@
 # Harness MCP Server — Task Tracking
 
+## PR 569 Review Automation (2026-07-07)
+- [x] Read Slack trigger thread and confirm report context
+- [x] Inspect PR #569 diff, CI/review state, and affected code paths
+- [x] Identify any concrete bug/root cause introduced or left unresolved
+- [x] Implement a focused fix with regression coverage if needed
+- [ ] Commit, push, open PR if fixed, and reply in the Slack thread
+
 ## Remove Visualization Resources / SVG + Image Generation (2026-07-06)
 
 ### Context

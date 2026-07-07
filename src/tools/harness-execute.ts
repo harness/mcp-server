@@ -554,7 +554,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
               if (pollResult.timed_out) {
                 envelope._wait = {
-                  hint: `Execution still running after ${pollResult.elapsed_ms}ms (last status: ${pollResult.status}). Recheck with harness_get(resource_type='execution', execution_id='${executionId}'), or get diagnostics so far with harness_diagnose(resource_type='execution', options={execution_id: '${executionId}'}).`,
+                  hint: `Execution still running after ${pollResult.elapsed_ms}ms (last status: ${pollResult.status}). Recheck with harness_get(resource_type='execution', execution_id='${executionId}') and wait for a terminal status before diagnosing it.`,
                 };
               } else if (FAILURE_STATUSES.has(pollResult.status)) {
                 envelope._diagnose_hint = `Execution ${pollResult.status}. Call harness_diagnose(resource_type='execution', options={execution_id: '${executionId}'}) for the failed step, error message, and log snippet.`;

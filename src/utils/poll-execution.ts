@@ -32,8 +32,10 @@ export const TERMINAL_STATUSES: ReadonlySet<string> = new Set([
   "Expired",
   "Errored",
   "AbortedByFreeze",
+  "ApprovalRejected",
   "IgnoreFailed",
   "Skipped",
+  "Suspended",
 ]);
 
 /** Statuses that indicate the execution failed and is worth diagnosing. */
@@ -43,6 +45,7 @@ export const FAILURE_STATUSES: ReadonlySet<string> = new Set([
   "Aborted",
   "Expired",
   "AbortedByFreeze",
+  "ApprovalRejected",
   "IgnoreFailed",
 ]);
 

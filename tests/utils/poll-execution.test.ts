@@ -64,7 +64,16 @@ describe("nextPollIntervalMs", () => {
 
 describe("TERMINAL_STATUSES / FAILURE_STATUSES", () => {
   it("includes the expected terminal statuses", () => {
-    for (const s of ["Success", "Failed", "Aborted", "Expired", "Errored", "AbortedByFreeze"]) {
+    for (const s of [
+      "Success",
+      "Failed",
+      "Aborted",
+      "Expired",
+      "Errored",
+      "AbortedByFreeze",
+      "ApprovalRejected",
+      "Suspended",
+    ]) {
       expect(TERMINAL_STATUSES.has(s)).toBe(true);
     }
   });
@@ -78,6 +87,7 @@ describe("TERMINAL_STATUSES / FAILURE_STATUSES", () => {
   it("identifies failure statuses", () => {
     expect(FAILURE_STATUSES.has("Failed")).toBe(true);
     expect(FAILURE_STATUSES.has("Errored")).toBe(true);
+    expect(FAILURE_STATUSES.has("ApprovalRejected")).toBe(true);
     expect(FAILURE_STATUSES.has("Success")).toBe(false);
   });
 });
