@@ -2232,6 +2232,102 @@ pipeline:
     expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
   });
 
+  it("merges input_set_ids into a full pipeline YAML STRING passed as inputs", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "str_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "prod"
+      - name: "branch"
+        type: "String"
+        value: "main"
+`;
+    // Caller passes a full pipeline document as a YAML string alongside an
+    // input set. Previously this skipped materialization and dropped the set.
+    const inlineYaml = `pipeline:
+  identifier: "str_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "feature"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } }) // input set GET
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-str" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "str_pipe",
+      inputs: inlineYaml,
+      input_set_ids: ["my-input-set"],
+    });
+
+    expect(result.isError).toBeUndefined();
+    // Only the input set GET + the execute POST — no template fetch needed.
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+
+    const getCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("/pipeline/api/inputSets/");
+    expect(getCall.path).toContain("my-input-set");
+
+    const runCall = mockRequest.mock.calls[1]![0] as {
+      method?: string;
+      body?: string;
+      params?: Record<string, string | string[] | undefined>;
+    };
+    expect(runCall.method).toBe("POST");
+    // Input set base value present...
+    expect(runCall.body).toContain("environment");
+    expect(runCall.body).toContain("prod");
+    // ...and the caller's inline override wins for branch.
+    expect(runCall.body).toContain("feature");
+    expect(runCall.body).not.toContain("main");
+    // Input set applied via body, not the ignored query param.
+    expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
+  });
+
+  it("merges input_set_ids into a full pipeline OBJECT passed as inputs", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "obj_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "prod"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } }) // input set GET
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-obj" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "obj_pipe",
+      inputs: {
+        pipeline: {
+          identifier: "obj_pipe",
+          variables: [{ name: "branch", type: "String", value: "feature" }],
+        },
+      },
+      input_set_ids: ["my-input-set"],
+    });
+
+    expect(result.isError).toBeUndefined();
+    const runCall = mockRequest.mock.calls[mockRequest.mock.calls.length - 1]![0] as {
+      body?: string;
+      params?: Record<string, string | string[] | undefined>;
+    };
+    // Input set base + caller override both present in the merged body.
+    expect(runCall.body).toContain("environment");
+    expect(runCall.body).toContain("prod");
+    expect(runCall.body).toContain("feature");
+    expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
+  });
+
   it("includes _inputResolution metadata on successful auto-resolved execution", async () => {
     const simpleTemplate = `pipeline:
   identifier: "meta_pipe"
