@@ -325,11 +325,22 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             );
           }
           try {
+            // Forward git context so remote / Git-stored input sets resolve
+            // from the correct branch/repo instead of silently defaulting to
+            // the repo's default branch. `normalizeRemotePipelineRunParams`
+            // (called above) has already populated these on `input`.
+            const gitContext = {
+              branch: asString(input.pipeline_branch) ?? asString(input.branch),
+              repoName: asString(input.repo_name),
+              connectorRef: asString(input.connector_ref),
+              storeType: asString(input.store_type),
+            };
             materializedInputSetYaml = await materializeInputSetsToRuntimeYaml(client, {
               pipelineId,
               orgId,
               projectId,
               inputSetIds,
+              gitContext,
             });
             if (materializedInputSetYaml && hasNoInlineRuntimeInputs(args.inputs)) {
               input.inputs = materializedInputSetYaml;

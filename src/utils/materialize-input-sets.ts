@@ -13,6 +13,19 @@ export interface MaterializeParams {
   orgId: string;
   projectId: string;
   inputSetIds: string[];
+  /**
+   * Git context for remote / Git-stored input sets. When omitted, the Harness
+   * API resolves the input set from the repo's default branch — which silently
+   * returns the wrong values (or 404s) when the set lives on another branch.
+   */
+  gitContext?: InputSetGitContext;
+}
+
+export interface InputSetGitContext {
+  branch?: string;
+  repoName?: string;
+  connectorRef?: string;
+  storeType?: string;
 }
 
 function mergeVariableLists(
@@ -104,6 +117,7 @@ async function fetchInputSetPipelineFragment(
   orgId: string,
   projectId: string,
   inputSetId: string,
+  gitContext?: InputSetGitContext,
 ): Promise<Record<string, unknown> | undefined> {
   const raw = await client.request<unknown>({
     method: "GET",
@@ -112,6 +126,12 @@ async function fetchInputSetPipelineFragment(
       orgIdentifier: orgId,
       projectIdentifier: projectId,
       pipelineIdentifier: pipelineId,
+      // Git context for remote input sets. Empty/undefined values are dropped
+      // by the client's query serializer, so inline sets are unaffected.
+      branch: gitContext?.branch,
+      repoName: gitContext?.repoName,
+      connectorRef: gitContext?.connectorRef,
+      storeType: gitContext?.storeType,
     },
   });
   const r = asRecord(raw);
@@ -149,6 +169,7 @@ export async function materializeInputSetsToRuntimeYaml(
       params.orgId,
       params.projectId,
       id,
+      params.gitContext,
     );
     if (!fragment) {
       throw new HarnessApiError(
