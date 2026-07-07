@@ -6,7 +6,15 @@ metadata:
   labels:
     app.kubernetes.io/name: harness-mcp-server
 spec:
-  replicas: 2
+  # MCP sessions are held in an in-memory Map per pod (see src/index.ts). A
+  # session initialized on one pod is unknown to any other, so a request
+  # load-balanced to a different replica returns "Session not found", forcing
+  # the client to re-initialize / re-authenticate. Until the session store is
+  # externalized (e.g. shared store + SDK eventStore for resumability), run a
+  # single replica. If you must scale out, you MUST also add sticky routing
+  # (Service sessionAffinity: ClientIP below is not sufficient through an
+  # L7 ingress — configure sticky sessions at the ingress too).
+  replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: harness-mcp-server

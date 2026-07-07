@@ -196,11 +196,11 @@ describe("ConfigSchema", () => {
     }
   });
 
-  it("defaults MCP_SESSION_TTL_MS to five minutes", () => {
+  it("defaults MCP_SESSION_TTL_MS to thirty minutes", () => {
     const result = ConfigSchema.safeParse(validConfig);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.MCP_SESSION_TTL_MS).toBe(5 * 60_000);
+      expect(result.data.MCP_SESSION_TTL_MS).toBe(30 * 60_000);
     }
   });
 
@@ -219,6 +219,31 @@ describe("ConfigSchema", () => {
     const result = ConfigSchema.safeParse({
       ...validConfig,
       MCP_SESSION_TTL_MS: "0",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("defaults HARNESS_MCP_TRUST_PROXY to 0 and coerces from env", () => {
+    const withDefault = ConfigSchema.safeParse(validConfig);
+    expect(withDefault.success).toBe(true);
+    if (withDefault.success) {
+      expect(withDefault.data.HARNESS_MCP_TRUST_PROXY).toBe(0);
+    }
+
+    const coerced = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_MCP_TRUST_PROXY: "2",
+    });
+    expect(coerced.success).toBe(true);
+    if (coerced.success) {
+      expect(coerced.data.HARNESS_MCP_TRUST_PROXY).toBe(2);
+    }
+  });
+
+  it("rejects negative HARNESS_MCP_TRUST_PROXY", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_MCP_TRUST_PROXY: "-1",
     });
     expect(result.success).toBe(false);
   });

@@ -7,6 +7,15 @@ metadata:
     app.kubernetes.io/name: harness-mcp-server
 spec:
   type: ClusterIP
+  # Pin a client to the same pod so in-memory MCP sessions resolve on follow-up
+  # requests. This covers direct Service traffic; L7 ingress in front of the
+  # Service must configure its own sticky sessions for this to hold end-to-end.
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      # Match the app's idle session TTL (MCP_SESSION_TTL_MS default 30m = 1800s)
+      # so affinity does not expire before the session does.
+      timeoutSeconds: 1800
   selector:
     app.kubernetes.io/name: harness-mcp-server
   ports:
