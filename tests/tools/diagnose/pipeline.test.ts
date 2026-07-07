@@ -107,6 +107,75 @@ describe("pipelineHandler", () => {
     await expect(pipelineHandler.diagnose(ctx)).rejects.toThrow("execution_id or pipeline_id");
   });
 
+  it("rejects non-terminal execution status before diagnosis proceeds", async () => {
+    const inProgressStatuses = ["Running", "ApprovalWaiting", "Queued"];
+    for (const status of inProgressStatuses) {
+      const exec = makeExecution({ status });
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_yaml: true },
+      });
+
+      await expect(pipelineHandler.diagnose(ctx)).rejects.toThrow(
+        `Cannot diagnose execution with status '${status}'`,
+      );
+    }
+  });
+
+  it("propagates non-terminal rejection instead of returning execution_error", async () => {
+    const exec = makeExecution({ status: "Running" });
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: true },
+    });
+
+    await expect(pipelineHandler.diagnose(ctx)).rejects.toThrow(
+      "Diagnosis is only available for completed executions",
+    );
+  });
+
+  it("allows diagnosis for ApprovalRejected and Suspended terminal statuses", async () => {
+    for (const status of ["ApprovalRejected", "Suspended"]) {
+      const exec = makeExecution({ status });
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+      const execution = result.execution as Record<string, unknown>;
+      expect((execution.execution as Record<string, unknown>).status).toBe(status);
+    }
+  });
+
+  it("does not fetch pipeline YAML when execution is still in progress", async () => {
+    const exec = makeExecution({ status: "Running" });
+    const dispatch = makePipelineDispatch(exec);
+    const registry = {
+      dispatch,
+      dispatchExecute: vi.fn(),
+      getAccountId: () => "test-account",
+    } as unknown as Registry;
+
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: true, include_yaml: true },
+    });
+
+    await expect(pipelineHandler.diagnose(ctx)).rejects.toThrow("Cannot diagnose execution with status");
+    const pipelineGetCalls = dispatch.mock.calls.filter(
+      ([, resourceType, op]) => resourceType === "pipeline" && op === "get",
+    );
+    expect(pipelineGetCalls).toHaveLength(0);
+  });
+
   it("returns summary for successful execution", async () => {
     const exec = makeExecution({ status: "Success" });
     const registry = makePipelineRegistry(exec);
