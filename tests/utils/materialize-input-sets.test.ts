@@ -76,6 +76,25 @@ describe("mergeRuntimePipelineFragments", () => {
     expect(out.identifier).toBe("new-id");
     expect(out.variables).toEqual([{ name: "x", value: "1" }]);
   });
+
+  it("combines disjoint pipeline variables from both fragments", () => {
+    const base = {
+      identifier: "P",
+      variables: [{ name: "environment", type: "String", value: "prod" }],
+    };
+    const override = {
+      identifier: "P",
+      variables: [{ name: "branch", type: "String", value: "feature" }],
+    };
+    const out = mergeRuntimePipelineFragments(base, override);
+    expect(out.variables).toEqual(
+      expect.arrayContaining([
+        { name: "environment", type: "String", value: "prod" },
+        { name: "branch", type: "String", value: "feature" },
+      ]),
+    );
+    expect(out.variables).toHaveLength(2);
+  });
 });
 
 describe("materializeInputSetsToRuntimeYaml", () => {

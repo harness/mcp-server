@@ -2328,6 +2328,160 @@ pipeline:
     expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
   });
 
+  it("merges stage variables from input_set_ids when inputs is full pipeline YAML", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "stage_pipe"
+    stages:
+      - stage:
+          identifier: "ci"
+          type: "CI"
+          variables:
+            - name: "demo"
+              type: "String"
+              value: "from-input-set"
+            - name: "retained"
+              type: "String"
+              value: "kept"
+`;
+    const inlineYaml = `pipeline:
+  identifier: "stage_pipe"
+  stages:
+    - stage:
+        identifier: "ci"
+        type: "CI"
+        variables:
+          - name: "demo"
+            type: "String"
+            value: "from-caller"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-stage" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "stage_pipe",
+      inputs: inlineYaml,
+      input_set_ids: ["stage-set"],
+    });
+
+    expect(result.isError).toBeUndefined();
+    const runCall = mockRequest.mock.calls[1]![0] as { body?: string };
+    expect(runCall.body).toContain("from-caller");
+    expect(runCall.body).not.toContain("from-input-set");
+    expect(runCall.body).toContain("kept");
+  });
+
+  it("merges multiple input_set_ids then applies full pipeline inputs override", async () => {
+    const setAYaml = `inputSet:
+  pipeline:
+    identifier: "multi_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "dev"
+`;
+    const setBYaml = `inputSet:
+  pipeline:
+    identifier: "multi_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "prod"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml: setAYaml } })
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml: setBYaml } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-multi" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "multi_pipe",
+      inputs: {
+        pipeline: {
+          identifier: "multi_pipe",
+          variables: [{ name: "branch", type: "String", value: "feature" }],
+        },
+      },
+      input_set_ids: ["set-a", "set-b"],
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(3);
+    const runCall = mockRequest.mock.calls[2]![0] as { body?: string; params?: Record<string, string | string[] | undefined> };
+    expect(runCall.body).toContain("prod");
+    expect(runCall.body).not.toContain("dev");
+    expect(runCall.body).toContain("feature");
+    expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
+  });
+
+  it("returns error when input_set_ids fail to load alongside full pipeline inputs", async () => {
+    mockRequest.mockResolvedValueOnce({
+      status: "ERROR",
+      message: "Input set not found",
+      code: "INPUT_SET_NOT_FOUND",
+    });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "err_pipe",
+      inputs: {
+        pipeline: {
+          identifier: "err_pipe",
+          variables: [{ name: "branch", type: "String", value: "main" }],
+        },
+      },
+      input_set_ids: ["missing-set"],
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Could not load input set(s) for execution"),
+    });
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Input set not found"),
+    });
+    expect(mockRequest).toHaveBeenCalledOnce();
+  });
+
+  it("merges input_set_ids when inputs YAML string is a bare pipeline fragment", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "bare_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "prod"
+`;
+    const bareFragmentYaml = `identifier: "bare_pipe"
+variables:
+  - name: "branch"
+    type: "String"
+    value: "feature"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-bare" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "bare_pipe",
+      inputs: bareFragmentYaml,
+      input_set_ids: ["bare-set"],
+    });
+
+    expect(result.isError).toBeUndefined();
+    const runCall = mockRequest.mock.calls[1]![0] as { body?: string };
+    expect(runCall.body).toContain("environment");
+    expect(runCall.body).toContain("prod");
+    expect(runCall.body).toContain("feature");
+  });
+
   it("includes _inputResolution metadata on successful auto-resolved execution", async () => {
     const simpleTemplate = `pipeline:
   identifier: "meta_pipe"
