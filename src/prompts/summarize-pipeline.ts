@@ -33,10 +33,9 @@ Unlike debug-pipeline-failure, summarize ALL steps including successes; focus on
 
 ## Steps
 
-1. Call harness_diagnose with ${idParam}${projectId ? `, project_id="${projectId}"` : ""} to get the full stage/step tree, durations, statuses, and any failure details.
+1. Call harness_diagnose with ${idParam}${projectId ? `, project_id="${projectId}"` : ""}, options={include_logs: true} to get the full stage/step tree, durations, statuses, failed step logs, and the main build/test log on success.
    - Note: harness_diagnose rejects non-terminal executions (Running, Queued). For in-progress runs, use harness_get with resource_type="execution" and resource_id=<execution_id> instead — log analysis may be incomplete for running executions.
-2. Fetch logs selectively — do NOT fetch logs for every step (large pipelines may have 30+ steps):
-   - Failed steps: already included in the harness_diagnose response (failed_step_logs).
+2. Fetch additional logs selectively — do NOT fetch logs for every step (large pipelines may have 30+ steps). The diagnose response already includes failed_step_logs and the main step log on success. Only fetch more if needed:
    - Slowest steps: use harness_get with resource_type="execution_log" and the Harness URL including ?step=<nodeExecutionId> for the top 3 slowest steps.
    - Key output steps: fetch logs for build, deploy, and test steps to capture artifacts, image tags, and test counts.
 3. Optionally call harness_get with resource_type="pipeline" and resource_id=<pipeline_id> for YAML context if step purposes are unclear from the diagnose output alone.

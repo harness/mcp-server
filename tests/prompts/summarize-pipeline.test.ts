@@ -98,7 +98,7 @@ describe("summarize-pipeline prompt", () => {
     expect(text).not.toContain("get_pipeline");
   });
 
-  it("includes selective log-fetching guidance", async () => {
+  it("includes selective log-fetching guidance with include_logs", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
       name: "summarize-pipeline",
@@ -107,10 +107,11 @@ describe("summarize-pipeline prompt", () => {
 
     const text = (result.messages[0].content as { type: string; text: string }).text;
 
+    expect(text).toContain("include_logs: true");
     expect(text).toContain("selectively");
     expect(text).toContain("do NOT fetch logs for every step");
     expect(text).toContain("Slowest steps");
-    expect(text).toContain("Failed steps");
+    expect(text).toContain("failed_step_logs");
   });
 
   it("includes differentiation from debug-pipeline-failure", async () => {
