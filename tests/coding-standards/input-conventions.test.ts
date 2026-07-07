@@ -4,22 +4,10 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ALL_HANDLER_FILES } from "./allowed-tools.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
-
-const HANDLER_FILES = [
-  "src/tools/harness-list.ts",
-  "src/tools/harness-get.ts",
-  "src/tools/harness-create.ts",
-  "src/tools/harness-update.ts",
-  "src/tools/harness-delete.ts",
-  "src/tools/harness-execute.ts",
-  "src/tools/harness-diagnose.ts",
-  "src/tools/harness-search.ts",
-  "src/tools/harness-describe.ts",
-  "src/tools/harness-status.ts",
-  "src/tools/harness-schema.ts",
-];
+const HANDLER_FILES = ALL_HANDLER_FILES;
 
 /** snake_case: lowercase letters, digits, underscores only. */
 const SNAKE_CASE = /^[a-z][a-z0-9_]*$/;
