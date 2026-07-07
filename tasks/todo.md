@@ -6,7 +6,7 @@
 - [x] Identify any concrete bug/root cause introduced or left unresolved
 - [x] Implement a focused fix with regression coverage if needed
 - [x] Run focused and broad verification
-- [ ] Commit, push, open PR if fixed, and reply in the Slack thread
+- [x] Commit, push, open PR if fixed, and reply in the Slack thread
 
 ### Review
 - Found that PR #569's non-terminal diagnosis guard duplicated the execution terminal-status list instead of sharing the existing wait-mode utility, which would leave wait mode and `harness_diagnose` inconsistent for statuses such as approval rejection.
