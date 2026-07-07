@@ -220,6 +220,54 @@ describe("materializeInputSetsToRuntimeYaml", () => {
         orgIdentifier: "my-org",
         projectIdentifier: "my-project",
         pipelineIdentifier: "my-pipe",
+        // Git params are present but undefined for inline sets; the client's
+        // query serializer drops undefined/empty values.
+        branch: undefined,
+        repoName: undefined,
+        connectorRef: undefined,
+        storeType: undefined,
+      },
+    });
+  });
+
+  it("forwards git context so remote input sets resolve from the right branch", async () => {
+    const request = vi.fn().mockResolvedValueOnce({
+      status: "SUCCESS",
+      data: {
+        inputSetYaml: `inputSet:
+  pipeline:
+    identifier: my-pipe
+    variables:
+      - name: env
+        type: String
+        value: staging
+`,
+      },
+    });
+    const client = makeClient(request);
+
+    await materializeInputSetsToRuntimeYaml(client, {
+      ...baseParams,
+      inputSetIds: ["remote-set"],
+      gitContext: {
+        branch: "feature/x",
+        repoName: "my-repo",
+        connectorRef: "gh_conn",
+        storeType: "REMOTE",
+      },
+    });
+
+    expect(request).toHaveBeenCalledWith({
+      method: "GET",
+      path: "/pipeline/api/inputSets/remote-set",
+      params: {
+        orgIdentifier: "my-org",
+        projectIdentifier: "my-project",
+        pipelineIdentifier: "my-pipe",
+        branch: "feature/x",
+        repoName: "my-repo",
+        connectorRef: "gh_conn",
+        storeType: "REMOTE",
       },
     });
   });
