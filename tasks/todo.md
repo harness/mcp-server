@@ -12,7 +12,7 @@ Slack report: hosted/remote Harness MCP sessions are cutting out and forcing cli
 - [x] Add proxy trust configuration so per-IP rate limiting works correctly behind load balancers.
 - [x] Update Kubernetes manifests to avoid routing in-memory MCP sessions across pods.
 - [x] Run focused config/release checks plus typecheck/build validation.
-- [ ] Commit, push, open PR, and reply in the Slack thread.
+- [x] Commit, push, open PR, and reply in the Slack thread.
 
 ### Review
 - Root cause: HTTP MCP sessions are process-local (`src/index.ts` stores them in an in-memory `Map`). With the shipped Kubernetes deployment at two replicas and no sticky routing, follow-up requests could land on a different pod and return `404 Session not found`, which clients surface as re-authentication/re-enable prompts. The previous five-minute idle TTL also reaped quiet remote-client sessions between prompts.
