@@ -1,4 +1,4 @@
-import type { PathBuilderConfig, ToolsetDefinition } from "../types.js";
+import type { BodySchema, PathBuilderConfig, ToolsetDefinition } from "../types.js";
 import { ngExtract, passthrough, v1ListExtract } from "../extractors.js";
 import { parse as parseYaml } from "yaml";
 
@@ -47,6 +47,163 @@ const scorecardStatsExtract = (raw: unknown): unknown => {
   };
 };
 
+const idpEntityMutateBodySchema: BodySchema = {
+  description: "IDP catalog entity YAML payload",
+  fields: [
+    {
+      name: "yaml",
+      type: "yaml",
+      required: true,
+      description:
+        "Full entity YAML (Harness v1 format: apiVersion: harness.io/v1, kind, metadata, spec). " +
+        "Pass as body.yaml, or as a raw YAML string body.",
+    },
+    {
+      name: "git_details",
+      type: "object",
+      required: false,
+      description:
+        "Optional Git storage for REMOTE entities: branch_name, file_path, connector_ref, repo_name, store_type, commit_message, is_harness_code_repo.",
+    },
+  ],
+};
+
+const buildIdpEntityScopePath = (input: Record<string, unknown>): string => {
+  let scope = "account";
+  const orgId = input.org_id as string | undefined;
+  const projectId = input.project_id as string | undefined;
+  if (orgId) {
+    scope += `.${orgId}`;
+    if (projectId) {
+      scope += `.${projectId}`;
+    }
+  }
+
+  const kind = input.kind as string | undefined;
+  const entityId = input.entity_id as string | undefined;
+  if (!kind) {
+    throw new Error(`Missing required field "kind" for idp_entity. Pass it via params: { kind: "component" }.`);
+  }
+  if (!entityId) {
+    throw new Error(`Missing required field "entity_id" for idp_entity. Pass it via params or as resource_id.`);
+  }
+
+  if (orgId) input.org_id = orgId;
+  if (projectId) input.project_id = projectId;
+
+  return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(entityId)}`;
+};
+
+const buildIdpEntityMutateBody = (input: Record<string, unknown>): Record<string, unknown> => {
+  const body = input.body;
+  if (typeof body === "string") {
+    return { yaml: body };
+  }
+  const b = (body as Record<string, unknown> | undefined) ?? {};
+  const yaml = typeof b.yaml === "string" ? b.yaml : undefined;
+  if (!yaml) {
+    throw new Error(
+      'yaml is required. Pass body as a raw YAML string, or body: { yaml: "...", git_details?: {...} }.',
+    );
+  }
+  const out: Record<string, unknown> = { yaml };
+  if (b.git_details != null) out.git_details = b.git_details;
+  return out;
+};
+
+const idpEntityScopeQueryParams = {
+  org_id: "orgIdentifier",
+  project_id: "projectIdentifier",
+} as const;
+
+const requireObjectBody = (input: Record<string, unknown>): Record<string, unknown> => {
+  const body = input.body;
+  if (body == null || typeof body !== "object" || Array.isArray(body)) {
+    throw new Error("body must be a JSON object for this resource.");
+  }
+  return body as Record<string, unknown>;
+};
+
+const buildScorecardMutateBody = (input: Record<string, unknown>): Record<string, unknown> => {
+  const body = requireObjectBody(input);
+  if (!body.scorecard || typeof body.scorecard !== "object" || Array.isArray(body.scorecard)) {
+    throw new Error(
+      'scorecard is required. Pass body: { scorecard: {...}, checks?: [...] }. ' +
+        "Use harness_get(scorecard) to round-trip an existing scorecard.",
+    );
+  }
+  return body;
+};
+
+const buildScorecardCheckMutateBody = (input: Record<string, unknown>): Record<string, unknown> => {
+  const body = requireObjectBody(input);
+  if (!body.checkDetails || typeof body.checkDetails !== "object" || Array.isArray(body.checkDetails)) {
+    throw new Error(
+      'checkDetails is required. Pass body: { checkDetails: {...} }. ' +
+        "Use harness_get(scorecard_check) to round-trip an existing check.",
+    );
+  }
+  return body;
+};
+
+const scorecardMutateBodySchema: BodySchema = {
+  description: "ScorecardDetailsRequest — scorecard metadata and associated checks",
+  fields: [
+    {
+      name: "scorecard",
+      type: "object",
+      required: true,
+      description:
+        "Scorecard definition: name, identifier, description, filter, weightageStrategy (EQUAL_WEIGHTS|CUSTOM), published, onDemand",
+      fields: [
+        { name: "name", type: "string", required: true, description: "Display name" },
+        { name: "identifier", type: "string", required: true, description: "Unique scorecard identifier" },
+        { name: "description", type: "string", required: true, description: "Scorecard description" },
+        {
+          name: "filter",
+          type: "object",
+          required: false,
+          description: "Entity filter: kind, type, owners, tags, lifecycle, scopes",
+        },
+        { name: "weightageStrategy", type: "string", required: false, description: "EQUAL_WEIGHTS or CUSTOM" },
+        { name: "published", type: "boolean", required: false, description: "Whether the scorecard is published" },
+        { name: "onDemand", type: "boolean", required: false, description: "Whether scores are computed on demand" },
+      ],
+    },
+    {
+      name: "checks",
+      type: "array",
+      required: false,
+      description: "Checks to include: [{ identifier, weightage, custom? }]",
+      itemType: "{ identifier: string, weightage: number, custom?: boolean }",
+    },
+  ],
+};
+
+const scorecardCheckMutateBodySchema: BodySchema = {
+  description: "CheckDetailsRequest — custom scorecard check definition",
+  fields: [
+    {
+      name: "checkDetails",
+      type: "object",
+      required: true,
+      description: "Check definition",
+      fields: [
+        { name: "identifier", type: "string", required: true, description: "Unique check identifier" },
+        { name: "name", type: "string", required: true, description: "Display name" },
+        { name: "description", type: "string", required: true, description: "Check description" },
+        { name: "expression", type: "string", required: false, description: "Advanced expression (when ruleStrategy=ADVANCED)" },
+        { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
+        { name: "custom", type: "boolean", required: false, description: "Whether this is a custom check" },
+        { name: "ruleStrategy", type: "string", required: false, description: "ALL_OF, ANY_OF, or ADVANCED" },
+        { name: "rules", type: "array", required: false, description: "Rules for ALL_OF/ANY_OF strategies", itemType: "object" },
+        { name: "defaultBehaviour", type: "string", required: false, description: "PASS or FAIL when data is missing" },
+        { name: "failMessage", type: "string", required: false, description: "Message shown on check failure" },
+      ],
+    },
+  ],
+};
+
 export const idpToolset: ToolsetDefinition = {
   name: "idp",
   displayName: "Internal Developer Portal",
@@ -55,9 +212,12 @@ export const idpToolset: ToolsetDefinition = {
     {
       resourceType: "idp_entity",
       displayName: "IDP Entity",
-      description: "Internal Developer Portal catalog entity. Supports list and get. Lists Harness IDP catalog metadata (services, APIs, user groups, resources, etc.) including identifier, scope, kind, ref type (INLINE/GIT), YAML, Git details, ownership, tags, lifecycle, scorecards, status, and group.",
+      description:
+        "Internal Developer Portal catalog entity. Supports list, get, create, and update. " +
+        "Lists Harness IDP catalog metadata (services, APIs, user groups, resources, etc.) including identifier, scope, kind, ref type (INLINE/GIT), YAML, Git details, ownership, tags, lifecycle, scorecards, status, and group.",
       toolset: "idp",
       scope: "account",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["kind", "entity_id"],
       listFilterFields: [
         { name: "kind", description: "Comma-separated list of entity kinds to fetch. Defaults to 'component,api,resource'.", enum: ["api", "component", "environment", "environmentblueprint", "group", "resource", "user", "workflow"] },
@@ -136,45 +296,55 @@ export const idpToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           path: "/v1/entities/{scope}/{kind}/{entityId}",
-          pathBuilder: (input) => {
-            let scope = "account";
-            const orgId = input.org_id as string | undefined;
-            const projectId = input.project_id as string | undefined;
-            if (orgId) {
-              scope += `.${orgId}`;
-              if (projectId) {
-                scope += `.${projectId}`;
-              }
-            }
-
-            const kind = input.kind as string | undefined;
-            const entityId = input.entity_id as string | undefined;
-            if (!kind) {
-              throw new Error(`Missing required field "kind" for idp_entity. Pass it via params: { kind: "component" }.`);
-            }
-            if (!entityId) {
-              throw new Error(`Missing required field "entity_id" for idp_entity. Pass it via params or as resource_id.`);
-            }
-
-            if (orgId) input.org_id = orgId;
-            if (projectId) input.project_id = projectId;
-
-            return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(entityId)}`;
-          },
-          queryParams: {
-            org_id: "orgIdentifier",
-            project_id: "projectIdentifier",
-          },
+          pathBuilder: buildIdpEntityScopePath,
+          queryParams: idpEntityScopeQueryParams,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get details of a specific IDP catalog entity by kind + entity_id. Returns the entity's identifier, scope, kind, ref type (INLINE/GIT), YAML, Git details, ownership, tags, lifecycle, scorecards, status, and group. Use list_entities first to discover the entity_id. Note: workflow entities may include a 'token' field — IGNORE it.",
+        },
+        create: {
+          method: "POST",
+          path: "/v1/entities",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          queryParams: {
+            ...idpEntityScopeQueryParams,
+            convert: "convert",
+            dry_run: "dry_run",
+            operation_mode: "operationMode",
+          },
+          bodyBuilder: buildIdpEntityMutateBody,
+          responseExtractor: passthrough,
+          description:
+            "Create an IDP catalog entity. Scope via org_id/project_id (account scope when both omitted). " +
+            "INLINE entities: pass yaml only. REMOTE/Git-backed: include git_details in body. " +
+            "Optional params: convert (Backstage YAML conversion), dry_run (validate only), operation_mode=UPSERT (create or update).",
+          bodySchema: idpEntityMutateBodySchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/v1/entities/{scope}/{kind}/{entityId}",
+          pathBuilder: buildIdpEntityScopePath,
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          queryParams: {
+            ...idpEntityScopeQueryParams,
+            convert: "convert",
+            dry_run: "dry_run",
+          },
+          bodyBuilder: buildIdpEntityMutateBody,
+          responseExtractor: passthrough,
+          description:
+            "Update an IDP catalog entity (full replacement). Requires kind + entity_id (or resource_id + params.kind). " +
+            "Pass the complete entity yaml in body. For Git-backed entities include git_details when updating remote storage.",
+          bodySchema: idpEntityMutateBodySchema,
         },
       },
     },
     {
       resourceType: "scorecard",
       displayName: "Scorecard",
-      description: "IDP scorecard for tracking developer standards. Supports list and get.",
+      description: "IDP scorecard for tracking developer standards. Supports list, get, create, and update.",
       toolset: "idp",
       scope: "account",
       identifierFields: ["scorecard_id"],
@@ -199,12 +369,39 @@ export const idpToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: "Get details of a specific scorecard in the Harness IDP Catalog. Use this only when the scorecard_id is known (use list_scorecards first to discover it).",
         },
+        create: {
+          method: "POST",
+          path: "/v1/scorecards",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildScorecardMutateBody,
+          responseExtractor: passthrough,
+          description:
+            "Create an IDP scorecard. Pass body: { scorecard: { name, identifier, description, filter?, weightageStrategy?, published? }, checks?: [...] }. " +
+            "Create scorecard_check resources first when referencing custom checks. Set published=true to publish.",
+          bodySchema: scorecardMutateBodySchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/v1/scorecards/{scorecardIdentifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          pathParams: { scorecard_id: "scorecardIdentifier" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildScorecardMutateBody,
+          responseExtractor: passthrough,
+          description:
+            "Update an IDP scorecard (full replacement). Requires scorecard_id. " +
+            "Pass the complete body from harness_get — { scorecard, checks }.",
+          bodySchema: scorecardMutateBodySchema,
+        },
       },
     },
     {
       resourceType: "scorecard_check",
       displayName: "Scorecard Check",
-      description: "Individual check within an IDP scorecard. A check is a query performed against a data point for a software component which results in either Pass or Fail. Supports list and get.",
+      description:
+        "Individual check within an IDP scorecard. A check is a query performed against a data point for a software component which results in either Pass or Fail. " +
+        "Supports list, get, create, and update.",
       toolset: "idp",
       scope: "account",
       identifierFields: ["check_id"],
@@ -247,6 +444,31 @@ export const idpToolset: ToolsetDefinition = {
           defaultQueryParams: { custom: "false" },
           responseExtractor: passthrough,
           description: "Get details of a specific scorecard check. Pass is_custom=true for custom checks (the scorecard details indicate this).",
+        },
+        create: {
+          method: "POST",
+          path: "/v1/checks",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildScorecardCheckMutateBody,
+          responseExtractor: passthrough,
+          description:
+            "Create a custom scorecard check. Pass body: { checkDetails: { identifier, name, description, ruleStrategy?, rules?, expression?, defaultBehaviour?, failMessage? } }. " +
+            "ruleStrategy: ALL_OF, ANY_OF, or ADVANCED. defaultBehaviour: PASS or FAIL.",
+          bodySchema: scorecardCheckMutateBodySchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/v1/checks/{checkIdentifier}",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          pathParams: { check_id: "checkIdentifier" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildScorecardCheckMutateBody,
+          responseExtractor: passthrough,
+          description:
+            "Update a scorecard check (full replacement). Requires check_id. " +
+            "Pass the complete body from harness_get — { checkDetails: {...} }.",
+          bodySchema: scorecardCheckMutateBodySchema,
         },
       },
     },
