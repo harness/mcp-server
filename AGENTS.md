@@ -12,7 +12,7 @@ pnpm build             # tsc → build/
 pnpm dev               # tsc --watch
 pnpm typecheck         # tsc --noEmit
 pnpm test              # vitest run (118 test files, 2510 tests, ~9s)
-pnpm standards:check   # run coding-standards and structural validation tests
+pnpm standards:check   # run coding-standards and structural validation tests (see docs/coding-standards.md)
 pnpm start             # stdio transport (requires HARNESS_API_KEY)
 pnpm start:http        # HTTP transport (node build/index.js http)
 pnpm inspect           # MCP Inspector against stdio build
@@ -130,6 +130,12 @@ Deprecated aliases (still work, emit deprecation warning to stderr):
 - `src/registry/types.ts` — `ResourceDefinition`, `EndpointSpec`, `OperationPolicy` types
 - `src/tools/index.ts` — The 11 tool registrations
 - `.env.example` — All supported env vars with documentation
+
+---
+
+## Coding Standards
+
+Architecture rules (registry-driven tool model, pure-data toolsets, stderr-only logging, singleton HTTP client, Zod v4 input schemas) are documented in [docs/coding-standards.md](docs/coding-standards.md) and enforced by `pnpm standards:check` in CI. Before committing registry or tool-handler changes, run that command alongside `pnpm build`, `pnpm typecheck`, and `pnpm test`.
 
 ---
 
