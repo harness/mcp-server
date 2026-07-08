@@ -2383,6 +2383,11 @@ const schema: Record<string, any> = {
                   "required": [
                     "sto"
                   ]
+                },
+                {
+                  "required": [
+                    "dynamic"
+                  ]
                 }
               ]
             },
@@ -2406,6 +2411,16 @@ const schema: Record<string, any> = {
                   },
                   "then": {
                     "$ref": "#/definitions/template_v1/stages/unified/UnifiedPipelineStageNode"
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "dynamic"
+                    ]
+                  },
+                  "then": {
+                    "$ref": "#/definitions/template_v1/stages/unified/DynamicStageNodeV1"
                   }
                 },
                 {
@@ -3973,6 +3988,112 @@ const schema: Record<string, any> = {
               "value": {
                 "description": "Output value expression. Supports expressions.",
                 "type": "string"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "DynamicStageNodeV1": {
+            "title": "DynamicStageNodeV1",
+            "description": "Dynamic stage node for executing child pipelines from inline or remote sources.",
+            "type": "object",
+            "required": [
+              "dynamic"
+            ],
+            "properties": {
+              "id": {
+                "description": "Unique identifier for the stage.",
+                "type": "string"
+              },
+              "name": {
+                "description": "Display name of the stage.",
+                "type": "string"
+              },
+              "description": {
+                "description": "Description of the stage.",
+                "type": "string"
+              },
+              "if": {
+                "description": "Conditional execution expression. Stage is skipped if condition resolves to false.",
+                "type": "string"
+              },
+              "variables": {
+                "description": "Stage-level variables.",
+                "$ref": "#/definitions/template_v1/common/NGVariableV1Wrapper"
+              },
+              "on-failure": {
+                "$ref": "#/definitions/template_v1/common/OnFailure"
+              },
+              "dynamic": {
+                "description": "Dynamic stage configuration.",
+                "type": "object",
+                "properties": {
+                  "source": {
+                    "description": "Base64 encoded inline child pipeline YAML.",
+                    "type": "string",
+                    "not": {
+                      "const": "<+input>"
+                    }
+                  },
+                  "source-config": {
+                    "description": "Remote source configuration for child pipeline.",
+                    "type": "object",
+                    "required": [
+                      "uses",
+                      "with"
+                    ],
+                    "properties": {
+                      "uses": {
+                        "description": "Source type.",
+                        "type": "string",
+                        "enum": [
+                          "git"
+                        ]
+                      },
+                      "with": {
+                        "description": "Git source configuration.",
+                        "type": "object",
+                        "required": [
+                          "repo",
+                          "path"
+                        ],
+                        "properties": {
+                          "connector": {
+                            "description": "Git connector reference.",
+                            "type": "string"
+                          },
+                          "repo": {
+                            "description": "Repository name.",
+                            "type": "string"
+                          },
+                          "branch": {
+                            "description": "Branch name.",
+                            "type": "string"
+                          },
+                          "commit": {
+                            "description": "Commit ID.",
+                            "type": "string"
+                          },
+                          "path": {
+                            "description": "Path to the child pipeline YAML file.",
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "source"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "source-config"
+                    ]
+                  }
+                ]
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"

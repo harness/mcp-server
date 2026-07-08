@@ -5,8 +5,10 @@ import { createLogger } from "../../utils/logger.js";
 import { sendProgress } from "../../utils/progress.js";
 import { isRecord, asRecord, asString, asNumber } from "../../utils/type-guards.js";
 import { resolveLogContent, resolveLogDownloadUrl } from "../../utils/log-resolver.js";
+import { TERMINAL_STATUSES } from "../../utils/poll-execution.js";
 
 const log = createLogger("diagnose:pipeline");
+const NON_TERMINAL_EXECUTION_ERROR_PREFIX = "Cannot diagnose execution with status";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -109,6 +111,18 @@ interface FailedNodeDetail {
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function nonTerminalExecutionError(status: string): Error {
+  return new Error(
+    `${NON_TERMINAL_EXECUTION_ERROR_PREFIX} '${status}'. `
+    + "Diagnosis is only available for completed executions. "
+    + "Please wait for the execution to reach a terminal status before diagnosing it.",
+  );
+}
+
+function isNonTerminalExecutionError(err: unknown): err is Error {
+  return err instanceof Error && err.message.startsWith(NON_TERMINAL_EXECUTION_ERROR_PREFIX);
+}
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
@@ -523,6 +537,10 @@ export const pipelineHandler: DiagnoseHandler = {
       const exec = asRecord(execution) ?? {};
       const pes = asRecord(exec.pipelineExecutionSummary);
       resolvedPipelineId = asString(pes?.pipelineIdentifier);
+      const executionStatus = asString(pes?.status);
+      if (executionStatus && !TERMINAL_STATUSES.has(executionStatus)) {
+        throw nonTerminalExecutionError(executionStatus);
+      }
 
       // Always extract the full graph node map — needed for both failed-step
       // log fetching and the explicit step log lookup below.
@@ -583,6 +601,9 @@ export const pipelineHandler: DiagnoseHandler = {
         currentStep++;
       }
     } catch (err) {
+      if (isNonTerminalExecutionError(err)) {
+        throw err;
+      }
       diagnostic.execution_error = String(err);
     }
 

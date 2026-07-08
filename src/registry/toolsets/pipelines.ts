@@ -828,9 +828,17 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/pipeline/api/inputSets/{inputSetIdentifier}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { input_set_id: "inputSetIdentifier" },
-          queryParams: { pipeline_id: "pipelineIdentifier" },
+          queryParams: {
+            pipeline_id: "pipelineIdentifier",
+            // Git context for remote/Git-stored input sets — without a branch
+            // the API silently resolves from the repo's default branch.
+            branch: "branch",
+            repo_name: "repoName",
+            connector_ref: "connectorRef",
+            store_type: "storeType",
+          },
           responseExtractor: ngExtract,
-          description: "Get input set details",
+          description: "Get input set details. For remote/git-backed input sets, pass branch (and repo_name for multi-repo) to read from a specific branch; otherwise the default branch is used.",
         },
         create: {
           method: "POST",

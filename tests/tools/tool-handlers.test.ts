@@ -2022,6 +2022,48 @@ pipeline:
     expect(data._diagnose_hint).toEqual(expect.stringContaining("exec-wait-fail"));
   });
 
+  it("does not suggest diagnose when wait times out before a terminal status", async () => {
+    vi.useFakeTimers();
+    try {
+      mockRequest
+        .mockResolvedValueOnce({ data: { planExecutionId: "exec-wait-running", status: "RUNNING" } })
+        .mockResolvedValue({
+          data: {
+            pipelineExecutionSummary: {
+              planExecutionId: "exec-wait-running",
+              status: "Running",
+              name: "Running Pipeline",
+              pipelineIdentifier: "running_pipe",
+              startTs: 1_700_000_000_000,
+            },
+          },
+        });
+
+      const pending = server.call("harness_execute", {
+        resource_type: "pipeline",
+        action: "run",
+        resource_id: "running_pipe",
+        wait: true,
+        wait_poll_interval_seconds: 2,
+        wait_timeout_seconds: 10,
+      });
+
+      for (let i = 0; i < 50; i++) {
+        await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(1000);
+      }
+
+      const result = await pending;
+      expect(result.isError).toBeUndefined();
+      const data = parseResult(result) as { _wait?: { hint?: string }; execution_timed_out?: boolean };
+      expect(data.execution_timed_out).toBe(true);
+      expect(data._wait?.hint).toContain("wait for a terminal status");
+      expect(data._wait?.hint).not.toContain("harness_diagnose");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("preserves trigger response and surfaces wait error when execution polling fails persistently", async () => {
     vi.useFakeTimers();
     try {
@@ -2171,6 +2213,48 @@ pipeline:
     expect(runCall.body).not.toContain("<+input>");
   });
 
+  it("forwards git branch/repo to the input set GET for a remote pipeline run", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "remote_pipe"
+    variables:
+      - name: "env"
+        type: "String"
+        value: "prod"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } }) // input set GET
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-remote" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "remote_pipe",
+      input_set_ids: ["remote-set"],
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "gh_conn",
+        repo_name: "my-repo",
+        branch: "feature/x",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const getCall = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      path?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("/pipeline/api/inputSets/remote-set");
+    // Git context must reach the input-set GET, else a remote set silently
+    // resolves from the repo's default branch (wrong values, no error).
+    expect(getCall.params?.branch).toBe("feature/x");
+    expect(getCall.params?.repoName).toBe("my-repo");
+    expect(getCall.params?.connectorRef).toBe("gh_conn");
+    expect(getCall.params?.storeType).toBe("REMOTE");
+  });
+
   it("materializes input_set_ids before applying inline input overrides", async () => {
     const inputSetYaml = `inputSet:
   pipeline:
@@ -2229,6 +2313,102 @@ pipeline:
     expect(runCall.body).toContain("environment");
     expect(runCall.body).toContain("prod");
     expect(runCall.body).not.toContain("<+input>");
+    expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
+  });
+
+  it("merges input_set_ids into a full pipeline YAML STRING passed as inputs", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "str_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "prod"
+      - name: "branch"
+        type: "String"
+        value: "main"
+`;
+    // Caller passes a full pipeline document as a YAML string alongside an
+    // input set. Previously this skipped materialization and dropped the set.
+    const inlineYaml = `pipeline:
+  identifier: "str_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "feature"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } }) // input set GET
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-str" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "str_pipe",
+      inputs: inlineYaml,
+      input_set_ids: ["my-input-set"],
+    });
+
+    expect(result.isError).toBeUndefined();
+    // Only the input set GET + the execute POST — no template fetch needed.
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+
+    const getCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("/pipeline/api/inputSets/");
+    expect(getCall.path).toContain("my-input-set");
+
+    const runCall = mockRequest.mock.calls[1]![0] as {
+      method?: string;
+      body?: string;
+      params?: Record<string, string | string[] | undefined>;
+    };
+    expect(runCall.method).toBe("POST");
+    // Input set base value present...
+    expect(runCall.body).toContain("environment");
+    expect(runCall.body).toContain("prod");
+    // ...and the caller's inline override wins for branch.
+    expect(runCall.body).toContain("feature");
+    expect(runCall.body).not.toContain("main");
+    // Input set applied via body, not the ignored query param.
+    expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
+  });
+
+  it("merges input_set_ids into a full pipeline OBJECT passed as inputs", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "obj_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "prod"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } }) // input set GET
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-obj" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "obj_pipe",
+      inputs: {
+        pipeline: {
+          identifier: "obj_pipe",
+          variables: [{ name: "branch", type: "String", value: "feature" }],
+        },
+      },
+      input_set_ids: ["my-input-set"],
+    });
+
+    expect(result.isError).toBeUndefined();
+    const runCall = mockRequest.mock.calls[mockRequest.mock.calls.length - 1]![0] as {
+      body?: string;
+      params?: Record<string, string | string[] | undefined>;
+    };
+    // Input set base + caller override both present in the merged body.
+    expect(runCall.body).toContain("environment");
+    expect(runCall.body).toContain("prod");
+    expect(runCall.body).toContain("feature");
     expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
   });
 
@@ -2944,6 +3124,88 @@ describe("harness_diagnose", () => {
     if (result.isError) {
       const data = parseResult(result) as { error: string };
       expect(data.error).not.toContain("not supported");
+    }
+  });
+
+  it("rejects in-progress pipeline executions", async () => {
+    const inProgressStatuses = [
+      "Running",
+      "AsyncWaiting",
+      "TaskWaiting",
+      "TimedWaiting",
+      "NotStarted",
+      "Queued",
+      "Paused",
+      "ResourceWaiting",
+      "InterventionWaiting",
+      "ApprovalWaiting",
+      "WaitStepRunning",
+      "QueuedLicenseLimitReached",
+      "QueuedExecutionConcurrencyReached",
+      "Pausing",
+      "InputWaiting",
+      "UploadWaiting",
+      "QueuedGlobalInfraCapacityReached",
+      "Discontinuing",
+    ];
+
+    for (const status of inProgressStatuses) {
+      mockRequest.mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            status,
+            pipelineIdentifier: "test",
+            planExecutionId: "e1",
+            layoutNodeMap: {},
+          },
+        },
+      });
+
+      const result = await server.call("harness_diagnose", {
+        options: { execution_id: "e1" },
+      });
+
+      expect(result.isError).toBe(true);
+      const data = parseResult(result) as { error: string };
+      expect(data.error).toContain(`Cannot diagnose execution with status '${status}'`);
+      expect(data.error).toContain("Diagnosis is only available for completed executions");
+    }
+  });
+
+  it("allows pipeline executions with shared terminal statuses", async () => {
+    const terminalStatuses = [
+      "Success",
+      "Failed",
+      "Errored",
+      "IgnoreFailed",
+      "Expired",
+      "Aborted",
+      "Skipped",
+      "ApprovalRejected",
+      "Suspended",
+      "AbortedByFreeze",
+    ];
+
+    for (const status of terminalStatuses) {
+      mockRequest.mockResolvedValueOnce({
+        data: {
+          pipelineExecutionSummary: {
+            status,
+            pipelineIdentifier: "test",
+            planExecutionId: "e1",
+            layoutNodeMap: {},
+          },
+        },
+      });
+
+      const result = await server.call("harness_diagnose", {
+        options: { execution_id: "e1" },
+      });
+
+      if (result.isError) {
+        const data = parseResult(result) as { error: string };
+        expect(data.error).not.toContain("Cannot diagnose execution with status");
+      }
     }
   });
 });

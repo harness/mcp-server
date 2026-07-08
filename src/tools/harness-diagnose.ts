@@ -39,7 +39,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
         url: z.string().optional().describe("A Harness URL — resource type, org, project, and ID are extracted automatically"),
         org_id: z.string().optional().describe("Organization identifier (overrides default)"),
         project_id: z.string().optional().describe("Project identifier (overrides default)"),
-        options: z.record(z.string(), z.unknown()).optional().describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, return_download_url (boolean, return signed logs.zip URLs instead of inline log text), log_snippet_lines, max_failed_steps. When a Harness URL contains ?step=<nodeExecutionId>, setting include_logs:true fetches that specific step's log regardless of pass/fail status and returns it as requested_step_log alongside any failed_step_logs. GitOps: agent_id. Call harness_describe for details."),
+        options: z.record(z.string(), z.unknown()).optional().describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, return_download_url (boolean, return signed logs.zip URLs instead of inline log text), log_snippet_lines, max_failed_steps. Pipeline diagnosis requires a completed execution. When a Harness URL contains ?step=<nodeExecutionId>, setting include_logs:true fetches that specific step's log regardless of pass/fail status and returns it as requested_step_log alongside any failed_step_logs. GitOps: agent_id. Call harness_describe for details."),
       },
       outputSchema: diagnoseOutputSchema,
       annotations: {
