@@ -133,6 +133,31 @@ describe("scorecard mutate operations", () => {
     );
   });
 
+  it("create: rejects non-object body shapes", async () => {
+    const client = makeClient();
+
+    await expect(registry.dispatch(client, "scorecard", "create", { body: "not-json" })).rejects.toThrow(
+      /body must be a JSON object/,
+    );
+    await expect(registry.dispatch(client, "scorecard", "create", { body: [] })).rejects.toThrow(
+      /body must be a JSON object/,
+    );
+    await expect(registry.dispatch(client, "scorecard", "create", {})).rejects.toThrow(
+      /body must be a JSON object/,
+    );
+  });
+
+  it("create: rejects scorecard when it is not an object", async () => {
+    const client = makeClient();
+
+    await expect(
+      registry.dispatch(client, "scorecard", "create", { body: { scorecard: [] } }),
+    ).rejects.toThrow(/scorecard is required/);
+    await expect(
+      registry.dispatch(client, "scorecard", "create", { body: { scorecard: "bad" } }),
+    ).rejects.toThrow(/scorecard is required/);
+  });
+
   it("update: PUT /v1/scorecards/{scorecardIdentifier}", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
@@ -196,6 +221,31 @@ describe("scorecard_check mutate operations", () => {
     await expect(registry.dispatch(client, "scorecard_check", "create", { body: {} })).rejects.toThrow(
       /checkDetails is required/,
     );
+  });
+
+  it("create: rejects non-object body shapes", async () => {
+    const client = makeClient();
+
+    await expect(registry.dispatch(client, "scorecard_check", "create", { body: "not-json" })).rejects.toThrow(
+      /body must be a JSON object/,
+    );
+    await expect(registry.dispatch(client, "scorecard_check", "create", { body: [] })).rejects.toThrow(
+      /body must be a JSON object/,
+    );
+    await expect(registry.dispatch(client, "scorecard_check", "create", {})).rejects.toThrow(
+      /body must be a JSON object/,
+    );
+  });
+
+  it("create: rejects checkDetails when it is not an object", async () => {
+    const client = makeClient();
+
+    await expect(
+      registry.dispatch(client, "scorecard_check", "create", { body: { checkDetails: [] } }),
+    ).rejects.toThrow(/checkDetails is required/);
+    await expect(
+      registry.dispatch(client, "scorecard_check", "create", { body: { checkDetails: "bad" } }),
+    ).rejects.toThrow(/checkDetails is required/);
   });
 
   it("update: PUT /v1/checks/{checkIdentifier}", async () => {

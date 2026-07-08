@@ -209,6 +209,121 @@ describe("idp_entity mutate operations", () => {
     ).rejects.toThrow(/Missing required field "entity_id"/);
   });
 
+  it("get: GET scoped path with kind, entity_id, and scope query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service", kind: "component" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "get", {
+      org_id: "my_org",
+      project_id: "my_project",
+      kind: "component",
+      entity_id: "boutique-service",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as {
+      method: string;
+      path: string;
+      params: Record<string, string>;
+    };
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/v1/entities/account.my_org.my_project/component/boutique-service");
+    expect(call.params.orgIdentifier).toBe("my_org");
+    expect(call.params.projectIdentifier).toBe("my_project");
+  });
+
+  it("update: account scope path when org_id and project_id are omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "update", {
+      kind: "component",
+      entity_id: "boutique-service",
+      body: { yaml: SAMPLE_YAML },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { path: string; params: Record<string, string> };
+    expect(call.path).toBe("/v1/entities/account/component/boutique-service");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("update: org-only scope path when project_id is omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "update", {
+      org_id: "my_org",
+      kind: "api",
+      entity_id: "payments-api",
+      body: { yaml: SAMPLE_YAML },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { path: string; params: Record<string, string> };
+    expect(call.path).toBe("/v1/entities/account.my_org/api/payments-api");
+    expect(call.params.orgIdentifier).toBe("my_org");
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("update: encodes special characters in kind and entity_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "update", {
+      kind: "component/special",
+      entity_id: "svc with spaces",
+      body: { yaml: SAMPLE_YAML },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { path: string };
+    expect(call.path).toBe(
+      "/v1/entities/account/" + encodeURIComponent("component/special") + "/" + encodeURIComponent("svc with spaces"),
+    );
+  });
+
+  it("update: forwards optional convert and dry_run query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "update", {
+      kind: "component",
+      entity_id: "boutique-service",
+      body: { yaml: SAMPLE_YAML },
+      convert: true,
+      dry_run: true,
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown> };
+    expect(call.params.convert).toBe(true);
+    expect(call.params.dry_run).toBe(true);
+  });
+
+  it("update: accepts raw YAML string body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "update", {
+      kind: "component",
+      entity_id: "boutique-service",
+      body: SAMPLE_YAML,
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { body: Record<string, unknown> };
+    expect(call.body).toEqual({ yaml: SAMPLE_YAML });
+  });
+
+  it("create: omits scope query params at account scope", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "create", {
+      body: { yaml: SAMPLE_YAML },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { params: Record<string, string> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
   it("bodyBuilder helpers match registry specs", () => {
     const createSpec = getOp("idp_entity", "create");
     const updateSpec = getOp("idp_entity", "update");
