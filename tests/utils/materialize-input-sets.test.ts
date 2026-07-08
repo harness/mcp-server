@@ -271,4 +271,28 @@ describe("materializeInputSetsToRuntimeYaml", () => {
       },
     });
   });
+
+  it("accepts input set YAML whose pipeline fragment is at the document root", async () => {
+    const request = vi.fn().mockResolvedValueOnce({
+      status: "SUCCESS",
+      data: {
+        inputSetYaml: `pipeline:
+  identifier: my-pipe
+  variables:
+    - name: tier
+      type: String
+      value: gold
+`,
+      },
+    });
+    const client = makeClient(request);
+
+    const yaml = await materializeInputSetsToRuntimeYaml(client, {
+      ...baseParams,
+      inputSetIds: ["root-shape-set"],
+    });
+
+    expect(yaml).toContain("tier");
+    expect(yaml).toContain("gold");
+  });
 });

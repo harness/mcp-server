@@ -270,6 +270,40 @@ describe("harness_get", () => {
     expect(call.params.orgIdentifier).toBeUndefined();
     expect(call.params.projectIdentifier).toBeUndefined();
   });
+
+  it("forwards git context when getting a remote input set", async () => {
+    mockRequest.mockResolvedValueOnce({
+      status: "SUCCESS",
+      data: { inputSetYaml: "inputSet:\n  pipeline:\n    identifier: p1\n" },
+    });
+
+    const result = await server.call("harness_get", {
+      resource_type: "input_set",
+      resource_id: "remote-set",
+      params: {
+        pipeline_id: "my-pipeline",
+        branch: "feature/x",
+        repo_name: "my-repo",
+        connector_ref: "gh_conn",
+        store_type: "REMOTE",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      path?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(call.method).toBe("GET");
+    expect(call.path).toContain("/pipeline/api/inputSets/remote-set");
+    // Without branch the API silently resolves from the default branch.
+    expect(call.params?.branch).toBe("feature/x");
+    expect(call.params?.repoName).toBe("my-repo");
+    expect(call.params?.connectorRef).toBe("gh_conn");
+    expect(call.params?.storeType).toBe("REMOTE");
+    expect(call.params?.pipelineIdentifier).toBe("my-pipeline");
+  });
 });
 
 describe("harness_get — execution_inputs", () => {
@@ -2410,6 +2444,61 @@ pipeline:
     expect(runCall.body).toContain("prod");
     expect(runCall.body).toContain("feature");
     expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
+  });
+
+  it("forwards git context when merging input_set_ids with full pipeline YAML inputs", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "str_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "prod"
+`;
+    const inlineYaml = `pipeline:
+  identifier: "str_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "feature"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-remote-str" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "str_pipe",
+      inputs: inlineYaml,
+      input_set_ids: ["remote-set"],
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "gh_conn",
+        repo_name: "my-repo",
+        branch: "feature/x",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+
+    const getCall = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      path?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("/pipeline/api/inputSets/remote-set");
+    expect(getCall.params?.branch).toBe("feature/x");
+    expect(getCall.params?.repoName).toBe("my-repo");
+    expect(getCall.params?.connectorRef).toBe("gh_conn");
+    expect(getCall.params?.storeType).toBe("REMOTE");
+
+    const runCall = mockRequest.mock.calls[1]![0] as { body?: string };
+    expect(runCall.body).toContain("environment");
+    expect(runCall.body).toContain("prod");
+    expect(runCall.body).toContain("feature");
   });
 
   it("includes _inputResolution metadata on successful auto-resolved execution", async () => {

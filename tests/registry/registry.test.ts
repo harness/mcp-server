@@ -956,6 +956,37 @@ describe("Registry", () => {
       expect(call.path).toBe("/pipeline/api/pipelines/my-pipeline");
     });
 
+    it("input_set get forwards git query params for remote sets", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { inputSetYaml: "inputSet:\n  pipeline:\n    identifier: p1\n" },
+      });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "input_set", "get", {
+        pipeline_id: "my-pipeline",
+        input_set_id: "remote-set",
+        branch: "feature/x",
+        repo_name: "my-repo",
+        connector_ref: "gh_conn",
+        store_type: "REMOTE",
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("GET");
+      expect(call.path).toBe("/pipeline/api/inputSets/remote-set");
+      expect(call.params).toMatchObject({
+        orgIdentifier: "default",
+        projectIdentifier: "test-project",
+        pipelineIdentifier: "my-pipeline",
+        branch: "feature/x",
+        repoName: "my-repo",
+        connectorRef: "gh_conn",
+        storeType: "REMOTE",
+      });
+    });
+
     it("throws on unsupported operation", async () => {
       const client = makeClient();
       await expect(
