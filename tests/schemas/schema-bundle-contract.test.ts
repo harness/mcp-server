@@ -153,4 +153,33 @@ describe("schema bundle contract", () => {
     expect(cdSteps).toHaveProperty("DeployGoogleAgentRuntimeRevisionStepNode_template");
     expect(cdSteps).toHaveProperty("DeployGoogleAgentRuntimeRevisionStepInfo");
   });
+
+  it("includes upstream DeployAwsAgentCoreRevision step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("DeployAwsAgentCoreRevisionStepNode");
+    expect(cdSteps).toHaveProperty("DeployAwsAgentCoreRevisionStepInfo");
+
+    const stepNode = cdSteps.DeployAwsAgentCoreRevisionStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("DeployAwsAgentCoreRevision");
+
+    const stepInfo = cdSteps.DeployAwsAgentCoreRevisionStepInfo as {
+      allOf: Array<{ properties?: Record<string, unknown> }>;
+    };
+    const mergedProps = stepInfo.allOf.find((part) => part.properties)?.properties ?? {};
+    expect(mergedProps).toHaveProperty("connectorRef");
+    expect(mergedProps).toHaveProperty("waitReady");
+  });
+
+  it("includes upstream DeployAwsAgentCoreRevision step definitions in v0 template", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = templateDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("DeployAwsAgentCoreRevisionStepNode");
+    expect(cdSteps).toHaveProperty("DeployAwsAgentCoreRevisionStepNode_template");
+    expect(cdSteps).toHaveProperty("DeployAwsAgentCoreRevisionStepInfo");
+  });
 });

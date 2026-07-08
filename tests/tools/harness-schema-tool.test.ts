@@ -342,6 +342,22 @@ describe("harness_schema nested static definition lookup", () => {
     expect(schema.properties?.type?.enum).toContain("DeployGoogleAgentRuntimeRevision");
   });
 
+  it("resolves newly synced DeployAwsAgentCoreRevision step definition from v0 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "DeployAwsAgentCoreRevisionStepNode",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("steps.cd.DeployAwsAgentCoreRevisionStepNode");
+    expect(parsed.requested_path).toBe("DeployAwsAgentCoreRevisionStepNode");
+    const schema = parsed.schema as { properties?: { type?: { enum?: string[] } } };
+    expect(schema.properties?.type?.enum).toContain("DeployAwsAgentCoreRevision");
+  });
+
   it("resolves v1 Clone definition with upstream user field", async () => {
     const server = makeMcpServer();
     registerSchemaTool(server, undefined, undefined);

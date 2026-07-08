@@ -270,6 +270,38 @@ describe("harness_get", () => {
     expect(call.params.orgIdentifier).toBeUndefined();
     expect(call.params.projectIdentifier).toBeUndefined();
   });
+
+  it("forwards git context on input_set get for remote/Git-stored sets", async () => {
+    mockRequest.mockResolvedValueOnce({
+      data: { identifier: "remote-set", inputSetYaml: "inputSet:\n  pipeline:\n    identifier: remote_pipe\n" },
+    });
+
+    const result = await server.call("harness_get", {
+      resource_type: "input_set",
+      resource_id: "remote-set",
+      params: {
+        pipeline_id: "remote_pipe",
+        branch: "feature/x",
+        repo_name: "my-repo",
+        connector_ref: "gh_conn",
+        store_type: "REMOTE",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      path?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/pipeline/api/inputSets/remote-set");
+    expect(call.params?.pipelineIdentifier).toBe("remote_pipe");
+    expect(call.params?.branch).toBe("feature/x");
+    expect(call.params?.repoName).toBe("my-repo");
+    expect(call.params?.connectorRef).toBe("gh_conn");
+    expect(call.params?.storeType).toBe("REMOTE");
+  });
 });
 
 describe("harness_get — execution_inputs", () => {
