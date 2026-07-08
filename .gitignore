@@ -22,3 +22,7 @@ pipelines/
 index (1).json
 index (2).yaml
 harness-mcp-v2-quality-review.md.pdf
+# Coverage reports
+coverage/
+*.lcov
+.nyc_output/

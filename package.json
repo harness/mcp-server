@@ -23,6 +23,7 @@
     "docs:generate": "node scripts/generate-docs.js",
     "docs:check": "node scripts/generate-docs.js --check",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "docker:build": "docker build -t harness-mcp-server .",
     "docker:run": "docker run --rm -p 3000:3000 --env-file .env harness-mcp-server",
@@ -85,6 +86,7 @@
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^22.13.5",
+    "@vitest/coverage-v8": "3.2.4",
     "typescript": "^5.7.3",
     "vitest": "^3.0.6"
   },
