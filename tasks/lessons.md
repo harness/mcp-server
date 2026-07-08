@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Remote Pipeline Branch Context
+- **Issue**: A remote pipeline run can use `pipelineBranchName` to execute a feature-branch pipeline while the supporting input-template or input-set APIs still read from `branch`. If `harness_execute` forwards `pipeline_branch` only to execute, auto-resolution can use the default-branch template; if input-set GET prefers `pipeline_branch` over an explicit `branch`, it can load the wrong input set values.
+- **Fix**: Treat explicit `branch` as the source branch for runtime-template and input-set lookup, fall back to `pipeline_branch` only when no `branch` is supplied, and extract CI codebase branch/repo from both YAML-string and object-form pipeline runtime inputs before materializing input sets.
+- **Rule**: For remote pipeline execution changes, add handler-level regressions for all three backend calls: runtime template fetch (`/inputSets/template`), input-set GET, and final execute. Cover `pipeline_branch`-only, `branch` + `pipeline_branch`, and object-form `inputs.pipeline.properties.ci.codebase`.
+
 ## Read Cache Signals Must Not Block Execute Paths
 - **Issue**: A remote pipeline `pipeline.get` response can report `cacheResponse.cacheState=STALE_CACHE` and old YAML from the read/UI cache, while pipeline execution is documented to fetch entities from Git for the selected pipeline branch.
 - **Fix**: Do not fail-close `harness_execute` based on `pipeline.get` cache metadata. Preserve explicit branch selection by sending `pipelineBranchName` for remote executions, and only block execution on signals from the execute path itself.

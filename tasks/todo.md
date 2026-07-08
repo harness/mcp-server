@@ -4,7 +4,7 @@
 - [x] Baseline current branch and identify recent behavioral commits
 - [x] Review high-blast-radius diffs and trace concrete bug candidates through callers
 - [x] Implement a minimal fix only if a critical trigger is proven
-- [ ] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [x] Run focused verification for any fix, or sanity checks for no-fix outcome
 - [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
@@ -16,6 +16,7 @@
 - Found a remote pipeline execution correctness bug: runs that used only `params.pipeline_branch` could execute the feature-branch pipeline while fetching the runtime input template from the default branch, and remote input set materialization preferred `pipeline_branch` over an explicit input-set `branch`.
 - Also found that object-form runtime YAML (`inputs: { pipeline: ... }`) was excluded from CI codebase branch/repo extraction, so remote input sets could be loaded from the default branch even when the object payload selected a feature branch.
 - Fixed branch propagation so runtime template resolution falls back to `pipeline_branch` only when `branch` is absent, input-set GETs prefer explicit `branch`, and object-form pipeline inputs participate in codebase extraction.
+- Verification passed: focused `tests/tools/tool-handlers.test.ts` run for pipeline branch/input-set cases, `pnpm typecheck`, `pnpm build`, `pnpm test`, `pnpm standards:check`, and `pnpm docs:check`.
 
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
