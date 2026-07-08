@@ -1,5 +1,22 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-08)
+- [x] Baseline current branch and identify recent behavioral commits
+- [x] Review high-blast-radius diffs and trace concrete bug candidates through callers
+- [x] Implement a minimal fix only if a critical trigger is proven
+- [ ] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+
+### Plan
+- Treat the current `origin/main` delta and the latest commits on `main` as the recent-change window.
+- Prioritize correctness paths that can break executions, mutate wrong resources, expose credentials/data, or crash HTTP/stdio transports.
+- Require a concrete trigger scenario before changing runtime code; if none clears the severity/confidence bar, leave code unchanged and post a short no-critical-bugs summary.
+
+### Review
+- Found a remote pipeline execution correctness bug: runs that used only `params.pipeline_branch` could execute the feature-branch pipeline while fetching the runtime input template from the default branch, and remote input set materialization preferred `pipeline_branch` over an explicit input-set `branch`.
+- Also found that object-form runtime YAML (`inputs: { pipeline: ... }`) was excluded from CI codebase branch/repo extraction, so remote input sets could be loaded from the default branch even when the object payload selected a feature branch.
+- Fixed branch propagation so runtime template resolution falls back to `pipeline_branch` only when `branch` is absent, input-set GETs prefer explicit `branch`, and object-form pipeline inputs participate in codebase extraction.
+
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
 - [x] Inspect PR #569 diff, CI/review state, and affected code paths

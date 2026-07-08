@@ -1552,6 +1552,45 @@ describe("harness_execute", () => {
     expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix", module: "ci" });
   });
 
+  it("uses pipeline_branch as the runtime template branch when branch is omitted", async () => {
+    const templateYaml = `pipeline:
+  identifier: "my-pipe"
+  variables:
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: templateYaml } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-branch" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: { environment: "prod" },
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "account.github",
+        repo_name: "testdataserv",
+        pipeline_branch: "feature/my-fix",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    const templateCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string; params?: Record<string, unknown> };
+    expect(templateCall.method).toBe("POST");
+    expect(templateCall.path).toBe("/pipeline/api/inputSets/template");
+    expect(templateCall.params).toMatchObject({ branch: "feature/my-fix" });
+
+    const postCall = mockRequest.mock.calls[1]![0] as { method?: string; params?: Record<string, unknown>; body?: string };
+    expect(postCall.method).toBe("POST");
+    expect(postCall.params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+    expect(postCall.body).toContain("environment");
+    expect(postCall.body).toContain("prod");
+  });
+
   it("defaults remote pipeline_branch from branch and runs without read-cache preflight", async () => {
     mockRequest.mockImplementation((request: { method?: string }) => {
       if (request.method === "GET") {
@@ -1620,6 +1659,49 @@ pipeline:
     expect(postCall.params).toMatchObject({
       branch: "feature/from-yaml",
       pipelineBranchName: "feature/from-yaml",
+      storeType: "REMOTE",
+      repoName: "testdataserv",
+    });
+  });
+
+  it("defaults remote pipeline branch from object-form runtime YAML codebase branch", async () => {
+    mockRequest.mockImplementation((request: { method?: string }) => {
+      if (request.method === "GET") {
+        throw new Error("pipeline.get read-cache preflight should not run");
+      }
+      return Promise.resolve({ data: { planExecutionId: "exec-object" } });
+    });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: {
+        pipeline: {
+          identifier: "my-pipe",
+          properties: {
+            ci: {
+              codebase: {
+                repoName: "testdataserv",
+                build: {
+                  type: "branch",
+                  spec: { branch: "feature/from-object" },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledOnce();
+
+    const postCall = mockRequest.mock.calls[0]![0] as { method?: string; params?: Record<string, unknown> };
+    expect(postCall.method).toBe("POST");
+    expect(postCall.params).toMatchObject({
+      branch: "feature/from-object",
+      pipelineBranchName: "feature/from-object",
       storeType: "REMOTE",
       repoName: "testdataserv",
     });
@@ -2252,6 +2334,98 @@ pipeline:
     expect(getCall.params?.branch).toBe("feature/x");
     expect(getCall.params?.repoName).toBe("my-repo");
     expect(getCall.params?.connectorRef).toBe("gh_conn");
+    expect(getCall.params?.storeType).toBe("REMOTE");
+  });
+
+  it("prefers branch over pipeline_branch when GETting remote input sets", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "remote_pipe"
+    variables:
+      - name: "env"
+        type: "String"
+        value: "prod"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } }) // input set GET
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-remote" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "remote_pipe",
+      input_set_ids: ["remote-set"],
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "gh_conn",
+        repo_name: "my-repo",
+        branch: "release/input-sets",
+        pipeline_branch: "feature/pipeline-yaml",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const getCall = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      path?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("/pipeline/api/inputSets/remote-set");
+    expect(getCall.params?.branch).toBe("release/input-sets");
+
+    const runCall = mockRequest.mock.calls[1]![0] as { method?: string; params?: Record<string, string | string[] | undefined> };
+    expect(runCall.method).toBe("POST");
+    expect(runCall.params?.branch).toBe("release/input-sets");
+    expect(runCall.params?.pipelineBranchName).toBe("feature/pipeline-yaml");
+  });
+
+  it("forwards object-form runtime YAML codebase branch to the input set GET", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "remote_pipe"
+    variables:
+      - name: "env"
+        type: "String"
+        value: "prod"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } }) // input set GET
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-object-input-set" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "remote_pipe",
+      input_set_ids: ["remote-set"],
+      inputs: {
+        pipeline: {
+          identifier: "remote_pipe",
+          properties: {
+            ci: {
+              codebase: {
+                repoName: "my-repo",
+                build: {
+                  type: "branch",
+                  spec: { branch: "feature/object-inputs" },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const getCall = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      path?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("/pipeline/api/inputSets/remote-set");
+    expect(getCall.params?.branch).toBe("feature/object-inputs");
+    expect(getCall.params?.repoName).toBe("my-repo");
     expect(getCall.params?.storeType).toBe("REMOTE");
   });
 

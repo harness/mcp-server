@@ -330,7 +330,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             // the repo's default branch. `normalizeRemotePipelineRunParams`
             // (called above) has already populated these on `input`.
             const gitContext = {
-              branch: asString(input.pipeline_branch) ?? asString(input.branch),
+              branch: asString(input.branch) ?? asString(input.pipeline_branch),
               repoName: asString(input.repo_name),
               connectorRef: asString(input.connector_ref),
               storeType: asString(input.store_type),
@@ -400,7 +400,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               pipelineId,
               orgId: asString(input.org_id) || registry.orgId,
               projectId: asString(input.project_id) || registry.projectId,
-              branch: asString(input.branch),
+              branch: asString(input.branch) ?? asString(input.pipeline_branch),
             };
             resolved = materializedInputSetYaml
               ? await resolveRuntimeInputsWithBaseYaml(client, inputsToResolve, resolveOptions, materializedInputSetYaml)
@@ -636,13 +636,11 @@ function normalizeRemotePipelineRunParams(input: Record<string, unknown>): void 
 }
 
 function extractRuntimeYamlCodebase(inputs: unknown): { branch?: string; repoName?: string } | undefined {
-  if (typeof inputs !== "string" || inputs.trim().length === 0) {
-    return undefined;
-  }
-
   try {
-    const root = asRecord(parseYaml(inputs));
-    const pipeline = asRecord(root?.pipeline);
+    const root = typeof inputs === "string"
+      ? asRecord(inputs.trim().length > 0 ? parseYaml(inputs) : undefined)
+      : asRecord(inputs);
+    const pipeline = asRecord(root?.pipeline) ?? root;
     const properties = asRecord(pipeline?.properties);
     const ci = asRecord(properties?.ci);
     const codebase = asRecord(ci?.codebase);
