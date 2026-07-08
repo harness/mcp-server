@@ -803,9 +803,7 @@ export const dbopsToolset: ToolsetDefinition = {
       executeActions: {
         run: {
           method: "POST",
-          // /v1/ prefix is intentional — this endpoint is on the new db-devops-service
-          // routing, not the legacy /dbops/v1/ prefix used by older resources in this toolset.
-          path: "/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
           pathParams: { org_id: "org", project_id: "project" },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,

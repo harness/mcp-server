@@ -1,5 +1,18 @@
 # Harness MCP Server — Task Tracking
 
+## PR 592 DB Ops Routing Review (2026-07-08)
+- [x] Read Slack trigger thread and confirm there are no screenshots or follow-up details
+- [x] Inspect PR #592 metadata and diff for the reported DB Ops 404
+- [x] Trace DB Ops registry paths to confirm the execute endpoint routing root cause
+- [ ] Implement a focused local fix and regression updates
+- [ ] Run focused verification
+- [ ] Commit, push, open PR if fixed, and reply in the Slack thread if available
+
+### Plan
+- Keep the change scoped to the `database_execute_llm_authoring_pipeline.run` endpoint and its path assertions.
+- Align the endpoint with the DB Ops backend prefix used by the rest of the toolset: `/dbops/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline`.
+- Update stale test names/comments so the tests describe the expected DB Ops-prefixed routing rather than the removed bare `/v1` route.
+
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
 - [x] Inspect PR #569 diff, CI/review state, and affected code paths

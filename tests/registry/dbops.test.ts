@@ -699,7 +699,7 @@ describe("database_instance skipScopeBodyInjection", () => {
 });
 
 describe("database_execute_llm_authoring_pipeline run", () => {
-  it("maps body aliases to the new /v1/llm-authoring/execute-pipeline payload (default-pipeline branch)", async () => {
+  it("maps body aliases to the DB Ops llm-authoring execute payload (default-pipeline branch)", async () => {
     const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({
       executionId: "exec-1",
@@ -723,7 +723,7 @@ describe("database_execute_llm_authoring_pipeline run", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.path).toBe(
-      "/v1/orgs/default/projects/test-project/llm-authoring/execute-pipeline",
+      "/dbops/v1/orgs/default/projects/test-project/llm-authoring/execute-pipeline",
     );
     expect(call.body).toEqual({
       conversationId: "conversation-1",
@@ -762,7 +762,7 @@ describe("database_execute_llm_authoring_pipeline run", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.path).toBe(
-      "/v1/orgs/default/projects/test-project/llm-authoring/execute-pipeline",
+      "/dbops/v1/orgs/default/projects/test-project/llm-authoring/execute-pipeline",
     );
     expect(call.body).toEqual({
       conversationId: "conversation-1",
