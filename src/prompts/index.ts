@@ -42,6 +42,9 @@ import { registerPendingApprovalsPrompt } from "./pending-approvals.js";
 // Deployment workflow prompts
 import { registerBuildDeployAppPrompt } from "./build-deploy-app.js";
 
+// Pipeline summarizer
+import { registerSummarizePipelinePrompt } from "./summarize-pipeline.js";
+
 // AI Evals
 import { registerAddMetricPrompt } from "./add-metric.js";
 import { registerRunEvaluationPrompt } from "./run-evaluation.js";
@@ -90,6 +93,9 @@ export function registerAllPrompts(server: McpServer): void {
 
   // Deployment workflows
   registerBuildDeployAppPrompt(server);
+
+  // Pipeline summarizer
+  registerSummarizePipelinePrompt(server);
 
   // AI Evals (harness-evals + ai-evals API)
   registerAddMetricPrompt(server);
