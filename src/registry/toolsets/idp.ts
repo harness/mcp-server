@@ -1,5 +1,5 @@
 import type { PathBuilderConfig, ToolsetDefinition } from "../types.js";
-import { ngExtract, passthrough, v1ListExtract } from "../extractors.js";
+import { ngExtract, passthrough, scorecardStatsExtract, v1ListExtract } from "../extractors.js";
 import { parse as parseYaml } from "yaml";
 
 const CONFIG_API_KEY = "__config_api_key";
@@ -36,15 +36,6 @@ const extractAuthParamRefs = (yamlStr: string): { apikeyRefs: string[]; apiKeySe
   }
 
   return { apikeyRefs, apiKeySecretRefs };
-};
-
-const scorecardStatsExtract = (raw: unknown): unknown => {
-  const r = raw as { name?: string; stats?: unknown[]; timestamp?: number | null };
-  return {
-    name: r.name,
-    stats: r.stats ?? [],
-    time: r.timestamp != null ? new Date(r.timestamp).toISOString() : "",
-  };
 };
 
 export const idpToolset: ToolsetDefinition = {
