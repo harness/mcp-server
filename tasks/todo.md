@@ -5,7 +5,7 @@
 - [x] Review high-blast-radius recent behavioral commits and trace caller paths
 - [x] Implement a minimal fix only if a concrete critical trigger is proven
 - [x] Run focused verification for any fix, or sanity checks for no-fix outcome
-- [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+- [x] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
 - Treat recent commits after `v3.2.8` plus adjacent schema/prompt changes as the primary review window because the branch is at `v3.2.9`.
