@@ -2,15 +2,22 @@
 
 ## Critical Bug Investigation Automation (2026-07-09)
 - [x] Baseline current branch and recent commit window
-- [ ] Review high-blast-radius recent behavioral commits and trace caller paths
-- [ ] Implement a minimal fix only if a concrete critical trigger is proven
-- [ ] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [x] Review high-blast-radius recent behavioral commits and trace caller paths
+- [x] Implement a minimal fix only if a concrete critical trigger is proven
+- [x] Run focused verification for any fix, or sanity checks for no-fix outcome
 - [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
 - Treat recent commits after `v3.2.8` plus adjacent schema/prompt changes as the primary review window because the branch is at `v3.2.9`.
 - Prioritize pipeline execution/input-set behavior, diagnose status gating, generated schema/tool contract drift, and new prompt registration because those paths can affect deployments or tool availability.
 - Require a concrete trigger scenario and caller-chain proof before changing runtime code; if confidence stays below the critical-bug bar, leave code unchanged and report the no-fix result.
+
+### Review
+- Found a high-severity remote pipeline execution bug in the recent input-set materialization path. When callers supplied `input_set_ids` plus object-form full pipeline `inputs` containing `pipeline.properties.ci.codebase.build.spec.branch`, the tool did not extract that branch/repo context before fetching remote input sets. Harness could then load the saved input set from the repo default branch while executing the caller's feature-branch pipeline YAML, silently mixing runtime values across branches.
+- Found a related branch-consistency gap for the combined input-set + flat override path: explicit `params.pipeline_branch` was forwarded to the input-set GET and final execute POST, but runtime-template fetch for resolving inline overrides used only `branch`, so override resolution could read a different branch than the input-set materialization and execution request.
+- Fixed `harness_execute` so remote codebase extraction handles object-form full pipeline documents as well as YAML strings, and so runtime-template resolution prefers `pipeline_branch` over `branch`, matching the input-set GET and execute POST branch selection.
+- Added public tool-handler regressions proving object-form codebase branches reach the remote input-set GET and execute request, and proving `pipeline_branch` reaches input-set GET, runtime-template fetch, and execute POST in the combined input-set + override flow.
+- Verification passed: focused Vitest run for pipeline branch/input-set cases, `pnpm typecheck`, `pnpm build`, `pnpm test` (113 files / 2478 tests), `pnpm standards:check` (10 files / 80 tests), and `pnpm docs:check`.
 
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
