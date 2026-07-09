@@ -278,6 +278,8 @@ export const repositoriesToolset: ToolsetDefinition = {
             path: "filePath",
           },
           queryParams: {
+            org_id: "orgIdentifier",
+            project_id: "projectIdentifier",
             git_ref: "git_ref",
             include_commit: "include_commit",
           },
@@ -296,6 +298,8 @@ export const repositoriesToolset: ToolsetDefinition = {
             path: "filePath",
           },
           queryParams: {
+            org_id: "orgIdentifier",
+            project_id: "projectIdentifier",
             git_ref: "git_ref",
             line_from: "line_from",
             line_to: "line_to",
