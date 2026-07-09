@@ -400,7 +400,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               pipelineId,
               orgId: asString(input.org_id) || registry.orgId,
               projectId: asString(input.project_id) || registry.projectId,
-              branch: asString(input.branch),
+              branch: asString(input.pipeline_branch) ?? asString(input.branch),
             };
             resolved = materializedInputSetYaml
               ? await resolveRuntimeInputsWithBaseYaml(client, inputsToResolve, resolveOptions, materializedInputSetYaml)
@@ -636,12 +636,12 @@ function normalizeRemotePipelineRunParams(input: Record<string, unknown>): void 
 }
 
 function extractRuntimeYamlCodebase(inputs: unknown): { branch?: string; repoName?: string } | undefined {
-  if (typeof inputs !== "string" || inputs.trim().length === 0) {
+  if (typeof inputs !== "string" && !isFullPipelineInputs(inputs)) {
     return undefined;
   }
 
   try {
-    const root = asRecord(parseYaml(inputs));
+    const root = asRecord(typeof inputs === "string" ? parseYaml(inputs) : inputs);
     const pipeline = asRecord(root?.pipeline);
     const properties = asRecord(pipeline?.properties);
     const ci = asRecord(properties?.ci);

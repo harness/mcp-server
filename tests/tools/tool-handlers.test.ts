@@ -2288,19 +2288,28 @@ pipeline:
       resource_id: "skip_pipe",
       inputs: { branch: "feature" },
       input_set_ids: ["my-input-set"],
+      params: {
+        store_type: "REMOTE",
+        repo_name: "my-repo",
+        pipeline_branch: "feature/base",
+      },
     });
 
     expect(result.isError).toBeUndefined();
     expect(mockRequest).toHaveBeenCalledTimes(3);
 
-    const getCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    const getCall = mockRequest.mock.calls[0]![0] as { method?: string; path?: string; params?: Record<string, unknown> };
     expect(getCall.method).toBe("GET");
     expect(getCall.path).toContain("/pipeline/api/inputSets/");
     expect(getCall.path).toContain("my-input-set");
+    expect(getCall.params?.branch).toBe("feature/base");
+    expect(getCall.params?.repoName).toBe("my-repo");
+    expect(getCall.params?.storeType).toBe("REMOTE");
 
-    const templateCall = mockRequest.mock.calls[1]![0] as { method?: string; path?: string };
+    const templateCall = mockRequest.mock.calls[1]![0] as { method?: string; path?: string; params?: Record<string, unknown> };
     expect(templateCall.method).toBe("POST");
     expect(templateCall.path).toBe("/pipeline/api/inputSets/template");
+    expect(templateCall.params?.branch).toBe("feature/base");
 
     const runCall = mockRequest.mock.calls[2]![0] as {
       method?: string;
@@ -2314,6 +2323,7 @@ pipeline:
     expect(runCall.body).toContain("prod");
     expect(runCall.body).not.toContain("<+input>");
     expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
+    expect(runCall.params?.pipelineBranchName).toBe("feature/base");
   });
 
   it("merges input_set_ids into a full pipeline YAML STRING passed as inputs", async () => {
@@ -2394,6 +2404,14 @@ pipeline:
       inputs: {
         pipeline: {
           identifier: "obj_pipe",
+          properties: {
+            ci: {
+              codebase: {
+                repoName: "my-repo",
+                build: { type: "branch", spec: { branch: "feature/from-object" } },
+              },
+            },
+          },
           variables: [{ name: "branch", type: "String", value: "feature" }],
         },
       },
@@ -2401,6 +2419,17 @@ pipeline:
     });
 
     expect(result.isError).toBeUndefined();
+    const getCall = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      path?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.path).toContain("/pipeline/api/inputSets/my-input-set");
+    expect(getCall.params?.branch).toBe("feature/from-object");
+    expect(getCall.params?.repoName).toBe("my-repo");
+    expect(getCall.params?.storeType).toBe("REMOTE");
+
     const runCall = mockRequest.mock.calls[mockRequest.mock.calls.length - 1]![0] as {
       body?: string;
       params?: Record<string, string | string[] | undefined>;
@@ -2409,6 +2438,10 @@ pipeline:
     expect(runCall.body).toContain("environment");
     expect(runCall.body).toContain("prod");
     expect(runCall.body).toContain("feature");
+    expect(runCall.params?.branch).toBe("feature/from-object");
+    expect(runCall.params?.pipelineBranchName).toBe("feature/from-object");
+    expect(runCall.params?.repoName).toBe("my-repo");
+    expect(runCall.params?.storeType).toBe("REMOTE");
     expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
   });
 

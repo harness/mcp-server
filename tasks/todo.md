@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-09)
+- [x] Baseline current branch and recent commit window
+- [ ] Review high-blast-radius recent behavioral commits and trace caller paths
+- [ ] Implement a minimal fix only if a concrete critical trigger is proven
+- [ ] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+
+### Plan
+- Treat recent commits after `v3.2.8` plus adjacent schema/prompt changes as the primary review window because the branch is at `v3.2.9`.
+- Prioritize pipeline execution/input-set behavior, diagnose status gating, generated schema/tool contract drift, and new prompt registration because those paths can affect deployments or tool availability.
+- Require a concrete trigger scenario and caller-chain proof before changing runtime code; if confidence stays below the critical-bug bar, leave code unchanged and report the no-fix result.
+
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
 - [x] Inspect PR #569 diff, CI/review state, and affected code paths
