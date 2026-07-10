@@ -124,12 +124,48 @@ const requireObjectBody = (input: Record<string, unknown>): Record<string, unkno
   return body as Record<string, unknown>;
 };
 
+const requireRecordField = (
+  body: Record<string, unknown>,
+  field: string,
+  message: string,
+): Record<string, unknown> => {
+  const value = body[field];
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(message);
+  }
+  return value as Record<string, unknown>;
+};
+
+const requireStringField = (
+  body: Record<string, unknown>,
+  field: string,
+  message: string,
+): string => {
+  const value = body[field];
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(message);
+  }
+  return value;
+};
+
 const buildScorecardMutateBody = (input: Record<string, unknown>): Record<string, unknown> => {
   const body = requireObjectBody(input);
-  if (!body.scorecard || typeof body.scorecard !== "object" || Array.isArray(body.scorecard)) {
+  requireRecordField(
+    body,
+    "scorecard",
+    'scorecard is required. Pass body: { scorecard: {...}, checks?: [...] }. ' +
+      "Use harness_get(scorecard) to round-trip an existing scorecard.",
+  );
+  return body;
+};
+
+const buildScorecardUpdateBody = (input: Record<string, unknown>): Record<string, unknown> => {
+  const body = buildScorecardMutateBody(input);
+  if (!Array.isArray(body.checks)) {
     throw new Error(
-      'scorecard is required. Pass body: { scorecard: {...}, checks?: [...] }. ' +
-        "Use harness_get(scorecard) to round-trip an existing scorecard.",
+      "checks is required for scorecard updates because the endpoint performs a full replacement. " +
+        "Fetch the scorecard with harness_get and pass the complete { scorecard, checks } body. " +
+        "Pass checks: [] only when intentionally removing all checks.",
     );
   }
   return body;
@@ -137,12 +173,49 @@ const buildScorecardMutateBody = (input: Record<string, unknown>): Record<string
 
 const buildScorecardCheckMutateBody = (input: Record<string, unknown>): Record<string, unknown> => {
   const body = requireObjectBody(input);
-  if (!body.checkDetails || typeof body.checkDetails !== "object" || Array.isArray(body.checkDetails)) {
-    throw new Error(
-      'checkDetails is required. Pass body: { checkDetails: {...} }. ' +
-        "Use harness_get(scorecard_check) to round-trip an existing check.",
-    );
+  requireRecordField(
+    body,
+    "checkDetails",
+    'checkDetails is required. Pass body: { checkDetails: {...} }. ' +
+      "Use harness_get(scorecard_check) to round-trip an existing check.",
+  );
+  return body;
+};
+
+const buildScorecardCheckUpdateBody = (input: Record<string, unknown>): Record<string, unknown> => {
+  const body = buildScorecardCheckMutateBody(input);
+  const checkDetails = body.checkDetails as Record<string, unknown>;
+  requireStringField(checkDetails, "identifier", "checkDetails.identifier is required for scorecard_check updates.");
+  requireStringField(checkDetails, "name", "checkDetails.name is required for scorecard_check updates.");
+  requireStringField(checkDetails, "description", "checkDetails.description is required for scorecard_check updates.");
+  const ruleStrategy = requireStringField(
+    checkDetails,
+    "ruleStrategy",
+    "checkDetails.ruleStrategy is required for scorecard_check updates because the endpoint performs a full replacement.",
+  ).toUpperCase();
+
+  switch (ruleStrategy) {
+    case "ALL_OF":
+    case "ANY_OF":
+      if (!Array.isArray(checkDetails.rules)) {
+        throw new Error(
+          "checkDetails.rules is required for ALL_OF/ANY_OF scorecard_check updates. " +
+            "Fetch the check with harness_get and pass the complete { checkDetails } body.",
+        );
+      }
+      break;
+    case "ADVANCED":
+      requireStringField(
+        checkDetails,
+        "expression",
+        "checkDetails.expression is required for ADVANCED scorecard_check updates. " +
+          "Fetch the check with harness_get and pass the complete { checkDetails } body.",
+      );
+      break;
+    default:
+      throw new Error("checkDetails.ruleStrategy must be one of ALL_OF, ANY_OF, or ADVANCED.");
   }
+
   return body;
 };
 
@@ -178,6 +251,21 @@ const scorecardMutateBodySchema: BodySchema = {
       itemType: "{ identifier: string, weightage: number, custom?: boolean }",
     },
   ],
+};
+
+const scorecardUpdateBodySchema: BodySchema = {
+  ...scorecardMutateBodySchema,
+  description: "ScorecardDetailsRequest — full replacement scorecard metadata and associated checks",
+  fields: scorecardMutateBodySchema.fields.map((field) =>
+    field.name === "checks"
+      ? {
+          ...field,
+          required: true,
+          description:
+            "Required for full replacement updates: [{ identifier, weightage, custom? }]. Pass [] only to intentionally remove all checks.",
+        }
+      : field,
+  ),
 };
 
 const scorecardCheckMutateBodySchema: BodySchema = {
@@ -387,12 +475,12 @@ export const idpToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { scorecard_id: "scorecardIdentifier" },
           skipScopeBodyInjection: true,
-          bodyBuilder: buildScorecardMutateBody,
+          bodyBuilder: buildScorecardUpdateBody,
           responseExtractor: passthrough,
           description:
             "Update an IDP scorecard (full replacement). Requires scorecard_id. " +
             "Pass the complete body from harness_get — { scorecard, checks }.",
-          bodySchema: scorecardMutateBodySchema,
+          bodySchema: scorecardUpdateBodySchema,
         },
       },
     },
@@ -463,7 +551,7 @@ export const idpToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { check_id: "checkIdentifier" },
           skipScopeBodyInjection: true,
-          bodyBuilder: buildScorecardCheckMutateBody,
+          bodyBuilder: buildScorecardCheckUpdateBody,
           responseExtractor: passthrough,
           description:
             "Update a scorecard check (full replacement). Requires check_id. " +

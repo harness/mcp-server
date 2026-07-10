@@ -1,5 +1,21 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-10)
+- [x] Baseline current branch and identify recent high-blast-radius commits
+- [x] Trace recent behavioral changes through caller/downstream paths
+- [x] Implement a minimal fix only if a concrete critical trigger is proven
+- [ ] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+
+### Plan
+- Treat commits after `v3.2.10` as the tight recent-change window, then include the adjacent v3.2.9..HEAD behavioral commits if the latest change depends on them.
+- Prioritize DBOps path construction, Code file content scope handling, and new IDP write resources because they can break executions, file reads/writes, or mutate account/project entities.
+- Require a concrete trigger scenario and caller-chain proof before editing runtime code; if confidence stays below the critical-bug bar, leave code unchanged and report the no-fix result.
+
+### Review
+- Found a data-loss risk in the new IDP scorecard/check update paths: both operations are documented as full replacement, but the body builders accepted partial replacement bodies. A metadata-only scorecard update could omit `checks`, and a check rename/update could omit rule logic, allowing the backend to replace the resource with missing associations or logic.
+- Fixed scorecard updates to require an explicit `checks` array, preserving intentional clears via `checks: []`; fixed scorecard check updates to require full `checkDetails` identity/metadata plus rule payloads based on `ruleStrategy`.
+
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
 - [x] Inspect PR #569 diff, CI/review state, and affected code paths

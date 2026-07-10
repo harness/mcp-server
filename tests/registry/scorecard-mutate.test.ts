@@ -148,6 +148,19 @@ describe("scorecard mutate operations", () => {
     expect(call.body).toEqual(SAMPLE_SCORECARD_BODY);
   });
 
+  it("update: rejects missing checks to avoid accidental full-replacement clears", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "scorecard", "update", {
+        scorecard_id: "production_readiness",
+        body: { scorecard: SAMPLE_SCORECARD_BODY.scorecard },
+      }),
+    ).rejects.toThrow(/checks is required for scorecard updates/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("bodyBuilder helpers match registry specs", () => {
     const createSpec = getOp("scorecard", "create");
     const updateSpec = getOp("scorecard", "update");
@@ -155,6 +168,7 @@ describe("scorecard mutate operations", () => {
     expect(createSpec.skipScopeBodyInjection).toBe(true);
     expect(updateSpec.skipScopeBodyInjection).toBe(true);
     expect(createSpec.bodySchema?.fields.map((f) => f.name)).toEqual(["scorecard", "checks"]);
+    expect(updateSpec.bodySchema?.fields.find((f) => f.name === "checks")?.required).toBe(true);
     expect(createSpec.operationPolicy).toEqual({ risk: "low_write", retryPolicy: "do_not_retry" });
     expect(updateSpec.operationPolicy).toEqual({ risk: "low_write", retryPolicy: "safe" });
   });
@@ -211,6 +225,46 @@ describe("scorecard_check mutate operations", () => {
     expect(call.method).toBe("PUT");
     expect(call.path).toBe("/v1/checks/has_readme");
     expect(call.body).toEqual(SAMPLE_CHECK_BODY);
+  });
+
+  it("update: rejects rule-based checks without rules", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "scorecard_check", "update", {
+        check_id: "has_readme",
+        body: {
+          checkDetails: {
+            identifier: "has_readme",
+            name: "Has README",
+            description: "Component must have a README file",
+            ruleStrategy: "ALL_OF",
+          },
+        },
+      }),
+    ).rejects.toThrow(/checkDetails\.rules is required/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("update: rejects advanced checks without expression", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "scorecard_check", "update", {
+        check_id: "has_readme",
+        body: {
+          checkDetails: {
+            identifier: "has_readme",
+            name: "Has README",
+            description: "Component must have a README file",
+            ruleStrategy: "ADVANCED",
+          },
+        },
+      }),
+    ).rejects.toThrow(/checkDetails\.expression is required/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("bodyBuilder helpers match registry specs", () => {
