@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Docs Checks Need a Completed Build
+- **Issue**: Running `pnpm docs:check` in parallel with `pnpm build` can fail with `ERR_MODULE_NOT_FOUND` for `build/registry/index.js` because docs generation imports compiled files.
+- **Fix**: Run `pnpm build` to completion before `pnpm docs:check`; rerun docs checks after any stale/missing build failure.
+- **Rule**: Do not parallelize docs checks with the build in this repo. The existing docs gotcha applies to `docs:check` as well as `docs:generate`.
+
 ## Read Cache Signals Must Not Block Execute Paths
 - **Issue**: A remote pipeline `pipeline.get` response can report `cacheResponse.cacheState=STALE_CACHE` and old YAML from the read/UI cache, while pipeline execution is documented to fetch entities from Git for the selected pipeline branch.
 - **Fix**: Do not fail-close `harness_execute` based on `pipeline.get` cache metadata. Preserve explicit branch selection by sending `pipelineBranchName` for remote executions, and only block execution on signals from the execute path itself.
