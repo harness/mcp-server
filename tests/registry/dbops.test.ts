@@ -723,7 +723,7 @@ describe("database_execute_llm_authoring_pipeline run", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.path).toBe(
-      "/v1/orgs/default/projects/test-project/llm-authoring/execute-pipeline",
+      "/dbops/v1/orgs/default/projects/test-project/llm-authoring/execute-pipeline",
     );
     expect(call.body).toEqual({
       conversationId: "conversation-1",
@@ -762,7 +762,7 @@ describe("database_execute_llm_authoring_pipeline run", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.path).toBe(
-      "/v1/orgs/default/projects/test-project/llm-authoring/execute-pipeline",
+      "/dbops/v1/orgs/default/projects/test-project/llm-authoring/execute-pipeline",
     );
     expect(call.body).toEqual({
       conversationId: "conversation-1",

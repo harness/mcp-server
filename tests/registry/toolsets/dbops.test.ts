@@ -18,7 +18,7 @@ describe("database_execute_llm_authoring_pipeline endpoint spec", () => {
   it("hits the v1 llm-authoring/execute-pipeline path", () => {
     expect(runAction.method).toBe("POST");
     expect(runAction.path).toBe(
-      "/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
+      "/dbops/v1/orgs/{org}/projects/{project}/llm-authoring/execute-pipeline",
     );
   });
 
