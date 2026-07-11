@@ -2,15 +2,20 @@
 
 ## Critical Bug Investigation Automation (2026-07-11)
 - [x] Baseline branch and read prior investigation notes
-- [ ] Inspect recent high-blast-radius commits and diffs
-- [ ] Trace any plausible critical bug through caller and dispatch paths
-- [ ] Implement a minimal fix and tests only if a concrete critical trigger is proven
-- [ ] Validate fix, commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+- [x] Inspect recent high-blast-radius commits and diffs
+- [x] Trace any plausible critical bug through caller and dispatch paths
+- [x] Implement a minimal fix and tests only if a concrete critical trigger is proven
+- [x] Validate fix, commit/push/open PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
 - Treat the current `origin/main` history since `v3.2.10` and the immediately preceding behavioral PRs as the primary recent-change window.
 - Prioritize DBOps request construction, Code file scope handling, IDP write support, and pipeline/diagnose execution behavior because those can affect writes, auth/scope, or production operations.
 - Require a concrete trigger scenario with data loss, crash, security exposure, or significant user-facing breakage before changing runtime code.
+
+### Review
+- Found a high-severity data-loss risk in the newly added IDP scorecard update path. The endpoint is documented as a full replacement, but the update body builder accepted `body: { scorecard: {...} }` without `checks`, so an agent editing scorecard metadata could replace a populated scorecard with one containing no checks.
+- Added update-only guards for IDP full-replacement writes: scorecard updates now require the complete `checks` array, scorecard and scorecard_check updates reject path/body identifier conflicts, and idp_entity updates reject YAML kind/name conflicts with the requested update target.
+- Verification passed: `pnpm exec vitest run tests/registry/scorecard-mutate.test.ts tests/registry/idp-entity.test.ts`, `pnpm build`, `pnpm typecheck`, `pnpm docs:check`, `pnpm test` (115 files / 2502 tests), and `pnpm standards:check`.
 
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
