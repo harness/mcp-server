@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Operation-Specific Body Builders Must Be Wired Deliberately
+- **Issue**: While adding stricter update-only IDP guards, a broad text replacement briefly wired the update body builder/schema into create operations as well, which would have made valid create requests fail.
+- **Fix**: Review create and update operation blocks side by side after replacing shared body builders with operation-specific variants, and add tests that preserve create permissiveness while enforcing update invariants.
+- **Rule**: When splitting a shared builder/schema because create and update have different contracts, patch each operation explicitly and scan the final `bodyBuilder`/`bodySchema` wiring before committing.
+
 ## Read Cache Signals Must Not Block Execute Paths
 - **Issue**: A remote pipeline `pipeline.get` response can report `cacheResponse.cacheState=STALE_CACHE` and old YAML from the read/UI cache, while pipeline execution is documented to fetch entities from Git for the selected pipeline branch.
 - **Fix**: Do not fail-close `harness_execute` based on `pipeline.get` cache metadata. Preserve explicit branch selection by sending `pipelineBranchName` for remote executions, and only block execution on signals from the execute path itself.
