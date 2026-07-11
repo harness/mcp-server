@@ -148,6 +148,39 @@ describe("scorecard mutate operations", () => {
     expect(call.body).toEqual(SAMPLE_SCORECARD_BODY);
   });
 
+  it("update: rejects missing checks because scorecard updates are full replacements", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const bodyWithoutChecks = { scorecard: SAMPLE_SCORECARD_BODY.scorecard };
+
+    await expect(
+      registry.dispatch(client, "scorecard", "update", {
+        scorecard_id: "production_readiness",
+        body: bodyWithoutChecks,
+      }),
+    ).rejects.toThrow(/checks is required for scorecard updates/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("update: rejects scorecard identifier conflicts between path and body", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "scorecard", "update", {
+        scorecard_id: "production_readiness",
+        body: {
+          ...SAMPLE_SCORECARD_BODY,
+          scorecard: {
+            ...SAMPLE_SCORECARD_BODY.scorecard,
+            identifier: "staging_readiness",
+          },
+        },
+      }),
+    ).rejects.toThrow(/Conflicting scorecard\.identifier/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("bodyBuilder helpers match registry specs", () => {
     const createSpec = getOp("scorecard", "create");
     const updateSpec = getOp("scorecard", "update");
@@ -155,6 +188,7 @@ describe("scorecard mutate operations", () => {
     expect(createSpec.skipScopeBodyInjection).toBe(true);
     expect(updateSpec.skipScopeBodyInjection).toBe(true);
     expect(createSpec.bodySchema?.fields.map((f) => f.name)).toEqual(["scorecard", "checks"]);
+    expect(updateSpec.bodySchema?.fields.find((f) => f.name === "checks")?.required).toBe(true);
     expect(createSpec.operationPolicy).toEqual({ risk: "low_write", retryPolicy: "do_not_retry" });
     expect(updateSpec.operationPolicy).toEqual({ risk: "low_write", retryPolicy: "safe" });
   });
@@ -211,6 +245,24 @@ describe("scorecard_check mutate operations", () => {
     expect(call.method).toBe("PUT");
     expect(call.path).toBe("/v1/checks/has_readme");
     expect(call.body).toEqual(SAMPLE_CHECK_BODY);
+  });
+
+  it("update: rejects check identifier conflicts between path and body", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "scorecard_check", "update", {
+        check_id: "has_readme",
+        body: {
+          checkDetails: {
+            ...SAMPLE_CHECK_BODY.checkDetails,
+            identifier: "has_owner",
+          },
+        },
+      }),
+    ).rejects.toThrow(/Conflicting checkDetails\.identifier/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("bodyBuilder helpers match registry specs", () => {

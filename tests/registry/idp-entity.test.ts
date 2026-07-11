@@ -191,6 +191,35 @@ describe("idp_entity mutate operations", () => {
     expect(call.body).toEqual({ yaml: SAMPLE_YAML });
   });
 
+  it("update: rejects entity kind conflicts between path and YAML", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "idp_entity", "update", {
+        kind: "api",
+        entity_id: "boutique-service",
+        body: { yaml: SAMPLE_YAML },
+      }),
+    ).rejects.toThrow(/Conflicting kind/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("update: rejects entity identifier conflicts between path and YAML", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const mismatchedYaml = SAMPLE_YAML.replace("name: boutique-service", "name: checkout-service");
+
+    await expect(
+      registry.dispatch(client, "idp_entity", "update", {
+        kind: "component",
+        entity_id: "boutique-service",
+        body: { yaml: mismatchedYaml },
+      }),
+    ).rejects.toThrow(/Conflicting metadata\.name/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("update: requires kind and entity_id", async () => {
     const client = makeClient();
 

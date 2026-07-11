@@ -111,6 +111,55 @@ const buildIdpEntityMutateBody = (input: Record<string, unknown>): Record<string
   return out;
 };
 
+const asPlainRecord = (value: unknown): Record<string, unknown> | undefined => {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  return value as Record<string, unknown>;
+};
+
+const assertMatchingString = (field: string, pathValue: unknown, bodyValue: unknown): void => {
+  if (bodyValue == null) return;
+  if (typeof bodyValue !== "string") {
+    throw new Error(`${field} in body must be a string when provided.`);
+  }
+  if (pathValue != null && String(pathValue) !== bodyValue) {
+    throw new Error(
+      `Conflicting ${field}: path/resource identifier is "${String(pathValue)}" but body contains "${bodyValue}".`,
+    );
+  }
+};
+
+const assertMatchingKind = (pathKind: unknown, yamlKind: unknown): void => {
+  if (yamlKind == null) return;
+  if (typeof yamlKind !== "string") {
+    throw new Error("kind in entity YAML must be a string when provided.");
+  }
+  if (pathKind != null && String(pathKind).toLowerCase() !== yamlKind.toLowerCase()) {
+    throw new Error(`Conflicting kind: path kind is "${String(pathKind)}" but entity YAML contains "${yamlKind}".`);
+  }
+};
+
+const assertIdpEntityUpdateTargetMatchesBody = (input: Record<string, unknown>, yaml: string): void => {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(yaml);
+  } catch (err) {
+    throw new Error(`Failed to parse entity YAML: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const entity = asPlainRecord(parsed);
+  if (!entity) return;
+
+  assertMatchingKind(input.kind, entity.kind);
+  const metadata = asPlainRecord(entity.metadata);
+  assertMatchingString("metadata.name", input.entity_id, metadata?.name);
+};
+
+const buildIdpEntityUpdateBody = (input: Record<string, unknown>): Record<string, unknown> => {
+  const body = buildIdpEntityMutateBody(input);
+  assertIdpEntityUpdateTargetMatchesBody(input, body.yaml as string);
+  return body;
+};
+
 const idpEntityScopeQueryParams = {
   org_id: "orgIdentifier",
   project_id: "projectIdentifier",
@@ -135,6 +184,18 @@ const buildScorecardMutateBody = (input: Record<string, unknown>): Record<string
   return body;
 };
 
+const buildScorecardUpdateBody = (input: Record<string, unknown>): Record<string, unknown> => {
+  const body = buildScorecardMutateBody(input);
+  const scorecard = body.scorecard as Record<string, unknown>;
+  assertMatchingString("scorecard.identifier", input.scorecard_id, scorecard.identifier);
+  if (!Array.isArray(body.checks)) {
+    throw new Error(
+      "checks is required for scorecard updates. Update is a full replacement; pass the complete body from harness_get, including checks.",
+    );
+  }
+  return body;
+};
+
 const buildScorecardCheckMutateBody = (input: Record<string, unknown>): Record<string, unknown> => {
   const body = requireObjectBody(input);
   if (!body.checkDetails || typeof body.checkDetails !== "object" || Array.isArray(body.checkDetails)) {
@@ -143,6 +204,13 @@ const buildScorecardCheckMutateBody = (input: Record<string, unknown>): Record<s
         "Use harness_get(scorecard_check) to round-trip an existing check.",
     );
   }
+  return body;
+};
+
+const buildScorecardCheckUpdateBody = (input: Record<string, unknown>): Record<string, unknown> => {
+  const body = buildScorecardCheckMutateBody(input);
+  const checkDetails = body.checkDetails as Record<string, unknown>;
+  assertMatchingString("checkDetails.identifier", input.check_id, checkDetails.identifier);
   return body;
 };
 
@@ -178,6 +246,20 @@ const scorecardMutateBodySchema: BodySchema = {
       itemType: "{ identifier: string, weightage: number, custom?: boolean }",
     },
   ],
+};
+
+const scorecardUpdateBodySchema: BodySchema = {
+  ...scorecardMutateBodySchema,
+  fields: scorecardMutateBodySchema.fields.map((field) =>
+    field.name === "checks"
+      ? {
+          ...field,
+          required: true,
+          description:
+            "Complete checks array from harness_get. Required because scorecard update is a full replacement.",
+        }
+      : field,
+  ),
 };
 
 const scorecardCheckMutateBodySchema: BodySchema = {
@@ -332,7 +414,7 @@ export const idpToolset: ToolsetDefinition = {
             convert: "convert",
             dry_run: "dry_run",
           },
-          bodyBuilder: buildIdpEntityMutateBody,
+          bodyBuilder: buildIdpEntityUpdateBody,
           responseExtractor: passthrough,
           description:
             "Update an IDP catalog entity (full replacement). Requires kind + entity_id (or resource_id + params.kind). " +
@@ -387,12 +469,12 @@ export const idpToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { scorecard_id: "scorecardIdentifier" },
           skipScopeBodyInjection: true,
-          bodyBuilder: buildScorecardMutateBody,
+          bodyBuilder: buildScorecardUpdateBody,
           responseExtractor: passthrough,
           description:
             "Update an IDP scorecard (full replacement). Requires scorecard_id. " +
             "Pass the complete body from harness_get — { scorecard, checks }.",
-          bodySchema: scorecardMutateBodySchema,
+          bodySchema: scorecardUpdateBodySchema,
         },
       },
     },
@@ -463,7 +545,7 @@ export const idpToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { check_id: "checkIdentifier" },
           skipScopeBodyInjection: true,
-          bodyBuilder: buildScorecardCheckMutateBody,
+          bodyBuilder: buildScorecardCheckUpdateBody,
           responseExtractor: passthrough,
           description:
             "Update a scorecard check (full replacement). Requires check_id. " +
