@@ -110,12 +110,8 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           );
           return errorResult(describeElicitationFailure(elicit));
         }
-        const versionLabel = asString(input.version_label);
-        if (versionLabel) { /* already set via params */ }
-        else if (isRecord(args.body) && "version_label" in args.body) {
+        if (!asString(input.version_label) && isRecord(args.body) && "version_label" in args.body) {
           input.version_label = args.body.version_label;
-        } else if (args.resource_type === "template") {
-          input.version_label = "v1";
         }
 
         const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation: elicit.method, resource_id: resolvedResourceId });

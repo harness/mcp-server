@@ -1193,6 +1193,34 @@ environment:
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
   });
+
+  it("does not default template updates to an arbitrary version label", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateRequest = vi.fn().mockResolvedValue({ data: { template: { identifier: "deploy_step" } } });
+    const templateClient = makeClient(templateRequest);
+    const templateServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, templateRegistry, templateClient);
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "deploy_step",
+      body: {
+        template_yaml: `
+template:
+  name: Deploy Step
+  identifier: deploy_step
+  versionLabel: "2.0"
+  type: Step
+  spec: {}
+`,
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("version_label") });
+    expect(templateRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("harness_update — pull request", () => {
