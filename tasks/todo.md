@@ -5,7 +5,7 @@
 - [x] Inspect recent behavioral commits and identify high-blast-radius changes
 - [x] Trace candidate bugs through callers and downstream request/response shapes
 - [x] Implement a minimal fix only if a concrete critical trigger is proven
-- [ ] Run focused validation for any fix, or sanity checks for no-fix outcome
+- [x] Run focused validation for any fix, or sanity checks for no-fix outcome
 - [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
@@ -17,6 +17,7 @@
 - Found that `harness_update(resource_type="template")` still defaulted a missing `version_label` to `"v1"` before dispatch. A user updating template `deploy_step` without an explicit version could send a body for version `2.0` while the tool targeted `/template/api/templates/update/deploy_step/v1`, risking mutation of the wrong template version.
 - Removed the implicit fallback so template updates fail closed unless the caller supplies `params.version_label` or `body.version_label`.
 - Added a tool-handler regression proving the missing-version case returns an error and sends no request.
+- Verification passed: focused `harness_update` Vitest tests, `pnpm typecheck`, `pnpm build`, full `tests/tools/tool-handlers.test.ts`, and full `pnpm test` (115 files / 2498 tests).
 
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
