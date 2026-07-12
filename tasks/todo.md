@@ -6,7 +6,7 @@
 - [x] Trace candidate bugs through callers and downstream request/response shapes
 - [x] Implement a minimal fix only if a concrete critical trigger is proven
 - [x] Run focused validation for any fix, or sanity checks for no-fix outcome
-- [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+- [x] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
 - Treat the recent commits on `main` as the review window, with emphasis on runtime behavior rather than release/version metadata.
@@ -18,6 +18,7 @@
 - Removed the implicit fallback so template updates fail closed unless the caller supplies `params.version_label` or `body.version_label`.
 - Added a tool-handler regression proving the missing-version case returns an error and sends no request.
 - Verification passed: focused `harness_update` Vitest tests, `pnpm typecheck`, `pnpm build`, full `tests/tools/tool-handlers.test.ts`, and full `pnpm test` (115 files / 2498 tests).
+- Opened PR #611.
 
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
