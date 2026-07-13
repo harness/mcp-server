@@ -220,6 +220,45 @@ export const gitopsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: "Get GitOps agent details",
         },
+        delete: {
+          method: "DELETE",
+          path: "/gitops/api/v1/agents/{agentIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { agent_id: "agentIdentifier" },
+          responseExtractor: passthrough,
+          description:
+            "Delete a GitOps agent. The agent identifier in the path is the raw identifier — NOT scope-prefixed.\n\n" +
+            "SCOPE DETERMINES WHICH ORG/PROJECT PARAMS ARE INJECTED:\n" +
+            "  Account-level agent: resource_scope='account' — omit org_id and project_id\n" +
+            "    harness_delete(resource_type='gitops_agent', resource_id='myagent', resource_scope='account')\n" +
+            "  Org-level agent:     resource_scope='org'     — org_id is injected, no project_id\n" +
+            "    harness_delete(resource_type='gitops_agent', resource_id='myagent', resource_scope='org')\n" +
+            "  Project-level agent: resource_scope='project' — both org_id and project_id are injected\n" +
+            "    harness_delete(resource_type='gitops_agent', resource_id='myagent')\n\n" +
+            "NOTE: The path identifier is always the raw agent ID (e.g. 'myagent'), never scope-prefixed\n" +
+            "(unlike other GitOps APIs where agentIdentifier is prefixed with 'account.', 'org.', etc.).\n" +
+            "The backend derives the scope from the presence of orgIdentifier and projectIdentifier in the request.",
+          paramsSchema: {
+            fields: [
+              {
+                name: "resource_id",
+                required: true,
+                description:
+                  "Raw agent identifier — no scope prefix. E.g. 'myagent', not 'account.myagent'. " +
+                  "Use harness_list(resource_type='gitops_agent') to discover the identifier.",
+              },
+              {
+                name: "resource_scope",
+                required: false,
+                description:
+                  "Controls which scope params are injected. " +
+                  "'account' — account-level agent (no org/project). " +
+                  "'org' — org-level agent (orgIdentifier injected). " +
+                  "'project' — project-level agent (orgIdentifier + projectIdentifier injected, default when omitted).",
+              },
+            ],
+          } satisfies ParamsSchema,
+        },
       },
     },
     {
@@ -385,6 +424,97 @@ export const gitopsToolset: ToolsetDefinition = {
               { name: "validate", type: "boolean", required: false, description: "Validate spec before applying (default: true)." },
             ],
           },
+        },
+        delete: {
+          method: "DELETE",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/applications/{appName}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: {
+            agent_id: "agentIdentifier",
+            app_name: "appName",
+          },
+          queryParams: {
+            cascade: "request.cascade",
+            propagation_policy: "request.propagationPolicy",
+            remove_existing_finalizers: "options.removeExistingFinalizers",
+            app_namespace: "request.appNamespace",
+          },
+          bodyBuilder: (input) => {
+            const cascade = input.cascade;
+            const propagationPolicy = input.propagation_policy;
+
+            if (cascade === undefined || cascade === "") {
+              throw new Error(
+                "Deletion mode is required — ask the user which mode they want before proceeding:\n\n" +
+                "DELETION MODES:\n" +
+                "  1. Foreground: cascade='true', propagation_policy='foreground'\n" +
+                "     Waits for all K8s child resources to be fully deleted before removing the Application.\n" +
+                "  2. Background: cascade='true', propagation_policy='background'\n" +
+                "     Removes the Application immediately; Kubernetes cleans up child resources asynchronously.\n" +
+                "  3. Non-cascading: cascade='false' (no propagation_policy needed)\n" +
+                "     Deletes only the ArgoCD Application record. K8s resources remain running in the cluster.\n\n" +
+                "Also ask: remove_existing_finalizers='true' or 'false'\n" +
+                "  Set 'true' only if the app is stuck and cannot be deleted due to stuck finalizers. Default: 'false'.",
+              );
+            }
+
+            if ((cascade === "true" || cascade === true) && !propagationPolicy) {
+              throw new Error(
+                "propagation_policy is required when cascade=true — ask the user:\n" +
+                "  'foreground' — waits for all K8s child resources to be deleted first (recommended)\n" +
+                "  'background' — deletes the Application immediately; Kubernetes cleans up resources asynchronously",
+              );
+            }
+
+            return undefined;
+          },
+          responseExtractor: passthrough,
+          description:
+            "Delete a GitOps application. ALWAYS ask the user for the deletion mode and finalizer preference before calling — do not assume defaults.\n\n" +
+            "EXAMPLE:\n" +
+            "harness_delete(resource_type='gitops_application', resource_id='my-app',\n" +
+            "  params={agent_id:'account.myagent', cascade:'true', propagation_policy:'foreground', remove_existing_finalizers:'false'})\n\n" +
+            "DELETION MODES (required — ask the user):\n" +
+            "  Foreground: cascade='true', propagation_policy='foreground'\n" +
+            "    Waits for all K8s child resources to be deleted before removing the Application.\n" +
+            "  Background: cascade='true', propagation_policy='background'\n" +
+            "    Deletes the Application immediately; K8s cleans up child resources asynchronously.\n" +
+            "  Non-cascading: cascade='false'\n" +
+            "    Removes only the ArgoCD Application record; K8s resources remain running in the cluster.\n\n" +
+            "FINALIZER REMOVAL (ask the user): remove_existing_finalizers='true'/'false'\n" +
+            "  Use 'true' only when the app is stuck and cannot be deleted due to stuck finalizers.\n\n" +
+            "IDENTIFIERS:\n" +
+            "  resource_id — app name, plain (not scope-prefixed), e.g. 'my-app'\n" +
+            "  agent_id in params — scope-prefixed: 'account.myagent' | 'org.myagent' | 'myagent'",
+          paramsSchema: {
+            fields: [
+              {
+                name: "agent_id",
+                required: true,
+                description: "Scope-prefixed agent identifier (e.g. 'account.myagent', 'org.myagent', or 'myagent' for project-level).",
+              },
+              {
+                name: "cascade",
+                required: true,
+                description: "Whether to cascade deletion to K8s resources. 'true' = cascade (foreground or background), 'false' = non-cascading (leaves K8s resources running). Ask the user before setting.",
+              },
+              {
+                name: "propagation_policy",
+                required: false,
+                description: "Required when cascade='true'. 'foreground' — waits for all K8s child resources to be deleted first. 'background' — deletes immediately, async cleanup. Omit when cascade='false'.",
+              },
+              {
+                name: "remove_existing_finalizers",
+                required: true,
+                description: "Whether to strip existing finalizers before deletion. 'true' unblocks stuck apps; 'false' is the safe default. Ask the user before setting.",
+              },
+              {
+                name: "app_namespace",
+                required: false,
+                description: "Application namespace override. Only needed when the app was deployed to a non-default namespace.",
+              },
+            ],
+          } satisfies ParamsSchema,
         },
       },
       executeActions: {
@@ -597,6 +727,52 @@ export const gitopsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: "Get GitOps cluster details (requires agent_id)",
         },
+        delete: {
+          method: "DELETE",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/clusters/{clusterIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: {
+            agent_id: "agentIdentifier",
+            cluster_id: "clusterIdentifier",
+          },
+          queryParams: {
+            force_delete: "forceDelete",
+            query_name: "query.name",
+          },
+          responseExtractor: passthrough,
+          description:
+            "Delete a GitOps cluster registration.\n\n" +
+            "EXAMPLE:\n" +
+            "harness_delete(resource_type='gitops_cluster', resource_id='c11', params={agent_id:'account.myagent'})\n\n" +
+            "FORCE DELETE: Deletion fails if GitOps applications are still deployed to this cluster. " +
+            "Set force_delete='true' in params to bypass this check and delete anyway.\n\n" +
+            "IDENTIFIERS:\n" +
+            "  resource_id — the immutable internal cluster identifier (e.g. 'cluster11'). This never changes even when the cluster is renamed in the UI.\n" +
+            "  agent_id — scope-prefixed agent identifier (e.g. 'account.myagent').\n" +
+            "  query_name — the ArgoCD display name (the name visible in the UI). Harness stores the cluster by resource_id internally, " +
+            "but ArgoCD tracks it by display name. If the cluster was renamed after registration, resource_id stays the same while the display name changes. " +
+            "In that case, pass the current display name as query_name so ArgoCD can locate the cluster for deletion. " +
+            "Use harness_get(resource_type='gitops_cluster') to find the current display name.",
+          paramsSchema: {
+            fields: [
+              {
+                name: "agent_id",
+                required: true,
+                description: "Scope-prefixed agent identifier (e.g. 'account.myagent', 'org.myagent', or 'myagent' for project-level).",
+              },
+              {
+                name: "force_delete",
+                required: false,
+                description: "Set to 'true' to skip the safety check that blocks deletion when GitOps applications are still deployed to this cluster. Default: false.",
+              },
+              {
+                name: "query_name",
+                required: false,
+                description: "ArgoCD display name of the cluster. Only required if the cluster was renamed in the UI after registration — the display name changes but resource_id (the path identifier) does not. Omit if the cluster has never been renamed.",
+              },
+            ],
+          } satisfies ParamsSchema,
+        },
       },
     },
     {
@@ -643,6 +819,51 @@ export const gitopsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: "Get GitOps repository details (requires agent_id)",
         },
+        delete: {
+          method: "DELETE",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/repositories/{repoIdentifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: {
+            agent_id: "agentIdentifier",
+            repo_id: "repoIdentifier",
+          },
+          queryParams: {
+            force_delete: "forceDelete",
+          },
+          responseExtractor: passthrough,
+          description:
+            "Delete a GitOps repository.\n\n" +
+            "EXAMPLE:\n" +
+            "harness_delete(resource_type='gitops_repository', resource_id='rolloutsDemoRepo',\n" +
+            "  params={agent_id:'account.myagent'})\n\n" +
+            "IDENTIFIERS:\n" +
+            "  resource_id — repository identifier (e.g. 'rolloutsDemoRepo'). " +
+            "Use harness_list(resource_type='gitops_repository') to discover it.\n" +
+            "  agent_id   — scope-prefixed agent identifier: 'account.myagent' | 'org.myagent' | 'myagent'\n\n" +
+            "SCOPE: set resource_scope to control which org/project params are injected:\n" +
+            "  'account' — account-level (no org/project)\n" +
+            "  'org'     — org-level (orgIdentifier injected)\n" +
+            "  'project' — project-level (orgIdentifier + projectIdentifier injected, default)\n\n" +
+            "FORCE DELETE: set force_delete='true' to bypass the safety check that blocks deletion\n" +
+            "when the repository is still referenced by one or more GitOps applications.\n" +
+            "Use only when you intend to delete the repo regardless of active app references.",
+          paramsSchema: {
+            fields: [
+              {
+                name: "agent_id",
+                required: true,
+                description: "Scope-prefixed agent identifier. E.g. 'account.myagent', 'org.myagent', or 'myagent' for project-level.",
+              },
+              {
+                name: "force_delete",
+                required: false,
+                description:
+                  "Set to 'true' to force-delete even if the repository is still in use by GitOps applications. " +
+                  "Defaults to 'false' (deletion is blocked when active apps reference the repo).",
+              },
+            ],
+          } satisfies ParamsSchema,
+        },
       },
     },
     {
@@ -661,11 +882,12 @@ export const gitopsToolset: ToolsetDefinition = {
       scope: "project",
       identifierFields: ["agent_id", "appset_id"],
       executeHint:
-        "GET/UPDATE requires the ApplicationSet UUID, NOT its name. The API uses UUID as the identifier.\n" +
+        "GET/UPDATE/DELETE requires the ApplicationSet UUID, NOT its name. The API uses UUID as the identifier.\n" +
         "REQUIRED WORKFLOW:\n" +
         "  1. harness_list(resource_type='gitops_applicationset', params={agent_id:'account.myagent'}) — find appset by name, note 'identifier' (= UUID)\n" +
         "  2. For GET: harness_get(resource_type='gitops_applicationset', resource_id='<uuid>', params={agent_id:'account.myagent'})\n" +
         "  3. For UPDATE: include metadata.uid=<uuid> and preserve spec.template.spec.project from the list response\n" +
+        "  4. For DELETE: harness_delete(resource_type='gitops_applicationset', resource_id='<uuid>', params={agent_id:'account.myagent'})\n" +
         "CREATE does NOT need a UUID — just pass agent_id in params.",
       listFilterFields: [
         { name: "search_term", description: "Filter ApplicationSets by name or keyword" },
@@ -848,6 +1070,26 @@ export const gitopsToolset: ToolsetDefinition = {
             ],
           },
         },
+        delete: {
+          method: "DELETE",
+          path: "/gitops/api/v1/applicationset/{identifier}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: {
+            appset_id: "identifier",
+          },
+          queryParams: {
+            agent_id: "agentIdentifier",
+          },
+          responseExtractor: passthrough,
+          description:
+            "Delete a GitOps ApplicationSet by UUID.\n\n" +
+            "IMPORTANT: resource_id must be the ApplicationSet UUID, NOT its name.\n\n" +
+            "REQUIRED WORKFLOW:\n" +
+            "  1. harness_list(resource_type='gitops_applicationset', params={agent_id:'account.myagent'}, search_term='my-appset')\n" +
+            "     → note the 'identifier' field (= UUID)\n" +
+            "  2. harness_delete(resource_type='gitops_applicationset', resource_id='<uuid>', params={agent_id:'account.myagent'})\n\n" +
+            "NOTE: Deleting an ApplicationSet also deletes all Applications it generated, unless the ApplicationSet's syncPolicy preserves them.",
+        },
       },
     },
     {
@@ -893,6 +1135,38 @@ export const gitopsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Get GitOps repository credential details",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/repocreds/{credentialId}",
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: {
+            agent_id: "agentIdentifier",
+            credential_id: "credentialId",
+          },
+          responseExtractor: passthrough,
+          description:
+            "Delete a GitOps repository credential template.\n\n" +
+            "EXAMPLE:\n" +
+            "harness_delete(resource_type='gitops_repo_credential', resource_id='ashinsabu3_donlxgyi',\n" +
+            "  params={agent_id:'account.tomylocal'})\n\n" +
+            "IDENTIFIERS:\n" +
+            "  resource_id — credential identifier (e.g. 'ashinsabu3_donlxgyi'). " +
+            "Use harness_list(resource_type='gitops_repo_credential') to discover it.\n" +
+            "  agent_id   — scope-prefixed agent identifier: 'account.myagent' | 'org.myagent' | 'myagent'\n\n" +
+            "SCOPE: set resource_scope to control which org/project params are injected:\n" +
+            "  'account' — account-level (no org/project)\n" +
+            "  'org'     — org-level (orgIdentifier injected)\n" +
+            "  'project' — project-level (orgIdentifier + projectIdentifier injected, default)",
+          paramsSchema: {
+            fields: [
+              {
+                name: "agent_id",
+                required: true,
+                description: "Scope-prefixed agent identifier. E.g. 'account.myagent', 'org.myagent', or 'myagent' for project-level.",
+              },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },
