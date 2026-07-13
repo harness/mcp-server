@@ -355,6 +355,54 @@ describe("harness_schema nested static definition lookup", () => {
     const schema = parsed.schema as { properties?: Record<string, { description?: string }> };
     expect(schema.properties?.user?.description).toContain("clone container");
   });
+
+  it("resolves newly synced DeployAwsAgentCoreRevision step definition from v0 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "DeployAwsAgentCoreRevisionStepNode",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("steps.cd.DeployAwsAgentCoreRevisionStepNode");
+    expect(parsed.requested_path).toBe("DeployAwsAgentCoreRevisionStepNode");
+    const schema = parsed.schema as { properties?: { type?: { enum?: string[] } } };
+    expect(schema.properties?.type?.enum).toContain("DeployAwsAgentCoreRevision");
+  });
+
+  it("resolves newly synced IdentitiesConfig from v0 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "IdentitiesConfig",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("common.IdentitiesConfig");
+    const schema = parsed.schema as { description?: string; additionalProperties?: unknown };
+    expect(schema.description).toContain("named identities");
+    expect(schema.additionalProperties).toBeDefined();
+  });
+
+  it("resolves newly synced DynamicStageNodeV1 from v1 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline_v1",
+      path: "DynamicStageNodeV1",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("stages.unified.DynamicStageNodeV1");
+    const schema = parsed.schema as { required?: string[]; description?: string };
+    expect(schema.required).toContain("dynamic");
+    expect(schema.description).toContain("child pipelines");
+  });
 });
 
 // Wrapper definitions that are grouping objects (not schema nodes) must still
