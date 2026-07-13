@@ -956,6 +956,35 @@ describe("harness_update", () => {
     });
   });
 
+  it("updates IDP entities at the configured project scope when only resource_id and kind are provided", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp" }));
+    mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
+    client = makeClient(mockRequest);
+    const idpServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(idpServer, registry, client);
+
+    const result = await idpServer.call("harness_update", {
+      resource_type: "idp_entity",
+      resource_id: "boutique-service",
+      params: { kind: "component" },
+      body: { yaml: "apiVersion: harness.io/v1\nkind: component\nmetadata:\n  name: boutique-service\nspec: {}" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      path: string;
+      params: Record<string, string>;
+      body: Record<string, unknown>;
+    };
+    expect(callArgs.path).toBe("/v1/entities/account.default.test-project/component/boutique-service");
+    expect(callArgs.params.orgIdentifier).toBe("default");
+    expect(callArgs.params.projectIdentifier).toBe("test-project");
+    expect(callArgs.body).toEqual({
+      yaml: "apiVersion: harness.io/v1\nkind: component\nmetadata:\n  name: boutique-service\nspec: {}",
+    });
+  });
+
   it("rejects raw YAML update bodies whose identifier conflicts with resource_id", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "prod_connector" } });
@@ -2313,6 +2342,83 @@ pipeline:
     expect(runCall.body).toContain("environment");
     expect(runCall.body).toContain("prod");
     expect(runCall.body).not.toContain("<+input>");
+    expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
+  });
+
+  it("uses pipeline_branch for both remote input-set materialization and runtime template resolution", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "remote_override_pipe"
+    variables:
+      - name: "environment"
+        type: "String"
+        value: "prod"
+      - name: "branch"
+        type: "String"
+        value: "main"
+`;
+    const templateWithRequired = `pipeline:
+  identifier: "remote_override_pipe"
+  variables:
+    - name: "branch"
+      type: "String"
+      value: "<+input>"
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } }) // input set
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: templateWithRequired } }) // template
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-remote-override" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "remote_override_pipe",
+      inputs: { environment: "staging" },
+      input_set_ids: ["remote-set"],
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "gh_conn",
+        repo_name: "my-repo",
+        pipeline_branch: "feature/x",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(3);
+
+    const getCall = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.params?.branch).toBe("feature/x");
+    expect(getCall.params?.repoName).toBe("my-repo");
+    expect(getCall.params?.connectorRef).toBe("gh_conn");
+    expect(getCall.params?.storeType).toBe("REMOTE");
+
+    const templateCall = mockRequest.mock.calls[1]![0] as {
+      method?: string;
+      path?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(templateCall.method).toBe("POST");
+    expect(templateCall.path).toBe("/pipeline/api/inputSets/template");
+    expect(templateCall.params?.branch).toBe("feature/x");
+
+    const runCall = mockRequest.mock.calls[2]![0] as {
+      method?: string;
+      body?: string;
+      params?: Record<string, string | string[] | undefined>;
+    };
+    expect(runCall.method).toBe("POST");
+    expect(runCall.body).toContain("environment");
+    expect(runCall.body).toContain("staging");
+    expect(runCall.body).toContain("branch");
+    expect(runCall.body).toContain("main");
+    expect(runCall.params?.pipelineBranchName).toBe("feature/x");
     expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
   });
 

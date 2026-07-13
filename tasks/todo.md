@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-13)
+- [ ] Baseline branch state and identify recent behavioral commits
+- [ ] Review high-blast-radius diffs and trace concrete trigger scenarios
+- [ ] Implement a minimal fix only if a critical bug is proven
+- [ ] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+
+### Plan
+- Treat the current branch against `origin/main` and recent main history as the investigation window.
+- Prioritize behavioral paths that can cause data loss, crashes, security issues, or significant user-facing breakage.
+- Avoid changes unless a concrete trigger and high-confidence minimal fix are both established.
+
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
 - [x] Inspect PR #569 diff, CI/review state, and affected code paths

@@ -400,7 +400,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               pipelineId,
               orgId: asString(input.org_id) || registry.orgId,
               projectId: asString(input.project_id) || registry.projectId,
-              branch: asString(input.branch),
+              branch: asString(input.pipeline_branch) ?? asString(input.branch),
             };
             resolved = materializedInputSetYaml
               ? await resolveRuntimeInputsWithBaseYaml(client, inputsToResolve, resolveOptions, materializedInputSetYaml)
