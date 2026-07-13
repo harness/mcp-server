@@ -1,5 +1,13 @@
 # Lessons Learned
 
+## Scope Defaults and Remote Branch Context Must Stay End-to-End
+- **Issue**: Multi-scope path builders can bypass the registry's usual config defaulting when they construct path segments themselves. For IDP entities, list used configured `HARNESS_ORG` / `HARNESS_PROJECT`, while get/update path construction fell back to account scope, so a list -> update flow could target a different entity with the same kind/id.
+- **Fix**: Path builders that encode scope in the path must accept `PathBuilderConfig`, honor explicit `resource_scope`, use configured org/project defaults when scope is omitted and the resource's list/default behavior does so, and clear unused scope fields so query params match the path.
+- **Rule**: For multi-scope resources with custom path builders, test omitted-scope defaulting and explicit account/org/project overrides through the public tool handler when writes are supported.
+- **Issue**: Remote pipeline execution has multiple helper calls before the final run. Passing branch context to the input-set GET but not to the runtime-template fetch can silently resolve inline overrides against a different Git branch.
+- **Fix**: Use one normalized branch source (`pipeline_branch ?? branch`) for every pre-execute pipeline helper call and the final execute request.
+- **Rule**: When adding or fixing remote pipeline branch handling, assert every request in the chain (input set GET, runtime input template, execute POST) carries the same branch/repo/connector/store context.
+
 ## Read Cache Signals Must Not Block Execute Paths
 - **Issue**: A remote pipeline `pipeline.get` response can report `cacheResponse.cacheState=STALE_CACHE` and old YAML from the read/UI cache, while pipeline execution is documented to fetch entities from Git for the selected pipeline branch.
 - **Fix**: Do not fail-close `harness_execute` based on `pipeline.get` cache metadata. Preserve explicit branch selection by sending `pipelineBranchName` for remote executions, and only block execution on signals from the execute path itself.
