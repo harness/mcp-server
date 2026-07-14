@@ -4,14 +4,20 @@
 - [x] Baseline recent behavioral commits and identify high-blast-radius changes
 - [x] Trace candidate failures through public tool handlers, registry dispatch, and client requests
 - [x] Implement a minimal fix only for a concrete critical trigger
-- [ ] Commit and push any fix before running validation
-- [ ] Validate focused behavior and broader project checks
+- [x] Commit and push any fix before running validation
+- [x] Validate focused behavior and broader project checks
 - [ ] Open a PR and report the fix, or report no critical bugs in Slack
 
 ### Plan
 - Review behavioral commits after `v3.2.9`, prioritizing DBOps routing, Harness Code file scoping, and new IDP write operations; inspect schema/prompt changes only where they alter runtime behavior.
 - Require a concrete crash, security, data-loss, or significant user-facing failure scenario supported by the full caller chain before editing runtime code.
 - Keep any correction narrowly scoped with a regression test; otherwise leave source unchanged and send the expected no-critical-bugs summary.
+
+### Review
+- Found that remote v0 pipeline runs using `params.pipeline_branch` still fetched the runtime input template without a branch. Harness therefore resolved the template from the repository default branch while executing the selected non-default branch, so flat runtime inputs could be validated and placed against the wrong pipeline revision.
+- Fixed runtime input resolution to prefer the normalized `pipeline_branch`, matching input-set materialization and the final `pipelineBranchName` execute parameter. Added a public handler regression proving the template fetch and execute request use the same branch.
+- Before/after verification: the regression failed on parent commit `22bac922` because the template request's `branch` was `undefined`, and passed on the fix with `branch=feature/x`.
+- Validation passed: focused Vitest regression, `pnpm typecheck`, `pnpm build`, `pnpm standards:check` (80 tests), `pnpm docs:check`, `git diff --check`, and full `pnpm test` (115 files / 2498 tests).
 
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
