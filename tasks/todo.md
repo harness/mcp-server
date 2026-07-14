@@ -1,5 +1,18 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-14)
+- [x] Baseline recent behavioral commits and identify high-blast-radius changes
+- [x] Trace candidate failures through public tool handlers, registry dispatch, and client requests
+- [x] Implement a minimal fix only for a concrete critical trigger
+- [ ] Commit and push any fix before running validation
+- [ ] Validate focused behavior and broader project checks
+- [ ] Open a PR and report the fix, or report no critical bugs in Slack
+
+### Plan
+- Review behavioral commits after `v3.2.9`, prioritizing DBOps routing, Harness Code file scoping, and new IDP write operations; inspect schema/prompt changes only where they alter runtime behavior.
+- Require a concrete crash, security, data-loss, or significant user-facing failure scenario supported by the full caller chain before editing runtime code.
+- Keep any correction narrowly scoped with a regression test; otherwise leave source unchanged and send the expected no-critical-bugs summary.
+
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
 - [x] Inspect PR #569 diff, CI/review state, and affected code paths

@@ -2255,6 +2255,49 @@ pipeline:
     expect(getCall.params?.storeType).toBe("REMOTE");
   });
 
+  it("forwards pipeline_branch to the runtime input template for a remote pipeline run", async () => {
+    const runtimeTemplate = `pipeline:
+  identifier: "remote_template_pipe"
+  variables:
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: runtimeTemplate } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-remote-template" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "remote_template_pipe",
+      inputs: { environment: "prod" },
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "gh_conn",
+        repo_name: "my-repo",
+        pipeline_branch: "feature/x",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const templateCall = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      path?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(templateCall.method).toBe("POST");
+    expect(templateCall.path).toBe("/pipeline/api/inputSets/template");
+    expect(templateCall.params?.branch).toBe("feature/x");
+
+    const runCall = mockRequest.mock.calls[1]![0] as {
+      params?: Record<string, string | undefined>;
+      body?: string;
+    };
+    expect(runCall.params?.pipelineBranchName).toBe("feature/x");
+    expect(runCall.body).toContain("prod");
+  });
+
   it("materializes input_set_ids before applying inline input overrides", async () => {
     const inputSetYaml = `inputSet:
   pipeline:
