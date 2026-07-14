@@ -1810,6 +1810,38 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.path).toBe("/ccm/api/business-mapping/cat-uuid-123");
     });
+
+    it("cost_category_filter list wraps top-level string array for MCP structured output", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: ["AI Common Fields", "Teams"],
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_category_filter", "list", {});
+
+      expect(result).toEqual({ values: ["AI Common Fields", "Teams"] });
+    });
+
+    it("cost_category_filter get passes costCategory query param and wraps bucket array", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: ["Product Management", "Security Engineering", "Software Development"],
+        metaData: null,
+        correlationId: "73f1c1e3-8825-402d-9a76-30addfb3a7ed",
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_category_filter", "get", {
+        cost_category: "Teams",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ccm/api/business-mapping/filter-panel");
+      expect(call.params?.costCategory).toBe("Teams");
+      expect(result).toEqual({
+        values: ["Product Management", "Security Engineering", "Software Development"],
+      });
+    });
   });
 
 });
