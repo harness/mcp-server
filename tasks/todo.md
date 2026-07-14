@@ -6,7 +6,7 @@
 - [x] Implement a minimal fix only for a concrete critical trigger
 - [x] Commit and push any fix before running validation
 - [x] Validate focused behavior and broader project checks
-- [ ] Open a PR and report the fix, or report no critical bugs in Slack
+- [x] Open a PR and report the fix, or report no critical bugs in Slack
 
 ### Plan
 - Review behavioral commits after `v3.2.9`, prioritizing DBOps routing, Harness Code file scoping, and new IDP write operations; inspect schema/prompt changes only where they alter runtime behavior.
@@ -18,6 +18,7 @@
 - Fixed runtime input resolution to prefer the normalized `pipeline_branch`, matching input-set materialization and the final `pipelineBranchName` execute parameter. Added a public handler regression proving the template fetch and execute request use the same branch.
 - Before/after verification: the regression failed on parent commit `22bac922` because the template request's `branch` was `undefined`, and passed on the fix with `branch=feature/x`.
 - Validation passed: focused Vitest regression, `pnpm typecheck`, `pnpm build`, `pnpm standards:check` (80 tests), `pnpm docs:check`, `git diff --check`, and full `pnpm test` (115 files / 2498 tests).
+- Opened PR #616 and posted the bug, impact, root cause, fix, and validation summary to `#proj-mcp-v2`.
 
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
