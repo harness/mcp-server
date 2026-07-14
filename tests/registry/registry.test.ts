@@ -1811,18 +1811,18 @@ describe("Registry", () => {
       expect(call.path).toBe("/ccm/api/business-mapping/cat-uuid-123");
     });
 
-    it("cost_category_filter list wraps top-level string array for MCP structured output", async () => {
+    it("cost_recommendation_filters list wraps top-level string array for MCP structured output", async () => {
       const mockRequest = vi.fn().mockResolvedValue({
         data: ["AI Common Fields", "Teams"],
       });
       const client = makeClient(mockRequest);
 
-      const result = await registry.dispatch(client, "cost_category_filter", "list", {});
+      const result = await registry.dispatch(client, "cost_recommendation_filters", "list", {});
 
       expect(result).toEqual({ values: ["AI Common Fields", "Teams"] });
     });
 
-    it("cost_category_filter get passes costCategory query param and wraps bucket array", async () => {
+    it("cost_recommendation_filters get passes costCategory query param and wraps bucket array", async () => {
       const mockRequest = vi.fn().mockResolvedValue({
         status: "SUCCESS",
         data: ["Product Management", "Security Engineering", "Software Development"],
@@ -1831,7 +1831,7 @@ describe("Registry", () => {
       });
       const client = makeClient(mockRequest);
 
-      const result = await registry.dispatch(client, "cost_category_filter", "get", {
+      const result = await registry.dispatch(client, "cost_recommendation_filters", "get", {
         cost_category: "Teams",
       });
 
