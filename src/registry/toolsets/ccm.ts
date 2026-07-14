@@ -1686,7 +1686,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
     {
       resourceType: "cost_recommendation_stats",
       displayName: "Cost Recommendation Stats",
-      description: "Cost recommendation statistics. harness_get: aggregate stats. harness_get with group_by=type: stats grouped by resource type (resize, terminate, etc.).",
+      description: "Cost recommendation statistics. harness_get: aggregate stats. harness_get with group_by=type: stats grouped by resource type (resize, terminate, etc.). Supports cost_category filtering — pass cost_category name and optionally cost_buckets (comma-separated) to scope stats to a specific category. When cost_category is provided without cost_buckets, all buckets for that category are included automatically.",
       toolset: "ccm",
       scope: "account",
       identifierFields: [],
@@ -1700,17 +1700,39 @@ For cost time-series data, use harness_get with start_time and end_time.`,
               ? "/ccm/api/recommendation/overview/resource-type/stats"
               : "/ccm/api/recommendation/overview/stats",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          bodyBuilder: () => ({
-            filterType: "CCMRecommendation",
-            minSaving: 0,
-            daysBack: 7,
-          }),
+          bodyBuilder: (input) => {
+            const body: Record<string, unknown> = {
+              filterType: "CCMRecommendation",
+              minSaving: (input.min_saving as number) ?? 0,
+              daysBack: (input.days_back as number) ?? 7,
+            };
+
+            if (input.cost_category && input.cost_buckets) {
+              const buckets = (input.cost_buckets as string).split(",").map(b => b.trim());
+              body.costCategoryDTOs = buckets.map(bucket => ({
+                costCategory: input.cost_category as string,
+                costBucket: bucket,
+              }));
+            }
+
+            if (input.recommendation_states) {
+              const states = (input.recommendation_states as string).split(",").map(s => s.trim());
+              body.k8sRecommendationFilterPropertiesDTO = { recommendationStates: states };
+            }
+
+            return body;
+          },
           responseExtractor: ngExtract,
           description:
-            "Get aggregate stats, or stats by resource type when group_by=type",
+            "Get aggregate stats, or stats by resource type when group_by=type. Pass cost_category and cost_buckets to filter by cost category.",
           paramsSchema: {
             fields: [
               { name: "group_by", required: false, description: "Group by resource type (type)" },
+              { name: "cost_category", required: false, description: "Cost category name to filter stats by" },
+              { name: "cost_buckets", required: false, description: "Comma-separated list of cost bucket names within the category. If omitted when cost_category is set, pass all buckets from harness_get(resource_type='cost_recommendation_filters', cost_category='<name>')." },
+              { name: "min_saving", required: false, description: "Minimum savings threshold (default 0)" },
+              { name: "days_back", required: false, description: "Number of days to look back (default 7)" },
+              { name: "recommendation_states", required: false, description: "Filter by state(s): OPEN, APPLIED, IGNORED. Comma-separated." },
             ],
           } satisfies ParamsSchema,
         },
