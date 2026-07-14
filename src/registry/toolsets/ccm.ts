@@ -966,7 +966,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
-      diagnosticHint: "To fetch recommendations for a specific team, business unit, or any custom grouping, use the cost_category + cost_bucket filters. Cost categories are user-defined groupings (e.g. by team, environment, project). Discover available values with: harness_list(resource_type='cost_recommendation_filters') for category names, then harness_get(resource_type='cost_recommendation_filters', cost_category='<name>') for bucket names within that category.",
+      diagnosticHint: "To fetch recommendations for a specific team, business unit, or any custom grouping, use the cost_category + cost_bucket filters. Cost categories are user-defined groupings (e.g. by team, environment, project). Discover available values with: harness_list(resource_type='cost_recommendation_filter') for category names, then harness_get(resource_type='cost_recommendation_filter', cost_category='<name>') for bucket names within that category.",
       listFilterFields: [
         { name: "min_saving", description: "Minimum savings threshold", type: "number" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
@@ -1448,11 +1448,11 @@ For cost time-series data, use harness_get with start_time and end_time.`,
     },
 
     // ------------------------------------------------------------------
-    // 7b. cost_recommendation_filters — filter-panel endpoint for recommendation filters
+    // 7b. cost_recommendation_filter — filter-panel endpoint for recommendation filters
     // ------------------------------------------------------------------
     {
-      resourceType: "cost_recommendation_filters",
-      displayName: "Cost Recommendation Filters",
+      resourceType: "cost_recommendation_filter",
+      displayName: "Cost Recommendation Filter",
       description:
         "Discover available cost category names and their buckets for use as filters in cost_recommendation. Call harness_list to get all cost category names. Call harness_get with cost_category=<name> to get bucket names within that category.",
       toolset: "ccm",
