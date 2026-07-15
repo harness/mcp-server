@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Explicit Resource Scope Must Govern Path Builders and Query Mapping
+- **Issue**: A multi-scope resource path builder derived its scope from raw `org_id`/`project_id`, so narrower identifiers merged from a URL overrode an explicit account/org `resource_scope` during full-replacement writes.
+- **Fix**: Normalize endpoint inputs from the authoritative `resource_scope` before path building and operation-specific query mapping: account removes org/project, org removes project, and project retains both.
+- **Rule**: For multi-scope resources with custom path builders or explicit scope query mappings, test conflicting URL-derived narrower identifiers at both registry and public-handler boundaries, especially for update operations.
+
 ## Read Cache Signals Must Not Block Execute Paths
 - **Issue**: A remote pipeline `pipeline.get` response can report `cacheResponse.cacheState=STALE_CACHE` and old YAML from the read/UI cache, while pipeline execution is documented to fetch entities from Git for the selected pipeline branch.
 - **Fix**: Do not fail-close `harness_execute` based on `pipeline.get` cache metadata. Preserve explicit branch selection by sending `pipelineBranchName` for remote executions, and only block execution on signals from the execute path itself.

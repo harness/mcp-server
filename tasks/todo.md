@@ -4,14 +4,21 @@
 - [x] Baseline recent behavioral commits and select high-blast-radius changes
 - [x] Trace candidate failures through public handlers, registry dispatch, and client calls
 - [x] Implement a minimal fix only for a concrete critical trigger
-- [ ] Commit and push any fix before running validation
-- [ ] Run focused and broad verification, then open a PR if fixed
-- [ ] Report the investigation outcome in Slack
+- [x] Commit and push any fix before running validation
+- [x] Run focused and broad verification, then open a PR if fixed
+- [x] Report the investigation outcome in Slack
 
 ### Plan
 - Treat changes after `v3.2.10` plus the immediately preceding behavioral commits as the primary review window.
 - Prioritize DBOps request routing, Harness Code file scope propagation, and new IDP write operations because they affect production API paths or mutations.
 - Require a concrete crash, destructive mutation, security boundary failure, or major broken workflow before changing code.
+
+### Review
+- Found that the new `idp_entity` create/update operations ignored explicit `resource_scope` when org/project identifiers were also present. A URL-assisted account-scope update could therefore build a project-scope full-replacement path and overwrite the wrong entity with the same kind/identifier.
+- Fixed IDP entity scope normalization so explicit account scope removes org/project identifiers and explicit org scope removes project identifiers before both path and query construction.
+- Added registry-level create/update regressions plus a public `harness_update` regression covering URL-derived narrower scope values.
+- Verification passed: focused IDP/tool-handler tests (13), `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, `pnpm standards:check` (80), and `pnpm test` (115 files / 2501 tests).
+- Opened PR #619 and posted the bug, root cause, fix, and validation summary to Slack.
 
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
