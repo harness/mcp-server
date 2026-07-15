@@ -1,6 +1,6 @@
 import type { ToolsetDefinition, PreflightContext, ParamsSchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
-import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, anomalyListExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
+import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, anomalyListExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract, countExtract } from "../extractors.js";
 
 // ---------------------------------------------------------------------------
 // GraphQL queries — ported from the official Go MCP server
@@ -973,7 +973,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
         { name: "days_back", description: "Number of days to look back (default 7)", type: "number" },
         { name: "recommendation_states", description: "Filter by state(s): OPEN, APPLIED, IGNORED. Comma-separated or single value.", type: "string" },
         { name: "cost_category", description: "Cost category name to filter by (must pair with cost_bucket)", type: "string" },
-        { name: "cost_bucket", description: "Cost bucket within the cost category", type: "string" },
+        { name: "cost_bucket", description: "Cost bucket(s) within the cost category. Comma-separated for multiple (e.g. 'Autostopping,BARG')", type: "string" },
         { name: "sort_by", description: "Sort field", enum: ["MONTHLY_SAVING", "MONTHLY_COST", "RESOURCE_NAME"] },
         { name: "sort_order", description: "Sort direction", enum: ["ASCENDING", "DESCENDING"] },
         { name: "limit", description: "Result limit", type: "number" },
@@ -988,7 +988,7 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
             const body: Record<string, unknown> = {
               filterType: "CCMRecommendation",
               minSaving: (input.min_saving as number) ?? 0,
-              daysBack: (input.days_back as number) ?? 7,
+              daysBack: (input.days_back as number) ?? 4,
               offset: (input.offset as number) ?? 0,
               limit: (input.limit as number) ?? 20,
             };
@@ -999,9 +999,11 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
             }
 
             if (input.cost_category && input.cost_bucket) {
-              body.costCategoryDTOs = [
-                { costCategory: input.cost_category as string, costBucket: input.cost_bucket as string },
-              ];
+              const buckets = (input.cost_bucket as string).split(",").map(b => b.trim());
+              body.costCategoryDTOs = buckets.map(bucket => ({
+                costCategory: input.cost_category as string,
+                costBucket: bucket,
+              }));
             }
 
             if (input.recommendation_states) {
@@ -1680,6 +1682,57 @@ For cost time-series data, use harness_get with start_time and end_time.`,
     },
 
     // ------------------------------------------------------------------
+    // 10b. cost_recommendation_count — total recommendation count
+    // ------------------------------------------------------------------
+    {
+      resourceType: "cost_recommendation_count",
+      displayName: "Cost Recommendation Count",
+      description: "Get total count of recommendations. Supports same filters as cost_recommendation (cost_category + cost_buckets, recommendation_states, min_saving, days_back). Use this to get the accurate total before fetching paginated results.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: [],
+      operations: {
+        get: {
+          method: "POST",
+          path: "/ccm/api/recommendation/overview/count",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          bodyBuilder: (input) => {
+            const body: Record<string, unknown> = {
+              filterType: "CCMRecommendation",
+              minSaving: (input.min_saving as number) ?? 0,
+              daysBack: (input.days_back as number) ?? 4,
+            };
+
+            if (input.cost_category && input.cost_buckets) {
+              const buckets = (input.cost_buckets as string).split(",").map(b => b.trim());
+              body.costCategoryDTOs = buckets.map(bucket => ({
+                costCategory: input.cost_category as string,
+                costBucket: bucket,
+              }));
+            }
+
+            if (input.recommendation_states) {
+              const states = (input.recommendation_states as string).split(",").map(s => s.trim());
+              body.k8sRecommendationFilterPropertiesDTO = { recommendationStates: states };
+            }
+
+            return body;
+          },
+          responseExtractor: countExtract,
+          description: "Get total recommendation count with optional filters.",
+          paramsSchema: {
+            fields: [
+              { name: "cost_category", required: false, description: "Cost category name to filter by" },
+              { name: "cost_buckets", required: false, description: "Comma-separated list of cost bucket names within the category" },
+              { name: "min_saving", required: false, description: "Minimum savings threshold (default 0)" },
+              { name: "days_back", required: false, description: "Number of days to look back (default 7)" },
+              { name: "recommendation_states", required: false, description: "Filter by state(s): OPEN, APPLIED, IGNORED. Comma-separated." },
+            ],
+          } satisfies ParamsSchema,
+        },
+      },
+    },
+
     // 11. cost_recommendation_stats — REST overview stats + by-type
     //    Merged: aggregate stats and stats grouped by resource type
     // ------------------------------------------------------------------
@@ -1704,7 +1757,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
             const body: Record<string, unknown> = {
               filterType: "CCMRecommendation",
               minSaving: (input.min_saving as number) ?? 0,
-              daysBack: (input.days_back as number) ?? 7,
+              daysBack: (input.days_back as number) ?? 4,
             };
 
             if (input.cost_category && input.cost_buckets) {

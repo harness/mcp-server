@@ -21,6 +21,13 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
   };
 };
 
+/** Extract `data` from NG API and wrap primitive values in an object for structuredContent compatibility. */
+export const countExtract = (raw: unknown): { count: number } => {
+  const r = raw as { data?: unknown };
+  const value = r.data ?? raw;
+  return { count: typeof value === "number" ? value : 0 };
+};
+
 /** Pass-through extractor — returns raw response unchanged. Used for APIs that don't wrap in `data`. */
 export const passthrough = (raw: unknown): unknown => raw;
 

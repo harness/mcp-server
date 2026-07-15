@@ -1822,7 +1822,7 @@ describe("Registry", () => {
       expect(call.body).toEqual({
         filterType: "CCMRecommendation",
         minSaving: 0,
-        daysBack: 7,
+        daysBack: 4,
         offset: 0,
         limit: 20,
       });
@@ -1906,7 +1906,7 @@ describe("Registry", () => {
       expect(call.body).toEqual({
         filterType: "CCMRecommendation",
         minSaving: 0,
-        daysBack: 7,
+        daysBack: 4,
       });
     });
 
