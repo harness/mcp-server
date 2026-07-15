@@ -959,21 +959,21 @@ Use with no perspective_id to get CCM metadata (available connectors, default pe
       displayName: "Cost Recommendation",
       description: `Cloud cost optimization recommendations. Answers "how do I reduce my cloud bill?"
 
-harness_list: General recommendations across the account. Supports filters: min_saving, days_back, recommendation_states (OPEN, APPLIED, IGNORED), cost_category + cost_bucket (pair), sort_by (MONTHLY_SAVING, MONTHLY_COST, RESOURCE_NAME), sort_order.
+harness_list: General recommendations across the account. Supports filters: min_saving, days_back, recommendation_states (OPEN, APPLIED, IGNORED), cost_category + cost_buckets (pair), sort_by (MONTHLY_SAVING, MONTHLY_COST, RESOURCE_NAME), sort_order.
 harness_get: Perspective-scoped recommendations — pass perspective_id to get recs for a specific perspective with savings stats. Optionally pass min_saving, time_filter (${VALID_TIME_FILTERS.join(", ")}), limit, offset.
 
 Replaces the 5 separate resource-type tools from the official server (EC2, Azure VM, ECS, Node Pool, Workload) — all resource types are returned in a single list.`,
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
-      diagnosticHint: "To fetch recommendations for a specific team, business unit, or any custom grouping, use the cost_category + cost_bucket filters. Cost categories are user-defined groupings (e.g. by team, environment, project). Discover available values with: harness_list(resource_type='cost_recommendation_filter') for category names, then harness_get(resource_type='cost_recommendation_filter', cost_category='<name>') for bucket names within that category.",
+      diagnosticHint: "To fetch recommendations for a specific team, business unit, or any custom grouping, use the cost_category + cost_buckets filters. Cost categories are user-defined groupings (e.g. by team, environment, project). Discover available values with: harness_list(resource_type='cost_recommendation_filter') for category names, then harness_get(resource_type='cost_recommendation_filter', cost_category='<name>') for bucket names within that category.",
       listFilterFields: [
         { name: "min_saving", description: "Minimum savings threshold", type: "number" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
         { name: "days_back", description: "Number of days to look back (default 7)", type: "number" },
         { name: "recommendation_states", description: "Filter by state(s): OPEN, APPLIED, IGNORED. Comma-separated or single value.", type: "string" },
-        { name: "cost_category", description: "Cost category name to filter by (must pair with cost_bucket)", type: "string" },
-        { name: "cost_bucket", description: "Cost bucket(s) within the cost category. Comma-separated for multiple (e.g. 'Autostopping,BARG')", type: "string" },
+        { name: "cost_category", description: "Cost category name to filter by (must pair with cost_buckets)", type: "string" },
+        { name: "cost_buckets", description: "Cost bucket(s) within the cost category. Comma-separated for multiple (e.g. 'Autostopping,BARG')", type: "string" },
         { name: "sort_by", description: "Sort field", enum: ["MONTHLY_SAVING", "MONTHLY_COST", "RESOURCE_NAME"] },
         { name: "sort_order", description: "Sort direction", enum: ["ASCENDING", "DESCENDING"] },
         { name: "limit", description: "Result limit", type: "number" },
@@ -998,8 +998,8 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
               body.sortOrder = (input.sort_order as string) ?? "DESCENDING";
             }
 
-            if (input.cost_category && input.cost_bucket) {
-              const buckets = (input.cost_bucket as string).split(",").map(b => b.trim());
+            if (input.cost_category && input.cost_buckets) {
+              const buckets = (input.cost_buckets as string).split(",").map(b => b.trim());
               body.costCategoryDTOs = buckets.map(bucket => ({
                 costCategory: input.cost_category as string,
                 costBucket: bucket,

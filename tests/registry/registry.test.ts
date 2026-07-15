@@ -1828,13 +1828,13 @@ describe("Registry", () => {
       });
     });
 
-    it("cost_recommendation list passes cost_category and cost_bucket as costCategoryDTOs", async () => {
+    it("cost_recommendation list passes cost_category and cost_buckets as costCategoryDTOs", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
       const client = makeClient(mockRequest);
 
       await registry.dispatch(client, "cost_recommendation", "list", {
         cost_category: "AI Platform team",
-        cost_bucket: "GCP QA",
+        cost_buckets: "GCP QA",
       });
 
       const call = mockRequest.mock.calls[0][0];
@@ -1883,7 +1883,7 @@ describe("Registry", () => {
       expect(call.body.daysBack).toBe(30);
     });
 
-    it("cost_recommendation list does not include costCategoryDTOs when only cost_category is provided without cost_bucket", async () => {
+    it("cost_recommendation list does not include costCategoryDTOs when only cost_category is provided without cost_buckets", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
       const client = makeClient(mockRequest);
 
