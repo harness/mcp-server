@@ -1895,6 +1895,41 @@ describe("Registry", () => {
       expect(call.body.costCategoryDTOs).toBeUndefined();
     });
 
+    it("cost_recommendation_count get sends default body when no filters provided", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: 42 });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_count", "get", {});
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ccm/api/recommendation/overview/count");
+      expect(call.body).toEqual({
+        filterType: "CCMRecommendation",
+        minSaving: 0,
+        daysBack: 4,
+      });
+    });
+
+    it("cost_recommendation_count get passes cost_category, cost_buckets, and recommendation_states", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: 10 });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_count", "get", {
+        cost_category: "Teams",
+        cost_buckets: "Engineering,Platform",
+        recommendation_states: "OPEN,APPLIED",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.costCategoryDTOs).toEqual([
+        { costCategory: "Teams", costBucket: "Engineering" },
+        { costCategory: "Teams", costBucket: "Platform" },
+      ]);
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["OPEN", "APPLIED"],
+      });
+    });
+
     it("cost_recommendation_stats get sends default body to aggregate stats endpoint", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { totalMonthlyCost: 5000, totalMonthlySaving: 1200 } });
       const client = makeClient(mockRequest);
