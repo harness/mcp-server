@@ -1739,7 +1739,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
     {
       resourceType: "cost_recommendation_stats",
       displayName: "Cost Recommendation Stats",
-      description: "Cost recommendation statistics. harness_get: aggregate stats. harness_get with group_by=type: stats grouped by resource type (resize, terminate, etc.). Supports cost_category filtering — pass cost_category name and optionally cost_buckets (comma-separated) to scope stats to a specific category. When cost_category is provided without cost_buckets, all buckets for that category are included automatically.",
+      description: "Cost recommendation statistics. harness_get: aggregate stats. harness_get with group_by=type: stats grouped by resource type (resize, terminate, etc.). Supports cost_category filtering — pass cost_category name and cost_buckets (comma-separated) to scope stats to a specific category. Both fields are required to apply category filtering; discover bucket names with harness_get(resource_type='cost_recommendation_filter', cost_category='<name>').",
       toolset: "ccm",
       scope: "account",
       identifierFields: [],
