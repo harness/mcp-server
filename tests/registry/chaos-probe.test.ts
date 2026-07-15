@@ -841,7 +841,7 @@ describe("chaos_component_variable.get required field validation (preflight)", (
         org_id: "org1",
         identifier: "some-component",
       }),
-    ).rejects.toThrow(/Missing required field.*type/);
+    ).rejects.toThrow(/Missing required param\(s\).*type/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
@@ -854,7 +854,7 @@ describe("chaos_component_variable.get required field validation (preflight)", (
         org_id: "org1",
         type: "Probe",
       }),
-    ).rejects.toThrow(/Missing required field.*identifier/);
+    ).rejects.toThrow(/Missing required param\(s\).*identifier/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 

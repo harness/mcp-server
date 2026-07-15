@@ -364,6 +364,27 @@ export class Registry {
 
   private static readonly READ_OPERATIONS: Set<OperationName> = new Set(["list", "get"]);
 
+  /** Fail fast when required paramsSchema fields are absent from dispatch input. */
+  private validateRequiredParamsSchema(
+    spec: EndpointSpec,
+    resourceType: string,
+    operationLabel: string,
+    input: Record<string, unknown>,
+  ): void {
+    if (!spec.paramsSchema) return;
+
+    const missingParams = spec.paramsSchema.fields
+      .filter((f) => f.required && input[f.name] === undefined)
+      .map((f) => f.name);
+    if (missingParams.length === 0) return;
+
+    throw new Error(
+      `Missing required param(s) for ${resourceType}.${operationLabel}: ${missingParams.join(", ")}. ` +
+        `Pass them via params (e.g. params: { ${missingParams.map((n) => `${n}: "..."`).join(", ")} }). ` +
+        `Use harness_describe(resource_type="${resourceType}") to see valid values.`,
+    );
+  }
+
   /** Dispatch a CRUD operation to the Harness API. */
   async dispatch(
     client: HarnessClient,
@@ -399,18 +420,7 @@ export class Registry {
       }
     }
 
-    if (spec.paramsSchema) {
-      const missingParams = spec.paramsSchema.fields
-        .filter(f => f.required && input[f.name] === undefined)
-        .map(f => f.name);
-      if (missingParams.length > 0) {
-        throw new Error(
-          `Missing required param(s) for ${resourceType}.${operation}: ${missingParams.join(", ")}. ` +
-          `Pass them via params (e.g. params: { ${missingParams.map(n => `${n}: "..."`).join(", ")} }). ` +
-          `Use harness_describe(resource_type="${resourceType}") to see valid values.`
-        );
-      }
-    }
+    this.validateRequiredParamsSchema(spec, resourceType, operation, input);
 
     return this.executeSpecWithAudit(client, def, spec, operation, resourceType, input, auditCtx, abortSignal);
   }
@@ -437,6 +447,8 @@ export class Registry {
     if (this.config.HARNESS_READ_ONLY && actionSpec.operationPolicy.risk !== "read") {
       throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${action}" is not allowed.`);
     }
+
+    this.validateRequiredParamsSchema(actionSpec, resourceType, action, input);
 
     return this.executeSpecWithAudit(client, def, actionSpec, "execute", resourceType, input, { ...auditCtx, tool: auditCtx?.tool ?? "harness_execute", action }, abortSignal);
   }
