@@ -342,6 +342,67 @@ describe("harness_schema nested static definition lookup", () => {
     expect(schema.properties?.type?.enum).toContain("DeployGoogleAgentRuntimeRevision");
   });
 
+  it("resolves newly synced DeployAwsAgentCoreRevision step definition from v0 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "DeployAwsAgentCoreRevisionStepNode",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("steps.cd.DeployAwsAgentCoreRevisionStepNode");
+    expect(parsed.requested_path).toBe("DeployAwsAgentCoreRevisionStepNode");
+    const schema = parsed.schema as { properties?: { type?: { enum?: string[] } } };
+    expect(schema.properties?.type?.enum).toContain("DeployAwsAgentCoreRevision");
+  });
+
+  it("resolves IdentitiesConfig and IdentitySpec from v0 pipeline common definitions", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+
+    const identitiesResult = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "IdentitiesConfig",
+    });
+    const identitiesParsed = parseResult(identitiesResult) as Record<string, unknown>;
+    expect(identitiesResult.isError).toBeFalsy();
+    expect(identitiesParsed.path).toBe("common.IdentitiesConfig");
+    expect(identitiesParsed.requested_path).toBe("IdentitiesConfig");
+    const identitiesSchema = identitiesParsed.schema as { maxProperties?: number };
+    expect(identitiesSchema.maxProperties).toBe(10);
+
+    const specResult = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "IdentitySpec",
+    });
+    const specParsed = parseResult(specResult) as Record<string, unknown>;
+    expect(specResult.isError).toBeFalsy();
+    expect(specParsed.path).toBe("common.IdentitySpec");
+    expect(specParsed.requested_path).toBe("IdentitySpec");
+    const specSchema = specParsed.schema as { properties?: Record<string, unknown> };
+    expect(specSchema.properties).toHaveProperty("audience");
+    expect(specSchema.properties).toHaveProperty("subjectTemplate");
+  });
+
+  it("resolves newly synced DynamicStageNodeV1 from v1 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline_v1",
+      path: "DynamicStageNodeV1",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("stages.unified.DynamicStageNodeV1");
+    expect(parsed.requested_path).toBe("DynamicStageNodeV1");
+    const schema = parsed.schema as { required?: string[]; properties?: Record<string, unknown> };
+    expect(schema.required).toContain("dynamic");
+    expect(schema.properties).toHaveProperty("dynamic");
+  });
+
   it("resolves v1 Clone definition with upstream user field", async () => {
     const server = makeMcpServer();
     registerSchemaTool(server, undefined, undefined);

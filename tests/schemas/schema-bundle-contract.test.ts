@@ -153,4 +153,78 @@ describe("schema bundle contract", () => {
     expect(cdSteps).toHaveProperty("DeployGoogleAgentRuntimeRevisionStepNode_template");
     expect(cdSteps).toHaveProperty("DeployGoogleAgentRuntimeRevisionStepInfo");
   });
+
+  it("includes upstream DeployAwsAgentCoreRevision step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("DeployAwsAgentCoreRevisionStepNode");
+    expect(cdSteps).toHaveProperty("DeployAwsAgentCoreRevisionStepInfo");
+
+    const stepNode = cdSteps.DeployAwsAgentCoreRevisionStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("DeployAwsAgentCoreRevision");
+
+    const stepInfo = cdSteps.DeployAwsAgentCoreRevisionStepInfo as {
+      properties: Record<string, unknown>;
+    };
+    expect(stepInfo.properties).toHaveProperty("connectorRef");
+    expect(stepInfo.properties).toHaveProperty("waitReady");
+  });
+
+  it("includes upstream DeployAwsAgentCoreRevision step definitions in v0 template", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = templateDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("DeployAwsAgentCoreRevisionStepNode");
+    expect(cdSteps).toHaveProperty("DeployAwsAgentCoreRevisionStepNode_template");
+    expect(cdSteps).toHaveProperty("DeployAwsAgentCoreRevisionStepInfo");
+  });
+
+  it("includes upstream IdentitiesConfig and IdentitySpec in v0 pipeline common definitions", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const common = pipelineDefs.pipeline.common as Record<string, unknown>;
+
+    expect(common).toHaveProperty("IdentitiesConfig");
+    expect(common).toHaveProperty("IdentitySpec");
+
+    const identitiesConfig = common.IdentitiesConfig as {
+      maxProperties?: number;
+      description?: string;
+      additionalProperties?: { $ref?: string };
+    };
+    expect(identitiesConfig.maxProperties).toBe(10);
+    expect(identitiesConfig.description).toContain("IdentitySpec");
+    expect(identitiesConfig.additionalProperties?.$ref).toContain("IdentitySpec");
+
+    const identitySpec = common.IdentitySpec as {
+      properties?: Record<string, unknown>;
+    };
+    expect(identitySpec.properties).toHaveProperty("audience");
+    expect(identitySpec.properties).toHaveProperty("subjectTemplate");
+  });
+
+  it("includes upstream DynamicStageNodeV1 in v1 pipeline unified stages", () => {
+    const pipelineDefs = SCHEMAS.pipeline_v1.definitions as Record<string, Record<string, unknown>>;
+    const unified = pipelineDefs.pipeline_v1.stages.unified as Record<string, unknown>;
+
+    expect(unified).toHaveProperty("DynamicStageNodeV1");
+
+    const node = unified.DynamicStageNodeV1 as {
+      required?: string[];
+      properties?: Record<string, unknown>;
+      description?: string;
+    };
+    expect(node.required).toContain("dynamic");
+    expect(node.properties).toHaveProperty("dynamic");
+    expect(node.description).toContain("child pipeline");
+  });
+
+  it("includes upstream DynamicStageNodeV1 in v1 template unified stages", () => {
+    const templateDefs = SCHEMAS.template_v1.definitions as Record<string, Record<string, unknown>>;
+    const unified = templateDefs.template_v1.stages.unified as Record<string, unknown>;
+
+    expect(unified).toHaveProperty("DynamicStageNodeV1");
+  });
 });
