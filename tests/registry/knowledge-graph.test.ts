@@ -338,6 +338,7 @@ describe("kg_related_type get extractor", () => {
 
     const result = (await registry.dispatch(client, "kg_related_type", "get", {
       type_id: "service",
+      kind: "OBJECT_KIND_ENTITY",
     })) as Record<string, unknown>;
 
     expect(result.dcs_enrichments).toEqual([
@@ -366,7 +367,7 @@ describe("kg_related_type get extractor", () => {
 });
 
 // ---------------------------------------------------------------------------
-// kg_type get — local required-field validation
+// kg_type / kg_related_type get — required kind param and body construction
 // ---------------------------------------------------------------------------
 
 describe("kg_type get body validation", () => {
@@ -384,6 +385,77 @@ describe("kg_type get body validation", () => {
       registry.dispatch(client, "kg_type", "get", { kind: "OBJECT_KIND_ENTITY" }),
     ).rejects.toThrow(/Missing required identifier/);
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fails locally with a clear error when kind is missing", async () => {
+    // Regression: kind used to default silently to OBJECT_KIND_ENTITY, which
+    // could return the wrong schema when the same id exists under multiple kinds.
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "kg_type", "get", { type_id: "service" }),
+    ).rejects.toThrow(/Missing required param\(s\) for kg_type\.get: kind/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("sends the exact kind in the request body without defaulting to OBJECT_KIND_ENTITY", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ type: { view_type: { id: "v1", name: "V1" } } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "kg_type", "get", {
+      type_id: "v1",
+      kind: "OBJECT_KIND_VIEW",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(call.body).toEqual({ kind: "OBJECT_KIND_VIEW", id: "v1" });
+  });
+});
+
+describe("kg_related_type get body validation", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("fails locally with a clear error when kind is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "kg_related_type", "get", { type_id: "service" }),
+    ).rejects.toThrow(/Missing required param\(s\) for kg_related_type\.get: kind/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("sends the exact kind in type_reference without defaulting to OBJECT_KIND_ENTITY", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ relationship_types: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "kg_related_type", "get", {
+      type_id: "v1",
+      kind: "OBJECT_KIND_VIEW",
+      include_transitive: true,
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(call.body).toEqual({
+      type_reference: { object_kind: "OBJECT_KIND_VIEW", id: "v1" },
+      include_transitive: true,
+    });
+  });
+});
+
+describe("kg_type / kg_related_type paramsSchema metadata", () => {
+  it("marks kind as required on get operations", () => {
+    const registry = new Registry(makeConfig());
+    const kgType = registry.getResource("kg_type").operations.get!;
+    const kgRelated = registry.getResource("kg_related_type").operations.get!;
+
+    expect(kgType.paramsSchema?.fields.find((f) => f.name === "kind")?.required).toBe(true);
+    expect(kgRelated.paramsSchema?.fields.find((f) => f.name === "kind")?.required).toBe(true);
   });
 });
 
