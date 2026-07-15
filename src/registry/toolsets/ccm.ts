@@ -1782,7 +1782,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
             fields: [
               { name: "group_by", required: false, description: "Group by resource type (type)" },
               { name: "cost_category", required: false, description: "Cost category name to filter stats by" },
-              { name: "cost_buckets", required: false, description: "Comma-separated list of cost bucket names within the category. If omitted when cost_category is set, pass all buckets from harness_get(resource_type='cost_recommendation_filters', cost_category='<name>')." },
+              { name: "cost_buckets", required: false, description: "Comma-separated list of cost bucket names within the category. If omitted when cost_category is set, pass all buckets from harness_get(resource_type='cost_recommendation_filter', cost_category='<name>')." },
               { name: "min_saving", required: false, description: "Minimum savings threshold (default 0)" },
               { name: "days_back", required: false, description: "Number of days to look back (default 7)" },
               { name: "recommendation_states", required: false, description: "Filter by state(s): OPEN, APPLIED, IGNORED. Comma-separated." },
