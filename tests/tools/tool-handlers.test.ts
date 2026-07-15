@@ -934,6 +934,33 @@ describe("harness_update", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
   });
 
+  it("keeps explicit account scope authoritative for IDP entity URLs", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp" }));
+    mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
+    client = makeClient(mockRequest);
+    const idpServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(idpServer, registry, client);
+
+    const result = await idpServer.call("harness_update", {
+      resource_type: "idp_entity",
+      resource_id: "boutique-service",
+      resource_scope: "account",
+      url: "https://app.harness.io/ng/account/test-account/module/idp/orgs/url-org/projects/url-project/catalog",
+      params: { kind: "component" },
+      body: { yaml: "apiVersion: harness.io/v1\nkind: component\nmetadata:\n  name: boutique-service" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as {
+      path: string;
+      params: Record<string, unknown>;
+    };
+    expect(call.path).toBe("/v1/entities/account/component/boutique-service");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
   it("coerces JSON-string bodies before dispatch", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "platform" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "proj1" } });

@@ -1,5 +1,18 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-15)
+- [x] Baseline recent behavioral commits and select high-blast-radius changes
+- [x] Trace candidate failures through public handlers, registry dispatch, and client calls
+- [x] Implement a minimal fix only for a concrete critical trigger
+- [ ] Commit and push any fix before running validation
+- [ ] Run focused and broad verification, then open a PR if fixed
+- [ ] Report the investigation outcome in Slack
+
+### Plan
+- Treat changes after `v3.2.10` plus the immediately preceding behavioral commits as the primary review window.
+- Prioritize DBOps request routing, Harness Code file scope propagation, and new IDP write operations because they affect production API paths or mutations.
+- Require a concrete crash, destructive mutation, security boundary failure, or major broken workflow before changing code.
+
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
 - [x] Inspect PR #569 diff, CI/review state, and affected code paths

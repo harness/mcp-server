@@ -68,10 +68,21 @@ const idpEntityMutateBodySchema: BodySchema = {
   ],
 };
 
-const buildIdpEntityScopePath = (input: Record<string, unknown>): string => {
+const resolveIdpEntityScope = (input: Record<string, unknown>): string => {
   let scope = "account";
-  const orgId = input.org_id as string | undefined;
-  const projectId = input.project_id as string | undefined;
+  let orgId = input.org_id as string | undefined;
+  let projectId = input.project_id as string | undefined;
+
+  // resource_scope is authoritative. URL parsing can still supply org/project
+  // identifiers alongside an explicit wider scope, so remove narrower values
+  // before both path construction and query-param mapping.
+  if (input.resource_scope === "account") {
+    orgId = undefined;
+    projectId = undefined;
+  } else if (input.resource_scope === "org") {
+    projectId = undefined;
+  }
+
   if (orgId) {
     scope += `.${orgId}`;
     if (projectId) {
@@ -79,6 +90,16 @@ const buildIdpEntityScopePath = (input: Record<string, unknown>): string => {
     }
   }
 
+  if (orgId) input.org_id = orgId;
+  else delete input.org_id;
+  if (orgId && projectId) input.project_id = projectId;
+  else delete input.project_id;
+
+  return scope;
+};
+
+const buildIdpEntityScopePath = (input: Record<string, unknown>): string => {
+  const scope = resolveIdpEntityScope(input);
   const kind = input.kind as string | undefined;
   const entityId = input.entity_id as string | undefined;
   if (!kind) {
@@ -88,10 +109,12 @@ const buildIdpEntityScopePath = (input: Record<string, unknown>): string => {
     throw new Error(`Missing required field "entity_id" for idp_entity. Pass it via params or as resource_id.`);
   }
 
-  if (orgId) input.org_id = orgId;
-  if (projectId) input.project_id = projectId;
-
   return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(entityId)}`;
+};
+
+const buildIdpEntityCollectionPath = (input: Record<string, unknown>): string => {
+  resolveIdpEntityScope(input);
+  return "/v1/entities";
 };
 
 const buildIdpEntityMutateBody = (input: Record<string, unknown>): Record<string, unknown> => {
@@ -305,6 +328,7 @@ export const idpToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/v1/entities",
+          pathBuilder: buildIdpEntityCollectionPath,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
           queryParams: {
