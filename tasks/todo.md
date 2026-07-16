@@ -1,5 +1,20 @@
 # Harness MCP Server — Task Tracking
 
+## Coding Standards Compliance Review (2026-07-16)
+- [x] Run `pnpm standards:check` and audit codebase against docs/coding-standards.md
+- [x] Add missing security and multi-scope pathBuilder guardrails
+- [x] Document multi-scope pathBuilder contract in docs/coding-standards.md
+- [x] Verify full test suite passes
+
+### Review
+- Baseline `pnpm standards:check` passed (80 tests) but lacked §4 multi-scope pathBuilder and §9 security enforcement from prior reviews.
+- Added `tests/coding-standards/security.test.ts` (secret read-only, RateLimiter, log redaction, formatBodyPreview).
+- Added `tests/coding-standards/multi-scope-pathbuilders.test.ts` (PathBuilderConfig contract for scope-encoding pathBuilders).
+- Extended `docs-consistency.test.ts` to lock 11-tool model, registerTool, and pathBuilder docs.
+- Updated `docs/coding-standards.md` §4 with multi-scope pathBuilder rules.
+- Note: user-provided standards snapshot is outdated (10 tools, Zod v3, server.tool()) — canonical source is `docs/coding-standards.md` (11 tools, Zod v4, registerTool).
+- Verification passed: `pnpm standards:check` (88 tests), `pnpm typecheck`, `pnpm test` (118 files / 2537 tests).
+
 ## Critical Bug Investigation Automation (2026-07-16)
 - [x] Baseline branch state and identify recent behavioral commits
 - [x] Review high-blast-radius diffs and trace concrete trigger scenarios
