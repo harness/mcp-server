@@ -1,6 +1,6 @@
 import type { ToolsetDefinition, PreflightContext, ParamsSchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
-import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, anomalyListExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract } from "../extractors.js";
+import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, anomalyListExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract, countExtract } from "../extractors.js";
 
 // ---------------------------------------------------------------------------
 // GraphQL queries — ported from the official Go MCP server
@@ -348,6 +348,61 @@ function extractBusinessMappingValues(raw: unknown, valueSubType?: string): unkn
     };
   }
   return { values: [], _error: "Unexpected response shape — no businessMappings or array found" };
+}
+
+/**
+ * Normalizes /ccm/api/business-mapping/filter-panel responses into `{ values }`
+ * so harness_get/list satisfy MCP structured output (objects only — raw arrays fail
+ * outputSchema validation in strict clients like MCP Inspector).
+ *
+ * API shape (list and get are identical — only `data` meaning differs):
+ *   { "status": "SUCCESS", "data": ["..."], "metaData": null, "correlationId": "..." }
+ * - list (no costCategory): `data` = cost category names
+ * - get (costCategory query param): `data` = bucket names within that category
+ */
+function extractCostCategoryFilterPanel(raw: unknown): { values: string[] } {
+  const envelope = raw as { data?: unknown; resource?: unknown } | undefined;
+  const unwrapped = envelope?.data ?? envelope?.resource ?? raw;
+
+  if (Array.isArray(unwrapped)) {
+    const values = unwrapped
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const obj = item as { name?: string; costCategory?: string; costBucket?: string };
+          return obj.name ?? obj.costCategory ?? obj.costBucket;
+        }
+        return undefined;
+      })
+      .filter((v): v is string => typeof v === "string" && v.length > 0);
+    return { values };
+  }
+
+  if (unwrapped !== null && typeof unwrapped === "object") {
+    const obj = unwrapped as Record<string, unknown>;
+    if (Array.isArray(obj.costBuckets)) {
+      return { values: obj.costBuckets.filter((v): v is string => typeof v === "string") };
+    }
+    if (Array.isArray(obj.costTargets)) {
+      return {
+        values: (obj.costTargets as Array<{ name?: string }>)
+          .map((t) => t.name)
+          .filter((v): v is string => typeof v === "string" && v.length > 0),
+      };
+    }
+    if (Array.isArray(obj.businessMappings)) {
+      return {
+        values: (obj.businessMappings as Array<{ name?: string }>)
+          .map((m) => m.name)
+          .filter((v): v is string => typeof v === "string" && v.length > 0),
+      };
+    }
+    if (Array.isArray(obj.costCategories)) {
+      return { values: obj.costCategories.filter((v): v is string => typeof v === "string") };
+    }
+  }
+
+  return { values: [] };
 }
 
 // ---------------------------------------------------------------------------
@@ -904,16 +959,23 @@ Use with no perspective_id to get CCM metadata (available connectors, default pe
       displayName: "Cost Recommendation",
       description: `Cloud cost optimization recommendations. Answers "how do I reduce my cloud bill?"
 
-harness_list: General recommendations across the account.
+harness_list: General recommendations across the account. Supports filters: min_saving, days_back, recommendation_states (OPEN, APPLIED, IGNORED), cost_category + cost_buckets (pair), sort_by (MONTHLY_SAVING, MONTHLY_COST, RESOURCE_NAME), sort_order.
 harness_get: Perspective-scoped recommendations — pass perspective_id to get recs for a specific perspective with savings stats. Optionally pass min_saving, time_filter (${VALID_TIME_FILTERS.join(", ")}), limit, offset.
 
 Replaces the 5 separate resource-type tools from the official server (EC2, Azure VM, ECS, Node Pool, Workload) — all resource types are returned in a single list.`,
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
+      diagnosticHint: "To fetch recommendations for a specific team, business unit, or any custom grouping, use the cost_category + cost_buckets filters. Cost categories are user-defined groupings (e.g. by team, environment, project). Discover available values with: harness_list(resource_type='cost_recommendation_filter') for category names, then harness_get(resource_type='cost_recommendation_filter', cost_category='<name>') for bucket names within that category.",
       listFilterFields: [
         { name: "min_saving", description: "Minimum savings threshold", type: "number" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
+        { name: "days_back", description: "Number of days to look back (default 4)", type: "number" },
+        { name: "recommendation_states", description: "Filter by state(s): OPEN, APPLIED, IGNORED. Comma-separated or single value.", type: "string" },
+        { name: "cost_category", description: "Cost category name to filter by (must pair with cost_buckets)", type: "string" },
+        { name: "cost_buckets", description: "Cost bucket(s) within the cost category. Comma-separated for multiple (e.g. 'Autostopping,BARG')", type: "string" },
+        { name: "sort_by", description: "Sort field", enum: ["MONTHLY_SAVING", "MONTHLY_COST", "RESOURCE_NAME"] },
+        { name: "sort_order", description: "Sort direction", enum: ["ASCENDING", "DESCENDING"] },
         { name: "limit", description: "Result limit", type: "number" },
         { name: "offset", description: "Pagination offset", type: "number" },
       ],
@@ -922,13 +984,35 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
           method: "POST",
           path: "/ccm/api/recommendation/overview/list",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          bodyBuilder: (input) => ({
-            filterType: "CCMRecommendation",
-            minSaving: (input.min_saving as number) ?? 0,
-            daysBack: 7,
-            offset: (input.offset as number) ?? 0,
-            limit: (input.limit as number) ?? 20,
-          }),
+          bodyBuilder: (input) => {
+            const body: Record<string, unknown> = {
+              filterType: "CCMRecommendation",
+              minSaving: (input.min_saving as number) ?? 0,
+              daysBack: (input.days_back as number) ?? 4,
+              offset: (input.offset as number) ?? 0,
+              limit: (input.limit as number) ?? 20,
+            };
+
+            if (input.sort_by) {
+              body.sortBy = input.sort_by as string;
+              body.sortOrder = (input.sort_order as string) ?? "DESCENDING";
+            }
+
+            if (input.cost_category && input.cost_buckets) {
+              const buckets = (input.cost_buckets as string).split(",").map(b => b.trim());
+              body.costCategoryDTOs = buckets.map(bucket => ({
+                costCategory: input.cost_category as string,
+                costBucket: bucket,
+              }));
+            }
+
+            if (input.recommendation_states) {
+              const states = (input.recommendation_states as string).split(",").map(s => s.trim());
+              body.k8sRecommendationFilterPropertiesDTO = { recommendationStates: states };
+            }
+
+            return body;
+          },
           responseExtractor: ngExtract,
           description:
             "List all cost optimization recommendations across the account. Returns recommendations for all resource types (EC2, Azure VM, ECS, Node Pool, Workload) in a single response.",
@@ -1366,6 +1450,38 @@ For cost time-series data, use harness_get with start_time and end_time.`,
     },
 
     // ------------------------------------------------------------------
+    // 7b. cost_recommendation_filter — filter-panel endpoint for recommendation filters
+    // ------------------------------------------------------------------
+    {
+      resourceType: "cost_recommendation_filter",
+      displayName: "Cost Recommendation Filter",
+      description:
+        "Discover available cost category names and their buckets for use as filters in cost_recommendation. Call harness_list to get all cost category names. Call harness_get with cost_category=<name> to get bucket names within that category.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["cost_category"],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/ccm/api/business-mapping/filter-panel",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: extractCostCategoryFilterPanel,
+          description: "List all cost category names available for filtering recommendations.",
+        },
+        get: {
+          method: "GET",
+          path: "/ccm/api/business-mapping/filter-panel",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            cost_category: "costCategory",
+          },
+          responseExtractor: extractCostCategoryFilterPanel,
+          description: "Get bucket names within a specific cost category. Pass cost_category to filter.",
+        },
+      },
+    },
+
+    // ------------------------------------------------------------------
     // 8. cost_account_overview — REST overview endpoint (account-level)
     // ------------------------------------------------------------------
     {
@@ -1566,13 +1682,64 @@ For cost time-series data, use harness_get with start_time and end_time.`,
     },
 
     // ------------------------------------------------------------------
+    // 10b. cost_recommendation_count — total recommendation count
+    // ------------------------------------------------------------------
+    {
+      resourceType: "cost_recommendation_count",
+      displayName: "Cost Recommendation Count",
+      description: "Get total count of recommendations. Supports same filters as cost_recommendation (cost_category + cost_buckets, recommendation_states, min_saving, days_back). Use this to get the accurate total before fetching paginated results.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: [],
+      operations: {
+        get: {
+          method: "POST",
+          path: "/ccm/api/recommendation/overview/count",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          bodyBuilder: (input) => {
+            const body: Record<string, unknown> = {
+              filterType: "CCMRecommendation",
+              minSaving: (input.min_saving as number) ?? 0,
+              daysBack: (input.days_back as number) ?? 4,
+            };
+
+            if (input.cost_category && input.cost_buckets) {
+              const buckets = (input.cost_buckets as string).split(",").map(b => b.trim());
+              body.costCategoryDTOs = buckets.map(bucket => ({
+                costCategory: input.cost_category as string,
+                costBucket: bucket,
+              }));
+            }
+
+            if (input.recommendation_states) {
+              const states = (input.recommendation_states as string).split(",").map(s => s.trim());
+              body.k8sRecommendationFilterPropertiesDTO = { recommendationStates: states };
+            }
+
+            return body;
+          },
+          responseExtractor: countExtract,
+          description: "Get total recommendation count with optional filters.",
+          paramsSchema: {
+            fields: [
+              { name: "cost_category", required: false, description: "Cost category name to filter by" },
+              { name: "cost_buckets", required: false, description: "Comma-separated list of cost bucket names within the category" },
+              { name: "min_saving", required: false, description: "Minimum savings threshold (default 0)" },
+              { name: "days_back", required: false, description: "Number of days to look back (default 4)" },
+              { name: "recommendation_states", required: false, description: "Filter by state(s): OPEN, APPLIED, IGNORED. Comma-separated." },
+            ],
+          } satisfies ParamsSchema,
+        },
+      },
+    },
+
     // 11. cost_recommendation_stats — REST overview stats + by-type
     //    Merged: aggregate stats and stats grouped by resource type
     // ------------------------------------------------------------------
     {
       resourceType: "cost_recommendation_stats",
       displayName: "Cost Recommendation Stats",
-      description: "Cost recommendation statistics. harness_get: aggregate stats. harness_get with group_by=type: stats grouped by resource type (resize, terminate, etc.).",
+      description: "Cost recommendation statistics. harness_get: aggregate stats. harness_get with group_by=type: stats grouped by resource type (resize, terminate, etc.). Supports cost_category filtering — pass cost_category name and cost_buckets (comma-separated) to scope stats to a specific category. Both fields are required to apply category filtering; discover bucket names with harness_get(resource_type='cost_recommendation_filter', cost_category='<name>').",
       toolset: "ccm",
       scope: "account",
       identifierFields: [],
@@ -1586,17 +1753,39 @@ For cost time-series data, use harness_get with start_time and end_time.`,
               ? "/ccm/api/recommendation/overview/resource-type/stats"
               : "/ccm/api/recommendation/overview/stats",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          bodyBuilder: () => ({
-            filterType: "CCMRecommendation",
-            minSaving: 0,
-            daysBack: 7,
-          }),
+          bodyBuilder: (input) => {
+            const body: Record<string, unknown> = {
+              filterType: "CCMRecommendation",
+              minSaving: (input.min_saving as number) ?? 0,
+              daysBack: (input.days_back as number) ?? 4,
+            };
+
+            if (input.cost_category && input.cost_buckets) {
+              const buckets = (input.cost_buckets as string).split(",").map(b => b.trim());
+              body.costCategoryDTOs = buckets.map(bucket => ({
+                costCategory: input.cost_category as string,
+                costBucket: bucket,
+              }));
+            }
+
+            if (input.recommendation_states) {
+              const states = (input.recommendation_states as string).split(",").map(s => s.trim());
+              body.k8sRecommendationFilterPropertiesDTO = { recommendationStates: states };
+            }
+
+            return body;
+          },
           responseExtractor: ngExtract,
           description:
-            "Get aggregate stats, or stats by resource type when group_by=type",
+            "Get aggregate stats, or stats by resource type when group_by=type. Pass cost_category and cost_buckets to filter by cost category.",
           paramsSchema: {
             fields: [
               { name: "group_by", required: false, description: "Group by resource type (type)" },
+              { name: "cost_category", required: false, description: "Cost category name to filter stats by" },
+              { name: "cost_buckets", required: false, description: "Comma-separated list of cost bucket names within the category. If omitted when cost_category is set, pass all buckets from harness_get(resource_type='cost_recommendation_filter', cost_category='<name>')." },
+              { name: "min_saving", required: false, description: "Minimum savings threshold (default 0)" },
+              { name: "days_back", required: false, description: "Number of days to look back (default 4)" },
+              { name: "recommendation_states", required: false, description: "Filter by state(s): OPEN, APPLIED, IGNORED. Comma-separated." },
             ],
           } satisfies ParamsSchema,
         },

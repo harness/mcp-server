@@ -1810,6 +1810,214 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.path).toBe("/ccm/api/business-mapping/cat-uuid-123");
     });
+
+    it("cost_recommendation list sends default body when no filters provided", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {});
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ccm/api/recommendation/overview/list");
+      expect(call.body).toEqual({
+        filterType: "CCMRecommendation",
+        minSaving: 0,
+        daysBack: 4,
+        offset: 0,
+        limit: 20,
+      });
+    });
+
+    it("cost_recommendation list passes cost_category and cost_buckets as costCategoryDTOs", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        cost_category: "AI Platform team",
+        cost_buckets: "GCP QA",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.costCategoryDTOs).toEqual([
+        { costCategory: "AI Platform team", costBucket: "GCP QA" },
+      ]);
+    });
+
+    it("cost_recommendation list passes recommendation_states as k8sRecommendationFilterPropertiesDTO", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        recommendation_states: "OPEN,APPLIED",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["OPEN", "APPLIED"],
+      });
+    });
+
+    it("cost_recommendation list passes sort_by and sort_order", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        sort_by: "MONTHLY_SAVING",
+        sort_order: "DESCENDING",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.sortBy).toBe("MONTHLY_SAVING");
+      expect(call.body.sortOrder).toBe("DESCENDING");
+    });
+
+    it("cost_recommendation list uses days_back override", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        days_back: 30,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.daysBack).toBe(30);
+    });
+
+    it("cost_recommendation list does not include costCategoryDTOs when only cost_category is provided without cost_buckets", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        cost_category: "AI Platform team",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.costCategoryDTOs).toBeUndefined();
+    });
+
+    it("cost_recommendation_count get sends default body when no filters provided", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: 42 });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_count", "get", {});
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ccm/api/recommendation/overview/count");
+      expect(call.body).toEqual({
+        filterType: "CCMRecommendation",
+        minSaving: 0,
+        daysBack: 4,
+      });
+    });
+
+    it("cost_recommendation_count get passes cost_category, cost_buckets, and recommendation_states", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: 10 });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_count", "get", {
+        cost_category: "Teams",
+        cost_buckets: "Engineering,Platform",
+        recommendation_states: "OPEN,APPLIED",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.costCategoryDTOs).toEqual([
+        { costCategory: "Teams", costBucket: "Engineering" },
+        { costCategory: "Teams", costBucket: "Platform" },
+      ]);
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["OPEN", "APPLIED"],
+      });
+    });
+
+    it("cost_recommendation_stats get sends default body to aggregate stats endpoint", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { totalMonthlyCost: 5000, totalMonthlySaving: 1200 } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_stats", "get", {});
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ccm/api/recommendation/overview/stats");
+      expect(call.body).toEqual({
+        filterType: "CCMRecommendation",
+        minSaving: 0,
+        daysBack: 4,
+      });
+    });
+
+    it("cost_recommendation_stats get with group_by=type uses resource-type stats endpoint", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_stats", "get", {
+        group_by: "type",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ccm/api/recommendation/overview/resource-type/stats");
+    });
+
+    it("cost_recommendation_stats get passes cost_category and cost_buckets as costCategoryDTOs", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_stats", "get", {
+        cost_category: "Teams",
+        cost_buckets: "Engineering,Platform",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.costCategoryDTOs).toEqual([
+        { costCategory: "Teams", costBucket: "Engineering" },
+        { costCategory: "Teams", costBucket: "Platform" },
+      ]);
+    });
+
+    it("cost_recommendation_stats get passes recommendation_states", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_stats", "get", {
+        recommendation_states: "OPEN",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["OPEN"],
+      });
+    });
+
+    it("cost_recommendation_filter list wraps top-level string array for MCP structured output", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        data: ["AI Common Fields", "Teams"],
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_recommendation_filter", "list", {});
+
+      expect(result).toEqual({ values: ["AI Common Fields", "Teams"] });
+    });
+
+    it("cost_recommendation_filter get passes costCategory query param and wraps bucket array", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: ["Product Management", "Security Engineering", "Software Development"],
+        metaData: null,
+        correlationId: "73f1c1e3-8825-402d-9a76-30addfb3a7ed",
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_recommendation_filter", "get", {
+        cost_category: "Teams",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ccm/api/business-mapping/filter-panel");
+      expect(call.params?.costCategory).toBe("Teams");
+      expect(result).toEqual({
+        values: ["Product Management", "Security Engineering", "Software Development"],
+      });
+    });
   });
 
 });

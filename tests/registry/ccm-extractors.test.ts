@@ -9,7 +9,25 @@ import {
   ccmTimeseriesExtract,
   ccmSummaryExtract,
   ccmRecommendationsExtract,
+  countExtract,
 } from "../../src/registry/extractors.js";
+
+describe("countExtract", () => {
+  it("extracts numeric data from NG envelope", () => {
+    expect(countExtract({ data: 42 })).toEqual({ count: 42 });
+  });
+
+  it("extracts numeric raw value when envelope is absent", () => {
+    expect(countExtract(7)).toEqual({ count: 7 });
+  });
+
+  it("returns _error when data is not a number", () => {
+    expect(countExtract({ data: "not-a-number" })).toEqual({
+      count: 0,
+      _error: "Unexpected response shape — data is not a number",
+    });
+  });
+});
 
 describe("ccmViewsExtract", () => {
   it("maps views and totalCount to items/total", () => {
