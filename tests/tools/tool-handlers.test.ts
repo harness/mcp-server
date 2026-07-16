@@ -270,6 +270,32 @@ describe("harness_get", () => {
     expect(call.params.orgIdentifier).toBeUndefined();
     expect(call.params.projectIdentifier).toBeUndefined();
   });
+
+  it("gets IDP entities at the configured project scope when only resource_id and kind are provided", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp" }));
+    mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service", kind: "component" });
+    client = makeClient(mockRequest);
+    const idpServer = makeMcpServer();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(idpServer, registry, client);
+
+    const result = await idpServer.call("harness_get", {
+      resource_type: "idp_entity",
+      resource_id: "boutique-service",
+      params: { kind: "component" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params: Record<string, string>;
+    };
+    expect(callArgs.method).toBe("GET");
+    expect(callArgs.path).toBe("/v1/entities/account.default.test-project/component/boutique-service");
+    expect(callArgs.params.orgIdentifier).toBe("default");
+    expect(callArgs.params.projectIdentifier).toBe("test-project");
+  });
 });
 
 describe("harness_get — execution_inputs", () => {
@@ -2420,6 +2446,91 @@ pipeline:
     expect(runCall.body).toContain("main");
     expect(runCall.params?.pipelineBranchName).toBe("feature/x");
     expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
+  });
+
+  it("prefers pipeline_branch over branch for flat auto-resolve runtime template fetch", async () => {
+    const simpleTemplate = `pipeline:
+  identifier: "branch_precedence_pipe"
+  variables:
+    - name: "tag"
+      type: "String"
+      value: "<+input>"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: simpleTemplate } }) // template
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-branch-precedence" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "branch_precedence_pipe",
+      inputs: { tag: "v2.0" },
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "gh_conn",
+        repo_name: "my-repo",
+        pipeline_branch: "feature/pipeline-yaml",
+        branch: "feature/runtime-input",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+
+    const templateCall = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      path?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(templateCall.method).toBe("POST");
+    expect(templateCall.path).toBe("/pipeline/api/inputSets/template");
+    expect(templateCall.params?.branch).toBe("feature/pipeline-yaml");
+
+    const runCall = mockRequest.mock.calls[1]![0] as {
+      params?: Record<string, string | string[] | undefined>;
+    };
+    expect(runCall.params?.pipelineBranchName).toBe("feature/pipeline-yaml");
+  });
+
+  it("uses pipeline_branch for flat auto-resolve on remote pipelines without input_set_ids", async () => {
+    const simpleTemplate = `pipeline:
+  identifier: "remote_flat_pipe"
+  variables:
+    - name: "environment"
+      type: "String"
+      value: "<+input>"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetTemplateYaml: simpleTemplate } }) // template
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-remote-flat" } }); // execute
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "remote_flat_pipe",
+      inputs: { environment: "staging" },
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "gh_conn",
+        repo_name: "my-repo",
+        pipeline_branch: "feature/x",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+
+    const templateCall = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(templateCall.method).toBe("POST");
+    expect(templateCall.params?.branch).toBe("feature/x");
+
+    const runCall = mockRequest.mock.calls[1]![0] as {
+      params?: Record<string, string | string[] | undefined>;
+    };
+    expect(runCall.params?.pipelineBranchName).toBe("feature/x");
   });
 
   it("merges input_set_ids into a full pipeline YAML STRING passed as inputs", async () => {

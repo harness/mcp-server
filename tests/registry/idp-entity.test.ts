@@ -210,6 +210,47 @@ describe("idp_entity mutate operations", () => {
     expect(call.params.projectIdentifier).toBe("test-project");
   });
 
+  it("get: defaults to configured project scope when org_id/project_id are omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service", kind: "component" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "get", {
+      kind: "component",
+      entity_id: "boutique-service",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as {
+      method: string;
+      path: string;
+      params: Record<string, string>;
+    };
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/v1/entities/account.default.test-project/component/boutique-service");
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
+  });
+
+  it("get: explicit org resource_scope uses org path without project segment", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "shared-api" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "get", {
+      resource_scope: "org",
+      org_id: "platform",
+      project_id: "ignored-project",
+      kind: "api",
+      entity_id: "shared-api",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as {
+      path: string;
+      params: Record<string, string | undefined>;
+    };
+    expect(call.path).toBe("/v1/entities/account.platform/api/shared-api");
+    expect(call.params.orgIdentifier).toBe("platform");
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
   it("update: explicit account resource_scope suppresses configured org/project defaults", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
     const client = makeClient(mockRequest);
@@ -230,6 +271,72 @@ describe("idp_entity mutate operations", () => {
     expect(call.path).toBe("/v1/entities/account/component/boutique-service");
     expect(call.params.orgIdentifier).toBeUndefined();
     expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("get/update: reject explicit project scope without org and project identifiers", async () => {
+    const narrowRegistry = new Registry(makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }));
+    const client = makeClient();
+
+    await expect(
+      narrowRegistry.dispatch(client, "idp_entity", "get", {
+        resource_scope: "project",
+        kind: "component",
+        entity_id: "boutique-service",
+      }),
+    ).rejects.toThrow(/resource_scope "project" requires org_id or HARNESS_ORG/);
+
+    await expect(
+      narrowRegistry.dispatch(client, "idp_entity", "update", {
+        resource_scope: "project",
+        kind: "component",
+        entity_id: "boutique-service",
+        body: { yaml: SAMPLE_YAML },
+      }),
+    ).rejects.toThrow(/resource_scope "project" requires org_id or HARNESS_ORG/);
+  });
+
+  it("get/update: reject explicit org scope without org identifier", async () => {
+    const narrowRegistry = new Registry(makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }));
+    const client = makeClient();
+
+    await expect(
+      narrowRegistry.dispatch(client, "idp_entity", "get", {
+        resource_scope: "org",
+        kind: "component",
+        entity_id: "boutique-service",
+      }),
+    ).rejects.toThrow(/resource_scope "org" requires org_id or HARNESS_ORG/);
+
+    await expect(
+      narrowRegistry.dispatch(client, "idp_entity", "update", {
+        resource_scope: "org",
+        kind: "component",
+        entity_id: "boutique-service",
+        body: { yaml: SAMPLE_YAML },
+      }),
+    ).rejects.toThrow(/resource_scope "org" requires org_id or HARNESS_ORG/);
+  });
+
+  it("get/update: reject project scope when org is known but project is missing", async () => {
+    const orgOnlyRegistry = new Registry(makeConfig({ HARNESS_ORG: "default", HARNESS_PROJECT: undefined }));
+    const client = makeClient();
+
+    await expect(
+      orgOnlyRegistry.dispatch(client, "idp_entity", "get", {
+        resource_scope: "project",
+        kind: "component",
+        entity_id: "boutique-service",
+      }),
+    ).rejects.toThrow(/resource_scope "project" requires project_id or HARNESS_PROJECT/);
+
+    await expect(
+      orgOnlyRegistry.dispatch(client, "idp_entity", "update", {
+        resource_scope: "project",
+        kind: "component",
+        entity_id: "boutique-service",
+        body: { yaml: SAMPLE_YAML },
+      }),
+    ).rejects.toThrow(/resource_scope "project" requires project_id or HARNESS_PROJECT/);
   });
 
   it("update: requires kind and entity_id", async () => {
