@@ -69,6 +69,68 @@ function getOp(type: string, op: string): EndpointSpec {
   return spec;
 }
 
+describe("idp_entity get scope path", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("get: defaults to configured project scope when org_id/project_id are omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service", kind: "component" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "get", {
+      kind: "component",
+      entity_id: "boutique-service",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as {
+      method: string;
+      path: string;
+      params: Record<string, string>;
+    };
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/v1/entities/account.default.test-project/component/boutique-service");
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
+  });
+
+  it("get: explicit account resource_scope suppresses configured org/project defaults", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "get", {
+      resource_scope: "account",
+      org_id: "my_org",
+      project_id: "my_project",
+      kind: "component",
+      entity_id: "boutique-service",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as {
+      path: string;
+      params: Record<string, string | undefined>;
+    };
+    expect(call.path).toBe("/v1/entities/account/component/boutique-service");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("get: throws when resource_scope='org' but no org_id or HARNESS_ORG default", async () => {
+    const scopedRegistry = new Registry(makeConfig({ HARNESS_ORG: undefined }));
+    const client = makeClient(vi.fn());
+
+    await expect(
+      scopedRegistry.dispatch(client, "idp_entity", "get", {
+        resource_scope: "org",
+        kind: "component",
+        entity_id: "boutique-service",
+      }),
+    ).rejects.toThrow(/resource_scope "org" requires org_id or HARNESS_ORG/);
+  });
+});
+
 describe("idp_entity mutate operations", () => {
   let registry: Registry;
 

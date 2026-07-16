@@ -224,7 +224,7 @@ export const gitopsToolset: ToolsetDefinition = {
           method: "DELETE",
           path: "/gitops/api/v1/agents/{agentIdentifier}",
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          pathParams: { agent_id: "agentIdentifier" },
+          pathParams: { resource_id: "agentIdentifier" },
           responseExtractor: passthrough,
           description:
             "Delete a GitOps agent. The agent identifier in the path is the raw identifier — NOT scope-prefixed.\n\n" +
