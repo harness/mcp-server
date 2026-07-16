@@ -157,7 +157,7 @@ function requireTypeId(input: Record<string, unknown>): string {
 
 function schemaTypeGetBody(input: Record<string, unknown>) {
   return {
-    kind: (input.kind as string) ?? "OBJECT_KIND_ENTITY",
+    kind: input.kind as string,
     id: requireTypeId(input),
   };
 }
@@ -165,7 +165,7 @@ function schemaTypeGetBody(input: Record<string, unknown>) {
 function relatedTypesBody(input: Record<string, unknown>) {
   return {
     type_reference: {
-      object_kind: (input.kind as string) ?? "OBJECT_KIND_ENTITY",
+      object_kind: input.kind as string,
       id: requireTypeId(input),
     },
     include_transitive: input.include_transitive === true,
@@ -188,8 +188,11 @@ const KG_TYPE_GET_PARAMS: ParamsSchema = {
   fields: [
     {
       name: "kind",
-      required: false,
-      description: "Object kind of the type (default: OBJECT_KIND_ENTITY). One of OBJECT_KIND_*.",
+      required: true,
+      description:
+        "Object kind of the type. One of OBJECT_KIND_*. The same identifier can exist under multiple " +
+        "kinds with different fields — use the exact kind returned by kg_queryable_type_summary (for " +
+        "queryable types) or kg_type list, not a guess.",
     },
   ],
 };
@@ -198,8 +201,11 @@ const KG_RELATED_GET_PARAMS: ParamsSchema = {
   fields: [
     {
       name: "kind",
-      required: false,
-      description: "Object kind of the source type (default: OBJECT_KIND_ENTITY). One of OBJECT_KIND_*.",
+      required: true,
+      description:
+        "Object kind of the source type. One of OBJECT_KIND_*. The same identifier can exist under " +
+        "multiple kinds with different fields — use the exact kind returned by kg_queryable_type_summary " +
+        "(for queryable types) or kg_type list, not a guess.",
     },
     {
       name: "include_transitive",
@@ -249,7 +255,7 @@ export const semanticLayerToolset: ToolsetDefinition = {
           responseExtractor: schemaTypeExtract,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           description:
-            "Get a single schema type by kind and ID. Pass the type id as resource_id and kind via params (default: OBJECT_KIND_ENTITY).",
+            "Get a single schema type by kind and ID. Pass the type id as resource_id and the required kind via params.",
           paramsSchema: KG_TYPE_GET_PARAMS,
         },
       },
@@ -277,8 +283,8 @@ export const semanticLayerToolset: ToolsetDefinition = {
           responseExtractor: relatedTypesExtract,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           description:
-            "Get types related to a source type. Pass the type id as resource_id and optionally " +
-            "kind (default: OBJECT_KIND_ENTITY) and include_transitive (default: false) via params.",
+            "Get types related to a source type. Pass the type id as resource_id, the required kind, " +
+            "and optionally include_transitive (default: false) via params.",
           paramsSchema: KG_RELATED_GET_PARAMS,
         },
       },

@@ -3421,8 +3421,8 @@ const schema: Record<string, any> = {
                       "$ref": "#/definitions/template_v1/stages/unified/ServiceItem"
                     }
                   },
-                  "sequential": {
-                    "description": "Execute services sequentially (one at a time). When false, services run in parallel.",
+                  "parallel": {
+                    "description": "Execute services in parallel (all at once). Defaults to false, so services run one at a time (serially) unless set to true.",
                     "oneOf": [
                       {
                         "type": "boolean",
@@ -3506,8 +3506,8 @@ const schema: Record<string, any> = {
                     "description": "List of environments for multi-environment deployment.",
                     "$ref": "#/definitions/template_v1/stages/unified/EnvironmentItems"
                   },
-                  "sequential": {
-                    "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
+                  "parallel": {
+                    "description": "Execute environments in parallel (all at once). Defaults to false, so environments run one at a time (serially) unless set to true.",
                     "oneOf": [
                       {
                         "type": "boolean",
@@ -3531,8 +3531,8 @@ const schema: Record<string, any> = {
                     "description": "Environment group configuration.",
                     "$ref": "#/definitions/template_v1/stages/unified/EnvironmentGroup"
                   },
-                  "sequential": {
-                    "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
+                  "parallel": {
+                    "description": "Execute environments in parallel (all at once). Defaults to false, so environments run one at a time (serially) unless set to true.",
                     "oneOf": [
                       {
                         "type": "boolean",
@@ -3556,8 +3556,8 @@ const schema: Record<string, any> = {
                     "description": "Filters for selecting environments and infrastructures.",
                     "$ref": "#/definitions/template_v1/stages/unified/Filters"
                   },
-                  "sequential": {
-                    "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
+                  "parallel": {
+                    "description": "Execute environments in parallel (all at once). Defaults to false, so environments run one at a time (serially) unless set to true.",
                     "oneOf": [
                       {
                         "type": "boolean",
@@ -3815,8 +3815,8 @@ const schema: Record<string, any> = {
                 "description": "Environment group identifier.",
                 "type": "string"
               },
-              "sequential": {
-                "description": "Execute environments sequentially (one at a time). When false, environments run in parallel.",
+              "parallel": {
+                "description": "Execute environments in parallel (all at once). Defaults to false, so environments run one at a time (serially) unless set to true.",
                 "oneOf": [
                   {
                     "type": "boolean",

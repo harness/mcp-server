@@ -399,6 +399,19 @@ export class Registry {
       }
     }
 
+    if (spec.paramsSchema) {
+      const missingParams = spec.paramsSchema.fields
+        .filter(f => f.required && input[f.name] === undefined)
+        .map(f => f.name);
+      if (missingParams.length > 0) {
+        throw new Error(
+          `Missing required param(s) for ${resourceType}.${operation}: ${missingParams.join(", ")}. ` +
+          `Pass them via params (e.g. params: { ${missingParams.map(n => `${n}: "..."`).join(", ")} }). ` +
+          `Use harness_describe(resource_type="${resourceType}") to see valid values.`
+        );
+      }
+    }
+
     return this.executeSpecWithAudit(client, def, spec, operation, resourceType, input, auditCtx, abortSignal);
   }
 
