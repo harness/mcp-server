@@ -68,16 +68,32 @@ const idpEntityMutateBodySchema: BodySchema = {
   ],
 };
 
-const buildIdpEntityScopePath = (input: Record<string, unknown>): string => {
+const buildIdpEntityScopePath = (input: Record<string, unknown>, config: PathBuilderConfig): string => {
   let scope = "account";
-  const orgId = input.org_id as string | undefined;
-  const projectId = input.project_id as string | undefined;
-  if (orgId) {
-    scope += `.${orgId}`;
-    if (projectId) {
-      scope += `.${projectId}`;
-    }
+  const requestedScope = typeof input.resource_scope === "string" ? input.resource_scope : undefined;
+  const effectiveOrgId = (input.org_id as string | undefined) || config.HARNESS_ORG;
+  const effectiveProjectId = (input.project_id as string | undefined) || config.HARNESS_PROJECT;
+  const shouldUseProject =
+    requestedScope === "project" ||
+    (!requestedScope && Boolean(effectiveOrgId && effectiveProjectId));
+  const shouldUseOrg =
+    requestedScope === "org" ||
+    shouldUseProject ||
+    (!requestedScope && Boolean(effectiveOrgId));
+
+  if (requestedScope === "project" && (!effectiveOrgId || !effectiveProjectId)) {
+    throw new Error(
+      "resource_scope='project' requires org_id and project_id, or HARNESS_ORG and HARNESS_PROJECT defaults.",
+    );
   }
+  if (requestedScope === "org" && !effectiveOrgId) {
+    throw new Error("resource_scope='org' requires org_id, or a HARNESS_ORG default.");
+  }
+
+  const orgId = shouldUseOrg ? effectiveOrgId : undefined;
+  const projectId = shouldUseProject ? effectiveProjectId : undefined;
+  if (orgId) scope += `.${orgId}`;
+  if (projectId) scope += `.${projectId}`;
 
   const kind = input.kind as string | undefined;
   const entityId = input.entity_id as string | undefined;
@@ -89,7 +105,9 @@ const buildIdpEntityScopePath = (input: Record<string, unknown>): string => {
   }
 
   if (orgId) input.org_id = orgId;
+  else delete input.org_id;
   if (projectId) input.project_id = projectId;
+  else delete input.project_id;
 
   return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(entityId)}`;
 };

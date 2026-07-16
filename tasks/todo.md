@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-13)
+- [x] Baseline branch state and identify recent behavioral commits
+- [x] Review high-blast-radius diffs and trace concrete trigger scenarios
+- [x] Implement a minimal fix only if a critical bug is proven
+- [x] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [x] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+
+### Plan
+- Treat the current branch against `origin/main` and recent main history as the investigation window.
+- Prioritize behavioral paths that can cause data loss, crashes, security issues, or significant user-facing breakage.
+- Avoid changes unless a concrete trigger and high-confidence minimal fix are both established.
+
+### Review
+- Found an IDP entity update correctness bug in the new mutate path: `idp_entity` list defaults to configured org/project scope, but the get/update path builder ignored `HARNESS_ORG` / `HARNESS_PROJECT` when callers omitted explicit `org_id` / `project_id`. A common `harness_list` -> `harness_update(resource_id, params.kind)` flow could PUT `/v1/entities/account/...` and overwrite an account-scoped entity with the same kind/id instead of the project entity the agent had just listed.
+- Fixed IDP entity path construction to use explicit `resource_scope` when supplied, otherwise default to configured org/project scope when available, and to suppress org/project query params for explicit account-scope calls.
+- Found a remote pipeline input override bug: when a run combined `input_set_ids`, flat inline overrides, and `pipeline_branch` (without `branch`), the input-set GET used the remote branch but the runtime-template POST did not. Overrides could be resolved against the default-branch template and execute with incorrect runtime values.
+- Fixed runtime-template resolution to use `pipeline_branch ?? branch`, matching input-set materialization and execute dispatch.
+- Verification passed: focused Vitest regression filter, `pnpm typecheck`, `pnpm build`, `pnpm test` (115 files / 2501 tests), `pnpm standards:check`, and `pnpm docs:check`.
+
 ## PR 569 Review Automation (2026-07-07)
 - [x] Read Slack trigger thread and confirm report context
 - [x] Inspect PR #569 diff, CI/review state, and affected code paths

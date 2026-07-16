@@ -191,6 +191,47 @@ describe("idp_entity mutate operations", () => {
     expect(call.body).toEqual({ yaml: SAMPLE_YAML });
   });
 
+  it("update: defaults to configured project scope when org_id/project_id are omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "update", {
+      kind: "component",
+      entity_id: "boutique-service",
+      body: { yaml: SAMPLE_YAML },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as {
+      path: string;
+      params: Record<string, string>;
+    };
+    expect(call.path).toBe("/v1/entities/account.default.test-project/component/boutique-service");
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
+  });
+
+  it("update: explicit account resource_scope suppresses configured org/project defaults", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "update", {
+      resource_scope: "account",
+      org_id: "my_org",
+      project_id: "my_project",
+      kind: "component",
+      entity_id: "boutique-service",
+      body: { yaml: SAMPLE_YAML },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as {
+      path: string;
+      params: Record<string, string | undefined>;
+    };
+    expect(call.path).toBe("/v1/entities/account/component/boutique-service");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
   it("update: requires kind and entity_id", async () => {
     const client = makeClient();
 
