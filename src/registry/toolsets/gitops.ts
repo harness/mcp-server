@@ -241,11 +241,12 @@ export const gitopsToolset: ToolsetDefinition = {
           paramsSchema: {
             fields: [
               {
-                name: "resource_id",
+                name: "agent_id",
                 required: true,
                 description:
                   "Raw agent identifier — no scope prefix. E.g. 'myagent', not 'account.myagent'. " +
-                  "Use harness_list(resource_type='gitops_agent') to discover the identifier.",
+                  "Use harness_list(resource_type='gitops_agent') to discover the identifier. " +
+                  "harness_delete maps resource_id to this field automatically.",
               },
               {
                 name: "resource_scope",

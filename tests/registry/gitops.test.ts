@@ -268,7 +268,7 @@ describe("gitops_application", () => {
         agent_id: "account.myagent",
         app_name: "demo-app",
       }),
-    ).rejects.toThrow(/Deletion mode is required/);
+    ).rejects.toThrow(/Missing required param\(s\).*cascade/);
   });
 
   it("delete: throws when cascade=true but propagation_policy is missing", async () => {
@@ -279,6 +279,7 @@ describe("gitops_application", () => {
         agent_id: "account.myagent",
         app_name: "demo-app",
         cascade: "true",
+        remove_existing_finalizers: "false",
       }),
     ).rejects.toThrow(/propagation_policy is required when cascade=true/);
   });
