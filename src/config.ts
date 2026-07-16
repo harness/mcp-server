@@ -78,7 +78,12 @@ const RawConfigSchema = z.object({
   HARNESS_DEFAULT_PROJECT_ID: optionalStringFromEnv,
   HARNESS_API_TIMEOUT_MS: z.coerce.number().default(30000),
   HARNESS_MAX_RETRIES: z.coerce.number().default(3),
-  MCP_SESSION_TTL_MS: z.coerce.number().min(1).default(5 * 60_000),
+  // Idle HTTP sessions are reaped after this many ms once no request or SSE
+  // stream is active. Kept generous (30 min) so interactive clients (e.g. the
+  // claude.ai connector, which does not hold a persistent SSE stream between
+  // prompts) are not evicted mid-conversation, which surfaces to users as
+  // repeated "Session not found" → re-authenticate prompts.
+  MCP_SESSION_TTL_MS: z.coerce.number().min(1).default(30 * 60_000),
   LOG_LEVEL: z.preprocess(
     (val) => (val === "" ? undefined : val),
     z.enum(["debug", "info", "warn", "error"]).default("info"),
@@ -96,6 +101,12 @@ const RawConfigSchema = z.object({
   HARNESS_MCP_ALLOWED_HOSTS: optionalStringFromEnv.transform(validateAllowedHosts),
   HARNESS_MCP_AUTH_TOKEN: optionalStringFromEnv,
   HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: booleanFromEnv.default(false),
+  // Number of proxy hops to trust for client IP resolution (Express `trust
+  // proxy`). Set to the count of reverse proxies / load balancers in front of
+  // the server so per-IP rate limiting keys on the real client rather than the
+  // proxy socket peer (which would bucket every user together). Default 0
+  // (trust nothing) preserves prior behaviour for direct binds.
+  HARNESS_MCP_TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   HARNESS_FME_API_KEY: optionalStringFromEnv,
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
   HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),

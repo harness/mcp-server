@@ -115,6 +115,7 @@ See `.env.example` for the full list. Non-obvious ones:
 | `HARNESS_FME_API_KEY` | Feature Management Engine (Split.io) key; falls back to `HARNESS_API_KEY` if unset |
 | `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | Set `true` for local HTTP dev without auth token |
 | `HARNESS_MCP_ALLOWED_HOSTS` | Comma-separated allowed hostnames for HTTP Host-header validation |
+| `HARNESS_MCP_TRUST_PROXY` | Number of proxy hops to trust for client IP (`trust proxy`); set behind an LB so rate limiting keys on the real client (default `0`) |
 | `HARNESS_ALLOW_HTTP` | Allow non-HTTPS base URL (default `false`) |
 
 Deprecated aliases (still work, emit deprecation warning to stderr):

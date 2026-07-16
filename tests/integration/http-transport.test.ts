@@ -83,12 +83,12 @@ describe("HTTP transport session management", () => {
     });
 
     it("session TTL reaper removes idle sessions while preserving active requests", () => {
-      const SESSION_TTL_MS = 5 * 60_000; // matches MCP_SESSION_TTL_MS default
+      const SESSION_TTL_MS = 30 * 60_000; // matches MCP_SESSION_TTL_MS default
       const sessions = new Map<string, { lastActivity: number; activeRequests: number }>();
 
       // Active session
       sessions.set("active", { lastActivity: Date.now(), activeRequests: 0 });
-      // Expired session (6 minutes ago)
+      // Expired session (31 minutes ago)
       sessions.set("expired", { lastActivity: Date.now() - SESSION_TTL_MS - 60_000, activeRequests: 0 });
       // In-flight session older than the TTL
       sessions.set("in-flight", { lastActivity: Date.now() - SESSION_TTL_MS - 60_000, activeRequests: 1 });
@@ -104,6 +104,17 @@ describe("HTTP transport session management", () => {
       expect(sessions.has("active")).toBe(true);
       expect(sessions.has("expired")).toBe(false);
       expect(sessions.has("in-flight")).toBe(true);
+    });
+
+    it("thirty-minute default TTL keeps interactive idle sessions past the old five-minute cutoff", () => {
+      const DEFAULT_TTL_MS = 30 * 60_000;
+      const interactiveGapMs = 6 * 60_000; // e.g. claude.ai connector between prompts
+      const now = Date.now();
+
+      const session = { lastActivity: now - interactiveGapMs, activeRequests: 0 };
+
+      expect(isSessionExpired(session, DEFAULT_TTL_MS, now)).toBe(false);
+      expect(isSessionExpired(session, 5 * 60_000, now)).toBe(true);
     });
 
     it("session TTL reaper honors operator-configured TTL values", () => {
@@ -148,6 +159,106 @@ describe("HTTP transport session management", () => {
       expect(sessions.size).toBe(1);
       expect(sessions.has("s1")).toBe(false);
       expect(sessions.has("s2")).toBe(true);
+    });
+  });
+
+  describe("trust proxy and rate limiting", () => {
+    async function getProbe(
+      baseUrl: string,
+      headers: Record<string, string> = {},
+    ): Promise<{ status: number; body: unknown }> {
+      const url = new URL("/probe", baseUrl);
+      return new Promise((resolve, reject) => {
+        const req = httpRequest(
+          {
+            hostname: url.hostname,
+            port: url.port,
+            path: url.pathname,
+            method: "GET",
+            headers,
+          },
+          (res) => {
+            let rawBody = "";
+            res.setEncoding("utf8");
+            res.on("data", (chunk) => { rawBody += chunk; });
+            res.on("end", () => {
+              resolve({
+                status: res.statusCode ?? 0,
+                body: rawBody ? JSON.parse(rawBody) : undefined,
+              });
+            });
+          },
+        );
+        req.on("error", reject);
+        req.end();
+      });
+    }
+
+    function buildRateLimitProbeApp(trustProxy: number): Express {
+      const app = createHarnessHttpExpressApp(resolveHttpHostValidationOptions("127.0.0.1", {}));
+      if (trustProxy > 0) {
+        app.set("trust proxy", trustProxy);
+      }
+
+      const ipHits = new Map<string, { count: number; resetAt: number }>();
+      const RATE_WINDOW_MS = 60_000;
+      const RATE_LIMIT = 2;
+
+      app.use((req, res, next) => {
+        const ip = req.ip ?? "unknown";
+        const now = Date.now();
+        let entry = ipHits.get(ip);
+        if (!entry || now >= entry.resetAt) {
+          entry = { count: 0, resetAt: now + RATE_WINDOW_MS };
+          ipHits.set(ip, entry);
+        }
+        entry.count++;
+        if (entry.count > RATE_LIMIT) {
+          res.status(429).json({
+            jsonrpc: "2.0",
+            error: { code: -32000, message: "Too many requests. Try again later." },
+            id: null,
+          });
+          return;
+        }
+        next();
+      });
+
+      app.get("/probe", (req, res) => {
+        res.json({ ip: req.ip });
+      });
+
+      return app;
+    }
+
+    it("does not enable trust proxy when HARNESS_MCP_TRUST_PROXY is zero", () => {
+      const app = buildRateLimitProbeApp(0);
+      expect(app.get("trust proxy")).toBe(false);
+    });
+
+    it("resolves req.ip from X-Forwarded-For when trust proxy is enabled", async () => {
+      const app = buildRateLimitProbeApp(1);
+      await withListeningApp(app, async (baseUrl) => {
+        const res = await getProbe(baseUrl, { "X-Forwarded-For": "203.0.113.10" });
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ ip: "203.0.113.10" });
+      });
+    });
+
+    it("keys per-IP rate limits on proxied client IPs instead of the load balancer peer", async () => {
+      const app = buildRateLimitProbeApp(1);
+      await withListeningApp(app, async (baseUrl) => {
+        for (let i = 0; i < 2; i++) {
+          const allowed = await getProbe(baseUrl, { "X-Forwarded-For": "203.0.113.10" });
+          expect(allowed.status).toBe(200);
+        }
+        const limited = await getProbe(baseUrl, { "X-Forwarded-For": "203.0.113.10" });
+        expect(limited.status).toBe(429);
+
+        const otherClient = await getProbe(baseUrl, { "X-Forwarded-For": "198.51.100.20" });
+        expect(otherClient.status).toBe(200);
+        expect(otherClient.body).toEqual({ ip: "198.51.100.20" });
+      });
     });
   });
 
