@@ -86,12 +86,29 @@ describe("gitops_agent", () => {
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "gitops_agent", "delete", {
+      resource_id: "agent1779094157087",
       agent_id: "agent1779094157087",
+      resource_scope: "project",
     });
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("DELETE");
     expect(call.path).toBe("/gitops/api/v1/agents/agent1779094157087");
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
+  });
+
+  it("delete: rejects ambiguous requests without resource_scope", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_agent", "delete", {
+        resource_id: "agent1779094157087",
+        agent_id: "agent1779094157087",
+      }),
+    ).rejects.toThrow(/resource_scope/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
 
@@ -267,8 +284,9 @@ describe("gitops_application", () => {
       registry.dispatch(client, "gitops_application", "delete", {
         agent_id: "account.myagent",
         app_name: "demo-app",
+        remove_existing_finalizers: "false",
       }),
-    ).rejects.toThrow(/Deletion mode is required/);
+    ).rejects.toThrow(/Missing required param.*cascade/);
   });
 
   it("delete: throws when cascade=true but propagation_policy is missing", async () => {
@@ -279,6 +297,7 @@ describe("gitops_application", () => {
         agent_id: "account.myagent",
         app_name: "demo-app",
         cascade: "true",
+        remove_existing_finalizers: "false",
       }),
     ).rejects.toThrow(/propagation_policy is required when cascade=true/);
   });
@@ -565,6 +584,18 @@ describe("gitops_applicationset", () => {
     expect(call.method).toBe("DELETE");
     expect(call.path).toBe("/gitops/api/v1/applicationset/cce8a056-8059-4abc-def0-123456789abc");
     expect(call.params.agentIdentifier).toBe("account.myagent");
+  });
+
+  it("delete: rejects requests without the parent agent_id", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_applicationset", "delete", {
+        appset_id: "cce8a056-8059-4abc-def0-123456789abc",
+      }),
+    ).rejects.toThrow(/agent_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
 

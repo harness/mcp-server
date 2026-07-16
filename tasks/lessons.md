@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Patch Repeated Endpoint Shapes with Operation-Specific Context
+- **Issue**: A patch targeting a repeated `queryParams: { agent_id: ... }` block initially attached destructive-delete validation to the adjacent read endpoint.
+- **Fix**: Re-read the exact operation block after patching and move the schema to `operations.delete`.
+- **Rule**: In declarative toolsets with repeated endpoint shapes, anchor edits with the operation name and verify the resulting diff/line location before testing or committing.
+
 ## Scope Defaults and Remote Branch Context Must Stay End-to-End
 - **Issue**: Multi-scope path builders can bypass the registry's usual config defaulting when they construct path segments themselves. For IDP entities, list used configured `HARNESS_ORG` / `HARNESS_PROJECT`, while get/update path construction fell back to account scope, so a list -> update flow could target a different entity with the same kind/id.
 - **Fix**: Path builders that encode scope in the path must accept `PathBuilderConfig`, honor explicit `resource_scope`, use configured org/project defaults when scope is omitted and the resource's list/default behavior does so, and clear unused scope fields so query params match the path.
