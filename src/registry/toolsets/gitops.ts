@@ -241,10 +241,11 @@ export const gitopsToolset: ToolsetDefinition = {
           paramsSchema: {
             fields: [
               {
-                name: "resource_id",
+                name: "agent_id",
                 required: true,
                 description:
                   "Raw agent identifier — no scope prefix. E.g. 'myagent', not 'account.myagent'. " +
+                  "Passed as resource_id to harness_delete. " +
                   "Use harness_list(resource_type='gitops_agent') to discover the identifier.",
               },
               {
@@ -494,8 +495,12 @@ export const gitopsToolset: ToolsetDefinition = {
                 description: "Scope-prefixed agent identifier (e.g. 'account.myagent', 'org.myagent', or 'myagent' for project-level).",
               },
               {
+                // Not marked required here: the bodyBuilder owns deletion-mode
+                // validation and emits the detailed "ask the user" guidance
+                // (mode + finalizer choice). A generic required-param error
+                // would pre-empt that richer message.
                 name: "cascade",
-                required: true,
+                required: false,
                 description: "Whether to cascade deletion to K8s resources. 'true' = cascade (foreground or background), 'false' = non-cascading (leaves K8s resources running). Ask the user before setting.",
               },
               {
@@ -504,8 +509,10 @@ export const gitopsToolset: ToolsetDefinition = {
                 description: "Required when cascade='true'. 'foreground' — waits for all K8s child resources to be deleted first. 'background' — deletes immediately, async cleanup. Omit when cascade='false'.",
               },
               {
+                // Optional with a safe default ('false'); do not force callers
+                // to supply it just to reach the deletion-mode validation.
                 name: "remove_existing_finalizers",
-                required: true,
+                required: false,
                 description: "Whether to strip existing finalizers before deletion. 'true' unblocks stuck apps; 'false' is the safe default. Ask the user before setting.",
               },
               {
