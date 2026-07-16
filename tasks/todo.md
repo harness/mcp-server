@@ -5,7 +5,7 @@
 - [x] Review high-blast-radius diffs and trace concrete trigger scenarios
 - [x] Implement a minimal fix only if a critical bug is proven
 - [x] Run focused verification for any fix, or sanity checks for no-fix outcome
-- [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+- [x] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
 - Treat recent `origin/main` history after `v3.2.10` as the primary investigation window.
