@@ -4,13 +4,20 @@
 - [x] Baseline branch state and identify recent behavioral commits
 - [x] Review high-blast-radius diffs and trace concrete trigger scenarios
 - [x] Implement a minimal fix only if a critical bug is proven
-- [ ] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [x] Run focused verification for any fix, or sanity checks for no-fix outcome
 - [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
 - Treat recent `origin/main` history after `v3.2.10` as the primary investigation window.
 - Prioritize GitOps delete mappings, Code file scoping, IDP writes, database path construction, and schema-sync changes with runtime impact.
 - Require a concrete caller-chain trigger and high-confidence minimal fix before changing runtime code.
+
+### Review
+- Found a wrong-scope destructive-delete bug in the new `gitops_agent` mapping: its docs said omitted `resource_scope` defaulted to project, but `scopeOptional` dispatch omitted org/project query params and therefore selected account scope. Reused raw agent IDs could cause a project-agent deletion request to delete the account agent instead.
+- Made GitOps agent deletion fail closed unless `resource_scope` is explicit, and corrected the project-scope example.
+- Added missing `agent_id` validation for ApplicationSet deletion so the cascading delete cannot be dispatched without its parent agent context.
+- Updated GitOps tests for the registry's current params validation order and added public `harness_delete` regressions proving ambiguous requests never reach the API.
+- Verification passed: focused GitOps delete regressions, complete affected test files (248 tests), `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, `pnpm standards:check` (80 tests), and `pnpm test` (116 files / 2529 tests).
 
 ## Critical Bug Investigation Automation (2026-07-13)
 - [x] Baseline branch state and identify recent behavioral commits
