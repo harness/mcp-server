@@ -31,6 +31,37 @@ const workspaceListExtract = (
 const workspaceGetExtract = (raw: unknown): unknown => raw;
 
 /**
+ * IaCM workspace provisioner summary: expose the API's ratios together with
+ * derived integer counts so agents can answer "how many Terraform workspaces?"
+ * without listing every workspace or constructing an HQL query.
+ */
+const workspaceProvisionerSummaryExtract = (raw: unknown): unknown => {
+  const response = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+  const total = typeof response.total === "number" ? response.total : 0;
+  const provisionerRatios =
+    response.provisioner && typeof response.provisioner === "object" && !Array.isArray(response.provisioner)
+      ? response.provisioner as Record<string, unknown>
+      : {};
+
+  const provisioners = Object.entries(provisionerRatios)
+    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .map(([provisioner, ratio]) => ({
+      provisioner,
+      ratio,
+      ...(ratio >= 0 && ratio <= 1 && total >= 0
+        ? { workspace_count: Math.round(ratio * total) }
+        : {}),
+    }));
+
+  return {
+    total_workspaces: total,
+    provisioners,
+  };
+};
+
+/**
  * IACM resources list: API returns a ResourcesResponse with resources, outputs,
  * dataSources, and pagination metadata. Pass the full structure through so the
  * LLM sees outputs (Terraform outputs with descriptions) and data sources as well.
@@ -154,7 +185,8 @@ export const iacmToolset: ToolsetDefinition = {
     "Harness IaCM (Infrastructure as Code Management) — manage Terraform workspaces, " +
     "inspect provisioned resources and Terraform outputs, browse the module registry, " +
     "review workspace cost history, and diff resource changes from past plan/apply/destroy activities. " +
-    "Use iacm_workspace to list and get workspaces, iacm_resource for Terraform resources and outputs, " +
+    "Use iacm_workspace to list and get workspaces, iacm_workspace_provisioner_summary for counts by provisioner, " +
+    "iacm_resource for Terraform resources and outputs, " +
     "iacm_module for the module registry, iacm_workspace_costs for cost breakdown, " +
     "and iacm_activity_resource_change for activity diffs.",
   optIn: false,
@@ -257,6 +289,57 @@ export const iacmToolset: ToolsetDefinition = {
           description:
             "Get full metadata for a specific IaCM workspace by its identifier. " +
             "Returns id, identifier, name, status, last_run, variables, cost_summary, and project_id.",
+        },
+      },
+    },
+
+    // ─── Workspace Provisioner Summary ─────────────────────────────────────
+    {
+      resourceType: "iacm_workspace_provisioner_summary",
+      displayName: "IaCM Workspace Provisioner Summary",
+      description:
+        "Workspace counts and ratios grouped by IaCM provisioner (for example Terraform or OpenTofu). " +
+        "Use harness_get on this resource for questions such as 'how many workspaces use Terraform?'. " +
+        "Returns total_workspaces and provisioners entries containing provisioner, ratio, and workspace_count. " +
+        "This avoids unsupported provisioner filters on iacm_workspace and does not require Knowledge Graph/HQL.",
+      searchAliases: [
+        "terraform workspace count",
+        "workspaces by provisioner",
+        "workspace provisioner count",
+        "number of terraform workspaces",
+      ],
+      toolset: "iacm",
+      scope: "project",
+      identifierFields: [],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/iacm/api/orgs/{org}/projects/{project}/workspaces/provisioners-ratio",
+          pathParams: { org_id: "org", project_id: "project" },
+          queryParams: {
+            start_time: "start_time",
+            end_time: "end_time",
+          },
+          paramsSchema: {
+            fields: [
+              {
+                name: "start_time",
+                required: false,
+                description: "Optional start time filter as a Unix timestamp.",
+              },
+              {
+                name: "end_time",
+                required: false,
+                description: "Optional end time filter as a Unix timestamp.",
+              },
+            ],
+          },
+          preflight: requireProjectScope,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: workspaceProvisionerSummaryExtract,
+          description:
+            "Get IaCM workspace totals grouped by provisioner. " +
+            "Use provisioners[].workspace_count for the number using a named provisioner.",
         },
       },
     },

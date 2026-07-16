@@ -62,22 +62,29 @@ describe("iacmToolset structure", () => {
     expect(iacmToolset.optIn).toBe(false);
   });
 
-  it("registers all 5 resource types", () => {
+  it("registers all 6 resource types", () => {
     const types = iacmToolset.resources.map((r) => r.resourceType);
     expect(types).toContain("iacm_workspace");
+    expect(types).toContain("iacm_workspace_provisioner_summary");
     expect(types).toContain("iacm_resource");
     expect(types).toContain("iacm_module");
     expect(types).toContain("iacm_workspace_costs");
     expect(types).toContain("iacm_activity_resource_change");
-    expect(types).toHaveLength(5);
+    expect(types).toHaveLength(6);
   });
 
   it("iacm_module is account-scoped", () => {
     expect(findResource("iacm_module").scope).toBe("account");
   });
 
-  it("iacm_workspace, iacm_resource, iacm_workspace_costs, iacm_activity_resource_change are project-scoped", () => {
-    for (const type of ["iacm_workspace", "iacm_resource", "iacm_workspace_costs", "iacm_activity_resource_change"]) {
+  it("IaCM workspace resources are project-scoped", () => {
+    for (const type of [
+      "iacm_workspace",
+      "iacm_workspace_provisioner_summary",
+      "iacm_resource",
+      "iacm_workspace_costs",
+      "iacm_activity_resource_change",
+    ]) {
       expect(findResource(type).scope).toBe("project");
     }
   });
@@ -101,6 +108,7 @@ describe("iacm default-on with Registry", () => {
   it("IS present when HARNESS_TOOLSETS is unset (all defaults)", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: undefined }));
     expect(registry.getAllResourceTypes()).toContain("iacm_workspace");
+    expect(registry.getAllResourceTypes()).toContain("iacm_workspace_provisioner_summary");
   });
 
   it("IS present when explicitly enabled with HARNESS_TOOLSETS=iacm", () => {
@@ -178,10 +186,17 @@ describe("requireProjectScope preflight", () => {
     await expect(preflight(ctx)).rejects.toThrow("IaCM");
   });
 
-  it("is present on all project-scoped list operations", () => {
-    for (const type of ["iacm_workspace", "iacm_resource", "iacm_workspace_costs", "iacm_activity_resource_change"]) {
-      const spec = getOp(type, "list");
-      expect(spec.preflight, `${type}.list is missing preflight`).toBeDefined();
+  it("is present on all project-scoped IaCM operations", () => {
+    const operations: Array<[string, "list" | "get"]> = [
+      ["iacm_workspace", "list"],
+      ["iacm_workspace_provisioner_summary", "get"],
+      ["iacm_resource", "list"],
+      ["iacm_workspace_costs", "list"],
+      ["iacm_activity_resource_change", "list"],
+    ];
+    for (const [type, operation] of operations) {
+      const spec = getOp(type, operation);
+      expect(spec.preflight, `${type}.${operation} is missing preflight`).toBeDefined();
     }
   });
 
@@ -216,6 +231,47 @@ describe("workspaceListExtract (via registry dispatch)", () => {
     expect(result.items).toEqual([]);
     expect(result.page_count).toBe(0);
     expect(result.has_more).toBe(false);
+  });
+});
+
+// ─── Response extractor: workspace provisioner summary ───────────────────────
+
+describe("workspaceProvisionerSummaryExtract", () => {
+  function extract(raw: unknown) {
+    return getOp("iacm_workspace_provisioner_summary", "get").responseExtractor!(raw) as Record<string, unknown>;
+  }
+
+  it("projects provisioner ratios with derived workspace counts", () => {
+    const result = extract({
+      total: 10,
+      provisioner: {
+        terraform: 0.7,
+        opentofu: 0.3,
+      },
+    });
+
+    expect(result).toEqual({
+      total_workspaces: 10,
+      provisioners: [
+        { provisioner: "terraform", ratio: 0.7, workspace_count: 7 },
+        { provisioner: "opentofu", ratio: 0.3, workspace_count: 3 },
+      ],
+    });
+  });
+
+  it("omits a derived count when the API value is not a ratio", () => {
+    const result = extract({ total: 10, provisioner: { terraform: 70 } });
+
+    expect(result.provisioners).toEqual([
+      { provisioner: "terraform", ratio: 70 },
+    ]);
+  });
+
+  it("handles malformed responses without leaking the backend envelope", () => {
+    expect(extract({ debug: "internal" })).toEqual({
+      total_workspaces: 0,
+      provisioners: [],
+    });
   });
 });
 
@@ -340,6 +396,12 @@ describe("endpoint paths", () => {
     );
   });
 
+  it("iacm_workspace_provisioner_summary get uses the provisioners-ratio endpoint", () => {
+    expect(getOp("iacm_workspace_provisioner_summary", "get").path).toBe(
+      "/iacm/api/orgs/{org}/projects/{project}/workspaces/provisioners-ratio",
+    );
+  });
+
   it("iacm_resource list uses /workspaces/{workspaceId}/resources", () => {
     expect(getOp("iacm_resource", "list").path).toContain("/resources");
   });
@@ -363,6 +425,52 @@ describe("endpoint paths", () => {
 // ─── Registry dispatch integration ───────────────────────────────────────────
 
 describe("iacm registry dispatch", () => {
+  it("dispatches the provisioner summary with optional time filters", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      total: 4,
+      provisioner: { terraform: 0.75, opentofu: 0.25 },
+    });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await registry.dispatch(
+      makeClient(mockRequest),
+      "iacm_workspace_provisioner_summary",
+      "get",
+      {
+        org_id: "default",
+        project_id: "Testim",
+        start_time: 1000,
+        end_time: 2000,
+      },
+    );
+
+    const request = mockRequest.mock.calls[0]![0] as {
+      path: string;
+      params: Record<string, unknown>;
+    };
+    expect(request.path).toBe(
+      "/iacm/api/orgs/default/projects/Testim/workspaces/provisioners-ratio",
+    );
+    expect(request.params).toMatchObject({
+      start_time: 1000,
+      end_time: 2000,
+    });
+    expect(result).toMatchObject({
+      total_workspaces: 4,
+      provisioners: expect.arrayContaining([
+        { provisioner: "terraform", ratio: 0.75, workspace_count: 3 },
+      ]),
+    });
+  });
+
+  it("discovers the provisioner summary for Terraform workspace count questions", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    expect(registry.searchResources("number of terraform workspaces")[0]?.type).toBe(
+      "iacm_workspace_provisioner_summary",
+    );
+  });
+
   it("dispatches iacm_module get using the numeric id from harness_get resource_id mapping", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ id: 4640, name: "vpc" });
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));

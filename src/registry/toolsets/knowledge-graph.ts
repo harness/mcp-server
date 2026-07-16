@@ -252,9 +252,9 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
         "1. Learn grammar: harness_get(resource_type='kg_grammar'). " +
         "2. Discover types: harness_list(resource_type='kg_queryable_type_summary') — note the 'identifier' and 'kind' fields. " +
         "3. Get fields per type: harness_get(resource_type='kg_type', resource_id='<identifier>', params={kind: '<kind>'}). " +
-        "4. Validate: harness_execute(resource_type='hql_query', action='validate', " +
-        "body={query_string: 'find view \"ci:pipeline_execution_summary_ci\" | select {count()}'}). " +
-        "5. Run: harness_execute(resource_type='hql_query', action='run', body={query_string: '...'}). ",
+        "4. Validate with harness_execute arguments: " +
+        "{\"resource_type\":\"hql_query\",\"action\":\"validate\",\"body\":{\"query_string\":\"find view \\\"ci:pipeline_execution_summary_ci\\\" | select {count()}\"}}; " +
+        "5. Run with the same valid JSON shape using \"action\":\"run\". ",
       operations: {},
       executeActions: {
         validate: {

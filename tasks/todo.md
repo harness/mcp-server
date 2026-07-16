@@ -1,5 +1,19 @@
 # Harness MCP Server — Task Tracking
 
+## Ask AI Knowledge Graph Tool-Call Parse Failure (2026-07-16)
+- [x] Read the complete Slack thread and confirm the screenshot/error
+- [x] Trace the Knowledge Graph and IaCM tool contracts used by the request
+- [x] Reproduce the malformed/unsupported tool-call path and identify root cause
+- [x] Implement a minimal fix with regression coverage
+- [ ] Commit and push the implementation checkpoint before testing
+- [ ] Run focused and broad verification
+- [ ] Open the PR and reply in the original Slack thread
+
+### Plan
+- Treat the repeated Ask AI parser failure as a tool-contract generation problem until local schema inspection or a reproducible MCP call proves otherwise.
+- Follow the likely request path from IaCM workspace discovery through Knowledge Graph/HQL query construction, checking both registered JSON schemas and prompt-facing descriptions for ambiguity or invalid shapes.
+- Keep any fix limited to the proven schema/metadata defect and add a regression at the public tool-registration or handler boundary.
+
 ## Critical Bug Investigation Automation (2026-07-13)
 - [x] Baseline branch state and identify recent behavioral commits
 - [x] Review high-blast-radius diffs and trace concrete trigger scenarios

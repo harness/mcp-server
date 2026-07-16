@@ -91,6 +91,25 @@ describe("hql_query run body", () => {
   });
 });
 
+describe("hql_query discovery guidance", () => {
+  it("provides a strict-JSON single-query example for tool-call generation", () => {
+    const registry = new Registry(makeConfig());
+    const hint = registry.getResource("hql_query").executeHint;
+    const marker = "4. Validate with harness_execute arguments: ";
+    const serializedArguments = hint?.split(marker)[1]?.split("; 5.")[0];
+
+    expect(serializedArguments).toBeDefined();
+    expect(JSON.parse(serializedArguments!)).toEqual({
+      resource_type: "hql_query",
+      action: "validate",
+      body: {
+        query_string:
+          "find view \"ci:pipeline_execution_summary_ci\" | select {count()}",
+      },
+    });
+  });
+});
+
 // ---------------------------------------------------------------------------
 // hql_query — run response shape
 // ---------------------------------------------------------------------------
