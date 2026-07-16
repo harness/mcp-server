@@ -985,6 +985,26 @@ describe("harness_update", () => {
     });
   });
 
+  it("blocks IDP entity updates in read-only mode using the registered config", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp", HARNESS_READ_ONLY: true }));
+    mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
+    client = makeClient(mockRequest);
+    const idpServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(idpServer, registry, client, makeConfig({ HARNESS_READ_ONLY: true }));
+
+    const result = await idpServer.call("harness_update", {
+      resource_type: "idp_entity",
+      resource_id: "boutique-service",
+      params: { kind: "component" },
+      body: { yaml: "apiVersion: harness.io/v1\nkind: component\nmetadata:\n  name: boutique-service\nspec: {}" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Read-only mode") });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("rejects raw YAML update bodies whose identifier conflicts with resource_id", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "prod_connector" } });
@@ -1468,6 +1488,28 @@ describe("harness_delete", () => {
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("gitops_application delete without cascade returns deletion-mode guidance (not generic missing-param error)", async () => {
+    const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsServer = makeMcpServer("accept");
+    const gitopsRequest = vi.fn();
+    const gitopsClient = makeClient(gitopsRequest);
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(gitopsServer, gitopsRegistry, gitopsClient, makeConfig());
+
+    const result = await gitopsServer.call("harness_delete", {
+      resource_type: "gitops_application",
+      resource_id: "demo-app",
+      params: { agent_id: "account.myagent" },
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    const parsed = parseResult(result) as { error: string };
+    expect(parsed.error).toMatch(/Deletion mode is required/);
+    expect(parsed.error).not.toMatch(/Missing required param\(s\).*cascade/);
+    expect(gitopsRequest).not.toHaveBeenCalled();
   });
 });
 
@@ -2881,6 +2923,40 @@ describe("harness_describe", () => {
       expect.arrayContaining([
         expect.objectContaining({ name: "repo_id", required: true }),
         expect.objectContaining({ name: "pr_number", required: true }),
+      ]),
+    );
+  });
+
+  it("exposes gitops delete paramsSchema with agent_id and optional cascade fields", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsServer = makeMcpServer();
+    const { registerDescribeTool } = await import("../../src/tools/harness-describe.js");
+    registerDescribeTool(gitopsServer, registry);
+
+    const agentResult = await gitopsServer.call("harness_describe", { resource_type: "gitops_agent" });
+    expect(agentResult.isError).toBeUndefined();
+    const agentData = parseResult(agentResult) as {
+      operations: Array<{ operation: string; paramsSchema?: { fields: Array<{ name: string; required: boolean }> } }>;
+    };
+    const agentDelete = agentData.operations.find((op) => op.operation === "delete");
+    expect(agentDelete?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "agent_id", required: true }),
+      ]),
+    );
+    expect(agentDelete?.paramsSchema?.fields.some((f) => f.name === "resource_id")).toBe(false);
+
+    const appResult = await gitopsServer.call("harness_describe", { resource_type: "gitops_application" });
+    expect(appResult.isError).toBeUndefined();
+    const appData = parseResult(appResult) as {
+      operations: Array<{ operation: string; paramsSchema?: { fields: Array<{ name: string; required: boolean }> } }>;
+    };
+    const appDelete = appData.operations.find((op) => op.operation === "delete");
+    expect(appDelete?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "agent_id", required: true }),
+        expect.objectContaining({ name: "cascade", required: false }),
+        expect.objectContaining({ name: "remove_existing_finalizers", required: false }),
       ]),
     );
   });

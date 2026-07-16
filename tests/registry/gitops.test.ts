@@ -1562,6 +1562,59 @@ describe("gitops identifier field ordering", () => {
 });
 
 // ---------------------------------------------------------------------------
+// paramsSchema on delete — agent_id naming and optional cascade fields
+// (regression: generic required-param errors must not pre-empt bodyBuilder guidance)
+// ---------------------------------------------------------------------------
+
+describe("paramsSchema on gitops delete operations", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("gitops_agent delete: documents agent_id (not resource_id) as the required param", () => {
+    const spec = registry.getResource("gitops_agent").operations.delete!;
+    const fieldNames = spec.paramsSchema!.fields.map((f) => f.name);
+
+    expect(fieldNames).toContain("agent_id");
+    expect(fieldNames).not.toContain("resource_id");
+    expect(spec.paramsSchema!.fields.find((f) => f.name === "agent_id")?.required).toBe(true);
+  });
+
+  it("gitops_application delete: cascade and remove_existing_finalizers stay optional in paramsSchema", () => {
+    const fields = registry.getResource("gitops_application").operations.delete!.paramsSchema!.fields;
+
+    expect(fields.find((f) => f.name === "agent_id")?.required).toBe(true);
+    expect(fields.find((f) => f.name === "cascade")?.required).toBe(false);
+    expect(fields.find((f) => f.name === "remove_existing_finalizers")?.required).toBe(false);
+  });
+
+  it("gitops_application delete: missing cascade reaches bodyBuilder guidance, not paramsSchema gate", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_application", "delete", {
+        agent_id: "account.myagent",
+        app_name: "demo-app",
+      }),
+    ).rejects.toThrow(/Deletion mode is required/);
+
+    try {
+      await registry.dispatch(client, "gitops_application", "delete", {
+        agent_id: "account.myagent",
+        app_name: "demo-app",
+      });
+      expect.fail("expected delete without cascade to throw");
+    } catch (error) {
+      const message = (error as Error).message;
+      expect(message).toMatch(/Deletion mode is required/);
+      expect(message).not.toMatch(/Missing required param\(s\).*cascade/);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Pagination param forwarding for list operations
 // ---------------------------------------------------------------------------
 
