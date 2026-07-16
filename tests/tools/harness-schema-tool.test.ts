@@ -416,6 +416,22 @@ describe("harness_schema nested static definition lookup", () => {
     const schema = parsed.schema as { properties?: Record<string, { description?: string }> };
     expect(schema.properties?.user?.description).toContain("clone container");
   });
+
+  it("resolves GoogleCloudRunDeployStepInfo from bundled v0 pipeline schema (#597)", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "GoogleCloudRunDeployStepInfo",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toContain("GoogleCloudRunDeployStepInfo");
+    const schema = parsed.schema as { properties?: Record<string, unknown> };
+    expect(schema.properties).toHaveProperty("connectorRef");
+    expect(schema.properties).toHaveProperty("image");
+  });
 });
 
 // Wrapper definitions that are grouping objects (not schema nodes) must still

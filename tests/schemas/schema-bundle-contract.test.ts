@@ -227,4 +227,73 @@ describe("schema bundle contract", () => {
 
     expect(unified).toHaveProperty("DynamicStageNodeV1");
   });
+
+  it("includes upstream GoogleCloudRunDeploy step definitions in v0 pipeline (#597)", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("GoogleCloudRunDeployStepNode");
+    expect(cdSteps).toHaveProperty("GoogleCloudRunDeployStepInfo");
+
+    const stepNode = cdSteps.GoogleCloudRunDeployStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("GoogleCloudRunDeploy");
+
+    const stepInfo = cdSteps.GoogleCloudRunDeployStepInfo as {
+      properties: Record<string, unknown>;
+    };
+    expect(stepInfo.properties).toHaveProperty("connectorRef");
+    expect(stepInfo.properties).toHaveProperty("image");
+  });
+
+  it("includes upstream ShiftGoogleAgentRuntimeTraffic step definitions in v0 pipeline (#597)", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("ShiftGoogleAgentRuntimeTrafficStepNode");
+    expect(cdSteps).toHaveProperty("ShiftGoogleAgentRuntimeTrafficStepInfo");
+
+    const stepNode = cdSteps.ShiftGoogleAgentRuntimeTrafficStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("ShiftGoogleAgentRuntimeTraffic");
+  });
+
+  it("includes upstream RollbackGoogleAgentRuntimeRevision step definitions in v0 pipeline (#597)", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("RollbackGoogleAgentRuntimeRevisionStepNode");
+    expect(cdSteps).toHaveProperty("RollbackGoogleAgentRuntimeRevisionStepInfo");
+
+    const stepNode = cdSteps.RollbackGoogleAgentRuntimeRevisionStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("RollbackGoogleAgentRuntimeRevision");
+  });
+
+  it("includes upstream ShiftAwsAgentCoreTraffic step definitions in v0 pipeline (#597)", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("ShiftAwsAgentCoreTrafficStepNode");
+    expect(cdSteps).toHaveProperty("ShiftAwsAgentCoreTrafficStepInfo");
+
+    const stepNode = cdSteps.ShiftAwsAgentCoreTrafficStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("ShiftAwsAgentCoreTraffic");
+  });
+
+  it("includes upstream llmConnectorRef on AiEvalStepInfo in v0 pipeline (#597)", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const ciSteps = pipelineDefs.pipeline.steps.ci as Record<string, unknown>;
+    const aiEval = ciSteps.AiEvalStepInfo as {
+      allOf: Array<{ properties?: Record<string, { description?: string }> }>;
+    };
+
+    const props = aiEval.allOf.find((part) => part.properties?.llmConnectorRef)?.properties;
+    expect(props?.llmConnectorRef?.description).toContain("LLM connector");
+  });
 });
