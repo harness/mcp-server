@@ -80,6 +80,19 @@ describe("gitops_agent", () => {
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/gitops/api/v1/agents/account.myagent");
   });
+
+  it("delete: raw agent_id → DELETE /gitops/api/v1/agents/{agentIdentifier}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "delete", {
+      agent_id: "agent1779094157087",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/agent1779094157087");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -207,6 +220,67 @@ describe("gitops_application", () => {
         body: {},
       }),
     ).rejects.toThrow(/body\.application is required/);
+  });
+
+  it("delete: foreground cascade — cascade + propagation_policy forwarded as query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_application", "delete", {
+      agent_id: "account.myagent",
+      app_name: "demo-app",
+      cascade: "true",
+      propagation_policy: "foreground",
+      remove_existing_finalizers: "false",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/account.myagent/applications/demo-app");
+    // queryParams maps: cascade → request.cascade, propagation_policy → request.propagationPolicy
+    expect(call.params["request.cascade"]).toBe("true");
+    expect(call.params["request.propagationPolicy"]).toBe("foreground");
+    expect(call.params["options.removeExistingFinalizers"]).toBe("false");
+  });
+
+  it("delete: non-cascading — cascade=false, no propagation_policy needed", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_application", "delete", {
+      agent_id: "account.myagent",
+      app_name: "demo-app",
+      cascade: "false",
+      remove_existing_finalizers: "false",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.params["request.cascade"]).toBe("false");
+    expect(call.params["request.propagationPolicy"]).toBeUndefined();
+  });
+
+  it("delete: throws when cascade is not provided", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_application", "delete", {
+        agent_id: "account.myagent",
+        app_name: "demo-app",
+      }),
+    ).rejects.toThrow(/Deletion mode is required/);
+  });
+
+  it("delete: throws when cascade=true but propagation_policy is missing", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_application", "delete", {
+        agent_id: "account.myagent",
+        app_name: "demo-app",
+        cascade: "true",
+      }),
+    ).rejects.toThrow(/propagation_policy is required when cascade=true/);
   });
 });
 
@@ -477,6 +551,21 @@ describe("gitops_applicationset", () => {
       }),
     ).rejects.toThrow(/metadata\.uid is REQUIRED/);
   });
+
+  it("delete: appset_id → {identifier}, agent_id → query param agentIdentifier", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_applicationset", "delete", {
+      appset_id: "cce8a056-8059-4abc-def0-123456789abc",
+      agent_id: "account.myagent",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/applicationset/cce8a056-8059-4abc-def0-123456789abc");
+    expect(call.params.agentIdentifier).toBe("account.myagent");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -523,6 +612,36 @@ describe("gitops_cluster", () => {
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/gitops/api/v1/agents/account.myagent/clusters/incluster");
   });
+
+  it("delete: cluster_id → {clusterIdentifier}, force_delete forwarded as forceDelete query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_cluster", "delete", {
+      agent_id: "account.myagent",
+      cluster_id: "cluster11",
+      force_delete: "true",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/account.myagent/clusters/cluster11");
+    expect(call.params.forceDelete).toBe("true");
+  });
+
+  it("delete: query_name forwarded as query.name — used for renamed clusters", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_cluster", "delete", {
+      agent_id: "account.myagent",
+      cluster_id: "cluster11",
+      query_name: "cluster11-jh_9",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params["query.name"]).toBe("cluster11-jh_9");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -563,6 +682,34 @@ describe("gitops_repository", () => {
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/gitops/api/v1/agents/account.myagent/repositories/my-repo");
   });
+
+  it("delete: repo_id → {repoIdentifier}, DELETE path correct", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_repository", "delete", {
+      agent_id: "account.gitopssanityagent-qa-12201bdd96",
+      repo_id: "rolloutsDemoRepo",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/account.gitopssanityagent-qa-12201bdd96/repositories/rolloutsDemoRepo");
+  });
+
+  it("delete: force_delete forwarded as forceDelete query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_repository", "delete", {
+      agent_id: "account.myagent",
+      repo_id: "my-repo",
+      force_delete: "true",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.forceDelete).toBe("true");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -602,6 +749,20 @@ describe("gitops_repo_credential", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/gitops/api/v1/agents/account.myagent/repocreds/my-cred");
+  });
+
+  it("delete: credential_id → {credentialId}, DELETE path correct", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_repo_credential", "delete", {
+      agent_id: "account.tomylocal",
+      credential_id: "ashinsabu3_donlxgyi",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/account.tomylocal/repocreds/ashinsabu3_donlxgyi");
   });
 });
 
