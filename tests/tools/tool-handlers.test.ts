@@ -1369,10 +1369,38 @@ describe("harness_delete", () => {
     });
 
     expect(projectResult.isError).toBeUndefined();
-    const call = gitopsRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string };
-    expect(call.path).toBe("/gitops/api/v1/agents/shared-agent");
-    expect(call.params.orgIdentifier).toBe("default");
-    expect(call.params.projectIdentifier).toBe("test-project");
+    const projectCall = gitopsRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string };
+    expect(projectCall.path).toBe("/gitops/api/v1/agents/shared-agent");
+    expect(projectCall.params.orgIdentifier).toBe("default");
+    expect(projectCall.params.projectIdentifier).toBe("test-project");
+
+    gitopsRequest.mockClear();
+
+    const accountResult = await gitopsServer.call("harness_delete", {
+      resource_type: "gitops_agent",
+      resource_id: "shared-agent",
+      resource_scope: "account",
+    });
+
+    expect(accountResult.isError).toBeUndefined();
+    const accountCall = gitopsRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string };
+    expect(accountCall.path).toBe("/gitops/api/v1/agents/shared-agent");
+    expect(accountCall.params.orgIdentifier).toBeUndefined();
+    expect(accountCall.params.projectIdentifier).toBeUndefined();
+
+    gitopsRequest.mockClear();
+
+    const orgResult = await gitopsServer.call("harness_delete", {
+      resource_type: "gitops_agent",
+      resource_id: "shared-agent",
+      resource_scope: "org",
+    });
+
+    expect(orgResult.isError).toBeUndefined();
+    const orgCall = gitopsRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string };
+    expect(orgCall.path).toBe("/gitops/api/v1/agents/shared-agent");
+    expect(orgCall.params.orgIdentifier).toBe("default");
+    expect(orgCall.params.projectIdentifier).toBeUndefined();
   });
 
   it("requires a parent agent before deleting a GitOps ApplicationSet", async () => {
@@ -1391,6 +1419,17 @@ describe("harness_delete", () => {
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("agent_id") });
     expect(gitopsRequest).not.toHaveBeenCalled();
+
+    const successResult = await gitopsServer.call("harness_delete", {
+      resource_type: "gitops_applicationset",
+      resource_id: "cce8a056-8059-4abc-def0-123456789abc",
+      params: { agent_id: "account.myagent" },
+    });
+
+    expect(successResult.isError).toBeUndefined();
+    const call = gitopsRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string };
+    expect(call.path).toBe("/gitops/api/v1/applicationset/cce8a056-8059-4abc-def0-123456789abc");
+    expect(call.params.agentIdentifier).toBe("account.myagent");
   });
 
   it("returns structured delete payload without spreading API fields at top level", async () => {
@@ -2902,6 +2941,40 @@ describe("harness_describe", () => {
     const data = parseResult(result) as { supportedScopes?: string[]; scopeHint?: string };
     expect(data.supportedScopes).toEqual(["account", "org", "project"]);
     expect(data.scopeHint).toContain("resource_scope='account'");
+  });
+
+  it("exposes required destructive-delete params for GitOps agents and ApplicationSets", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsServer = makeMcpServer();
+    const { registerDescribeTool } = await import("../../src/tools/harness-describe.js");
+    registerDescribeTool(gitopsServer, registry);
+
+    const agentResult = await gitopsServer.call("harness_describe", { resource_type: "gitops_agent" });
+    expect(agentResult.isError).toBeUndefined();
+    const agentData = parseResult(agentResult) as {
+      operations: Array<{ operation: string; paramsSchema?: { fields: Array<{ name: string; required: boolean; description?: string }> } }>;
+    };
+    const agentDelete = agentData.operations.find((op) => op.operation === "delete");
+    expect(agentDelete?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "resource_scope", required: true }),
+        expect.objectContaining({ name: "resource_id", required: true }),
+      ]),
+    );
+    const scopeField = agentDelete?.paramsSchema?.fields.find((f) => f.name === "resource_scope");
+    expect(scopeField?.description).toContain("ambiguous");
+
+    const appsetResult = await gitopsServer.call("harness_describe", { resource_type: "gitops_applicationset" });
+    expect(appsetResult.isError).toBeUndefined();
+    const appsetData = parseResult(appsetResult) as {
+      operations: Array<{ operation: string; paramsSchema?: { fields: Array<{ name: string; required: boolean }> } }>;
+    };
+    const appsetDelete = appsetData.operations.find((op) => op.operation === "delete");
+    expect(appsetDelete?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "agent_id", required: true }),
+      ]),
+    );
   });
 
   it("exposes paramsSchema for pull request operations and execute actions", async () => {

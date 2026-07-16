@@ -110,6 +110,40 @@ describe("gitops_agent", () => {
     ).rejects.toThrow(/resource_scope/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
+
+  it("delete: account scope omits org and project query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "delete", {
+      resource_id: "shared-agent",
+      agent_id: "shared-agent",
+      resource_scope: "account",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/shared-agent");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("delete: org scope injects orgIdentifier only", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "delete", {
+      resource_id: "shared-agent",
+      agent_id: "shared-agent",
+      resource_scope: "org",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/shared-agent");
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -1713,5 +1747,38 @@ describe("gitops supportedScopes", () => {
     await expect(
       registry.dispatch(client, "gitops_application", "list", { resource_scope: "account" }),
     ).rejects.toThrow(/gitops_application does not support account scope/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Destructive delete paramsSchema — fail closed before API dispatch
+// ---------------------------------------------------------------------------
+
+describe("gitops destructive delete paramsSchema", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("gitops_agent delete requires resource_scope and resource_id", () => {
+    const def = registry.getResource("gitops_agent");
+    const deleteSpec = def.operations.delete;
+    expect(deleteSpec?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "resource_scope", required: true }),
+        expect.objectContaining({ name: "resource_id", required: true }),
+      ]),
+    );
+  });
+
+  it("gitops_applicationset delete requires parent agent_id", () => {
+    const def = registry.getResource("gitops_applicationset");
+    const deleteSpec = def.operations.delete;
+    expect(deleteSpec?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "agent_id", required: true }),
+      ]),
+    );
   });
 });
