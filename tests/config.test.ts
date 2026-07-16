@@ -248,6 +248,14 @@ describe("ConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects fractional HARNESS_MCP_TRUST_PROXY", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_MCP_TRUST_PROXY: "1.5",
+    });
+    expect(result.success).toBe(false);
+  });
+
   it("coerces string numbers for timeout and retries", () => {
     const result = ConfigSchema.safeParse({
       ...validConfig,

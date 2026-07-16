@@ -260,6 +260,21 @@ describe("HTTP transport session management", () => {
         expect(otherClient.body).toEqual({ ip: "198.51.100.20" });
       });
     });
+
+    it("ignores X-Forwarded-For for rate limiting when trust proxy is disabled", async () => {
+      const app = buildRateLimitProbeApp(0);
+      await withListeningApp(app, async (baseUrl) => {
+        for (let i = 0; i < 2; i++) {
+          const allowed = await getProbe(baseUrl, { "X-Forwarded-For": "203.0.113.10" });
+          expect(allowed.status).toBe(200);
+        }
+        const limitedSameForwardedIp = await getProbe(baseUrl, { "X-Forwarded-For": "203.0.113.10" });
+        expect(limitedSameForwardedIp.status).toBe(429);
+
+        const limitedDifferentForwardedIp = await getProbe(baseUrl, { "X-Forwarded-For": "198.51.100.20" });
+        expect(limitedDifferentForwardedIp.status).toBe(429);
+      });
+    });
   });
 
   describe("rate limiting behavior", () => {
