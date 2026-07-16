@@ -39,24 +39,29 @@ const workspaceProvisionerSummaryExtract = (raw: unknown): unknown => {
   const response = raw && typeof raw === "object" && !Array.isArray(raw)
     ? raw as Record<string, unknown>
     : {};
-  const total = typeof response.total === "number" ? response.total : 0;
+  const total = typeof response.total === "number" && Number.isFinite(response.total)
+    ? response.total
+    : undefined;
   const provisionerRatios =
     response.provisioner && typeof response.provisioner === "object" && !Array.isArray(response.provisioner)
       ? response.provisioner as Record<string, unknown>
       : {};
 
   const provisioners = Object.entries(provisionerRatios)
-    .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+    .filter(
+      (entry): entry is [string, number] =>
+        typeof entry[1] === "number" && Number.isFinite(entry[1]),
+    )
     .map(([provisioner, ratio]) => ({
       provisioner,
       ratio,
-      ...(ratio >= 0 && ratio <= 1 && total >= 0
+      ...(total !== undefined && ratio >= 0 && ratio <= 1 && total >= 0
         ? { workspace_count: Math.round(ratio * total) }
         : {}),
     }));
 
   return {
-    total_workspaces: total,
+    ...(total !== undefined ? { total_workspaces: total } : {}),
     provisioners,
   };
 };

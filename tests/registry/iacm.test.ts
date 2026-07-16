@@ -269,7 +269,6 @@ describe("workspaceProvisionerSummaryExtract", () => {
 
   it("handles malformed responses without leaking the backend envelope", () => {
     expect(extract({ debug: "internal" })).toEqual({
-      total_workspaces: 0,
       provisioners: [],
     });
   });
