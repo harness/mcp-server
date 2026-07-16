@@ -7150,7 +7150,7 @@ const schema: Record<string, any> = {
                         "type": "array",
                         "items": {
                           "type": "string",
-                          "pattern": "^([a-zA-Z0-9-_]+)$",
+                          "pattern": "^([a-zA-Z0-9-_:]+)$",
                           "maxItems": 20
                         }
                       },
@@ -7410,7 +7410,7 @@ const schema: Record<string, any> = {
                         "type": "array",
                         "items": {
                           "type": "string",
-                          "pattern": "^([a-zA-Z0-9-_]+)$"
+                          "pattern": "^([a-zA-Z0-9-_:]+)$"
                         },
                         "maxItems": 20
                       },
@@ -8002,7 +8002,7 @@ const schema: Record<string, any> = {
                         "type": "array",
                         "items": {
                           "type": "string",
-                          "pattern": "^([a-zA-Z0-9-_]+)$",
+                          "pattern": "^([a-zA-Z0-9-_:]+)$",
                           "maxItems": 20
                         }
                       },
@@ -10178,7 +10178,7 @@ const schema: Record<string, any> = {
                         "maxItems": 20,
                         "items": {
                           "type": "string",
-                          "pattern": "^([a-zA-Z0-9-_]+)$"
+                          "pattern": "^([a-zA-Z0-9-_:]+)$"
                         }
                       },
                       {
@@ -11625,11 +11625,18 @@ const schema: Record<string, any> = {
                                                         ]
                                                       },
                                                       "value": {
-                                                        "type": "array",
-                                                        "minItems": 1,
-                                                        "items": {
-                                                          "type": "string"
-                                                        }
+                                                        "oneOf": [
+                                                          {
+                                                            "type": "array",
+                                                            "minItems": 1,
+                                                            "items": {
+                                                              "type": "string"
+                                                            }
+                                                          },
+                                                          {
+                                                            "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                                                          }
+                                                        ]
                                                       }
                                                     }
                                                   }
@@ -53169,6 +53176,9 @@ const schema: Record<string, any> = {
                         "type": "string"
                       }
                     ]
+                  },
+                  "llmConnectorRef": {
+                    "type": "string"
                   }
                 }
               }
@@ -53197,6 +53207,9 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 ]
+              },
+              "llmConnectorRef": {
+                "type": "string"
               }
             }
           },
@@ -83534,8 +83547,16 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "name": {
-                    "type": "string",
-                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_\\.\\[\\]$-]{0,127}$"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z_][0-9a-zA-Z_\\.\\[\\]$-]{0,127}$"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)"
+                      }
+                    ]
                   },
                   "type": {
                     "type": "string",
@@ -83573,8 +83594,16 @@ const schema: Record<string, any> = {
                     "format": "double"
                   },
                   "name": {
-                    "type": "string",
-                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_\\.\\[\\]$-]{0,127}$"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z_][0-9a-zA-Z_\\.\\[\\]$-]{0,127}$"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)"
+                      }
+                    ]
                   },
                   "type": {
                     "type": "string",
@@ -83624,8 +83653,16 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "name": {
-                    "type": "string",
-                    "pattern": "^[a-zA-Z_][0-9a-zA-Z_\\.\\[\\]$-]{0,127}$"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^[a-zA-Z_][0-9a-zA-Z_\\.\\[\\]$-]{0,127}$"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)"
+                      }
+                    ]
                   },
                   "type": {
                     "type": "string",
@@ -91990,6 +92027,544 @@ const schema: Record<string, any> = {
               }
             }
           },
+          "ShiftAwsAgentCoreTrafficStepNode": {
+            "title": "ShiftAwsAgentCoreTrafficStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for ShiftAwsAgentCoreTrafficStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ShiftAwsAgentCoreTraffic"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "ShiftAwsAgentCoreTraffic"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/ShiftAwsAgentCoreTrafficStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "ShiftAwsAgentCoreTrafficStepInfo": {
+            "title": "ShiftAwsAgentCoreTrafficStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "connectorRef": {
+                    "type": "string"
+                  },
+                  "delegateSelectors": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "image": {
+                    "type": "string"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "privileged": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "runAsUser": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "preExecution": {
+                    "type": "string"
+                  },
+                  "target": {
+                    "type": "object",
+                    "properties": {
+                      "revisionId": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "weight": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "connectorRef": {
+                "type": "string"
+              },
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "image": {
+                "type": "string"
+              },
+              "imagePullPolicy": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Always",
+                      "Never",
+                      "IfNotPresent"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "privileged": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "runAsUser": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "preExecution": {
+                "type": "string"
+              },
+              "target": {
+                "type": "object",
+                "properties": {
+                  "revisionId": {
+                    "type": "string"
+                  }
+                }
+              },
+              "weight": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for ShiftAwsAgentCoreTrafficStepInfo"
+              }
+            }
+          },
+          "RollbackAwsAgentCoreRevisionStepNode": {
+            "title": "RollbackAwsAgentCoreRevisionStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for RollbackAwsAgentCoreRevisionStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "RollbackAwsAgentCoreRevision"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "RollbackAwsAgentCoreRevision"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/RollbackAwsAgentCoreRevisionStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "RollbackAwsAgentCoreRevisionStepInfo": {
+            "title": "RollbackAwsAgentCoreRevisionStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "connectorRef": {
+                    "type": "string"
+                  },
+                  "delegateSelectors": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "image": {
+                    "type": "string"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "privileged": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "runAsUser": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "preExecution": {
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "properties": {
+              "connectorRef": {
+                "type": "string"
+              },
+              "delegateSelectors": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "image": {
+                "type": "string"
+              },
+              "imagePullPolicy": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Always",
+                      "Never",
+                      "IfNotPresent"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "privileged": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "runAsUser": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "preExecution": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for RollbackAwsAgentCoreRevisionStepInfo"
+              }
+            }
+          },
           "GoogleCloudRunTrafficShiftStepNode": {
             "title": "GoogleCloudRunTrafficShiftStepNode",
             "type": "object",
@@ -99433,38 +100008,75 @@ const schema: Record<string, any> = {
               },
               {
                 "type": "object",
-                "required": [
-                  "loadTestRef"
-                ],
                 "properties": {
-                  "loadTestRef": {
+                  "kind": {
+                    "description": "How the step resolves what to run: 'instance' (default) runs an existing load test referenced by loadTestRef; 'template' runs a chaos-hub load test template (hubRef + identifier) bound to infraReference + environmentReference.",
                     "type": "string",
-                    "minLength": 1
+                    "enum": [
+                      "instance",
+                      "template"
+                    ]
                   },
-                  "targetUsers": {
+                  "loadTestRef": {
+                    "description": "Reference to the load test to run (instance mode). May be a fixed value or a pipeline expression / runtime input (<+input>) so the step stays reusable when authored inside a template.",
                     "oneOf": [
                       {
-                        "type": "integer"
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
                       },
                       {
                         "$ref": "#/definitions/pipeline/steps/common/common-jexl"
                       }
                     ]
                   },
-                  "rampUpTimeSec": {
+                  "hubRef": {
+                    "description": "Chaos Hub reference containing the load test template to run (template mode).",
                     "oneOf": [
                       {
-                        "type": "integer"
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
                       },
                       {
                         "$ref": "#/definitions/pipeline/steps/common/common-jexl"
                       }
                     ]
                   },
-                  "durationSeconds": {
+                  "identifier": {
+                    "description": "Identifier of the load test template within the chaos hub to run (template mode).",
                     "oneOf": [
                       {
-                        "type": "integer"
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "revision": {
+                    "description": "Pinned revision of the load test template captured when the template is selected (template mode). Load test templates are versioned, so the run is pinned to an explicit revision for reproducibility.",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "infraReference": {
+                    "description": "Infrastructure the templated load test runs on (template mode). May be a fixed value or a pipeline expression / runtime input.",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "environmentReference": {
+                    "description": "Environment the templated load test runs in (template mode). May be a fixed value or a pipeline expression / runtime input.",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
                       },
                       {
                         "$ref": "#/definitions/pipeline/steps/common/common-jexl"
@@ -99513,6 +100125,30 @@ const schema: Record<string, any> = {
                       }
                     ]
                   }
+                },
+                "if": {
+                  "properties": {
+                    "kind": {
+                      "const": "template"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                },
+                "then": {
+                  "required": [
+                    "hubRef",
+                    "identifier",
+                    "revision",
+                    "infraReference",
+                    "environmentReference"
+                  ]
+                },
+                "else": {
+                  "required": [
+                    "loadTestRef"
+                  ]
                 }
               }
             ],
@@ -106005,7 +106641,8 @@ const schema: Record<string, any> = {
                   "GoogleCloudRun",
                   "AzureContainerApps",
                   "Salesforce",
-                  "GoogleManagedInstanceGroup"
+                  "GoogleManagedInstanceGroup",
+                  "AiAgent"
                 ]
               },
               "environment": {
@@ -107270,6 +107907,12 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/DeployAwsAgentCoreRevisionStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/ShiftAwsAgentCoreTrafficStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/RollbackAwsAgentCoreRevisionStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/GoogleCloudRunTrafficShiftStepNode"
@@ -110515,7 +111158,8 @@ const schema: Record<string, any> = {
                   "GoogleCloudRun",
                   "AzureContainerApps",
                   "Salesforce",
-                  "GoogleManagedInstanceGroup"
+                  "GoogleManagedInstanceGroup",
+                  "AiAgent"
                 ]
               },
               "description": {
@@ -110824,6 +111468,22 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/stages/cd/GoogleMigServiceSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "AiAgent"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/AiAgentServiceSpec"
                     }
                   }
                 }
@@ -115134,6 +115794,217 @@ const schema: Record<string, any> = {
               }
             }
           },
+          "AiAgentServiceSpec": {
+            "title": "AiAgentServiceSpec",
+            "type": "object",
+            "required": [
+              "platform"
+            ],
+            "properties": {
+              "configVariables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "platform": {
+                "$ref": "#/definitions/pipeline/stages/cd/AiAgentPlatform"
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "description": {
+                "desc": "This is the description for AiAgentServiceSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "AiAgentPlatform": {
+            "title": "AiAgentPlatform",
+            "type": "object",
+            "required": [
+              "type",
+              "spec"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "AwsAgentCore",
+                  "GoogleAgentRuntime"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for AiAgentPlatform"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "AwsAgentCore"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/AwsAgentCorePlatformSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "GoogleAgentRuntime"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/GoogleAgentRuntimePlatformSpec"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "AwsAgentCorePlatformSpec": {
+            "title": "AwsAgentCorePlatformSpec",
+            "type": "object",
+            "required": [
+              "source",
+              "executionRoleArn"
+            ],
+            "properties": {
+              "source": {
+                "$ref": "#/definitions/pipeline/stages/cd/AwsCoreAgentSource"
+              },
+              "executionRoleArn": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for AwsAgentCorePlatformSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "AwsCoreAgentSource": {
+            "title": "AwsCoreAgentSource",
+            "type": "object",
+            "required": [
+              "type",
+              "spec"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "container"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for AwsCoreAgentSource"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "container"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/ContainerAgentSource"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "ContainerAgentSource": {
+            "title": "ContainerAgentSource",
+            "type": "object",
+            "required": [
+              "image"
+            ],
+            "properties": {
+              "image": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for ContainerAgentSource"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "GoogleAgentRuntimePlatformSpec": {
+            "title": "GoogleAgentRuntimePlatformSpec",
+            "type": "object",
+            "required": [
+              "source"
+            ],
+            "properties": {
+              "source": {
+                "$ref": "#/definitions/pipeline/stages/cd/GoogleAgentSource"
+              },
+              "description": {
+                "desc": "This is the description for GoogleAgentRuntimePlatformSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "GoogleAgentSource": {
+            "title": "GoogleAgentSource",
+            "type": "object",
+            "required": [
+              "type",
+              "spec"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "container"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for GoogleAgentSource"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "container"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/ContainerAgentSource"
+                    }
+                  }
+                }
+              }
+            ]
+          },
           "StageOverridesConfig": {
             "title": "StageOverridesConfig",
             "type": "object",
@@ -119323,6 +120194,12 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/DeployAwsAgentCoreRevisionStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/ShiftAwsAgentCoreTrafficStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/RollbackAwsAgentCoreRevisionStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/GoogleCloudRunTrafficShiftStepNode"
