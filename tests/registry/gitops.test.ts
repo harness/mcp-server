@@ -86,6 +86,7 @@ describe("gitops_agent", () => {
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "gitops_agent", "delete", {
+      resource_id: "agent1779094157087",
       agent_id: "agent1779094157087",
     });
 
@@ -267,8 +268,9 @@ describe("gitops_application", () => {
       registry.dispatch(client, "gitops_application", "delete", {
         agent_id: "account.myagent",
         app_name: "demo-app",
+        remove_existing_finalizers: "false",
       }),
-    ).rejects.toThrow(/Deletion mode is required/);
+    ).rejects.toThrow(/Missing required param\(s\) for gitops_application\.delete: cascade/);
   });
 
   it("delete: throws when cascade=true but propagation_policy is missing", async () => {
@@ -279,6 +281,7 @@ describe("gitops_application", () => {
         agent_id: "account.myagent",
         app_name: "demo-app",
         cascade: "true",
+        remove_existing_finalizers: "false",
       }),
     ).rejects.toThrow(/propagation_policy is required when cascade=true/);
   });
