@@ -46,3 +46,19 @@ describe("Coding standards — documentation consistency", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
 });
+
+describe("Coding standards — AGENTS.md consistency", () => {
+  const agentsContent = readFileSync(join(REPO_ROOT, "AGENTS.md"), "utf8");
+
+  it("AGENTS.md documents 11 consolidated MCP tools including harness_schema", () => {
+    expect(agentsContent).toMatch(/11 consolidated tools/);
+    for (const tool of REQUIRED_TOOLS) {
+      expect(agentsContent, `missing ${tool} in AGENTS.md`).toContain(tool);
+    }
+  });
+
+  it("AGENTS.md references Zod v4 and standards:check", () => {
+    expect(agentsContent).toMatch(/Zod v4/);
+    expect(agentsContent).toContain("pnpm standards:check");
+  });
+});
