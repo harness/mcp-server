@@ -962,7 +962,7 @@ describe("harness_update", () => {
     client = makeClient(mockRequest);
     const idpServer = makeMcpServer("accept");
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(idpServer, registry, client);
+    registerUpdateTool(idpServer, registry, client, makeConfig());
 
     const result = await idpServer.call("harness_update", {
       resource_type: "idp_entity",
