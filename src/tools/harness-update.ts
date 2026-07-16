@@ -12,7 +12,7 @@ import { formatBodyPreview } from "../utils/body-preview.js";
 import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { updateOutputSchema } from "./output-schemas.js";
 
-export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
+export function registerUpdateTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const updatableTypes = registry.getTypesForOperation("update");
 
   server.registerTool(
@@ -80,7 +80,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
         const risk = def.operations.update!.operationPolicy.risk;
         // Fail fast on HARNESS_READ_ONLY before elicitation — see
         // harness_create.ts for the rationale. Mirrors registry.dispatch().
-        if (config?.HARNESS_READ_ONLY) {
+        if (config.HARNESS_READ_ONLY) {
           const reason = `Read-only mode is enabled (HARNESS_READ_ONLY=true). "update" operations are not allowed.`;
           registry.auditBlockedAttempt(
             args.resource_type,
@@ -97,7 +97,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           toolName: "harness_update",
           message: `Update ${args.resource_type} "${resolvedResourceId}"?\n\n${bodyPreview}`,
           risk,
-          autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
+          autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {

@@ -89,7 +89,7 @@ describe("Elicitation flow: harness_create", () => {
   it("proceeds without elicitation when client does not support it (non-destructive)", async () => {
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(server, registry, client);
+    registerCreateTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_create", {
       resource_type: "pipeline",
@@ -106,7 +106,7 @@ describe("Elicitation flow: harness_create", () => {
     // requiresConfirmation(risk), which kicks in at medium_write.
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(server, registry, client);
+    registerCreateTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_create", {
       resource_type: "pipeline",
@@ -120,7 +120,7 @@ describe("Elicitation flow: harness_create", () => {
   it("proceeds when elicitInput throws (low-risk create silently bypasses)", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitThrows: true });
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(server, registry, client);
+    registerCreateTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_create", {
       resource_type: "pipeline",
@@ -145,7 +145,7 @@ describe("Elicitation flow: harness_delete (destructive)", () => {
   it("blocks when client does not support elicitation", async () => {
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -161,7 +161,7 @@ describe("Elicitation flow: harness_delete (destructive)", () => {
   it("blocks when elicitInput throws (destructive)", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitThrows: true });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -176,7 +176,7 @@ describe("Elicitation flow: harness_delete (destructive)", () => {
   it("proceeds when user accepts", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -191,7 +191,7 @@ describe("Elicitation flow: harness_delete (destructive)", () => {
   it("stops when user declines", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -218,7 +218,7 @@ describe("Elicitation flow: harness_execute", () => {
   it("blocks high_write action when client does not support elicitation", async () => {
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(server, registry, client);
+    registerExecuteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_execute", {
       resource_type: "pipeline",
@@ -235,7 +235,7 @@ describe("Elicitation flow: harness_execute", () => {
   it("confirms and proceeds on accept for high_write action", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(server, registry, client);
+    registerExecuteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_execute", {
       resource_type: "pipeline",
@@ -250,7 +250,7 @@ describe("Elicitation flow: harness_execute", () => {
   it("stops on decline", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(server, registry, client);
+    registerExecuteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_execute", {
       resource_type: "pipeline",
@@ -265,7 +265,7 @@ describe("Elicitation flow: harness_execute", () => {
   it("proceeds without elicitation for low_write action on non-elicitation client", async () => {
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(server, registry, client);
+    registerExecuteTool(server, registry, client, makeConfig());
 
     // pipeline import is low_write — should proceed without elicitation
     const result = await server.call("harness_execute", {
@@ -292,7 +292,7 @@ describe("Elicitation flow: harness_update", () => {
   it("proceeds without elicitation (non-destructive)", async () => {
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(server, registry, client);
+    registerUpdateTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_update", {
       resource_type: "pipeline",
@@ -310,7 +310,7 @@ describe("Elicitation flow: harness_update", () => {
     // would only matter for medium_write+ updates.
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(server, registry, client);
+    registerUpdateTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_update", {
       resource_type: "pipeline",
@@ -335,7 +335,7 @@ describe("Elicitation ordering: validate before elicit", () => {
   it("harness_create validates resource_type before asking user to confirm", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(server, registry, client);
+    registerCreateTool(server, registry, client, makeConfig());
 
     // execution has no create operation — should error without eliciting
     const result = await server.call("harness_create", {
@@ -351,7 +351,7 @@ describe("Elicitation ordering: validate before elicit", () => {
   it("harness_delete validates resource_type before asking user to confirm", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "execution",
@@ -365,7 +365,7 @@ describe("Elicitation ordering: validate before elicit", () => {
   it("harness_execute validates action before asking user to confirm", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(server, registry, client);
+    registerExecuteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_execute", {
       resource_type: "pipeline",
@@ -392,7 +392,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
   it("harness_delete proceeds with confirm:true when client lacks elicitation", async () => {
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -407,7 +407,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
   it("harness_delete proceeds with confirm:true when elicitInput throws", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitThrows: true });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -421,7 +421,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
   it("harness_execute proceeds with confirm:true when client lacks elicitation (high_write)", async () => {
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(server, registry, client);
+    registerExecuteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_execute", {
       resource_type: "pipeline",
@@ -442,7 +442,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     const server = makeMcpServer({ supportsElicitation: true });
     server._elicitInput.mockResolvedValue({ action: "accept", content: {} });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -457,7 +457,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
   it("harness_delete still blocks on explicit decline EVEN with confirm:true (authoritative human decline)", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -475,7 +475,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
   it("harness_execute still blocks on explicit cancel EVEN with confirm:true", async () => {
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "cancel" });
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(server, registry, client);
+    registerExecuteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_execute", {
       resource_type: "pipeline",
@@ -491,7 +491,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
   it("error hint when client lacks elicitation tells caller to retry with confirm:true (and does NOT misattribute to user)", async () => {
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -516,7 +516,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     const server = makeMcpServer({ supportsElicitation: true });
     server._elicitInput.mockResolvedValue({ action: "accept", content: {} });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, registry, client);
+    registerDeleteTool(server, registry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -545,7 +545,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
 
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, auditedRegistry, client);
+    registerDeleteTool(server, auditedRegistry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -582,7 +582,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
 
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, auditedRegistry, client);
+    registerDeleteTool(server, auditedRegistry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",
@@ -620,7 +620,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     // Decline elicitation so we hit the blocked audit path.
     const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(server, stoRegistry, client);
+    registerExecuteTool(server, stoRegistry, client, makeConfig());
 
     const result = await server.call("harness_execute", {
       resource_type: "security_exemption",
@@ -695,7 +695,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
 
     const server = makeMcpServer({ supportsElicitation: false });
     const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
-    registerDeleteTool(server, auditedRegistry, client);
+    registerDeleteTool(server, auditedRegistry, client, makeConfig());
 
     const result = await server.call("harness_delete", {
       resource_type: "pipeline",

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi, afterEach } from "vitest";
 import type { Config } from "../../src/config.js";
 import { resolveFmeApiKey } from "../../src/config.js";
 import {
@@ -53,6 +53,31 @@ describe("session header parsing", () => {
     expect(parseAutoApproveRiskHeader({ "x-harness-auto-approve-risk": "ALL" })).toBe("all");
     expect(parseAutoApproveRiskHeader({ "x-harness-auto-approve-risk": " medium_write " })).toBe("medium_write");
     expect(parseAutoApproveRiskHeader({ "x-harness-auto-approve-risk": "read" })).toBeUndefined();
+  });
+
+  describe("auto-approve risk header warnings", () => {
+    // The logger writes through console.error (see src/utils/logger.ts).
+    afterEach(() => vi.restoreAllMocks());
+
+    it("warns on an unrecognized value instead of silently defaulting", () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      expect(parseAutoApproveRiskHeader({ "x-harness-auto-approve-risk": "read" })).toBeUndefined();
+      expect(spy).toHaveBeenCalledTimes(1);
+      // The offending value is surfaced so a misconfigured client can debug it.
+      expect(spy.mock.calls[0]?.[0]).toContain("read");
+    });
+
+    it("does not warn on a recognized value", () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      expect(parseAutoApproveRiskHeader({ "x-harness-auto-approve-risk": "high_write" })).toBe("high_write");
+      expect(spy).not.toHaveBeenCalled();
+    });
+
+    it("does not warn when the header is absent", () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      expect(parseAutoApproveRiskHeader({})).toBeUndefined();
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
 
   it("merges valid session headers without mutating the base config", () => {
