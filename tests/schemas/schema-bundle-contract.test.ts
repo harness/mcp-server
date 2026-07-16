@@ -220,4 +220,70 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream GoogleCloudRunDeploy step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("GoogleCloudRunDeployStepNode");
+    expect(cdSteps).toHaveProperty("GoogleCloudRunDeployStepInfo");
+
+    const stepNode = cdSteps.GoogleCloudRunDeployStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("GoogleCloudRunDeploy");
+
+    const stepInfo = cdSteps.GoogleCloudRunDeployStepInfo as {
+      properties: Record<string, unknown>;
+    };
+    expect(stepInfo.properties).toHaveProperty("connectorRef");
+    expect(stepInfo.properties).toHaveProperty("image");
+  });
+
+  it("includes upstream GoogleCloudRunDeploy step definitions in v0 template", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = templateDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("GoogleCloudRunDeployStepNode");
+    expect(cdSteps).toHaveProperty("GoogleCloudRunDeployStepNode_template");
+    expect(cdSteps).toHaveProperty("GoogleCloudRunDeployStepInfo");
+  });
+
+  it("includes upstream ShiftGoogleAgentRuntimeTraffic step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("ShiftGoogleAgentRuntimeTrafficStepNode");
+    expect(cdSteps).toHaveProperty("ShiftGoogleAgentRuntimeTrafficStepInfo");
+
+    const stepNode = cdSteps.ShiftGoogleAgentRuntimeTrafficStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("ShiftGoogleAgentRuntimeTraffic");
+  });
+
+  it("includes upstream RollbackGoogleAgentRuntimeRevision step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("RollbackGoogleAgentRuntimeRevisionStepNode");
+    expect(cdSteps).toHaveProperty("RollbackGoogleAgentRuntimeRevisionStepInfo");
+
+    const stepNode = cdSteps.RollbackGoogleAgentRuntimeRevisionStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("RollbackGoogleAgentRuntimeRevision");
+  });
+
+  it("uses parallel (not sequential) for v1 multi-service deployment after upstream rename", () => {
+    const defs = SCHEMAS.pipeline_v1.definitions as Record<string, Record<string, unknown>>;
+    const serviceV1 = defs.pipeline_v1.stages.unified.ServiceV1 as {
+      oneOf: Array<{ properties?: Record<string, { description?: string; properties?: Record<string, unknown> }> }>;
+    };
+    const multiService = serviceV1.oneOf.find((variant) => variant.properties?.items != null);
+    expect(multiService).toBeDefined();
+    expect(multiService!.properties).toHaveProperty("parallel");
+    expect(multiService!.properties).not.toHaveProperty("sequential");
+    expect(multiService!.properties!.parallel.description).toContain("parallel");
+  });
 });

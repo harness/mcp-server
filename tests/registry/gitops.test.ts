@@ -81,17 +81,25 @@ describe("gitops_agent", () => {
     expect(call.path).toBe("/gitops/api/v1/agents/account.myagent");
   });
 
-  it("delete: raw agent_id → DELETE /gitops/api/v1/agents/{agentIdentifier}", async () => {
+  it("delete: raw resource_id → DELETE /gitops/api/v1/agents/{agentIdentifier}", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "gitops_agent", "delete", {
-      agent_id: "agent1779094157087",
+      resource_id: "agent1779094157087",
     });
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("DELETE");
     expect(call.path).toBe("/gitops/api/v1/agents/agent1779094157087");
+  });
+
+  it("delete: fails fast when resource_id is missing (paramsSchema enforcement)", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_agent", "delete", {}),
+    ).rejects.toThrow(/Missing required param\(s\) for gitops_agent\.delete: resource_id/);
   });
 });
 
@@ -260,7 +268,7 @@ describe("gitops_application", () => {
     expect(call.params["request.propagationPolicy"]).toBeUndefined();
   });
 
-  it("delete: throws when cascade is not provided", async () => {
+  it("delete: fails fast via paramsSchema when cascade and remove_existing_finalizers are missing", async () => {
     const client = makeClient(vi.fn());
 
     await expect(
@@ -268,7 +276,9 @@ describe("gitops_application", () => {
         agent_id: "account.myagent",
         app_name: "demo-app",
       }),
-    ).rejects.toThrow(/Deletion mode is required/);
+    ).rejects.toThrow(
+      /Missing required param\(s\) for gitops_application\.delete: cascade, remove_existing_finalizers/,
+    );
   });
 
   it("delete: throws when cascade=true but propagation_policy is missing", async () => {
@@ -279,6 +289,7 @@ describe("gitops_application", () => {
         agent_id: "account.myagent",
         app_name: "demo-app",
         cascade: "true",
+        remove_existing_finalizers: "false",
       }),
     ).rejects.toThrow(/propagation_policy is required when cascade=true/);
   });
