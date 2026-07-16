@@ -126,6 +126,22 @@ describe("idp_entity mutate operations", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
+  it("create: explicit org scope discards a stale project value", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service", kind: "component" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "create", {
+      resource_scope: "org",
+      org_id: "my_org",
+      project_id: "stale_project",
+      body: { yaml: SAMPLE_YAML },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { params: Record<string, string> };
+    expect(call.params.orgIdentifier).toBe("my_org");
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
   it("create: accepts raw YAML string body", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
@@ -240,6 +256,48 @@ describe("idp_entity mutate operations", () => {
       kind: "component",
       entity_id: "boutique-service",
       body: { yaml: SAMPLE_YAML },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as {
+      path: string;
+      params: Record<string, string>;
+    };
+    expect(call.path).toBe("/v1/entities/account.my_org/component/boutique-service");
+    expect(call.params.orgIdentifier).toBe("my_org");
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("get: explicit account scope targets the account entity despite narrower values", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "get", {
+      resource_scope: "account",
+      org_id: "url_org",
+      project_id: "url_project",
+      kind: "component",
+      entity_id: "boutique-service",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as {
+      path: string;
+      params: Record<string, string>;
+    };
+    expect(call.path).toBe("/v1/entities/account/component/boutique-service");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("get: explicit org scope discards a stale project value", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "get", {
+      resource_scope: "org",
+      org_id: "my_org",
+      project_id: "stale_project",
+      kind: "component",
+      entity_id: "boutique-service",
     });
 
     const call = mockRequest.mock.calls[0][0] as {

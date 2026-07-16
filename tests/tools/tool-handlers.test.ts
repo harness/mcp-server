@@ -270,6 +270,32 @@ describe("harness_get", () => {
     expect(call.params.orgIdentifier).toBeUndefined();
     expect(call.params.projectIdentifier).toBeUndefined();
   });
+
+  it("keeps explicit account scope authoritative for IDP entity URLs", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp" }));
+    mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
+    client = makeClient(mockRequest);
+    const idpServer = makeMcpServer();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(idpServer, registry, client);
+
+    const result = await idpServer.call("harness_get", {
+      resource_type: "idp_entity",
+      resource_id: "boutique-service",
+      resource_scope: "account",
+      url: "https://app.harness.io/ng/account/test-account/module/idp/orgs/url-org/projects/url-project/catalog",
+      params: { kind: "component" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as {
+      path: string;
+      params: Record<string, unknown>;
+    };
+    expect(call.path).toBe("/v1/entities/account/component/boutique-service");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
 });
 
 describe("harness_get — execution_inputs", () => {
@@ -876,6 +902,31 @@ describe("harness_create", () => {
     const elicitationCall = fileStoreServer.server.elicitInput.mock.calls[0]![0] as { message: string };
     expect(elicitationCall.message).toContain("[redacted");
     expect(elicitationCall.message).not.toContain(contentBase64);
+  });
+
+  it("keeps explicit account scope authoritative for IDP entity URLs", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp" }));
+    mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service", kind: "component" });
+    client = makeClient(mockRequest);
+    const idpServer = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(idpServer, registry, client);
+
+    const result = await idpServer.call("harness_create", {
+      resource_type: "idp_entity",
+      resource_scope: "account",
+      url: "https://app.harness.io/ng/account/test-account/module/idp/orgs/url-org/projects/url-project/catalog",
+      body: { yaml: "apiVersion: harness.io/v1\nkind: component\nmetadata:\n  name: boutique-service" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as {
+      path: string;
+      params: Record<string, unknown>;
+    };
+    expect(call.path).toBe("/v1/entities");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
   });
 });
 
