@@ -639,7 +639,7 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     expect(events[0]!.http_path).not.toContain("//");
   });
 
-  it("HARNESS_READ_ONLY blocks BEFORE elicitation and emits a blocked audit row", async () => {
+  it("HARNESS_READ_ONLY blocks harness_delete BEFORE elicitation and emits a blocked audit row", async () => {
     // Regression for Cursor PR #351 finding: the registry's read-only gate
     // throws inside dispatch, AFTER elicitation has already prompted the
     // user and BEFORE auditBlockedAttempt is called. That's two contract
@@ -675,6 +675,69 @@ describe("Elicitation flow: confirm: true override (end-to-end through tool entr
     // The rejection lives in the audit log as a first-class blocked row.
     expect(events).toHaveLength(1);
     expect(events[0]!.tool).toBe("harness_delete");
+    expect(events[0]!.outcome).toBe("blocked");
+    expect(events[0]!.confirmation).toBe("blocked");
+    expect(events[0]!.error).toContain("Read-only mode");
+  });
+
+  it("HARNESS_READ_ONLY blocks harness_create BEFORE elicitation and emits a blocked audit row", async () => {
+    const { AuditManager } = await import("../../src/audit/manager.js");
+    const events: import("../../src/audit/types.js").AuditEvent[] = [];
+    const manager = new AuditManager();
+    manager.addSink({
+      name: "test",
+      emit(e) { events.push(e); },
+    });
+    const roConfig = { ...makeConfig(), HARNESS_READ_ONLY: true };
+    const roRegistry = new Registry(roConfig, { auditManager: manager });
+
+    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(server, roRegistry, client, roConfig);
+
+    const result = await server.call("harness_create", {
+      resource_type: "pipeline",
+      body: { yamlPipeline: "pipeline:\n  name: Test" },
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Read-only mode") });
+    expect(server._elicitInput).not.toHaveBeenCalled();
+    expect(events).toHaveLength(1);
+    expect(events[0]!.tool).toBe("harness_create");
+    expect(events[0]!.outcome).toBe("blocked");
+    expect(events[0]!.confirmation).toBe("blocked");
+    expect(events[0]!.error).toContain("Read-only mode");
+  });
+
+  it("HARNESS_READ_ONLY blocks harness_update BEFORE elicitation and emits a blocked audit row", async () => {
+    const { AuditManager } = await import("../../src/audit/manager.js");
+    const events: import("../../src/audit/types.js").AuditEvent[] = [];
+    const manager = new AuditManager();
+    manager.addSink({
+      name: "test",
+      emit(e) { events.push(e); },
+    });
+    const roConfig = { ...makeConfig(), HARNESS_READ_ONLY: true };
+    const roRegistry = new Registry(roConfig, { auditManager: manager });
+
+    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(server, roRegistry, client, roConfig);
+
+    const result = await server.call("harness_update", {
+      resource_type: "pipeline",
+      resource_id: "my-pipe",
+      body: { yamlPipeline: "pipeline:\n  name: Updated" },
+      confirm: true,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Read-only mode") });
+    expect(server._elicitInput).not.toHaveBeenCalled();
+    expect(events).toHaveLength(1);
+    expect(events[0]!.tool).toBe("harness_update");
     expect(events[0]!.outcome).toBe("blocked");
     expect(events[0]!.confirmation).toBe("blocked");
     expect(events[0]!.error).toContain("Read-only mode");

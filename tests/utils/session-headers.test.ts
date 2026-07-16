@@ -78,6 +78,20 @@ describe("session header parsing", () => {
       expect(parseAutoApproveRiskHeader({})).toBeUndefined();
       expect(spy).not.toHaveBeenCalled();
     });
+
+    it("mergeConfigWithSessionHeaders warns and keeps deployment default on invalid value", () => {
+      const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const base = makeConfig();
+      base.HARNESS_AUTO_APPROVE_RISK = "high_write";
+
+      const merged = mergeConfigWithSessionHeaders(base, {
+        "x-harness-auto-approve-risk": "read",
+      });
+
+      expect(merged.HARNESS_AUTO_APPROVE_RISK).toBe("high_write");
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(spy.mock.calls[0]?.[0]).toContain("read");
+    });
   });
 
   it("merges valid session headers without mutating the base config", () => {
