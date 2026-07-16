@@ -3,10 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
-import { jsonResult, errorResult, mixedResult } from "../utils/response-formatter.js";
-import { toExecutionSummaryData, renderTimelineSvg, renderStageFlowSvg, parsePipelineYaml, renderArchitectureSvg } from "../utils/svg/index.js";
-import { asRecord } from "../utils/type-guards.js";
-import { createLogger } from "../utils/logger.js";
+import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString } from "../utils/type-guards.js";
@@ -16,8 +13,6 @@ import { connectorHandler } from "./diagnose/connector.js";
 import { delegateHandler } from "./diagnose/delegate.js";
 import { gitopsApplicationHandler } from "./diagnose/gitops-application.js";
 import { diagnoseOutputSchema } from "./output-schemas.js";
-
-const logDiag = createLogger("diagnose");
 
 const ALIASES: Record<string, string> = { execution: "pipeline", gitops_app: "gitops_application" };
 
@@ -44,7 +39,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
         url: z.string().optional().describe("A Harness URL — resource type, org, project, and ID are extracted automatically"),
         org_id: z.string().optional().describe("Organization identifier (overrides default)"),
         project_id: z.string().optional().describe("Project identifier (overrides default)"),
-        options: z.record(z.string(), z.unknown()).optional().describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, return_download_url (boolean, return signed logs.zip URLs instead of inline log text), log_snippet_lines, max_failed_steps, include_visual (boolean, include PNG image inline), visual_type ('timeline'|'flow'|'architecture', default 'timeline' — 'architecture' renders full pipeline YAML as multi-level diagram with stages, step groups, steps, rollback), visual_width (number, default 900). When a Harness URL contains ?step=<nodeExecutionId>, setting include_logs:true fetches that specific step's log regardless of pass/fail status and returns it as requested_step_log alongside any failed_step_logs. GitOps: agent_id. Call harness_describe for details."),
+        options: z.record(z.string(), z.unknown()).optional().describe("Resource-specific diagnostic options. Pipeline: execution_id, pipeline_id, summary, include_yaml, include_logs, return_download_url (boolean, return signed logs.zip URLs instead of inline log text), log_snippet_lines, max_failed_steps. Pipeline diagnosis requires a completed execution. When a Harness URL contains ?step=<nodeExecutionId>, setting include_logs:true fetches that specific step's log regardless of pass/fail status and returns it as requested_step_log alongside any failed_step_logs. GitOps: agent_id. Call harness_describe for details."),
       },
       outputSchema: diagnoseOutputSchema,
       annotations: {
@@ -80,59 +75,6 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
 
         const ctx: DiagnoseContext = { client, registry, config, input, args: mergedArgs, extra, signal: extra.signal };
         const result = await handler.diagnose(ctx);
-
-        // Visual rendering (opt-in)
-        if (mergedArgs.include_visual === true && resourceType === "pipeline") {
-          try {
-            const visualType = String(mergedArgs.visual_type ?? "timeline");
-            const visualWidth = typeof mergedArgs.visual_width === "number" ? mergedArgs.visual_width : 900;
-
-            // Auto-detect: if pipeline YAML is in the result, render architecture diagram
-            // regardless of visual_type (architecture is always more informative when YAML is available)
-            const pipelineData = asRecord(result.pipeline);
-            let archSvg: string | null = null;
-
-            if (pipelineData?.yamlPipeline && typeof pipelineData.yamlPipeline === "string") {
-              const YAML = await import("yaml");
-              const parsed = parsePipelineYaml(YAML.parse(pipelineData.yamlPipeline));
-              if (parsed) archSvg = renderArchitectureSvg(parsed, { width: visualWidth });
-            }
-
-            // If no YAML in result and visual_type is architecture, try fetching it
-            if (!archSvg && (visualType === "architecture" || visualType === "flow")) {
-              const pipelineId = asString(mergedArgs.pipeline_id) ?? asString(input.pipeline_id);
-              if (pipelineId) {
-                try {
-                  const pipelineResp = await registry.dispatch(client, "pipeline", "get", { ...input, pipeline_id: pipelineId }, { tool: "harness_diagnose" }, extra.signal);
-                  const resp = asRecord(pipelineResp);
-                  if (resp?.yamlPipeline && typeof resp.yamlPipeline === "string") {
-                    const YAML = await import("yaml");
-                    const parsed = parsePipelineYaml(YAML.parse(resp.yamlPipeline));
-                    if (parsed) archSvg = renderArchitectureSvg(parsed, { width: visualWidth });
-                  }
-                } catch (err) {
-                  logDiag.warn("Failed to fetch pipeline for architecture diagram", { error: String(err) });
-                }
-              }
-            }
-
-            if (archSvg) {
-              return await mixedResult(result, archSvg);
-            }
-
-            // Fallback: timeline or flow from execution data
-            const summaryData = toExecutionSummaryData(result);
-            if (summaryData) {
-              const hasSteps = summaryData.stages.some((s) => s.steps.length > 0);
-              const svg = visualType === "flow"
-                ? renderStageFlowSvg(summaryData, { width: visualWidth })
-                : renderTimelineSvg(summaryData, { width: visualWidth, showSteps: hasSteps });
-              return await mixedResult(result, svg);
-            }
-          } catch (err) {
-            logDiag.warn("SVG rendering failed, returning text-only", { error: String(err) });
-          }
-        }
 
         return jsonResult(result);
       } catch (err) {

@@ -3,8 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
-import { jsonResult, errorResult, mixedResult } from "../utils/response-formatter.js";
-import { toProjectHealthData, renderStatusSummarySvg } from "../utils/svg/index.js";
+import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { buildDeepLink } from "../utils/deep-links.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { createLogger } from "../utils/logger.js";
@@ -79,7 +78,6 @@ export function registerStatusTool(
         project_id: z.string().optional().describe("Project identifier (overrides default)"),
         url: z.string().optional().describe("A Harness UI URL — org and project are extracted automatically"),
         limit: z.number().default(5).optional().describe("Max items per section (default 5, max 20)"),
-        include_visual: z.boolean().default(false).optional().describe("Include visual health dashboard image (default false)"),
       },
       outputSchema: statusOutputSchema,
       annotations: {
@@ -219,19 +217,6 @@ export function registerStatusTool(
 
         if (Object.keys(errors).length > 0) {
           status._errors = errors;
-        }
-
-        // Visual rendering (opt-in)
-        if (args.include_visual) {
-          try {
-            const healthData = toProjectHealthData(status, orgId, projectId);
-            if (healthData) {
-              const svg = renderStatusSummarySvg(healthData);
-              return await mixedResult(status, svg);
-            }
-          } catch (err) {
-            log.warn("SVG rendering failed, returning text-only", { error: String(err) });
-          }
         }
 
         return jsonResult(status);

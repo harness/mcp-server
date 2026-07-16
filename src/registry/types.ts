@@ -2,6 +2,8 @@
  * Core types for the resource registry and dispatch system.
  */
 
+import type { RequestOptions } from "../client/types.js";
+
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 // ---------------------------------------------------------------------------
@@ -71,13 +73,18 @@ export function requiresConfirmation(risk: RiskLevel): boolean {
 
 // ---------------------------------------------------------------------------
 // Minimal interfaces for PreflightContext (avoids circular imports).
-// The concrete HarnessClient and Registry satisfy these structurally.
-// Preflight hooks that need concrete-only methods (e.g. getCurrentUserId)
-// can narrow via `(client as unknown as HarnessClient)`.
+// The concrete HarnessClient and Registry satisfy these structurally, so
+// preflight hooks can call the methods they need without unsafe casts.
+// `RequestOptions` is imported from client/types (which has no registry
+// imports), so no dependency cycle is introduced.
 // ---------------------------------------------------------------------------
 
 export interface HarnessClientInterface {
   readonly account: string;
+  /** Resolve the current user's id (cached). Used by preflight hooks that stamp requester/approver. */
+  getCurrentUserId(): Promise<string>;
+  /** Issue an authenticated Harness request. Used by preflight hooks that fetch defaults. */
+  request<T>(options: RequestOptions): Promise<T>;
 }
 
 export interface RegistryDispatchInterface {
@@ -89,13 +96,16 @@ export interface RegistryDispatchInterface {
     signal?: AbortSignal,
   ): Promise<unknown>;
   getResource(resourceType: string): ResourceDefinition;
+  /** Default org identifier from config, when set. */
+  readonly orgId: string | undefined;
+  /** Default project identifier from config, when set. */
+  readonly projectId: string | undefined;
 }
 
 /**
  * Context passed to EndpointSpec.preflight hooks. Uses structural interfaces
  * so this module does not import HarnessClient/Registry (which would create a
- * cycle). Hooks that need concrete-only methods can narrow:
- *   `const hc = client as unknown as HarnessClient;`
+ * cycle), while still exposing the concrete methods hooks need.
  */
 export interface PreflightContext {
   client: HarnessClientInterface;
@@ -134,7 +144,6 @@ export type ToolsetName =
   | "platform"
   | "file_store"
 
-  | "visualizations"
   | "governance"
   | "freeze"
   | "overrides"

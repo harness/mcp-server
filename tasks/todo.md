@@ -1,5 +1,105 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-13)
+- [x] Baseline branch state and identify recent behavioral commits
+- [x] Review high-blast-radius diffs and trace concrete trigger scenarios
+- [x] Implement a minimal fix only if a critical bug is proven
+- [x] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [x] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+
+### Plan
+- Treat the current branch against `origin/main` and recent main history as the investigation window.
+- Prioritize behavioral paths that can cause data loss, crashes, security issues, or significant user-facing breakage.
+- Avoid changes unless a concrete trigger and high-confidence minimal fix are both established.
+
+### Review
+- Found an IDP entity update correctness bug in the new mutate path: `idp_entity` list defaults to configured org/project scope, but the get/update path builder ignored `HARNESS_ORG` / `HARNESS_PROJECT` when callers omitted explicit `org_id` / `project_id`. A common `harness_list` -> `harness_update(resource_id, params.kind)` flow could PUT `/v1/entities/account/...` and overwrite an account-scoped entity with the same kind/id instead of the project entity the agent had just listed.
+- Fixed IDP entity path construction to use explicit `resource_scope` when supplied, otherwise default to configured org/project scope when available, and to suppress org/project query params for explicit account-scope calls.
+- Found a remote pipeline input override bug: when a run combined `input_set_ids`, flat inline overrides, and `pipeline_branch` (without `branch`), the input-set GET used the remote branch but the runtime-template POST did not. Overrides could be resolved against the default-branch template and execute with incorrect runtime values.
+- Fixed runtime-template resolution to use `pipeline_branch ?? branch`, matching input-set materialization and execute dispatch.
+- Verification passed: focused Vitest regression filter, `pnpm typecheck`, `pnpm build`, `pnpm test` (115 files / 2501 tests), `pnpm standards:check`, and `pnpm docs:check`.
+
+## PR 569 Review Automation (2026-07-07)
+- [x] Read Slack trigger thread and confirm report context
+- [x] Inspect PR #569 diff, CI/review state, and affected code paths
+- [x] Identify any concrete bug/root cause introduced or left unresolved
+- [x] Implement a focused fix with regression coverage if needed
+- [x] Run focused and broad verification
+- [x] Commit, push, open PR if fixed, and reply in the Slack thread
+
+### Review
+- Found that PR #569's non-terminal diagnosis guard duplicated the execution terminal-status list instead of sharing the existing wait-mode utility, which would leave wait mode and `harness_diagnose` inconsistent for statuses such as approval rejection.
+- Fixed `harness_diagnose` to use the shared terminal-status set, expanded the shared set to include `ApprovalRejected` and `Suspended`, and updated wait timeout guidance so it no longer recommends diagnosing still-running executions.
+- Verification passed: focused Vitest status/diagnose tests, `pnpm build`, `pnpm typecheck`, `pnpm docs:check`, `pnpm test`, and `pnpm standards:check`.
+
+## Remove Visualization Resources / SVG + Image Generation (2026-07-06)
+
+### Context
+Incident with the visualization feature → remove all SVG/PNG chart & image generation from the MCP server.
+Feature is **opt-in** (`include_visual` defaults to false) and the `visual_*` resource types have **no API operations**, so blast radius is self-contained — nothing else in dispatch depends on them.
+
+> There is no separate "table image" generator. All image output is SVG→PNG charts (pie/bar/timeseries/timeline/stage-flow/status/architecture) rendered via `@resvg/resvg-js` in a child process. Removing the SVG module removes all of it.
+
+### Scope — two layers
+1. **Rendering engine** — `src/utils/svg/` (18 files) + `@resvg/resvg-js` dependency + `tests/utils/svg/`.
+2. **Opt-in wiring** — `include_visual`/`visual_type`/`visual_width` params on 3 of the 11 tools (`harness_list`, `harness_diagnose`, `harness_status`), the metadata-only `visualizations` toolset, and the `imageResult`/`mixedResult` response helpers.
+
+### Steps (in order)
+
+**1. Delete the rendering engine**
+- [ ] Delete `src/utils/svg/` (whole dir — render-png, render-png-child, timeline, stage-flow, status-summary, executions-timeseries, architecture, list-visuals, charts/*, colors, escape, mappers, types, index)
+- [ ] Delete `tests/utils/svg/` (6 test files)
+
+**2. Remove the toolset + registry wiring**
+- [ ] Delete `src/registry/toolsets/visualizations.ts`
+- [ ] `src/registry/index.ts:42` — remove `import { visualizationsToolset }`
+- [ ] `src/registry/index.ts:157` — remove `visualizationsToolset,` from the toolset array
+- [ ] `src/registry/types.ts:137` — remove `| "visualizations"` from the toolset-name union
+- [ ] KEEP the `diagnosticHint` field on `ResourceDefinition` — verified used by ~15 other toolsets
+
+**3. Strip shared response-formatter helpers**
+- [ ] `src/utils/response-formatter.ts` — remove `svgToPngBase64` import (line 8), `imageResult()` (81-86), `mixedResult()` (93-106), and the `{ type: "image" }` `ContentItem` variant (line 12). KEEP `jsonResult`/`errorResult`/`normalizeHarnessListPayload`.
+- [ ] `tests/utils/response-formatter.test.ts` — remove `describe("imageResult")` + `describe("mixedResult")` and their imports
+
+**4. Remove per-tool wiring (params + render blocks)**
+- [ ] `src/tools/harness-list.ts` — remove `renderListVisual`/`ListVisualType`/`mixedResult` imports, `include_visual`+`visual_type` fields, render block (90-102). KEEP the `diagnosticHint` usage at line 133.
+- [ ] `src/tools/harness-diagnose.ts` — remove SVG renderer + `mixedResult` imports, `include_visual`/`visual_type`/`visual_width` from options schema desc (line 47), render block (84-133)
+- [ ] `src/tools/harness-status.ts` — remove `toProjectHealthData`/`renderStatusSummarySvg`/`mixedResult` imports, `include_visual` field (82), render block (224-233)
+- [ ] `tests/tools/zod-input-schema-descriptions.test.ts` — remove `include_visual`/`visual_type` assertions for harness_list (70-79) and harness_status (100-106)
+
+**5. Drop the dependency**
+- [ ] `package.json:55` — remove `@resvg/resvg-js`. LEAVE `sharp`/`@huggingface/transformers` alone (transitive, used by semantic search)
+- [ ] `pnpm install` to refresh lockfile
+
+**6. Docs + config cleanup**
+- [ ] `.env.example:94` — remove `visualizations` from `HARNESS_TOOLSETS` available list
+- [ ] `docs/coding-standards.md:77` — replace the `visual_*` example of metadata-only `operations: {}` with another example
+- [ ] Delete `docs/testing/visual_*/` (7 dirs) + remove references in `docs/testing/CONSOLIDATED_TEST_RESULTS.md`
+- [ ] README counts: default toolsets 38→37; "38 of 39"→"37 of 38"; remove "Visualizations" from feature bullet (line 12) and the Visualizations toolset→resource mapping row. Prefer regenerating over hand-editing.
+
+**7. Build, regenerate docs, verify**
+- [ ] `pnpm build`
+- [ ] `pnpm docs:generate` (reads build/ — must build first)
+- [ ] `pnpm typecheck`
+- [ ] `pnpm test`
+- [ ] `pnpm standards:check`
+- [ ] `pnpm docs:check`
+
+### Open questions for review — RESOLVED
+1. Reserve the `visualizations` toolset name? → **Hard removal** (user-approved).
+2. Deprecate vs. hard-remove `include_visual` params? → **Hard removal** (incident) (user-approved).
+3. Preserve for re-introduction? → **Full clean removal** (user-approved); git history + spec 006 preserve context.
+
+### Review (completed 2026-07-06)
+- Deleted the rendering engine (`src/utils/svg/` 18 files, `tests/utils/svg/` 6 files) and the `visualizations` toolset (`src/registry/toolsets/visualizations.ts`, 7 `visual_*` metadata-only resource types).
+- Removed registry wiring (`registry/index.ts` import + array entry, `registry/types.ts` union member) and the `imageResult`/`mixedResult` helpers + `image` `ContentItem` variant + `svgToPngBase64` import from `response-formatter.ts`. Kept `diagnosticHint` (used by ~15 other toolsets), `jsonResult`/`errorResult`/`normalizeHarnessListPayload`, and the `harness-status` logger (still used).
+- Stripped `include_visual`/`visual_type`/`visual_width` params + render blocks from `harness-list`, `harness-diagnose`, `harness-status`; removed the now-unused `list` logger; removed the vestigial `analysis` field from `listOutputSchema`.
+- Dropped `@resvg/resvg-js` from `package.json` and refreshed the lockfile. Left `sharp`/`@huggingface/transformers` (transitive, semantic search).
+- Docs/config: `.env.example` toolset list, `docs/coding-standards.md` metadata-only example, removed `docs/testing/visual_*/` (7 dirs) + CONSOLIDATED_TEST_RESULTS section, README feature bullet + Visualizations section + toolset-mapping row. Updated spec `006-visualization-review.md` status to "Removed" (it had proposed this exact removal as its Phase 3; audit-spec 004/005 preconditions confirmed independent).
+- Verification passed: clean `pnpm build` (no stale svg/visualizations artifacts in `build/`), `pnpm typecheck`, `pnpm docs:generate` (219→212 resource types, 38→37 default toolsets, 37/38 total), `pnpm docs:check` ("up to date"), `pnpm standards:check` (80 tests), and `pnpm test` (112 files / 2457 tests). One full-suite timeout in an unrelated `harness_schema` live-entity test was confirmed a flake — passes in isolation and on suite re-run.
+
+---
+
 ## Critical Bug Investigation Automation (2026-07-02)
 - [x] Baseline current branch and identify recent behavioral commits after `v3.2.5`
 - [x] Review high-blast-radius diffs and trace candidate bugs through callers

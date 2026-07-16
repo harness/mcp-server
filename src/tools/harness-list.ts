@@ -2,21 +2,16 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
-import { jsonResult, errorResult, mixedResult, normalizeHarnessListPayload } from "../utils/response-formatter.js";
+import { jsonResult, errorResult, normalizeHarnessListPayload } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint, HarnessApiError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
-import { renderListVisual } from "../utils/svg/list-visuals.js";
 import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
-import type { ListVisualType } from "../utils/svg/list-visuals.js";
-import { createLogger } from "../utils/logger.js";
 import { resourceTypeSchema } from "./input-schemas.js";
 import { listOutputSchema } from "./output-schemas.js";
-
-const log = createLogger("list");
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
   // Build a dynamic description for the filters param from all enabled resource definitions
@@ -43,8 +38,6 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         compact: z.boolean().default(true).optional().describe("Strip verbose metadata from list items, keeping only essential fields (default true)"),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources (e.g. repo_id for pull requests). Call harness_describe for fields per resource_type."),
         filters: z.record(z.string(), z.unknown()).optional().describe(filtersDesc),
-        include_visual: z.boolean().default(false).optional().describe("Include an inline PNG chart of the results (default false). Supported for execution resource_type. Use when user asks for a visualization, chart, or graph."),
-        visual_type: z.enum(["timeseries", "bar", "pie"]).default("pie").optional().describe("Chart type when include_visual=true. 'timeseries' = daily execution counts, 'pie' = breakdown by status, 'bar' = breakdown by pipeline. Default 'pie'."),
       },
       outputSchema: listOutputSchema,
       annotations: {
@@ -84,23 +77,6 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
           if (Array.isArray(items)) {
             const compactFn = registry.getResource(resourceType).compactItem;
             result.items = compactItems(items, compactFn);
-          }
-        }
-
-        // Visual rendering (opt-in)
-        if (args.include_visual && resourceType && isRecord(result)) {
-          const items = result.items;
-          if (Array.isArray(items)) {
-            try {
-              const vt = (args.visual_type ?? "pie") as ListVisualType;
-              const visual = renderListVisual(resourceType, items, vt);
-              if (visual) {
-                result.analysis = visual.analysis;
-                return await mixedResult(result, visual.svg);
-              }
-            } catch (err) {
-              log.warn("Visual rendering failed, returning text-only", { error: String(err) });
-            }
           }
         }
 

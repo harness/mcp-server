@@ -1,5 +1,5 @@
 import * as z from "zod/v4";
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
@@ -12,7 +12,7 @@ import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, resolveRuntimeInputsWithBaseYaml, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
-import { materializeInputSetsToRuntimeYaml } from "../utils/materialize-input-sets.js";
+import { materializeInputSetsToRuntimeYaml, mergeRuntimePipelineFragments } from "../utils/materialize-input-sets.js";
 import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
@@ -28,6 +28,31 @@ function hasNoInlineRuntimeInputs(inputs: unknown): boolean {
   if (inputs === undefined) return true;
   const record = asRecord(inputs);
   return !!record && Object.keys(record).length === 0;
+}
+
+/**
+ * True when `inputs` is a full pipeline document (`{ pipeline: ... }`) rather
+ * than a flat key/value override map. These are merged fragment-wise with a
+ * materialized input set (see the pipeline run path) instead of being resolved
+ * against the runtime input template.
+ */
+function isFullPipelineInputs(inputs: unknown): inputs is Record<string, unknown> {
+  const record = asRecord(inputs);
+  return !!record && "pipeline" in record;
+}
+
+/**
+ * Extract the inner `pipeline` fragment from a pipeline-execute runtime
+ * document, accepting either a YAML string or an already-parsed object. The
+ * top-level `pipeline` key is unwrapped when present; otherwise the whole
+ * document is treated as the fragment. Used to merge a caller-supplied full
+ * pipeline YAML with a materialized input set.
+ */
+function extractPipelineFragment(yamlOrObj: unknown): Record<string, unknown> {
+  const doc = typeof yamlOrObj === "string" ? parseYaml(yamlOrObj) : yamlOrObj;
+  const root = asRecord(doc);
+  if (!root) return {};
+  return asRecord(root.pipeline) ?? root;
 }
 
 /**
@@ -98,7 +123,7 @@ function extractExecutionId(result: unknown, resourceType: string): string | und
     ?? asString(rec.executionId);
 }
 
-export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient, config?: Config): void {
+export function registerExecuteTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
   const executableTypes = registry.getTypesWithExecuteActions();
 
   server.registerTool(
@@ -180,7 +205,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         // mode. For everything else we don't ask the user to approve a
         // write that can never run, AND we capture the rejection as a
         // pre-dispatch "blocked" audit row.
-        if (config?.HARNESS_READ_ONLY && risk !== "read") {
+        if (config.HARNESS_READ_ONLY && risk !== "read") {
           const reason = `Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${args.action}" is not allowed.`;
           registry.auditBlockedAttempt(
             resourceType,
@@ -197,7 +222,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           toolName: "harness_execute",
           message: `Execute "${args.action}" on ${resourceType}${resourceId ? ` "${resourceId}"` : ""}?`,
           risk,
-          autoApproveRisk: config?.HARNESS_AUTO_APPROVE_RISK,
+          autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
         });
         if (!elicit.proceed) {
@@ -220,7 +245,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           // Fail fast on policy errors before fan-out — mirrors registry.dispatchExecute()
           // risk-based enforcement: read-safe actions (e.g. hql validate/run) are allowed in
           // read-only mode; write actions are blocked before any query is dispatched.
-          if (config?.HARNESS_READ_ONLY && risk !== "read") {
+          if (config.HARNESS_READ_ONLY && risk !== "read") {
             return errorResult(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${args.action}" is not allowed.`);
           }
 
@@ -276,7 +301,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           resourceType === "pipeline" &&
           args.action === "run" &&
           hasInputSets &&
-          (hasNoInlineRuntimeInputs(args.inputs) || isResolvableInputs(args.inputs))
+          (hasNoInlineRuntimeInputs(args.inputs) ||
+            isResolvableInputs(args.inputs) ||
+            isFullPipelineInputs(args.inputs) ||
+            typeof args.inputs === "string")
         ) {
           const pipelineId = asString(input.pipeline_id) ?? resourceId;
           const orgId = asString(input.org_id) || registry.orgId;
@@ -297,14 +325,40 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             );
           }
           try {
+            // Forward git context so remote / Git-stored input sets resolve
+            // from the correct branch/repo instead of silently defaulting to
+            // the repo's default branch. `normalizeRemotePipelineRunParams`
+            // (called above) has already populated these on `input`.
+            const gitContext = {
+              branch: asString(input.pipeline_branch) ?? asString(input.branch),
+              repoName: asString(input.repo_name),
+              connectorRef: asString(input.connector_ref),
+              storeType: asString(input.store_type),
+            };
             materializedInputSetYaml = await materializeInputSetsToRuntimeYaml(client, {
               pipelineId,
               orgId,
               projectId,
               inputSetIds,
+              gitContext,
             });
             if (materializedInputSetYaml && hasNoInlineRuntimeInputs(args.inputs)) {
               input.inputs = materializedInputSetYaml;
+              delete input.input_set_ids;
+              materializedInputSets = true;
+            } else if (
+              materializedInputSetYaml &&
+              (isFullPipelineInputs(args.inputs) || typeof args.inputs === "string")
+            ) {
+              // Caller supplied a full pipeline document (YAML string or object)
+              // alongside input_set_ids. Merge the input set as the base and the
+              // caller's document as the override (caller wins per variable /
+              // stage). Without this the input set would be dropped to the
+              // `inputSetIdentifiers` query param, which pipeline execute ignores.
+              const base = extractPipelineFragment(materializedInputSetYaml);
+              const override = extractPipelineFragment(args.inputs);
+              const merged = mergeRuntimePipelineFragments(base, override);
+              input.inputs = stringifyYaml({ pipeline: merged });
               delete input.input_set_ids;
               materializedInputSets = true;
             }
@@ -346,7 +400,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
               pipelineId,
               orgId: asString(input.org_id) || registry.orgId,
               projectId: asString(input.project_id) || registry.projectId,
-              branch: asString(input.branch),
+              branch: asString(input.pipeline_branch) ?? asString(input.branch),
             };
             resolved = materializedInputSetYaml
               ? await resolveRuntimeInputsWithBaseYaml(client, inputsToResolve, resolveOptions, materializedInputSetYaml)
@@ -511,7 +565,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
               if (pollResult.timed_out) {
                 envelope._wait = {
-                  hint: `Execution still running after ${pollResult.elapsed_ms}ms (last status: ${pollResult.status}). Recheck with harness_get(resource_type='execution', execution_id='${executionId}'), or get diagnostics so far with harness_diagnose(resource_type='execution', options={execution_id: '${executionId}'}).`,
+                  hint: `Execution still running after ${pollResult.elapsed_ms}ms (last status: ${pollResult.status}). Recheck with harness_get(resource_type='execution', execution_id='${executionId}') and wait for a terminal status before diagnosing it.`,
                 };
               } else if (FAILURE_STATUSES.has(pollResult.status)) {
                 envelope._diagnose_hint = `Execution ${pollResult.status}. Call harness_diagnose(resource_type='execution', options={execution_id: '${executionId}'}) for the failed step, error message, and log snippet.`;

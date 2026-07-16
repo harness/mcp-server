@@ -39,7 +39,6 @@ import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
 import { fileStoreToolset } from "./toolsets/file-store.js";
 
-import { visualizationsToolset } from "./toolsets/visualizations.js";
 import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
@@ -154,7 +153,6 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   platformToolset,
   fileStoreToolset,
 
-  visualizationsToolset,
   governanceToolset,
   freezeToolset,
   overridesToolset,
@@ -397,6 +395,19 @@ export class Registry {
         throw new Error(
           `Missing required filter(s) for listing ${resourceType}: ${missing.join(", ")}. ` +
           `Pass them via filters (e.g. filters: { ${missing.map(n => `${n}: "..."`).join(", ")} }).`
+        );
+      }
+    }
+
+    if (spec.paramsSchema) {
+      const missingParams = spec.paramsSchema.fields
+        .filter(f => f.required && input[f.name] === undefined)
+        .map(f => f.name);
+      if (missingParams.length > 0) {
+        throw new Error(
+          `Missing required param(s) for ${resourceType}.${operation}: ${missingParams.join(", ")}. ` +
+          `Pass them via params (e.g. params: { ${missingParams.map(n => `${n}: "..."`).join(", ")} }). ` +
+          `Use harness_describe(resource_type="${resourceType}") to see valid values.`
         );
       }
     }

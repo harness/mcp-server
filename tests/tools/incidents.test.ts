@@ -196,7 +196,7 @@ describe("incident — harness_create", () => {
     mockRequest = vi.fn().mockResolvedValue({ prettyId: "INC-99" });
     client = makeClient(mockRequest);
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
-    registerCreateTool(server, registry, client);
+    registerCreateTool(server, registry, client, makeConfig());
   });
 
   it("errors when required fields (templateShortId/title) are missing", async () => {
@@ -235,7 +235,7 @@ describe("incident — harness_update", () => {
     mockRequest = vi.fn().mockResolvedValue({ prettyId: "INC-42" });
     client = makeClient(mockRequest);
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
-    registerUpdateTool(server, registry, client);
+    registerUpdateTool(server, registry, client, makeConfig());
   });
 
   it("issues a PATCH to the incident path with the merge-patch body", async () => {
@@ -264,7 +264,7 @@ describe("incident — harness_execute (close)", () => {
     mockRequest = vi.fn().mockResolvedValue({ prettyId: "INC-42", status: "CLOSED" });
     client = makeClient(mockRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(server, registry, client);
+    registerExecuteTool(server, registry, client, makeConfig());
   });
 
   it("posts to the /close path with no body", async () => {

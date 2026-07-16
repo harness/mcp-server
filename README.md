@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 219 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 212 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,10 +8,10 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 219 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 38 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, Visualizations, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
+- **11 tools, 212 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 37 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
-- **32 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
+- **33 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
 - **Zero-config start.** Just provide a Harness API key. Account ID is auto-extracted from PAT and SAT tokens, org/project defaults are optional, and toolset filtering lets you expose only what you need.
 - **Extensible by design.** Adding a new Harness resource means adding a declarative data file — no new tool registration, no schema changes, no prompt updates.
@@ -1197,7 +1197,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-219 resource types organized across 38 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+212 resource types organized across 37 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1664,22 +1664,6 @@ Security exemption execute workflow:
 | `setting`     | x    |     |        |        |        |                 |
 
 
-### Visualizations
-
-Inline PNG chart visualizations rendered from Harness data. These are metadata-only resource types with no API operations — they exist so the LLM can discover available chart types via `harness_describe`. Use `include_visual=true` on supported tools (`harness_diagnose`, `harness_list`, `harness_status`) to generate charts.
-
-
-| Resource Type             | Description                                         | How to Generate                                       |
-| ------------------------- | --------------------------------------------------- | ----------------------------------------------------- |
-| `visual_timeline`         | Gantt chart of pipeline stage execution over time   | `harness_diagnose` with `visual_type: "timeline"`     |
-| `visual_stage_flow`       | DAG flowchart of pipeline stages and steps          | `harness_diagnose` with `visual_type: "flow"`         |
-| `visual_health_dashboard` | Project health overview with status indicators      | `harness_status` with `include_visual: true`          |
-| `visual_pie_chart`        | Donut chart of execution status breakdown           | `harness_list` with `visual_type: "pie"`              |
-| `visual_bar_chart`        | Bar chart of execution counts by pipeline           | `harness_list` with `visual_type: "bar"`              |
-| `visual_timeseries`       | Daily execution trend over 30 days                  | `harness_list` with `visual_type: "timeseries"`       |
-| `visual_architecture`     | Pipeline YAML architecture diagram (stages → steps) | `harness_diagnose` with `visual_type: "architecture"` |
-
-
 ## MCP Prompts
 
 ### DevOps
@@ -1689,6 +1673,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 | ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | `build-deploy-app`             | End-to-end CI/CD workflow: scan a git repo, generate CI pipeline (build & push Docker image), discover or generate K8s manifests, create CD pipeline, and deploy — with auto-retry on CI failures (up to 5 attempts) and CD failures (up to 3 attempts with user permission). On exhausted retries, provides Harness UI deep links to all created resources for manual investigation. | `repoUrl` (required), `imageName` (required), `projectId` (optional), `namespace` (optional)         |
 | `debug-pipeline-failure`       | Analyze a failed execution: accepts an execution ID, pipeline ID, or Harness URL. Gets stage/step breakdown, failure details, delegate info, and failed step logs via `harness_diagnose`, then provides root cause analysis and suggested fixes. Automatically follows chained pipeline failures.                                                                                     | `executionId` (optional), `projectId` (optional)                                                     |
+| `summarize-pipeline`           | Summarize an entire pipeline execution — all steps, statuses, durations, and logs (not just failures). Uses `harness_diagnose` with `include_logs: true` for the full stage/step tree and selectively fetches additional logs for slowest and key output steps. Provides execution overview, step table, and optimization observations.                                               | `executionId` (optional), `projectId` (optional)                                                     |
 | `create-pipeline`              | Generate a new pipeline YAML from natural language requirements, reviewing existing resources for context                                                                                                                                                                                                                                                                             | `description` (required), `projectId` (optional)                                                     |
 | `create-agent`                 | Interactively build a Harness AI agent — check existing agents, gather requirements, generate agent YAML spec using the agent-pipeline schema, confirm with user, then create or update via `harness_create`/`harness_update`                                                                                                                                                         | `agent_name` (required), `task_description` (required), `org_id` (optional), `project_id` (optional) |
 | `onboard-service`              | Walk through onboarding a new service with environments and a deployment pipeline                                                                                                                                                                                                                                                                                                     | `serviceName` (required), `projectId` (optional)                                                     |
@@ -1755,7 +1740,7 @@ Inline PNG chart visualizations rendered from Harness data. These are metadata-o
 
 ## Toolset Filtering
 
-By default, 38 of 39 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
+By default, 37 of 38 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 
@@ -1829,7 +1814,6 @@ Available toolset names:
 | `freeze`                | freeze_window, global_freeze                                                                                                                                                                                                                                                                    |
 | `overrides`             | service_override                                                                                                                                                                                                                                                                                |
 | `settings`              | setting                                                                                                                                                                                                                                                                                         |
-| `visualizations`        | visual_timeline, visual_stage_flow, visual_health_dashboard, visual_pie_chart, visual_bar_chart, visual_timeseries, visual_architecture                                                                                                                                                         |
 | `knowledge-graph`       | kg_queryable_type_summary, kg_grammar, hql_query                                                                                                                                                                                                                                                |
 | `semantic-layer`        | kg_type, kg_related_type                                                                                                                                                                                                                                                                        |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item, eval_git_registration, online_eval |
@@ -1852,8 +1836,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  38 Toolsets      |      (data files, not code)
-                |  219 Resource Types|
+                |  37 Toolsets      |      (data files, not code)
+                |  212 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
@@ -2155,7 +2139,7 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | Pipeline CI shorthand (`branch`, `tag`, `pr_number`, `commit_sha`) did not apply | `inputs.build` was already provided, so shorthand expansion was intentionally skipped                | Remove `inputs.build` to use shorthand expansion, or keep full explicit `build` structure                                            |
 | Pipeline run loaded the wrong YAML revision                                     | The pipeline definition is stored in Git and the run did not specify the desired pipeline branch      | Pass `params.pipeline_branch` on the `run` action; this maps to Harness `pipelineBranchName`                                         |
 | `wait: true` returned `_wait.error`                                              | The pipeline trigger succeeded, but server-side polling failed                                       | Recheck the `execution_id` with `harness_get(resource_type="execution", ...)` before deciding whether to rerun                        |
-| `wait: true` returned `execution_timed_out: true`                                | The execution did not reach a terminal status before `wait_timeout_seconds`                          | Use the returned `execution_id` to recheck status or diagnose the still-running execution                                             |
+| `wait: true` returned `execution_timed_out: true`                                | The execution did not reach a terminal status before `wait_timeout_seconds`                          | Use the returned `execution_id` to recheck status; wait for a terminal status before running `harness_diagnose`                       |
 | Execution logs are empty or blob downloads return 403                           | Harness-hosted log blob URLs require the configured Harness client/auth path, especially for internal or self-managed hosts | Keep `HARNESS_BASE_URL` pointed at the target Harness host and use `harness_get(resource_type="execution_log", ...)` or `harness_diagnose(..., include_logs=true)` rather than bypassing the MCP client |
 | `Operation declined by user` / `Operation cancelled by user`                     | User declined or cancelled the elicitation confirmation dialog — authoritative                       | Verify operation details with the user; `confirm: true` does **not** bypass an explicit decline. The user must accept the prompt   |
 | `Operation blocked: the client could not surface a usable confirmation prompt`   | Client lacks elicitation support, `elicitInput` failed, or returned a degenerate accept              | Retry with `confirm: true` for non-interactive automation, or use a client that supports elicitation                                |

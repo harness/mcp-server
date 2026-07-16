@@ -338,6 +338,7 @@ describe("kg_related_type get extractor", () => {
 
     const result = (await registry.dispatch(client, "kg_related_type", "get", {
       type_id: "service",
+      kind: "OBJECT_KIND_ENTITY",
     })) as Record<string, unknown>;
 
     expect(result.dcs_enrichments).toEqual([
@@ -383,6 +384,34 @@ describe("kg_type get body validation", () => {
     await expect(
       registry.dispatch(client, "kg_type", "get", { kind: "OBJECT_KIND_ENTITY" }),
     ).rejects.toThrow(/Missing required identifier/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fails locally with a clear error when kind is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "kg_type", "get", { type_id: "service" }),
+    ).rejects.toThrow(/Missing required param\(s\) for kg_type\.get: kind/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("kg_related_type get params validation", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("fails locally with a clear error when kind is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "kg_related_type", "get", { type_id: "service" }),
+    ).rejects.toThrow(/Missing required param\(s\) for kg_related_type\.get: kind/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 });
