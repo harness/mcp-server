@@ -787,3 +787,16 @@ export const fmeGetExtract = (raw: unknown): unknown => {
   }
   return raw;
 };
+
+/**
+ * IDP scorecard/check stats — normalizes timestamp to RFC3339 `time` for agent consumption.
+ * API: `{ name?, stats?, timestamp? }`
+ */
+export const scorecardStatsExtract = (raw: unknown): unknown => {
+  const r = raw as { name?: string; stats?: unknown[]; timestamp?: number | null };
+  return {
+    name: r.name,
+    stats: r.stats ?? [],
+    time: r.timestamp != null ? new Date(r.timestamp).toISOString() : "",
+  };
+};

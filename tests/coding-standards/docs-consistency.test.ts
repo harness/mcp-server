@@ -6,29 +6,17 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { ALLOWED_MCP_TOOLS } from "./constants.js";
+
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
-
-const REQUIRED_TOOLS = [
-  "harness_list",
-  "harness_get",
-  "harness_create",
-  "harness_update",
-  "harness_delete",
-  "harness_execute",
-  "harness_diagnose",
-  "harness_search",
-  "harness_describe",
-  "harness_status",
-  "harness_schema",
-];
 
 describe("Coding standards — documentation consistency", () => {
   const content = readFileSync(STANDARDS_PATH, "utf8");
 
   it("docs/coding-standards.md documents 11 consolidated MCP tools including harness_schema", () => {
     expect(content).toMatch(/11 consolidated tool handlers/);
-    for (const tool of REQUIRED_TOOLS) {
+    for (const tool of ALLOWED_MCP_TOOLS) {
       expect(content, `missing ${tool} in docs/coding-standards.md`).toContain(tool);
     }
   });
