@@ -45,4 +45,10 @@ describe("Coding standards — documentation consistency", () => {
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
+
+  it("docs/coding-standards.md documents multi-scope pathBuilder config contract", () => {
+    expect(content).toContain("Multi-scope resources");
+    expect(content).toContain("PathBuilderConfig");
+    expect(content).toContain("multi-scope-pathbuilders.test.ts");
+  });
 });
