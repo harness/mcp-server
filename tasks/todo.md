@@ -5,14 +5,20 @@
 - [x] Trace the Knowledge Graph and IaCM tool contracts used by the request
 - [x] Reproduce the malformed/unsupported tool-call path and identify root cause
 - [x] Implement a minimal fix with regression coverage
-- [ ] Commit and push the implementation checkpoint before testing
-- [ ] Run focused and broad verification
+- [x] Commit and push the implementation checkpoint before testing
+- [x] Run focused and broad verification
 - [ ] Open the PR and reply in the original Slack thread
 
 ### Plan
 - Treat the repeated Ask AI parser failure as a tool-contract generation problem until local schema inspection or a reproducible MCP call proves otherwise.
 - Follow the likely request path from IaCM workspace discovery through Knowledge Graph/HQL query construction, checking both registered JSON schemas and prompt-facing descriptions for ambiguity or invalid shapes.
 - Keep any fix limited to the proven schema/metadata defect and add a regression at the public tool-registration or handler boundary.
+
+### Review
+- Root cause: IaCM exposed workspace list/get but not Harness's existing provisioner-ratio endpoint, so a direct workspace-count question was routed into the more fragile Knowledge Graph/HQL workflow. The HQL execute hint compounded this by showing JavaScript-like arguments (single-quoted values and unquoted keys) instead of valid tool-call JSON.
+- Added the project-scoped, read-only `iacm_workspace_provisioner_summary` resource over `GET /iacm/api/orgs/{org}/projects/{project}/workspaces/provisioners-ratio`. Its extractor projects stable provisioner ratios and derives workspace counts when the API returns a valid 0–1 ratio and numeric total.
+- Added natural-language search aliases and README guidance so Terraform/OpenTofu workspace-count questions discover the direct IaCM resource. Replaced the HQL validate example with strict, parseable JSON.
+- Verification passed: 62 focused IaCM/Knowledge Graph tests, typecheck, build, standards (80 tests), docs generation/check, and 115 unaffected test files / 2435 tests. The repository's untouched `tests/registry/gitops.test.ts` still has 3 existing failures because generic required-param validation now precedes GitOps-specific delete validation; the failing source/tests are identical to `origin/main`.
 
 ## Critical Bug Investigation Automation (2026-07-13)
 - [x] Baseline branch state and identify recent behavioral commits

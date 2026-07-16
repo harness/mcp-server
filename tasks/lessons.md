@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Aggregate Extractors Must Not Invent Zero Totals
+- **Issue**: Defaulting a missing or malformed aggregate `total` to `0` turns an invalid backend response into a confident but false “no resources” answer.
+- **Fix**: Omit the derived total/count when the source total or ratio is not finite and valid; only compute counts when the API supplies the required numeric inputs.
+- **Rule**: Response extractors may normalize valid zero values, but must distinguish zero from absent/malformed aggregate data.
+
 ## Scope Defaults and Remote Branch Context Must Stay End-to-End
 - **Issue**: Multi-scope path builders can bypass the registry's usual config defaulting when they construct path segments themselves. For IDP entities, list used configured `HARNESS_ORG` / `HARNESS_PROJECT`, while get/update path construction fell back to account scope, so a list -> update flow could target a different entity with the same kind/id.
 - **Fix**: Path builders that encode scope in the path must accept `PathBuilderConfig`, honor explicit `resource_scope`, use configured org/project defaults when scope is omitted and the resource's list/default behavior does so, and clear unused scope fields so query params match the path.
