@@ -13,7 +13,7 @@ const PIPELINE_SUMMARIZER_PROMPT = {
   },
 } as const;
 
-export function registerSummarizePipelinePrompt(server: McpServer): void {
+export function registerPipelineSummarizerPrompt(server: McpServer): void {
   const handler = async ({
     executionId,
     projectId,
@@ -88,7 +88,7 @@ If a step's log has no meaningful output (e.g. initialization), note what it did
       };
   };
 
-  server.registerPrompt("pipeline_summarizer", PIPELINE_SUMMARIZER_PROMPT, handler);
+  server.registerPrompt("pipeline-summarizer", PIPELINE_SUMMARIZER_PROMPT, handler);
   // Backward-compatible alias for callers still using the pre-rename prompt name.
   server.registerPrompt("summarize-pipeline", PIPELINE_SUMMARIZER_PROMPT, handler);
 }

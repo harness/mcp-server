@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { registerSummarizePipelinePrompt } from "../../src/prompts/summarize-pipeline.js";
+import { registerPipelineSummarizerPrompt } from "../../src/prompts/pipeline-summarizer.js";
 
 async function createTestClient(): Promise<Client> {
   const server = new McpServer(
     { name: "test-server", version: "0.0.1" },
     { capabilities: { prompts: {} } },
   );
-  registerSummarizePipelinePrompt(server);
+  registerPipelineSummarizerPrompt(server);
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test-client", version: "0.0.1" });
@@ -22,12 +22,12 @@ async function createTestClient(): Promise<Client> {
   return client;
 }
 
-describe("pipeline_summarizer prompt", () => {
+describe("pipeline-summarizer prompt", () => {
   it("appears in the prompt list", async () => {
     const client = await createTestClient();
     const { prompts } = await client.listPrompts();
 
-    const prompt = prompts.find((p) => p.name === "pipeline_summarizer");
+    const prompt = prompts.find((p) => p.name === "pipeline-summarizer");
     expect(prompt).toBeDefined();
     expect(prompt!.description).toContain("Fetch and summarize ALL step logs");
   });
@@ -39,7 +39,7 @@ describe("pipeline_summarizer prompt", () => {
     const alias = prompts.find((p) => p.name === "summarize-pipeline");
     expect(alias).toBeDefined();
     expect(alias!.description).toBe(
-      prompts.find((p) => p.name === "pipeline_summarizer")!.description,
+      prompts.find((p) => p.name === "pipeline-summarizer")!.description,
     );
 
     const result = await client.getPrompt({
@@ -53,7 +53,7 @@ describe("pipeline_summarizer prompt", () => {
   it("has the correct arguments", async () => {
     const client = await createTestClient();
     const { prompts } = await client.listPrompts();
-    const prompt = prompts.find((p) => p.name === "pipeline_summarizer")!;
+    const prompt = prompts.find((p) => p.name === "pipeline-summarizer")!;
 
     const argNames = prompt.arguments!.map((a) => a.name);
     expect(argNames).toContain("executionId");
@@ -69,7 +69,7 @@ describe("pipeline_summarizer prompt", () => {
   it("interpolates executionId and projectId", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
-      name: "pipeline_summarizer",
+      name: "pipeline-summarizer",
       arguments: {
         executionId: "exec-abc-123",
         projectId: "my-project",
@@ -85,7 +85,7 @@ describe("pipeline_summarizer prompt", () => {
   it("detects URL input and uses url param", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
-      name: "pipeline_summarizer",
+      name: "pipeline-summarizer",
       arguments: {
         executionId: "https://app.harness.io/ng/#/account/abc/pipelines/exec123",
       },
@@ -99,7 +99,7 @@ describe("pipeline_summarizer prompt", () => {
   it("references harness_diagnose with include_all_step_logs", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
-      name: "pipeline_summarizer",
+      name: "pipeline-summarizer",
       arguments: { executionId: "exec123" },
     });
 
@@ -114,7 +114,7 @@ describe("pipeline_summarizer prompt", () => {
   it("instructs to summarize every step without skipping", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
-      name: "pipeline_summarizer",
+      name: "pipeline-summarizer",
       arguments: { executionId: "exec123" },
     });
 
@@ -127,7 +127,7 @@ describe("pipeline_summarizer prompt", () => {
   it("includes running execution guidance", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
-      name: "pipeline_summarizer",
+      name: "pipeline-summarizer",
       arguments: { executionId: "exec123" },
     });
 
@@ -139,7 +139,7 @@ describe("pipeline_summarizer prompt", () => {
   it("includes required output table format", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
-      name: "pipeline_summarizer",
+      name: "pipeline-summarizer",
       arguments: { executionId: "exec123" },
     });
 
