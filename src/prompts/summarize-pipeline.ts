@@ -1,21 +1,26 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+const PIPELINE_SUMMARIZER_PROMPT = {
+  description:
+    "Fetch and summarize ALL step logs from a pipeline execution. Returns a table with every step's name, status, duration, and a log-based summary of what happened.",
+  argsSchema: {
+    executionId: z
+      .string()
+      .describe("The execution ID, pipeline ID, or a Harness URL")
+      .optional(),
+    projectId: z.string().describe("Project identifier").optional(),
+  },
+} as const;
+
 export function registerSummarizePipelinePrompt(server: McpServer): void {
-  server.registerPrompt(
-    "pipeline_summarizer",
-    {
-      description:
-        "Fetch and summarize ALL step logs from a pipeline execution. Returns a table with every step's name, status, duration, and a log-based summary of what happened.",
-      argsSchema: {
-        executionId: z
-          .string()
-          .describe("The execution ID, pipeline ID, or a Harness URL")
-          .optional(),
-        projectId: z.string().describe("Project identifier").optional(),
-      },
-    },
-    async ({ executionId, projectId }) => {
+  const handler = async ({
+    executionId,
+    projectId,
+  }: {
+    executionId?: string;
+    projectId?: string;
+  }) => {
       const isUrl = executionId?.startsWith("http");
       const idParam = isUrl
         ? `url="${executionId}"`
@@ -80,6 +85,9 @@ If a step's log has no meaningful output (e.g. initialization), note what it did
           },
         ],
       };
-    },
-  );
+  };
+
+  server.registerPrompt("pipeline_summarizer", PIPELINE_SUMMARIZER_PROMPT, handler);
+  // Backward-compatible alias for callers still using the pre-rename prompt name.
+  server.registerPrompt("summarize-pipeline", PIPELINE_SUMMARIZER_PROMPT, handler);
 }

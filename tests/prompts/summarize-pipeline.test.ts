@@ -32,6 +32,24 @@ describe("pipeline_summarizer prompt", () => {
     expect(prompt!.description).toContain("Fetch and summarize ALL step logs");
   });
 
+  it("registers summarize-pipeline as a backward-compatible alias", async () => {
+    const client = await createTestClient();
+    const { prompts } = await client.listPrompts();
+
+    const alias = prompts.find((p) => p.name === "summarize-pipeline");
+    expect(alias).toBeDefined();
+    expect(alias!.description).toBe(
+      prompts.find((p) => p.name === "pipeline_summarizer")!.description,
+    );
+
+    const result = await client.getPrompt({
+      name: "summarize-pipeline",
+      arguments: { executionId: "exec-legacy" },
+    });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+    expect(text).toContain('execution_id="exec-legacy"');
+  });
+
   it("has the correct arguments", async () => {
     const client = await createTestClient();
     const { prompts } = await client.listPrompts();
