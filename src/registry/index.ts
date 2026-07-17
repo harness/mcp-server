@@ -401,7 +401,7 @@ export class Registry {
 
     if (spec.paramsSchema) {
       const missingParams = spec.paramsSchema.fields
-        .filter(f => f.required && input[f.name] === undefined)
+        .filter(f => f.required && (input[f.name] === undefined || input[f.name] === ""))
         .map(f => f.name);
       if (missingParams.length > 0) {
         throw new Error(

@@ -81,17 +81,61 @@ describe("gitops_agent", () => {
     expect(call.path).toBe("/gitops/api/v1/agents/account.myagent");
   });
 
-  it("delete: raw agent_id → DELETE /gitops/api/v1/agents/{agentIdentifier}", async () => {
+  it("delete: rejects omitted resource_scope before sending a request", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_agent", "delete", {
+        agent_id: "shared-agent",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\).*resource_scope/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("delete: rejects an empty resource_scope before sending a request", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_agent", "delete", {
+        agent_id: "shared-agent",
+        resource_scope: "",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\).*resource_scope/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("delete: explicit project scope injects configured org and project", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "gitops_agent", "delete", {
       agent_id: "agent1779094157087",
+      resource_scope: "project",
     });
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("DELETE");
     expect(call.path).toBe("/gitops/api/v1/agents/agent1779094157087");
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
+  });
+
+  it("delete: explicit account scope omits org and project", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "delete", {
+      agent_id: "agent1779094157087",
+      resource_scope: "account",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
   });
 });
 
