@@ -985,6 +985,26 @@ describe("harness_update", () => {
     });
   });
 
+  it("blocks IDP entity updates when HARNESS_READ_ONLY is enabled via tool config", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp", HARNESS_READ_ONLY: true }));
+    const idpServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(idpServer, registry, client, makeConfig({ HARNESS_READ_ONLY: true }));
+
+    const result = await idpServer.call("harness_update", {
+      resource_type: "idp_entity",
+      resource_id: "boutique-service",
+      params: { kind: "component" },
+      body: { yaml: "apiVersion: harness.io/v1\nkind: component\nmetadata:\n  name: boutique-service\nspec: {}" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("HARNESS_READ_ONLY"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("rejects raw YAML update bodies whose identifier conflicts with resource_id", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "prod_connector" } });
@@ -1468,6 +1488,44 @@ describe("harness_delete", () => {
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("gitops_application delete surfaces bodyBuilder deletion-mode guidance when cascade is omitted", async () => {
+    const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(gitopsServer, gitopsRegistry, client, makeConfig());
+
+    const result = await gitopsServer.call("harness_delete", {
+      resource_type: "gitops_application",
+      resource_id: "demo-app",
+      params: { agent_id: "account.myagent" },
+    });
+
+    expect(result.isError).toBe(true);
+    const parsed = parseResult(result) as { error: string };
+    expect(parsed.error).toMatch(/Deletion mode is required/);
+    expect(parsed.error).not.toMatch(/Missing required param/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("gitops_agent delete maps resource_id to agent_id for paramsSchema validation", async () => {
+    const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsRequest = vi.fn().mockResolvedValue({});
+    const gitopsClient = makeClient(gitopsRequest);
+    const gitopsServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(gitopsServer, gitopsRegistry, gitopsClient, makeConfig());
+
+    const result = await gitopsServer.call("harness_delete", {
+      resource_type: "gitops_agent",
+      resource_id: "myagent",
+      resource_scope: "account",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = gitopsRequest.mock.calls[0]![0] as { path?: string };
+    expect(call.path).toBe("/gitops/api/v1/agents/myagent");
   });
 });
 
@@ -2883,6 +2941,27 @@ describe("harness_describe", () => {
         expect.objectContaining({ name: "pr_number", required: true }),
       ]),
     );
+  });
+
+  it("exposes optional cascade on gitops_application delete paramsSchema", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsServer = makeMcpServer();
+    const { registerDescribeTool } = await import("../../src/tools/harness-describe.js");
+    registerDescribeTool(gitopsServer, registry);
+
+    const result = await gitopsServer.call("harness_describe", { resource_type: "gitops_application" });
+    expect(result.isError).toBeUndefined();
+
+    const data = parseResult(result) as {
+      operations: Array<{ operation: string; paramsSchema?: { fields: Array<{ name: string; required: boolean }> } }>;
+    };
+    const deleteOp = data.operations.find((op) => op.operation === "delete");
+    const cascade = deleteOp?.paramsSchema?.fields.find((f) => f.name === "cascade");
+    const finalizers = deleteOp?.paramsSchema?.fields.find((f) => f.name === "remove_existing_finalizers");
+
+    expect(cascade?.required).toBe(false);
+    expect(finalizers?.required).toBe(false);
+    expect(deleteOp?.paramsSchema?.fields.find((f) => f.name === "agent_id")?.required).toBe(true);
   });
 
   it("exposes File Store list_children shorthands as paramsSchema and only FileStoreNode fields as bodySchema", async () => {

@@ -1562,6 +1562,51 @@ describe("gitops identifier field ordering", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Delete paramsSchema contracts — regression guard for #642
+// ---------------------------------------------------------------------------
+
+describe("GitOps delete paramsSchema contracts", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("gitops_agent.delete requires agent_id in paramsSchema (not resource_id)", () => {
+    const def = registry.getResource("gitops_agent");
+    const deleteSpec = def.operations.delete!;
+    const requiredNames = deleteSpec.paramsSchema!.fields
+      .filter((f) => f.required)
+      .map((f) => f.name);
+
+    expect(requiredNames).toEqual(["agent_id"]);
+    expect(requiredNames).not.toContain("resource_id");
+    expect(def.identifierFields).toContain("agent_id");
+  });
+
+  it("gitops_application.delete keeps cascade and remove_existing_finalizers optional", () => {
+    const deleteSpec = registry.getResource("gitops_application").operations.delete!;
+    const field = (name: string) => deleteSpec.paramsSchema!.fields.find((f) => f.name === name);
+
+    expect(field("agent_id")?.required).toBe(true);
+    expect(field("cascade")?.required).toBe(false);
+    expect(field("remove_existing_finalizers")?.required).toBe(false);
+  });
+
+  it("gitops_application.delete missing cascade uses bodyBuilder guidance, not generic required-param error", async () => {
+    const client = makeClient(vi.fn());
+
+    const rejection = registry.dispatch(client, "gitops_application", "delete", {
+      agent_id: "account.myagent",
+      app_name: "demo-app",
+    });
+
+    await expect(rejection).rejects.toThrow(/Deletion mode is required/);
+    await expect(rejection).rejects.not.toThrow(/Missing required param/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Pagination param forwarding for list operations
 // ---------------------------------------------------------------------------
 
