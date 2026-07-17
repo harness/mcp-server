@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-17)
+- [x] Baseline branch state and identify recent behavioral commits
+- [x] Review high-blast-radius diffs and trace concrete trigger scenarios
+- [x] Implement a minimal fix only if a critical bug is proven
+- [ ] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+
+### Plan
+- Treat current `origin/main` history since the 2026-07-13 investigation as the primary review window.
+- Prioritize the new CCM recommendation filters, GitOps delete mappings, and any recent write/auth behavior with concrete data-loss, crash, security, or major-breakage impact.
+- Trace candidates through public handlers and registry/client dispatch before changing code; patch only a proven high-severity trigger.
+
 ## Critical Bug Investigation Automation (2026-07-13)
 - [x] Baseline branch state and identify recent behavioral commits
 - [x] Review high-blast-radius diffs and trace concrete trigger scenarios

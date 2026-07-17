@@ -1345,6 +1345,24 @@ describe("harness_delete", () => {
     expect(data.deleted).toBe(true);
   });
 
+  it("does not delete a GitOps agent when resource_scope is omitted", async () => {
+    const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(gitopsServer, gitopsRegistry, client, makeConfig());
+
+    const result = await gitopsServer.call("harness_delete", {
+      resource_type: "gitops_agent",
+      resource_id: "shared-agent",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("resource_scope"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("returns structured delete payload without spreading API fields at top level", async () => {
     const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
     const templateServer = makeMcpServer("accept");
