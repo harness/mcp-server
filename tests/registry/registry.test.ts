@@ -977,6 +977,21 @@ describe("Registry", () => {
       ).rejects.toThrow(/Missing required field/);
     });
 
+    it("treats empty-string paramsSchema values as missing required params", async () => {
+      const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+      const mockRequest = vi.fn();
+      const client = makeClient(mockRequest);
+
+      await expect(
+        gitopsRegistry.dispatch(client, "gitops_agent", "delete", {
+          agent_id: "myagent",
+          resource_scope: "",
+        }),
+      ).rejects.toThrow(/Missing required param\(s\) for gitops_agent\.delete: resource_scope/);
+
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
+
     it("closes a Harness Code pull request via execute action", async () => {
       const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
       const mockRequest = vi.fn().mockResolvedValue({ number: 42, state: "closed" });

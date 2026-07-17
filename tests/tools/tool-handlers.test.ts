@@ -1363,6 +1363,75 @@ describe("harness_delete", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("does not delete a GitOps agent when resource_scope is an empty string", async () => {
+    const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(gitopsServer, gitopsRegistry, client, makeConfig());
+
+    const result = await gitopsServer.call("harness_delete", {
+      resource_type: "gitops_agent",
+      resource_id: "shared-agent",
+      resource_scope: "",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("resource_scope"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      scope: "account",
+      expectOrg: undefined,
+      expectProject: undefined,
+    },
+    {
+      scope: "org",
+      expectOrg: "default",
+      expectProject: undefined,
+    },
+    {
+      scope: "project",
+      expectOrg: "default",
+      expectProject: "test-project",
+    },
+  ] as const)(
+    "deletes a GitOps agent at %s scope with explicit top-level resource_scope",
+    async ({ scope, expectOrg, expectProject }) => {
+      const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+      const gitopsServer = makeMcpServer("accept");
+      mockRequest.mockResolvedValue({});
+      const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+      registerDeleteTool(gitopsServer, gitopsRegistry, client, makeConfig());
+
+      const result = await gitopsServer.call("harness_delete", {
+        resource_type: "gitops_agent",
+        resource_id: "shared-agent",
+        resource_scope: scope,
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(parseResult(result)).toMatchObject({
+        deleted: true,
+        resource_type: "gitops_agent",
+        resource_id: "shared-agent",
+      });
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0]![0] as {
+        method: string;
+        path: string;
+        params: Record<string, string | undefined>;
+      };
+      expect(call.method).toBe("DELETE");
+      expect(call.path).toBe("/gitops/api/v1/agents/shared-agent");
+      expect(call.params.orgIdentifier).toBe(expectOrg);
+      expect(call.params.projectIdentifier).toBe(expectProject);
+    },
+  );
+
   it("returns structured delete payload without spreading API fields at top level", async () => {
     const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
     const templateServer = makeMcpServer("accept");

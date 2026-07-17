@@ -137,6 +137,40 @@ describe("gitops_agent", () => {
     expect(call.params.orgIdentifier).toBeUndefined();
     expect(call.params.projectIdentifier).toBeUndefined();
   });
+
+  it("delete: explicit org scope injects org but not project", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "delete", {
+      agent_id: "shared-agent",
+      resource_scope: "org",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/shared-agent");
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("delete: configured org/project defaults cannot substitute for missing resource_scope", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const scopedRegistry = new Registry(makeConfig({
+      HARNESS_TOOLSETS: "gitops",
+      HARNESS_ORG: "prod-org",
+      HARNESS_PROJECT: "prod-project",
+    }));
+
+    await expect(
+      scopedRegistry.dispatch(client, "gitops_agent", "delete", {
+        agent_id: "shared-agent",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\).*resource_scope/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
