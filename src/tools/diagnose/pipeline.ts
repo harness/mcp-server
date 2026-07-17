@@ -724,8 +724,10 @@ export const pipelineHandler: DiagnoseHandler = {
     // no failed steps and no explicit step was requested.  Pick the deepest
     // (most specific) Run/Script step from the graph — this is typically the
     // main build/test step whose output the user actually wants to read.
+    // Skip when include_all_step_logs is set — all logs will be fetched below.
     if (
       includeLogs &&
+      !includeAllStepLogs &&
       failedNodes.length === 0 &&
       !requestedStepId &&
       graphNodeMap &&
@@ -783,64 +785,85 @@ export const pipelineHandler: DiagnoseHandler = {
     if (includeAllStepLogs && graphNodeMap && !diagnostic.all_step_logs) {
       await sendProgress(extra, currentStep, totalSteps, "Fetching all step logs...");
 
-      // Collect all nodes with logBaseKey, sorted by startTs
-      const loggableNodes = Object.entries(graphNodeMap)
-        .filter(([_, node]) => node.logBaseKey)
+      // Collect all nodes sorted by startTs. Include nodes without logBaseKey
+      // so the summary covers every step even if no log is available.
+      const allNodes = Object.entries(graphNodeMap)
         .sort((a, b) => (a[1].startTs ?? 0) - (b[1].startTs ?? 0));
 
+      // Only fetch logs for nodes that have a logBaseKey and were NOT already
+      // fetched in failed_step_logs (avoid redundant API calls).
+      const loggableNodes = allNodes.filter(
+        ([_, node]) => node.logBaseKey && !fetchedFailedLogKeys.has(node.logBaseKey),
+      );
+
       const logFetchConcurrency = config.HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY ?? 3;
-      const allLogEntries: { key: string; value: unknown }[] = [];
+      const fetchedLogs = new Map<string, unknown>();
 
       for (let i = 0; i < loggableNodes.length; i += logFetchConcurrency) {
         signal?.throwIfAborted();
         const batch = loggableNodes.slice(i, i + logFetchConcurrency);
         const batchResults = await Promise.all(
           batch.map(async ([nodeId, node]) => {
-            const key = `${node.identifier ?? node.name ?? nodeId}`;
-            // Skip nodes already fetched in failed_step_logs to avoid duplicates
-            if (fetchedFailedLogKeys.has(node.logBaseKey!)) {
-              return {
-                key,
-                value: {
-                  step_id: nodeId,
-                  name: node.name,
-                  identifier: node.identifier,
-                  status: node.status,
-                  duration_ms: node.startTs && node.endTs ? node.endTs - node.startTs : undefined,
-                  note: "Log already included in failed_step_logs",
-                },
-              };
-            }
             try {
               const logValue = await resolveDiagnoseLog(client, node.logBaseKey!, {
                 signal,
                 returnDownloadUrl,
                 logSnippetLines,
               });
-              return {
-                key,
-                value: {
-                  step_id: nodeId,
-                  name: node.name,
-                  identifier: node.identifier,
-                  status: node.status,
-                  duration_ms: node.startTs && node.endTs ? node.endTs - node.startTs : undefined,
-                  ...(returnDownloadUrl
-                    ? { download_url: (logValue as { download_url: string }).download_url }
-                    : { log: logValue }),
-                },
-              };
+              return { nodeId, logValue };
             } catch (err) {
-              return { key, value: { step_id: nodeId, name: node.name, status: node.status, error: String(err) } };
+              return { nodeId, logValue: { error: String(err) } };
             }
           }),
         );
-        allLogEntries.push(...batchResults);
+        for (const { nodeId, logValue } of batchResults) {
+          fetchedLogs.set(nodeId, logValue);
+        }
       }
 
+      // Build all_step_logs from ALL nodes (keyed by nodeId to avoid collisions)
       const allStepLogs: Record<string, unknown> = {};
-      for (const entry of allLogEntries) {
-        allStepLogs[entry.key] = entry.value;
+      for (const [nodeId, node] of allNodes) {
+        const entry: Record<string, unknown> = {
+          step_id: nodeId,
+          name: node.name,
+          identifier: node.identifier,
+          status: node.status,
+          duration_ms: node.startTs && node.endTs ? node.endTs - node.startTs : undefined,
+        };
+
+        if (!node.logBaseKey) {
+          entry.note = "No log available for this step";
+        } else if (fetchedFailedLogKeys.has(node.logBaseKey)) {
+          // Already fetched — find the log content from failed_step_logs
+          const failedLogs = diagnostic.failed_step_logs as Record<string, unknown> | undefined;
+          const failedEntry = failedLogs
+            ? Object.values(failedLogs).find((v) => {
+                const rec = v as Record<string, unknown> | undefined;
+                return rec && typeof v === "string"
+                  ? false
+                  : (v as Record<string, unknown>)?.step_id === nodeId;
+              }) ?? Object.entries(failedLogs).find(([key]) => key.endsWith(`/${node.identifier ?? node.name}`))?.[1]
+            : undefined;
+          if (failedEntry && typeof failedEntry === "string") {
+            entry.log = failedEntry;
+          } else if (failedEntry && typeof failedEntry === "object") {
+            Object.assign(entry, failedEntry);
+          } else {
+            entry.note = "Log included in failed_step_logs";
+          }
+        } else {
+          const logValue = fetchedLogs.get(nodeId);
+          if (logValue && typeof logValue === "object" && "error" in (logValue as Record<string, unknown>)) {
+            entry.error = (logValue as Record<string, unknown>).error;
+          } else if (returnDownloadUrl) {
+            entry.download_url = (logValue as { download_url: string }).download_url;
+          } else {
+            entry.log = logValue;
+          }
+        }
+
+        allStepLogs[nodeId] = entry;
       }
       diagnostic.all_step_logs = allStepLogs;
       currentStep++;
