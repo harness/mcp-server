@@ -4,13 +4,19 @@
 - [x] Baseline branch state and identify recent behavioral commits
 - [x] Review high-blast-radius diffs and trace concrete trigger scenarios
 - [x] Implement a minimal fix only if a critical bug is proven
-- [ ] Run focused verification for any fix, or sanity checks for no-fix outcome
-- [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
+- [x] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [x] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
 - Treat current `origin/main` history since the 2026-07-13 investigation as the primary review window.
 - Prioritize the new CCM recommendation filters, GitOps delete mappings, and any recent write/auth behavior with concrete data-loss, crash, security, or major-breakage impact.
 - Trace candidates through public handlers and registry/client dispatch before changing code; patch only a proven high-severity trigger.
+
+### Review
+- Found a wrong-scope deletion bug in the new `gitops_agent` delete operation. The resource is `scopeOptional`, so an omitted `resource_scope` suppresses configured `HARNESS_ORG` / `HARNESS_PROJECT` defaults and sends an account-scoped DELETE, despite the operation documentation claiming omission defaults to project scope. If the same raw agent ID exists at project and account scope, a normal project-context delete can remove the account agent.
+- Required explicit account/org/project scope for GitOps agent deletion and documented all three safe call shapes. Required-param validation now also rejects empty strings so `params: { resource_scope: "" }` cannot bypass the fail-closed guard.
+- Added registry regressions for omitted, empty, project, and account scope plus a public `harness_delete` regression proving omitted scope sends no API request.
+- Verification passed: focused GitOps agent / delete tests (23), `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, `pnpm standards:check` (80), and `pnpm test` (117 files / 2557 tests).
 
 ## Critical Bug Investigation Automation (2026-07-13)
 - [x] Baseline branch state and identify recent behavioral commits
