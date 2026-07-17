@@ -1,6 +1,7 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
+// snake_case id required by ml-infra (prompt_ref: "pipeline_summarizer")
 const PIPELINE_SUMMARIZER_PROMPT = {
   description:
     "Fetch and summarize ALL step logs from a pipeline execution. Returns a table with every step's name, status, duration, and a log-based summary of what happened.",

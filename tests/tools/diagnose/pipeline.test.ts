@@ -1564,6 +1564,51 @@ describe("pipelineHandler", () => {
       expect(logs["step-a"].log).toBeUndefined();
     });
 
+    it("caps total steps fetched by max_all_step_logs and emits truncation marker", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+      mockFn.mockResolvedValue("log output");
+
+      const stepEntries: Record<string, Record<string, unknown>> = {};
+      for (let i = 1; i <= 10; i++) {
+        stepEntries[`st${i}`] = {
+          uuid: `st${i}`, identifier: `st${i}`, name: `ST${i}`,
+          baseFqn: `pipeline.stages.s1.spec.execution.steps.st${i}`,
+          status: "Success", logBaseKey: `log/st${i}`, startTs: NOW + i * 1000, endTs: NOW + (i + 1) * 1000,
+        };
+      }
+
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "s1", name: "S1", status: "Success",
+          steps: Array.from({ length: 10 }, (_, i) => ({ id: `st${i + 1}`, name: `ST${i + 1}`, status: "Success" })),
+        }],
+        nodeMapEntries: stepEntries,
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true, max_all_step_logs: 3 },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(Object.keys(logs)).toHaveLength(3);
+
+      // Truncation marker emitted
+      const truncated = result.all_step_logs_truncated as { shown: number; total: number };
+      expect(truncated).toBeDefined();
+      expect(truncated.shown).toBe(3);
+      expect(truncated.total).toBe(10);
+
+      // Only 3 log fetches (not 10)
+      expect(mockFn).toHaveBeenCalledTimes(3);
+    });
+
     it("includes duration_ms when startTs and endTs are available", async () => {
       const exec = makeExecution({
         status: "Success",

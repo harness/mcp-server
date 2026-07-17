@@ -487,6 +487,7 @@ export const pipelineHandler: DiagnoseHandler = {
     const returnDownloadUrl = args.return_download_url === true;
     const logSnippetLines = asNumber(args.log_snippet_lines) ?? 120;
     const maxFailedSteps = asNumber(args.max_failed_steps) ?? 5;
+    const maxAllStepLogs = asNumber(args.max_all_step_logs) ?? 25;
 
     const hasRequestedStep = !!asString(input.step_id);
     let totalSteps = 1;
@@ -782,13 +783,20 @@ export const pipelineHandler: DiagnoseHandler = {
 
     // Fetch ALL step logs when explicitly requested (e.g., pipeline summarizer).
     // Uses same concurrency cap as failed step log fetching to avoid OOM.
+    // Total steps capped by maxAllStepLogs (default 25) to bound response size
+    // on large matrix/loop pipelines (same pattern as failed_steps_truncated).
     if (includeAllStepLogs && graphNodeMap && !diagnostic.all_step_logs) {
       await sendProgress(extra, currentStep, totalSteps, "Fetching all step logs...");
 
       // Collect all nodes sorted by startTs. Include nodes without logBaseKey
       // so the summary covers every step even if no log is available.
-      const allNodes = Object.entries(graphNodeMap)
+      const allNodesFull = Object.entries(graphNodeMap)
         .sort((a, b) => (a[1].startTs ?? 0) - (b[1].startTs ?? 0));
+
+      const allNodes = maxAllStepLogs > 0 ? allNodesFull.slice(0, maxAllStepLogs) : allNodesFull;
+      if (allNodes.length < allNodesFull.length) {
+        diagnostic.all_step_logs_truncated = { shown: allNodes.length, total: allNodesFull.length };
+      }
 
       // Only fetch logs for nodes that have a logBaseKey and were NOT already
       // fetched in failed_step_logs (avoid redundant API calls).
