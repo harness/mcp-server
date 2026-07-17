@@ -36,7 +36,7 @@ Your job is to summarize EVERY step in the execution by extracting concrete outp
 1. Call harness_diagnose with ${idParam}${projectId ? `, project_id="${projectId}"` : ""}, options={include_logs: true, include_all_step_logs: true} to get the full stage/step tree with ALL step logs.
    - Note: harness_diagnose rejects non-terminal executions (Running, Queued). For in-progress runs, use harness_get with resource_type="execution" and resource_id=<execution_id> instead.
 2. For each step in the all_step_logs response, extract the specific outputs based on step type (see "What to Extract" below).
-3. If there are more than 10 steps, present results in batches of 5 rows at a time so the user sees partial progress instead of waiting for the full table. After each batch, continue immediately with the next batch until all steps are covered.
+3. If there are more than 10 steps, present results in batches of 3 rows at a time so the user sees partial progress instead of waiting for the full table. After each batch, continue immediately with the next batch until all steps are covered.
 4. Present results as the table below. DO NOT skip any steps — summarize every single one, even if the step succeeded with no issues.
 
 ## What to Extract (by step type)
