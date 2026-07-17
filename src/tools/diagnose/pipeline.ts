@@ -609,11 +609,13 @@ export const pipelineHandler: DiagnoseHandler = {
       diagnostic.execution_error = String(err);
     }
 
-    // Track which log keys were actually fetched for failed steps — used below to
-    // avoid double-fetching the same log if step_id points to a failed step.
+    // Track which log keys were actually fetched — used below to avoid
+    // double-fetching the same log across failed_step_logs, requested_step_log,
+    // auto-fetch, and include_all_step_logs.
     // Must use `capped` (the actually-fetched subset), not the full `failedNodes`,
     // so that truncated failures don't incorrectly block the requested_step_log fetch.
     let fetchedFailedLogKeys = new Set<string>();
+    let fetchedLogKeys = new Set<string>();
 
     if (includeLogs && failedNodes.length > 0) {
       await sendProgress(extra, currentStep, totalSteps, "Fetching failed step logs...");
@@ -643,6 +645,7 @@ export const pipelineHandler: DiagnoseHandler = {
             const prefix = fn.log_key;
             if (!prefix) return { key, value: { error: "No log key available for this step" } };
             fetchedFailedLogKeys.add(prefix);
+            fetchedLogKeys.add(prefix);
             try {
               const logValue = await resolveDiagnoseLog(client, prefix, {
                 signal,
@@ -695,6 +698,7 @@ export const pipelineHandler: DiagnoseHandler = {
               ? { download_url: (logValue as { download_url: string }).download_url }
               : { log: logValue }),
           };
+          fetchedLogKeys.add(requestedNode.logBaseKey);
         } catch (err) {
           log.warn("Failed to fetch requested step log", { step_id: requestedStepId, error: String(err) });
           diagnostic.requested_step_log = {
@@ -767,6 +771,7 @@ export const pipelineHandler: DiagnoseHandler = {
               ? { download_url: (logValue as { download_url: string }).download_url }
               : { log: logValue }),
           };
+          fetchedLogKeys.add(bestNode.logBaseKey);
         } catch (err) {
           log.warn("Failed to auto-fetch step log", { step_id: bestNodeId, error: String(err) });
           diagnostic.requested_step_log = {
@@ -793,7 +798,7 @@ export const pipelineHandler: DiagnoseHandler = {
       // Only fetch logs for nodes that have a logBaseKey and were NOT already
       // fetched in failed_step_logs (avoid redundant API calls).
       const loggableNodes = allNodes.filter(
-        ([_, node]) => node.logBaseKey && !fetchedFailedLogKeys.has(node.logBaseKey),
+        ([_, node]) => node.logBaseKey && !fetchedLogKeys.has(node.logBaseKey),
       );
 
       const logFetchConcurrency = config.HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY ?? 3;
@@ -851,6 +856,17 @@ export const pipelineHandler: DiagnoseHandler = {
             Object.assign(entry, failedEntry);
           } else {
             entry.note = "Log included in failed_step_logs";
+          }
+        } else if (fetchedLogKeys.has(node.logBaseKey)) {
+          // Already fetched via requested_step_log — inline the log content
+          const reqLog = diagnostic.requested_step_log as Record<string, unknown> | undefined;
+          if (reqLog?.step_id === nodeId) {
+            if (reqLog.log) entry.log = reqLog.log;
+            else if (reqLog.download_url) entry.download_url = reqLog.download_url;
+            else if (reqLog.error) entry.error = reqLog.error;
+            else entry.note = "Log included in requested_step_log";
+          } else {
+            entry.note = "Log included in requested_step_log";
           }
         } else {
           const logValue = fetchedLogs.get(nodeId);
