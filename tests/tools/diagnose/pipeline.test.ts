@@ -1695,5 +1695,48 @@ describe("pipelineHandler", () => {
       const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
       expect(logs["step-a"].duration_ms).toBe(45000);
     });
+
+    it("caps log fetches by max_all_steps and emits all_step_logs_truncated", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+      mockFn.mockResolvedValue("resolved log line 1\nresolved log line 2");
+
+      const stepEntries: Record<string, Record<string, unknown>> = {};
+      for (let i = 1; i <= 4; i++) {
+        stepEntries[`st${i}`] = {
+          uuid: `st${i}`, identifier: `st${i}`, name: `ST${i}`,
+          baseFqn: `pipeline.stages.s1.spec.execution.steps.st${i}`,
+          status: "Success", logBaseKey: `log/st${i}`, startTs: NOW + i * 1000, endTs: NOW + (i + 1) * 1000,
+        };
+      }
+
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "s1", name: "S1", status: "Success",
+          steps: Array.from({ length: 4 }, (_, i) => ({ id: `st${i + 1}`, name: `ST${i + 1}`, status: "Success" })),
+        }],
+        nodeMapEntries: stepEntries,
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true, max_all_steps: 2 },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      expect(mockFn).toHaveBeenCalledTimes(2);
+      expect(result.all_step_logs_truncated).toEqual({ shown: 2, total: 4 });
+
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(Object.keys(logs)).toHaveLength(4);
+      expect(logs["st1"].log).toBeDefined();
+      expect(logs["st2"].log).toBeDefined();
+      expect(logs["st3"].note).toBe("Log omitted — increase max_all_steps to fetch");
+      expect(logs["st4"].note).toBe("Log omitted — increase max_all_steps to fetch");
+    });
   });
 });

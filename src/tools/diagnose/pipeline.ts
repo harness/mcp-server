@@ -495,6 +495,7 @@ export const pipelineHandler: DiagnoseHandler = {
     const returnDownloadUrl = args.return_download_url === true;
     const logSnippetLines = asNumber(args.log_snippet_lines) ?? 120;
     const maxFailedSteps = asNumber(args.max_failed_steps) ?? 5;
+    const maxAllSteps = asNumber(args.max_all_steps) ?? 50;
 
     const hasRequestedStep = !!asString(input.step_id);
     let totalSteps = 1;
@@ -794,7 +795,8 @@ export const pipelineHandler: DiagnoseHandler = {
     }
 
     // Fetch ALL step logs when explicitly requested (e.g., pipeline summarizer).
-    // Uses same concurrency cap as failed step log fetching to avoid OOM.
+    // Bounded by max_all_steps (default 50) to cap total logs fetched/retained;
+    // concurrency is additionally capped to avoid peak memory spikes (AIDEVOPS-2200).
     if (includeAllStepLogs && graphNodeMap && !diagnostic.all_step_logs) {
       await sendProgress(extra, currentStep, totalSteps, "Fetching all step logs...");
 
@@ -809,12 +811,22 @@ export const pipelineHandler: DiagnoseHandler = {
         ([_, node]) => node.logBaseKey && !fetchedLogKeys.has(node.logBaseKey),
       );
 
+      const cappedLoggableNodes = maxAllSteps > 0
+        ? loggableNodes.slice(0, maxAllSteps)
+        : loggableNodes;
+      if (cappedLoggableNodes.length < loggableNodes.length) {
+        diagnostic.all_step_logs_truncated = {
+          shown: cappedLoggableNodes.length,
+          total: loggableNodes.length,
+        };
+      }
+
       const logFetchConcurrency = config.HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY ?? 3;
       const fetchedLogs = new Map<string, unknown>();
 
-      for (let i = 0; i < loggableNodes.length; i += logFetchConcurrency) {
+      for (let i = 0; i < cappedLoggableNodes.length; i += logFetchConcurrency) {
         signal?.throwIfAborted();
-        const batch = loggableNodes.slice(i, i + logFetchConcurrency);
+        const batch = cappedLoggableNodes.slice(i, i + logFetchConcurrency);
         const batchResults = await Promise.all(
           batch.map(async ([nodeId, node]) => {
             try {
@@ -870,6 +882,12 @@ export const pipelineHandler: DiagnoseHandler = {
           } else {
             entry.note = "Log included in requested_step_log";
           }
+        } else if (
+          node.logBaseKey
+          && !fetchedLogs.has(nodeId)
+          && diagnostic.all_step_logs_truncated
+        ) {
+          entry.note = "Log omitted — increase max_all_steps to fetch";
         } else {
           const logValue = fetchedLogs.get(nodeId);
           if (logValue && typeof logValue === "object" && "error" in (logValue as Record<string, unknown>)) {

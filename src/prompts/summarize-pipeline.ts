@@ -40,7 +40,8 @@ Your job is to summarize EVERY step in the execution by extracting concrete outp
 
 1. Call harness_diagnose with ${idParam}${projectId ? `, project_id="${projectId}"` : ""}, options={include_logs: true, include_all_step_logs: true} to get the full stage/step tree with ALL step logs.
    - Note: harness_diagnose rejects non-terminal executions (Running, Queued). For in-progress runs, use harness_get with resource_type="execution" and resource_id=<execution_id> instead.
-   - The response contains \`all_step_logs\` (keyed by node ID) with logs for every step. Steps without available logs will have a \`note\` field instead — use their name/status/duration from the execution tree.
+   - The response contains \`all_step_logs\` (keyed by node ID) with metadata for every step. Steps without available logs will have a \`note\` field instead — use their name/status/duration from the execution tree.
+   - Large pipelines may return \`all_step_logs_truncated: { shown, total }\` when log fetches exceed \`max_all_steps\` (default 50). Omitted logs have \`note: "Log omitted — increase max_all_steps to fetch"\`. Re-call with a higher \`max_all_steps\` (or 0 for unlimited) to fetch the rest.
    - If any steps also appear in \`failed_step_logs\`, their log content is already merged into \`all_step_logs\` — use \`all_step_logs\` as the single source of truth.
 2. For each step in the all_step_logs response, extract the specific outputs based on step type (see "What to Extract" below).
 3. If there are more than 10 steps, present results in batches of 3 rows at a time so the user sees partial progress instead of waiting for the full table. After each batch, continue immediately with the next batch until all steps are covered.
