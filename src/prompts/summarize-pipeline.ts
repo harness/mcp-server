@@ -3,10 +3,10 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 export function registerSummarizePipelinePrompt(server: McpServer): void {
   server.registerPrompt(
-    "summarize-pipeline",
+    "pipeline_summarizer",
     {
       description:
-        "Summarize an entire pipeline execution — all steps, statuses, durations, and logs. Accepts an execution ID, pipeline ID, or Harness URL.",
+        "Fetch and summarize ALL step logs from a pipeline execution. Returns a table with every step's name, status, duration, and a log-based summary of what happened.",
       argsSchema: {
         executionId: z
           .string()
@@ -27,18 +27,31 @@ export function registerSummarizePipelinePrompt(server: McpServer): void {
             role: "user" as const,
             content: {
               type: "text" as const,
-              text: `You are a pipeline execution summarizer for Harness CI/CD.
+              text: `You are a pipeline execution summarizer for Harness CI/CD pipelines (IACM, CCM, CD, CI, STO).
 
-Unlike debug-pipeline-failure, summarize ALL steps including successes; focus on overview and optimization, not root-cause analysis.
+Your job is to summarize EVERY step in the execution by extracting concrete outputs from the logs. Do NOT skip any steps.
 
 ## Steps
 
-1. Call harness_diagnose with ${idParam}${projectId ? `, project_id="${projectId}"` : ""}, options={include_logs: true} to get the full stage/step tree, durations, statuses, failed step logs, and the main build/test log on success.
-   - Note: harness_diagnose rejects non-terminal executions (Running, Queued). For in-progress runs, use harness_get with resource_type="execution" and resource_id=<execution_id> instead — log analysis may be incomplete for running executions.
-2. Fetch additional logs selectively — do NOT fetch logs for every step (large pipelines may have 30+ steps). The diagnose response already includes failed_step_logs and the main step log on success. Only fetch more if needed:
-   - Slowest steps: use harness_get with resource_type="execution_log" and the Harness URL including ?step=<nodeExecutionId> for the top 3 slowest steps.
-   - Key output steps: fetch logs for build, deploy, and test steps to capture artifacts, image tags, and test counts.
-3. Optionally call harness_get with resource_type="pipeline" and resource_id=<pipeline_id> for YAML context if step purposes are unclear from the diagnose output alone.
+1. Call harness_diagnose with ${idParam}${projectId ? `, project_id="${projectId}"` : ""}, options={include_logs: true, include_all_step_logs: true} to get the full stage/step tree with ALL step logs.
+   - Note: harness_diagnose rejects non-terminal executions (Running, Queued). For in-progress runs, use harness_get with resource_type="execution" and resource_id=<execution_id> instead.
+2. For each step in the all_step_logs response, extract the specific outputs based on step type (see "What to Extract" below).
+3. If there are more than 10 steps, present results in batches of 5 rows at a time so the user sees partial progress instead of waiting for the full table. After each batch, continue immediately with the next batch until all steps are covered.
+4. Present results as the table below. DO NOT skip any steps — summarize every single one, even if the step succeeded with no issues.
+
+## What to Extract (by step type)
+
+For each step, look for these concrete outputs in the logs:
+
+- **IACM / Terraform**: Resources created/changed/destroyed (e.g. "3 added, 1 changed, 0 destroyed"), resource names/IDs provisioned, state file changes, plan drift detected
+- **CD / Deploy**: Service deployed, environment/namespace, image tag or artifact version, replicas, rollback info, health check results
+- **CI / Build**: Image built and pushed (repo:tag), build duration, cache hit/miss, test results (passed/failed/skipped counts), artifacts produced
+- **STO / Security**: Vulnerabilities found (critical/high/medium/low counts), policy violations, exemptions applied, scan tool used
+- **CCM / Cost**: Budget alerts, anomalies detected, recommendations applied, savings realized
+- **Approval**: Who approved/rejected, how long it waited
+- **Plugin / Run steps**: Command executed, exit code, key output lines (errors, warnings, final status messages)
+
+If a step's log has no meaningful output (e.g. initialization), note what it did briefly (e.g. "Initialized workspace", "Pulled image X").
 
 ## Required Output
 
@@ -51,17 +64,16 @@ Unlike debug-pipeline-failure, summarize ALL steps including successes; focus on
 
 ### Step Summary
 
-| # | Step Name | Type | Duration | Status | Key Output |
-|---|-----------|------|----------|--------|------------|
-| 1 | ...       | ...  | ...      | ...    | ...        |
-
-For each step, the "Key Output" column should note: artifacts produced, images built/pushed, tests passed/failed counts, deployments made, or meaningful log lines.
+| Step Name | Status | Duration | What Happened (outputs from logs) |
+|-----------|--------|----------|-----------------------------------|
+| ...       | ...    | ...      | Concrete outputs: what was provisioned/deployed/built/scanned |
 
 ### Key Observations
+- Resources provisioned or modified (total count across all steps)
+- Deployments: services, environments, artifact versions
+- Security: vulnerability counts, policy pass/fail
 - Performance bottlenecks or unusually slow steps
-- Warnings in passing steps
-- Resource patterns (memory, CPU, disk)
-- Suggestions for optimization`,
+- Errors or warnings worth investigating`,
             },
           },
         ],
