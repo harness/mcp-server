@@ -282,6 +282,14 @@ function findFailedNodes(nodeMap: Record<string, ExecGraphNode>): FailedNodeDeta
   return stepNodes.length > 0 ? stepNodes : stageNodes;
 }
 
+/** Matches the `${stage}/${step}` keys used in failed_step_logs. */
+function failedStepLogLookupKey(node: ExecGraphNode): string | undefined {
+  const stageMatch = node.baseFqn?.match(/\.stages\.([^.]+)\./);
+  if (!stageMatch) return undefined;
+  const stepId = node.identifier ?? node.name;
+  return stepId ? `${stageMatch[1]}/${stepId}` : undefined;
+}
+
 function findChildPipelineRef(
   nodeMap: Record<string, ExecGraphNode>,
 ): { executionId: string; orgId: string; projectId: string } | undefined {
@@ -840,16 +848,10 @@ export const pipelineHandler: DiagnoseHandler = {
         if (!node.logBaseKey) {
           entry.note = "No log available for this step";
         } else if (fetchedFailedLogKeys.has(node.logBaseKey)) {
-          // Already fetched — find the log content from failed_step_logs
+          // Already fetched — merge log content from failed_step_logs (keyed by stage/step).
           const failedLogs = diagnostic.failed_step_logs as Record<string, unknown> | undefined;
-          const failedEntry = failedLogs
-            ? Object.values(failedLogs).find((v) => {
-                const rec = v as Record<string, unknown> | undefined;
-                return rec && typeof v === "string"
-                  ? false
-                  : (v as Record<string, unknown>)?.step_id === nodeId;
-              }) ?? Object.entries(failedLogs).find(([key]) => key.endsWith(`/${node.identifier ?? node.name}`))?.[1]
-            : undefined;
+          const lookupKey = failedStepLogLookupKey(node);
+          const failedEntry = lookupKey ? failedLogs?.[lookupKey] : undefined;
           if (failedEntry && typeof failedEntry === "string") {
             entry.log = failedEntry;
           } else if (failedEntry && typeof failedEntry === "object") {

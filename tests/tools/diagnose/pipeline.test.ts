@@ -1408,6 +1408,67 @@ describe("pipelineHandler", () => {
       expect(allLogs["step-ok"]).toBeDefined();
       expect(allLogs["step-fail"]).toBeDefined();
       expect(allLogs["step-ok"].log).toBeDefined();
+      // Failed step log is merged from failed_step_logs — not re-fetched
+      expect(allLogs["step-fail"].log).toBe("resolved log line 1\nresolved log line 2");
+      expect(allLogs["step-fail"].note).toBeUndefined();
+    });
+
+    it("handles duplicate step identifiers across stages with failed_step_logs dedup", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+      mockFn.mockImplementation(async (_client, prefix: string) => {
+        if (prefix === "log/build-deploy") return "build deploy failed log";
+        if (prefix === "log/test-deploy") return "test deploy failed log";
+        return "other step log";
+      });
+
+      const exec = makeExecution({
+        status: "Failed",
+        stages: [
+          { id: "build", name: "Build", status: "Failed", steps: [
+            { id: "step-build-deploy", name: "Deploy", status: "Failed" },
+          ]},
+          { id: "test", name: "Test", status: "Failed", steps: [
+            { id: "step-test-deploy", name: "Deploy", status: "Failed" },
+          ]},
+        ],
+        nodeMapEntries: {
+          "step-build-deploy": {
+            uuid: "step-build-deploy", identifier: "deploy", name: "Deploy",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-build-deploy",
+            status: "Failed", failureInfo: { message: "build deploy failed" },
+            logBaseKey: "log/build-deploy", startTs: NOW, endTs: NOW + 10000,
+          },
+          "step-test-deploy": {
+            uuid: "step-test-deploy", identifier: "deploy", name: "Deploy",
+            baseFqn: "pipeline.stages.test.spec.execution.steps.step-test-deploy",
+            status: "Failed", failureInfo: { message: "test deploy failed" },
+            logBaseKey: "log/test-deploy", startTs: NOW + 10000, endTs: NOW + 20000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: false, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      // Each failed step fetched once (in failed_step_logs), not again in all_step_logs
+      expect(mockFn).toHaveBeenCalledTimes(2);
+
+      const allLogs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      // Both entries exist — keyed by nodeId, not shared identifier
+      expect(Object.keys(allLogs)).toEqual(["step-build-deploy", "step-test-deploy"]);
+      // Each step gets its own log from failed_step_logs (no cross-stage collision)
+      expect(allLogs["step-build-deploy"].log).toBe("build deploy failed log");
+      expect(allLogs["step-test-deploy"].log).toBe("test deploy failed log");
+      expect(allLogs["step-build-deploy"].identifier).toBe("deploy");
+      expect(allLogs["step-test-deploy"].identifier).toBe("deploy");
     });
 
     it("does not re-fetch logs already in requested_step_log", async () => {
