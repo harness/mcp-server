@@ -93,6 +93,16 @@ describe("gitops_agent", () => {
     expect(call.method).toBe("DELETE");
     expect(call.path).toBe("/gitops/api/v1/agents/agent1779094157087");
   });
+
+  it("delete: fails fast when agent_id is missing (paramsSchema requires native identifier)", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_agent", "delete", {}),
+    ).rejects.toThrow(/Missing required param\(s\) for gitops_agent\.delete: agent_id/);
+
+    expect(client.request).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -281,6 +291,17 @@ describe("gitops_application", () => {
         cascade: "true",
       }),
     ).rejects.toThrow(/propagation_policy is required when cascade=true/);
+  });
+
+  it("delete: fails fast when agent_id is missing before deletion-mode bodyBuilder", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_application", "delete", {
+        app_name: "demo-app",
+        cascade: "false",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for gitops_application\.delete: agent_id/);
   });
 });
 
@@ -1032,6 +1053,51 @@ describe("gitops scope behavior", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.params.orgIdentifier).toBe("custom-org");
     expect(call.params.projectIdentifier).toBe("custom-project");
+  });
+
+  it("gitops_agent delete: account resource_scope omits org/project even when configured", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "delete", {
+      agent_id: "myagent",
+      resource_scope: "account",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/myagent");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("gitops_agent delete: org resource_scope injects orgIdentifier only", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "delete", {
+      agent_id: "myagent",
+      resource_scope: "org",
+      org_id: "custom-org",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("custom-org");
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("gitops_agent delete: project resource_scope injects org and project from config", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "delete", {
+      agent_id: "myagent",
+      resource_scope: "project",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
   });
 });
 
