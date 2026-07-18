@@ -220,4 +220,102 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream DeployAttestation step definitions in v0 pipeline common steps", () => {
+    const commonSteps = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>)
+      .pipeline.steps.common as Record<string, unknown>;
+
+    expect(commonSteps).toHaveProperty("DeployAttestationStepNode");
+    expect(commonSteps).toHaveProperty("DeployAttestationStepInfo");
+
+    const stepNode = commonSteps.DeployAttestationStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("DeployAttestation");
+
+    const stepInfo = commonSteps.DeployAttestationStepInfo as {
+      required: string[];
+      allOf: Array<{ required?: string[]; properties?: Record<string, unknown> }>;
+    };
+    expect(stepInfo.required).toEqual(
+      expect.arrayContaining(["deployStepRef", "oidcProvider"]),
+    );
+    const specBranch = stepInfo.allOf.find((branch) => branch.properties?.deployStepRef != null);
+    expect(specBranch?.properties).toHaveProperty("oidcProvider");
+    expect(specBranch?.properties).toHaveProperty("overrideConnectorRef");
+  });
+
+  it("includes upstream DeployAttestation step definitions in v0 template common steps", () => {
+    const commonSteps = (SCHEMAS.template.definitions as Record<string, Record<string, unknown>>)
+      .pipeline.steps.common as Record<string, unknown>;
+
+    expect(commonSteps).toHaveProperty("DeployAttestationStepNode_template");
+    expect(commonSteps).toHaveProperty("DeployAttestationStepInfo");
+
+    const stepNode = commonSteps.DeployAttestationStepNode_template as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("DeployAttestation");
+  });
+
+  it("requires serviceReferences for templated load test runs in v0 pipeline", () => {
+    const loadTest = (
+      SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>
+    ).pipeline.steps.resiliencetesting.LoadTestStepInfo as {
+      allOf: Array<{
+        properties?: {
+          serviceReferences?: { minItems: number; items: { minLength: number } };
+        };
+        then?: { required: string[] };
+      }>;
+    };
+
+    const specBranch = loadTest.allOf.find((branch) => branch.properties?.serviceReferences != null);
+    expect(specBranch?.properties?.serviceReferences?.minItems).toBe(1);
+    expect(specBranch?.properties?.serviceReferences?.items.minLength).toBe(1);
+    expect(specBranch?.then?.required).toEqual(
+      expect.arrayContaining(["serviceReferences", "environmentReference", "infraReference"]),
+    );
+  });
+
+  it("includes upstream customVerificationStartTime in v0 VerifyConfigurableProperty", () => {
+    const verifyProperty = (
+      SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>
+    ).pipeline.steps.cvng.VerifyConfigurableProperty as {
+      properties: { name: { enum: string[] } };
+    };
+
+    expect(verifyProperty.properties.name.enum).toContain("customVerificationStartTime");
+    expect(verifyProperty.properties.name.enum).toContain("deploymentStartTime");
+  });
+
+  it("includes upstream ServiceType and expanded ServiceV1 oneOf in v1 pipeline and template", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const ns = key;
+      const unified = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>)[ns]
+        .stages.unified as Record<string, unknown>;
+
+      const serviceType = unified.ServiceType as { enum: string[] };
+      expect(serviceType.enum).toContain("kubernetes");
+      expect(serviceType.enum).toContain("helm");
+      expect(serviceType.enum).toContain("azure-container-apps");
+
+      const serviceV1 = unified.ServiceV1 as {
+        oneOf: Array<{
+          type?: string;
+          required?: string[];
+          properties?: {
+            type?: { $ref: string };
+            items?: { oneOf: unknown[] };
+          };
+        }>;
+      };
+
+      expect(serviceV1.oneOf[0]?.type).toBe("string");
+      expect(serviceV1.oneOf[1]?.required).toContain("id");
+      expect(serviceV1.oneOf[1]?.properties?.type?.$ref).toContain("ServiceType");
+      expect(serviceV1.oneOf[2]?.properties?.items?.oneOf).toHaveLength(2);
+      expect(serviceV1.oneOf[2]?.properties?.type?.$ref).toContain("ServiceType");
+    }
+  });
 });
