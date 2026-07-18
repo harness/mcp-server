@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Multi-Scope Creates Must Match Read and Update Defaults
+- **Issue**: A multi-scope resource can normalize configured org/project defaults in get/update path builders while create retains generic account-scope behavior. An omitted-scope create then targets a different namespace from a subsequent omitted-scope update.
+- **Fix**: Share one scope normalizer across create/get/update, including explicit account-scope removal of incidental org/project identifiers.
+- **Rule**: When changing default scope resolution for any operation on a mutable resource, assert request scope parity across create, get, and update through both registry and public tool-handler tests.
+
 ## Scope Defaults and Remote Branch Context Must Stay End-to-End
 - **Issue**: Multi-scope path builders can bypass the registry's usual config defaulting when they construct path segments themselves. For IDP entities, list used configured `HARNESS_ORG` / `HARNESS_PROJECT`, while get/update path construction fell back to account scope, so a list -> update flow could target a different entity with the same kind/id.
 - **Fix**: Path builders that encode scope in the path must accept `PathBuilderConfig`, honor explicit `resource_scope`, use configured org/project defaults when scope is omitted and the resource's list/default behavior does so, and clear unused scope fields so query params match the path.

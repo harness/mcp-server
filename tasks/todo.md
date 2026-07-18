@@ -2,15 +2,21 @@
 
 ## Critical Bug Investigation Automation (2026-07-18)
 - [x] Baseline branch state and identify recent behavioral commits
-- [ ] Review high-blast-radius diffs and trace concrete trigger scenarios
-- [ ] Implement a minimal fix only if a critical bug is proven
-- [ ] Run focused verification for any fix, or sanity checks for no-fix outcome
+- [x] Review high-blast-radius diffs and trace concrete trigger scenarios
+- [x] Implement a minimal fix only if a critical bug is proven
+- [x] Run focused verification for any fix, or sanity checks for no-fix outcome
 - [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
 - Treat commits after `v3.2.10` as the primary recent-change window, with emphasis on GitOps deletes, scoped IDP writes, HTTP/session policy, Code scope forwarding, and CCM recommendation filtering.
 - Trace each candidate through the public tool handler, registry dispatch, and final request construction before judging severity.
 - Require a concrete high-impact trigger and a narrow, testable fix; otherwise leave runtime code unchanged.
+
+### Review
+- Found a wrong-target IDP write regression in the recently added entity mutation flow: with configured `HARNESS_ORG` / `HARNESS_PROJECT`, an omitted-scope create sent no scope identifiers and therefore created at account scope, while omitted-scope get/update resolved to the configured project scope.
+- A create followed by update for the same kind/identifier could therefore replace an existing project entity instead of the account entity that had just been created.
+- Fixed create to reuse the same account/org/project scope normalization as get/update, including clearing incidental org/project IDs for explicit account scope.
+- Verification passed: focused IDP registry/tool-handler tests, `pnpm typecheck`, `pnpm build`, `pnpm docs:generate`, `pnpm docs:check`, `pnpm standards:check`, and full `pnpm test` (117 files / 2556 tests).
 
 ## Critical Bug Investigation Automation (2026-07-13)
 - [x] Baseline branch state and identify recent behavioral commits
