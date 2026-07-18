@@ -700,6 +700,17 @@ export const chaosLoadTestListExtract = (raw: unknown): { items: unknown[]; tota
 };
 
 /**
+ * Chaos Service (v3) list response: { data: [...], correlationID, pagination: { index, limit, totalPages, totalItems } }.
+ * Distinct from chaos_loadtest's { items, pagination } envelope — the v3 chaos-services API
+ * wraps the array under `data` per shared PaginationResponse contract.
+ */
+export const chaosServiceListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: unknown[]; pagination?: { totalItems?: number } };
+  const items = r.data ?? [];
+  return { items, total: r.pagination?.totalItems ?? items.length };
+};
+
+/**
  * Extract chaos hub list response: { items: [...], pagination: { totalItems } }
  */
 export const chaosHubListExtract = (raw: unknown): { items: unknown[]; total: number } => {

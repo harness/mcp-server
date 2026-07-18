@@ -13,6 +13,7 @@ import {
   chaosK8sInfraListExtract,
   chaosLoadTestListExtract,
   chaosLoadTestExtract,
+  chaosServiceListExtract,
   chaosHubListExtract,
   chaosDRTestListExtract,
   sdPageExtract,
@@ -24,7 +25,7 @@ import {
   // Resource descriptions
   descChaosExperiment, descChaosExperimentRun, descChaosProbe,
   descChaosExperimentTemplate, descChaosExperimentVariable,
-  descChaosInfrastructure, descChaosLoadtest, descChaosK8sInfrastructure, descChaosEnabledInfrastructure,
+  descChaosInfrastructure, descChaosLoadtest, descChaosService, descChaosK8sInfrastructure, descChaosEnabledInfrastructure,
   descChaosHub, descChaosFault, descChaosFaultExperimentRun, descChaosFaultTemplate,
   descChaosProbeTemplate, descChaosActionTemplate,
   descChaosHubFault, descChaosEnvironment,
@@ -42,6 +43,17 @@ import {
   descListExperimentVariables, descGetComponentVariable, descCreateExperiment,
   descListLinuxInfra,
   descListLoadtests, descGetLoadtest, descCreateLoadtest, descDeleteLoadtest,
+  descListChaosServices, descGetChaosService, descDeleteChaosService, descCreateChaosService, descUpdateChaosService,
+  descChaosServiceEnvironmentIds, descChaosServiceInfrastructureIds,
+  descChaosServiceTags, descChaosServiceIncludeAllScope,
+  descChaosServiceSearch,
+  descChaosServiceIdentity,
+  descBodyChaosServiceCreate, descBodyChaosServiceUpdate,
+  descChaosServiceName, descChaosServiceDescription, descChaosServiceTagsBody,
+  descChaosServiceExternalServiceId, descChaosServiceAgentId,
+  descChaosServiceEnvironmentId, descChaosServiceInfrastructureId,
+  descChaosServiceInfrastructureType, descChaosServiceOnboardingId,
+  descChaosServiceProbes,
   descListK8sInfra, descGetK8sInfra, descListChaosEnabledInfra,
   descListHubs, descGetHub, descCreateHub, descUpdateHub, descDeleteHub,
   descListFaults, descGetFault,
@@ -144,6 +156,7 @@ import {
   descExperimentIdUUID,
   // Service Discovery
   descSDAgentIdentity, descSDEnvironmentId, descSDFetchAll, descSDAgentDiagnostic,
+  descDiscoveredAgent, descListDiscoveredAgents, descDiscoveredAgentSearch,
   descDiscoveredNamespace, descListDiscoveredNamespaces, descSDNamespaceNameFilter,
   descDiscoveredService, descListDiscoveredServices, descSDNamespaceFilter, descSDSearchFilter,
 } from "./chaos-descriptions.js";
@@ -1942,6 +1955,192 @@ export const chaosToolset: ToolsetDefinition = {
       },
     },
 
+    // ── Chaos Service (Service Management) ────────────────────────────
+    // v3 REST endpoints under the chaos manager:
+    //   GET    /v3/chaos-services
+    //   GET    /v3/chaos-services/{identity}
+    //   POST   /v3/chaos-services
+    //   PUT    /v3/chaos-services/{identity}
+    //   DELETE /v3/chaos-services/{identity}
+    // List response envelope is
+    //   { data: [...], correlationID, pagination: { totalItems, ... } }
+    // (distinct from the load-test v1 envelope of { items, pagination }).
+    // Create and update return the full ChaosServiceResponse. Update is a
+    // full-replace on mutable fields plus desired-state reconcile of probes.
+    // Delete soft-deletes the service and purges its probe mappings, returning
+    //   { success, correlationID }.
+    {
+      resourceType: "chaos_service",
+      displayName: "Chaos Service",
+      description: descChaosService,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["identity"],
+      listFilterFields: [
+        { name: "environment_ids", description: descChaosServiceEnvironmentIds },
+        { name: "infrastructure_ids", description: descChaosServiceInfrastructureIds },
+        { name: "tags", description: descChaosServiceTags },
+        { name: "include_all_scope", description: descChaosServiceIncludeAllScope, type: "boolean" },
+        { name: "search", description: descChaosServiceSearch },
+      ],
+      relatedResources: [
+        { resourceType: "discovered_agent", relationship: "prerequisite", description: "STEP 1 of create: pick the Service Discovery agent. Its 'identity' becomes agent_id, its environmentIdentifier becomes environment_id, and (for SD K8s) its identity is also the bare infrastructure_id." },
+        { resourceType: "discovered_namespace", relationship: "filters", description: "Optional STEP 2a: list namespaces for the chosen agent to narrow the discovered_service list before picking a service." },
+        { resourceType: "discovered_service", relationship: "prerequisite", description: "STEP 2b of create: pick the service to onboard. Its 'id' becomes external_service_id (the server derives serviceType/namespace from it)." },
+        { resourceType: "chaos_probe", relationship: "associates", description: "STEP 4 of create: optional health-check probes to attach. Source probe identities and their inputs[] schema here; fill each input value before adding to the create body's probes array." },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${CHAOS}/v3/chaos-services`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            page: "page",
+            limit: "limit",
+            size: "limit",
+            search: "search",
+            search_term: "search",
+            environment_ids: "environmentIds",
+            infrastructure_ids: "infrastructureIds",
+            tags: "tags",
+            include_all_scope: "includeAllScope",
+            sort_field: "sortField",
+            sort_ascending: "sortAscending",
+          },
+          responseExtractor: chaosServiceListExtract,
+          description: descListChaosServices,
+        },
+        get: {
+          method: "GET",
+          path: `${CHAOS}/v3/chaos-services/{identity}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { identity: "identity" },
+          responseExtractor: passthrough,
+          description: descGetChaosService,
+        },
+        delete: {
+          method: "DELETE",
+          path: `${CHAOS}/v3/chaos-services/{identity}`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { identity: "identity" },
+          responseExtractor: passthrough,
+          description: descDeleteChaosService,
+        },
+        create: {
+          method: "POST",
+          path: `${CHAOS}/v3/chaos-services`,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const externalServiceId = b.external_service_id ?? b.externalServiceId;
+            const agentId = b.agent_id ?? b.agentId;
+            const environmentId = b.environment_id ?? b.environmentId;
+            const infrastructureId = b.infrastructure_id ?? b.infrastructureId;
+            const infrastructureType = b.infrastructure_type ?? b.infrastructureType;
+            const onboardingId = b.onboarding_id ?? b.onboardingId;
+            const tags = b.tags;
+            const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
+              probeId: p.probeId ?? p.probe_id,
+              ...(p.inputs ? { inputs: p.inputs } : {}),
+            }));
+            return {
+              identity: b.identity,
+              name: b.name,
+              ...(b.description ? { description: b.description } : {}),
+              ...(tags
+                ? {
+                    tags: Array.isArray(tags)
+                      ? tags
+                      : String(tags)
+                          .split(",")
+                          .map((t) => t.trim())
+                          .filter(Boolean),
+                  }
+                : {}),
+              externalServiceId,
+              agentId,
+              environmentId,
+              infrastructureId,
+              ...(infrastructureType ? { infrastructureType } : {}),
+              ...(onboardingId ? { onboardingId } : {}),
+              ...(probes && probes.length > 0 ? { probes } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: descCreateChaosService,
+          bodySchema: {
+            description: descBodyChaosServiceCreate,
+            fields: [
+              { name: "identity", type: "string", required: true, description: descChaosServiceIdentity },
+              { name: "name", type: "string", required: true, description: descChaosServiceName },
+              { name: "external_service_id", type: "string", required: true, description: descChaosServiceExternalServiceId },
+              { name: "agent_id", type: "string", required: true, description: descChaosServiceAgentId },
+              { name: "environment_id", type: "string", required: true, description: descChaosServiceEnvironmentId },
+              { name: "infrastructure_id", type: "string", required: true, description: descChaosServiceInfrastructureId },
+              { name: "infrastructure_type", type: "string", required: false, description: descChaosServiceInfrastructureType },
+              { name: "description", type: "string", required: false, description: descChaosServiceDescription },
+              { name: "tags", type: "array", required: false, description: descChaosServiceTagsBody },
+              { name: "onboarding_id", type: "string", required: false, description: descChaosServiceOnboardingId },
+              { name: "probes", type: "array", required: false, description: descChaosServiceProbes },
+            ],
+          },
+        },
+        update: {
+          method: "PUT",
+          path: `${CHAOS}/v3/chaos-services/{identity}`,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          pathParams: { identity: "identity" },
+          bodyBuilder: (input) => {
+            const b = coerceBody(input);
+            const externalServiceId = b.external_service_id ?? b.externalServiceId;
+            const agentId = b.agent_id ?? b.agentId;
+            const environmentId = b.environment_id ?? b.environmentId;
+            const infrastructureId = b.infrastructure_id ?? b.infrastructureId;
+            const tags = b.tags;
+            const probes = (b.probes as Array<Record<string, unknown>> | undefined)?.map((p) => ({
+              probeId: p.probeId ?? p.probe_id,
+              ...(p.inputs ? { inputs: p.inputs } : {}),
+            }));
+            return {
+              name: b.name,
+              ...(b.description !== undefined ? { description: b.description } : {}),
+              ...(tags
+                ? {
+                    tags: Array.isArray(tags)
+                      ? tags
+                      : String(tags)
+                          .split(",")
+                          .map((t) => t.trim())
+                          .filter(Boolean),
+                  }
+                : {}),
+              externalServiceId,
+              agentId,
+              environmentId,
+              infrastructureId,
+              ...(probes && probes.length > 0 ? { probes } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          description: descUpdateChaosService,
+          bodySchema: {
+            description: descBodyChaosServiceUpdate,
+            fields: [
+              { name: "name", type: "string", required: true, description: descChaosServiceName },
+              { name: "external_service_id", type: "string", required: true, description: descChaosServiceExternalServiceId },
+              { name: "agent_id", type: "string", required: true, description: descChaosServiceAgentId },
+              { name: "environment_id", type: "string", required: true, description: descChaosServiceEnvironmentId },
+              { name: "infrastructure_id", type: "string", required: true, description: descChaosServiceInfrastructureId },
+              { name: "description", type: "string", required: false, description: descChaosServiceDescription },
+              { name: "tags", type: "array", required: false, description: descChaosServiceTagsBody },
+              { name: "probes", type: "array", required: false, description: descChaosServiceProbes },
+            ],
+          },
+        },
+      },
+    },
+
     // ── Chaos Kubernetes Infrastructure ──────────────────────────────
     {
       resourceType: "chaos_k8s_infrastructure",
@@ -3266,6 +3465,60 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "tags", type: "object", required: false, description: descDRTestTags },
             ],
           },
+        },
+      },
+    },
+
+    // ── Service Discovery: Agents ──────────────────────────────────────
+    // GET /gateway/servicediscovery/api/v1/agents (service-discovery repo).
+    // Envelope matches the other SD list endpoints:
+    //   { items, page: { totalItems, ... }, correlationID }
+    // so we reuse sdPageExtract. The Go handler treats environmentIdentifier
+    // as an optional narrowing filter even though swagger marks it required —
+    // omit to enumerate agents across every environment in the current scope.
+    {
+      resourceType: "discovered_agent",
+      displayName: "Discovered Agent",
+      description: descDiscoveredAgent,
+      toolset: "chaos",
+      scope: "project",
+      scopeParams: CHAOS_SCOPE,
+      identifierFields: ["identity"],
+      searchAliases: [
+        "service discovery agent", "sd agent", "discovery agent",
+        "chaos discovery agent",
+      ],
+      listFilterFields: [
+        { name: "environment_id", description: descSDEnvironmentId },
+        { name: "search", description: descDiscoveredAgentSearch },
+        { name: "all", type: "boolean", description: descSDFetchAll },
+      ],
+      relatedResources: [
+        {
+          resourceType: "discovered_namespace",
+          relationship: "produces",
+          description: "The 'identity' field returned here is the value discovered_namespace / discovered_service / discovered_network_map take as agent_identity.",
+        },
+        {
+          resourceType: "chaos_service",
+          relationship: "referenced_by",
+          description: "Use an agent's 'identity' as the agent_id field when creating or updating a chaos_service.",
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: `${SD}/agents`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            environment_id: "environmentIdentifier",
+            search: "search",
+            page: "page",
+            size: "limit",   // SD uses `limit`, not `size`
+            all: "all",
+          },
+          responseExtractor: sdPageExtract,
+          description: descListDiscoveredAgents,
         },
       },
     },
