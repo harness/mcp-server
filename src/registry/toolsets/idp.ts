@@ -68,7 +68,10 @@ const idpEntityMutateBodySchema: BodySchema = {
   ],
 };
 
-const buildIdpEntityScopePath = (input: Record<string, unknown>, config: PathBuilderConfig): string => {
+const normalizeIdpEntityScope = (
+  input: Record<string, unknown>,
+  config: PathBuilderConfig,
+): string => {
   let scope = "account";
   const requestedScope = typeof input.resource_scope === "string" ? input.resource_scope : undefined;
   const effectiveOrgId = (input.org_id as string | undefined) || config.HARNESS_ORG;
@@ -95,6 +98,16 @@ const buildIdpEntityScopePath = (input: Record<string, unknown>, config: PathBui
   if (orgId) scope += `.${orgId}`;
   if (projectId) scope += `.${projectId}`;
 
+  if (orgId) input.org_id = orgId;
+  else delete input.org_id;
+  if (projectId) input.project_id = projectId;
+  else delete input.project_id;
+
+  return scope;
+};
+
+const buildIdpEntityScopePath = (input: Record<string, unknown>, config: PathBuilderConfig): string => {
+  const scope = normalizeIdpEntityScope(input, config);
   const kind = input.kind as string | undefined;
   const entityId = input.entity_id as string | undefined;
   if (!kind) {
@@ -103,11 +116,6 @@ const buildIdpEntityScopePath = (input: Record<string, unknown>, config: PathBui
   if (!entityId) {
     throw new Error(`Missing required field "entity_id" for idp_entity. Pass it via params or as resource_id.`);
   }
-
-  if (orgId) input.org_id = orgId;
-  else delete input.org_id;
-  if (projectId) input.project_id = projectId;
-  else delete input.project_id;
 
   return `/v1/entities/${encodeURIComponent(scope)}/${encodeURIComponent(kind)}/${encodeURIComponent(entityId)}`;
 };
@@ -323,6 +331,10 @@ export const idpToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/v1/entities",
+          pathBuilder: (input, config) => {
+            normalizeIdpEntityScope(input, config);
+            return "/v1/entities";
+          },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
           queryParams: {
@@ -334,7 +346,7 @@ export const idpToolset: ToolsetDefinition = {
           bodyBuilder: buildIdpEntityMutateBody,
           responseExtractor: passthrough,
           description:
-            "Create an IDP catalog entity. Scope via org_id/project_id (account scope when both omitted). " +
+            "Create an IDP catalog entity. Scope via resource_scope/org_id/project_id; when omitted, configured org/project defaults are used. " +
             "INLINE entities: pass yaml only. REMOTE/Git-backed: include git_details in body. " +
             "Optional params: convert (Backstage YAML conversion), dry_run (validate only), operation_mode=UPSERT (create or update).",
           bodySchema: idpEntityMutateBodySchema,

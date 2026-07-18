@@ -877,6 +877,33 @@ describe("harness_create", () => {
     expect(elicitationCall.message).toContain("[redacted");
     expect(elicitationCall.message).not.toContain(contentBase64);
   });
+
+  it("creates IDP entities at the configured project scope when scope is omitted", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp" }));
+    mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
+    client = makeClient(mockRequest);
+    const idpServer = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(idpServer, registry, client, makeConfig());
+
+    const result = await idpServer.call("harness_create", {
+      resource_type: "idp_entity",
+      body: { yaml: "apiVersion: harness.io/v1\nkind: component\nmetadata:\n  name: boutique-service\nspec: {}" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      path: string;
+      params: Record<string, string>;
+      body: Record<string, unknown>;
+    };
+    expect(callArgs.path).toBe("/v1/entities");
+    expect(callArgs.params.orgIdentifier).toBe("default");
+    expect(callArgs.params.projectIdentifier).toBe("test-project");
+    expect(callArgs.body).toEqual({
+      yaml: "apiVersion: harness.io/v1\nkind: component\nmetadata:\n  name: boutique-service\nspec: {}",
+    });
+  });
 });
 
 describe("harness_update", () => {

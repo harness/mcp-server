@@ -110,6 +110,43 @@ describe("idp_entity mutate operations", () => {
     expect(call.body.projectIdentifier).toBeUndefined();
   });
 
+  it("create: defaults to configured project scope when org_id/project_id are omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service", kind: "component" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "create", {
+      body: { yaml: SAMPLE_YAML },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as {
+      path: string;
+      params: Record<string, string>;
+    };
+    expect(call.path).toBe("/v1/entities");
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
+  });
+
+  it("create: explicit account resource_scope suppresses org/project identifiers", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service", kind: "component" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "idp_entity", "create", {
+      resource_scope: "account",
+      org_id: "my_org",
+      project_id: "my_project",
+      body: { yaml: SAMPLE_YAML },
+    });
+
+    const call = mockRequest.mock.calls[0][0] as {
+      path: string;
+      params: Record<string, string | undefined>;
+    };
+    expect(call.path).toBe("/v1/entities");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
   it("create: accepts raw YAML string body", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
