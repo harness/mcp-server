@@ -35110,6 +35110,157 @@ const schema: Record<string, any> = {
               }
             ]
           },
+          "DeployAttestationStepNode": {
+            "title": "DeployAttestationStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for DeployAttestationStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "DeployAttestation"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "DeployAttestation"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/DeployAttestationStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "DeployAttestationStepInfo": {
+            "title": "DeployAttestationStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "deployStepRef",
+                  "oidcProvider"
+                ],
+                "properties": {
+                  "description": {
+                    "desc": "This is the description for DeployAttestationStepInfo"
+                  },
+                  "deployStepRef": {
+                    "type": "string"
+                  },
+                  "oidcProvider": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "harness",
+                          "non-harness"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "overrideConnectorRef": {
+                    "type": "string"
+                  },
+                  "imageTag": {
+                    "type": "string"
+                  },
+                  "settings": {
+                    "type": "object"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "deployStepRef",
+              "oidcProvider"
+            ]
+          },
           "DBApplySchemaStepNode": {
             "title": "DBApplySchemaStepNode",
             "type": "object",
@@ -100083,6 +100234,15 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
+                  "serviceReferences": {
+                    "description": "Chaos services linked to the templated load test run (template mode). At least one service reference is required.",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
                   "inputs": {
                     "description": "Values for the load test's runtime inputs (entries the selected load test marks as <+input>). Each entry is a name/value pair; value may be fixed or a pipeline expression/runtime input.",
                     "oneOf": [
@@ -100142,7 +100302,8 @@ const schema: Record<string, any> = {
                     "identifier",
                     "revision",
                     "infraReference",
-                    "environmentReference"
+                    "environmentReference",
+                    "serviceReferences"
                   ]
                 },
                 "else": {
@@ -100937,6 +101098,7 @@ const schema: Record<string, any> = {
                 "type": "string",
                 "enum": [
                   "deploymentStartTime",
+                  "customVerificationStartTime",
                   "dataCollectionDuration"
                 ]
               },
@@ -107829,6 +107991,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/EnforceAttestationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/DeployAttestationStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/DBApplySchemaStepNode"
@@ -116995,6 +117160,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/SscaPrAttestationStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/DeployAttestationStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SscaJunitAttestationStepNode"
                   },
                   {
@@ -117759,6 +117927,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaPrAttestationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/DeployAttestationStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaJunitAttestationStepNode"

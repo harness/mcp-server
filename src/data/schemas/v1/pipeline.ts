@@ -3218,7 +3218,33 @@ const schema: Record<string, any> = {
             "description": "Service configuration for CD stages. Supports multiple formats.",
             "oneOf": [
               {
-                "$ref": "#/definitions/pipeline_v1/stages/unified/ServiceItem"
+                "type": "string",
+                "description": "Service identifier reference."
+              },
+              {
+                "type": "object",
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "type": {
+                    "description": "Service swimlane hint for the single service.",
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/ServiceType"
+                  },
+                  "id": {
+                    "description": "Service identifier.",
+                    "type": "string"
+                  },
+                  "ref": {
+                    "description": "Git branch for the service configuration.",
+                    "type": "string"
+                  },
+                  "with": {
+                    "description": "Service input overrides.",
+                    "$ref": "#/definitions/pipeline_v1/common/WithInputs"
+                  }
+                },
+                "additionalProperties": false
               },
               {
                 "type": "object",
@@ -3226,12 +3252,23 @@ const schema: Record<string, any> = {
                   "items"
                 ],
                 "properties": {
+                  "type": {
+                    "description": "Service swimlane hint applied to the multi-service group.",
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/ServiceType"
+                  },
                   "items": {
-                    "description": "List of services for multi-service deployment.",
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline_v1/stages/unified/ServiceItem"
-                    }
+                    "description": "List of services for multi-service deployment. Can be a fixed list or a single runtime input for the whole list.",
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/pipeline_v1/stages/unified/ServiceItem"
+                        }
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline_v1/common/Expression"
+                      }
+                    ]
                   },
                   "parallel": {
                     "description": "Execute services in parallel (all at once). Defaults to false, so services run one at a time (serially) unless set to true.",
@@ -3248,6 +3285,25 @@ const schema: Record<string, any> = {
                 },
                 "additionalProperties": false
               }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ServiceType": {
+            "title": "ServiceType",
+            "description": "Optional service swimlane hint (e.g. kubernetes, helm). Mandatory when the service is a runtime input so the swimlane can be determined before the service is resolved. Validated against the resolved service type at runtime.",
+            "type": "string",
+            "enum": [
+              "kubernetes",
+              "helm",
+              "aws-sam",
+              "serverless",
+              "google-cloud-run",
+              "azure-function",
+              "azure-web-app",
+              "ecs",
+              "asg",
+              "aws-lambda",
+              "azure-container-apps"
             ],
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
