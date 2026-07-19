@@ -1,5 +1,16 @@
 # Harness MCP Server — Task Tracking
 
+## Version Bump 3.2.12 (2026-07-19)
+- [x] Update package and bundle manifest versions to 3.2.12
+- [x] Update the release metadata version test
+- [ ] Commit and push the metadata update
+- [ ] Run focused verification and update the pull request
+
+### Plan
+- Keep this as a metadata-only patch release bump.
+- Update `package.json`, `manifest.json`, `mcp-directory/manifest.json`, and the pinned release metadata expectation.
+- Verify the focused release metadata test and repository diff.
+
 ## Critical Bug Investigation Automation (2026-07-13)
 - [x] Baseline branch state and identify recent behavioral commits
 - [x] Review high-blast-radius diffs and trace concrete trigger scenarios
