@@ -663,6 +663,18 @@ describe("gitops_cluster", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.params["query.name"]).toBe("cluster11-jh_9");
   });
+
+  it("delete: fails fast when agent_id is missing (paramsSchema requires native identifier)", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_cluster", "delete", {
+        cluster_id: "cluster11",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for gitops_cluster\.delete: agent_id/);
+
+    expect(client.request).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -731,6 +743,18 @@ describe("gitops_repository", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.params.forceDelete).toBe("true");
   });
+
+  it("delete: fails fast when agent_id is missing (paramsSchema requires native identifier)", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_repository", "delete", {
+        repo_id: "my-repo",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for gitops_repository\.delete: agent_id/);
+
+    expect(client.request).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -784,6 +808,18 @@ describe("gitops_repo_credential", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("DELETE");
     expect(call.path).toBe("/gitops/api/v1/agents/account.tomylocal/repocreds/ashinsabu3_donlxgyi");
+  });
+
+  it("delete: fails fast when agent_id is missing (paramsSchema requires native identifier)", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_repo_credential", "delete", {
+        credential_id: "ashinsabu3_donlxgyi",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for gitops_repo_credential\.delete: agent_id/);
+
+    expect(client.request).not.toHaveBeenCalled();
   });
 });
 
