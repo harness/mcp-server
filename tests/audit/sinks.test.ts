@@ -170,6 +170,16 @@ describe("WebhookSink", () => {
 });
 
 describe("OTelSink", () => {
+  const originalEndpoint = process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+
+  afterEach(() => {
+    if (originalEndpoint === undefined) {
+      delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    } else {
+      process.env.OTEL_EXPORTER_OTLP_ENDPOINT = originalEndpoint;
+    }
+  });
+
   it("emit is a no-op when @opentelemetry/api is not available", () => {
     const sink = new OTelSink();
     expect(() => sink.emit(makeEvent())).not.toThrow();
@@ -188,5 +198,17 @@ describe("OTelSink", () => {
   it("has the correct name", () => {
     const sink = new OTelSink();
     expect(sink.name).toBe("otel");
+  });
+
+  it("drains events queued before standalone bootstrap completes", async () => {
+    process.env.OTEL_EXPORTER_OTLP_ENDPOINT = "http://127.0.0.1:4318/v1/traces";
+
+    const sink = new OTelSink();
+    sink.emit(makeEvent({ event_id: "queued-before-init" }));
+    sink.emit(makeEvent({ event_id: "queued-before-init-2" }));
+
+    await expect(sink.flush()).resolves.toBeUndefined();
+    expect(() => sink.emit(makeEvent({ event_id: "after-init" }))).not.toThrow();
+    await expect(sink.close()).resolves.toBeUndefined();
   });
 });

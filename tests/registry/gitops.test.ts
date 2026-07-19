@@ -1684,3 +1684,56 @@ describe("gitops supportedScopes", () => {
     ).rejects.toThrow(/gitops_application does not support account scope/);
   });
 });
+
+// ---------------------------------------------------------------------------
+// delete paramsSchema — fail-fast on native identifier fields (regression #642)
+// ---------------------------------------------------------------------------
+
+describe("gitops delete paramsSchema validation", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("gitops_agent delete: requires agent_id (not resource_id) before API call", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_agent", "delete", {
+        resource_id: "myagent",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for gitops_agent\.delete: agent_id/);
+
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
+  it("gitops_agent delete: resource_scope account omits org/project query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "delete", {
+      agent_id: "myagent",
+      resource_scope: "account",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/myagent");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("gitops_application delete: cascade is optional at paramsSchema — bodyBuilder owns deletion-mode guidance", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_application", "delete", {
+        agent_id: "account.myagent",
+        app_name: "demo-app",
+      }),
+    ).rejects.toThrow(/Deletion mode is required/);
+
+    expect(client.request).not.toHaveBeenCalled();
+  });
+});

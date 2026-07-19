@@ -1469,6 +1469,32 @@ describe("harness_delete", () => {
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
     expect(mockRequest).not.toHaveBeenCalled();
   });
+
+  it("maps resource_id to agent_id for gitops_agent delete", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    mockRequest = vi.fn().mockResolvedValue({});
+    client = makeClient(mockRequest);
+    const gitopsServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(gitopsServer, registry, client, makeConfig());
+
+    const result = await gitopsServer.call("harness_delete", {
+      resource_type: "gitops_agent",
+      resource_id: "agent1779094157087",
+      resource_scope: "account",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params: Record<string, unknown>;
+    };
+    expect(callArgs.method).toBe("DELETE");
+    expect(callArgs.path).toBe("/gitops/api/v1/agents/agent1779094157087");
+    expect(callArgs.params.orgIdentifier).toBeUndefined();
+    expect(callArgs.params.projectIdentifier).toBeUndefined();
+  });
 });
 
 describe("harness_execute", () => {
