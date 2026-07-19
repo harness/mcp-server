@@ -1987,6 +1987,42 @@ describe("Registry", () => {
       });
     });
 
+    it("cost_recommendation_count get does not include costCategoryDTOs when only cost_category is provided without cost_buckets", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: 5 });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_count", "get", {
+        cost_category: "Teams",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.costCategoryDTOs).toBeUndefined();
+    });
+
+    it("cost_recommendation_stats get does not include costCategoryDTOs when only cost_category is provided without cost_buckets", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_stats", "get", {
+        cost_category: "Teams",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.costCategoryDTOs).toBeUndefined();
+    });
+
+    it("cost_recommendation_count get surfaces _error when API data is not a number", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: "not-a-number" });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_recommendation_count", "get", {});
+
+      expect(result).toEqual({
+        count: 0,
+        _error: "Unexpected response shape — data is not a number",
+      });
+    });
+
     it("cost_recommendation_filter list wraps top-level string array for MCP structured output", async () => {
       const mockRequest = vi.fn().mockResolvedValue({
         data: ["AI Common Fields", "Teams"],

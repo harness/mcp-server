@@ -93,6 +93,40 @@ describe("gitops_agent", () => {
     expect(call.method).toBe("DELETE");
     expect(call.path).toBe("/gitops/api/v1/agents/agent1779094157087");
   });
+
+  it("delete: fails fast when agent_id is omitted (paramsSchema validates native identifier)", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_agent", "delete", {}),
+    ).rejects.toThrow(/Missing required param\(s\) for gitops_agent\.delete: agent_id/);
+  });
+
+  it("delete: resource_id alone does not satisfy agent_id requirement at dispatch", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_agent", "delete", {
+        resource_id: "agent1779094157087",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for gitops_agent\.delete: agent_id/);
+  });
+
+  it("delete: account-scoped agent omits org/project query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "delete", {
+      agent_id: "myagent",
+      resource_scope: "account",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/myagent");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------

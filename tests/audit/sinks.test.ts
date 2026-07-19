@@ -189,4 +189,32 @@ describe("OTelSink", () => {
     const sink = new OTelSink();
     expect(sink.name).toBe("otel");
   });
+
+  it("queues audit events while OTel bootstrap is in flight", () => {
+    type OTelInternals = OTelSink & {
+      pendingEvents: AuditEvent[];
+      ready: boolean;
+      disabled: boolean;
+    };
+
+    const sink = new OTelSink() as OTelInternals;
+    if (sink.ready || sink.disabled) {
+      return;
+    }
+
+    sink.emit(makeEvent({ event_id: "queued-1" }));
+    expect(sink.pendingEvents).toHaveLength(1);
+    expect(sink.pendingEvents[0]?.event_id).toBe("queued-1");
+  });
+
+  it("clears the pending queue after flush completes", async () => {
+    type OTelInternals = OTelSink & { pendingEvents: AuditEvent[] };
+
+    const sink = new OTelSink() as OTelInternals;
+    sink.emit(makeEvent({ event_id: "queued-1" }));
+    await sink.flush();
+
+    expect(sink.pendingEvents).toHaveLength(0);
+    await sink.close();
+  });
 });
