@@ -1345,6 +1345,43 @@ describe("harness_delete", () => {
     expect(data.deleted).toBe(true);
   });
 
+  it("requires explicit scope before deleting a GitOps agent", async () => {
+    const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(gitopsServer, gitopsRegistry, client, makeConfig());
+
+    const result = await gitopsServer.call("harness_delete", {
+      resource_type: "gitops_agent",
+      resource_id: "shared-agent",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("resource_scope"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("forwards explicit project scope when deleting a GitOps agent", async () => {
+    const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+    const gitopsServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(gitopsServer, gitopsRegistry, client, makeConfig());
+
+    const result = await gitopsServer.call("harness_delete", {
+      resource_type: "gitops_agent",
+      resource_id: "shared-agent",
+      resource_scope: "project",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; path: string };
+    expect(callArgs.path).toBe("/gitops/api/v1/agents/shared-agent");
+    expect(callArgs.params.orgIdentifier).toBe("default");
+    expect(callArgs.params.projectIdentifier).toBe("test-project");
+  });
+
   it("returns structured delete payload without spreading API fields at top level", async () => {
     const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
     const templateServer = makeMcpServer("accept");

@@ -81,17 +81,48 @@ describe("gitops_agent", () => {
     expect(call.path).toBe("/gitops/api/v1/agents/account.myagent");
   });
 
-  it("delete: raw agent_id → DELETE /gitops/api/v1/agents/{agentIdentifier}", async () => {
+  it("delete: requires an explicit resource_scope", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_agent", "delete", {
+        agent_id: "agent1779094157087",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\).*resource_scope/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("delete: project scope injects org and project identifiers", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "gitops_agent", "delete", {
       agent_id: "agent1779094157087",
+      resource_scope: "project",
     });
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("DELETE");
     expect(call.path).toBe("/gitops/api/v1/agents/agent1779094157087");
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
+  });
+
+  it("delete: account scope omits org and project identifiers", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_agent", "delete", {
+      agent_id: "agent1779094157087",
+      resource_scope: "account",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/agent1779094157087");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
   });
 });
 
