@@ -38,11 +38,15 @@ describe("business-value-review prompt", () => {
     const prompt = prompts.find((p) => p.name === "business-value-review")!;
 
     const argNames = prompt.arguments!.map((a) => a.name);
-    expect(argNames).toContain("customer");
-    expect(argNames).toContain("quarter");
-    expect(argNames).toContain("projectId");
+    expect(argNames).toEqual([
+      "customer",
+      "quarter",
+      "timeFilter",
+      "reviewStart",
+      "reviewEnd",
+    ]);
 
-    for (const name of ["customer", "quarter", "projectId"]) {
+    for (const name of argNames) {
       expect(prompt.arguments!.find((a) => a.name === name)!.required).toBe(false);
     }
   });
@@ -60,18 +64,24 @@ describe("business-value-review prompt", () => {
     expect(text).toContain("Q2 FY27");
   });
 
-  it("interpolates projectId into a project filter when provided", async () => {
+  it("interpolates the review filter and commitment date range", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
       name: "business-value-review",
-      arguments: { projectId: "my-project" },
+      arguments: {
+        timeFilter: "THIS_QUARTER",
+        reviewStart: "2026-04-01",
+        reviewEnd: "2026-06-30",
+      },
     });
 
     const text = (result.messages[0].content as { type: string; text: string }).text;
-    expect(text).toContain('project_id="my-project"');
+    expect(text).toContain('time_filter: "THIS_QUARTER"');
+    expect(text).toContain('start_date: "2026-04-01"');
+    expect(text).toContain('end_date: "2026-06-30"');
   });
 
-  it("omits the project filter when projectId is not provided", async () => {
+  it("defaults to a clearly labeled last-quarter filter and account scope", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
       name: "business-value-review",
@@ -79,10 +89,12 @@ describe("business-value-review prompt", () => {
     });
 
     const text = (result.messages[0].content as { type: string; text: string }).text;
-    expect(text).not.toContain("project_id=");
+    expect(text).toContain('time_filter: "LAST_QUARTER"');
+    expect(text).toContain("CCM resources used here are account-scoped");
+    expect(text).not.toContain('project_id="');
   });
 
-  it("references consolidated harness_* tools and valid CCM resource_types", async () => {
+  it("uses each CCM resource through its supported operation", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
     const text = (result.messages[0].content as { type: string; text: string }).text;
@@ -97,7 +109,14 @@ describe("business-value-review prompt", () => {
     expect(text).toContain('resource_type="cost_commitment"');
     expect(text).toContain('resource_type="cost_recommendation_stats"');
     expect(text).toContain('resource_type="cost_recommendation"');
-    expect(text).toContain('resource_type="cost_anomaly_summary"');
+    expect(text).toContain('resource_type="cost_anomaly"');
+
+    expect(text).toContain('Call `harness_list` with resource_type="cost_summary" and **no perspective_id**');
+    expect(text).toContain('`harness_list` resource_type="cost_summary", params={perspective_id:');
+    expect(text).toContain('`harness_get` resource_type="cost_summary", params={perspective_id:');
+    expect(text).toContain("→ budget status only");
+    expect(text).not.toContain('group_by: "cost_category"');
+    expect(text).not.toContain("~40%");
 
     // Must NOT reference maestro-only tool names
     expect(text).not.toContain("harness_adoption_core_list");
@@ -123,5 +142,7 @@ describe("business-value-review prompt", () => {
     expect(text).toContain("Run");
     expect(text).toContain("Never invent numbers");
     expect(text).toContain("data unavailable");
+    expect(text).toContain("N/A — insufficient evidence");
+    expect(text).toContain("Compute the overall score only when all three groups have numeric scores");
   });
 });
