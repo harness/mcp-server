@@ -599,8 +599,15 @@ export class Registry {
     pagination: OffsetPaginationSpec,
     requestedOffset: number,
     requestedSize: number,
+    searchTerm?: string,
   ): Promise<unknown> {
-    if (requestedSize <= pagination.maxPageSize || !firstPage || typeof firstPage !== "object" || Array.isArray(firstPage)) {
+    const scanAllPages = searchTerm !== undefined;
+    if (
+      (!scanAllPages && requestedSize <= pagination.maxPageSize) ||
+      !firstPage ||
+      typeof firstPage !== "object" ||
+      Array.isArray(firstPage)
+    ) {
       return firstPage;
     }
 
@@ -617,14 +624,20 @@ export class Registry {
       : undefined;
     const offsetParam = pagination.offsetParam ?? "offset";
     const limitParam = pagination.limitParam ?? "limit";
-    let nextOffset = requestedOffset + firstItems.length;
+    let nextOffset = (scanAllPages ? 0 : requestedOffset) + firstItems.length;
+    let lastPageSize = firstItems.length;
 
-    while (
-      items.length < requestedSize &&
-      firstItems.length > 0 &&
-      (total === undefined || nextOffset < total)
-    ) {
-      const pageSize = Math.min(pagination.maxPageSize, requestedSize - items.length);
+    while (lastPageSize > 0) {
+      const hasMore = total === undefined
+        ? lastPageSize === pagination.maxPageSize
+        : nextOffset < total;
+      if (!hasMore || (!scanAllPages && items.length >= requestedSize)) {
+        break;
+      }
+
+      const pageSize = scanAllPages
+        ? pagination.maxPageSize
+        : Math.min(pagination.maxPageSize, requestedSize - items.length);
       const nextPage = await client.request({
         ...requestOptions,
         params: {
@@ -644,11 +657,28 @@ export class Registry {
 
       items.push(...nextItems);
       nextOffset += nextItems.length;
+      lastPageSize = nextItems.length;
+    }
+
+    let outputItems = items.slice(0, requestedSize);
+    let outputTotal = totalValue;
+    if (scanAllPages && pagination.clientSideSearch) {
+      const normalizedSearch = searchTerm.toLocaleLowerCase();
+      const matches = items.filter((item) => {
+        if (!item || typeof item !== "object" || Array.isArray(item)) return false;
+        const record = item as Record<string, unknown>;
+        return pagination.clientSideSearch?.itemFields.some((field) =>
+          String(record[field] ?? "").toLocaleLowerCase().includes(normalizedSearch)
+        ) ?? false;
+      });
+      outputItems = matches.slice(requestedOffset, requestedOffset + requestedSize);
+      outputTotal = matches.length;
     }
 
     return {
       ...firstRecord,
-      [pagination.itemsField]: items,
+      [pagination.itemsField]: outputItems,
+      [pagination.totalField]: outputTotal,
       [offsetParam]: requestedOffset,
       [limitParam]: requestedSize,
     };
@@ -803,17 +833,29 @@ export class Registry {
       }
     }
 
-    let offsetPaginationRequest: { requestedOffset: number; requestedSize: number } | undefined;
+    let offsetPaginationRequest: {
+      requestedOffset: number;
+      requestedSize: number;
+      searchTerm?: string;
+    } | undefined;
     if (spec.offsetPagination) {
       const requestedSize = toPositiveInteger(input.size) ?? 20;
       const page = toNonNegativeInteger(input.page) ?? 0;
       const requestedOffset = toNonNegativeInteger(input.offset) ?? page * requestedSize;
       const offsetParam = spec.offsetPagination.offsetParam ?? "offset";
       const limitParam = spec.offsetPagination.limitParam ?? "limit";
+      const searchValue = spec.offsetPagination.clientSideSearch
+        ? input[spec.offsetPagination.clientSideSearch.inputField]
+        : undefined;
+      const searchTerm = typeof searchValue === "string" && searchValue.trim()
+        ? searchValue.trim()
+        : undefined;
 
-      params[offsetParam] = requestedOffset;
-      params[limitParam] = Math.min(requestedSize, spec.offsetPagination.maxPageSize);
-      offsetPaginationRequest = { requestedOffset, requestedSize };
+      params[offsetParam] = searchTerm ? 0 : requestedOffset;
+      params[limitParam] = searchTerm
+        ? spec.offsetPagination.maxPageSize
+        : Math.min(requestedSize, spec.offsetPagination.maxPageSize);
+      offsetPaginationRequest = { requestedOffset, requestedSize, searchTerm };
     }
 
     // Resolve HTTP method — methodBuilder overrides static method when present.
@@ -930,6 +972,7 @@ export class Registry {
         spec.offsetPagination,
         offsetPaginationRequest.requestedOffset,
         offsetPaginationRequest.requestedSize,
+        offsetPaginationRequest.searchTerm,
       );
     }
 

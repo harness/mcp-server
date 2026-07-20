@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Generic Search Must Preserve Its Documented Semantics
+- **Issue**: Mapping a generic substring `search_term` directly to a backend's exact-match `name` filter makes the request look wired while leaving discovery broken.
+- **Fix**: For an offset-paginated API without native substring search, scan all backend pages, filter case-insensitively client-side, and only then apply the caller's logical page/size.
+- **Rule**: Request-shape tests are insufficient when two parameters have different semantics; include a result test where the match exists beyond the backend's first page.
+
 ## Scope Defaults and Remote Branch Context Must Stay End-to-End
 - **Issue**: Multi-scope path builders can bypass the registry's usual config defaulting when they construct path segments themselves. For IDP entities, list used configured `HARNESS_ORG` / `HARNESS_PROJECT`, while get/update path construction fell back to account scope, so a list -> update flow could target a different entity with the same kind/id.
 - **Fix**: Path builders that encode scope in the path must accept `PathBuilderConfig`, honor explicit `resource_scope`, use configured org/project defaults when scope is omitted and the resource's list/default behavior does so, and clear unused scope fields so query params match the path.

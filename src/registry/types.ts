@@ -252,6 +252,14 @@ export interface OffsetPaginationSpec {
   offsetParam?: string;
   /** Query parameter used for the page size. Defaults to "limit". */
   limitParam?: string;
+  /**
+   * Optional client-side substring search for APIs without a native search parameter.
+   * The registry scans all API pages, filters these item fields, then applies page/size.
+   */
+  clientSideSearch?: {
+    inputField: string;
+    itemFields: string[];
+  };
 }
 
 /**

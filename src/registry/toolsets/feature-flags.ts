@@ -187,7 +187,6 @@ export const featureFlagsToolset: ToolsetDefinition = {
           queryParams: {
             offset: "offset",
             size: "limit",
-            search_term: "name",
             rollout_status_id: "rolloutStatus",
             name: "name",
             tags: "tag",
@@ -196,10 +195,14 @@ export const featureFlagsToolset: ToolsetDefinition = {
             maxPageSize: 50,
             itemsField: "objects",
             totalField: "totalCount",
+            clientSideSearch: {
+              inputField: "search_term",
+              itemFields: ["name"],
+            },
           },
           responseExtractor: fmeListExtract,
           description:
-            "List feature flags for a workspace with filtering and page/size pagination. search_term maps to the FME partial-name filter; explicit name takes precedence. Requests larger than 50 are fetched in API-sized chunks.",
+            "List feature flags for a workspace with filtering and page/size pagination. search_term scans all API pages and applies a case-insensitive name substring match because the FME API's name filter is exact-match. Requests larger than 50 are fetched in API-sized chunks.",
         },
         get: {
           method: "GET",

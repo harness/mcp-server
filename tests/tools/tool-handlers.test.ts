@@ -172,13 +172,13 @@ describe("harness_list", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
-  it("maps FME list page, size, and filtered search_term through the public tool", async () => {
+  it("applies a filtered FME search_term through the public tool", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
     mockRequest = vi.fn().mockResolvedValue({
       objects: [{ id: "flag-21", name: "delete_after_migration" }],
       totalCount: 1,
-      offset: 20,
-      limit: 20,
+      offset: 0,
+      limit: 50,
     });
     client = makeClient(mockRequest);
     const fmeServer = makeMcpServer();
@@ -187,7 +187,7 @@ describe("harness_list", () => {
 
     const result = await fmeServer.call("harness_list", {
       resource_type: "fme_feature_flag",
-      page: 1,
+      page: 0,
       size: 20,
       filters: {
         workspace_id: "ws-1",
@@ -197,7 +197,11 @@ describe("harness_list", () => {
 
     expect(result.isError).toBeUndefined();
     const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
-    expect(call.params).toMatchObject({ offset: 20, limit: 20, name: "delete" });
+    expect(call.params).toMatchObject({ offset: 0, limit: 50 });
+    expect(call.params).not.toHaveProperty("name");
+    const data = parseResult(result) as { items: Array<{ name: string }>; total: number };
+    expect(data.total).toBe(1);
+    expect(data.items[0]?.name).toContain("delete_after_migration");
   });
 
   it("propagates user-fixable API errors as errorResult", async () => {
