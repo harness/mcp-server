@@ -4,13 +4,18 @@
 - [x] Baseline branch state and identify recent behavioral commits
 - [x] Review high-blast-radius diffs and trace concrete trigger scenarios
 - [x] Implement a minimal fix only if a critical bug is proven
-- [ ] Validate any fix, or complete targeted sanity checks for a no-fix outcome
+- [x] Validate any fix, or complete targeted sanity checks for a no-fix outcome
 - [ ] Commit/push/open PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
 - Review changes merged after the prior 2026-07-13 investigation, prioritizing runtime behavior over release metadata.
 - Trace candidate failures through public tool handlers, registry dispatch, request construction, and response extraction.
 - Require a concrete crash, data-loss, security, or major user-breakage trigger before modifying runtime code.
+
+### Review
+- Found a wrong-scope deletion hazard in the newly added `gitops_agent` delete operation. GitOps agent paths use raw, non-scope-prefixed IDs, and the backend chooses account/org/project scope from query params. Omitting `resource_scope` therefore sent an account-scoped DELETE, while the operation's project example explicitly omitted the field. If the same ID existed at account and project scope, a project-agent deletion request could delete the account agent.
+- Changed the operation to require explicit `resource_scope`, corrected every example, and added registry plus public `harness_delete` regressions for fail-closed omission and exact account/project query scoping.
+- Verification passed: focused GitOps deletion regressions (16 tests), complete GitOps/tool-handler suites (248 tests), `pnpm typecheck`, `pnpm build`, `pnpm test` (117 files / 2557 tests), `pnpm standards:check` (80 tests), `pnpm docs:check`, and `git diff --check HEAD`.
 
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
