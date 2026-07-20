@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { type Config, resolveProductBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
+import type { RequestOptions } from "../client/types.js";
 import { HarnessApiError } from "../utils/errors.js";
-import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec, ResourceScope } from "./types.js";
+import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec, ResourceScope, OffsetPaginationSpec } from "./types.js";
 import type { AuditManager } from "../audit/manager.js";
 import type { AuditContext, AuditEvent, AuditOutcome } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
@@ -63,6 +64,16 @@ const TOOLSET_ALIASES: Record<string, string> = {
 
 function isResourceScope(value: unknown): value is ResourceScope {
   return typeof value === "string" && RESOURCE_SCOPES.includes(value as ResourceScope);
+}
+
+function toNonNegativeInteger(value: unknown): number | undefined {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function toPositiveInteger(value: unknown): number | undefined {
+  const parsed = toNonNegativeInteger(value);
+  return parsed !== undefined && parsed > 0 ? parsed : undefined;
 }
 
 function getSupportedScopes(def: ResourceDefinition): readonly ResourceScope[] {
@@ -581,6 +592,68 @@ export class Registry {
     this.auditManager.emit(event);
   }
 
+  private async collectOffsetPages(
+    client: HarnessClient,
+    firstPage: unknown,
+    requestOptions: RequestOptions,
+    pagination: OffsetPaginationSpec,
+    requestedOffset: number,
+    requestedSize: number,
+  ): Promise<unknown> {
+    if (requestedSize <= pagination.maxPageSize || !firstPage || typeof firstPage !== "object" || Array.isArray(firstPage)) {
+      return firstPage;
+    }
+
+    const firstRecord = firstPage as Record<string, unknown>;
+    const firstItems = firstRecord[pagination.itemsField];
+    if (!Array.isArray(firstItems)) {
+      return firstPage;
+    }
+
+    const items = [...firstItems];
+    const totalValue = firstRecord[pagination.totalField];
+    const total = typeof totalValue === "number" && Number.isFinite(totalValue)
+      ? totalValue
+      : undefined;
+    const offsetParam = pagination.offsetParam ?? "offset";
+    const limitParam = pagination.limitParam ?? "limit";
+    let nextOffset = requestedOffset + firstItems.length;
+
+    while (
+      items.length < requestedSize &&
+      firstItems.length > 0 &&
+      (total === undefined || nextOffset < total)
+    ) {
+      const pageSize = Math.min(pagination.maxPageSize, requestedSize - items.length);
+      const nextPage = await client.request({
+        ...requestOptions,
+        params: {
+          ...requestOptions.params,
+          [offsetParam]: nextOffset,
+          [limitParam]: pageSize,
+        },
+      });
+      if (!nextPage || typeof nextPage !== "object" || Array.isArray(nextPage)) {
+        break;
+      }
+
+      const nextItems = (nextPage as Record<string, unknown>)[pagination.itemsField];
+      if (!Array.isArray(nextItems) || nextItems.length === 0) {
+        break;
+      }
+
+      items.push(...nextItems);
+      nextOffset += nextItems.length;
+    }
+
+    return {
+      ...firstRecord,
+      [pagination.itemsField]: items,
+      [offsetParam]: requestedOffset,
+      [limitParam]: requestedSize,
+    };
+  }
+
   private async executeSpec(
     client: HarnessClient,
     def: ResourceDefinition,
@@ -730,6 +803,19 @@ export class Registry {
       }
     }
 
+    let offsetPaginationRequest: { requestedOffset: number; requestedSize: number } | undefined;
+    if (spec.offsetPagination) {
+      const requestedSize = toPositiveInteger(input.size) ?? 20;
+      const page = toNonNegativeInteger(input.page) ?? 0;
+      const requestedOffset = toNonNegativeInteger(input.offset) ?? page * requestedSize;
+      const offsetParam = spec.offsetPagination.offsetParam ?? "offset";
+      const limitParam = spec.offsetPagination.limitParam ?? "limit";
+
+      params[offsetParam] = requestedOffset;
+      params[limitParam] = Math.min(requestedSize, spec.offsetPagination.maxPageSize);
+      offsetPaginationRequest = { requestedOffset, requestedSize };
+    }
+
     // Resolve HTTP method — methodBuilder overrides static method when present.
     const resolvedMethod = spec.methodBuilder ? spec.methodBuilder(input) : spec.method;
 
@@ -793,7 +879,7 @@ export class Registry {
     const baseUrl = resolveProductBaseUrl(this.config, product);
     const productHeaders: Record<string, string> = { ...spec.headers };
 
-    const requestOpts = {
+    const requestOpts: RequestOptions = {
       method: resolvedMethod,
       path,
       params,
@@ -834,6 +920,17 @@ export class Registry {
       }
     } else {
       raw = await client.request(requestOpts);
+    }
+
+    if (spec.offsetPagination && offsetPaginationRequest) {
+      raw = await this.collectOffsetPages(
+        client,
+        raw,
+        requestOpts,
+        spec.offsetPagination,
+        offsetPaginationRequest.requestedOffset,
+        offsetPaginationRequest.requestedSize,
+      );
     }
 
     // Extract response

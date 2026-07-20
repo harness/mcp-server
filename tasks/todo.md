@@ -1,5 +1,18 @@
 # Harness MCP Server — Task Tracking
 
+## FME Feature Flag List Pagination and Search (2026-07-20)
+- [x] Confirm the public `harness_list` inputs and FME API query contract
+- [x] Add request-shape regressions for page, size, and substring search
+- [x] Implement the minimal FME request mapping fix
+- [ ] Commit and push the implementation checkpoint
+- [ ] Run focused and broad verification
+- [ ] Open the pull request and report the fix in the original Slack thread
+
+### Plan
+- Keep the change in the declarative `fme_feature_flag.list` endpoint and shared pagination behavior only if the endpoint needs an explicit adapter.
+- Convert the generic 0-indexed `page` plus `size` contract to FME's offset/limit query contract, while preserving an explicit FME `offset` filter.
+- Map generic `search_term` to FME's name filter with substring semantics, and cover exact-name behavior to avoid accidental regressions.
+
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
 - [x] Update the release metadata version test

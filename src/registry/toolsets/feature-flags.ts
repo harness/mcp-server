@@ -164,7 +164,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag",
       displayName: "FME Feature Flag",
       description:
-        "Feature flag via the Split.io API. List flags by workspace with filtering (name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50). Supports create (requires traffic_type_id), get, delete, update, and kill/restore/archive/unarchive execute actions.",
+        "Feature flag via the Split.io API. List flags by workspace with filtering (search_term, name, tags, rollout_status_id) and page/size pagination. Split requests are chunked at the API maximum of 50. Supports create (requires traffic_type_id), get, delete, update, and kill/restore/archive/unarchive execute actions.",
       toolset: "feature-flags",
       scope: "account",
       identifierFields: ["workspace_id", "feature_flag_name"],
@@ -173,6 +173,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace)", required: true },
         { name: "offset", description: "Pagination offset for FME feature flags", type: "number" },
+        { name: "search_term", description: "Filter flags by partial name match", type: "string" },
         { name: "rollout_status_id", description: "Filter by rollout status UUID (use fme_rollout_status to discover valid IDs)", type: "string" },
         { name: "name", description: "Filter flags by name (partial match)", type: "string" },
         { name: "tags", description: "Filter flags by tag", type: "string" },
@@ -186,13 +187,19 @@ export const featureFlagsToolset: ToolsetDefinition = {
           queryParams: {
             offset: "offset",
             size: "limit",
+            search_term: "name",
             rollout_status_id: "rolloutStatus",
             name: "name",
             tags: "tag",
           },
+          offsetPagination: {
+            maxPageSize: 50,
+            itemsField: "objects",
+            totalField: "totalCount",
+          },
           responseExtractor: fmeListExtract,
           description:
-            "List feature flags for a workspace with filtering and pagination (offset and size params, max 50).",
+            "List feature flags for a workspace with filtering and page/size pagination. search_term maps to the FME partial-name filter; explicit name takes precedence. Requests larger than 50 are fetched in API-sized chunks.",
         },
         get: {
           method: "GET",

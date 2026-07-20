@@ -241,6 +241,19 @@ export interface InputExpansionRule {
  */
 export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_ORG?: string; HARNESS_PROJECT?: string };
 
+export interface OffsetPaginationSpec {
+  /** Maximum page size accepted by the backing API. */
+  maxPageSize: number;
+  /** Response field containing the page's items. */
+  itemsField: string;
+  /** Response field containing the total number of matching items. */
+  totalField: string;
+  /** Query parameter used for the absolute offset. Defaults to "offset". */
+  offsetParam?: string;
+  /** Query parameter used for the page size. Defaults to "limit". */
+  limitParam?: string;
+}
+
 /**
  * Specifies how a single CRUD operation maps to the Harness API.
  */
@@ -260,6 +273,12 @@ export interface EndpointSpec {
   staticQueryParams?: Record<string, string>;
   /** Default query params to include if not overridden by input */
   defaultQueryParams?: Record<string, string>;
+  /**
+   * Adapts generic 0-indexed page/size inputs to an offset/limit API.
+   * Requests larger than the backing API's maximum are fetched in chunks
+   * and returned as one logical page.
+   */
+  offsetPagination?: OffsetPaginationSpec;
   /**
    * When true, if `orgIdentifier` (or custom `scopeParams.org`) is still unset after scope
    * resolution, set it from `input.org_id` or `config.HARNESS_ORG`. Used for account-scoped

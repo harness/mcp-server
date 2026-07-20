@@ -172,6 +172,34 @@ describe("harness_list", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
+  it("maps FME list page, size, and filtered search_term through the public tool", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      objects: [{ id: "flag-21", name: "delete_after_migration" }],
+      totalCount: 1,
+      offset: 20,
+      limit: 20,
+    });
+    client = makeClient(mockRequest);
+    const fmeServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(fmeServer, registry, client);
+
+    const result = await fmeServer.call("harness_list", {
+      resource_type: "fme_feature_flag",
+      page: 1,
+      size: 20,
+      filters: {
+        workspace_id: "ws-1",
+        search_term: "delete",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params).toMatchObject({ offset: 20, limit: 20, name: "delete" });
+  });
+
   it("propagates user-fixable API errors as errorResult", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_list", { resource_type: "pipeline" });
