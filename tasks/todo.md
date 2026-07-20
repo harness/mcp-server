@@ -6,7 +6,7 @@
 - [x] Implement the minimal FME request mapping fix
 - [x] Commit and push the implementation checkpoint
 - [x] Run focused and broad verification
-- [ ] Open the pull request and report the fix in the original Slack thread
+- [x] Open the pull request and report the fix in the original Slack thread
 
 ### Plan
 - Keep the change in the declarative `fme_feature_flag.list` endpoint and shared pagination behavior only if the endpoint needs an explicit adapter.
