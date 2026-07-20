@@ -4,14 +4,20 @@
 - [x] Confirm the public `harness_list` inputs and FME API query contract
 - [x] Add request-shape regressions for page, size, and substring search
 - [x] Implement the minimal FME request mapping fix
-- [ ] Commit and push the implementation checkpoint
-- [ ] Run focused and broad verification
+- [x] Commit and push the implementation checkpoint
+- [x] Run focused and broad verification
 - [ ] Open the pull request and report the fix in the original Slack thread
 
 ### Plan
 - Keep the change in the declarative `fme_feature_flag.list` endpoint and shared pagination behavior only if the endpoint needs an explicit adapter.
 - Convert the generic 0-indexed `page` plus `size` contract to FME's offset/limit query contract, while preserving an explicit FME `offset` filter.
-- Map generic `search_term` to FME's name filter with substring semantics, and cover exact-name behavior to avoid accidental regressions.
+- Preserve generic `search_term` substring semantics across all FME pages, and cover exact-name behavior to avoid accidental regressions.
+
+### Review
+- Root cause: `fme_feature_flag.list` only mapped the resource-specific `offset`; generic `page` was dropped. The Split API also caps `limit` at 50, so `size=100` was silently clamped, and generic `search_term` had no endpoint mapping.
+- Added declarative offset-pagination metadata so the registry translates page/size to offset/limit and combines multiple API pages when a logical page exceeds the backend's 50-item maximum.
+- Implemented case-insensitive client-side name substring search across all FME pages because the backend `name` filter is exact-match; the exact `name` filter remains server-side.
+- Verification passed: focused and complete affected Vitest files, `pnpm typecheck`, `pnpm build`, `pnpm test` (117 files / 2559 tests), `pnpm standards:check` (10 files / 80 tests), and `pnpm docs:generate && pnpm docs:check`.
 
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
