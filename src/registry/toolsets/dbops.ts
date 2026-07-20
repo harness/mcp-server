@@ -696,6 +696,56 @@ export const dbopsToolset: ToolsetDefinition = {
       },
     },
 
+    // ── ChangeSet Existence ─────────────────────────────────────────────
+    {
+      resourceType: "database_changeset_existence",
+      displayName: "Database ChangeSet Existence",
+      description:
+        "Check whether Liquibase changeSet ids already exist in a schema's catalog. " +
+        "Use before presenting new changesets for review to ensure ids are unique. " +
+        "Only the id field is evaluated; author and fileName are ignored by the API.",
+      toolset: "dbops",
+      scope: "project",
+      identifierFields: ["dbschema_id"],
+      operations: {
+        get: {
+          method: "POST",
+          path: "/dbops/v1/orgs/{org}/projects/{project}/dbschema/{dbschema}/changesets/existence",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            dbschema_id: "dbschema",
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const rawIds = input.changeset_ids ?? input.changeSetIds ?? input.change_set_ids;
+            if (!Array.isArray(rawIds) || rawIds.length === 0) {
+              throw new Error(
+                "changeset_ids is required — provide a non-empty array of Liquibase changeSet id strings to check",
+              );
+            }
+            if (rawIds.length > 100) {
+              throw new Error("changeset_ids supports at most 100 ids per request");
+            }
+            const ids: string[] = [];
+            for (const entry of rawIds) {
+              if (typeof entry !== "string" || entry.trim().length === 0) {
+                throw new Error("each changeset_ids entry must be a non-empty string");
+              }
+              ids.push(entry.trim());
+            }
+            return { changeSets: ids.map((id) => ({ id })) };
+          },
+          responseExtractor: passthrough,
+          description:
+            "Batch-check changeSet id uniqueness for a schema. " +
+            "Pass changeset_ids (array of id strings) via params or top-level input. " +
+            "Returns { existence: { '<id>': true|false } } — true means the id is already in use.",
+        },
+      },
+    },
+
     // ── Default Authoring Instance ──────────────────────────────────────
     {
       resourceType: "database_default_authoring_instance",
