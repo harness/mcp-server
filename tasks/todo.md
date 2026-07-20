@@ -1,5 +1,17 @@
 # Harness MCP Server — Task Tracking
 
+## PR 668 Review Automation (2026-07-20)
+- [x] Read the complete Slack thread and confirm the request context
+- [ ] Inspect PR #668 changes, prompt registration, tests, and CI state
+- [ ] Trace any concrete correctness or customer-facing issues
+- [ ] Implement and verify a focused fix only if an issue is proven
+- [ ] Commit/push/open a PR if fixed; otherwise report review outcome in Slack
+
+### Plan
+- Review the proposed Business Value Review prompt against existing prompt conventions and the actual consolidated MCP tool contract.
+- Prioritize behavior that could make the workflow fail or mislead customers: prompt registration, argument handling, resource/action names, scope requirements, and response assumptions.
+- Avoid speculative source changes; patch only a reproducible contract mismatch and cover it with focused tests.
+
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
 - [x] Update the release metadata version test
