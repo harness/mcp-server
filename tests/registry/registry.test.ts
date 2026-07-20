@@ -1895,6 +1895,30 @@ describe("Registry", () => {
       expect(call.body.costCategoryDTOs).toBeUndefined();
     });
 
+    it("cost_recommendation_count get does not include costCategoryDTOs when only cost_category is provided without cost_buckets", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: 5 });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_count", "get", {
+        cost_category: "AI Platform team",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.costCategoryDTOs).toBeUndefined();
+    });
+
+    it("cost_recommendation_count get surfaces _error when API returns non-number data", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: "not-a-number" });
+      const client = makeClient(mockRequest);
+
+      const result = await registry.dispatch(client, "cost_recommendation_count", "get", {});
+
+      expect(result).toEqual({
+        count: 0,
+        _error: "Unexpected response shape — data is not a number",
+      });
+    });
+
     it("cost_recommendation_count get sends default body when no filters provided", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: 42 });
       const client = makeClient(mockRequest);
@@ -1971,6 +1995,18 @@ describe("Registry", () => {
         { costCategory: "Teams", costBucket: "Engineering" },
         { costCategory: "Teams", costBucket: "Platform" },
       ]);
+    });
+
+    it("cost_recommendation_stats get does not include costCategoryDTOs when only cost_category is provided without cost_buckets", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_stats", "get", {
+        cost_category: "AI Platform team",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.costCategoryDTOs).toBeUndefined();
     });
 
     it("cost_recommendation_stats get passes recommendation_states", async () => {
