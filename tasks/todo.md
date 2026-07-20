@@ -2,15 +2,21 @@
 
 ## PR 668 Review Automation (2026-07-20)
 - [x] Read the complete Slack thread and confirm the request context
-- [ ] Inspect PR #668 changes, prompt registration, tests, and CI state
-- [ ] Trace any concrete correctness or customer-facing issues
-- [ ] Implement and verify a focused fix only if an issue is proven
-- [ ] Commit/push/open a PR if fixed; otherwise report review outcome in Slack
+- [x] Inspect PR #668 changes, prompt registration, tests, and CI state
+- [x] Trace any concrete correctness or customer-facing issues
+- [x] Implement and verify a focused fix only if an issue is proven
+- [x] Commit/push/open a PR if fixed; otherwise report review outcome in Slack
 
 ### Plan
 - Review the proposed Business Value Review prompt against existing prompt conventions and the actual consolidated MCP tool contract.
 - Prioritize behavior that could make the workflow fail or mislead customers: prompt registration, argument handling, resource/action names, scope requirements, and response assumptions.
 - Avoid speculative source changes; patch only a reproducible contract mismatch and cover it with focused tests.
+
+### Review
+- Found that the prompt routed CCM metadata and full cost summaries through `harness_get`; that operation returns only budget data, while metadata/trend/forecast are exposed through `harness_list`.
+- Found that `group_by: "cost_category"` is interpreted as a label key, project scoping is ignored by account-level CCM resources, and the prompt mixed unrelated data windows while forcing maturity scores and a 40% savings assumption without evidence.
+- Corrected tool routing and filters, removed false project scoping, added explicit review-window inputs and financial guardrails, limited maturity scoring to evidenced dimensions, and strengthened prompt contract tests.
+- Verification passed: focused prompt tests (7), `pnpm typecheck`, `pnpm build`, full `pnpm test` (118 files / 2560 tests), `pnpm standards:check` (10 files / 80 tests), `pnpm docs:check`, and `git diff --check`.
 
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
