@@ -32,15 +32,14 @@ describe("debug-pipeline-failure prompt", () => {
     expect(prompt!.description).toContain("Analyze a failed pipeline execution");
   });
 
-  it("registers pipeline_error_analysis as an alias", async () => {
+  it("registers pipeline_error_analysis as an alias with a distinguishing description", async () => {
     const client = await createTestClient();
     const { prompts } = await client.listPrompts();
 
     const alias = prompts.find((p) => p.name === "pipeline_error_analysis");
     expect(alias).toBeDefined();
-    expect(alias!.description).toBe(
-      prompts.find((p) => p.name === "debug-pipeline-failure")!.description,
-    );
+    expect(alias!.description).toContain("Alias of debug-pipeline-failure");
+    expect(alias!.description).toContain("analyze a failed pipeline execution");
   });
 
   it("pipeline_error_analysis returns the same prompt content", async () => {

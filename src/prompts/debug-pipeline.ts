@@ -55,7 +55,11 @@ export function registerDebugPipelinePrompt(server: McpServer): void {
   // Alias: ml-infra requests this name via get_prompt("pipeline_error_analysis")
   server.registerPrompt(
     "pipeline_error_analysis",
-    promptConfig,
+    {
+      ...promptConfig,
+      description:
+        "Alias of debug-pipeline-failure — analyze a failed pipeline execution and suggest fixes. Accepts an execution ID, pipeline ID, or Harness URL.",
+    },
     async (args) => handleDebugPipeline(args),
   );
 }
