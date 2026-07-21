@@ -11,7 +11,11 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { ensureSecureAdmZip } from "./adm-zip-security-lib.mjs";
+import {
+  ensureSecureAdmZip,
+  isSecureAdmZipVersion,
+  SECURE_ADM_ZIP_VERSION,
+} from "./adm-zip-security-lib.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const shrinkwrapPath = join(repoRoot, "npm-shrinkwrap.json");
@@ -26,6 +30,55 @@ function run(cmd, args, cwd) {
 }
 
 const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
+
+function sortedEntries(value = {}) {
+  return Object.entries(value).sort(([left], [right]) => left.localeCompare(right));
+}
+
+function failCheck(message) {
+  console.error(`npm-shrinkwrap.json is out of date: ${message}`);
+  process.exit(1);
+}
+
+if (checkMode) {
+  if (!existsSync(shrinkwrapPath)) {
+    failCheck("file is missing — run: node scripts/generate-npm-shrinkwrap.mjs");
+  }
+
+  const shrinkwrap = JSON.parse(readFileSync(shrinkwrapPath, "utf8"));
+  const root = shrinkwrap.packages?.[""];
+  if (!root) {
+    failCheck("root package metadata is missing");
+  }
+  if (root.name !== pkg.name || root.version !== pkg.version) {
+    failCheck(`root metadata does not match ${pkg.name}@${pkg.version}`);
+  }
+
+  if (
+    JSON.stringify(sortedEntries(root.dependencies)) !==
+    JSON.stringify(sortedEntries(pkg.dependencies))
+  ) {
+    failCheck("root dependencies do not match package.json");
+  }
+  if (
+    JSON.stringify(sortedEntries(root.optionalDependencies)) !==
+    JSON.stringify(sortedEntries(pkg.optionalDependencies))
+  ) {
+    failCheck("root optionalDependencies do not match package.json");
+  }
+
+  const hoistedAdmZipVersion = shrinkwrap.packages?.["node_modules/adm-zip"]?.version;
+  if (
+    !hoistedAdmZipVersion ||
+    !isSecureAdmZipVersion(hoistedAdmZipVersion, SECURE_ADM_ZIP_VERSION)
+  ) {
+    failCheck(`hoisted adm-zip is ${hoistedAdmZipVersion ?? "missing"}`);
+  }
+
+  console.error("npm-shrinkwrap.json metadata is up to date");
+  process.exit(0);
+}
+
 const stagingRoot = join(repoRoot, ".npm-shrinkwrap-staging");
 
 rmSync(stagingRoot, { recursive: true, force: true });
@@ -42,7 +95,7 @@ const stagingManifest = {
 writeFileSync(join(stagingRoot, "package.json"), `${JSON.stringify(stagingManifest, null, 2)}\n`);
 
 run("npm", ["install", "--omit=dev"], stagingRoot);
-ensureSecureAdmZip(stagingRoot);
+ensureSecureAdmZip(stagingRoot, { strict: true });
 run("npm", ["install", "--package-lock-only", "--omit=dev"], stagingRoot);
 run("npm", ["shrinkwrap"], stagingRoot);
 
@@ -50,21 +103,6 @@ const generated = join(stagingRoot, "npm-shrinkwrap.json");
 if (!existsSync(generated)) {
   console.error("npm-shrinkwrap.json was not generated");
   process.exit(1);
-}
-
-if (checkMode) {
-  if (!existsSync(shrinkwrapPath)) {
-    console.error("Missing committed npm-shrinkwrap.json — run: node scripts/generate-npm-shrinkwrap.mjs");
-    process.exit(1);
-  }
-  const expected = readFileSync(shrinkwrapPath, "utf8");
-  const actual = readFileSync(generated, "utf8");
-  if (expected !== actual) {
-    console.error("npm-shrinkwrap.json is out of date — run: node scripts/generate-npm-shrinkwrap.mjs");
-    process.exit(1);
-  }
-  console.error("npm-shrinkwrap.json is up to date");
-  process.exit(0);
 }
 
 copyFileSync(generated, shrinkwrapPath);

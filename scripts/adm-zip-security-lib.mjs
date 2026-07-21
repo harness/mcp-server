@@ -13,17 +13,84 @@ export function readAdmZipVersion(admZipDir) {
   if (!existsSync(pkgPath)) {
     return null;
   }
-  return JSON.parse(readFileSync(pkgPath, "utf8")).version;
+  const version = JSON.parse(readFileSync(pkgPath, "utf8")).version;
+  return typeof version === "string" && version.length > 0 ? version : null;
 }
 
-/** @returns {boolean} */
+/**
+ * Compare semver-like versions (major.minor.patch). Pre-release/build metadata is ignored.
+ * @returns {boolean}
+ */
 export function isSecureAdmZipVersion(version, target = SECURE_ADM_ZIP_VERSION) {
   if (!version) {
-    return true;
+    return false;
   }
-  const [major, minor] = version.split(".").map(Number);
-  const [targetMajor, targetMinor] = target.split(".").map(Number);
-  return major > targetMajor || (major === targetMajor && minor >= targetMinor);
+
+  const parse = (value) =>
+    value
+      .split(".")
+      .slice(0, 3)
+      .map((part) => Number.parseInt(part.replace(/[^0-9].*$/, ""), 10));
+
+  const parts = parse(version);
+  const targetParts = parse(target);
+  if (parts.some(Number.isNaN) || targetParts.some(Number.isNaN)) {
+    return false;
+  }
+
+  for (let index = 0; index < 3; index += 1) {
+    const current = parts[index] ?? 0;
+    const minimum = targetParts[index] ?? 0;
+    if (current > minimum) {
+      return true;
+    }
+    if (current < minimum) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+/**
+ * @param {string} packageRoot
+ * @param {string} packageName
+ * @returns {string[]}
+ */
+function findPackageDirs(packageRoot, packageName) {
+  const nodeModules = join(packageRoot, "node_modules");
+  if (!existsSync(nodeModules)) {
+    return [];
+  }
+
+  /** @type {string[]} */
+  const found = [];
+
+  /** @param {string} dir */
+  function walk(dir) {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === ".bin") {
+        continue;
+      }
+      const child = join(dir, entry.name);
+      if (entry.name === packageName && existsSync(join(child, "package.json"))) {
+        found.push(child);
+        continue;
+      }
+      if (entry.name.startsWith("@") || !entry.name.startsWith(".")) {
+        walk(child);
+      }
+    }
+  }
+
+  walk(nodeModules);
+  return found;
 }
 
 /**
@@ -32,39 +99,7 @@ export function isSecureAdmZipVersion(version, target = SECURE_ADM_ZIP_VERSION) 
  * @returns {string[]}
  */
 export function findAdmZipInstallDirs(packageRoot) {
-  const nodeModules = join(packageRoot, "node_modules");
-  if (!existsSync(nodeModules)) {
-    return [];
-  }
-
-  /** @type {string[]} */
-  const found = [];
-
-  /** @param {string} dir */
-  function walk(dir) {
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name === ".bin") {
-        continue;
-      }
-      const child = join(dir, entry.name);
-      if (entry.name === "adm-zip" && existsSync(join(child, "package.json"))) {
-        found.push(child);
-        continue;
-      }
-      if (entry.name.startsWith("@") || !entry.name.startsWith(".")) {
-        walk(child);
-      }
-    }
-  }
-
-  walk(nodeModules);
-  return found;
+  return findPackageDirs(packageRoot, "adm-zip");
 }
 
 /**
@@ -73,39 +108,7 @@ export function findAdmZipInstallDirs(packageRoot) {
  * @returns {string[]}
  */
 export function findOnnxRuntimeNodeDirs(packageRoot) {
-  const nodeModules = join(packageRoot, "node_modules");
-  if (!existsSync(nodeModules)) {
-    return [];
-  }
-
-  /** @type {string[]} */
-  const found = [];
-
-  /** @param {string} dir */
-  function walk(dir) {
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (!entry.isDirectory() || entry.name === ".bin") {
-        continue;
-      }
-      const child = join(dir, entry.name);
-      if (entry.name === "onnxruntime-node" && existsSync(join(child, "package.json"))) {
-        found.push(child);
-        continue;
-      }
-      if (entry.name.startsWith("@") || !entry.name.startsWith(".")) {
-        walk(child);
-      }
-    }
-  }
-
-  walk(nodeModules);
-  return found;
+  return findPackageDirs(packageRoot, "onnxruntime-node");
 }
 
 /**
@@ -125,21 +128,38 @@ export function listInsecureAdmZipInstalls(
  * Upgrade adm-zip under packageRoot for npm consumers.
  * pnpm installs with pnpm.overrides should no-op when already secure.
  *
+ * Nested adm-zip under onnxruntime-node is only upgraded when this runs (postinstall).
+ * Consumers using `npm install --ignore-scripts` skip postinstall and remain exposed.
+ *
  * @param {string} packageRoot
- * @param {{ npmCommand?: string, target?: string, dryRun?: boolean }} [options]
- * @returns {{ patched: string[], skipped: boolean }}
+ * @param {{ npmCommand?: string, target?: string, dryRun?: boolean, strict?: boolean }} [options]
+ * @returns {{ patched: string[], skipped: boolean, warnings: string[] }}
  */
 export function ensureSecureAdmZip(
   packageRoot,
-  { npmCommand = "npm", target = SECURE_ADM_ZIP_VERSION, dryRun = false } = {},
+  {
+    npmCommand = "npm",
+    target = SECURE_ADM_ZIP_VERSION,
+    dryRun = false,
+    strict = false,
+  } = {},
 ) {
   const insecure = listInsecureAdmZipInstalls(packageRoot, target);
   if (insecure.length === 0) {
-    return { patched: [], skipped: true };
+    return { patched: [], skipped: true, warnings: [] };
   }
 
   /** @type {string[]} */
   const patched = [];
+  /** @type {string[]} */
+  const warnings = [];
+
+  const warnOrThrow = (message) => {
+    if (strict) {
+      throw new Error(message);
+    }
+    warnings.push(message);
+  };
 
   const runNpmInstall = (prefix) => {
     if (dryRun) {
@@ -150,6 +170,7 @@ export function ensureSecureAdmZip(
       npmCommand,
       [
         "install",
+        "--global=false",
         "--prefix",
         prefix,
         "--omit=dev",
@@ -158,8 +179,15 @@ export function ensureSecureAdmZip(
       ],
       { stdio: "ignore", env: process.env },
     );
+    if (result.error) {
+      warnOrThrow(
+        `failed to upgrade adm-zip under ${prefix}: ${result.error.message}`,
+      );
+      return;
+    }
     if (result.status !== 0) {
-      throw new Error(`failed to upgrade adm-zip under ${prefix}`);
+      warnOrThrow(`failed to upgrade adm-zip under ${prefix}: npm exited ${result.status}`);
+      return;
     }
     patched.push(prefix);
   };
@@ -177,12 +205,12 @@ export function ensureSecureAdmZip(
   }
 
   const remaining = listInsecureAdmZipInstalls(packageRoot, target);
-  if (remaining.length > 0) {
+  if (!dryRun && remaining.length > 0) {
     const details = remaining
       .map(({ dir, version }) => `${dir}@${version ?? "missing"}`)
       .join(", ");
-    throw new Error(`insecure adm-zip remains after patch (${ADM_ZIP_CVE}): ${details}`);
+    warnOrThrow(`insecure adm-zip remains after patch (${ADM_ZIP_CVE}): ${details}`);
   }
 
-  return { patched, skipped: false };
+  return { patched, skipped: false, warnings };
 }

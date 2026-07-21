@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
 /**
- * CI helper: simulate an npm consumer install and assert adm-zip is secure.
+ * CI helper: simulate the supported global npm install and assert adm-zip is secure.
+ *
+ * Install scripts must run — do not pass `--ignore-scripts`; nested adm-zip under
+ * onnxruntime-node is only upgraded by the package postinstall hook.
  */
 
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -46,10 +49,13 @@ if (!tgz) {
 
 const consumerRoot = mkdtempSync(join(tmpdir(), "harness-mcp-npm-consumer-"));
 try {
-  run("npm", ["init", "-y"], consumerRoot);
-  run("npm", ["install", "--omit=dev", join(repoRoot, tgz)], consumerRoot);
+  run(
+    "npm",
+    ["install", "--global", "--prefix", consumerRoot, "--omit=dev", join(repoRoot, tgz)],
+    consumerRoot,
+  );
 
-  const packageRoot = join(consumerRoot, "node_modules", "harness-mcp-v2");
+  const packageRoot = join(consumerRoot, "lib", "node_modules", "harness-mcp-v2");
   const insecure = listInsecureAdmZipInstalls(packageRoot);
   if (insecure.length > 0) {
     console.error(
@@ -61,7 +67,7 @@ try {
     process.exit(1);
   }
 
-  console.error("npm consumer install: all adm-zip copies are secure");
+  console.error("global npm consumer install: all adm-zip copies are secure");
 } finally {
   rmSync(consumerRoot, { recursive: true, force: true });
   rmSync(join(repoRoot, tgz), { force: true });

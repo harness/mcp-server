@@ -34,7 +34,7 @@
     "test:watch": "vitest",
     "docker:build": "docker build -t harness-mcp-server .",
     "docker:run": "docker run --rm -p 3000:3000 --env-file .env harness-mcp-server",
-    "prepublishOnly": "pnpm build && node scripts/generate-npm-shrinkwrap.mjs",
+    "prepublishOnly": "pnpm build && pnpm npm-shrinkwrap:check",
     "postinstall": "node scripts/ensure-secure-adm-zip.mjs"
   },
   "keywords": [
@@ -58,6 +58,7 @@
   "dependencies": {
     "@hono/node-server": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "adm-zip": "^0.6.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "hono": "^4.12.25",
