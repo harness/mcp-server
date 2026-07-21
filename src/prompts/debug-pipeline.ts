@@ -52,7 +52,9 @@ export function registerDebugPipelinePrompt(server: McpServer): void {
     async (args) => handleDebugPipeline(args),
   );
 
-  // Alias: ml-infra requests this name via get_prompt("pipeline_error_analysis")
+  // ml-infra alias (snake_case): get_prompt("pipeline_error_analysis").
+  // Canonical name is kebab-case "debug-pipeline-failure" above.
+  // Cross-repo naming alignment tracked in https://github.com/harness/mcp-server/issues/677
   server.registerPrompt(
     "pipeline_error_analysis",
     {

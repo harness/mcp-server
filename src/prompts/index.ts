@@ -1,3 +1,9 @@
+/**
+ * Prompt IDs use kebab-case (e.g. debug-pipeline-failure). ml-infra calls
+ * get_prompt() with snake_case names for some workflows; those are registered
+ * as aliases in the owning module. See https://github.com/harness/mcp-server/issues/677
+ * for the plan to align naming across repos and retire redundant aliases.
+ */
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
 import { registerDebugPipelinePrompt } from "./debug-pipeline.js";
