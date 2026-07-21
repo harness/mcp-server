@@ -4,13 +4,18 @@
 - [x] Baseline the designated branch and identify recent behavioral commits
 - [x] Review high-blast-radius diffs and trace concrete trigger scenarios
 - [x] Implement a minimal fix only if a critical bug is proven
-- [ ] Commit and push any fix before running verification
-- [ ] Validate the fix, open a PR, and report the outcome in Slack
+- [x] Commit and push any fix before running verification
+- [x] Validate the fix, open a PR, and report the outcome in Slack
 
 ### Plan
 - Treat current `origin/main` history and the designated feature branch as the investigation window.
 - Prioritize runtime changes affecting authentication, write targeting, pipeline execution, process stability, and response integrity.
 - Require a concrete trigger through the public caller path before editing; otherwise report no critical bugs without opening a PR.
+
+### Review
+- Found a bulk pipeline-log corruption bug in the new `include_all_step_logs` path: failed logs were deduplicated by exact `logBaseKey` but merged into `all_step_logs` by stage-local step identifier. If two stages had failed steps named `deploy`, the second step could receive the first step's log and produce a false execution summary.
+- Replaced the fetched-key set with a key-to-value map and now merge previously fetched failed logs by exact `logBaseKey`. Added a regression with duplicate step identifiers in different stages and distinct log content.
+- Verification passed: focused pipeline diagnosis tests (47), `pnpm typecheck`, `pnpm build`, `pnpm docs:check`, full `pnpm test` (117 files / 2565 tests), `pnpm standards:check` (80 tests), and `git diff --check`.
 
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
