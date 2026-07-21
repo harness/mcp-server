@@ -3,6 +3,17 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { registerBusinessValueReviewPrompt } from "../../src/prompts/business-value-review.js";
+import { registerAllPrompts } from "../../src/prompts/index.js";
+
+async function connect(server: McpServer): Promise<Client> {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
+  const client = new Client({ name: "test-client", version: "0.0.1" });
+  await Promise.all([
+    client.connect(clientTransport),
+    server.connect(serverTransport),
+  ]);
+  return client;
+}
 
 async function createTestClient(): Promise<Client> {
   const server = new McpServer(
@@ -10,16 +21,7 @@ async function createTestClient(): Promise<Client> {
     { capabilities: { prompts: {} } },
   );
   registerBusinessValueReviewPrompt(server);
-
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  const client = new Client({ name: "test-client", version: "0.0.1" });
-
-  await Promise.all([
-    client.connect(clientTransport),
-    server.connect(serverTransport),
-  ]);
-
-  return client;
+  return connect(server);
 }
 
 describe("business-value-review prompt", () => {
@@ -186,5 +188,81 @@ describe("business-value-review prompt", () => {
     expect(text).toContain("do NOT emit any Mermaid");
     expect(text).not.toContain("```mermaid");
     expect(text).not.toContain("xychart-beta");
+  });
+
+  it("is wired into registerAllPrompts (guards against accidental removal)", async () => {
+    const server = new McpServer(
+      { name: "test-server", version: "0.0.1" },
+      { capabilities: { prompts: {} } },
+    );
+    registerAllPrompts(server);
+    const client = await connect(server);
+
+    const { prompts } = await client.listPrompts();
+    expect(prompts.find((p) => p.name === "business-value-review")).toBeDefined();
+  });
+
+  it("uses harness_list (not harness_get) for CCM metadata and summary", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    // Step 0 metadata + Step 3 summary are list operations; only budget status is a get.
+    expect(text).toMatch(/harness_list.*resource_type="cost_summary".*no perspective_id/s);
+    expect(text).toContain("budget status");
+    // Guard against reintroducing the harness_get-for-metadata bug.
+    expect(text).not.toMatch(/harness_get with resource_type="cost_summary".*no perspective_id/s);
+  });
+
+  it("computes recommendation subtotal from stats, not summed list rows", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("Authoritative totals");
+    expect(text).toContain("do NOT compute the section subtotal by summing these 25 rows");
+  });
+
+  it("separates active anomalies from the all-status summary", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain('resource_type="cost_anomaly"');
+    expect(text).toContain('status: "ACTIVE"');
+    expect(text).toContain("NOT status-filtered");
+  });
+
+  it("guards allocation math against zero/invalid totals and validates commitment dates", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("do NOT divide by zero");
+    expect(text).toContain("Validate the dates before every call");
+    expect(text).toContain("strictly before");
+  });
+
+  it("warns that cost_breakdown lacks BUSINESS_MAPPING group-by", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("resolves any non-predefined");
+    expect(text).toContain("LABEL");
+  });
+
+  it("notes CCM account-scoping only when projectId is provided", async () => {
+    const client = await createTestClient();
+    const withProject = await client.getPrompt({
+      name: "business-value-review",
+      arguments: { projectId: "my-project" },
+    });
+    const withProjectText = (withProject.messages[0].content as { type: string; text: string }).text;
+    expect(withProjectText).toContain("CCM data is account-scoped");
+
+    const withoutProject = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const withoutProjectText = (withoutProject.messages[0].content as { type: string; text: string }).text;
+    expect(withoutProjectText).not.toContain("CCM data is account-scoped");
   });
 });
