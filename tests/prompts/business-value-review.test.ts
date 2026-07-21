@@ -124,4 +124,67 @@ describe("business-value-review prompt", () => {
     expect(text).toContain("Never invent numbers");
     expect(text).toContain("data unavailable");
   });
+
+  it("defaults to full mermaid mode with radar, diagrams required not optional", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("Required diagrams");
+    expect(text).toContain("xychart-beta");
+    expect(text).toContain("pie");
+    // Default is full mermaid mode → radar enabled for the maturity chart.
+    expect(text).toContain("full mode — use radar");
+    expect(text).toContain("```mermaid");
+    expect(text).toContain("radar");
+    expect(text).toContain("supporting data table");
+    // The prompt must require diagrams, never frame them as optional.
+    expect(text).not.toMatch(/optional(?:ly)?\s+.{0,20}(mermaid|diagram|radar)/i);
+  });
+
+  it("steers away from radar in explicit auto mode", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({
+      name: "business-value-review",
+      arguments: { diagrams: "auto" },
+    });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("do NOT use radar");
+    expect(text).toContain("xychart-beta");
+  });
+
+  it("exposes a diagrams mode argument", async () => {
+    const client = await createTestClient();
+    const { prompts } = await client.listPrompts();
+    const prompt = prompts.find((p) => p.name === "business-value-review")!;
+    expect(prompt.arguments!.map((a) => a.name)).toContain("diagrams");
+  });
+
+  it("enables radar only in full mermaid mode", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({
+      name: "business-value-review",
+      arguments: { diagrams: "mermaid" },
+    });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("full mode — use radar");
+    expect(text).toContain("```mermaid");
+    expect(text).toContain("radar");
+  });
+
+  it("suppresses all Mermaid in tables mode", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({
+      name: "business-value-review",
+      arguments: { diagrams: "tables" },
+    });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("tables");
+    expect(text).toContain("do NOT emit any Mermaid");
+    expect(text).not.toContain("```mermaid");
+    expect(text).not.toContain("xychart-beta");
+  });
 });

@@ -14,12 +14,15 @@ export function registerBusinessValueReviewPrompt(server: McpServer): void {
         customer: z.string().describe("Customer / account name shown on the report cover (e.g. \"Acme Corp\")").optional(),
         quarter: z.string().describe("Review period label for the subtitle (e.g. \"Q2 FY27\")").optional(),
         projectId: z.string().describe("Project identifier to scope the review (optional; most CCM data is account-scoped)").optional(),
+        diagrams: z.string().describe("Diagram mode: \"mermaid\" (default, full Mermaid incl. radar — best for Cursor/Windsurf/Antigravity), \"auto\" (broadly-compatible Mermaid only, no radar — for GitHub/older renderers), or \"tables\" (no diagrams, tables only — if the client cannot render Mermaid)").optional(),
       },
     },
-    async ({ customer, quarter, projectId }) => {
+    async ({ customer, quarter, projectId, diagrams }) => {
       const customerName = customer || "<customer>";
       const period = quarter || "<quarter/period>";
       const projectFilter = projectId ? `, project_id="${projectId}"` : "";
+      const diagramMode = (diagrams || "mermaid").toLowerCase();
+      const tablesOnly = diagramMode === "tables";
       return {
         messages: [{
           role: "user" as const,
@@ -33,7 +36,9 @@ A BVR is a customer-facing executive document. Follow the four phases below: gat
 - **Never invent numbers.** A BVR is a financial document. Every figure must come from a tool call.
 - If a data source is unavailable (tool error, module not licensed, empty result), **omit that section or explicitly mark it "data unavailable"** — do not estimate or fabricate.
 - Always pair a monthly figure with its annualized equivalent (× 12).
-- The deliverable is a **markdown document** you author in this conversation. There is no rendering server — represent charts as markdown tables (and optionally a Mermaid diagram for the maturity radar).
+- The deliverable is a **markdown document** you author in this conversation. There is no rendering server.${tablesOnly
+  ? " Diagram mode is **tables**: do NOT emit any Mermaid — present every visual as a plain markdown data table only."
+  : " **Every visual must be a Mermaid diagram** (fenced \\`\\`\\`mermaid blocks) backed by a supporting data table. Diagrams are required, not optional. See \"Required diagrams\" below for the compatible syntax to use and the fallback rules."}
 
 ---
 
@@ -96,7 +101,7 @@ Output a single markdown document with this structure:
 
 **YAML frontmatter** (cover): title "Business Value Review", subtitle "${period} Cloud FinOps Review", customer "${customerName}", date, author "Harness CCM FinOps Agent", classification "Confidential".
 
-**I. Executive Summary & FinOps Maturity** — a metrics summary (total cloud spend + QoQ trend, realized savings run-rate + annualized, maturity score) and a maturity table (dimension · score · stage · evidence). Optionally add a Mermaid radar for the 7 dimensions.
+**I. Executive Summary & FinOps Maturity** — a metrics summary (total cloud spend + QoQ trend, realized savings run-rate + annualized, maturity score) and a maturity table (dimension · score · stage · evidence), plus the **required** maturity visual (see "Required diagrams" below).
 
 **II. CCM Module Deep Dive** — one subsection each, using a Metric / Benchmark / Current table:
   1. Cost Visibility & Allocation
@@ -112,7 +117,31 @@ Output a single markdown document with this structure:
 
 **IV. Prioritized Recommendations Matrix** — one deduped ranked table. Each row: Action · Source · Why · Owner · $ Impact (annualized) · Effort (S/M/L) · Time-to-impact · Risk · Validation. Follow with a "Quick Wins (Top 5)" and "Strategic Bets" cross-view.
 
-Use blockquote callouts for the most important findings/risks. Prioritize every recommendation by annualized dollar impact.`,
+Use blockquote callouts for the most important findings/risks. Prioritize every recommendation by annualized dollar impact.
+
+---
+
+## Required diagrams
+${tablesOnly
+? `Diagram mode is **tables** — do NOT emit any Mermaid. Present each of the four visuals below as a plain markdown data table instead (maturity scores, 12-month spend, cost breakdown, savings composition).`
+: `The report MUST include **all four** visuals below, each next to (not instead of) its supporting data table. Use only data you gathered — never fabricate a point to fill a chart; if a diagram's data is unavailable, replace it with a one-line note naming the missing source.
+
+**Compatibility — how to pick the syntax (you cannot detect the client's renderer at runtime, so choose defensively):**
+- **Default (diagram mode "auto"):** use ONLY the broadly-supported diagram types — \`pie\` and \`xychart-beta\` (bar/line). Do NOT use \`radar\` in auto mode; render maturity as an \`xychart-beta\` bar of the 7 scores instead. These have shipped in Mermaid for years and render in most clients.
+- **Full mode (diagram mode "mermaid"):** you may use \`radar\` for the maturity chart (needs Mermaid ≥ v11.6). ${diagramMode === "mermaid" ? "**This run is in full mode — use radar for the maturity chart.**" : "This run is in auto mode — do NOT use radar; use the xychart-beta bar."}
+- **Always include the supporting data table for every diagram** — it is the guaranteed fallback: if a block does not render, the reader still has the numbers. If the person tells you a diagram did not render, re-emit that visual as a plain table and switch to tables-only for the rest of the report.
+
+**The four required visuals:**
+
+1. **FinOps maturity** (Section I) — the 7 dimension scores (0–3).${diagramMode === "mermaid" ? " Use a \`radar\` chart:\n\`\`\`mermaid\nradar\n  title FinOps Maturity (0-3)\n  axis vis[\"Visibility\"], alloc[\"Allocation\"], tool[\"Tooling\"], comm[\"Commitment\"], anom[\"Anomaly\"], opt[\"Optimization\"], acct[\"Accountability\"]\n  curve current{2,2,1,3,2,2,3}\n\`\`\`" : " Use an \`xychart-beta\` bar (one bar per dimension, y-axis 0–3)."}
+
+2. **12-month spend trend** (Section II.1) — an \`xychart-beta\` line of monthly total cloud spend, from \`cost_timeseries\`.
+
+3. **Cost breakdown by top dimension** (Section II.1) — an \`xychart-beta\` bar of the top ~8 cost buckets (BU / service / product) from \`cost_breakdown\`.
+
+4. **Savings composition** (Section II.3) — a \`pie\` of realized + open savings by source (commitment, recommendations, and any other gathered stream).
+
+Mermaid authoring rules: keep axis/slice labels short (≤ ~15 chars, no line breaks); quote labels containing spaces or special characters; never put raw \`$\`, \`%\`, \`(\`, or \`,\` inside an unquoted label; render currency in the surrounding table, not inside the diagram.`}`,
           },
         }],
       };
