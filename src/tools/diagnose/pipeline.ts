@@ -483,15 +483,18 @@ export const pipelineHandler: DiagnoseHandler = {
 
     const includeYaml = args.include_yaml ?? !isSummary;
     const includeLogs = args.include_logs ?? !isSummary;
+    const includeAllStepLogs = args.include_all_step_logs === true;
     const returnDownloadUrl = args.return_download_url === true;
     const logSnippetLines = asNumber(args.log_snippet_lines) ?? 120;
     const maxFailedSteps = asNumber(args.max_failed_steps) ?? 5;
+    const maxAllStepLogs = asNumber(args.max_all_step_logs) ?? 25;
 
     const hasRequestedStep = !!asString(input.step_id);
     let totalSteps = 1;
     if (includeYaml) totalSteps++;
     if (includeLogs) totalSteps++;
     if (includeLogs && hasRequestedStep) totalSteps++;
+    if (includeAllStepLogs) totalSteps++;
 
     if (!executionId && pipelineId) {
       log.info("Fetching latest execution for pipeline", { pipelineId });
@@ -722,8 +725,10 @@ export const pipelineHandler: DiagnoseHandler = {
     // no failed steps and no explicit step was requested.  Pick the deepest
     // (most specific) Run/Script step from the graph — this is typically the
     // main build/test step whose output the user actually wants to read.
+    // Skip when include_all_step_logs is set — all logs will be fetched below.
     if (
       includeLogs &&
+      !includeAllStepLogs &&
       failedNodes.length === 0 &&
       !requestedStepId &&
       graphNodeMap &&
@@ -773,6 +778,102 @@ export const pipelineHandler: DiagnoseHandler = {
           };
         }
       }
+      currentStep++;
+    }
+
+    // Fetch ALL step logs when explicitly requested (e.g., pipeline summarizer).
+    // Uses same concurrency cap as failed step log fetching to avoid OOM.
+    // Total steps capped by maxAllStepLogs (default 25) to bound response size
+    // on large matrix/loop pipelines (same pattern as failed_steps_truncated).
+    if (includeAllStepLogs && graphNodeMap && !diagnostic.all_step_logs) {
+      await sendProgress(extra, currentStep, totalSteps, "Fetching all step logs...");
+
+      // Collect all nodes sorted by startTs. Include nodes without logBaseKey
+      // so the summary covers every step even if no log is available.
+      const allNodesFull = Object.entries(graphNodeMap)
+        .sort((a, b) => (a[1].startTs ?? 0) - (b[1].startTs ?? 0));
+
+      const allNodes = maxAllStepLogs > 0 ? allNodesFull.slice(0, maxAllStepLogs) : allNodesFull;
+      if (allNodes.length < allNodesFull.length) {
+        diagnostic.all_step_logs_truncated = { shown: allNodes.length, total: allNodesFull.length };
+      }
+
+      // Only fetch logs for nodes that have a logBaseKey and were NOT already
+      // fetched in failed_step_logs (avoid redundant API calls).
+      const loggableNodes = allNodes.filter(
+        ([_, node]) => node.logBaseKey && !fetchedFailedLogKeys.has(node.logBaseKey),
+      );
+
+      const logFetchConcurrency = config.HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY ?? 3;
+      const fetchedLogs = new Map<string, unknown>();
+
+      for (let i = 0; i < loggableNodes.length; i += logFetchConcurrency) {
+        signal?.throwIfAborted();
+        const batch = loggableNodes.slice(i, i + logFetchConcurrency);
+        const batchResults = await Promise.all(
+          batch.map(async ([nodeId, node]) => {
+            try {
+              const logValue = await resolveDiagnoseLog(client, node.logBaseKey!, {
+                signal,
+                returnDownloadUrl,
+                logSnippetLines,
+              });
+              return { nodeId, logValue };
+            } catch (err) {
+              return { nodeId, logValue: { error: String(err) } };
+            }
+          }),
+        );
+        for (const { nodeId, logValue } of batchResults) {
+          fetchedLogs.set(nodeId, logValue);
+        }
+      }
+
+      // Build all_step_logs from ALL nodes (keyed by nodeId to avoid collisions)
+      const allStepLogs: Record<string, unknown> = {};
+      for (const [nodeId, node] of allNodes) {
+        const entry: Record<string, unknown> = {
+          step_id: nodeId,
+          name: node.name,
+          identifier: node.identifier,
+          status: node.status,
+          duration_ms: node.startTs && node.endTs ? node.endTs - node.startTs : undefined,
+        };
+
+        if (!node.logBaseKey) {
+          entry.note = "No log available for this step";
+        } else if (fetchedFailedLogKeys.has(node.logBaseKey)) {
+          // Already fetched — find the log content from failed_step_logs
+          const failedLogs = diagnostic.failed_step_logs as Record<string, unknown> | undefined;
+          const failedEntry = failedLogs
+            ? Object.values(failedLogs).find((v) => {
+                const rec = v as Record<string, unknown> | undefined;
+                return rec && typeof v === "string"
+                  ? false
+                  : (v as Record<string, unknown>)?.step_id === nodeId;
+              }) ?? Object.entries(failedLogs).find(([key]) => key.endsWith(`/${node.identifier ?? node.name}`))?.[1]
+            : undefined;
+          if (failedEntry && typeof failedEntry === "string") {
+            entry.log = failedEntry;
+          } else if (failedEntry && typeof failedEntry === "object") {
+            Object.assign(entry, failedEntry);
+          } else {
+            entry.note = "Log included in failed_step_logs";
+          }
+        } else {
+          const logValue = fetchedLogs.get(nodeId);
+          if (logValue && typeof logValue === "object" && "error" in (logValue as Record<string, unknown>)) {
+            entry.error = (logValue as Record<string, unknown>).error;
+          } else if (returnDownloadUrl) {
+            entry.download_url = (logValue as { download_url: string }).download_url;
+          } else {
+            entry.log = logValue;
+          }
+        }
+
+        allStepLogs[nodeId] = entry;
+      }
+      diagnostic.all_step_logs = allStepLogs;
       currentStep++;
     }
 

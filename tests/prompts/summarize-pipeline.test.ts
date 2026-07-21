@@ -22,20 +22,38 @@ async function createTestClient(): Promise<Client> {
   return client;
 }
 
-describe("summarize-pipeline prompt", () => {
+describe("pipeline_summarizer prompt", () => {
   it("appears in the prompt list", async () => {
     const client = await createTestClient();
     const { prompts } = await client.listPrompts();
 
-    const prompt = prompts.find((p) => p.name === "summarize-pipeline");
+    const prompt = prompts.find((p) => p.name === "pipeline_summarizer");
     expect(prompt).toBeDefined();
-    expect(prompt!.description).toContain("Summarize an entire pipeline execution");
+    expect(prompt!.description).toContain("Fetch and summarize ALL step logs");
+  });
+
+  it("registers summarize-pipeline as a backward-compatible alias", async () => {
+    const client = await createTestClient();
+    const { prompts } = await client.listPrompts();
+
+    const alias = prompts.find((p) => p.name === "summarize-pipeline");
+    expect(alias).toBeDefined();
+    expect(alias!.description).toBe(
+      prompts.find((p) => p.name === "pipeline_summarizer")!.description,
+    );
+
+    const result = await client.getPrompt({
+      name: "summarize-pipeline",
+      arguments: { executionId: "exec-legacy" },
+    });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+    expect(text).toContain('execution_id="exec-legacy"');
   });
 
   it("has the correct arguments", async () => {
     const client = await createTestClient();
     const { prompts } = await client.listPrompts();
-    const prompt = prompts.find((p) => p.name === "summarize-pipeline")!;
+    const prompt = prompts.find((p) => p.name === "pipeline_summarizer")!;
 
     const argNames = prompt.arguments!.map((a) => a.name);
     expect(argNames).toContain("executionId");
@@ -51,7 +69,7 @@ describe("summarize-pipeline prompt", () => {
   it("interpolates executionId and projectId", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
-      name: "summarize-pipeline",
+      name: "pipeline_summarizer",
       arguments: {
         executionId: "exec-abc-123",
         projectId: "my-project",
@@ -67,7 +85,7 @@ describe("summarize-pipeline prompt", () => {
   it("detects URL input and uses url param", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
-      name: "summarize-pipeline",
+      name: "pipeline_summarizer",
       arguments: {
         executionId: "https://app.harness.io/ng/#/account/abc/pipelines/exec123",
       },
@@ -78,62 +96,57 @@ describe("summarize-pipeline prompt", () => {
     expect(text).not.toContain("execution_id=");
   });
 
-  it("references consolidated harness_* tools, not legacy names", async () => {
+  it("references harness_diagnose with include_all_step_logs", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
-      name: "summarize-pipeline",
+      name: "pipeline_summarizer",
       arguments: { executionId: "exec123" },
     });
 
     const text = (result.messages[0].content as { type: string; text: string }).text;
 
     expect(text).toContain("harness_diagnose");
-    expect(text).toContain("harness_get");
-    expect(text).toContain('resource_type="execution_log"');
-    expect(text).toContain('resource_type="pipeline"');
-
-    // Must NOT reference legacy tool names
-    expect(text).not.toContain("get_execution");
-    expect(text).not.toContain("download_execution_logs");
-    expect(text).not.toContain("get_pipeline");
-  });
-
-  it("includes selective log-fetching guidance with include_logs", async () => {
-    const client = await createTestClient();
-    const result = await client.getPrompt({
-      name: "summarize-pipeline",
-      arguments: { executionId: "exec123" },
-    });
-
-    const text = (result.messages[0].content as { type: string; text: string }).text;
-
     expect(text).toContain("include_logs: true");
-    expect(text).toContain("selectively");
-    expect(text).toContain("do NOT fetch logs for every step");
-    expect(text).toContain("Slowest steps");
-    expect(text).toContain("failed_step_logs");
+    expect(text).toContain("include_all_step_logs: true");
+    expect(text).toContain("all_step_logs");
   });
 
-  it("includes differentiation from debug-pipeline-failure", async () => {
+  it("instructs to summarize every step without skipping", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
-      name: "summarize-pipeline",
+      name: "pipeline_summarizer",
       arguments: { executionId: "exec123" },
     });
 
     const text = (result.messages[0].content as { type: string; text: string }).text;
-    expect(text).toContain("Unlike debug-pipeline-failure");
+
+    expect(text).toContain("DO NOT skip any steps");
+    expect(text).toContain("summarize every single one");
   });
 
   it("includes running execution guidance", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
-      name: "summarize-pipeline",
+      name: "pipeline_summarizer",
       arguments: { executionId: "exec123" },
     });
 
     const text = (result.messages[0].content as { type: string; text: string }).text;
     expect(text).toContain("non-terminal executions");
     expect(text).toContain('resource_type="execution"');
+  });
+
+  it("includes required output table format", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({
+      name: "pipeline_summarizer",
+      arguments: { executionId: "exec123" },
+    });
+
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+    expect(text).toContain("Step Name");
+    expect(text).toContain("Status");
+    expect(text).toContain("Duration");
+    expect(text).toContain("What Happened");
   });
 });

@@ -1241,4 +1241,400 @@ describe("pipelineHandler", () => {
     expect(peakInFlight).toBeGreaterThan(0);
     expect(Object.keys(result.failed_step_logs as Record<string, unknown>)).toHaveLength(6);
   });
+
+  describe("include_all_step_logs", () => {
+    it("fetches logs for all steps when include_all_step_logs is true", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      (resolveLogContent as ReturnType<typeof vi.fn>).mockResolvedValue("resolved log line 1\nresolved log line 2");
+
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "build", name: "Build", status: "Success", steps: [
+          { id: "step-a", name: "Init", status: "Success" },
+          { id: "step-b", name: "Compile", status: "Success" },
+        ]}],
+        nodeMapEntries: {
+          "step-a": {
+            uuid: "step-a", identifier: "init", name: "Init",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-a",
+            status: "Success", logBaseKey: "log/step-a", startTs: NOW, endTs: NOW + 10000,
+          },
+          "step-b": {
+            uuid: "step-b", identifier: "compile", name: "Compile",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-b",
+            status: "Success", logBaseKey: "log/step-b", startTs: NOW + 10000, endTs: NOW + 30000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      expect(result.all_step_logs).toBeDefined();
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(logs["step-a"]).toBeDefined();
+      expect(logs["step-b"]).toBeDefined();
+      expect(logs["step-a"].log).toBe("resolved log line 1\nresolved log line 2");
+      expect(logs["step-b"].log).toBe("resolved log line 1\nresolved log line 2");
+      expect(logs["step-a"].status).toBe("Success");
+      expect(logs["step-b"].identifier).toBe("compile");
+    });
+
+    it("uses nodeId as key to avoid collisions on duplicate step names", async () => {
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "build", name: "Build", status: "Success", steps: [
+          { id: "step-1", name: "Run", status: "Success" },
+          { id: "step-2", name: "Run", status: "Success" },
+        ]}],
+        nodeMapEntries: {
+          "step-1": {
+            uuid: "step-1", identifier: "run", name: "Run",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-1",
+            status: "Success", logBaseKey: "log/step-1", startTs: NOW, endTs: NOW + 5000,
+          },
+          "step-2": {
+            uuid: "step-2", identifier: "run", name: "Run",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-2",
+            status: "Success", logBaseKey: "log/step-2", startTs: NOW + 5000, endTs: NOW + 10000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      // Both entries exist — keyed by nodeId, not by identifier
+      expect(logs["step-1"]).toBeDefined();
+      expect(logs["step-2"]).toBeDefined();
+      expect(Object.keys(logs)).toHaveLength(2);
+    });
+
+    it("includes steps without logBaseKey with a note", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      (resolveLogContent as ReturnType<typeof vi.fn>).mockResolvedValue("resolved log line 1\nresolved log line 2");
+
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "build", name: "Build", status: "Success", steps: [
+          { id: "step-with-log", name: "Run", status: "Success" },
+          { id: "step-no-log", name: "Template", status: "Success" },
+        ]}],
+        nodeMapEntries: {
+          "step-with-log": {
+            uuid: "step-with-log", identifier: "run", name: "Run",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-with-log",
+            status: "Success", logBaseKey: "log/step-with-log", startTs: NOW, endTs: NOW + 5000,
+          },
+          "step-no-log": {
+            uuid: "step-no-log", identifier: "template", name: "Template",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-no-log",
+            status: "Success", startTs: NOW + 5000, endTs: NOW + 8000,
+            // No logBaseKey
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(logs["step-with-log"].log).toBe("resolved log line 1\nresolved log line 2");
+      expect(logs["step-no-log"].note).toBe("No log available for this step");
+      expect(logs["step-no-log"].status).toBe("Success");
+      expect(logs["step-no-log"].name).toBe("Template");
+    });
+
+    it("does not re-fetch logs already in failed_step_logs", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+
+      const exec = makeExecution({
+        status: "Failed",
+        stages: [{ id: "s1", name: "S1", status: "Failed", steps: [
+          { id: "step-ok", name: "Init", status: "Success" },
+          { id: "step-fail", name: "Deploy", status: "Failed" },
+        ]}],
+        nodeMapEntries: {
+          "step-ok": {
+            uuid: "step-ok", identifier: "init", name: "Init",
+            baseFqn: "pipeline.stages.s1.spec.execution.steps.step-ok",
+            status: "Success", logBaseKey: "log/step-ok", startTs: NOW, endTs: NOW + 5000,
+          },
+          "step-fail": {
+            uuid: "step-fail", identifier: "deploy", name: "Deploy",
+            baseFqn: "pipeline.stages.s1.spec.execution.steps.step-fail",
+            status: "Failed", failureInfo: { message: "deploy error" },
+            logBaseKey: "log/step-fail", startTs: NOW + 5000, endTs: NOW + 15000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: false, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      // resolveLogContent called once for failed step (in failed_step_logs),
+      // once for the passing step (in all_step_logs). NOT twice for the failed step.
+      expect(mockFn).toHaveBeenCalledTimes(2);
+
+      // all_step_logs includes both steps
+      const allLogs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(allLogs["step-ok"]).toBeDefined();
+      expect(allLogs["step-fail"]).toBeDefined();
+      expect(allLogs["step-ok"].log).toBeDefined();
+    });
+
+    it("skips auto-fetch of deepest step when include_all_step_logs is set", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+      mockFn.mockResolvedValue("resolved log line 1\nresolved log line 2");
+
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "build", name: "Build", status: "Success", steps: [
+          { id: "step-a", name: "StepA", status: "Success" },
+        ]}],
+        nodeMapEntries: {
+          "step-a": {
+            uuid: "step-a", identifier: "step-a", name: "StepA",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-a",
+            status: "Success", logBaseKey: "log/step-a", startTs: NOW, endTs: NOW + 5000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      // Should NOT have requested_step_log (auto-fetch skipped)
+      expect(result.requested_step_log).toBeUndefined();
+      // But all_step_logs should have the step
+      expect(result.all_step_logs).toBeDefined();
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(logs["step-a"].log).toBe("resolved log line 1\nresolved log line 2");
+    });
+
+    it("respects concurrency cap for all_step_logs fetching", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+
+      let inFlight = 0;
+      let peakInFlight = 0;
+      mockFn.mockImplementation(async () => {
+        inFlight++;
+        peakInFlight = Math.max(peakInFlight, inFlight);
+        await new Promise((r) => setTimeout(r, 5));
+        inFlight--;
+        return "log output";
+      });
+
+      const stepEntries: Record<string, Record<string, unknown>> = {};
+      for (let i = 1; i <= 5; i++) {
+        stepEntries[`st${i}`] = {
+          uuid: `st${i}`, identifier: `st${i}`, name: `ST${i}`,
+          baseFqn: `pipeline.stages.s1.spec.execution.steps.st${i}`,
+          status: "Success", logBaseKey: `log/st${i}`, startTs: NOW + i * 1000, endTs: NOW + (i + 1) * 1000,
+        };
+      }
+
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "s1", name: "S1", status: "Success",
+          steps: Array.from({ length: 5 }, (_, i) => ({ id: `st${i + 1}`, name: `ST${i + 1}`, status: "Success" })),
+        }],
+        nodeMapEntries: stepEntries,
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true },
+        config: makeConfig({ HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: 2 }),
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      expect(mockFn).toHaveBeenCalledTimes(5);
+      expect(peakInFlight).toBeLessThanOrEqual(2);
+      expect(Object.keys(result.all_step_logs as Record<string, unknown>)).toHaveLength(5);
+    });
+
+    it("sorts steps chronologically by startTs", async () => {
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "build", name: "Build", status: "Success", steps: [
+          { id: "step-late", name: "Late", status: "Success" },
+          { id: "step-early", name: "Early", status: "Success" },
+        ]}],
+        nodeMapEntries: {
+          "step-late": {
+            uuid: "step-late", identifier: "late", name: "Late",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-late",
+            status: "Success", logBaseKey: "log/step-late", startTs: NOW + 20000, endTs: NOW + 30000,
+          },
+          "step-early": {
+            uuid: "step-early", identifier: "early", name: "Early",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-early",
+            status: "Success", logBaseKey: "log/step-early", startTs: NOW + 1000, endTs: NOW + 5000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      const keys = Object.keys(logs);
+      // step-early should come before step-late due to chronological sort
+      expect(keys.indexOf("step-early")).toBeLessThan(keys.indexOf("step-late"));
+    });
+
+    it("handles log fetch errors gracefully in all_step_logs", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+      mockFn.mockRejectedValueOnce(new Error("Network timeout"));
+
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "build", name: "Build", status: "Success", steps: [
+          { id: "step-a", name: "StepA", status: "Success" },
+        ]}],
+        nodeMapEntries: {
+          "step-a": {
+            uuid: "step-a", identifier: "step-a", name: "StepA",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-a",
+            status: "Success", logBaseKey: "log/step-a", startTs: NOW, endTs: NOW + 5000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(logs["step-a"].error).toContain("Network timeout");
+      expect(logs["step-a"].log).toBeUndefined();
+    });
+
+    it("caps total steps fetched by max_all_step_logs and emits truncation marker", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+      mockFn.mockResolvedValue("log output");
+
+      const stepEntries: Record<string, Record<string, unknown>> = {};
+      for (let i = 1; i <= 10; i++) {
+        stepEntries[`st${i}`] = {
+          uuid: `st${i}`, identifier: `st${i}`, name: `ST${i}`,
+          baseFqn: `pipeline.stages.s1.spec.execution.steps.st${i}`,
+          status: "Success", logBaseKey: `log/st${i}`, startTs: NOW + i * 1000, endTs: NOW + (i + 1) * 1000,
+        };
+      }
+
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "s1", name: "S1", status: "Success",
+          steps: Array.from({ length: 10 }, (_, i) => ({ id: `st${i + 1}`, name: `ST${i + 1}`, status: "Success" })),
+        }],
+        nodeMapEntries: stepEntries,
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true, max_all_step_logs: 3 },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(Object.keys(logs)).toHaveLength(3);
+
+      // Truncation marker emitted
+      const truncated = result.all_step_logs_truncated as { shown: number; total: number };
+      expect(truncated).toBeDefined();
+      expect(truncated.shown).toBe(3);
+      expect(truncated.total).toBe(10);
+
+      // Only 3 log fetches (not 10)
+      expect(mockFn).toHaveBeenCalledTimes(3);
+    });
+
+    it("includes duration_ms when startTs and endTs are available", async () => {
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "build", name: "Build", status: "Success", steps: [
+          { id: "step-a", name: "StepA", status: "Success" },
+        ]}],
+        nodeMapEntries: {
+          "step-a": {
+            uuid: "step-a", identifier: "step-a", name: "StepA",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-a",
+            status: "Success", logBaseKey: "log/step-a", startTs: NOW, endTs: NOW + 45000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(logs["step-a"].duration_ms).toBe(45000);
+    });
+  });
 });
