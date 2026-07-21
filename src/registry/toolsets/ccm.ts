@@ -171,6 +171,18 @@ const OUTPUT_FIELDS: Record<string, Record<string, string>> = {
   product:             { fieldId: "product",              fieldName: "Product",        identifier: "COMMON", identifierName: "Common" },
 };
 
+/**
+ * Build the startTime AFTER/BEFORE timeFilter pair from an explicit epoch-ms
+ * range — the shape the perspective GraphQL API expects. Shared by both the
+ * relative-enum path (buildTimeFilters) and the custom-window path.
+ */
+function buildCustomTimeFilters(startMs: number, endMs: number): Record<string, unknown>[] {
+  return [
+    { timeFilter: { field: { fieldId: "startTime", fieldName: "startTime", identifier: "COMMON" }, operator: "AFTER", value: startMs } },
+    { timeFilter: { field: { fieldId: "startTime", fieldName: "startTime", identifier: "COMMON" }, operator: "BEFORE", value: endMs } },
+  ];
+}
+
 function buildTimeFilters(timeFilter: string): Record<string, unknown>[] {
   const now = new Date();
   let start: Date;
@@ -241,18 +253,52 @@ function buildTimeFilters(timeFilter: string): Record<string, unknown>[] {
     }
   }
 
-  return [
-    { timeFilter: { field: { fieldId: "startTime", fieldName: "startTime", identifier: "COMMON" }, operator: "AFTER", value: start.getTime() } },
-    { timeFilter: { field: { fieldId: "startTime", fieldName: "startTime", identifier: "COMMON" }, operator: "BEFORE", value: end.getTime() } },
-  ];
+  return buildCustomTimeFilters(start.getTime(), end.getTime());
+}
+
+/**
+ * Resolve the time-filter portion of a perspective query. When explicit
+ * start_time/end_time epoch-ms values are supplied they take precedence over
+ * the relative `time_filter` enum (enabling historical/custom windows the enum
+ * cannot express); otherwise fall back to the relative enum.
+ */
+function resolveTimeFilters(
+  timeFilter: string,
+  startMs?: number,
+  endMs?: number,
+): Record<string, unknown>[] {
+  if (startMs != null && endMs != null) {
+    return buildCustomTimeFilters(startMs, endMs);
+  }
+  return buildTimeFilters(timeFilter);
+}
+
+/**
+ * Coerce an input value to a positive epoch-ms number, or undefined. Accepts
+ * numbers or numeric strings (tool args often arrive as strings).
+ */
+function toEpochMs(value: unknown): number | undefined {
+  if (value == null) return undefined;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
+}
+
+/** Read the optional custom-window params from a tool input. */
+function customWindow(input: Record<string, unknown>): { startMs?: number; endMs?: number } {
+  return { startMs: toEpochMs(input.start_time), endMs: toEpochMs(input.end_time) };
 }
 
 function buildViewFilter(viewId: string): Record<string, unknown>[] {
   return [{ viewMetadataFilter: { viewId, isPreview: false } }];
 }
 
-function buildFilters(viewId: string, timeFilter: string): Record<string, unknown>[] {
-  return [...buildViewFilter(viewId), ...buildTimeFilters(timeFilter)];
+function buildFilters(
+  viewId: string,
+  timeFilter: string,
+  startMs?: number,
+  endMs?: number,
+): Record<string, unknown>[] {
+  return [...buildViewFilter(viewId), ...resolveTimeFilters(timeFilter, startMs, endMs)];
 }
 
 function buildGroupBy(field?: string): Record<string, unknown>[] {
@@ -788,6 +834,8 @@ Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any labe
       listFilterFields: [
         { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, environment, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
+        { name: "start_time", description: "Custom window start in epoch milliseconds. When set with end_time, overrides time_filter — use for historical/custom ranges the relative enum can't express (e.g. a past quarter).", type: "number" },
+        { name: "end_time", description: "Custom window end in epoch milliseconds. Pair with start_time.", type: "number" },
         { name: "limit", description: "Result limit", type: "number" },
         { name: "offset", description: "Pagination offset", type: "number" },
       ],
@@ -803,6 +851,8 @@ Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any labe
               filters: buildFilters(
                 input.perspective_id as string,
                 (input.time_filter as string) ?? "LAST_30_DAYS",
+                customWindow(input).startMs,
+                customWindow(input).endMs,
               ),
               groupBy: buildGroupBy(input.group_by as string | undefined),
               limit: (input.limit as number) ?? 25,
@@ -838,6 +888,8 @@ Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, 
       listFilterFields: [
         { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
+        { name: "start_time", description: "Custom window start in epoch milliseconds. When set with end_time, overrides time_filter — use for historical/custom ranges the relative enum can't express (e.g. a past quarter).", type: "number" },
+        { name: "end_time", description: "Custom window end in epoch milliseconds. Pair with start_time.", type: "number" },
         { name: "time_resolution", description: "Time resolution for aggregation", enum: ["DAY", "MONTH", "WEEK"] },
         { name: "limit", description: "Result limit", type: "number" },
       ],
@@ -850,6 +902,7 @@ Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, 
             const timeResolution = (input.time_resolution as string) ?? "DAY";
             const entityGroupBy = buildGroupBy(input.group_by as string | undefined);
             const timeTruncGroupBy = { timeTruncGroupBy: { resolution: timeResolution } };
+            const { startMs, endMs } = customWindow(input);
 
             return {
               query: PERSPECTIVE_TIMESERIES_QUERY,
@@ -858,6 +911,8 @@ Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, 
                 filters: buildFilters(
                   input.perspective_id as string,
                   (input.time_filter as string) ?? "LAST_30_DAYS",
+                  startMs,
+                  endMs,
                 ),
                 groupBy: [timeTruncGroupBy, entityGroupBy[0]],
                 limit: (input.limit as number) ?? 12,
@@ -893,6 +948,8 @@ Use with no perspective_id to get CCM metadata (available connectors, default pe
       identifierFields: ["perspective_id"],
       listFilterFields: [
         { name: "time_filter", description: "Time range filter" },
+        { name: "start_time", description: "Custom window start in epoch milliseconds. When set with end_time, overrides time_filter — use for historical/custom ranges the relative enum can't express (e.g. a past quarter).", type: "number" },
+        { name: "end_time", description: "Custom window end in epoch milliseconds. Pair with start_time.", type: "number" },
       ],
       operations: {
         list: {
@@ -910,6 +967,7 @@ Use with no perspective_id to get CCM metadata (available connectors, default pe
               };
             }
 
+            const { startMs, endMs } = customWindow(input);
             return {
               query: PERSPECTIVE_SUMMARY_QUERY,
               operationName: "FetchPerspectiveDetailsSummaryWithBudget",
@@ -917,6 +975,8 @@ Use with no perspective_id to get CCM metadata (available connectors, default pe
                 filters: buildFilters(
                   perspectiveId,
                   (input.time_filter as string) ?? "LAST_30_DAYS",
+                  startMs,
+                  endMs,
                 ),
                 groupBy: buildGroupBy(),
                 aggregateFunction: buildAggregateFunction(),

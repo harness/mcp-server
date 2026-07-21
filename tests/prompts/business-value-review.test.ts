@@ -42,10 +42,22 @@ describe("business-value-review prompt", () => {
     const argNames = prompt.arguments!.map((a) => a.name);
     expect(argNames).toContain("customer");
     expect(argNames).toContain("quarter");
-    expect(argNames).toContain("projectId");
+    expect(argNames).toContain("diagrams");
+    // projectId was removed — CCM is account-scoped, the filter was ineffective.
+    expect(argNames).not.toContain("projectId");
 
-    for (const name of ["customer", "quarter", "projectId"]) {
+    for (const name of ["customer", "quarter", "diagrams"]) {
       expect(prompt.arguments!.find((a) => a.name === name)!.required).toBe(false);
+    }
+  });
+
+  it("exposes descriptions on every argument (zod .optional().describe() order)", async () => {
+    const client = await createTestClient();
+    const { prompts } = await client.listPrompts();
+    const prompt = prompts.find((p) => p.name === "business-value-review")!;
+
+    for (const arg of prompt.arguments!) {
+      expect(arg.description, `arg "${arg.name}" must have a description`).toBeTruthy();
     }
   });
 
@@ -62,26 +74,16 @@ describe("business-value-review prompt", () => {
     expect(text).toContain("Q2 FY27");
   });
 
-  it("interpolates projectId into a project filter when provided", async () => {
+  it("never emits a project_id filter (CCM is account-scoped)", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
       name: "business-value-review",
-      arguments: { projectId: "my-project" },
-    });
-
-    const text = (result.messages[0].content as { type: string; text: string }).text;
-    expect(text).toContain('project_id="my-project"');
-  });
-
-  it("omits the project filter when projectId is not provided", async () => {
-    const client = await createTestClient();
-    const result = await client.getPrompt({
-      name: "business-value-review",
-      arguments: {},
+      arguments: { customer: "Acme", quarter: "Q1" },
     });
 
     const text = (result.messages[0].content as { type: string; text: string }).text;
     expect(text).not.toContain("project_id=");
+    expect(text).toContain("CCM data is account-scoped");
   });
 
   it("references consolidated harness_* tools and valid CCM resource_types", async () => {
@@ -135,16 +137,30 @@ describe("business-value-review prompt", () => {
     expect(text).toContain("Required diagrams");
     expect(text).toContain("xychart-beta");
     expect(text).toContain("pie");
-    // Default is full mermaid mode → radar enabled for the maturity chart.
-    expect(text).toContain("full mode — use radar");
+    // Default is full mermaid mode → radar-beta enabled for the maturity chart.
+    expect(text).toContain("full mode — use radar-beta");
     expect(text).toContain("```mermaid");
-    expect(text).toContain("radar");
+    expect(text).toContain("radar-beta");
     expect(text).toContain("supporting data table");
     // The prompt must require diagrams, never frame them as optional.
     expect(text).not.toMatch(/optional(?:ly)?\s+.{0,20}(mermaid|diagram|radar)/i);
   });
 
-  it("steers away from radar in explicit auto mode", async () => {
+  it("uses radar-beta (not the invalid bare radar keyword) and placeholder scores", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({
+      name: "business-value-review",
+      arguments: { diagrams: "mermaid" },
+    });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("radar-beta");
+    // The maturity curve must be a placeholder, not fabricated fixed scores.
+    expect(text).toContain("curve current{<vis>,<alloc>,<tool>,<comm>,<anom>,<opt>,<acct>}");
+    expect(text).not.toContain("curve current{2,2,1,3,2,2,3}");
+  });
+
+  it("steers away from radar-beta in explicit auto mode", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
       name: "business-value-review",
@@ -152,8 +168,9 @@ describe("business-value-review prompt", () => {
     });
     const text = (result.messages[0].content as { type: string; text: string }).text;
 
-    expect(text).toContain("do NOT use radar");
+    expect(text).toContain("do NOT use radar-beta");
     expect(text).toContain("xychart-beta");
+    expect(text).not.toContain("```mermaid");
   });
 
   it("exposes a diagrams mode argument", async () => {
@@ -163,7 +180,7 @@ describe("business-value-review prompt", () => {
     expect(prompt.arguments!.map((a) => a.name)).toContain("diagrams");
   });
 
-  it("enables radar only in full mermaid mode", async () => {
+  it("enables radar-beta only in full mermaid mode", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
       name: "business-value-review",
@@ -171,9 +188,9 @@ describe("business-value-review prompt", () => {
     });
     const text = (result.messages[0].content as { type: string; text: string }).text;
 
-    expect(text).toContain("full mode — use radar");
+    expect(text).toContain("full mode — use radar-beta");
     expect(text).toContain("```mermaid");
-    expect(text).toContain("radar");
+    expect(text).toContain("radar-beta");
   });
 
   it("suppresses all Mermaid in tables mode", async () => {
@@ -252,17 +269,102 @@ describe("business-value-review prompt", () => {
     expect(text).toContain("LABEL");
   });
 
-  it("notes CCM account-scoping only when projectId is provided", async () => {
+  it("enforces a single reporting window across all queries", async () => {
     const client = await createTestClient();
-    const withProject = await client.getPrompt({
-      name: "business-value-review",
-      arguments: { projectId: "my-project" },
-    });
-    const withProjectText = (withProject.messages[0].content as { type: string; text: string }).text;
-    expect(withProjectText).toContain("CCM data is account-scoped");
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
 
-    const withoutProject = await client.getPrompt({ name: "business-value-review", arguments: {} });
-    const withoutProjectText = (withoutProject.messages[0].content as { type: string; text: string }).text;
-    expect(withoutProjectText).not.toContain("CCM data is account-scoped");
+    expect(text).toContain("Pick ONE reporting window and reuse it everywhere");
+    expect(text).toContain("REVIEW_START");
+    expect(text).toContain("Do NOT mix a quarter headline with 30-day anomalies");
+  });
+
+  it("scopes commitment analysis to EC2-only, no RDS/ElastiCache figures or fixed discount", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("treat these figures as EC2-only");
+    expect(text).toContain("Do NOT report RDS or ElastiCache");
+    // The old commitment-section instruction that told the model to APPLY a
+    // ~40% RI discount must be gone. (The global guardrail may still cite
+    // "~40% RI discount" as a forbidden example — that's expected.)
+    expect(text).not.toContain("× ~40% RI discount = annual opportunity");
+  });
+
+  it("requires N/A for maturity dimensions lacking evidence and excludes them from averages", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("Do not force a score when the backing data is missing");
+    expect(text).toContain("mark that dimension **N/A**");
+    expect(text).toContain("exclude N/A dimensions");
+  });
+
+  it("guards allocation against a false 100% when no unattributed row exists", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("do NOT report 100% allocation");
+  });
+
+  it("uses the response count for active anomalies, not one page of rows", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("do not equate the count with the number of rows returned");
+    expect(text).toContain("paginate with");
+  });
+
+  it("forbids fabricated rates/discounts globally (incl. recommendations matrix)", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("Never apply a fabricated rate, ratio, or discount");
+    expect(text).toContain("recommendations matrix");
+  });
+
+  it("requires allocation to be N/A (not Crawl/1.0) when unmeasurable", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("Critical — allocation specifically");
+    expect(text).toContain("score `allocation` = **N/A**, NOT 1.0/Crawl");
+    expect(text).toContain('do not conflate "couldn\'t measure" with "0% allocated"');
+  });
+
+  it("instructs compact: false on recommendation/breakdown/timeseries list calls", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("compact: false");
+    // The recommendation list specifically must call out per-item monthlySaving.
+    expect(text).toContain("required to get per-item `monthlySaving`");
+  });
+
+  it("targets historical quarters via start_time/end_time on perspective calls", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    // Perspective calls now accept an explicit epoch-ms window — no month-summing hack.
+    expect(text).toContain("REVIEW_START_MS");
+    expect(text).toContain("REVIEW_END_MS");
+    expect(text).toContain("pass `start_time`/`end_time` directly");
+    // Must warn LAST_QUARTER won't match a named past quarter.
+    expect(text).toContain("do NOT rely on `LAST_QUARTER`");
+    // The old manual month-summing workaround must be gone as an INSTRUCTION.
+    // (The prompt may still say "do NOT sum months manually" as a prohibition.)
+    expect(text).toContain("do NOT rely on `LAST_QUARTER`");
+    expect(text).not.toContain("sum the specific calendar months");
+    expect(text).not.toContain("**sum the target quarter");
+    // Fiscal vs calendar ambiguity must be surfaced, not assumed.
+    expect(text).toContain("Fiscal vs calendar");
   });
 });
