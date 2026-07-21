@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Deduplicated Data Must Keep Its Canonical Key
+- **Issue**: Bulk pipeline diagnosis deduplicated failed-step log fetches by `logBaseKey`, but later tried to recover the fetched value by step identifier. Step identifiers are only stage-local, so repeated names such as `deploy` caused one stage's log to be attached to another stage.
+- **Fix**: Store fetched values in a map keyed by the same canonical `logBaseKey` used for deduplication, then merge by exact key.
+- **Rule**: When avoiding duplicate fetches, preserve a key-to-result map through downstream assembly; never reconstruct identity from display names or scope-local identifiers.
+
 ## Scope Defaults and Remote Branch Context Must Stay End-to-End
 - **Issue**: Multi-scope path builders can bypass the registry's usual config defaulting when they construct path segments themselves. For IDP entities, list used configured `HARNESS_ORG` / `HARNESS_PROJECT`, while get/update path construction fell back to account scope, so a list -> update flow could target a different entity with the same kind/id.
 - **Fix**: Path builders that encode scope in the path must accept `PathBuilderConfig`, honor explicit `resource_scope`, use configured org/project defaults when scope is omitted and the resource's list/default behavior does so, and clear unused scope fields so query params match the path.
