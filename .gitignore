@@ -1,5 +1,6 @@
 node_modules/
 .pnpm-store/
+.npm-shrinkwrap-staging/
 build/
 dist/
 .env

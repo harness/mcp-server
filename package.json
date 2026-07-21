@@ -1,6 +1,6 @@
 {
   "name": "harness-mcp-v2",
-  "version": "3.2.12",
+  "version": "3.2.13",
   "description": "Give AI agents full access to the Harness.io platform — manage pipelines, deployments, cloud costs, chaos engineering, feature flags, SEI, and 125+ resource types through 11 MCP tools",
   "type": "module",
   "main": "build/index.js",
@@ -8,7 +8,10 @@
     "harness-mcp-v2": "build/index.js"
   },
   "files": [
-    "build/"
+    "build/",
+    "npm-shrinkwrap.json",
+    "scripts/adm-zip-security-lib.mjs",
+    "scripts/ensure-secure-adm-zip.mjs"
   ],
   "scripts": {
     "build": "tsc",
@@ -25,11 +28,14 @@
     "docs:generate": "node scripts/generate-docs.js",
     "docs:check": "node scripts/generate-docs.js --check",
     "standards:check": "vitest run tests/coding-standards tests/registry/structural-validation.test.ts",
+    "npm-shrinkwrap:generate": "node scripts/generate-npm-shrinkwrap.mjs",
+    "npm-shrinkwrap:check": "node scripts/generate-npm-shrinkwrap.mjs --check",
     "test": "vitest run",
     "test:watch": "vitest",
     "docker:build": "docker build -t harness-mcp-server .",
     "docker:run": "docker run --rm -p 3000:3000 --env-file .env harness-mcp-server",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build && pnpm npm-shrinkwrap:check",
+    "postinstall": "node scripts/ensure-secure-adm-zip.mjs"
   },
   "keywords": [
     "mcp",
@@ -52,6 +58,7 @@
   "dependencies": {
     "@hono/node-server": "^2.0.0",
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "adm-zip": "^0.6.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
     "hono": "^4.12.25",

@@ -22,6 +22,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: node -e "import('@hono/node-server')"
       - run: pnpm build
+      - run: pnpm npm-shrinkwrap:check
       - run: pnpm test
       - run: pnpm standards:check
       - run: pnpm typecheck
@@ -63,3 +64,34 @@ jobs:
         env:
           HARNESS_TOOLSETS: ${{ matrix.toolsets }}
           HARNESS_READ_ONLY: ${{ matrix.read_only }}
+
+  npm-consumer-adm-zip:
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/verify-npm-adm-zip.mjs
+      - name: Assert --ignore-scripts leaves nested adm-zip vulnerable
+        run: |
+          set -euo pipefail
+          tgz="$(npm pack --silent)"
+          consumer="$(mktemp -d)"
+          trap 'rm -rf "$consumer" "$tgz"' EXIT
+          npm install --global --prefix "$consumer" --omit=dev --ignore-scripts "$(pwd)/$tgz"
+          pkg_root="$consumer/lib/node_modules/harness-mcp-v2"
+          node --input-type=module -e "
+            import { listInsecureAdmZipInstalls } from './scripts/adm-zip-security-lib.mjs';
+            const insecure = listInsecureAdmZipInstalls(process.argv[1]);
+            if (insecure.length > 0) {
+              console.error('confirmed: --ignore-scripts skips adm-zip postinstall patch');
+              process.exit(0);
+            }
+            console.error('expected insecure nested adm-zip with --ignore-scripts');
+            process.exit(1);
+          " "$pkg_root"
