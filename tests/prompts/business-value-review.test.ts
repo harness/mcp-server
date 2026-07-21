@@ -250,6 +250,29 @@ describe("business-value-review prompt", () => {
     expect(text).toContain("NOT status-filtered");
   });
 
+  it("distinguishes a confirmed zero from a silent-empty response (all sections)", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("Distinguish a confirmed zero from a silent-empty response");
+    expect(text).toContain("applies to EVERY section");
+    expect(text).toContain("is NOT proof that the real value is zero");
+    // An unverified empty must not become a positive finding.
+    expect(text).toContain('"clean queue"');
+  });
+
+  it("requires corroboration before reporting a clean anomaly queue as Run", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("Zero-active handling");
+    expect(text).toContain("explicit `total: 0`");
+    // Unconfirmable zero → N/A, not a best-case score.
+    expect(text).toContain("score `anomaly_detection` **N/A**");
+  });
+
   it("guards allocation math against zero/invalid totals and validates commitment dates", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
@@ -326,6 +349,16 @@ describe("business-value-review prompt", () => {
 
     expect(text).toContain("Never apply a fabricated rate, ratio, or discount");
     expect(text).toContain("recommendations matrix");
+  });
+
+  it("requires dollar figures to be individually traceable (no rolled-up ~$X)", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("Dollar figures must be individually traceable");
+    expect(text).toContain("Quick Wins");
+    expect(text).toContain("enumerate the exact per-item savings");
   });
 
   it("requires allocation to be N/A (not Crawl/1.0) when unmeasurable", async () => {
