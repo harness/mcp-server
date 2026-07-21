@@ -21,6 +21,7 @@ import { registerCloudCostBreakdownPrompt } from "./cloud-cost-breakdown.js";
 import { registerCommitmentUtilizationPrompt } from "./commitment-utilization.js";
 import { registerCostAnomalyPrompt } from "./cost-anomaly.js";
 import { registerRightsizingPrompt } from "./rightsizing.js";
+import { registerBusinessValueReviewPrompt } from "./business-value-review.js";
 
 // DevSecOps prompts
 import { registerVulnerabilityTriagePrompt } from "./vulnerability-triage.js";
@@ -73,6 +74,7 @@ export function registerAllPrompts(server: McpServer): void {
   registerCommitmentUtilizationPrompt(server);
   registerCostAnomalyPrompt(server);
   registerRightsizingPrompt(server);
+  registerBusinessValueReviewPrompt(server);
 
   // DevSecOps
   registerVulnerabilityTriagePrompt(server);
