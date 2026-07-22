@@ -13,8 +13,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   ensureSecureAdmZip,
-  isSecureAdmZipVersion,
-  SECURE_ADM_ZIP_VERSION,
+  validateNpmShrinkwrapMetadata,
 } from "./adm-zip-security-lib.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -31,10 +30,6 @@ function run(cmd, args, cwd) {
 
 const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
 
-function sortedEntries(value = {}) {
-  return Object.entries(value).sort(([left], [right]) => left.localeCompare(right));
-}
-
 function failCheck(message) {
   console.error(`npm-shrinkwrap.json is out of date: ${message}`);
   process.exit(1);
@@ -46,33 +41,9 @@ if (checkMode) {
   }
 
   const shrinkwrap = JSON.parse(readFileSync(shrinkwrapPath, "utf8"));
-  const root = shrinkwrap.packages?.[""];
-  if (!root) {
-    failCheck("root package metadata is missing");
-  }
-  if (root.name !== pkg.name || root.version !== pkg.version) {
-    failCheck(`root metadata does not match ${pkg.name}@${pkg.version}`);
-  }
-
-  if (
-    JSON.stringify(sortedEntries(root.dependencies)) !==
-    JSON.stringify(sortedEntries(pkg.dependencies))
-  ) {
-    failCheck("root dependencies do not match package.json");
-  }
-  if (
-    JSON.stringify(sortedEntries(root.optionalDependencies)) !==
-    JSON.stringify(sortedEntries(pkg.optionalDependencies))
-  ) {
-    failCheck("root optionalDependencies do not match package.json");
-  }
-
-  const hoistedAdmZipVersion = shrinkwrap.packages?.["node_modules/adm-zip"]?.version;
-  if (
-    !hoistedAdmZipVersion ||
-    !isSecureAdmZipVersion(hoistedAdmZipVersion, SECURE_ADM_ZIP_VERSION)
-  ) {
-    failCheck(`hoisted adm-zip is ${hoistedAdmZipVersion ?? "missing"}`);
+  const validationError = validateNpmShrinkwrapMetadata(shrinkwrap, pkg);
+  if (validationError) {
+    failCheck(validationError);
   }
 
   console.error("npm-shrinkwrap.json metadata is up to date");

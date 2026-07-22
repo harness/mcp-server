@@ -214,3 +214,50 @@ export function ensureSecureAdmZip(
 
   return { patched, skipped: false, warnings };
 }
+
+/**
+ * @param {Record<string, unknown>} value
+ * @returns {Array<[string, unknown]>}
+ */
+export function sortedPackageEntries(value = {}) {
+  return Object.entries(value).sort(([left], [right]) => left.localeCompare(right));
+}
+
+/**
+ * Validate npm-shrinkwrap.json root metadata against package.json.
+ * @param {Record<string, unknown>} shrinkwrap
+ * @param {{ name: string; version: string; dependencies?: Record<string, string>; optionalDependencies?: Record<string, string> }} pkg
+ * @returns {string | null} error message when invalid, null when valid
+ */
+export function validateNpmShrinkwrapMetadata(shrinkwrap, pkg) {
+  const root = shrinkwrap.packages?.[""];
+  if (!root) {
+    return "root package metadata is missing";
+  }
+  if (root.name !== pkg.name || root.version !== pkg.version) {
+    return `root metadata does not match ${pkg.name}@${pkg.version}`;
+  }
+
+  if (
+    JSON.stringify(sortedPackageEntries(root.dependencies)) !==
+    JSON.stringify(sortedPackageEntries(pkg.dependencies))
+  ) {
+    return "root dependencies do not match package.json";
+  }
+  if (
+    JSON.stringify(sortedPackageEntries(root.optionalDependencies)) !==
+    JSON.stringify(sortedPackageEntries(pkg.optionalDependencies))
+  ) {
+    return "root optionalDependencies do not match package.json";
+  }
+
+  const hoistedAdmZipVersion = shrinkwrap.packages?.["node_modules/adm-zip"]?.version;
+  if (
+    !hoistedAdmZipVersion ||
+    !isSecureAdmZipVersion(hoistedAdmZipVersion, SECURE_ADM_ZIP_VERSION)
+  ) {
+    return `hoisted adm-zip is ${hoistedAdmZipVersion ?? "missing"}`;
+  }
+
+  return null;
+}
