@@ -545,8 +545,11 @@ describe("Toolset structural validation", () => {
   });
 
   describe("full-registry coverage regression", () => {
-    it("covers defaults, declared opt-in resources, and both pipeline resource types", () => {
+    it("covers defaults, all toolsets (incl. opt-in), and both pipeline resource types", () => {
+      const loadedToolsets = fullRegistry.getAllToolsets().map((t) => t.name).sort();
+      expect(loadedToolsets).toEqual([...ALL_TOOLSET_NAMES].sort());
       expect(allFullTypes).toEqual(expect.arrayContaining(defaultRegistry.getAllResourceTypes()));
+      expect(optInTypes.length).toBeGreaterThan(0);
       expect(allFullTypes).toEqual(expect.arrayContaining(optInTypes));
       expect(allFullTypes).toEqual(expect.arrayContaining(["pipeline", "pipeline_v1"]));
     });
