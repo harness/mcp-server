@@ -10,6 +10,13 @@ import { LocalSearchProvider } from "../../src/search/local-provider.js";
 const NETWORK_INIT_FAILURE =
   /\b(429|too many requests|fetch|network|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|load file|getaddrinfo|socket)\b/i;
 
+// The embedding backend (@huggingface/transformers) is an optionalDependency. When it
+// isn't installed (e.g. optional deps skipped in CI/local), initialize() fails with a
+// module-resolution error rather than a network error. That is an environment condition,
+// not a code regression, so skip rather than fail — same policy as a HuggingFace outage.
+const MISSING_OPTIONAL_DEP =
+  /Cannot find (?:package|module) ['"]@huggingface\/transformers['"]/i;
+
 describe("LocalSearchProvider", () => {
   let provider: LocalSearchProvider;
   let skipReason: string | undefined;
@@ -21,6 +28,8 @@ describe("LocalSearchProvider", () => {
       const initError = provider.getInitError() ?? "unknown initialization error";
       if (NETWORK_INIT_FAILURE.test(initError)) {
         skipReason = `embedding model unavailable (offline/rate-limited): ${initError}`;
+      } else if (MISSING_OPTIONAL_DEP.test(initError)) {
+        skipReason = `embedding backend not installed (optional dependency): ${initError}`;
       } else {
         // Not a network problem — surface it as a real failure below.
         throw new Error(`LocalSearchProvider failed to initialize: ${initError}`);
