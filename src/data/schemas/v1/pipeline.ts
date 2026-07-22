@@ -4545,7 +4545,7 @@ const schema: Record<string, any> = {
                 "description": "Image registry connector. Supports expressions.",
                 "type": "string"
               },
-              "registryRef": {
+              "registry": {
                 "description": "Harness Artifact Registry reference for the image. Supports expressions.",
                 "type": "string"
               },
