@@ -52,7 +52,9 @@ export function registerDebugPipelinePrompt(server: McpServer): void {
     async (args) => handleDebugPipeline(args),
   );
 
-  // Alias: ml-infra requests this name via get_prompt("pipeline_error_analysis")
+  // Alias: ml-infra requests this name via get_prompt("pipeline_error_analysis").
+  // Intentionally omitted from README prompt table — internal lookup alias, not a distinct template.
+  // Tracking: #677 for aligning canonical names across ml-infra and mcp-server.
   server.registerPrompt(
     "pipeline_error_analysis",
     {
