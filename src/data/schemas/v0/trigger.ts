@@ -2822,7 +2822,8 @@ const schema: Record<string, any> = {
                     "IssueComment",
                     "Release",
                     "Delete",
-                    "Create"
+                    "Create",
+                    "PullRequestReview"
                   ]
                 }
               }
@@ -2919,6 +2920,22 @@ const schema: Record<string, any> = {
                 "properties": {
                   "spec": {
                     "$ref": "#/definitions/trigger/webhook_trigger/github_create_spec"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "PullRequestReview"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "spec": {
+                    "$ref": "#/definitions/trigger/webhook_trigger/github_pr_review_spec"
                   }
                 }
               }
@@ -3170,6 +3187,55 @@ const schema: Record<string, any> = {
             {
               "type": "object",
               "properties": {
+                "connectorRef": {
+                  "type": "string"
+                },
+                "headerConditions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/trigger/trigger_event_data"
+                  }
+                },
+                "jexlCondition": {
+                  "type": "string"
+                },
+                "payloadConditions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/trigger/trigger_event_data"
+                  }
+                },
+                "repoName": {
+                  "type": "string"
+                }
+              }
+            }
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "github_pr_review_spec": {
+          "title": "github_pr_review_spec",
+          "allOf": [
+            {
+              "$ref": "#/definitions/trigger/webhook_trigger/github_event_spec"
+            },
+            {
+              "type": "object",
+              "properties": {
+                "actions": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "enum": [
+                      "Submitted",
+                      "Edited",
+                      "Dismissed"
+                    ]
+                  }
+                },
+                "autoAbortPreviousExecutions": {
+                  "type": "boolean"
+                },
                 "connectorRef": {
                   "type": "string"
                 },
