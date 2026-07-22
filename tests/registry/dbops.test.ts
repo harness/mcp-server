@@ -808,17 +808,26 @@ describe("database_snapshot_object get", () => {
 });
 
 describe("database_changeset_existence get", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  const baseInput = {
+    org_id: "default",
+    project_id: "test-project",
+    dbschema_id: "my_schema",
+  };
+
   it("passes changeset id body without scope injection", async () => {
-    const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({
       existence: { "add-users-email-column": false, "create-orders-index": true },
     });
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "database_changeset_existence", "get", {
-      org_id: "default",
-      project_id: "test-project",
-      dbschema_id: "my_schema",
+      ...baseInput,
       changeset_ids: ["add-users-email-column", "create-orders-index"],
     });
 
@@ -832,5 +841,116 @@ describe("database_changeset_existence get", () => {
     });
     expect(call.body).not.toHaveProperty("orgIdentifier");
     expect(call.body).not.toHaveProperty("projectIdentifier");
+  });
+
+  it("accepts changeSetIds and change_set_ids aliases", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ existence: { "cs-1": true } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_changeset_existence", "get", {
+      ...baseInput,
+      changeSetIds: ["cs-1"],
+    });
+    expect(mockRequest.mock.calls[0][0].body).toEqual({
+      changeSets: [{ id: "cs-1" }],
+    });
+
+    mockRequest.mockClear();
+    await registry.dispatch(client, "database_changeset_existence", "get", {
+      ...baseInput,
+      change_set_ids: ["cs-2"],
+    });
+    expect(mockRequest.mock.calls[0][0].body).toEqual({
+      changeSets: [{ id: "cs-2" }],
+    });
+  });
+
+  it("trims whitespace from each changeset id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ existence: {} });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_changeset_existence", "get", {
+      ...baseInput,
+      changeset_ids: ["  add-users-email-column  ", "create-orders-index"],
+    });
+
+    expect(mockRequest.mock.calls[0][0].body).toEqual({
+      changeSets: [{ id: "add-users-email-column" }, { id: "create-orders-index" }],
+    });
+  });
+
+  it("is a read operation with skipScopeBodyInjection", () => {
+    const spec = getOp("database_changeset_existence", "get");
+    expect(spec.operationPolicy).toEqual({ risk: "read", retryPolicy: "safe" });
+    expect(spec.skipScopeBodyInjection).toBe(true);
+    expect(spec.description).toContain("existence");
+  });
+
+  it("rejects when changeset_ids is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", baseInput),
+    ).rejects.toThrow("changeset_ids is required");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects when changeset_ids is empty", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        ...baseInput,
+        changeset_ids: [],
+      }),
+    ).rejects.toThrow("non-empty array");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects when changeset_ids exceeds 100 entries", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const changeset_ids = Array.from({ length: 101 }, (_, i) => `cs-${i}`);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        ...baseInput,
+        changeset_ids,
+      }),
+    ).rejects.toThrow("at most 100");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-string changeset_ids entries", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        ...baseInput,
+        changeset_ids: ["valid-id", 42],
+      }),
+    ).rejects.toThrow("non-empty string");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects blank changeset_ids entries", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        ...baseInput,
+        changeset_ids: ["valid-id", "   "],
+      }),
+    ).rejects.toThrow("non-empty string");
+
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
