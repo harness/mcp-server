@@ -4,14 +4,20 @@
 - [x] Baseline branch state and identify recent behavioral commits
 - [x] Review high-blast-radius diffs and trace concrete trigger scenarios
 - [x] Implement a minimal fix only if a critical bug is proven
-- [ ] Commit and push any fix before running verification
-- [ ] Run focused and broad verification for any fix
+- [x] Commit and push any fix before running verification
+- [x] Run focused and broad verification for any fix
 - [ ] Open a PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
 - Compare the current worktree and recent `origin/main` history, prioritizing behavioral changes since the latest release.
 - Trace candidate failures through public tool handlers, registry dispatch, request construction, and response extraction.
 - Require a concrete crash, data-loss, security, or significant-breakage trigger before editing runtime code.
+
+### Review
+- Found that the new `include_all_step_logs` path applied `max_all_step_logs` to every execution-graph node, including pipeline and stage wrappers. A normal pipeline with 25 real steps could therefore return only 23 steps while the public option and summarizer prompt promise up to 25 step logs.
+- Filtered known graph nodes to execution steps before chronological sorting and capping, while retaining nodes without `baseFqn` for compatibility with older API responses.
+- Added a regression with pipeline/stage wrapper nodes proving the cap and truncation metadata count only real steps.
+- Verification passed: focused pipeline diagnosis tests (47), `pnpm build`, `pnpm typecheck`, `pnpm docs:check`, full `pnpm test` (119 files / 2608 tests), and `pnpm standards:check` (80 tests).
 
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
