@@ -6,7 +6,7 @@
 - [x] Implement a minimal fix only if a critical bug is proven
 - [x] Commit and push any fix before running verification
 - [x] Run focused and broad verification for any fix
-- [ ] Open a PR if fixed; otherwise report no critical bugs in Slack
+- [x] Open a PR if fixed; otherwise report no critical bugs in Slack
 
 ### Plan
 - Compare the current worktree and recent `origin/main` history, prioritizing behavioral changes since the latest release.
@@ -18,6 +18,7 @@
 - Filtered known graph nodes to execution steps before chronological sorting and capping, while retaining nodes without `baseFqn` for compatibility with older API responses.
 - Added a regression with pipeline/stage wrapper nodes proving the cap and truncation metadata count only real steps.
 - Verification passed: focused pipeline diagnosis tests (47), `pnpm build`, `pnpm typecheck`, `pnpm docs:check`, full `pnpm test` (119 files / 2608 tests), and `pnpm standards:check` (80 tests).
+- Opened PR #684.
 
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
