@@ -1,29 +1,26 @@
 import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 
-export function registerDebugPipelinePrompt(server: McpServer): void {
-  server.registerPrompt(
-    "debug-pipeline-failure",
-    {
-      description: "Analyze a failed pipeline execution and suggest fixes. Accepts an execution ID, pipeline ID, or Harness URL.",
-      argsSchema: {
-        executionId: z.string().describe("The failed execution ID, pipeline ID, or a Harness URL").optional(),
-        projectId: z.string().describe("Project identifier").optional(),
-      },
-    },
-    async ({ executionId, projectId }) => {
-      // Detect if the input looks like a URL
-      const isUrl = executionId?.startsWith("http");
-      const idParam = isUrl
-        ? `url="${executionId}"`
-        : `execution_id="${executionId}"`;
+const promptConfig = {
+  description: "Analyze a failed pipeline execution and suggest fixes. Accepts an execution ID, pipeline ID, or Harness URL.",
+  argsSchema: {
+    executionId: z.string().describe("The failed execution ID, pipeline ID, or a Harness URL").optional(),
+    projectId: z.string().describe("Project identifier").optional(),
+  },
+};
 
-      return {
-        messages: [{
-          role: "user" as const,
-          content: {
-            type: "text" as const,
-            text: `Analyze this failed Harness pipeline execution and provide:
+function handleDebugPipeline({ executionId, projectId }: { executionId?: string; projectId?: string }) {
+  const isUrl = executionId?.startsWith("http");
+  const idParam = isUrl
+    ? `url="${executionId}"`
+    : `execution_id="${executionId}"`;
+
+  return {
+    messages: [{
+      role: "user" as const,
+      content: {
+        type: "text" as const,
+        text: `Analyze this failed Harness pipeline execution and provide:
 
 1. **Root cause** of the failure
 2. **Which step failed** and why
@@ -43,9 +40,28 @@ Then analyze the diagnostic payload:
   - Suggest the user either pass the missing values as \`inputs\` or use \`input_set_ids\` referencing a saved input set
 
 Provide actionable recommendations based on the combined evidence.`,
-          },
-        }],
-      };
+      },
+    }],
+  };
+}
+
+export function registerDebugPipelinePrompt(server: McpServer): void {
+  server.registerPrompt(
+    "debug-pipeline-failure",
+    promptConfig,
+    async (args) => handleDebugPipeline(args),
+  );
+
+  // Alias: ml-infra requests this name via get_prompt("pipeline_error_analysis").
+  // Intentionally omitted from README prompt table — internal lookup alias, not a distinct template.
+  // Tracking: #677 for aligning canonical names across ml-infra and mcp-server.
+  server.registerPrompt(
+    "pipeline_error_analysis",
+    {
+      ...promptConfig,
+      description:
+        "Alias of debug-pipeline-failure — analyze a failed pipeline execution and suggest fixes. Accepts an execution ID, pipeline ID, or Harness URL.",
     },
+    async (args) => handleDebugPipeline(args),
   );
 }
