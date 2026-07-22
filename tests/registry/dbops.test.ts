@@ -806,3 +806,31 @@ describe("database_snapshot_object get", () => {
     expect(call.body).not.toHaveProperty("projectIdentifier");
   });
 });
+
+describe("database_changeset_existence get", () => {
+  it("passes changeset id body without scope injection", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      existence: { "add-users-email-column": false, "create-orders-index": true },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_changeset_existence", "get", {
+      org_id: "default",
+      project_id: "test-project",
+      dbschema_id: "my_schema",
+      changeset_ids: ["add-users-email-column", "create-orders-index"],
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe(
+      "/dbops/v1/orgs/default/projects/test-project/dbschema/my_schema/changesets/existence",
+    );
+    expect(call.body).toEqual({
+      changeSets: [{ id: "add-users-email-column" }, { id: "create-orders-index" }],
+    });
+    expect(call.body).not.toHaveProperty("orgIdentifier");
+    expect(call.body).not.toHaveProperty("projectIdentifier");
+  });
+});
