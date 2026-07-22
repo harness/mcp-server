@@ -155,6 +155,10 @@ const VALID_GROUP_BY_FIELDS = [
   "region", "awsUsageaccountid", "awsServicecode", "awsBillingEntity",
   "awsInstancetype", "awsLineItemType", "awspayeraccountid", "awsUsageType",
   "cloudProvider", "none", "product",
+  // GenAI / AI (identifier "AI") — drill-down dimensions for the DEFAULT "GenAI"
+  // perspective (providers: Anthropic, Cursor, Devin, OpenAI).
+  "genAIModel", "genAIProvider", "genAIUsageType", "genAIPrincipal",
+  "genAIPrincipalId", "genAISubAccountId", "genAISubProvider",
 ] as const;
 
 const OUTPUT_FIELDS: Record<string, Record<string, string>> = {
@@ -169,6 +173,17 @@ const OUTPUT_FIELDS: Record<string, Record<string, string>> = {
   cloudProvider:       { fieldId: "cloudProvider",        fieldName: "Cloud Provider", identifier: "COMMON", identifierName: "Common" },
   none:                { fieldId: "none",                 fieldName: "None",           identifier: "COMMON", identifierName: "Common" },
   product:             { fieldId: "product",              fieldName: "Product",        identifier: "COMMON", identifierName: "Common" },
+  // GenAI / AI dimensions — identifier "AI". fieldName values match the CCM
+  // perspective UI (Model, Provider, Token Type, Principal, …). Without these
+  // entries buildGroupBy() falls through to LABEL_V2 and returns a single
+  // "No <field>" bucket, since the raw string isn't a real label key.
+  genAIModel:          { fieldId: "genAIModel",          fieldName: "Model",          identifier: "AI",     identifierName: "AI" },
+  genAIProvider:       { fieldId: "genAIProvider",       fieldName: "Provider",       identifier: "AI",     identifierName: "AI" },
+  genAIUsageType:      { fieldId: "genAIUsageType",      fieldName: "Token Type",     identifier: "AI",     identifierName: "AI" },
+  genAIPrincipal:      { fieldId: "genAIPrincipal",      fieldName: "Principal",      identifier: "AI",     identifierName: "AI" },
+  genAIPrincipalId:    { fieldId: "genAIPrincipalId",    fieldName: "Principal Id",   identifier: "AI",     identifierName: "AI" },
+  genAISubAccountId:   { fieldId: "genAISubAccountId",   fieldName: "Sub Account ID", identifier: "AI",     identifierName: "AI" },
+  genAISubProvider:    { fieldId: "genAISubProvider",    fieldName: "Sub Provider",   identifier: "AI",     identifierName: "AI" },
 };
 
 /**
