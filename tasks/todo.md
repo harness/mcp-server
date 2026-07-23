@@ -6,7 +6,7 @@
 - [x] Implement a minimal fix only if a critical bug is proven
 - [x] Commit and push any fix before running verification
 - [x] Validate the fix
-- [ ] Open a PR and report the outcome in Slack
+- [x] Open a PR and report the outcome in Slack
 
 ### Plan
 - Compare current main history with the previous investigation window and prioritize newly landed behavioral changes.
