@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Execution Log Identity Must Survive Response Reshaping
+- **Issue**: Failed pipeline logs were keyed by the display pair `stage/step`, then reused in node-ID-keyed all-step output through an identifier suffix match. Matrix and loop nodes can share both display identifiers, causing one log to overwrite another and be attributed to the wrong execution node.
+- **Fix**: Carry the execution node ID through failed-node discovery, preserve colliding display keys, and keep an internal map keyed by the unique `logBaseKey` for merges and deduplication.
+- **Rule**: When fetching or reshaping execution logs, use stable execution identity (`nodeId` or `logBaseKey`) internally. Human-readable stage/step names are presentation only and must never drive deduplication or attribution.
+
 ## Scope Defaults and Remote Branch Context Must Stay End-to-End
 - **Issue**: Multi-scope path builders can bypass the registry's usual config defaulting when they construct path segments themselves. For IDP entities, list used configured `HARNESS_ORG` / `HARNESS_PROJECT`, while get/update path construction fell back to account scope, so a list -> update flow could target a different entity with the same kind/id.
 - **Fix**: Path builders that encode scope in the path must accept `PathBuilderConfig`, honor explicit `resource_scope`, use configured org/project defaults when scope is omitted and the resource's list/default behavior does so, and clear unused scope fields so query params match the path.

@@ -4,13 +4,20 @@
 - [x] Baseline branch state and identify recent behavioral commits
 - [x] Review high-blast-radius diffs and trace concrete trigger scenarios
 - [x] Implement a minimal fix only if a critical bug is proven
-- [ ] Commit and push any fix before running verification
-- [ ] Validate the fix, open a PR, and report the outcome in Slack
+- [x] Commit and push any fix before running verification
+- [x] Validate the fix
+- [ ] Open a PR and report the outcome in Slack
 
 ### Plan
 - Compare current main history with the previous investigation window and prioritize newly landed behavioral changes.
 - Trace candidate issues through public tool handlers, registry dispatch, and downstream request/response shaping.
 - Require a concrete severe trigger and a narrow high-confidence regression test before changing runtime code.
+
+### Review
+- Found a failed-log attribution bug in the new `include_all_step_logs` diagnosis path. Failed logs were first keyed by the display pair `stage/identifier`, which collides for matrix and loop nodes, then merged into node-ID-keyed results via an identifier suffix search.
+- A pipeline with two failed matrix nodes sharing identifier `run` could overwrite one `failed_step_logs` entry and attach the surviving log to both nodes. The pipeline summarizer treats `all_step_logs` as its single source of truth, so it could report the wrong failure evidence for a deployment or test shard.
+- Fixed failed-node tracking to retain node IDs, preserve colliding failed-log outputs, and merge already-fetched content by each node's unique `logBaseKey`.
+- Verification passed: focused pipeline diagnosis tests (47), `pnpm typecheck`, `pnpm build`, full `pnpm test` (120 files / 2615 tests), `pnpm standards:check` (80 tests), `pnpm docs:check`, and `git diff --check`.
 
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
