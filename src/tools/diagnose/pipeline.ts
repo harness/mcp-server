@@ -95,6 +95,7 @@ interface StageSummary {
 }
 
 interface FailedNodeDetail {
+  node_id: string;
   stage: string;
   step: string;
   failure_message: string;
@@ -231,7 +232,7 @@ function findFailedNodes(nodeMap: Record<string, ExecGraphNode>): FailedNodeDeta
   const stepNodes: FailedNodeDetail[] = [];
   const stageNodes: FailedNodeDetail[] = [];
 
-  for (const node of Object.values(nodeMap)) {
+  for (const [nodeId, node] of Object.entries(nodeMap)) {
     if (node.status !== "Failed" && node.status !== "Errored" && node.status !== "Aborted") continue;
 
     const msg = node.failureInfo?.message;
@@ -248,6 +249,7 @@ function findFailedNodes(nodeMap: Record<string, ExecGraphNode>): FailedNodeDeta
     const delegate = node.delegateInfoList?.[0]?.name;
 
     const detail: FailedNodeDetail = {
+      node_id: nodeId,
       stage: stageId,
       step: node.identifier ?? node.name ?? "unknown",
       failure_message: msg,
@@ -614,7 +616,8 @@ export const pipelineHandler: DiagnoseHandler = {
     // avoid double-fetching the same log if step_id points to a failed step.
     // Must use `capped` (the actually-fetched subset), not the full `failedNodes`,
     // so that truncated failures don't incorrectly block the requested_step_log fetch.
-    let fetchedFailedLogKeys = new Set<string>();
+    const fetchedFailedLogKeys = new Set<string>();
+    const fetchedFailedLogs = new Map<string, unknown>();
 
     if (includeLogs && failedNodes.length > 0) {
       await sendProgress(extra, currentStep, totalSteps, "Fetching failed step logs...");
@@ -634,7 +637,7 @@ export const pipelineHandler: DiagnoseHandler = {
       // Fall back to 3 if the config field is missing (e.g. older callers
       // constructing Config manually in tests); Zod gives 3 in production.
       const logFetchConcurrency = config.HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY ?? 3;
-      const logEntries: { key: string; value: unknown }[] = [];
+      const logEntries: { key: string; nodeId: string; logKey?: string; value: unknown }[] = [];
       for (let i = 0; i < capped.length; i += logFetchConcurrency) {
         signal?.throwIfAborted();
         const batch = capped.slice(i, i + logFetchConcurrency);
@@ -642,7 +645,13 @@ export const pipelineHandler: DiagnoseHandler = {
           batch.map(async (fn) => {
             const key = `${fn.stage}/${fn.step}`;
             const prefix = fn.log_key;
-            if (!prefix) return { key, value: { error: "No log key available for this step" } };
+            if (!prefix) {
+              return {
+                key,
+                nodeId: fn.node_id,
+                value: { error: "No log key available for this step" },
+              };
+            }
             fetchedFailedLogKeys.add(prefix);
             try {
               const logValue = await resolveDiagnoseLog(client, prefix, {
@@ -650,10 +659,10 @@ export const pipelineHandler: DiagnoseHandler = {
                 returnDownloadUrl,
                 logSnippetLines,
               });
-              return { key, value: logValue };
+              return { key, nodeId: fn.node_id, logKey: prefix, value: logValue };
             } catch (err) {
               log.warn("Failed to fetch step logs", { step: fn.step, error: String(err) });
-              return { key, value: { error: String(err) } };
+              return { key, nodeId: fn.node_id, logKey: prefix, value: { error: String(err) } };
             }
           }),
         );
@@ -662,7 +671,13 @@ export const pipelineHandler: DiagnoseHandler = {
 
       const stepLogs: Record<string, unknown> = {};
       for (const entry of logEntries) {
-        stepLogs[entry.key] = entry.value;
+        if (entry.logKey) {
+          fetchedFailedLogs.set(entry.logKey, entry.value);
+        }
+        const outputKey = Object.hasOwn(stepLogs, entry.key)
+          ? `${entry.key} [${entry.nodeId}]`
+          : entry.key;
+        stepLogs[outputKey] = entry.value;
       }
       diagnostic.failed_step_logs = stepLogs;
     }
@@ -843,16 +858,10 @@ export const pipelineHandler: DiagnoseHandler = {
         if (!node.logBaseKey) {
           entry.note = "No log available for this step";
         } else if (fetchedFailedLogKeys.has(node.logBaseKey)) {
-          // Already fetched — find the log content from failed_step_logs
-          const failedLogs = diagnostic.failed_step_logs as Record<string, unknown> | undefined;
-          const failedEntry = failedLogs
-            ? Object.values(failedLogs).find((v) => {
-                const rec = v as Record<string, unknown> | undefined;
-                return rec && typeof v === "string"
-                  ? false
-                  : (v as Record<string, unknown>)?.step_id === nodeId;
-              }) ?? Object.entries(failedLogs).find(([key]) => key.endsWith(`/${node.identifier ?? node.name}`))?.[1]
-            : undefined;
+          // Already fetched — use the log key rather than the display name so
+          // matrix/loop steps with duplicate identifiers cannot receive each
+          // other's logs.
+          const failedEntry = fetchedFailedLogs.get(node.logBaseKey);
           if (failedEntry && typeof failedEntry === "string") {
             entry.log = failedEntry;
           } else if (failedEntry && typeof failedEntry === "object") {
