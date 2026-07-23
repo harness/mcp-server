@@ -833,4 +833,87 @@ describe("database_changeset_existence get", () => {
     expect(call.body).not.toHaveProperty("orgIdentifier");
     expect(call.body).not.toHaveProperty("projectIdentifier");
   });
+
+  it("accepts changeSetIds alias and trims whitespace", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ existence: { "my-id": true } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_changeset_existence", "get", {
+      org_id: "default",
+      project_id: "test-project",
+      dbschema_id: "my_schema",
+      changeSetIds: ["  my-id  "],
+    });
+
+    expect(mockRequest.mock.calls[0][0].body).toEqual({
+      changeSets: [{ id: "my-id" }],
+    });
+  });
+
+  it("rejects missing or empty changeset_ids before calling the API", async () => {
+    const registry = new Registry(makeConfig());
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        org_id: "default",
+        project_id: "test-project",
+        dbschema_id: "my_schema",
+      }),
+    ).rejects.toThrow(/changeset_ids is required/);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        org_id: "default",
+        project_id: "test-project",
+        dbschema_id: "my_schema",
+        changeset_ids: [],
+      }),
+    ).rejects.toThrow(/changeset_ids is required/);
+
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
+  it("rejects more than 100 ids per request", async () => {
+    const registry = new Registry(makeConfig());
+    const client = makeClient(vi.fn());
+    const ids = Array.from({ length: 101 }, (_, i) => `id-${i}`);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        org_id: "default",
+        project_id: "test-project",
+        dbschema_id: "my_schema",
+        changeset_ids: ids,
+      }),
+    ).rejects.toThrow(/at most 100 ids/);
+
+    expect(client.request).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-string or blank changeset_ids entries", async () => {
+    const registry = new Registry(makeConfig());
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        org_id: "default",
+        project_id: "test-project",
+        dbschema_id: "my_schema",
+        changeset_ids: ["valid", ""],
+      }),
+    ).rejects.toThrow(/each changeset_ids entry must be a non-empty string/);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        org_id: "default",
+        project_id: "test-project",
+        dbschema_id: "my_schema",
+        changeset_ids: ["valid", 42],
+      }),
+    ).rejects.toThrow(/each changeset_ids entry must be a non-empty string/);
+
+    expect(client.request).not.toHaveBeenCalled();
+  });
 });

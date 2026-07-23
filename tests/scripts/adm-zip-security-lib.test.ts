@@ -8,6 +8,7 @@ import {
   findOnnxRuntimeNodeDirs,
   isSecureAdmZipVersion,
   listInsecureAdmZipInstalls,
+  readAdmZipVersion,
   SECURE_ADM_ZIP_VERSION,
 } from "../../scripts/adm-zip-security-lib.mjs";
 
@@ -92,5 +93,15 @@ describe("adm-zip-security-lib", () => {
     });
     expect(result.warnings.length).toBeGreaterThan(0);
     expect(listInsecureAdmZipInstalls(root)).toHaveLength(1);
+  });
+
+  it("readAdmZipVersion returns version from package.json", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-lib-"));
+    tempDirs.push(root);
+    const admZipDir = join(root, "node_modules", "adm-zip");
+    writeAdmZip(admZipDir, "0.6.0");
+
+    expect(readAdmZipVersion(admZipDir)).toBe("0.6.0");
+    expect(readAdmZipVersion(join(root, "missing"))).toBeNull();
   });
 });
