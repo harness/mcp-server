@@ -4,7 +4,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 // snake_case id required by ml-infra (prompt_ref: "pipeline_summarizer")
 const PIPELINE_SUMMARIZER_PROMPT = {
   description:
-    "Fetch and summarize ALL step logs from a pipeline execution. Returns a table with every step's name, status, duration, and a log-based summary of what happened.",
+    "Analyze a pipeline execution — provides root cause analysis for failures and output summaries for successful steps. Supports whole-pipeline and single-step analysis.",
   argsSchema: {
     executionId: z
       .string()
@@ -33,9 +33,9 @@ export function registerSummarizePipelinePrompt(server: McpServer): void {
             role: "user" as const,
             content: {
               type: "text" as const,
-              text: `You are a pipeline execution summarizer for Harness CI/CD pipelines (IACM, CCM, CD, CI, STO).
+              text: `You are a pipeline execution analyzer for Harness CI/CD pipelines (IACM, CCM, CD, CI, STO).
 
-Your job is to summarize EVERY step in the execution by extracting concrete outputs from the logs. Do NOT skip any steps.
+Your job is to analyze every step in the execution: diagnose failures with root cause analysis and summarize outputs for successful steps.
 
 ## Steps
 
@@ -43,25 +43,38 @@ Your job is to summarize EVERY step in the execution by extracting concrete outp
    - Note: harness_diagnose rejects non-terminal executions (Running, Queued). For in-progress runs, use harness_get with resource_type="execution" and resource_id=<execution_id> instead.
    - The response contains \`all_step_logs\` (keyed by node ID) with logs for every step. Steps without available logs will have a \`note\` field instead — use their name/status/duration from the execution tree.
    - If any steps also appear in \`failed_step_logs\`, their log content is already merged into \`all_step_logs\` — use \`all_step_logs\` as the single source of truth.
-2. For each step in the all_step_logs response, extract the specific outputs based on step type (see "What to Extract" below).
-3. If there are more than 10 steps, present results in batches of 3 rows at a time so the user sees partial progress instead of waiting for the full table. After each batch, continue immediately with the next batch until all steps are covered.
-4. Present results as the table below. DO NOT skip any steps — summarize every single one, even if the step has no log (use status and duration).
 
-## What to Extract (by step type)
+2. Detect analysis mode from the response:
+   - If the response contains \`requested_step_log\` → **single-step mode**: analyze only that step in depth.
+   - If the response contains \`all_step_logs\` → **whole-pipeline mode**: analyze every step.
 
-For each step, look for these concrete outputs in the logs:
+3. For each step, branch analysis by status:
 
-- **IACM / Terraform**: Resources created/changed/destroyed (e.g. "3 added, 1 changed, 0 destroyed"), resource names/IDs provisioned, state file changes, plan drift detected
-- **CD / Deploy**: Service deployed, environment/namespace, image tag or artifact version, replicas, rollback info, health check results
-- **CI / Build**: Image built and pushed (repo:tag), build duration, cache hit/miss, test results (passed/failed/skipped counts), artifacts produced
-- **STO / Security**: Vulnerabilities found (critical/high/medium/low counts), policy violations, exemptions applied, scan tool used
-- **CCM / Cost**: Budget alerts, anomalies detected, recommendations applied, savings realized
-- **Approval**: Who approved/rejected, how long it waited
-- **Plugin / Run steps**: Command executed, exit code, key output lines (errors, warnings, final status messages)
+   **Failed / Errored:**
+   - Extract the error message and stack trace from logs
+   - Identify the root cause (misconfiguration, timeout, dependency failure, permission issue, resource limit, etc.)
+   - Provide a suggested fix with specific actions
+   - Note if this is a child pipeline failure — follow the chain to the actual failing step
 
-If a step's log has no meaningful output (e.g. initialization), note what it did briefly (e.g. "Initialized workspace", "Pulled image X").
+   **Success:**
+   - Extract concrete outputs based on step type:
+     - **IACM / Terraform**: Resources created/changed/destroyed, resource names/IDs, state drift
+     - **CD / Deploy**: Service, environment/namespace, image tag, replicas, health check result
+     - **CI / Build**: Image built (repo:tag), test results (passed/failed/skipped), artifacts produced
+     - **STO / Security**: Vulnerability counts (critical/high/medium/low), policy violations, scan tool
+     - **CCM / Cost**: Budget alerts, anomalies, recommendations, savings
+     - **Approval**: Who approved/rejected, wait duration
+     - **Plugin / Run steps**: Command executed, exit code, key output lines
 
-## Required Output
+   **Skipped:**
+   - Note as skipped with the reason (conditional skip, previous stage failure, manual intervention required)
+
+## Required Output (whole-pipeline mode)
+
+### Summary
+A 1–2 sentence executive summary of the entire execution outcome. Examples:
+- Failed: "Pipeline failed at stage Deploy / step rollout-prod because the Kubernetes namespace 'prod-us' hit its resource quota. Fix: increase CPU limits on the namespace or scale down existing pods."
+- Success: "Pipeline deployed service cart-api v2.4.1 to prod-us (3 replicas healthy), built and pushed image in 2m14s, passed 847 tests with 0 vulnerabilities."
 
 ### Execution Overview
 - **Pipeline**: [name]
@@ -70,18 +83,19 @@ If a step's log has no meaningful output (e.g. initialization), note what it did
 - **Duration**: [total wall-clock time]
 - **Trigger**: [manual / webhook / cron / API]
 
-### Step Summary
+### Step Analysis
 
-| Step Name | Status | Duration | What Happened (outputs from logs) |
-|-----------|--------|----------|-----------------------------------|
-| ...       | ...    | ...      | Concrete outputs: what was provisioned/deployed/built/scanned |
+| Step Name | Status | Duration | Analysis |
+|-----------|--------|----------|----------|
+| ...       | Failed | ...      | **Root cause**: ... **Fix**: ... |
+| ...       | Success | ...     | Concrete outputs from logs |
+| ...       | Skipped | ...     | Reason skipped |
 
-### Key Observations
-- Resources provisioned or modified (total count across all steps)
-- Deployments: services, environments, artifact versions
-- Security: vulnerability counts, policy pass/fail
-- Performance bottlenecks or unusually slow steps
-- Errors or warnings worth investigating`,
+### Key Findings
+- **Failures**: Root cause summary, affected steps, suggested fixes
+- **Outputs**: Resources provisioned/deployed/built/scanned (aggregated)
+- **Performance**: Bottlenecks or unusually slow steps
+- **Warnings**: Issues worth investigating even in successful steps`,
             },
           },
         ],

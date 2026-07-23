@@ -483,13 +483,17 @@ export const pipelineHandler: DiagnoseHandler = {
 
     const includeYaml = args.include_yaml ?? !isSummary;
     const includeLogs = args.include_logs ?? !isSummary;
-    const includeAllStepLogs = args.include_all_step_logs === true;
     const returnDownloadUrl = args.return_download_url === true;
     const logSnippetLines = asNumber(args.log_snippet_lines) ?? 120;
     const maxFailedSteps = asNumber(args.max_failed_steps) ?? 5;
     const maxAllStepLogs = asNumber(args.max_all_step_logs) ?? 25;
 
     const hasRequestedStep = !!asString(input.step_id);
+    // Suppress all_step_logs when a specific step is requested — the caller
+    // wants single-step analysis; returning all logs would be wasteful and
+    // could confuse downstream consumers into whole-pipeline mode.
+    const includeAllStepLogs = args.include_all_step_logs === true && !hasRequestedStep;
+
     let totalSteps = 1;
     if (includeYaml) totalSteps++;
     if (includeLogs) totalSteps++;
