@@ -228,13 +228,14 @@ export const gitopsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description:
             "Delete a GitOps agent. The agent identifier in the path is the raw identifier — NOT scope-prefixed.\n\n" +
+            "resource_scope is required because the same raw agent identifier can exist at account, org, and project scope.\n" +
             "SCOPE DETERMINES WHICH ORG/PROJECT PARAMS ARE INJECTED:\n" +
             "  Account-level agent: resource_scope='account' — omit org_id and project_id\n" +
             "    harness_delete(resource_type='gitops_agent', resource_id='myagent', resource_scope='account')\n" +
             "  Org-level agent:     resource_scope='org'     — org_id is injected, no project_id\n" +
             "    harness_delete(resource_type='gitops_agent', resource_id='myagent', resource_scope='org')\n" +
             "  Project-level agent: resource_scope='project' — both org_id and project_id are injected\n" +
-            "    harness_delete(resource_type='gitops_agent', resource_id='myagent')\n\n" +
+            "    harness_delete(resource_type='gitops_agent', resource_id='myagent', resource_scope='project')\n\n" +
             "NOTE: The path identifier is always the raw agent ID (e.g. 'myagent'), never scope-prefixed\n" +
             "(unlike other GitOps APIs where agentIdentifier is prefixed with 'account.', 'org.', etc.).\n" +
             "The backend derives the scope from the presence of orgIdentifier and projectIdentifier in the request.",
@@ -250,12 +251,12 @@ export const gitopsToolset: ToolsetDefinition = {
               },
               {
                 name: "resource_scope",
-                required: false,
+                required: true,
                 description:
-                  "Controls which scope params are injected. " +
+                  "Required top-level harness_delete field that controls which scope params are injected. " +
                   "'account' — account-level agent (no org/project). " +
                   "'org' — org-level agent (orgIdentifier injected). " +
-                  "'project' — project-level agent (orgIdentifier + projectIdentifier injected, default when omitted).",
+                  "'project' — project-level agent (orgIdentifier + projectIdentifier injected).",
               },
             ],
           } satisfies ParamsSchema,
