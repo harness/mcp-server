@@ -1,5 +1,22 @@
 # Harness MCP Server — Task Tracking
 
+## Coding Standards Compliance Review (2026-07-19)
+- [x] Audit codebase against docs/coding-standards.md
+- [x] Run pnpm standards:check and full test suite
+- [x] Cherry-pick strengthened guardrails (security + multi-scope pathBuilders)
+- [x] Commit, push, and open PR
+
+### Plan
+- Compare user-provided standards snapshot against canonical docs/coding-standards.md (11 tools incl. harness_schema, Zod v4, registerTool).
+- Rely on existing tests/coding-standards/*.test.ts guardrails; add missing §4/§9 enforcement from prior branch.
+- Verify no runtime code changes needed — standards compliance is already enforced in CI.
+
+### Review
+- Baseline `pnpm standards:check` passed (80 tests) before adding strengthened guardrails.
+- Cherry-picked `e92468da`: security.test.ts (§9 secret metadata, RateLimiter, redaction), multi-scope-pathbuilders.test.ts (§4 PathBuilderConfig), docs-consistency extensions (registerTool, pathBuilder docs, AGENTS.md alignment), and multi-scope pathBuilder docs in coding-standards.md.
+- User-provided standards snapshot is outdated vs canonical: 10 tools (actual 11 incl. harness_schema), Zod v3 (actual v4), server.tool() (actual registerTool()).
+- Verification passed: `pnpm standards:check` (12 files / 92 tests), `pnpm typecheck`, `pnpm build`, `pnpm test` (121 files / 2619 tests).
+
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
 - [x] Update the release metadata version test
