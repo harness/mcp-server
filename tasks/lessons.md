@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Historical Test Helpers Must Be Revalidated Against Current Runtime Architecture
+- **Issue**: Issue #119 and its original `fullRegistryV0` / `fullRegistryV1` helpers were created when `HARNESS_PIPELINE_VERSION` filtered one pipeline type out of the Registry. A later change made `pipeline` and `pipeline_v1` simultaneously available and reduced the config to a default preference, but the first implementation treated the stale helpers as two real variants, duplicated every invariant over identical objects, inferred opt-in resources from default/full set differences, and used a hand-built array instead of an end-to-end Registry fixture.
+- **Fix**: Trace current constructor behavior and relevant history before preserving an old helper. Use one full Registry for the current architecture, derive opt-in coverage from `ToolsetDefinition.optIn`, and inject malformed regression definitions through `RegistryOptions.additionalToolsets` so fixtures traverse the same Registry and validator path as production definitions.
+- **Rule**: When an issue references historical configuration variants, verify that the config still changes runtime structure on current main. Regression tests must enter through the same construction and iteration path they claim to protect, and environment-specific full-suite failures should be compared against a clean-main baseline before being attributed to the diff.
+
 ## Scope Defaults and Remote Branch Context Must Stay End-to-End
 - **Issue**: Multi-scope path builders can bypass the registry's usual config defaulting when they construct path segments themselves. For IDP entities, list used configured `HARNESS_ORG` / `HARNESS_PROJECT`, while get/update path construction fell back to account scope, so a list -> update flow could target a different entity with the same kind/id.
 - **Fix**: Path builders that encode scope in the path must accept `PathBuilderConfig`, honor explicit `resource_scope`, use configured org/project defaults when scope is omitted and the resource's list/default behavior does so, and clear unused scope fields so query params match the path.
