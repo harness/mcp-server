@@ -1323,6 +1323,54 @@ describe("pipelineHandler", () => {
       expect(Object.keys(logs)).toHaveLength(2);
     });
 
+    it("preserves and correctly merges failed logs for duplicate step identifiers", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+      mockFn.mockImplementation(async (_client: unknown, prefix: string) => `log for ${prefix}`);
+
+      const exec = makeExecution({
+        status: "Failed",
+        stages: [{ id: "s1", name: "S1", status: "Failed", steps: [
+          { id: "matrix-1", name: "Run 1", status: "Failed" },
+          { id: "matrix-2", name: "Run 2", status: "Failed" },
+        ]}],
+        nodeMapEntries: {
+          "matrix-1": {
+            uuid: "matrix-1", identifier: "run", name: "Run",
+            baseFqn: "pipeline.stages.s1.spec.execution.steps.matrix-1",
+            status: "Failed", failureInfo: { message: "first failed" },
+            logBaseKey: "log/matrix-1", startTs: NOW, endTs: NOW + 5000,
+          },
+          "matrix-2": {
+            uuid: "matrix-2", identifier: "run", name: "Run",
+            baseFqn: "pipeline.stages.s1.spec.execution.steps.matrix-2",
+            status: "Failed", failureInfo: { message: "second failed" },
+            logBaseKey: "log/matrix-2", startTs: NOW + 5000, endTs: NOW + 10000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: false, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      expect(mockFn).toHaveBeenCalledTimes(2);
+      expect(Object.values(result.failed_step_logs as Record<string, unknown>)).toEqual([
+        "log for log/matrix-1",
+        "log for log/matrix-2",
+      ]);
+
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(logs["matrix-1"].log).toBe("log for log/matrix-1");
+      expect(logs["matrix-2"].log).toBe("log for log/matrix-2");
+    });
+
     it("includes steps without logBaseKey with a note", async () => {
       const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
       (resolveLogContent as ReturnType<typeof vi.fn>).mockResolvedValue("resolved log line 1\nresolved log line 2");
