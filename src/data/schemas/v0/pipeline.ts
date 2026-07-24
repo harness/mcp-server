@@ -55279,6 +55279,9 @@ const schema: Record<string, any> = {
                   },
                   "instructions": {
                     "type": "string"
+                  },
+                  "llmConnectorRef": {
+                    "type": "string"
                   }
                 }
               }
@@ -55313,6 +55316,9 @@ const schema: Record<string, any> = {
                 "type": "string"
               },
               "instructions": {
+                "type": "string"
+              },
+              "llmConnectorRef": {
                 "type": "string"
               }
             }
@@ -83604,6 +83610,18 @@ const schema: Record<string, any> = {
                 ]
               },
               "disableGitRestraint": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "ignoreMissingValues": {
                 "oneOf": [
                   {
                     "type": "boolean"

@@ -220,4 +220,54 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream llmConnectorRef on IACMRemediationAgentInfo in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const iacmSteps = defs.pipeline.steps.iacm as Record<string, unknown>;
+
+      expect(iacmSteps).toHaveProperty("IACMRemediationAgentStepNode");
+      expect(iacmSteps).toHaveProperty("IACMRemediationAgentInfo");
+
+      const stepNode = iacmSteps.IACMRemediationAgentStepNode as {
+        properties: { type: { enum: string[] } };
+      };
+      expect(stepNode.properties.type.enum).toContain("IACMRemediationAgent");
+
+      const agentInfo = iacmSteps.IACMRemediationAgentInfo as {
+        properties: Record<string, { type?: string }>;
+      };
+      expect(agentInfo.properties).toHaveProperty("llmConnectorRef");
+      expect(agentInfo.properties.llmConnectorRef.type).toBe("string");
+      expect(agentInfo.properties).toHaveProperty("instructions");
+      expect(agentInfo.properties).toHaveProperty("remediationType");
+    }
+  });
+
+  it("includes upstream ignoreMissingValues on UpdateReleaseRepoStepInfo in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const cdSteps = defs.pipeline.steps.cd as Record<string, unknown>;
+
+      expect(cdSteps).toHaveProperty("UpdateReleaseRepoStepNode");
+      expect(cdSteps).toHaveProperty("UpdateReleaseRepoStepInfo");
+
+      const stepNode = cdSteps.UpdateReleaseRepoStepNode as {
+        properties: { type: { enum: string[] } };
+      };
+      expect(stepNode.properties.type.enum).toContain("GitOpsUpdateReleaseRepo");
+
+      const stepInfo = cdSteps.UpdateReleaseRepoStepInfo as {
+        properties: Record<string, { oneOf?: Array<{ type?: string; pattern?: string }> }>;
+      };
+      expect(stepInfo.properties).toHaveProperty("ignoreMissingValues");
+      const ignoreMissing = stepInfo.properties.ignoreMissingValues;
+      expect(ignoreMissing.oneOf).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ type: "boolean" }),
+          expect.objectContaining({ type: "string", pattern: "(<\\+.+>.*)" }),
+        ]),
+      );
+    }
+  });
 });
