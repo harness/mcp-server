@@ -388,22 +388,20 @@ describe("harness_schema nested static definition lookup", () => {
     expect(schema.properties?.llmConnectorRef?.type).toBe("string");
   });
 
-  it("resolves newly synced UpdateReleaseRepoStepInfo with ignoreMissingValues from v0 pipeline", async () => {
+  it("resolves newly synced UpdateReleaseRepoStepNode from v0 pipeline", async () => {
     const server = makeMcpServer();
     registerSchemaTool(server, undefined, undefined);
     const result = await server.call("harness_schema", {
       resource_type: "pipeline",
-      path: "UpdateReleaseRepoStepInfo",
+      path: "UpdateReleaseRepoStepNode",
     });
     const parsed = parseResult(result) as Record<string, unknown>;
 
     expect(result.isError).toBeFalsy();
-    expect(parsed.path).toBe("steps.cd.UpdateReleaseRepoStepInfo");
-    expect(parsed.requested_path).toBe("UpdateReleaseRepoStepInfo");
-    const schema = parsed.schema as {
-      properties?: Record<string, { oneOf?: Array<{ type?: string }> }>;
-    };
-    expect(schema.properties?.ignoreMissingValues?.oneOf).toHaveLength(2);
+    expect(parsed.path).toBe("steps.cd.UpdateReleaseRepoStepNode");
+    expect(parsed.requested_path).toBe("UpdateReleaseRepoStepNode");
+    const schema = parsed.schema as { properties?: { type?: { enum?: string[] } } };
+    expect(schema.properties?.type?.enum).toContain("GitOpsUpdateReleaseRepo");
   });
 
   it("resolves IdentitiesConfig from v0 pipeline common definitions", async () => {
