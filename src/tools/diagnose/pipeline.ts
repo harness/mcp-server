@@ -282,6 +282,11 @@ function findFailedNodes(nodeMap: Record<string, ExecGraphNode>): FailedNodeDeta
   return stepNodes.length > 0 ? stepNodes : stageNodes;
 }
 
+function isExecutionStepNode(node: ExecGraphNode): boolean {
+  const fqn = node.baseFqn;
+  return !fqn || fqn.includes(".steps.");
+}
+
 function findChildPipelineRef(
   nodeMap: Record<string, ExecGraphNode>,
 ): { executionId: string; orgId: string; projectId: string } | undefined {
@@ -792,9 +797,12 @@ export const pipelineHandler: DiagnoseHandler = {
     if (includeAllStepLogs && graphNodeMap && !diagnostic.all_step_logs) {
       await sendProgress(extra, currentStep, totalSteps, "Fetching all step logs...");
 
-      // Collect all nodes sorted by startTs. Include nodes without logBaseKey
-      // so the summary covers every step even if no log is available.
+      // Collect execution step nodes sorted by startTs. The graph also contains
+      // pipeline/stage wrappers, which must not consume the step safety cap.
+      // Keep nodes without a baseFqn for compatibility with older API shapes.
+      // Include steps without logBaseKey so the summary still covers them.
       const allNodesFull = Object.entries(graphNodeMap)
+        .filter(([, node]) => isExecutionStepNode(node))
         .sort((a, b) => (a[1].startTs ?? 0) - (b[1].startTs ?? 0));
 
       const allNodes = maxAllStepLogs > 0 ? allNodesFull.slice(0, maxAllStepLogs) : allNodesFull;
