@@ -1636,5 +1636,55 @@ describe("pipelineHandler", () => {
       const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
       expect(logs["step-a"].duration_ms).toBe(45000);
     });
+
+    it("does not fetch all_step_logs when step_id is present (single-step mode)", async () => {
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{
+          id: "build",
+          name: "Build",
+          status: "Success",
+          steps: [
+            { id: "step-a", name: "Init", status: "Success" },
+            { id: "step-b", name: "Compile", status: "Success" },
+          ],
+        }],
+        nodeMapEntries: {
+          "step-a": {
+            uuid: "step-a",
+            identifier: "init",
+            name: "Init",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-a",
+            status: "Success",
+            logBaseKey: "log/step-a",
+            startTs: NOW,
+            endTs: NOW + 10000,
+          },
+          "step-b": {
+            uuid: "step-b",
+            identifier: "compile",
+            name: "Compile",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-b",
+            status: "Success",
+            logBaseKey: "log/step-b",
+            startTs: NOW + 10000,
+            endTs: NOW + 30000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001", step_id: "step-a" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      expect(result.all_step_logs).toBeUndefined();
+      expect(result.requested_step_log).toBeDefined();
+      expect((result.requested_step_log as { step_id: string }).step_id).toBe("step-a");
+    });
   });
 });
