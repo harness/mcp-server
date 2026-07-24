@@ -8,7 +8,9 @@ import {
   findOnnxRuntimeNodeDirs,
   isSecureAdmZipVersion,
   listInsecureAdmZipInstalls,
+  readAdmZipVersion,
   SECURE_ADM_ZIP_VERSION,
+  validateNpmShrinkwrapMetadata,
 } from "../../scripts/adm-zip-security-lib.mjs";
 
 function writePackage(root: string, name: string, version = "1.0.0") {
@@ -92,5 +94,82 @@ describe("adm-zip-security-lib", () => {
     });
     expect(result.warnings.length).toBeGreaterThan(0);
     expect(listInsecureAdmZipInstalls(root)).toHaveLength(1);
+  });
+
+  it("readAdmZipVersion returns version from package.json", () => {
+    const root = mkdtempSync(join(tmpdir(), "adm-zip-lib-"));
+    tempDirs.push(root);
+    const admZipDir = join(root, "node_modules", "adm-zip");
+    writeAdmZip(admZipDir, "0.6.0");
+
+    expect(readAdmZipVersion(admZipDir)).toBe("0.6.0");
+    expect(readAdmZipVersion(join(root, "missing"))).toBeNull();
+  });
+});
+
+describe("validateNpmShrinkwrapMetadata", () => {
+  const basePkg = {
+    name: "harness-mcp-v2",
+    version: "3.2.13",
+    dependencies: { "adm-zip": "^0.6.0", zod: "^4.0.0" },
+    optionalDependencies: { "@huggingface/transformers": "^4.2.0" },
+  };
+
+  function makeShrinkwrap(overrides: Record<string, unknown> = {}) {
+    return {
+      packages: {
+        "": {
+          name: basePkg.name,
+          version: basePkg.version,
+          dependencies: basePkg.dependencies,
+          optionalDependencies: basePkg.optionalDependencies,
+        },
+        "node_modules/adm-zip": { version: "0.6.0" },
+        ...overrides,
+      },
+    };
+  }
+
+  it("accepts shrinkwrap that matches package.json with secure adm-zip", () => {
+    expect(validateNpmShrinkwrapMetadata(makeShrinkwrap(), basePkg)).toBeNull();
+  });
+
+  it("rejects missing root package metadata", () => {
+    expect(
+      validateNpmShrinkwrapMetadata({ packages: {} }, basePkg),
+    ).toBe("root package metadata is missing");
+  });
+
+  it("rejects version mismatch", () => {
+    const shrinkwrap = makeShrinkwrap();
+    (shrinkwrap.packages[""] as { version: string }).version = "0.0.0";
+    expect(validateNpmShrinkwrapMetadata(shrinkwrap, basePkg)).toMatch(/root metadata does not match/);
+  });
+
+  it("rejects dependency drift from package.json", () => {
+    const shrinkwrap = makeShrinkwrap();
+    (shrinkwrap.packages[""] as { dependencies: Record<string, string> }).dependencies = {
+      zod: "^4.0.0",
+    };
+    expect(validateNpmShrinkwrapMetadata(shrinkwrap, basePkg)).toBe(
+      "root dependencies do not match package.json",
+    );
+  });
+
+  it("rejects insecure hoisted adm-zip", () => {
+    const shrinkwrap = makeShrinkwrap({
+      "node_modules/adm-zip": { version: "0.5.18" },
+    });
+    expect(validateNpmShrinkwrapMetadata(shrinkwrap, basePkg)).toBe(
+      "hoisted adm-zip is 0.5.18",
+    );
+  });
+
+  it("rejects missing hoisted adm-zip", () => {
+    const shrinkwrap = makeShrinkwrap();
+    delete (shrinkwrap.packages as Record<string, unknown>)["node_modules/adm-zip"];
+    expect(validateNpmShrinkwrapMetadata(shrinkwrap, basePkg)).toBe(
+      "hoisted adm-zip is missing",
+    );
   });
 });
