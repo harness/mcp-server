@@ -1828,6 +1828,25 @@ describe("Registry", () => {
       });
     });
 
+    it("cost_recommendation list maps standard page and size inputs to offset and limit", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        page: 2,
+        size: 50,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body).toEqual({
+        filterType: "CCMRecommendation",
+        minSaving: 0,
+        daysBack: 4,
+        offset: 100,
+        limit: 50,
+      });
+    });
+
     it("cost_recommendation list passes cost_category and cost_buckets as costCategoryDTOs", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
       const client = makeClient(mockRequest);

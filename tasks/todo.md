@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Critical Bug Investigation Automation (2026-07-19)
+- [x] Baseline branch state and identify recent behavioral commits
+- [x] Review high-blast-radius diffs and trace concrete trigger scenarios
+- [x] Implement a minimal fix only if a critical bug is proven
+- [x] Commit and push before running verification if code changes are made
+- [x] Validate the fix and prepare the pull request and Slack report
+
+### Plan
+- Treat commits after the prior 2026-07-13 investigation as the primary window.
+- Prioritize new write-safety/config behavior and CCM recommendation filtering, then inspect adjacent caller and dispatch paths.
+- Require a concrete severe trigger and a narrow high-confidence fix before changing runtime code.
+
+### Review
+- Found silent data truncation in the CCM recommendation list path: `harness_list` exposes standard `page`/`size` controls, but the REST body builder ignored them and always requested `offset: 0, limit: 20`. Pagination loops therefore returned the first page repeatedly and could never retrieve recommendations beyond the first 20.
+- Fixed the body builder to derive REST `offset`/`limit` from standard page inputs while preserving explicit resource-specific `offset`/`limit` overrides.
+- Added a regression proving `page: 2, size: 50` sends `offset: 100, limit: 50`.
+- The wrong-scope GitOps agent deletion bug remains real on main, but PR #647 already contains the focused fix with green CI, so no duplicate fix was created here.
+- Verification passed: focused CCM recommendation tests (7), full test suite (117 files / 2554 tests), typecheck, build, and standards checks (10 files / 80 tests).
+
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
 - [x] Update the release metadata version test
