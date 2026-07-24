@@ -808,17 +808,26 @@ describe("database_snapshot_object get", () => {
 });
 
 describe("database_changeset_existence get", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  const baseInput = {
+    org_id: "default",
+    project_id: "test-project",
+    dbschema_id: "my_schema",
+  };
+
   it("passes changeset id body without scope injection", async () => {
-    const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({
       existence: { "add-users-email-column": false, "create-orders-index": true },
     });
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "database_changeset_existence", "get", {
-      org_id: "default",
-      project_id: "test-project",
-      dbschema_id: "my_schema",
+      ...baseInput,
       changeset_ids: ["add-users-email-column", "create-orders-index"],
     });
 
@@ -832,5 +841,99 @@ describe("database_changeset_existence get", () => {
     });
     expect(call.body).not.toHaveProperty("orgIdentifier");
     expect(call.body).not.toHaveProperty("projectIdentifier");
+  });
+
+  it("rejects missing changeset_ids before API call", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", baseInput),
+    ).rejects.toThrow("changeset_ids is required");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects empty changeset_ids array", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        ...baseInput,
+        changeset_ids: [],
+      }),
+    ).rejects.toThrow("changeset_ids is required");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects more than 100 ids per request", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const ids = Array.from({ length: 101 }, (_, i) => `changeset-${i}`);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        ...baseInput,
+        changeset_ids: ids,
+      }),
+    ).rejects.toThrow("changeset_ids supports at most 100 ids per request");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects non-string entries", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        ...baseInput,
+        changeset_ids: ["valid-id", 42],
+      }),
+    ).rejects.toThrow("each changeset_ids entry must be a non-empty string");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects blank string entries", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "database_changeset_existence", "get", {
+        ...baseInput,
+        changeset_ids: ["valid-id", "   "],
+      }),
+    ).rejects.toThrow("each changeset_ids entry must be a non-empty string");
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("accepts changeSetIds camelCase alias", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ existence: { "my-changeset": false } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_changeset_existence", "get", {
+      ...baseInput,
+      changeSetIds: ["my-changeset"],
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body).toEqual({ changeSets: [{ id: "my-changeset" }] });
+  });
+
+  it("trims whitespace from id entries", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ existence: { "trimmed-id": true } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "database_changeset_existence", "get", {
+      ...baseInput,
+      changeset_ids: ["  trimmed-id  "],
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body).toEqual({ changeSets: [{ id: "trimmed-id" }] });
   });
 });
