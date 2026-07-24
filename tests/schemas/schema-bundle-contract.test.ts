@@ -220,4 +220,61 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream PullRequestReview GitHub webhook trigger type in v0 trigger", () => {
+    const webhook = (SCHEMAS.trigger.definitions as Record<string, Record<string, unknown>>).trigger
+      .webhook_trigger as Record<string, unknown>;
+    const githubSpec = webhook.github_spec as {
+      allOf: Array<{
+        if?: { properties: { type: { const: string } } };
+        then?: { properties: { spec: { $ref: string } } };
+        properties?: { type: { enum: string[] } };
+      }>;
+    };
+
+    const typeEnum = githubSpec.allOf.find((branch) => branch.properties?.type?.enum)?.properties?.type
+      .enum;
+    expect(typeEnum).toContain("PullRequestReview");
+
+    const reviewBranch = githubSpec.allOf.find(
+      (branch) => branch.if?.properties?.type?.const === "PullRequestReview",
+    );
+    expect(reviewBranch?.then?.properties?.spec.$ref).toBe(
+      "#/definitions/trigger/webhook_trigger/github_pr_review_spec",
+    );
+  });
+
+  it("includes upstream github_pr_review_spec actions in v0 trigger", () => {
+    const webhook = (SCHEMAS.trigger.definitions as Record<string, Record<string, unknown>>).trigger
+      .webhook_trigger as Record<string, unknown>;
+    const reviewSpec = webhook.github_pr_review_spec as {
+      allOf: Array<{
+        properties?: {
+          actions?: { items: { enum: string[] } };
+          connectorRef?: { type: string };
+          repoName?: { type: string };
+        };
+      }>;
+    };
+
+    const properties = reviewSpec.allOf.find((branch) => branch.properties?.actions)?.properties;
+    expect(properties?.actions?.items.enum).toEqual(
+      expect.arrayContaining(["Submitted", "Edited", "Dismissed"]),
+    );
+    expect(properties?.connectorRef?.type).toBe("string");
+    expect(properties?.repoName?.type).toBe("string");
+  });
+
+  it("uses registry (not registryRef) for HAR image references in v1 Container definitions", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const container = defs[key].steps.unified.Container as {
+        properties: Record<string, { description?: string }>;
+      };
+
+      expect(container.properties).toHaveProperty("registry");
+      expect(container.properties).not.toHaveProperty("registryRef");
+      expect(container.properties.registry.description).toContain("Harness Artifact Registry");
+    }
+  });
 });
