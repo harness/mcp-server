@@ -1410,6 +1410,53 @@ describe("pipelineHandler", () => {
       expect(allLogs["step-ok"].log).toBeDefined();
     });
 
+    it("merges failed logs by exact log key when step identifiers repeat across stages", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+      mockFn.mockImplementation(async (_client: unknown, prefix: string) => `log for ${prefix}`);
+
+      const exec = makeExecution({
+        status: "Failed",
+        stages: [
+          { id: "s1", name: "S1", status: "Failed", steps: [
+            { id: "step-fail-1", name: "Deploy", status: "Failed" },
+          ] },
+          { id: "s2", name: "S2", status: "Failed", steps: [
+            { id: "step-fail-2", name: "Deploy", status: "Failed" },
+          ] },
+        ],
+        nodeMapEntries: {
+          "step-fail-1": {
+            uuid: "step-fail-1", identifier: "deploy", name: "Deploy",
+            baseFqn: "pipeline.stages.s1.spec.execution.steps.deploy",
+            status: "Failed", failureInfo: { message: "first deploy failed" },
+            logBaseKey: "log/s1/deploy", startTs: NOW, endTs: NOW + 5000,
+          },
+          "step-fail-2": {
+            uuid: "step-fail-2", identifier: "deploy", name: "Deploy",
+            baseFqn: "pipeline.stages.s2.spec.execution.steps.deploy",
+            status: "Failed", failureInfo: { message: "second deploy failed" },
+            logBaseKey: "log/s2/deploy", startTs: NOW + 5000, endTs: NOW + 10000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: false, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      expect(mockFn).toHaveBeenCalledTimes(2);
+      const allLogs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(allLogs["step-fail-1"].log).toBe("log for log/s1/deploy");
+      expect(allLogs["step-fail-2"].log).toBe("log for log/s2/deploy");
+    });
+
     it("skips auto-fetch of deepest step when include_all_step_logs is set", async () => {
       const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
       const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
