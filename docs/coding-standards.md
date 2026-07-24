@@ -67,6 +67,14 @@ Every `ResourceDefinition` declares a `scope`: `"project"`, `"org"`, or `"accoun
 
 The `Registry.dispatch()` method handles scope injection automatically based on the definition. Do NOT manually inject `accountIdentifier`, `orgIdentifier`, or `projectIdentifier` in toolset specs.
 
+**Multi-scope resources** (`supportedScopes: ["account", "org", "project"]`) with custom `pathBuilder` functions that embed scope in the URL path (not only query params) must:
+
+- Accept `PathBuilderConfig` as the second argument: `(input, config) => ...`
+- Honor `config.HARNESS_ORG` / `config.HARNESS_PROJECT` when callers omit `org_id` / `project_id`, matching list-operation defaults
+- Respect explicit `resource_scope` and clear unused `org_id` / `project_id` from query params when targeting account scope
+
+Enforced by `tests/coding-standards/multi-scope-pathbuilders.test.ts`.
+
 ### 5. Identifier Fields and Deep Links
 
 Every `ResourceDefinition` must declare:
