@@ -372,6 +372,40 @@ describe("harness_schema nested static definition lookup", () => {
     expect(schema.properties?.type?.enum).toContain("DeployAwsAgentCoreRevision");
   });
 
+  it("resolves newly synced IACMRemediationAgentInfo with llmConnectorRef from v0 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "IACMRemediationAgentInfo",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("steps.iacm.IACMRemediationAgentInfo");
+    expect(parsed.requested_path).toBe("IACMRemediationAgentInfo");
+    const schema = parsed.schema as { properties?: Record<string, { type?: string }> };
+    expect(schema.properties?.llmConnectorRef?.type).toBe("string");
+  });
+
+  it("resolves newly synced UpdateReleaseRepoStepInfo with ignoreMissingValues from v0 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "UpdateReleaseRepoStepInfo",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("steps.cd.UpdateReleaseRepoStepInfo");
+    expect(parsed.requested_path).toBe("UpdateReleaseRepoStepInfo");
+    const schema = parsed.schema as {
+      properties?: Record<string, { oneOf?: Array<{ type?: string }> }>;
+    };
+    expect(schema.properties?.ignoreMissingValues?.oneOf).toHaveLength(2);
+  });
+
   it("resolves IdentitiesConfig from v0 pipeline common definitions", async () => {
     const server = makeMcpServer();
     registerSchemaTool(server, undefined, undefined);
