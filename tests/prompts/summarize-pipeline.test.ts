@@ -29,7 +29,7 @@ describe("pipeline_summarizer prompt", () => {
 
     const prompt = prompts.find((p) => p.name === "pipeline_summarizer");
     expect(prompt).toBeDefined();
-    expect(prompt!.description).toContain("Fetch and summarize ALL step logs");
+    expect(prompt!.description).toContain("Analyze a pipeline execution");
   });
 
   it("registers summarize-pipeline as a backward-compatible alias", async () => {
@@ -111,7 +111,7 @@ describe("pipeline_summarizer prompt", () => {
     expect(text).toContain("all_step_logs");
   });
 
-  it("instructs to summarize every step without skipping", async () => {
+  it("includes root cause analysis for failures", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({
       name: "pipeline_summarizer",
@@ -120,8 +120,37 @@ describe("pipeline_summarizer prompt", () => {
 
     const text = (result.messages[0].content as { type: string; text: string }).text;
 
-    expect(text).toContain("DO NOT skip any steps");
-    expect(text).toContain("summarize every single one");
+    expect(text).toContain("root cause");
+    expect(text).toContain("suggested fix");
+    expect(text).toContain("Failed / Errored");
+  });
+
+  it("branches analysis by step status", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({
+      name: "pipeline_summarizer",
+      arguments: { executionId: "exec123" },
+    });
+
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("Failed / Errored");
+    expect(text).toContain("Success:");
+    expect(text).toContain("Skipped:");
+  });
+
+  it("supports single-step and whole-pipeline modes", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({
+      name: "pipeline_summarizer",
+      arguments: { executionId: "exec123" },
+    });
+
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("requested_step_log");
+    expect(text).toContain("single-step mode");
+    expect(text).toContain("whole-pipeline mode");
   });
 
   it("includes running execution guidance", async () => {
@@ -147,6 +176,18 @@ describe("pipeline_summarizer prompt", () => {
     expect(text).toContain("Step Name");
     expect(text).toContain("Status");
     expect(text).toContain("Duration");
-    expect(text).toContain("What Happened");
+    expect(text).toContain("Analysis");
+  });
+
+  it("includes a TL;DR executive summary section", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({
+      name: "pipeline_summarizer",
+      arguments: { executionId: "exec123" },
+    });
+
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+    expect(text).toContain("### Summary");
+    expect(text).toContain("executive summary");
   });
 });
