@@ -220,4 +220,32 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream llmConnectorRef on IACMRemediationAgentInfo in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const iacmSteps = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>)
+        .pipeline.steps.iacm as Record<string, unknown>;
+
+      const agentInfo = iacmSteps.IACMRemediationAgentInfo as {
+        allOf: Array<{ properties?: { llmConnectorRef?: unknown } }>;
+      };
+      const llmConnectorRef = agentInfo.allOf
+        .map((part) => part.properties?.llmConnectorRef)
+        .find((field) => field != null);
+
+      expect(llmConnectorRef).toBeDefined();
+    }
+  });
+
+  it("includes upstream ignoreMissingValues on UpdateReleaseRepoStepInfo in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const cdSteps = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>)
+        .pipeline.steps.cd as Record<string, unknown>;
+
+      const stepInfo = cdSteps.UpdateReleaseRepoStepInfo as {
+        properties: Record<string, unknown>;
+      };
+      expect(stepInfo.properties).toHaveProperty("ignoreMissingValues");
+    }
+  });
 });
