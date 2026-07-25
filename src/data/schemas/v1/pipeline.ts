@@ -1451,6 +1451,10 @@ const schema: Record<string, any> = {
             "template": {
               "$ref": "#/definitions/pipeline_v1/common/TemplateRef"
             },
+            "agent": {
+              "description": "Alias for `template`, used to reference an agent template.",
+              "$ref": "#/definitions/pipeline_v1/common/TemplateRef"
+            },
             "action": {
               "$ref": "#/definitions/pipeline_v1/common/TemplateRef"
             },
@@ -4098,6 +4102,11 @@ const schema: Record<string, any> = {
                 },
                 {
                   "required": [
+                    "agent"
+                  ]
+                },
+                {
+                  "required": [
                     "action"
                   ]
                 },
@@ -4245,6 +4254,11 @@ const schema: Record<string, any> = {
                       {
                         "required": [
                           "template"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "agent"
                         ]
                       },
                       {
