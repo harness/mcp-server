@@ -204,6 +204,32 @@ describe("schema bundle contract", () => {
     expect(identitySpec.properties.scope?.enum).toContain("STEP");
   });
 
+  it("includes upstream llmConnectorRef on IACM remediation and blast-radius agent step specs (#692)", () => {
+    for (const schemaKey of ["pipeline", "template"] as const) {
+      const iacmSteps = (SCHEMAS[schemaKey].definitions as Record<string, Record<string, unknown>>)
+        .pipeline.steps.iacm as Record<string, unknown>;
+
+      for (const name of ["IACMRemediationAgentInfo", "IACMBlastRadiusAgentInfo"] as const) {
+        const stepInfo = iacmSteps[name] as { properties: Record<string, { type?: string }> };
+        expect(stepInfo.properties).toHaveProperty("llmConnectorRef");
+        expect(stepInfo.properties.llmConnectorRef.type).toBe("string");
+      }
+    }
+  });
+
+  it("includes upstream ignoreMissingValues on UpdateReleaseRepo step spec (#692)", () => {
+    for (const schemaKey of ["pipeline", "template"] as const) {
+      const cdSteps = (SCHEMAS[schemaKey].definitions as Record<string, Record<string, unknown>>)
+        .pipeline.steps.cd as Record<string, unknown>;
+      const stepInfo = cdSteps.UpdateReleaseRepoStepInfo as {
+        properties: Record<string, { oneOf?: unknown[] }>;
+      };
+
+      expect(stepInfo.properties).toHaveProperty("ignoreMissingValues");
+      expect(stepInfo.properties.ignoreMissingValues.oneOf).toBeDefined();
+    }
+  });
+
   it("includes upstream DynamicStageNodeV1 in v1 pipeline and template unified stages", () => {
     for (const key of ["pipeline_v1", "template_v1"] as const) {
       const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;

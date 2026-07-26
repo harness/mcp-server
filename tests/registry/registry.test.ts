@@ -1910,6 +1910,18 @@ describe("Registry", () => {
       });
     });
 
+    it("cost_recommendation_count get does not include costCategoryDTOs when only cost_category is provided without cost_buckets", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: 5 });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_count", "get", {
+        cost_category: "AI Platform team",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.costCategoryDTOs).toBeUndefined();
+    });
+
     it("cost_recommendation_count get passes cost_category, cost_buckets, and recommendation_states", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: 10 });
       const client = makeClient(mockRequest);
@@ -1955,6 +1967,18 @@ describe("Registry", () => {
 
       const call = mockRequest.mock.calls[0][0];
       expect(call.path).toBe("/ccm/api/recommendation/overview/resource-type/stats");
+    });
+
+    it("cost_recommendation_stats get does not include costCategoryDTOs when only cost_category is provided without cost_buckets", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_stats", "get", {
+        cost_category: "AI Platform team",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.costCategoryDTOs).toBeUndefined();
     });
 
     it("cost_recommendation_stats get passes cost_category and cost_buckets as costCategoryDTOs", async () => {
