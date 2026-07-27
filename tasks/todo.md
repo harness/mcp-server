@@ -1,5 +1,21 @@
 # Harness MCP Server — Task Tracking
 
+## Scheduled Application Security Review (2026-07-27)
+- [x] Read allowed flagged-vulnerability memory family
+- [x] Map repository entry points and trust boundaries
+- [x] Search high-risk auth, RPC, file, shell, network, and logging paths
+- [x] Validate candidate attack paths against code traces
+- [x] Update allowed memory only for any new validated medium+ findings
+
+### Plan
+- Treat this as a no-code security scan on `cursor/application-security-review-e0fa`.
+- Prioritize HTTP transport, MCP tool dispatch, Harness credential/session handling, write confirmation gates, local file/multipart handling, and subprocess/network helpers.
+- Report and persist only end-to-end exploitable medium, high, or critical findings that are not already in the allowed memory family.
+
+### Review
+- Completed the scheduled security scan and updated the allowed out-of-repository vulnerability memory for any newly validated medium+ issue.
+- No external report was posted because no Slack or explicit reporting tool was available in this run.
+
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
 - [x] Update the release metadata version test
