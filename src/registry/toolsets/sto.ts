@@ -772,10 +772,11 @@ export const stoToolset: ToolsetDefinition = {
       displayName: "SAST Remediation Diff",
       description:
         "Diff validation-scan occurrences against the original SAST scan's ignore set (STO DiffOccurrences). "
-        + "Requires BOTH `scan_id` (original scan) and `execution_id` (validation pipeline execution). "
-        + "Removes ignored fingerprints from the validation scan, then splits remaining occurrences into "
+        + "Requires BOTH `scan_id` (original scan) and `validation_execution_id` (validation pipeline execution). "
+        + "Removes ignored fingerprints from the validation scan (server-side), then splits remaining occurrences into "
         + "`existing` (still present from original in-scope) and `new` (introduced by the remediations). "
-        + "Response flattens both partitions into `items[]` tagged with `_partition`.",
+        + "Response flattens both partitions into `items[]` tagged with `_partition`. "
+        + "Fingerprint is not returned on items — matching stays inside STO Core.",
       searchAliases: [
         "sast rem diff",
         "validation scan diff",
@@ -800,7 +801,19 @@ export const stoToolset: ToolsetDefinition = {
       identifierFields: [],
       listFilterFields: [
         { name: "scan_id", description: "REQUIRED. Original STO scan id the agent remediated.", required: true },
-        { name: "execution_id", description: "REQUIRED. Validation pipeline execution id.", required: true },
+        {
+          name: "validation_execution_id",
+          description:
+            "REQUIRED (or legacy alias execution_id). Validation pipeline execution id "
+            + "(sto-core query param validationExecutionId).",
+          required: false,
+        },
+        {
+          name: "execution_id",
+          description:
+            "Legacy alias for validation_execution_id. Prefer validation_execution_id.",
+          required: false,
+        },
         { name: "only_true_positive", type: "boolean", description: "When true (default), only TRUE_POSITIVE triage verdicts are treated as in-scope on the original scan." },
         { name: "limit", type: "number", description: "Max occurrences to return (1–10000, default 1000)." },
         { name: "severity_codes", description: "Comma-separated severities.", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
@@ -809,11 +822,13 @@ export const stoToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/sto/api/v2/sast-remediation/diff",
+          path: "/sto/api/v2/sast-remediation/diff-occurrences",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             scan_id: "scanId",
-            execution_id: "executionId",
+            validation_execution_id: "validationExecutionId",
+            // Legacy alias — prefer validation_execution_id.
+            execution_id: "validationExecutionId",
             only_true_positive: "onlyTruePositive",
             limit: "limit",
             severity_codes: "severityCodes",
@@ -825,17 +840,25 @@ export const stoToolset: ToolsetDefinition = {
                 "sast_remediation_diff: 'scan_id' is required (original STO scan id).",
               );
             }
-            if (typeof input.execution_id !== "string" || input.execution_id.length === 0) {
+            const validationExecutionId =
+              (typeof input.validation_execution_id === "string" && input.validation_execution_id)
+              || (typeof input.execution_id === "string" && input.execution_id)
+              || "";
+            if (!validationExecutionId) {
               throw new Error(
-                "sast_remediation_diff: 'execution_id' is required (validation pipeline execution id).",
+                "sast_remediation_diff: 'validation_execution_id' is required "
+                  + "(validation pipeline execution id; alias: execution_id).",
               );
             }
+            // Normalize so queryParams maps a single canonical key.
+            input.validation_execution_id = validationExecutionId;
+            delete input.execution_id;
           },
           responseExtractor: stoSastRemediationDiffExtract,
           skipCompact: true,
           description:
-            "Diff validation-scan occurrences vs original scan ignore set. Requires scan_id + execution_id. "
-            + "Flattens existing + new into items[]; each item tagged with _partition.",
+            "Diff validation-scan occurrences vs original scan ignore set. Requires scan_id + validation_execution_id. "
+            + "Flattens existingOccurrences + newOccurrences into items[]; each item tagged with _partition.",
         },
       },
     },

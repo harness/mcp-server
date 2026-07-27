@@ -1,6 +1,6 @@
 /**
  * Tests for the `sast_remediation_diff` resource that wraps
- * STO DiffOccurrences (`GET /sto/api/v2/sast-remediation/diff`).
+ * STO DiffOccurrences (`GET /sto/api/v2/sast-remediation/diff-occurrences`).
  */
 import { describe, it, expect, vi } from "vitest";
 import { stoToolset } from "../../src/registry/toolsets/sto.js";
@@ -49,7 +49,7 @@ function getListSpec(): EndpointSpec {
 }
 
 describe("sast_remediation_diff resource registration", () => {
-  it("registers list-only GET against sast-remediation/diff", () => {
+  it("registers list-only GET against sast-remediation/diff-occurrences", () => {
     const resource = getResource();
     const list = getListSpec();
     expect(resource.scope).toBe("project");
@@ -59,10 +59,11 @@ describe("sast_remediation_diff resource registration", () => {
       project: "projectId",
     });
     expect(list.method).toBe("GET");
-    expect(list.path).toBe("/sto/api/v2/sast-remediation/diff");
+    expect(list.path).toBe("/sto/api/v2/sast-remediation/diff-occurrences");
     expect(list.queryParams).toMatchObject({
       scan_id: "scanId",
-      execution_id: "executionId",
+      validation_execution_id: "validationExecutionId",
+      execution_id: "validationExecutionId",
       only_true_positive: "onlyTruePositive",
       limit: "limit",
       severity_codes: "severityCodes",
@@ -78,13 +79,13 @@ describe("sast_remediation_diff preflight", () => {
     await expect(
       spec.preflight!({
         client: { account: "test-account" },
-        input: { execution_id: "exec-1" },
+        input: { validation_execution_id: "exec-1" },
         registry: { dispatch: async () => undefined, getResource },
       }),
     ).rejects.toThrow(/scan_id/);
   });
 
-  it("rejects missing execution_id", async () => {
+  it("rejects missing validation_execution_id (and legacy execution_id)", async () => {
     const spec = getListSpec();
     await expect(
       spec.preflight!({
@@ -92,44 +93,102 @@ describe("sast_remediation_diff preflight", () => {
         input: { scan_id: "scan-1" },
         registry: { dispatch: async () => undefined, getResource },
       }),
-    ).rejects.toThrow(/execution_id/);
+    ).rejects.toThrow(/validation_execution_id/);
   });
 
-  it("accepts both required ids", async () => {
+  it("accepts validation_execution_id", async () => {
     const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      validation_execution_id: "exec-1",
+    };
     await expect(
       spec.preflight!({
         client: { account: "test-account" },
-        input: { scan_id: "scan-1", execution_id: "exec-1" },
+        input,
         registry: { dispatch: async () => undefined, getResource },
       }),
     ).resolves.toBeUndefined();
+    expect(input.validation_execution_id).toBe("exec-1");
+  });
+
+  it("accepts legacy execution_id and normalizes to validation_execution_id", async () => {
+    const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      execution_id: "exec-legacy",
+    };
+    await expect(
+      spec.preflight!({
+        client: { account: "test-account" },
+        input,
+        registry: { dispatch: async () => undefined, getResource },
+      }),
+    ).resolves.toBeUndefined();
+    expect(input.validation_execution_id).toBe("exec-legacy");
+    expect(input.execution_id).toBeUndefined();
   });
 });
 
 describe("sast_remediation_diff responseExtractor", () => {
   const MOCK_API_RESPONSE = {
     validationScanId: "val-scan-1",
-    existing: [{ issueId: "iss-e1", occurrenceInternalId: 1, fingerprint: "fp-e" }],
-    new: [{ issueId: "iss-n1", occurrenceInternalId: 2, fingerprint: "fp-n" }],
+    existingOccurrences: [
+      { issueId: "iss-e1", occurrenceInternalId: 1, issueTitle: "t1", severityCode: "HIGH" },
+    ],
+    newOccurrences: [
+      { issueId: "iss-n1", occurrenceInternalId: 2, issueTitle: "t2", severityCode: "LOW" },
+    ],
     existingCount: 1,
     newCount: 1,
     matchedCount: 2,
   };
 
-  it("flattens existing+new with _partition tags and side-channels", () => {
+  it("flattens existingOccurrences+newOccurrences with _partition tags", () => {
     const spec = getListSpec();
     const result = spec.responseExtractor!(MOCK_API_RESPONSE, {}) as Record<string, unknown>;
 
     expect(result.items).toEqual([
-      { issueId: "iss-e1", occurrenceInternalId: 1, fingerprint: "fp-e", _partition: "existing" },
-      { issueId: "iss-n1", occurrenceInternalId: 2, fingerprint: "fp-n", _partition: "new" },
+      {
+        issueId: "iss-e1",
+        occurrenceInternalId: 1,
+        issueTitle: "t1",
+        severityCode: "HIGH",
+        _partition: "existing",
+      },
+      {
+        issueId: "iss-n1",
+        occurrenceInternalId: 2,
+        issueTitle: "t2",
+        severityCode: "LOW",
+        _partition: "new",
+      },
     ]);
     expect(result.total).toBe(2);
     expect(result.existing_total).toBe(1);
     expect(result.new_total).toBe(1);
     expect(result.matched_count).toBe(2);
     expect(result.validation_scan_id).toBe("val-scan-1");
+  });
+
+  it("falls back to legacy existing/new keys", () => {
+    const spec = getListSpec();
+    const result = spec.responseExtractor!(
+      {
+        validationScanId: "val-scan-1",
+        existing: [{ issueId: "iss-e1", occurrenceInternalId: 1 }],
+        new: [{ issueId: "iss-n1", occurrenceInternalId: 2 }],
+        existingCount: 1,
+        newCount: 1,
+        matchedCount: 2,
+      },
+      {},
+    ) as Record<string, unknown>;
+
+    expect(result.items).toEqual([
+      { issueId: "iss-e1", occurrenceInternalId: 1, _partition: "existing" },
+      { issueId: "iss-n1", occurrenceInternalId: 2, _partition: "new" },
+    ]);
   });
 
   it("handles null/undefined API response without throwing", () => {
@@ -143,8 +202,8 @@ describe("sast_remediation_diff — registry dispatch", () => {
   it("passes required query params through to the Harness client", async () => {
     const request = vi.fn().mockResolvedValue({
       validationScanId: "val-scan-1",
-      existing: [],
-      new: [],
+      existingOccurrences: [],
+      newOccurrences: [],
       existingCount: 0,
       newCount: 0,
       matchedCount: 0,
@@ -154,7 +213,7 @@ describe("sast_remediation_diff — registry dispatch", () => {
 
     await registry.dispatch(client, "sast_remediation_diff", "list", {
       scan_id: "orig-scan",
-      execution_id: "val-exec",
+      validation_execution_id: "val-exec",
       only_true_positive: false,
       limit: 50,
       severity_codes: "HIGH,CRITICAL",
@@ -167,16 +226,41 @@ describe("sast_remediation_diff — registry dispatch", () => {
       params: Record<string, unknown>;
     };
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/sto/api/v2/sast-remediation/diff");
+    expect(call.path).toBe("/sto/api/v2/sast-remediation/diff-occurrences");
     expect(call.params).toMatchObject({
       accountId: "test-account",
       orgId: "default",
       projectId: "test-project",
       scanId: "orig-scan",
-      executionId: "val-exec",
+      validationExecutionId: "val-exec",
       onlyTruePositive: false,
       limit: 50,
       severityCodes: "HIGH,CRITICAL",
     });
+    expect(call.params.executionId).toBeUndefined();
+  });
+
+  it("normalizes legacy execution_id filter to validationExecutionId", async () => {
+    const request = vi.fn().mockResolvedValue({
+      validationScanId: "val-scan-1",
+      existingOccurrences: [],
+      newOccurrences: [],
+      existingCount: 0,
+      newCount: 0,
+      matchedCount: 0,
+    });
+    const client = makeClient(request);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    await registry.dispatch(client, "sast_remediation_diff", "list", {
+      scan_id: "orig-scan",
+      execution_id: "val-exec-legacy",
+    });
+
+    const call = request.mock.calls[0]![0] as {
+      params: Record<string, unknown>;
+    };
+    expect(call.params.validationExecutionId).toBe("val-exec-legacy");
+    expect(call.params.executionId).toBeUndefined();
   });
 });
