@@ -765,5 +765,115 @@ export const stoToolset: ToolsetDefinition = {
         },
       },
     },
+
+    // ── SAST Remediation Diff (validation vs original scan) ───────────
+    {
+      resourceType: "sast_remediation_diff",
+      displayName: "SAST Remediation Diff",
+      description:
+        "Diff validation-scan occurrences against the original SAST scan's ignore set (STO DiffOccurrences). "
+        + "Requires BOTH `scan_id` (original scan) and `execution_id` (validation pipeline execution). "
+        + "Removes ignored fingerprints from the validation scan, then splits remaining occurrences into "
+        + "`existing` (still present from original in-scope) and `new` (introduced by the remediations). "
+        + "Response flattens both partitions into `items[]` tagged with `_partition`.",
+      searchAliases: [
+        "sast rem diff",
+        "validation scan diff",
+        "sast occurrence diff",
+        "agent remediation validation",
+      ],
+      relatedResources: [
+        {
+          resourceType: "pipeline_security_issue",
+          relationship: "sibling",
+          description: "Per-execution Pipeline Security issue view (existing/new partitions for a run).",
+        },
+        {
+          resourceType: "security_issue",
+          relationship: "sibling",
+          description: "Cross-execution Issues page listing.",
+        },
+      ],
+      toolset: "sto",
+      scope: "project",
+      scopeParams: STO_SCOPE,
+      identifierFields: [],
+      listFilterFields: [
+        { name: "scan_id", description: "REQUIRED. Original STO scan id the agent remediated.", required: true },
+        { name: "execution_id", description: "REQUIRED. Validation pipeline execution id.", required: true },
+        { name: "only_true_positive", type: "boolean", description: "When true (default), only TRUE_POSITIVE triage verdicts are treated as in-scope on the original scan." },
+        { name: "limit", type: "number", description: "Max occurrences to return (1–10000, default 1000)." },
+        { name: "severity_codes", description: "Comma-separated severities.", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+        { name: "exclude_repo_patterns", description: "Comma-separated glob patterns matching repository target.name to exclude." },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/sto/api/v2/sast-remediation/diff",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            scan_id: "scanId",
+            execution_id: "executionId",
+            only_true_positive: "onlyTruePositive",
+            limit: "limit",
+            severity_codes: "severityCodes",
+            exclude_repo_patterns: "excludeRepoPatterns",
+          },
+          preflight: async ({ input }) => {
+            if (typeof input.scan_id !== "string" || input.scan_id.length === 0) {
+              throw new Error(
+                "sast_remediation_diff: 'scan_id' is required (original STO scan id).",
+              );
+            }
+            if (typeof input.execution_id !== "string" || input.execution_id.length === 0) {
+              throw new Error(
+                "sast_remediation_diff: 'execution_id' is required (validation pipeline execution id).",
+              );
+            }
+          },
+          responseExtractor: (raw: unknown): unknown => {
+            // DiffOccurrences returns:
+            //   { validationScanId, existing: [...], new: [...],
+            //     existingCount, newCount, matchedCount }
+            if (raw === null || raw === undefined || typeof raw !== "object") return raw;
+            const r = raw as {
+              validationScanId?: string;
+              existing?: unknown[];
+              new?: unknown[];
+              existingCount?: number;
+              newCount?: number;
+              matchedCount?: number;
+            };
+            const existingItems = Array.isArray(r.existing) ? r.existing : [];
+            const newItems = Array.isArray(r.new) ? r.new : [];
+            const tagged = [
+              ...existingItems.map((it) =>
+                typeof it === "object" && it !== null ? { ...it, _partition: "existing" } : it,
+              ),
+              ...newItems.map((it) =>
+                typeof it === "object" && it !== null ? { ...it, _partition: "new" } : it,
+              ),
+            ];
+            const existingCount =
+              typeof r.existingCount === "number" ? r.existingCount : existingItems.length;
+            const newCount = typeof r.newCount === "number" ? r.newCount : newItems.length;
+            const matchedCount =
+              typeof r.matchedCount === "number" ? r.matchedCount : existingCount + newCount;
+            return {
+              items: tagged,
+              total: matchedCount,
+              existing_total: existingCount,
+              new_total: newCount,
+              matched_count: matchedCount,
+              validation_scan_id: r.validationScanId,
+            };
+          },
+          skipCompact: true,
+          description:
+            "Diff validation-scan occurrences vs original scan ignore set. Requires scan_id + execution_id. "
+            + "Flattens existing + new into items[]; each item tagged with _partition.",
+        },
+      },
+    },
   ],
 };

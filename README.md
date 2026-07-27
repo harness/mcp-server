@@ -1,6 +1,6 @@
 ## Harness MCP Server 2.0
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 215 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 216 resource types.
 
 ## Why Use This MCP Server
 
@@ -8,7 +8,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 215 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 216 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 37 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **34 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -1197,7 +1197,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-215 resource types organized across 37 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+216 resource types organized across 37 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1599,11 +1599,12 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 ### Security Testing Orchestration (STO)
 
 
-| Resource Type           | List | Get | Create | Update | Delete | Execute Actions                |
-| ----------------------- | ---- | --- | ------ | ------ | ------ | ------------------------------ |
-| `security_issue`        | x    |     |        |        |        |                                |
-| `security_issue_filter` | x    |     |        |        |        |                                |
-| `security_exemption`    | x    |     | x      |        |        | `approve`, `reject` |
+| Resource Type             | List | Get | Create | Update | Delete | Execute Actions                |
+| ------------------------- | ---- | --- | ------ | ------ | ------ | ------------------------------ |
+| `security_issue`          | x    |     |        |        |        |                                |
+| `security_issue_filter`   | x    |     |        |        |        |                                |
+| `security_exemption`      | x    |     | x      |        |        | `approve`, `reject` |
+| `sast_remediation_diff`   | x    |     |        |        |        |                                |
 
 `security_exemption` create is a `high_write` operation. The server derives `requester_id` from the authenticated PAT, sets `exemptFutureOccurrences=true`, and defaults `duration_days` to 30 when not provided. For listing exemptions, pass a small explicit page size (for example `filters: { "status": "Pending", "size": 5 }`) and follow the `_nextPageHint` returned in each response.
 
@@ -1807,7 +1808,7 @@ Available toolset names:
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
 | `sei`                   | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric                                                                                     |
 | `scs`                   | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom                                                                                                                             |
-| `sto`                   | security_issue, security_issue_filter, security_exemption                                                                                                                                                                                                                                       |
+| `sto`                   | security_issue, security_issue_filter, security_exemption, sast_remediation_diff                                                                                                                                                                                                                |
 | `dbops`                 | database_schema, database_instance, database_snapshot_object, database_llm_authoring_pipeline                                                                                                                                                                                                   |
 | `access_control`        | user, user_group, service_account, role, role_assignment, resource_group, permission                                                                                                                                                                                                            |
 | `governance`            | policy, policy_set, policy_evaluation                                                                                                                                                                                                                                                           |
@@ -1837,7 +1838,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  37 Toolsets      |      (data files, not code)
-                |  215 Resource Types|
+                |  216 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
