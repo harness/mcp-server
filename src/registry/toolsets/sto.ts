@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { passthrough, stoExemptionsExtract } from "../extractors.js";
+import { passthrough, stoExemptionsExtract, stoSastRemediationDiffExtract } from "../extractors.js";
 
 /**
  * Injects a redirect hint into every security_issue list response.
@@ -831,43 +831,7 @@ export const stoToolset: ToolsetDefinition = {
               );
             }
           },
-          responseExtractor: (raw: unknown): unknown => {
-            // DiffOccurrences returns:
-            //   { validationScanId, existing: [...], new: [...],
-            //     existingCount, newCount, matchedCount }
-            if (raw === null || raw === undefined || typeof raw !== "object") return raw;
-            const r = raw as {
-              validationScanId?: string;
-              existing?: unknown[];
-              new?: unknown[];
-              existingCount?: number;
-              newCount?: number;
-              matchedCount?: number;
-            };
-            const existingItems = Array.isArray(r.existing) ? r.existing : [];
-            const newItems = Array.isArray(r.new) ? r.new : [];
-            const tagged = [
-              ...existingItems.map((it) =>
-                typeof it === "object" && it !== null ? { ...it, _partition: "existing" } : it,
-              ),
-              ...newItems.map((it) =>
-                typeof it === "object" && it !== null ? { ...it, _partition: "new" } : it,
-              ),
-            ];
-            const existingCount =
-              typeof r.existingCount === "number" ? r.existingCount : existingItems.length;
-            const newCount = typeof r.newCount === "number" ? r.newCount : newItems.length;
-            const matchedCount =
-              typeof r.matchedCount === "number" ? r.matchedCount : existingCount + newCount;
-            return {
-              items: tagged,
-              total: matchedCount,
-              existing_total: existingCount,
-              new_total: newCount,
-              matched_count: matchedCount,
-              validation_scan_id: r.validationScanId,
-            };
-          },
+          responseExtractor: stoSastRemediationDiffExtract,
           skipCompact: true,
           description:
             "Diff validation-scan occurrences vs original scan ignore set. Requires scan_id + execution_id. "
