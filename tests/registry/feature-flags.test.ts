@@ -157,6 +157,131 @@ describe("FME request routing", () => {
   });
 });
 
+describe("FME feature flag list pagination and search", () => {
+  it("maps generic page and size inputs to FME offset and limit params", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      objects: [{ id: "flag-21", name: "flag_21" }],
+      totalCount: 92,
+      offset: 20,
+      limit: 20,
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "list", {
+      workspace_id: "ws-1",
+      page: 1,
+      size: 20,
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({
+      offset: 20,
+      limit: 20,
+    });
+  });
+
+  it("keeps the exact name filter server-side without scanning extra pages", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      objects: [{ id: "flag-92", name: "delete_after_migration" }],
+      totalCount: 1,
+      offset: 0,
+      limit: 20,
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "list", {
+      workspace_id: "ws-1",
+      size: 20,
+      name: "delete_after_migration",
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    expect(firstRequest(mockRequest).params).toMatchObject({
+      offset: 0,
+      limit: 20,
+      name: "delete_after_migration",
+    });
+  });
+
+  it("scans all FME pages for a case-insensitive search_term substring", async () => {
+    const registry = new Registry(makeConfig());
+    const firstObjects = Array.from({ length: 50 }, (_, index) => ({
+      id: `flag-${index + 1}`,
+      name: `flag_${index + 1}`,
+    }));
+    const secondObjects = Array.from({ length: 42 }, (_, index) => ({
+      id: `flag-${index + 51}`,
+      name: index === 41 ? "DELETE_after_migration" : `flag_${index + 51}`,
+    }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({ objects: firstObjects, totalCount: 92, offset: 0, limit: 50 })
+      .mockResolvedValueOnce({ objects: secondObjects, totalCount: 92, offset: 50, limit: 50 });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_feature_flag", "list", {
+      workspace_id: "ws-1",
+      page: 0,
+      size: 20,
+      search_term: "delete",
+    }) as { objects: Array<{ name: string }>; totalCount: number; offset: number; limit: number };
+
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    expect(firstRequest(mockRequest).params).toMatchObject({ offset: 0, limit: 50 });
+    expect(firstRequest(mockRequest).params).not.toHaveProperty("name");
+    expect((mockRequest.mock.calls[1][0] as RequestOptions).params).toMatchObject({ offset: 50, limit: 50 });
+    expect(result).toMatchObject({ totalCount: 1, offset: 0, limit: 20 });
+    expect(result.objects).toMatchObject([{ id: "flag-92", name: "DELETE_after_migration" }]);
+  });
+
+  it("aggregates FME API pages when the requested size exceeds the API maximum", async () => {
+    const registry = new Registry(makeConfig());
+    const firstObjects = Array.from({ length: 50 }, (_, index) => ({
+      id: `flag-${index + 1}`,
+      name: `flag_${index + 1}`,
+    }));
+    const secondObjects = Array.from({ length: 42 }, (_, index) => ({
+      id: `flag-${index + 51}`,
+      name: `flag_${index + 51}`,
+    }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({ objects: firstObjects, totalCount: 92, offset: 0, limit: 50 })
+      .mockResolvedValueOnce({ objects: secondObjects, totalCount: 92, offset: 50, limit: 50 });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_feature_flag", "list", {
+      workspace_id: "ws-1",
+      page: 0,
+      size: 100,
+    }) as { objects: unknown[]; totalCount: number; offset: number; limit: number };
+
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    expect(firstRequest(mockRequest).params).toMatchObject({ offset: 0, limit: 50 });
+    expect((mockRequest.mock.calls[1][0] as RequestOptions).params).toMatchObject({ offset: 50, limit: 50 });
+    expect(result).toMatchObject({
+      totalCount: 92,
+      offset: 0,
+      limit: 100,
+    });
+    expect(result.objects).toHaveLength(92);
+  });
+
+  it("preserves an explicit offset instead of deriving one from page", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ objects: [], totalCount: 92, offset: 70, limit: 20 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "list", {
+      workspace_id: "ws-1",
+      page: 1,
+      size: 20,
+      offset: 70,
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({ offset: 70, limit: 20 });
+  });
+});
+
 describe("FME execute action response projection", () => {
   let registry: Registry;
 
