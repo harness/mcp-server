@@ -35,6 +35,16 @@ describe("buildLiveSchemaCacheKey", () => {
       JSON.stringify(["connector", "project", "acct-1", "", ""]),
     );
   });
+
+  it("includes explicit identifier in cache key", () => {
+    expect(
+      buildLiveSchemaCacheKey("infrastructure", "acct-1", "project", {
+        orgId: "default",
+        projectId: "cxe_sandbox",
+        identifier: "my_infra",
+      }),
+    ).toBe(JSON.stringify(["infrastructure", "project", "acct-1", "default", "cxe_sandbox", "my_infra"]));
+  });
 });
 
 describe("bundledSnapshotMatchesScope", () => {

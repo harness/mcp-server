@@ -3,6 +3,8 @@ import type { HarnessYamlScope } from "./types.js";
 export interface LiveSchemaCacheKeyScope {
   orgId?: string;
   projectId?: string;
+  /** Explicit entity identifier — omitted when using the internal placeholder only. */
+  identifier?: string;
 }
 
 export function buildLiveSchemaCacheKey(
@@ -17,6 +19,9 @@ export function buildLiveSchemaCacheKey(
   }
   if (scope === "project") {
     key.push(identifiers.projectId ?? "");
+  }
+  if (identifiers.identifier) {
+    key.push(identifiers.identifier);
   }
   return JSON.stringify(key);
 }
