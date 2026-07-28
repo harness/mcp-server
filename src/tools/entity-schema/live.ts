@@ -146,10 +146,10 @@ function resolveScope(scope?: HarnessYamlScope): HarnessYamlScope {
   return scope ?? "account";
 }
 
+/** Build NG /yaml-schema query params. resourceType drives placeholder identifier resolution at project scope. */
 function buildYamlSchemaParams(
   resourceType: string,
   definition: LiveEntitySchemaDefinition,
-  _accountId: string,
   params: LiveSchemaFetchParams,
 ): Record<string, string> {
   const scope = resolveScope(params.scope);
@@ -365,7 +365,7 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
       const accountId = client.account;
       const scope = resolveScope(params.scope);
       // Validate scope/org/project before cache or bundled paths (same rules as live NG fetch).
-      buildYamlSchemaParams(resourceType, definition, accountId, params);
+      buildYamlSchemaParams(resourceType, definition, params);
 
       const cacheKey = buildLiveSchemaCacheKey(resourceType, accountId, scope, {
         orgId: params.orgId,
@@ -394,7 +394,7 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
         return entry;
       }
 
-      const queryParams = buildYamlSchemaParams(resourceType, definition, accountId, params);
+      const queryParams = buildYamlSchemaParams(resourceType, definition, params);
 
       try {
         log.debug("Fetching live entity YAML schema", {
