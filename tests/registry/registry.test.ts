@@ -1828,6 +1828,82 @@ describe("Registry", () => {
       });
     });
 
+    it("cost_recommendation list maps standard page and size inputs to offset and limit", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        page: 2,
+        size: 50,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body).toEqual({
+        filterType: "CCMRecommendation",
+        minSaving: 0,
+        daysBack: 4,
+        offset: 100,
+        limit: 50,
+      });
+    });
+
+    it("cost_recommendation list uses size as limit when page is omitted", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        size: 100,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.offset).toBe(0);
+      expect(call.body.limit).toBe(100);
+    });
+
+    it("cost_recommendation list prefers resource-specific offset and limit over page and size", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        page: 3,
+        size: 50,
+        offset: 15,
+        limit: 25,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.offset).toBe(15);
+      expect(call.body.limit).toBe(25);
+    });
+
+    it("cost_recommendation list prefers resource-specific limit over harness_list size", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        page: 1,
+        size: 50,
+        limit: 10,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.offset).toBe(10);
+      expect(call.body.limit).toBe(10);
+    });
+
+    it("cost_recommendation list computes offset from page using resolved limit", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        page: 1,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.offset).toBe(20);
+      expect(call.body.limit).toBe(20);
+    });
+
     it("cost_recommendation list passes cost_category and cost_buckets as costCategoryDTOs", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
       const client = makeClient(mockRequest);
