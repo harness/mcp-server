@@ -52,20 +52,19 @@ export const LIVE_ENTITY_SCHEMAS: Record<string, LiveEntitySchemaDefinition> = {
 export const LIVE_ENTITY_RESOURCE_TYPES = Object.keys(LIVE_ENTITY_SCHEMAS);
 
 /**
- * Placeholder identifier for NG /yaml-schema on live entity types at project scope.
- * Some NG builds reject project-scoped requests without identifier (scopedIdentifierConfig is null).
+ * Placeholder identifier for NG /yaml-schema on live entity types at any scope.
+ * Some NG builds reject scoped requests without identifier (scopedIdentifierConfig is null).
  * A dummy value returns the generic type-level schema — the entity does not need to exist.
  */
 export const YAML_SCHEMA_PLACEHOLDER_IDENTIFIER = "test";
 
-/** Resolve NG yaml-schema identifier: explicit param wins, else placeholder at project scope. */
+/** Resolve NG yaml-schema identifier: explicit param wins, else placeholder for live entity types. */
 export function resolveYamlSchemaIdentifier(
   resourceType: string,
-  scope: HarnessYamlScope,
   params: LiveSchemaFetchParams,
 ): string | undefined {
   if (params.identifier) return params.identifier;
-  if (scope === "project" && resourceType in LIVE_ENTITY_SCHEMAS) {
+  if (resourceType in LIVE_ENTITY_SCHEMAS) {
     return YAML_SCHEMA_PLACEHOLDER_IDENTIFIER;
   }
   return undefined;
@@ -146,7 +145,7 @@ function resolveScope(scope?: HarnessYamlScope): HarnessYamlScope {
   return scope ?? "account";
 }
 
-/** Build NG /yaml-schema query params. resourceType drives placeholder identifier resolution at project scope. */
+/** Build NG /yaml-schema query params. resourceType drives placeholder identifier resolution. */
 function buildYamlSchemaParams(
   resourceType: string,
   definition: LiveEntitySchemaDefinition,
@@ -172,7 +171,7 @@ function buildYamlSchemaParams(
     query.projectIdentifier = params.projectId;
   }
 
-  const resolvedIdentifier = resolveYamlSchemaIdentifier(resourceType, scope, params);
+  const resolvedIdentifier = resolveYamlSchemaIdentifier(resourceType, params);
   if (resolvedIdentifier) {
     query.identifier = resolvedIdentifier;
   }

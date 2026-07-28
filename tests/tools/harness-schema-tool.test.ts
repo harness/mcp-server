@@ -90,7 +90,11 @@ describe("harness_schema live entities", () => {
       expect.objectContaining({
         method: "GET",
         path: "/ng/api/yaml-schema",
-        params: expect.objectContaining({ entityType: "Connectors", scope: "account" }),
+        params: expect.objectContaining({
+          entityType: "Connectors",
+          scope: "account",
+          identifier: YAML_SCHEMA_PLACEHOLDER_IDENTIFIER,
+        }),
       }),
     );
     expect(parsed.source).toBe("ng-yaml-schema");
@@ -144,6 +148,26 @@ describe("harness_schema live entities", () => {
           scope: "project",
           orgIdentifier: "my-org",
           projectIdentifier: "my-proj",
+        }),
+      }),
+    );
+  });
+
+  it("passes placeholder identifier for org-scoped environment live fetch", async () => {
+    requestMock.mockClear();
+    await server.call("harness_schema", {
+      resource_type: "environment",
+      scope: "org",
+      org_id: "my-org",
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          entityType: "Environment",
+          scope: "org",
+          orgIdentifier: "my-org",
+          identifier: YAML_SCHEMA_PLACEHOLDER_IDENTIFIER,
         }),
       }),
     );

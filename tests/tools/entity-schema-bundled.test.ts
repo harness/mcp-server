@@ -71,6 +71,53 @@ describe("entity schema bundled + live fallback", () => {
     expect(client.request).toHaveBeenCalledTimes(1);
   });
 
+  it("passes placeholder identifier for account-scoped connector live fetch", async () => {
+    vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue(undefined);
+    vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(false);
+
+    const client = {
+      account: "acct-123",
+      request: vi.fn().mockResolvedValue({ data: { type: "object" } }),
+    } as unknown as HarnessClient;
+
+    const fetcher = createLiveSchemaFetcher(client);
+    await fetcher.fetch("connector", { scope: "account" });
+
+    expect(client.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          entityType: "Connectors",
+          scope: "account",
+          identifier: YAML_SCHEMA_PLACEHOLDER_IDENTIFIER,
+        }),
+      }),
+    );
+  });
+
+  it("passes placeholder identifier for org-scoped secret live fetch", async () => {
+    vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue(undefined);
+    vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(false);
+
+    const client = {
+      account: "acct-123",
+      request: vi.fn().mockResolvedValue({ data: { type: "object" } }),
+    } as unknown as HarnessClient;
+
+    const fetcher = createLiveSchemaFetcher(client);
+    await fetcher.fetch("secret", { scope: "org", orgId: "default" });
+
+    expect(client.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          entityType: "Secrets",
+          scope: "org",
+          orgIdentifier: "default",
+          identifier: YAML_SCHEMA_PLACEHOLDER_IDENTIFIER,
+        }),
+      }),
+    );
+  });
+
   it("passes placeholder identifier for project-scoped infrastructure live fetch", async () => {
     vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue(undefined);
     vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(false);

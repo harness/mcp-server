@@ -290,7 +290,7 @@ export function registerSchemaTool(
           .describe(
             "Optional entity identifier for NG yaml-schema. Use when updating an existing entity " +
               "to fetch an entity-specific schema. Omit for generic create-time schemas — a placeholder " +
-              "identifier is sent automatically for all project-scoped live entity types.",
+              "identifier is sent automatically for all live entity types at any scope.",
           ),
       },
       outputSchema: schemaOutputSchema,
