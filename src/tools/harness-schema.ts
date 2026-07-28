@@ -284,6 +284,14 @@ export function registerSchemaTool(
           .string()
           .optional()
           .describe("Project identifier — required when scope is project (live entity schemas)."),
+        identifier: z
+          .string()
+          .optional()
+          .describe(
+            "Optional entity identifier for NG yaml-schema. Use when updating an existing service or infrastructure " +
+              "to fetch a deployment-type-specific schema. Omit for generic create-time schemas — a placeholder " +
+              "identifier is sent automatically for project-scoped service/infrastructure.",
+          ),
       },
       outputSchema: schemaOutputSchema,
       annotations: {
@@ -356,6 +364,7 @@ export function registerSchemaTool(
             scope: args.scope as HarnessYamlScope | undefined,
             orgId: args.org_id,
             projectId: args.project_id,
+            identifier: args.identifier,
           });
 
           if (!fetched) {

@@ -12,6 +12,8 @@ export interface LiveSchemaFetchParams {
   scope?: HarnessYamlScope;
   orgId?: string;
   projectId?: string;
+  /** Override NG yaml-schema identifier — use for entity-specific service/infrastructure schemas. */
+  identifier?: string;
 }
 
 export interface EntitySchemaFetchResult {
