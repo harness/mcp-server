@@ -1564,6 +1564,64 @@ describe("pipelineHandler", () => {
       expect(logs["step-a"].log).toBeUndefined();
     });
 
+    it("excludes structural graph nodes before applying max_all_step_logs", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+      mockFn.mockResolvedValue("log output");
+
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "build", name: "Build", status: "Success", steps: [
+          { id: "step-a", name: "StepA", status: "Success" },
+          { id: "step-b", name: "StepB", status: "Success" },
+          { id: "step-c", name: "StepC", status: "Success" },
+        ] }],
+        nodeMapEntries: {
+          pipeline: {
+            uuid: "pipeline", identifier: "pipeline", name: "Pipeline",
+            baseFqn: "pipeline", status: "Success", startTs: NOW, endTs: NOW + 10000,
+          },
+          "stage-build": {
+            uuid: "stage-build", identifier: "build", name: "Build",
+            baseFqn: "pipeline.stages.build", status: "Success",
+            logBaseKey: "log/build", startTs: NOW, endTs: NOW + 10000,
+          },
+          "step-a": {
+            uuid: "step-a", identifier: "step-a", name: "StepA",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-a",
+            status: "Success", logBaseKey: "log/step-a", startTs: NOW + 1000, endTs: NOW + 2000,
+          },
+          "step-b": {
+            uuid: "step-b", identifier: "step-b", name: "StepB",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-b",
+            status: "Success", logBaseKey: "log/step-b", startTs: NOW + 2000, endTs: NOW + 3000,
+          },
+          "step-c": {
+            uuid: "step-c", identifier: "step-c", name: "StepC",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-c",
+            status: "Success", logBaseKey: "log/step-c", startTs: NOW + 3000, endTs: NOW + 4000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true, max_all_step_logs: 2 },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      const logs = result.all_step_logs as Record<string, Record<string, unknown>>;
+      expect(Object.keys(logs)).toEqual(["step-a", "step-b"]);
+      expect(mockFn).toHaveBeenCalledTimes(2);
+
+      const truncated = result.all_step_logs_truncated as { shown: number; total: number };
+      expect(truncated).toEqual({ shown: 2, total: 3 });
+    });
+
     it("caps total steps fetched by max_all_step_logs and emits truncation marker", async () => {
       const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
       const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
