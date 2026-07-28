@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import * as bundled from "../../src/tools/entity-schema/bundled.js";
-import { createLiveSchemaFetcher, YAML_SCHEMA_PLACEHOLDER_IDENTIFIER } from "../../src/tools/entity-schema/live.js";
+import {
+  createLiveSchemaFetcher,
+  resolveYamlSchemaIdentifier,
+  YAML_SCHEMA_PLACEHOLDER_IDENTIFIER,
+} from "../../src/tools/entity-schema/live.js";
 
 describe("entity schema bundled + live fallback", () => {
   afterEach(() => {
@@ -69,6 +73,63 @@ describe("entity schema bundled + live fallback", () => {
 
     expect(result).toEqual({ schema: liveSchema, source: "ng-yaml-schema" });
     expect(client.request).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolveYamlSchemaIdentifier returns placeholder only at project scope", () => {
+    const params = { orgId: "default", projectId: "cxe_sandbox" };
+
+    expect(resolveYamlSchemaIdentifier("service", "project", params)).toBe(
+      YAML_SCHEMA_PLACEHOLDER_IDENTIFIER,
+    );
+    expect(resolveYamlSchemaIdentifier("service", "org", { orgId: "default" })).toBeUndefined();
+    expect(resolveYamlSchemaIdentifier("service", "account", {})).toBeUndefined();
+    expect(resolveYamlSchemaIdentifier("pipeline", "project", params)).toBeUndefined();
+  });
+
+  it("does not pass placeholder identifier for account-scoped live fetch", async () => {
+    vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue(undefined);
+    vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(false);
+
+    const client = {
+      account: "acct-123",
+      request: vi.fn().mockResolvedValue({ data: { type: "object" } }),
+    } as unknown as HarnessClient;
+
+    const fetcher = createLiveSchemaFetcher(client);
+    await fetcher.fetch("service", { scope: "account" });
+
+    expect(client.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.not.objectContaining({ identifier: expect.anything() }),
+      }),
+    );
+  });
+
+  it("does not pass placeholder identifier for org-scoped live fetch", async () => {
+    vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue(undefined);
+    vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(false);
+
+    const client = {
+      account: "acct-123",
+      request: vi.fn().mockResolvedValue({ data: { type: "object" } }),
+    } as unknown as HarnessClient;
+
+    const fetcher = createLiveSchemaFetcher(client);
+    await fetcher.fetch("service", { scope: "org", orgId: "default" });
+
+    expect(client.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          scope: "org",
+          orgIdentifier: "default",
+        }),
+      }),
+    );
+    expect(client.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.not.objectContaining({ identifier: expect.anything() }),
+      }),
+    );
   });
 
   it("passes placeholder identifier for project-scoped infrastructure live fetch", async () => {

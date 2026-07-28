@@ -52,13 +52,19 @@ export const LIVE_ENTITY_SCHEMAS: Record<string, LiveEntitySchemaDefinition> = {
 export const LIVE_ENTITY_RESOURCE_TYPES = Object.keys(LIVE_ENTITY_SCHEMAS);
 
 /**
- * Placeholder identifier for NG /yaml-schema on live entity types at project scope.
- * Some NG builds reject project-scoped requests without identifier (scopedIdentifierConfig is null).
- * A dummy value returns the generic type-level schema — the entity does not need to exist.
+ * Placeholder identifier for NG /yaml-schema on live entity types at project scope only.
+ *
+ * Account- and org-scoped requests return a type-level schema without identifier.
+ * Project scope is different: some NG builds reject the request when identifier is
+ * omitted (scopedIdentifierConfig is null). A dummy value returns the generic schema —
+ * the entity does not need to exist.
  */
 export const YAML_SCHEMA_PLACEHOLDER_IDENTIFIER = "test";
 
-/** Resolve NG yaml-schema identifier: explicit param wins, else placeholder at project scope. */
+/**
+ * Resolve NG yaml-schema identifier.
+ * Explicit param wins; otherwise send the placeholder only at project scope.
+ */
 export function resolveYamlSchemaIdentifier(
   resourceType: string,
   scope: HarnessYamlScope,
