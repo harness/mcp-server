@@ -98,7 +98,7 @@ describe("entity schema bundled + live fallback", () => {
     );
   });
 
-  it("does not pass placeholder identifier for connector project scope", async () => {
+  it("passes placeholder identifier for project-scoped connector live fetch", async () => {
     vi.spyOn(bundled, "getBundledEntitySchema").mockReturnValue(undefined);
     vi.spyOn(bundled, "bundledSnapshotsMatchAccount").mockReturnValue(false);
 
@@ -114,8 +114,14 @@ describe("entity schema bundled + live fallback", () => {
       projectId: "cxe_sandbox",
     });
 
-    const call = client.request.mock.calls[0]?.[0] as { params?: Record<string, string> };
-    expect(call.params?.identifier).toBeUndefined();
+    expect(client.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          entityType: "Connectors",
+          identifier: YAML_SCHEMA_PLACEHOLDER_IDENTIFIER,
+        }),
+      }),
+    );
   });
 
   it("uses explicit identifier instead of placeholder and skips bundled", async () => {
