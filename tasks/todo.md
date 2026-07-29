@@ -1,5 +1,35 @@
 # Harness MCP Server — Task Tracking
 
+## Issue #119 — Full Registry Structural Invariants (2026-07-21)
+- [x] Confirm Issue #119 is unassigned, unclaimed by another contributor, has no Development branch/PR, and remains unresolved on current main
+- [x] Audit every invariant in `tests/registry/structural-validation.test.ts` against default, opt-in, and both pipeline resource types
+- [x] Extend universal structural invariants to the full registry while preserving intentional default-only semantics
+- [x] Add focused regression coverage proving opt-in resources and both pipeline resource types participate in validation
+- [x] Run focused tests, standards, typecheck, full tests, and a temporary falsifiability mutation
+- [x] Review final status/diff and record verification results
+
+### Plan
+- Reuse the existing full-registry construction instead of duplicating toolset assembly.
+- Classify each invariant by whether it describes resource/endpoint structure or default exposure policy; only the former moves to full-registry coverage.
+- Verify historical Issue assumptions against current runtime architecture before choosing the full-registry helper shape.
+- Use a small test-only regression fixture/helper if needed to prove coverage without copying the production registry.
+- Do not change production registry data merely to satisfy newly expanded assertions; investigate each failure first.
+
+### Review
+- Issue #119 remained open, unassigned, and without Development branches/PRs. The only claim comment is by `rainhotel (lilinhao)`, matching the local contributor identity; the Activity commit is an unrelated FME fix from a fork whose PR number collided with `harness#119`.
+- Replaced default-registry iteration with a single full Registry that reflects current main: `pipeline` and `pipeline_v1` are always registered, while `HARNESS_PIPELINE_VERSION` only selects the default preference. Kept default exposure assertions intentionally scoped to `defaultRegistry`.
+- Derived opt-in toolsets/resources from `ToolsetDefinition.optIn`, removed five redundant opt-in-only structural checks, and added assertions that the default Registry contains exactly non-opt-in toolsets.
+- Added an end-to-end invalid-scope regression by injecting a test-only opt-in toolset through `RegistryOptions.additionalToolsets`; the same `collectInvalidScopes(Registry)` validator is used by the production full-registry invariant and the fixture.
+- Falsifiability passed: temporarily blanking `ansible_inventory.displayName` failed the expanded invariant; restoring the file returned the target suite to green, with no production-file diff retained.
+- Verification passed: target structural test (35 tests), related registry tests (208 tests), `pnpm standards:check` (77 tests), `pnpm typecheck`, `pnpm build`, and the full suite with `--testTimeout=30000` (117 files, 2542 passed, 8 skipped). The original `pnpm test` timeout was reproduced unchanged on a clean `origin/main` worktree (same local semantic-search test at 5 seconds), proving it is a machine-specific baseline issue rather than this diff. `pnpm docs:check` remains blocked on Windows by the existing absolute-path ESM import error (`ERR_UNSUPPORTED_ESM_URL_SCHEME`).
+
+### Strict Review Follow-up
+- [x] Remove the stale V0/V1 Registry duplication now that both pipeline resource types are registered simultaneously
+- [x] Derive opt-in toolsets and resource types from `ToolsetDefinition.optIn`, not default/full set differences
+- [x] Replace the hand-built invalid resource array with an end-to-end `RegistryOptions.additionalToolsets` fixture
+- [x] Re-run focused and broad verification, including a clean-main baseline for the default `pnpm test` timeout
+- [x] Record the correction in `tasks/lessons.md` and update this review summary
+
 ## Version Bump 3.2.12 (2026-07-19)
 - [x] Update package and bundle manifest versions to 3.2.12
 - [x] Update the release metadata version test

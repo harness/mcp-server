@@ -2,12 +2,12 @@
  * Structural validation of all toolset definitions.
  *
  * Validates path/param consistency, bodySchema presence on write ops,
- * and general correctness across all 60+ resource types.
+ * and general correctness across all 200+ resource types.
  */
 import { describe, it, expect } from "vitest";
 import { Registry, ALL_TOOLSET_NAMES } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
-import type { EndpointSpec, ResourceDefinition } from "../../src/registry/types.js";
+import type { EndpointSpec, ResourceDefinition, ToolsetDefinition } from "../../src/registry/types.js";
 
 function makeConfig(): Config {
   return {
@@ -28,42 +28,38 @@ function extractPathPlaceholders(path: string): string[] {
   return matches ? matches.map((m) => m.slice(1, -1)) : [];
 }
 
-describe("Toolset structural validation", () => {
-  const registry = new Registry(makeConfig());
-  const allTypes = registry.getAllResourceTypes();
-
-  /** Defaults plus every opt-in toolset — used for universal write-metadata checks. */
-  const fullRegistryV0 = new Registry({
-    ...makeConfig(),
-    HARNESS_TOOLSETS: ALL_TOOLSET_NAMES.map((n) => `+${n}`).join(","),
-    HARNESS_PIPELINE_VERSION: "0",
-  } as Config);
-  const fullRegistryV1 = new Registry({
-    ...makeConfig(),
-    HARNESS_TOOLSETS: ALL_TOOLSET_NAMES.map((n) => `+${n}`).join(","),
-    HARNESS_PIPELINE_VERSION: "1",
-  } as Config);
-
-  // Union of both pipeline versions — ensures both pipeline and pipeline_v1 are covered
-  const allFullTypes = [
-    ...new Set([...fullRegistryV0.getAllResourceTypes(), ...fullRegistryV1.getAllResourceTypes()]),
-  ];
-
-  /** Get resource def from whichever full registry includes this type (pipeline version split). */
-  function getFullResource(type: string): ResourceDefinition {
-    try {
-      return fullRegistryV0.getResource(type);
-    } catch {
-      return fullRegistryV1.getResource(type);
+function collectInvalidScopes(registry: Registry): string[] {
+  const validScopes = new Set(["project", "org", "account"]);
+  const invalid: string[] = [];
+  for (const type of registry.getAllResourceTypes()) {
+    const def = registry.getResource(type);
+    if (!validScopes.has(def.scope)) {
+      invalid.push(`${type}: scope="${def.scope}"`);
     }
   }
+  return invalid;
+}
+
+describe("Toolset structural validation", () => {
+  const defaultRegistry = new Registry(makeConfig());
+  const fullToolsetSelection = ALL_TOOLSET_NAMES.map((name) => `+${name}`).join(",");
+  /** Defaults plus every opt-in toolset. Both pipeline resource types are always registered. */
+  const fullRegistry = new Registry({
+    ...makeConfig(),
+    HARNESS_TOOLSETS: fullToolsetSelection,
+  });
+  const allFullTypes = fullRegistry.getAllResourceTypes();
+  const optInToolsets = fullRegistry.getAllToolsets().filter((toolset) => toolset.optIn);
+  const optInTypes = optInToolsets.flatMap((toolset) =>
+    toolset.resources.map((resource) => resource.resourceType),
+  );
 
   describe("path/param consistency", () => {
     it("every path placeholder has a matching pathParams entry", () => {
       const issues: string[] = [];
 
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         const allSpecs: [string, EndpointSpec][] = [
           ...Object.entries(def.operations) as [string, EndpointSpec][],
           ...Object.entries(def.executeActions ?? {}) as [string, EndpointSpec][],
@@ -100,8 +96,8 @@ describe("Toolset structural validation", () => {
     it("every pathParams value corresponds to a path placeholder", () => {
       const issues: string[] = [];
 
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         const allSpecs: [string, EndpointSpec][] = [
           ...Object.entries(def.operations) as [string, EndpointSpec][],
           ...Object.entries(def.executeActions ?? {}) as [string, EndpointSpec][],
@@ -130,8 +126,8 @@ describe("Toolset structural validation", () => {
     it("pathParams keys use snake_case (matching tool input conventions)", () => {
       const issues: string[] = [];
 
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         const allSpecs: [string, EndpointSpec][] = [
           ...Object.entries(def.operations) as [string, EndpointSpec][],
           ...Object.entries(def.executeActions ?? {}) as [string, EndpointSpec][],
@@ -154,8 +150,8 @@ describe("Toolset structural validation", () => {
   describe("identifierFields consistency", () => {
     it("every resource type has identifierFields defined", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         if (!def.identifierFields) {
           missing.push(type);
         }
@@ -167,8 +163,8 @@ describe("Toolset structural validation", () => {
       const scopeOnlyParams = new Set(["org_id", "project_id", "account_id", "org", "project"]);
       const issues: string[] = [];
 
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         if (!def.operations.get || def.identifierFields.length > 0) continue;
 
         const getSpec = def.operations.get;
@@ -187,8 +183,8 @@ describe("Toolset structural validation", () => {
 
     it("identifierFields referenced in get pathParams exist", () => {
       const issues: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         const getSpec = def.operations.get;
         if (!getSpec?.pathParams) continue;
 
@@ -207,23 +203,15 @@ describe("Toolset structural validation", () => {
 
   describe("scope consistency", () => {
     it("every resource has a valid scope", () => {
-      const validScopes = new Set(["project", "org", "account"]);
-      const invalid: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
-        if (!validScopes.has(def.scope)) {
-          invalid.push(`${type}: scope="${def.scope}"`);
-        }
-      }
-      expect(invalid).toEqual([]);
+      expect(collectInvalidScopes(fullRegistry)).toEqual([]);
     });
   });
 
   describe("HTTP method conventions", () => {
     it("list operations use GET or POST", () => {
       const issues: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         const listSpec = def.operations.list;
         if (listSpec && listSpec.method !== "GET" && listSpec.method !== "POST") {
           issues.push(`${type}.list: unexpected method ${listSpec.method}`);
@@ -234,8 +222,8 @@ describe("Toolset structural validation", () => {
 
     it("get operations use GET or POST (some analytics APIs use POST)", () => {
       const issues: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         const getSpec = def.operations.get;
         if (getSpec && getSpec.method !== "GET" && getSpec.method !== "POST") {
           issues.push(`${type}.get: unexpected method ${getSpec.method}`);
@@ -246,8 +234,8 @@ describe("Toolset structural validation", () => {
 
     it("create operations use POST", () => {
       const issues: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         const createSpec = def.operations.create;
         if (createSpec && createSpec.method !== "POST") {
           issues.push(`${type}.create: unexpected method ${createSpec.method}`);
@@ -258,8 +246,8 @@ describe("Toolset structural validation", () => {
 
     it("delete operations use DELETE", () => {
       const issues: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         const deleteSpec = def.operations.delete;
         if (deleteSpec && deleteSpec.method !== "DELETE") {
           issues.push(`${type}.delete: unexpected method ${deleteSpec.method}`);
@@ -270,8 +258,8 @@ describe("Toolset structural validation", () => {
 
     it("update operations use PUT or PATCH", () => {
       const issues: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         const updateSpec = def.operations.update;
         if (updateSpec && updateSpec.method !== "PUT" && updateSpec.method !== "PATCH") {
           issues.push(`${type}.update: unexpected method ${updateSpec.method}`);
@@ -284,8 +272,8 @@ describe("Toolset structural validation", () => {
   describe("responseExtractor presence", () => {
     it("every operation has a responseExtractor", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         for (const [op, spec] of Object.entries(def.operations)) {
           if (!spec.responseExtractor) {
             missing.push(`${type}.${op}`);
@@ -304,8 +292,8 @@ describe("Toolset structural validation", () => {
   describe("write operations require bodyBuilder or bodySchema", () => {
     it("create operations have a bodyBuilder", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         if (def.operations.create && !def.operations.create.bodyBuilder) {
           missing.push(`${type}.create`);
         }
@@ -315,8 +303,8 @@ describe("Toolset structural validation", () => {
 
     it("update operations have a bodyBuilder", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         if (def.operations.update && !def.operations.update.bodyBuilder) {
           missing.push(`${type}.update`);
         }
@@ -328,7 +316,7 @@ describe("Toolset structural validation", () => {
   describe("toolset/resource cross-references", () => {
     it("every resource's toolset field matches its parent toolset name", () => {
       const issues: string[] = [];
-      for (const ts of registry.getAllToolsets()) {
+      for (const ts of fullRegistry.getAllToolsets()) {
         for (const res of ts.resources) {
           if (res.toolset !== ts.name) {
             issues.push(`${res.resourceType}: toolset="${res.toolset}" but parent toolset is "${ts.name}"`);
@@ -341,7 +329,7 @@ describe("Toolset structural validation", () => {
     it("no duplicate resource type names across toolsets", () => {
       const seen = new Map<string, string>();
       const dupes: string[] = [];
-      for (const ts of registry.getAllToolsets()) {
+      for (const ts of fullRegistry.getAllToolsets()) {
         for (const res of ts.resources) {
           const existing = seen.get(res.resourceType);
           if (existing) {
@@ -360,8 +348,8 @@ describe("Toolset structural validation", () => {
 
     it("every operation endpoint spec has operationPolicy", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         for (const [op, spec] of Object.entries(def.operations)) {
           if (!spec.operationPolicy) {
             missing.push(`${type}.${op}`);
@@ -373,8 +361,8 @@ describe("Toolset structural validation", () => {
 
     it("every executeAction endpoint spec has operationPolicy", () => {
       const missing: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
           if (!spec.operationPolicy) {
             missing.push(`${type}.${action}`);
@@ -386,8 +374,8 @@ describe("Toolset structural validation", () => {
 
     it("operationPolicy.risk is a valid RiskLevel", () => {
       const issues: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         for (const [op, spec] of Object.entries(def.operations)) {
           if (spec.operationPolicy && !VALID_RISK_LEVELS.has(spec.operationPolicy.risk)) {
             issues.push(`${type}.${op}: invalid risk "${spec.operationPolicy.risk}"`);
@@ -404,8 +392,8 @@ describe("Toolset structural validation", () => {
 
     it("operationPolicy.retryPolicy is a valid RetryPolicy", () => {
       const issues: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         for (const [op, spec] of Object.entries(def.operations)) {
           if (spec.operationPolicy && !VALID_RETRY_POLICIES.has(spec.operationPolicy.retryPolicy)) {
             issues.push(`${type}.${op}: invalid retryPolicy "${spec.operationPolicy.retryPolicy}"`);
@@ -422,8 +410,8 @@ describe("Toolset structural validation", () => {
 
     it("all delete operations have risk: destructive", () => {
       const issues: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         const deleteSpec = def.operations.delete;
         if (deleteSpec?.operationPolicy && deleteSpec.operationPolicy.risk !== "destructive") {
           issues.push(`${type}.delete: risk is "${deleteSpec.operationPolicy.risk}", expected "destructive"`);
@@ -434,8 +422,8 @@ describe("Toolset structural validation", () => {
 
     it("all list and get operations have risk: read", () => {
       const issues: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         for (const op of ["list", "get"] as const) {
           const spec = def.operations[op];
           if (spec?.operationPolicy && spec.operationPolicy.risk !== "read") {
@@ -448,8 +436,8 @@ describe("Toolset structural validation", () => {
 
     it("no endpoint spec has blockWithoutConfirmation (removed field)", () => {
       const found: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         for (const [op, spec] of Object.entries(def.operations)) {
           if ("blockWithoutConfirmation" in spec) {
             found.push(`${type}.${op}`);
@@ -469,7 +457,7 @@ describe("Toolset structural validation", () => {
     it("every create operation has bodySchema", () => {
       const missing: string[] = [];
       for (const type of allFullTypes) {
-        const def = getFullResource(type);
+        const def = fullRegistry.getResource(type);
         if (def.operations.create && !def.operations.create.bodySchema) {
           missing.push(`${type}.create`);
         }
@@ -480,7 +468,7 @@ describe("Toolset structural validation", () => {
     it("every update operation has bodySchema", () => {
       const missing: string[] = [];
       for (const type of allFullTypes) {
-        const def = getFullResource(type);
+        const def = fullRegistry.getResource(type);
         if (def.operations.update && !def.operations.update.bodySchema) {
           missing.push(`${type}.update`);
         }
@@ -492,7 +480,7 @@ describe("Toolset structural validation", () => {
       const missing: string[] = [];
       const RISKY = new Set(["medium_write", "high_write", "destructive"]);
       for (const type of allFullTypes) {
-        const def = getFullResource(type);
+        const def = fullRegistry.getResource(type);
         for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
           const risk = spec.operationPolicy?.risk;
           if (risk && RISKY.has(risk) && !spec.actionDescription) {
@@ -507,7 +495,7 @@ describe("Toolset structural validation", () => {
       const missing: string[] = [];
       const RISKY = new Set(["medium_write", "high_write", "destructive"]);
       for (const type of allFullTypes) {
-        const def = getFullResource(type);
+        const def = fullRegistry.getResource(type);
         for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
           const risk = spec.operationPolicy?.risk;
           if (risk && RISKY.has(risk) && !spec.bodySchema) {
@@ -521,7 +509,7 @@ describe("Toolset structural validation", () => {
     it("every execute action has actionDescription or description", () => {
       const missing: string[] = [];
       for (const type of allFullTypes) {
-        const def = getFullResource(type);
+        const def = fullRegistry.getResource(type);
         for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
           if (!spec.actionDescription && !spec.description) {
             missing.push(`${type}.${action}`);
@@ -535,8 +523,8 @@ describe("Toolset structural validation", () => {
   describe("description completeness", () => {
     it("every resource type has a non-empty description", () => {
       const empty: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         if (!def.description || def.description.trim() === "") {
           empty.push(type);
         }
@@ -546,8 +534,8 @@ describe("Toolset structural validation", () => {
 
     it("every resource type has a non-empty displayName", () => {
       const empty: string[] = [];
-      for (const type of allTypes) {
-        const def = registry.getResource(type);
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
         if (!def.displayName || def.displayName.trim() === "") {
           empty.push(type);
         }
@@ -555,93 +543,70 @@ describe("Toolset structural validation", () => {
       expect(empty).toEqual([]);
     });
   });
-});
 
-describe("Opt-in toolset structural validation", () => {
-  const defaultRegistry = new Registry(makeConfig());
-  const defaultNames = new Set(defaultRegistry.getAllToolsets().map((t) => t.name));
-  const optInNames = ALL_TOOLSET_NAMES.filter((n) => !defaultNames.has(n));
-
-  if (optInNames.length === 0) {
-    it("no opt-in toolsets to validate", () => {
-      expect(optInNames).toEqual([]);
+  describe("full-registry coverage regression", () => {
+    it("covers defaults, all toolsets (incl. opt-in), and both pipeline resource types", () => {
+      const loadedToolsets = fullRegistry.getAllToolsets().map((t) => t.name).sort();
+      expect(loadedToolsets).toEqual([...ALL_TOOLSET_NAMES].sort());
+      expect(allFullTypes).toEqual(expect.arrayContaining(defaultRegistry.getAllResourceTypes()));
+      expect(optInTypes.length).toBeGreaterThan(0);
+      expect(allFullTypes).toEqual(expect.arrayContaining(optInTypes));
+      expect(allFullTypes).toEqual(expect.arrayContaining(["pipeline", "pipeline_v1"]));
     });
-    return;
-  }
 
-  const additive = optInNames.map((n) => `+${n}`).join(",");
-  const expandedRegistry = new Registry({ ...makeConfig(), HARNESS_TOOLSETS: additive });
-  const expandedTypes = expandedRegistry.getAllResourceTypes();
+    it("rejects an invalid opt-in resource added through the Registry", () => {
+      const invalidToolset: ToolsetDefinition = {
+        name: "invalid-structural-fixture",
+        displayName: "Invalid Structural Fixture",
+        description: "Test-only opt-in toolset with an invalid resource definition.",
+        optIn: true,
+        resources: [
+          {
+            resourceType: "invalid_scope_fixture",
+            displayName: "Invalid Scope Fixture",
+            description: "Test-only resource used to prove full-registry validation.",
+            toolset: "invalid-structural-fixture",
+            scope: "invalid" as ResourceDefinition["scope"],
+            identifierFields: [],
+            operations: {},
+          },
+        ],
+      };
+      const invalidRegistry = new Registry(
+        {
+          ...makeConfig(),
+          HARNESS_TOOLSETS: `${fullToolsetSelection},+invalid-structural-fixture`,
+        },
+        { additionalToolsets: [invalidToolset] },
+      );
 
-  it("expanded registry includes more resource types than defaults", () => {
-    const defaultTypes = defaultRegistry.getAllResourceTypes();
-    expect(expandedTypes.length).toBeGreaterThan(defaultTypes.length);
+      const invalidTypes = invalidRegistry.getAllResourceTypes();
+      expect(invalidTypes).toEqual(expect.arrayContaining(allFullTypes));
+      expect(invalidTypes).toContain("invalid_scope_fixture");
+      expect(collectInvalidScopes(invalidRegistry)).toEqual([
+        'invalid_scope_fixture: scope="invalid"',
+      ]);
+    });
   });
 
-  it("expanded registry includes all opt-in toolsets", () => {
-    const loadedNames = new Set(expandedRegistry.getAllToolsets().map((t) => t.name));
-    const missing = optInNames.filter((n) => !loadedNames.has(n));
-    expect(missing, `Opt-in toolsets not loaded: ${missing.join(", ")}`).toEqual([]);
-  });
+  describe("default/opt-in exposure semantics", () => {
+    // These checks intentionally compare default visibility with the expanded
+    // registry; structural quality is validated above for every full-registry resource.
+    it("default registry loads exactly the non-opt-in toolsets", () => {
+      const expectedNames = fullRegistry.getAllToolsets()
+        .filter((toolset) => !toolset.optIn)
+        .map((toolset) => toolset.name)
+        .sort();
+      const actualNames = defaultRegistry.getAllToolsets().map((toolset) => toolset.name).sort();
 
-  it("every opt-in resource type has identifierFields defined", () => {
-    const missing: string[] = [];
-    for (const type of expandedTypes) {
-      const def = expandedRegistry.getResource(type);
-      if (!def.identifierFields) {
-        missing.push(type);
-      }
-    }
-    expect(missing, `Missing identifierFields: ${missing.join(", ")}`).toEqual([]);
-  });
+      expect(actualNames).toEqual(expectedNames);
+    });
 
-  it("every opt-in operation has a responseExtractor", () => {
-    const missing: string[] = [];
-    for (const type of expandedTypes) {
-      const def = expandedRegistry.getResource(type);
-      for (const [op, spec] of Object.entries(def.operations)) {
-        if (!spec.responseExtractor) missing.push(`${type}.${op}`);
-      }
-      for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
-        if (!spec.responseExtractor) missing.push(`${type}.${action}`);
-      }
-    }
-    expect(missing, `Missing responseExtractor: ${missing.join(", ")}`).toEqual([]);
-  });
+    it("default registry excludes every declared opt-in resource type", () => {
+      const defaultTypes = new Set(defaultRegistry.getAllResourceTypes());
+      const unexpectedlyExposed = optInTypes.filter((type) => defaultTypes.has(type));
 
-  it("every opt-in operation has operationPolicy", () => {
-    const missing: string[] = [];
-    for (const type of expandedTypes) {
-      const def = expandedRegistry.getResource(type);
-      for (const [op, spec] of Object.entries(def.operations)) {
-        if (!spec.operationPolicy) missing.push(`${type}.${op}`);
-      }
-      for (const [action, spec] of Object.entries(def.executeActions ?? {})) {
-        if (!spec.operationPolicy) missing.push(`${type}.${action}`);
-      }
-    }
-    expect(missing, `Missing operationPolicy:\n${missing.join("\n")}`).toEqual([]);
-  });
-
-  it("every opt-in resource has a valid scope", () => {
-    const validScopes = new Set(["project", "org", "account"]);
-    const invalid: string[] = [];
-    for (const type of expandedTypes) {
-      const def = expandedRegistry.getResource(type);
-      if (!validScopes.has(def.scope)) {
-        invalid.push(`${type}: scope="${def.scope}"`);
-      }
-    }
-    expect(invalid).toEqual([]);
-  });
-
-  it("every opt-in resource has a non-empty description and displayName", () => {
-    const empty: string[] = [];
-    for (const type of expandedTypes) {
-      const def = expandedRegistry.getResource(type);
-      if (!def.description?.trim()) empty.push(`${type}: missing description`);
-      if (!def.displayName?.trim()) empty.push(`${type}: missing displayName`);
-    }
-    expect(empty).toEqual([]);
+      expect(unexpectedlyExposed).toEqual([]);
+    });
   });
 });
