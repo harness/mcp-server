@@ -277,13 +277,82 @@ describe("template paramsSchema for harness_describe", () => {
     }
   });
 
-  it("template (v0) get/update/delete expose version_label via params", () => {
-    const def = registry.getResource("template");
-    expect(def.operations.get!.paramsSchema!.fields.some((f) => f.name === "version_label")).toBe(true);
-    expect(def.operations.update!.paramsSchema!.fields.find((f) => f.name === "version_label")?.required).toBe(
-      true,
+  it("template (v0) get documents global, version_label, and git fields via params", () => {
+    const get = registry.getResource("template").operations.get!;
+    const names = get.paramsSchema!.fields.map((f) => f.name);
+    expect(names).toEqual(
+      expect.arrayContaining(["global", "version_label", "branch", "store_type", "connector_ref", "repo_name"]),
     );
-    expect(def.operations.delete!.paramsSchema!.fields.some((f) => f.name === "version_label")).toBe(true);
+    expect(get.paramsSchema!.fields.find((f) => f.name === "global")?.required).toBe(false);
+  });
+
+  it("template (v0) update documents version_label and git-backed params", () => {
+    const update = registry.getResource("template").operations.update!;
+    const names = update.paramsSchema!.fields.map((f) => f.name);
+    expect(update.paramsSchema!.fields.find((f) => f.name === "version_label")?.required).toBe(true);
+    expect(names).toEqual(
+      expect.arrayContaining([
+        "version_label",
+        "store_type",
+        "branch",
+        "connector_ref",
+        "repo_name",
+        "file_path",
+        "is_harness_code_repo",
+        "last_object_id",
+        "last_commit_id",
+        "comments",
+      ]),
+    );
+  });
+
+  it("template (v0) delete documents version_label, force_delete, and comments", () => {
+    const del = registry.getResource("template").operations.delete!;
+    const names = del.paramsSchema!.fields.map((f) => f.name);
+    expect(names).toEqual(expect.arrayContaining(["version_label", "force_delete", "comments"]));
+  });
+});
+
+describe("template paramsSchema dispatch validation", () => {
+  const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+  const client = makeClient(vi.fn());
+
+  it("rejects template_v1 update without version_label", async () => {
+    await expect(
+      registry.dispatch(client, "template_v1", "update", {
+        template_id: "my_tpl",
+        org_id: "default",
+        project_id: "proj",
+        body: {
+          template_yaml:
+            "version: 1\ntemplate:\n  identifier: my_tpl\n  name: My\n  step:\n    run:\n      script: echo hi\n",
+        },
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for template_v1\.update: version_label/);
+  });
+
+  it("rejects template_v1 delete without version_label", async () => {
+    await expect(
+      registry.dispatch(client, "template_v1", "delete", {
+        template_id: "my_tpl",
+        org_id: "default",
+        project_id: "proj",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for template_v1\.delete: version_label/);
+  });
+
+  it("rejects template (v0) update without version_label", async () => {
+    await expect(
+      registry.dispatch(client, "template", "update", {
+        template_id: "my_tpl",
+        org_id: "default",
+        project_id: "proj",
+        body: {
+          template_yaml:
+            "template:\n  identifier: my_tpl\n  name: My\n  versionLabel: v2\n  type: Step\n  spec: {}\n",
+        },
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for template\.update: version_label/);
   });
 });
 

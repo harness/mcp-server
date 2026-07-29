@@ -7,6 +7,12 @@ import { SCOPE_BEHAVIOR_DOC, templateV1BasePathFromScope } from "../scope-utils.
 const TEMPLATE_V0_GET_PARAMS: ParamsSchema = {
   fields: [
     {
+      name: "global",
+      required: false,
+      description:
+        "When true, fetch from the global templates account. Pass via params.",
+    },
+    {
       name: "version_label",
       required: false,
       description: "Template version to fetch. Pass via params.",
@@ -15,6 +21,21 @@ const TEMPLATE_V0_GET_PARAMS: ParamsSchema = {
       name: "branch",
       required: false,
       description: "Git branch for remote/git-backed templates. Pass via params.",
+    },
+    {
+      name: "store_type",
+      required: false,
+      description: "Storage type (e.g. INLINE, REMOTE). Pass via params.",
+    },
+    {
+      name: "connector_ref",
+      required: false,
+      description: "Git connector ref for remote templates. Pass via params.",
+    },
+    {
+      name: "repo_name",
+      required: false,
+      description: "Git repo name for remote templates. Pass via params.",
     },
   ],
 };
@@ -26,6 +47,57 @@ const TEMPLATE_V0_UPDATE_PARAMS: ParamsSchema = {
       required: true,
       description: "Template version label to update. Pass via params.",
     },
+    {
+      name: "store_type",
+      required: false,
+      description:
+        "Storage type. Use REMOTE for git-backed templates. Pass via params.",
+    },
+    {
+      name: "branch",
+      required: false,
+      description:
+        "Git branch for remote updates. Required when store_type=REMOTE. Pass via params.",
+    },
+    {
+      name: "connector_ref",
+      required: false,
+      description:
+        "Git connector ref for external remote templates. Pass via params.",
+    },
+    {
+      name: "repo_name",
+      required: false,
+      description: "Git repo name for remote templates. Pass via params.",
+    },
+    {
+      name: "file_path",
+      required: false,
+      description: "Path to the template file in the repo. Pass via params.",
+    },
+    {
+      name: "is_harness_code_repo",
+      required: false,
+      description:
+        "When true, use Harness Code (no connector_ref). Pass via params.",
+    },
+    {
+      name: "last_object_id",
+      required: false,
+      description:
+        "Git objectId from GET response gitDetails — required for remote updates. Pass via params.",
+    },
+    {
+      name: "last_commit_id",
+      required: false,
+      description:
+        "Git commitId from GET response gitDetails — required for remote updates. Pass via params.",
+    },
+    {
+      name: "comments",
+      required: false,
+      description: "Optional update comment. Pass via params.",
+    },
   ],
 };
 
@@ -36,6 +108,16 @@ const TEMPLATE_V0_DELETE_PARAMS: ParamsSchema = {
       required: false,
       description:
         "Version to delete. Omit to delete all versions (may require force_delete). Pass via params.",
+    },
+    {
+      name: "force_delete",
+      required: false,
+      description: "Force delete when removing all versions or in-use templates. Pass via params.",
+    },
+    {
+      name: "comments",
+      required: false,
+      description: "Optional delete comment. Pass via params.",
     },
   ],
 };
@@ -375,7 +457,8 @@ export const templatesToolset: ToolsetDefinition = {
           responseExtractor: ngExtract,
           paramsSchema: TEMPLATE_V0_GET_PARAMS,
           description:
-            "Get template details and YAML. Use global=true for global templates account. For remote/git-backed templates, pass branch to specify which branch to read from. The response gitDetails.objectId and gitDetails.commitId are needed as last_object_id/last_commit_id when updating a remote template.",
+            "Get template details and YAML. Use global=true for global templates account. For remote/git-backed templates, pass branch to specify which branch to read from. The response gitDetails.objectId and gitDetails.commitId are needed as last_object_id/last_commit_id when updating a remote template. " +
+            "Pass global, version_label, and git fields via params (see harness_describe).",
         },
         create: {
           method: "POST",
