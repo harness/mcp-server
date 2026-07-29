@@ -1,5 +1,33 @@
 import type { ToolsetDefinition } from "../types.js";
+import { buildBodyNormalized } from "../../utils/body-normalizer.js";
 import { ngExtract, pageExtract } from "../extractors.js";
+
+/**
+ * Infra create/update body shaping (same unwrap/strip pattern as service/env), plus
+ * ``ensureYamlWrapper`` — NG requires non-empty ``yaml`` and will not synthesize it
+ * (QA: flat JSON → ``yaml: must not be empty``; service/env succeed without yaml).
+ *
+ * Inject org/project from tool-level ``org_id``/``project_id`` *before* yaml synthesis
+ * so the generated ``body.yaml`` includes scope fields. Registry also injects those
+ * into the JSON body later; without this, yaml would lag behind the outer body.
+ */
+const infrastructureScopeFields = [
+  { from: "org_id", to: "orgIdentifier", onlyIfMissing: true },
+  { from: "project_id", to: "projectIdentifier", onlyIfMissing: true },
+] as const;
+
+const infrastructureBodyBuilder = buildBodyNormalized({
+  unwrapKey: "infrastructureDefinition",
+  ensureYamlWrapper: "infrastructureDefinition",
+  injectFields: [...infrastructureScopeFields],
+});
+
+const infrastructureUpdateBodyBuilder = buildBodyNormalized({
+  unwrapKey: "infrastructureDefinition",
+  ensureYamlWrapper: "infrastructureDefinition",
+  injectIdentifier: { inputField: "infrastructure_id", bodyField: "identifier" },
+  injectFields: [...infrastructureScopeFields],
+});
 
 export const infrastructureToolset: ToolsetDefinition = {
   name: "infrastructure",
@@ -52,16 +80,25 @@ export const infrastructureToolset: ToolsetDefinition = {
           method: "POST",
           path: "/ng/api/infrastructures",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: infrastructureBodyBuilder,
           bodySchema: {
-            description: "Infrastructure definition",
+            description:
+              "Infrastructure definition. NG requires body.yaml (infrastructureDefinition: ...). " +
+              "Prefer body: { identifier, name, type, environmentRef, deploymentType?, yaml }. " +
+              "If yaml is omitted, the server synthesizes it from the flat fields.",
             fields: [
               { name: "identifier", type: "string", required: true, description: "Unique identifier" },
               { name: "name", type: "string", required: true, description: "Display name" },
               { name: "type", type: "string", required: true, description: "Infrastructure type (e.g. KubernetesDirect, KubernetesGcp)" },
               { name: "environmentRef", type: "string", required: true, description: "Environment reference identifier" },
               { name: "deploymentType", type: "string", required: false, description: "Deployment type (e.g. Kubernetes)" },
-              { name: "yaml", type: "yaml", required: false, description: "Full infrastructure YAML definition" },
+              {
+                name: "yaml",
+                type: "yaml",
+                required: true,
+                description:
+                  "Full infrastructure YAML under infrastructureDefinition:. Auto-synthesized from flat fields when omitted.",
+              },
             ],
           },
           responseExtractor: ngExtract,
@@ -71,15 +108,22 @@ export const infrastructureToolset: ToolsetDefinition = {
           method: "PUT",
           path: "/ng/api/infrastructures",
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: infrastructureUpdateBodyBuilder,
           bodySchema: {
-            description: "Infrastructure definition update",
+            description:
+              "Infrastructure definition update. NG requires body.yaml; auto-synthesized from flat fields when omitted.",
             fields: [
               { name: "identifier", type: "string", required: true, description: "Infrastructure identifier" },
               { name: "name", type: "string", required: true, description: "Display name" },
               { name: "type", type: "string", required: true, description: "Infrastructure type" },
               { name: "environmentRef", type: "string", required: true, description: "Environment reference identifier" },
-              { name: "yaml", type: "yaml", required: false, description: "Full infrastructure YAML definition" },
+              {
+                name: "yaml",
+                type: "yaml",
+                required: true,
+                description:
+                  "Full infrastructure YAML under infrastructureDefinition:. Auto-synthesized from flat fields when omitted.",
+              },
             ],
           },
           responseExtractor: ngExtract,

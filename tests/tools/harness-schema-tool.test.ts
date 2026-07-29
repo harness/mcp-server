@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { registerSchemaTool } from "../../src/tools/harness-schema.js";
-import { extractLiveSchema } from "../../src/tools/entity-schema/live.js";
+import { extractLiveSchema, YAML_SCHEMA_PLACEHOLDER_IDENTIFIER } from "../../src/tools/entity-schema/live.js";
 import { VALID_SCHEMAS } from "../../src/data/schemas/index.js";
 
 function makeMcpServer() {
@@ -90,7 +90,11 @@ describe("harness_schema live entities", () => {
       expect.objectContaining({
         method: "GET",
         path: "/ng/api/yaml-schema",
-        params: expect.objectContaining({ entityType: "Connectors", scope: "account" }),
+        params: expect.objectContaining({
+          entityType: "Connectors",
+          scope: "account",
+          identifier: YAML_SCHEMA_PLACEHOLDER_IDENTIFIER,
+        }),
       }),
     );
     expect(parsed.source).toBe("ng-yaml-schema");
@@ -144,6 +148,67 @@ describe("harness_schema live entities", () => {
           scope: "project",
           orgIdentifier: "my-org",
           projectIdentifier: "my-proj",
+        }),
+      }),
+    );
+  });
+
+  it("passes placeholder identifier for org-scoped environment live fetch", async () => {
+    requestMock.mockClear();
+    await server.call("harness_schema", {
+      resource_type: "environment",
+      scope: "org",
+      org_id: "my-org",
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          entityType: "Environment",
+          scope: "org",
+          orgIdentifier: "my-org",
+          identifier: YAML_SCHEMA_PLACEHOLDER_IDENTIFIER,
+        }),
+      }),
+    );
+  });
+
+  it("passes placeholder identifier for project-scoped service live fetch", async () => {
+    requestMock.mockClear();
+    await server.call("harness_schema", {
+      resource_type: "service",
+      scope: "project",
+      org_id: "default",
+      project_id: "cxe_sandbox",
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          entityType: "Service",
+          scope: "project",
+          orgIdentifier: "default",
+          projectIdentifier: "cxe_sandbox",
+          identifier: YAML_SCHEMA_PLACEHOLDER_IDENTIFIER,
+        }),
+      }),
+    );
+  });
+
+  it("passes explicit identifier when provided", async () => {
+    requestMock.mockClear();
+    await server.call("harness_schema", {
+      resource_type: "infrastructure",
+      scope: "project",
+      org_id: "default",
+      project_id: "cxe_sandbox",
+      identifier: "my_k8s_infra",
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          identifier: "my_k8s_infra",
         }),
       }),
     );

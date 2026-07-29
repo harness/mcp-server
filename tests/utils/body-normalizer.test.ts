@@ -9,6 +9,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildBodyNormalized,
+  ensureYamlField,
   stripNulls,
   unwrapBody,
 } from "../../src/utils/body-normalizer.js";
@@ -177,5 +178,138 @@ connector:
         },
       }),
     ).toThrow(/Conflicting identifiers/);
+  });
+});
+
+describe("ensureYamlField", () => {
+  it("preserves an existing non-empty yaml string", () => {
+    const body = {
+      identifier: "k8s_staging_infra",
+      yaml: "infrastructureDefinition:\n  identifier: k8s_staging_infra\n",
+    };
+    expect(ensureYamlField(body, "infrastructureDefinition")).toEqual(body);
+  });
+
+  it("synthesizes yaml from flat fields when omitted (infra NG contract)", () => {
+    const result = ensureYamlField(
+      {
+        identifier: "k8s_staging_infra",
+        name: "K8s Staging Infrastructure",
+        type: "KubernetesDirect",
+        environmentRef: "staging",
+        deploymentType: "Kubernetes",
+        spec: { connectorRef: "account.cdautomationtest", namespace: "default" },
+      },
+      "infrastructureDefinition",
+    ) as Record<string, unknown>;
+
+    expect(typeof result.yaml).toBe("string");
+    expect(result.yaml as string).toContain("infrastructureDefinition:");
+    expect(result.yaml as string).toContain("identifier: k8s_staging_infra");
+    expect(result.identifier).toBe("k8s_staging_infra");
+    expect(result.environmentRef).toBe("staging");
+  });
+
+  it("replaces empty yaml string with synthesized content", () => {
+    const result = ensureYamlField(
+      { identifier: "x", name: "X", type: "KubernetesDirect", environmentRef: "e", yaml: "  " },
+      "infrastructureDefinition",
+    ) as Record<string, unknown>;
+    expect((result.yaml as string).trim().length).toBeGreaterThan(0);
+    expect(result.yaml as string).toContain("identifier: x");
+  });
+});
+
+describe("buildBodyNormalized ensureYamlWrapper", () => {
+  const infraCreateBuilder = buildBodyNormalized({
+    unwrapKey: "infrastructureDefinition",
+    ensureYamlWrapper: "infrastructureDefinition",
+  });
+
+  it("synthesizes yaml for the flat JSON body that previously failed NG create", () => {
+    const result = infraCreateBuilder({
+      body: {
+        deploymentType: "Kubernetes",
+        description: "Kubernetes infrastructure for staging deployments",
+        environmentRef: "staging",
+        identifier: "k8s_staging_infra",
+        name: "K8s Staging Infrastructure",
+        orgIdentifier: "default",
+        projectIdentifier: "cxe_sandbox",
+        spec: {
+          connectorRef: "account.cdautomationtest",
+          namespace: "default",
+          releaseName: "release-<+INFRA_KEY_SHORT_ID>",
+        },
+        type: "KubernetesDirect",
+      },
+    }) as Record<string, unknown>;
+
+    expect(typeof result.yaml).toBe("string");
+    expect((result.yaml as string).length).toBeGreaterThan(0);
+    expect(result.yaml as string).toContain("infrastructureDefinition:");
+    expect(result.identifier).toBe("k8s_staging_infra");
+  });
+
+  it("unwraps infrastructureDefinition YAML string body and fills yaml", () => {
+    const result = infraCreateBuilder({
+      body: `
+infrastructureDefinition:
+  name: K8s Staging Infrastructure
+  identifier: k8s_staging_infra
+  environmentRef: staging
+  type: KubernetesDirect
+  deploymentType: Kubernetes
+`,
+    }) as Record<string, unknown>;
+
+    expect(result.identifier).toBe("k8s_staging_infra");
+    expect(typeof result.yaml).toBe("string");
+    expect(result.yaml as string).toContain("infrastructureDefinition:");
+  });
+
+  it("keeps an explicit body.yaml when provided", () => {
+    const yaml =
+      "infrastructureDefinition:\n  identifier: k8s_staging_infra\n  name: K8s Staging Infrastructure\n";
+    const result = infraCreateBuilder({
+      body: {
+        identifier: "k8s_staging_infra",
+        name: "K8s Staging Infrastructure",
+        type: "KubernetesDirect",
+        environmentRef: "staging",
+        yaml,
+      },
+    }) as Record<string, unknown>;
+
+    expect(result.yaml).toBe(yaml);
+  });
+
+  it("includes org/project from tool-level org_id/project_id in synthesized yaml", () => {
+    // Common MCP shape: scope outside body; yaml must not lag behind JSON fields.
+    const infraWithScope = buildBodyNormalized({
+      unwrapKey: "infrastructureDefinition",
+      ensureYamlWrapper: "infrastructureDefinition",
+      injectFields: [
+        { from: "org_id", to: "orgIdentifier", onlyIfMissing: true },
+        { from: "project_id", to: "projectIdentifier", onlyIfMissing: true },
+      ],
+    });
+
+    const result = infraWithScope({
+      org_id: "default",
+      project_id: "cxe_sandbox",
+      body: {
+        identifier: "k8s_staging_infra",
+        name: "K8s Staging Infrastructure",
+        type: "KubernetesDirect",
+        environmentRef: "staging",
+        deploymentType: "Kubernetes",
+      },
+    }) as Record<string, unknown>;
+
+    expect(result.orgIdentifier).toBe("default");
+    expect(result.projectIdentifier).toBe("cxe_sandbox");
+    expect(result.yaml as string).toContain("orgIdentifier: default");
+    expect(result.yaml as string).toContain("projectIdentifier: cxe_sandbox");
   });
 });

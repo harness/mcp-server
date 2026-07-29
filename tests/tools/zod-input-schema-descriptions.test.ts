@@ -157,6 +157,7 @@ describe("Zod 4 input schema descriptions (PR #398 regression)", () => {
       "scope",
       "org_id",
       "project_id",
+      "identifier",
       "path",
       "example",
       "example_search",

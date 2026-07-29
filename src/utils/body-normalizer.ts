@@ -2,9 +2,15 @@
  * Normalize request bodies for Harness NG APIs.
  * - Strip null/undefined to avoid "Unable to process JSON" from invalid values.
  * - Unwrap common wrapper keys (environment, service, connector) when APIs expect the entity at top level.
+ * - Optionally synthesize ``body.yaml`` for APIs that require it (see ``ensureYamlWrapper``).
+ *
+ * Service/environment create do NOT need yaml synthesis — NG fills ``yaml`` server-side when
+ * omitted. Infrastructure create/update DOES: NG returns ``yaml: must not be empty`` if the
+ * client sends only flat JSON fields. Wire ``ensureYamlWrapper: "infrastructureDefinition"``
+ * for those operations only.
  */
 
-import { parse as parseYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 
 /** Recursively remove null and undefined so they are omitted from JSON. */
 export function stripNulls(obj: unknown): unknown {
@@ -27,6 +33,41 @@ export function unwrapBody(body: unknown, wrapperKey: string): unknown {
     return (body as Record<string, unknown>)[wrapperKey];
   }
   return body;
+}
+
+/**
+ * Ensure ``body.yaml`` is a non-empty string for NG APIs that reject missing yaml
+ * even when the same entity fields are present as JSON (infra create/update).
+ *
+ * Unlike service/environment, NG does not synthesize infra yaml server-side.
+ * Agents often send flat ``{ identifier, name, type, environmentRef, spec }``
+ * (or a raw ``infrastructureDefinition:`` YAML string body). This helper:
+ * - keeps an existing non-empty ``yaml`` string
+ * - stringifies an object-shaped ``yaml`` under ``wrapperKey`` if needed
+ * - otherwise builds ``yaml: "<wrapperKey>:\\n ..."`` from the remaining fields
+ */
+export function ensureYamlField(body: unknown, wrapperKey: string): unknown {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) return body;
+  const rec = body as Record<string, unknown>;
+  const existing = rec.yaml;
+
+  if (typeof existing === "string" && existing.trim()) {
+    return body;
+  }
+
+  if (existing !== null && existing !== undefined && typeof existing === "object" && !Array.isArray(existing)) {
+    const yamlObj =
+      wrapperKey in (existing as Record<string, unknown>)
+        ? existing
+        : { [wrapperKey]: existing };
+    return { ...rec, yaml: stringifyYaml(yamlObj) };
+  }
+
+  const { yaml: _ignored, ...fields } = rec;
+  return {
+    ...fields,
+    yaml: stringifyYaml({ [wrapperKey]: fields }),
+  };
 }
 
 function parseYamlBody(body: string): unknown {
@@ -56,6 +97,13 @@ export interface BodyBuilderOptions {
   injectIdentifier?: { inputField: string; bodyField: string };
   /** Auto-inject additional fields if missing */
   injectFields?: Array<{ from: string; to: string; onlyIfMissing?: boolean }>;
+  /**
+   * Root key for synthesized ``body.yaml`` (e.g. ``infrastructureDefinition``).
+   * When set, after unwrap/strip, ensure a non-empty ``yaml`` string exists —
+   * NG ``POST/PUT /ng/api/infrastructures`` requires it; service/env must not
+   * set this (NG fills yaml for those). See ``ensureYamlField``.
+   */
+  ensureYamlWrapper?: string;
 }
 
 function getInjectionTarget(body: unknown, wrapKey?: string): Record<string, unknown> | undefined {
@@ -130,7 +178,14 @@ export function buildBodyNormalized(opts: BodyBuilderOptions = {}): (input: Reco
     }
 
     // Step 4: Strip nulls
-    const out = stripNulls(body);
-    return typeof out === "object" && out !== null ? out : body;
+    let out = stripNulls(body);
+    out = typeof out === "object" && out !== null ? out : body;
+
+    // Step 5: NG APIs that require body.yaml (infrastructure create/update)
+    if (opts.ensureYamlWrapper) {
+      out = ensureYamlField(out, opts.ensureYamlWrapper);
+    }
+
+    return out;
   };
 }

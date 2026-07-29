@@ -1,5 +1,7 @@
 ## Harness MCP Server 2.0
 
+[![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
+
 An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 216 resource types.
 
 ## Why Use This MCP Server

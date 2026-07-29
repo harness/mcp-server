@@ -51,6 +51,25 @@ export const LIVE_ENTITY_SCHEMAS: Record<string, LiveEntitySchemaDefinition> = {
 
 export const LIVE_ENTITY_RESOURCE_TYPES = Object.keys(LIVE_ENTITY_SCHEMAS);
 
+/**
+ * Placeholder identifier for NG /yaml-schema on live entity types at any scope.
+ * Some NG builds reject scoped requests without identifier (scopedIdentifierConfig is null).
+ * A dummy value returns the generic type-level schema — the entity does not need to exist.
+ */
+export const YAML_SCHEMA_PLACEHOLDER_IDENTIFIER = "test";
+
+/** Resolve NG yaml-schema identifier: explicit param wins, else placeholder for live entity types. */
+export function resolveYamlSchemaIdentifier(
+  resourceType: string,
+  params: LiveSchemaFetchParams,
+): string | undefined {
+  if (params.identifier) return params.identifier;
+  if (resourceType in LIVE_ENTITY_SCHEMAS) {
+    return YAML_SCHEMA_PLACEHOLDER_IDENTIFIER;
+  }
+  return undefined;
+}
+
 const RESPONSE_SCHEMA_KEYS = [
   "schema",
   "yamlSchema",
@@ -126,9 +145,10 @@ function resolveScope(scope?: HarnessYamlScope): HarnessYamlScope {
   return scope ?? "account";
 }
 
+/** Build NG /yaml-schema query params. resourceType drives placeholder identifier resolution. */
 function buildYamlSchemaParams(
+  resourceType: string,
   definition: LiveEntitySchemaDefinition,
-  accountId: string,
   params: LiveSchemaFetchParams,
 ): Record<string, string> {
   const scope = resolveScope(params.scope);
@@ -149,6 +169,11 @@ function buildYamlSchemaParams(
       throw new Error("project_id is required when scope is 'project'");
     }
     query.projectIdentifier = params.projectId;
+  }
+
+  const resolvedIdentifier = resolveYamlSchemaIdentifier(resourceType, params);
+  if (resolvedIdentifier) {
+    query.identifier = resolvedIdentifier;
   }
 
   return query;
@@ -339,11 +364,12 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
       const accountId = client.account;
       const scope = resolveScope(params.scope);
       // Validate scope/org/project before cache or bundled paths (same rules as live NG fetch).
-      buildYamlSchemaParams(definition, accountId, params);
+      buildYamlSchemaParams(resourceType, definition, params);
 
       const cacheKey = buildLiveSchemaCacheKey(resourceType, accountId, scope, {
         orgId: params.orgId,
         projectId: params.projectId,
+        ...(params.identifier ? { identifier: params.identifier } : {}),
       });
 
       const cached = cache.get(cacheKey);
@@ -354,8 +380,8 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
         return cached;
       }
 
-      // Bundled-first when snapshots match the runtime account (see bundledSnapshotsMatchAccount).
-      const bundled = getBundledEntitySchema(resourceType, scope);
+      // Explicit identifier requests entity-specific schema — bundled snapshots are type-level only.
+      const bundled = params.identifier ? undefined : getBundledEntitySchema(resourceType, scope);
       if (
         bundled &&
         bundledSnapshotsMatchAccount(accountId) &&
@@ -367,7 +393,7 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
         return entry;
       }
 
-      const queryParams = buildYamlSchemaParams(definition, accountId, params);
+      const queryParams = buildYamlSchemaParams(resourceType, definition, params);
 
       try {
         log.debug("Fetching live entity YAML schema", {
@@ -375,6 +401,12 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
           entity_type: definition.entityType,
           scope,
           account_id: accountId,
+          ...(queryParams.identifier
+            ? {
+                identifier: queryParams.identifier,
+                placeholder: !params.identifier && queryParams.identifier === YAML_SCHEMA_PLACEHOLDER_IDENTIFIER,
+              }
+            : {}),
         });
 
         const response = await client.request<unknown>({
