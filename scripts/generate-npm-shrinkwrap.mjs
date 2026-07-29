@@ -16,6 +16,7 @@ import {
   isSecureAdmZipVersion,
   SECURE_ADM_ZIP_VERSION,
 } from "./adm-zip-security-lib.mjs";
+import { computeTransitiveOverrides } from "./npm-shrinkwrap-lib.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const shrinkwrapPath = join(repoRoot, "npm-shrinkwrap.json");
@@ -91,12 +92,10 @@ mkdirSync(stagingRoot, { recursive: true });
 // Direct deps are already pinned in dependencies/optionalDependencies; npm
 // rejects (EOVERRIDE) an override that conflicts with a direct dep, so drop
 // those keys and keep only the transitive pins.
-const directDeps = new Set([
-  ...Object.keys(pkg.dependencies ?? {}),
-  ...Object.keys(pkg.optionalDependencies ?? {}),
-]);
-const transitiveOverrides = Object.fromEntries(
-  Object.entries(pkg.pnpm?.overrides ?? {}).filter(([name]) => !directDeps.has(name)),
+const transitiveOverrides = computeTransitiveOverrides(
+  pkg.pnpm?.overrides,
+  pkg.dependencies,
+  pkg.optionalDependencies,
 );
 
 const stagingManifest = {
