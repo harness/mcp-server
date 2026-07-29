@@ -193,14 +193,20 @@ describe("AI Evals online_eval resource", () => {
     expect(res.diagnosticHint).toContain("trace");
   });
 
-  it("evaluate schema uses metric_set_id and judge_llm_connector_ref, not deprecated metric_ids", () => {
+  it("evaluate schema prefers judge_llm_config and retains its deprecated connector alias", () => {
     const res = findResource("online_eval");
     const action = res.executeActions!.evaluate;
-    const fields = fieldNames(action.bodySchema!.fields);
+    const fields = action.bodySchema!.fields;
+    const fieldNames = fields.map((field) => field.name);
 
-    expect(fields).toContain("metric_set_id");
-    expect(fields).toContain("judge_llm_connector_ref");
-    expect(fields).not.toContain("metric_ids");
+    expect(fieldNames).toContain("metric_set_id");
+    expect(fieldNames).toContain("judge_llm_config");
+    expect(fieldNames).toContain("judge_model_id");
+    expect(fieldNames).toContain("judge_llm_connector_ref");
+    expect(fieldNames).not.toContain("metric_ids");
+    expect(fields.find((field) => field.name === "judge_llm_config")).toMatchObject({ type: "object" });
+    expect(fields.find((field) => field.name === "judge_model_id")?.description).toContain("DEPRECATED");
+    expect(fields.find((field) => field.name === "judge_llm_connector_ref")?.description).toContain("DEPRECATED");
   });
 
   it("evaluate metadata no longer references metric_ids", () => {
@@ -353,26 +359,25 @@ describe("AI Evals eval_target test action", () => {
 
 // ─── LLM connector ref in body schemas ─────────────────────────────────────
 
-describe("AI Evals LLM connector ref migration", () => {
-  it("metric set create body schema uses judge_llm_connector_ref not judge_model_id", () => {
+describe("AI Evals structured LLM config migration", () => {
+  it("metric set schemas prefer judge_llm_config and retain connector aliases as deprecated", () => {
     const res = findResource("eval_metric_set");
-    const createOp = res.operations.create!;
-    const fields = createOp.bodySchema!.fields;
-    const hasConnectorRef = fields.some((f) => f.name === "judge_llm_connector_ref");
-    const hasModelId = fields.some((f) => f.name === "judge_model_id");
-    expect(hasConnectorRef).toBe(true);
-    expect(hasModelId).toBe(false);
+    for (const operation of [res.operations.create!, res.operations.update!]) {
+      const fields = operation.bodySchema!.fields;
+      expect(fields.find((field) => field.name === "judge_llm_config")).toMatchObject({ type: "object" });
+      expect(fields.find((field) => field.name === "judge_model_id")?.description).toContain("DEPRECATED");
+      expect(fields.find((field) => field.name === "judge_llm_connector_ref")?.description).toContain("DEPRECATED");
+    }
   });
 
-  it("dataset generate body schema uses llm_connector_ref not model_id", () => {
+  it("dataset generation prefers llm_config and retains connector alias as deprecated", () => {
     const res = findResource("eval_dataset");
     const action = res.executeActions?.generate;
     expect(action).toBeDefined();
     const fields = action!.bodySchema!.fields;
-    const hasConnectorRef = fields.some((f) => f.name === "llm_connector_ref");
-    const hasModelId = fields.some((f) => f.name === "model_id");
-    expect(hasConnectorRef).toBe(true);
-    expect(hasModelId).toBe(false);
+    expect(fields.find((field) => field.name === "llm_config")).toMatchObject({ type: "object" });
+    expect(fields.find((field) => field.name === "model_id")?.description).toContain("DEPRECATED");
+    expect(fields.find((field) => field.name === "llm_connector_ref")?.description).toContain("DEPRECATED");
   });
 });
 
@@ -389,6 +394,35 @@ describe("AI Evals control-plane API drift", () => {
       type: "string",
       required: true,
     });
+  });
+
+  it("metric update body schema exposes optional dimension", () => {
+    const res = findResource("eval_metric");
+    const dimensionField = res.operations.update!.bodySchema!.fields.find((field) => field.name === "dimension");
+
+    expect(dimensionField).toMatchObject({
+      name: "dimension",
+      type: "string",
+      required: false,
+    });
+  });
+
+  it("metric update dispatch preserves dimension in the API body", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ id: "metric-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "eval_metric", "update", {
+      org_id: "myorg",
+      project_id: "myproj",
+      metric_id: "metric-1",
+      body: { dimension: "safety" },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("PATCH");
+    expect(call.path).toBe("/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/metrics/metric-1");
+    expect(call.body).toEqual({ dimension: "safety" });
   });
 
   it("metric create dispatch preserves dimension in the API body", async () => {
