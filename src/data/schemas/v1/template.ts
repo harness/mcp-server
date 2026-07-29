@@ -83,6 +83,7 @@ const schema: Record<string, any> = {
           ],
           "properties": {
             "agent": {
+              "description": "Deprecated: define a step template with `template.step.agent.uses`/`with` instead of a top-level `template.agent` entity.",
               "$ref": "#/definitions/template/agent/AgentTemplateSpec"
             }
           }
@@ -1369,6 +1370,10 @@ const schema: Record<string, any> = {
               "description": "Display name for the template-referenced item."
             },
             "template": {
+              "$ref": "#/definitions/template_v1/common/TemplateRef"
+            },
+            "agent": {
+              "description": "Alias for `template`, used to reference an agent template.",
               "$ref": "#/definitions/template_v1/common/TemplateRef"
             },
             "action": {
@@ -3532,6 +3537,10 @@ const schema: Record<string, any> = {
             "description": "Environment configuration for CD stages.",
             "oneOf": [
               {
+                "description": "Harness expression that resolves to the environment configuration.",
+                "$ref": "#/definitions/template_v1/common/Expression"
+              },
+              {
                 "type": "object",
                 "required": [
                   "id"
@@ -4286,6 +4295,11 @@ const schema: Record<string, any> = {
                 },
                 {
                   "required": [
+                    "agent"
+                  ]
+                },
+                {
+                  "required": [
                     "action"
                   ]
                 },
@@ -4433,6 +4447,11 @@ const schema: Record<string, any> = {
                       {
                         "required": [
                           "template"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "agent"
                         ]
                       },
                       {

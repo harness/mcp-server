@@ -5602,6 +5602,173 @@ const schema: Record<string, any> = {
             ],
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
+          "ChangeAdvisorStepNode": {
+            "title": "ChangeAdvisorStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for ChangeAdvisorStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ChangeAdvisor"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "ChangeAdvisor"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "ChangeAdvisorStepInfo": {
+            "title": "ChangeAdvisorStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "mode": {
+                    "description": "Advisory mode for the Change Advisor step (e.g. advisory).",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "policyPack": {
+                    "description": "Policy pack to evaluate the change against (e.g. balanced).",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "timeoutMinutes": {
+                    "description": "Maximum time in minutes to wait for the advisory call.",
+                    "oneOf": [
+                      {
+                        "type": "integer"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "presets": {
+                    "description": "Preset identifiers applied to the advisory evaluation.",
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "env": {
+                    "description": "Target environment identifier for the change.",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "HarnessStore": {
             "title": "HarnessStore",
             "allOf": [
@@ -100256,9 +100423,8 @@ const schema: Record<string, any> = {
                     ]
                   },
                   "serviceReferences": {
-                    "description": "Chaos services linked to the templated load test run (template mode). At least one service reference is required.",
+                    "description": "Chaos services linked to the templated load test run (template mode). Optional in schema; required at runtime when CHAOS_RISK_SERVICES_ENABLED is enabled.",
                     "type": "array",
-                    "minItems": 1,
                     "items": {
                       "type": "string",
                       "minLength": 1
@@ -100323,8 +100489,7 @@ const schema: Record<string, any> = {
                     "identifier",
                     "revision",
                     "infraReference",
-                    "environmentReference",
-                    "serviceReferences"
+                    "environmentReference"
                   ]
                 },
                 "else": {
@@ -106576,6 +106741,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
                   }
                 ]
@@ -108168,6 +108336,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/HelmDeleteStepNode"
@@ -117962,6 +118133,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SastScanNode"
                   },
                   {
@@ -118583,6 +118757,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/AIExperimentStepNode"
@@ -119566,6 +119743,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/cd/HelmDeleteStepNode"
                   },
                   {
@@ -120461,6 +120641,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeFlagCreateStepNode"
@@ -121409,6 +121592,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/custom/HarnessApprovalStepNode"
                   },
                   {
@@ -121855,6 +122041,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/RONotifyStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/HarnessApprovalStepNode"
