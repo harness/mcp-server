@@ -147,7 +147,9 @@ const triggerEvalRunSchema: BodySchema = {
       name: "run_inputs",
       type: "object",
       required: false,
-      description: "RunInputs overrides: { llm_connector_ref?, target_id?, dataset_id?, metric_set_id?, variables? }",
+      description:
+        "RunInputs overrides: { llm_config? (preferred structured provider config), target_id?, dataset_id?, metric_set_id?, variables? }. " +
+        "llm_connector_ref, model_id, and model remain accepted but are DEPRECATED; use llm_config instead.",
     },
     { name: "input_set_id", type: "string", required: false, description: "Saved input set id" },
     { name: "branch", type: "string", required: false, description: "Override git branch (e.g. run against a PR branch)" },
@@ -176,7 +178,7 @@ const createMetricSchema: BodySchema = {
       description:
         "Metric config — structure depends on type/kind. " +
         "Heuristic: { kind, threshold?, case_sensitive?, ... }. " +
-        "LLM: { rubric?, criteria?, judge_llm_connector_ref? (Harness LLM connector identifier) }. " +
+        "LLM: { rubric?, criteria?, judge_llm_config? (preferred structured provider config), judge_llm_connector_ref? (DEPRECATED) }. " +
         "Composite: { metrics: [{ metric_id, weight }], aggregation: 'average'|'weighted_average'|'min'|'max'|'all_pass' }. " +
         "Use harness_execute(resource_type='eval_metric', action='suggestions') to discover appropriate metrics for a target type.",
     },
@@ -191,6 +193,7 @@ const updateMetricSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: false, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
+    { name: "dimension", type: "string", required: false, description: "Evaluation dimension: correctness | groundedness | safety | trajectory | performance" },
     { name: "config", type: "object", required: false, description: "Config" },
     { name: "default_threshold", type: "number", required: false, description: "Threshold 0-1" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
@@ -204,7 +207,24 @@ const createMetricSetSchema: BodySchema = {
     { name: "name", type: "string", required: true, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "judge_llm_connector_ref", type: "string", required: false, description: "Harness LLM connector identifier for judge model" },
+    {
+      name: "judge_llm_config",
+      type: "object",
+      required: false,
+      description: "Preferred structured LLM provider configuration for the judge model",
+    },
+    {
+      name: "judge_model_id",
+      type: "string",
+      required: false,
+      description: "DEPRECATED — use judge_llm_config. UUID of the registered judge model",
+    },
+    {
+      name: "judge_llm_connector_ref",
+      type: "string",
+      required: false,
+      description: "DEPRECATED — use judge_llm_config. Harness LLM connector identifier for judge model",
+    },
     {
       name: "entries",
       type: "array",
@@ -223,7 +243,24 @@ const updateMetricSetSchema: BodySchema = {
     { name: "name", type: "string", required: false, description: "Name" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "judge_llm_connector_ref", type: "string", required: false, description: "Harness LLM connector identifier for judge model" },
+    {
+      name: "judge_llm_config",
+      type: "object",
+      required: false,
+      description: "Preferred structured LLM provider configuration for the judge model",
+    },
+    {
+      name: "judge_model_id",
+      type: "string",
+      required: false,
+      description: "DEPRECATED — use judge_llm_config. UUID of the registered judge model",
+    },
+    {
+      name: "judge_llm_connector_ref",
+      type: "string",
+      required: false,
+      description: "DEPRECATED — use judge_llm_config. Harness LLM connector identifier for judge model",
+    },
   ],
 };
 
@@ -320,7 +357,9 @@ const triggerSuiteRunSchema: BodySchema = {
       name: "run_inputs",
       type: "object",
       required: false,
-      description: "RunInputs overrides: { llm_connector_ref?, target_id?, dataset_id?, metric_set_id?, variables? }",
+      description:
+        "RunInputs overrides: { llm_config? (preferred structured provider config), target_id?, dataset_id?, metric_set_id?, variables? }. " +
+        "llm_connector_ref, model_id, and model remain accepted but are DEPRECATED; use llm_config instead.",
     },
     { name: "input_set_id", type: "string", required: false, description: "Saved input set id" },
     {
@@ -479,7 +518,24 @@ const generateDatasetItemsSchema: BodySchema = {
       description: "Generation strategy: use_case | rephrase | adversarial | complexity_ladder",
     },
     { name: "count", type: "number", required: true, description: "Number of items to generate (1-200)" },
-    { name: "llm_connector_ref", type: "string", required: true, description: "Harness LLM connector identifier for the generation model" },
+    {
+      name: "llm_config",
+      type: "object",
+      required: false,
+      description: "Preferred structured LLM provider configuration for dataset generation",
+    },
+    {
+      name: "model_id",
+      type: "string",
+      required: false,
+      description: "DEPRECATED — use llm_config. UUID of the registered AI model",
+    },
+    {
+      name: "llm_connector_ref",
+      type: "string",
+      required: false,
+      description: "DEPRECATED — use llm_config. Harness LLM connector identifier for the generation model",
+    },
     {
       name: "description",
       type: "string",
@@ -540,7 +596,24 @@ const evaluateTraceSchema: BodySchema = {
         "At least one of metric_set_id or metrics is required.",
       itemType: "object",
     },
-    { name: "judge_llm_connector_ref", type: "string", required: false, description: "Harness LLM connector identifier for judge model" },
+    {
+      name: "judge_llm_config",
+      type: "object",
+      required: false,
+      description: "Preferred structured LLM provider configuration for the judge model",
+    },
+    {
+      name: "judge_model_id",
+      type: "string",
+      required: false,
+      description: "DEPRECATED — use judge_llm_config. UUID of the registered judge model",
+    },
+    {
+      name: "judge_llm_connector_ref",
+      type: "string",
+      required: false,
+      description: "DEPRECATED — use judge_llm_config. Harness LLM connector identifier for judge model",
+    },
     {
       name: "options",
       type: "object",
@@ -1080,7 +1153,8 @@ export const aiEvalsToolset: ToolsetDefinition = {
       diagnosticHint:
         "Before creating a metric set, list available metrics with harness_list(resource_type='eval_metric'). " +
         "Use harness_execute(resource_type='eval_metric', action='suggestions') to discover metrics appropriate for a target type. " +
-        "If using LLM metrics (llm-as-judge), set judge_llm_connector_ref to a Harness LLM connector identifier.",
+        "If using LLM metrics (llm-as-judge), set judge_llm_config to a structured provider configuration. " +
+        "judge_llm_connector_ref remains accepted but is DEPRECATED.",
       relatedResources: [
         { resourceType: "eval_metric_set_entry", relationship: "contains", description: "Metric membership entries with thresholds" },
         { resourceType: "eval_metric", relationship: "uses", description: "Entries reference metrics by metric_id" },
