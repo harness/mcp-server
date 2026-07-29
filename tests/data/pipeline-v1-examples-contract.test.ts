@@ -1,8 +1,12 @@
 /**
  * Contract tests for pipeline_v1 example YAML.
  *
- * Examples are curated to match real v1 converter output (not the bundled JSON
- * schema, which is stricter). These tests catch regressions back to v0-style
+ * Examples must conform to the bundled v1 JSON schema (the official Harness
+ * contract synced from harness-schema/main). The v0→v1 converter currently
+ * emits several non-conformant constructs — `runtime: {shell: true}`,
+ * `environment.name`, `runtime.kubernetes.{node,os}` — so examples are
+ * deliberately NOT copied verbatim from converter output. These tests catch
+ * regressions back to those invalid shapes and to v0-style
  * `identifier` / `type: run` / `type: agent` patterns that agents copy from.
  */
 import { describe, it, expect } from "vitest";
@@ -123,22 +127,70 @@ function validateExampleStructure(name: string, yaml: string): Violation[] {
     violations.push({ example: name, path: "pipeline.identifier", message: "use pipeline.id instead of pipeline.identifier" });
   }
 
+  const RUNTIME_STRINGS = new Set(["cloud", "shell", "vm", "k8"]);
+  const K8_RUNTIME_KEYS = new Set([
+    "namespace",
+    "connector",
+    "user",
+    "pull",
+    "harness-image-connector",
+    "automount-service-token",
+    "priority-class",
+    "tolerations",
+    "host",
+    "node-selector",
+    "timeout",
+    "service-account",
+    "labels",
+    "annotations",
+    "volumes",
+    "pod-spec-overlay",
+    "security-context",
+  ]);
+
   walkStages(pipeline.stages, (stage, stagePath) => {
     const runtime = stage.runtime;
     if (runtime == null) return;
+
+    // RuntimeV1 is either a string shorthand (cloud|shell|vm|k8) or an object
+    // carrying exactly one runtime spec. `shell: true` is the converter's
+    // invalid boolean form — the schema wants the string "shell".
+    if (typeof runtime === "string") {
+      if (!RUNTIME_STRINGS.has(runtime)) {
+        violations.push({
+          example: name,
+          path: `${stagePath}.runtime`,
+          message: `runtime string must be one of ${[...RUNTIME_STRINGS].join(", ")}`,
+        });
+      }
+      return;
+    }
     if (!isRecord(runtime)) return;
 
-    if ("vm" in runtime) {
-      violations.push({ example: name, path: `${stagePath}.runtime.vm`, message: "use shell: or kubernetes: runtime" });
-    }
-    if ("cloud" in runtime) {
-      violations.push({ example: name, path: `${stagePath}.runtime.cloud`, message: "use shell: or kubernetes: runtime" });
-    }
-    if ("shell" in runtime && runtime.shell !== true) {
+    if ("shell" in runtime && !isRecord(runtime.shell)) {
       violations.push({
         example: name,
         path: `${stagePath}.runtime.shell`,
-        message: "converter shell runtime is shell: true",
+        message: 'invalid converter shape `runtime: {shell: true}` — use the string `runtime: cloud` (or a shell spec object)',
+      });
+    }
+    if (isRecord(runtime.kubernetes)) {
+      for (const key of Object.keys(runtime.kubernetes)) {
+        if (!K8_RUNTIME_KEYS.has(key)) {
+          violations.push({
+            example: name,
+            path: `${stagePath}.runtime.kubernetes.${key}`,
+            message: `"${key}" is not a valid K8RuntimeSpec key (converter emits node:/os: which the schema rejects)`,
+          });
+        }
+      }
+    }
+
+    if (isRecord(stage.environment) && "name" in stage.environment) {
+      violations.push({
+        example: name,
+        path: `${stagePath}.environment.name`,
+        message: "environment does not allow name: (additionalProperties:false) — use id: and deploy-to:",
       });
     }
 
@@ -223,13 +275,14 @@ describe("pipeline_v1 example converter contract", () => {
 });
 
 describe("pipeline_v1 example PR #428 regression guards", () => {
-  it("minimal-v1 uses shell runtime and run: steps", () => {
+  it("minimal-v1 uses a schema-valid runtime and run: steps", () => {
     const ex = v1Examples.find((e) => e.name === "minimal-v1");
     expect(ex).toBeDefined();
     const pipeline = parseYaml(ex!.yaml).pipeline;
     expect(pipeline.id).toBe("simple_build");
     expect(pipeline.clone?.enabled).toBe(false);
-    expect(pipeline.stages[0].runtime.shell).toBe(true);
+    // schema wants the string shorthand, not the converter's `{shell: true}`
+    expect(pipeline.stages[0].runtime).toBe("cloud");
     expect(pipeline.stages[0].steps[0].run.shell).toBe("sh");
   });
 
@@ -253,7 +306,9 @@ describe("pipeline_v1 example PR #428 regression guards", () => {
 
     const runtime = parseYaml(ex!.yaml).pipeline.stages[0].runtime;
     expect(runtime.kubernetes.namespace).toBe("harness-builds");
-    expect(runtime.kubernetes.node).toEqual({});
+    // node:/os: are converter artifacts the K8RuntimeSpec rejects — must be absent
+    expect(runtime.kubernetes.node).toBeUndefined();
+    expect(runtime.kubernetes.os).toBeUndefined();
   });
 });
 

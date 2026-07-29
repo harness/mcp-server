@@ -15,8 +15,7 @@ const examples: ResourceExample[] = [
   stages:
     - id: build
       name: build
-      runtime:
-        shell: true
+      runtime: cloud
       steps:
         - id: build
           name: Build
@@ -60,8 +59,6 @@ const examples: ResourceExample[] = [
           automount-service-token: true
           connector: account.k8s_build_cluster
           namespace: harness-builds
-          node: {}
-          os: Linux
       steps:
         - id: code_review
           name: Code Review
@@ -97,7 +94,6 @@ const examples: ResourceExample[] = [
     - environment:
         deploy-to: shared
         id: dev
-        name: dev
       id: Helm_Deploy
       name: Helm Deploy
       on-failure:
@@ -154,8 +150,6 @@ const examples: ResourceExample[] = [
           automount-service-token: true
           connector: account.k8s_build_cluster
           namespace: harness-builds
-          node: {}
-          os: Linux
       steps:
         - id: Get_Commit_Details
           name: Get Commit Details
@@ -217,8 +211,7 @@ const examples: ResourceExample[] = [
         enabled: true
       id: Plan_Dev
       name: Plan Dev
-      runtime:
-        shell: true
+      runtime: cloud
       steps:
         - id: Terraform_Plan
           name: Terraform Plan
@@ -247,8 +240,7 @@ const examples: ResourceExample[] = [
         - kubernetes-delegate
       id: Deploy_Prod
       name: Deploy Prod
-      runtime:
-        shell: true
+      runtime: cloud
       steps:
         - id: Terraform_Plan
           name: Terraform Plan
@@ -319,7 +311,6 @@ const examples: ResourceExample[] = [
       environment:
         deploy-to: nonprod
         id: account.deploy_util
-        name: account.deploy_util
       id: deployment_setup
       if: <+Always>
       name: deployment-setup
@@ -381,7 +372,6 @@ const examples: ResourceExample[] = [
     - environment:
         deploy-to: ecs_prod
         id: prod
-        name: prod
       id: prod
       if: <+OnPipelineSuccess>
       name: prod
@@ -421,7 +411,6 @@ const examples: ResourceExample[] = [
       environment:
         deploy-to: dev_cluster
         id: dev
-        name: dev
       id: Deploy_to_dev
       inputs:
         BuildVersion:
@@ -511,7 +500,6 @@ const examples: ResourceExample[] = [
     - environment:
         deploy-to: pr
         id: pr
-        name: pr
       id: Delete_PR
       name: Delete PR
       on-failure:
@@ -555,7 +543,6 @@ const examples: ResourceExample[] = [
     - environment:
         deploy-to: production_cluster
         id: prod
-        name: prod
       id: Rolling_Deploy
       name: Rolling Deploy
       on-failure:
@@ -615,7 +602,6 @@ const examples: ResourceExample[] = [
     - environment:
         deploy-to: production_cluster
         id: prod
-        name: prod
       id: Canary_Deploy
       name: Canary Deploy
       on-failure:
@@ -707,7 +693,6 @@ const examples: ResourceExample[] = [
     - environment:
         deploy-to: ecs_production
         id: prod
-        name: prod
       id: Deploy_Prod
       name: Deploy Prod
       on-failure:
@@ -762,8 +747,7 @@ const examples: ResourceExample[] = [
         enabled: true
       id: Build_Package
       name: Build & Package
-      runtime:
-        shell: true
+      runtime: cloud
       steps:
         - id: install_deps
           name: Install Dependencies
@@ -788,7 +772,6 @@ const examples: ResourceExample[] = [
     - environment:
         deploy-to: lambda_<+pipeline.variables.stage>
         id: <+pipeline.variables.stage>
-        name: <+pipeline.variables.stage>
       id: Deploy_Lambda
       name: Deploy Lambda
       on-failure:
@@ -847,7 +830,6 @@ const examples: ResourceExample[] = [
     - environment:
         deploy-to: tas_production
         id: prod
-        name: prod
       id: TAS_Deploy
       name: TAS Deploy
       on-failure:
@@ -923,8 +905,7 @@ const examples: ResourceExample[] = [
         enabled: true
       id: Build
       name: Build
-      runtime:
-        shell: true
+      runtime: cloud
       steps:
         - id: build_app
           name: Build App
@@ -950,7 +931,6 @@ const examples: ResourceExample[] = [
     - environment:
         deploy-to: azure_production
         id: prod
-        name: prod
       id: Deploy_Prod
       name: Deploy Prod
       on-failure:
@@ -1034,7 +1014,6 @@ const examples: ResourceExample[] = [
     - environment:
         deploy-to: on_prem_servers
         id: prod
-        name: prod
       id: Deploy
       name: Deploy
       on-failure:
@@ -1095,8 +1074,7 @@ const examples: ResourceExample[] = [
   stages:
     - id: Build
       name: Build
-      runtime:
-        shell: true
+      runtime: cloud
       steps:
         - id: build_artifact
           name: Build Artifact
@@ -1113,7 +1091,6 @@ const examples: ResourceExample[] = [
           - environment:
               deploy-to: us_east_cluster
               id: us_east
-              name: us-east
             id: Deploy_US_East
             name: Deploy US-East
             on-failure:
@@ -1141,7 +1118,6 @@ const examples: ResourceExample[] = [
           - environment:
               deploy-to: eu_west_cluster
               id: eu_west
-              name: eu-west
             id: Deploy_EU_West
             name: Deploy EU-West
             on-failure:
@@ -1184,8 +1160,7 @@ const examples: ResourceExample[] = [
         enabled: true
       id: Update_Manifests
       name: Update Manifests
-      runtime:
-        shell: true
+      runtime: cloud
       steps:
         - id: update_image_tag
           name: Update Image Tag
