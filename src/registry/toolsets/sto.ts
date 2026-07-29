@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { passthrough, stoExemptionsExtract } from "../extractors.js";
+import { passthrough, stoExemptionsExtract, stoSastRemediationDiffExtract } from "../extractors.js";
 
 /**
  * Injects a redirect hint into every security_issue list response.
@@ -762,6 +762,103 @@ export const stoToolset: ToolsetDefinition = {
               },
             ],
           },
+        },
+      },
+    },
+
+    // ── SAST Remediation Diff (validation vs original scan) ───────────
+    {
+      resourceType: "sast_remediation_diff",
+      displayName: "SAST Remediation Diff",
+      description:
+        "Diff validation-scan occurrences against the original SAST scan's ignore set (STO DiffOccurrences). "
+        + "Requires BOTH `scan_id` (original scan) and `validation_execution_id` (validation pipeline execution). "
+        + "Removes ignored fingerprints from the validation scan (server-side), then splits remaining occurrences into "
+        + "`existing` (still present from original in-scope) and `new` (introduced by the remediations). "
+        + "Response flattens both partitions into `items[]` tagged with `_partition`. "
+        + "Fingerprint is not returned on items — matching stays inside STO Core.",
+      searchAliases: [
+        "sast rem diff",
+        "validation scan diff",
+        "sast occurrence diff",
+        "agent remediation validation",
+      ],
+      relatedResources: [
+        {
+          resourceType: "pipeline_security_issue",
+          relationship: "sibling",
+          description: "Per-execution Pipeline Security issue view (existing/new partitions for a run).",
+        },
+        {
+          resourceType: "security_issue",
+          relationship: "sibling",
+          description: "Cross-execution Issues page listing.",
+        },
+      ],
+      toolset: "sto",
+      scope: "project",
+      scopeParams: STO_SCOPE,
+      identifierFields: [],
+      listFilterFields: [
+        { name: "scan_id", description: "REQUIRED. Original STO scan id the agent remediated.", required: true },
+        {
+          name: "validation_execution_id",
+          description:
+            "REQUIRED (or legacy alias execution_id). Validation pipeline execution id "
+            + "(sto-core query param validationExecutionId).",
+          required: false,
+        },
+        {
+          name: "execution_id",
+          description:
+            "Legacy alias for validation_execution_id. Prefer validation_execution_id.",
+          required: false,
+        },
+        { name: "only_true_positive", type: "boolean", description: "When true (default), only TRUE_POSITIVE triage verdicts are treated as in-scope on the original scan." },
+        { name: "limit", type: "number", description: "Max occurrences to return (1–10000, default 1000)." },
+        { name: "severity_codes", description: "Comma-separated severities.", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
+        { name: "exclude_repo_patterns", description: "Comma-separated glob patterns matching repository target.name to exclude." },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/sto/api/v2/sast-remediation/diff-occurrences",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            scan_id: "scanId",
+            validation_execution_id: "validationExecutionId",
+            // Legacy alias — prefer validation_execution_id.
+            execution_id: "validationExecutionId",
+            only_true_positive: "onlyTruePositive",
+            limit: "limit",
+            severity_codes: "severityCodes",
+            exclude_repo_patterns: "excludeRepoPatterns",
+          },
+          preflight: async ({ input }) => {
+            if (typeof input.scan_id !== "string" || input.scan_id.length === 0) {
+              throw new Error(
+                "sast_remediation_diff: 'scan_id' is required (original STO scan id).",
+              );
+            }
+            const validationExecutionId =
+              (typeof input.validation_execution_id === "string" && input.validation_execution_id)
+              || (typeof input.execution_id === "string" && input.execution_id)
+              || "";
+            if (!validationExecutionId) {
+              throw new Error(
+                "sast_remediation_diff: 'validation_execution_id' is required "
+                  + "(validation pipeline execution id; alias: execution_id).",
+              );
+            }
+            // Normalize so queryParams maps a single canonical key.
+            input.validation_execution_id = validationExecutionId;
+            delete input.execution_id;
+          },
+          responseExtractor: stoSastRemediationDiffExtract,
+          skipCompact: true,
+          description:
+            "Diff validation-scan occurrences vs original scan ignore set. Requires scan_id + validation_execution_id. "
+            + "Flattens existingOccurrences + newOccurrences into items[]; each item tagged with _partition.",
         },
       },
     },

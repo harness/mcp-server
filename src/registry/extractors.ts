@@ -128,6 +128,64 @@ export const stoExemptionsExtract = (raw: unknown, input?: Record<string, unknow
 };
 
 /**
+ * STO SAST remediation DiffOccurrences
+ * (`GET /sto/api/v2/sast-remediation/diff-occurrences`).
+ *
+ * API shape:
+ *   { validationScanId, existingOccurrences: [...], newOccurrences: [...],
+ *     existingCount, newCount, matchedCount }
+ *
+ * Flatten existing+new into `items[]` tagged with `_partition` so agents can
+ * tell still-present vs newly introduced occurrences without two list calls.
+ * Fingerprint is not on the wire (Diff matching is server-side only).
+ */
+export const stoSastRemediationDiffExtract = (raw: unknown): unknown => {
+  if (raw === null || raw === undefined || typeof raw !== "object") return raw;
+  const r = raw as {
+    validationScanId?: string;
+    existingOccurrences?: unknown[];
+    newOccurrences?: unknown[];
+    // Legacy keys (pre rename) — keep reading briefly for mixed deploys.
+    existing?: unknown[];
+    new?: unknown[];
+    existingCount?: number;
+    newCount?: number;
+    matchedCount?: number;
+  };
+  const existingItems = Array.isArray(r.existingOccurrences)
+    ? r.existingOccurrences
+    : Array.isArray(r.existing)
+      ? r.existing
+      : [];
+  const newItems = Array.isArray(r.newOccurrences)
+    ? r.newOccurrences
+    : Array.isArray(r.new)
+      ? r.new
+      : [];
+  const tagged = [
+    ...existingItems.map((it) =>
+      typeof it === "object" && it !== null ? { ...it, _partition: "existing" } : it,
+    ),
+    ...newItems.map((it) =>
+      typeof it === "object" && it !== null ? { ...it, _partition: "new" } : it,
+    ),
+  ];
+  const existingCount =
+    typeof r.existingCount === "number" ? r.existingCount : existingItems.length;
+  const newCount = typeof r.newCount === "number" ? r.newCount : newItems.length;
+  const matchedCount =
+    typeof r.matchedCount === "number" ? r.matchedCount : existingCount + newCount;
+  return {
+    items: tagged,
+    total: matchedCount,
+    existing_total: existingCount,
+    new_total: newCount,
+    matched_count: matchedCount,
+    validation_scan_id: r.validationScanId,
+  };
+};
+
+/**
  * AI Evals control plane — paginated list: `{ data, page, limit, total_elements }`.
  */
 export const aiEvalsListExtract = (raw: unknown): { items: unknown[]; total: number } => {
