@@ -84,12 +84,28 @@ const stagingRoot = join(repoRoot, ".npm-shrinkwrap-staging");
 rmSync(stagingRoot, { recursive: true, force: true });
 mkdirSync(stagingRoot, { recursive: true });
 
+// pnpm.overrides is the source of truth for security pins. npm ignores it, so
+// mirror it into the npm-native `overrides` field (flat "pkg": "range" entries
+// are format-compatible) — otherwise transitive pins like sharp (capped by
+// @huggingface/transformers) leak vulnerable versions into the shipped tree.
+// Direct deps are already pinned in dependencies/optionalDependencies; npm
+// rejects (EOVERRIDE) an override that conflicts with a direct dep, so drop
+// those keys and keep only the transitive pins.
+const directDeps = new Set([
+  ...Object.keys(pkg.dependencies ?? {}),
+  ...Object.keys(pkg.optionalDependencies ?? {}),
+]);
+const transitiveOverrides = Object.fromEntries(
+  Object.entries(pkg.pnpm?.overrides ?? {}).filter(([name]) => !directDeps.has(name)),
+);
+
 const stagingManifest = {
   name: pkg.name,
   version: pkg.version,
   private: true,
   dependencies: pkg.dependencies,
   optionalDependencies: pkg.optionalDependencies,
+  overrides: transitiveOverrides,
 };
 
 writeFileSync(join(stagingRoot, "package.json"), `${JSON.stringify(stagingManifest, null, 2)}\n`);
