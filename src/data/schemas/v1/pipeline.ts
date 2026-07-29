@@ -1451,6 +1451,10 @@ const schema: Record<string, any> = {
             "template": {
               "$ref": "#/definitions/pipeline_v1/common/TemplateRef"
             },
+            "agent": {
+              "description": "Alias for `template`, used to reference an agent template.",
+              "$ref": "#/definitions/pipeline_v1/common/TemplateRef"
+            },
             "action": {
               "$ref": "#/definitions/pipeline_v1/common/TemplateRef"
             },
@@ -3344,6 +3348,10 @@ const schema: Record<string, any> = {
             "description": "Environment configuration for CD stages.",
             "oneOf": [
               {
+                "description": "Harness expression that resolves to the environment configuration.",
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
+              },
+              {
                 "type": "object",
                 "required": [
                   "id"
@@ -4098,6 +4106,11 @@ const schema: Record<string, any> = {
                 },
                 {
                   "required": [
+                    "agent"
+                  ]
+                },
+                {
+                  "required": [
                     "action"
                   ]
                 },
@@ -4245,6 +4258,11 @@ const schema: Record<string, any> = {
                       {
                         "required": [
                           "template"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "agent"
                         ]
                       },
                       {
