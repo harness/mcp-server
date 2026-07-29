@@ -11,11 +11,11 @@ import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSyn
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { ensureSecureAdmZip } from "./adm-zip-security-lib.mjs";
 import {
-  ensureSecureAdmZip,
-  isSecureAdmZipVersion,
-  SECURE_ADM_ZIP_VERSION,
-} from "./adm-zip-security-lib.mjs";
+  buildStagingManifest,
+  validateShrinkwrapMetadata,
+} from "./npm-shrinkwrap-lib.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const shrinkwrapPath = join(repoRoot, "npm-shrinkwrap.json");
@@ -31,10 +31,6 @@ function run(cmd, args, cwd) {
 
 const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
 
-function sortedEntries(value = {}) {
-  return Object.entries(value).sort(([left], [right]) => left.localeCompare(right));
-}
-
 function failCheck(message) {
   console.error(`npm-shrinkwrap.json is out of date: ${message}`);
   process.exit(1);
@@ -46,33 +42,9 @@ if (checkMode) {
   }
 
   const shrinkwrap = JSON.parse(readFileSync(shrinkwrapPath, "utf8"));
-  const root = shrinkwrap.packages?.[""];
-  if (!root) {
-    failCheck("root package metadata is missing");
-  }
-  if (root.name !== pkg.name || root.version !== pkg.version) {
-    failCheck(`root metadata does not match ${pkg.name}@${pkg.version}`);
-  }
-
-  if (
-    JSON.stringify(sortedEntries(root.dependencies)) !==
-    JSON.stringify(sortedEntries(pkg.dependencies))
-  ) {
-    failCheck("root dependencies do not match package.json");
-  }
-  if (
-    JSON.stringify(sortedEntries(root.optionalDependencies)) !==
-    JSON.stringify(sortedEntries(pkg.optionalDependencies))
-  ) {
-    failCheck("root optionalDependencies do not match package.json");
-  }
-
-  const hoistedAdmZipVersion = shrinkwrap.packages?.["node_modules/adm-zip"]?.version;
-  if (
-    !hoistedAdmZipVersion ||
-    !isSecureAdmZipVersion(hoistedAdmZipVersion, SECURE_ADM_ZIP_VERSION)
-  ) {
-    failCheck(`hoisted adm-zip is ${hoistedAdmZipVersion ?? "missing"}`);
+  const validationError = validateShrinkwrapMetadata(pkg, shrinkwrap);
+  if (validationError) {
+    failCheck(validationError);
   }
 
   console.error("npm-shrinkwrap.json metadata is up to date");
@@ -84,31 +56,10 @@ const stagingRoot = join(repoRoot, ".npm-shrinkwrap-staging");
 rmSync(stagingRoot, { recursive: true, force: true });
 mkdirSync(stagingRoot, { recursive: true });
 
-// pnpm.overrides is the source of truth for security pins. npm ignores it, so
-// mirror it into the npm-native `overrides` field (flat "pkg": "range" entries
-// are format-compatible) — otherwise transitive pins like sharp (capped by
-// @huggingface/transformers) leak vulnerable versions into the shipped tree.
-// Direct deps are already pinned in dependencies/optionalDependencies; npm
-// rejects (EOVERRIDE) an override that conflicts with a direct dep, so drop
-// those keys and keep only the transitive pins.
-const directDeps = new Set([
-  ...Object.keys(pkg.dependencies ?? {}),
-  ...Object.keys(pkg.optionalDependencies ?? {}),
-]);
-const transitiveOverrides = Object.fromEntries(
-  Object.entries(pkg.pnpm?.overrides ?? {}).filter(([name]) => !directDeps.has(name)),
+writeFileSync(
+  join(stagingRoot, "package.json"),
+  `${JSON.stringify(buildStagingManifest(pkg), null, 2)}\n`,
 );
-
-const stagingManifest = {
-  name: pkg.name,
-  version: pkg.version,
-  private: true,
-  dependencies: pkg.dependencies,
-  optionalDependencies: pkg.optionalDependencies,
-  overrides: transitiveOverrides,
-};
-
-writeFileSync(join(stagingRoot, "package.json"), `${JSON.stringify(stagingManifest, null, 2)}\n`);
 
 run("npm", ["install", "--omit=dev"], stagingRoot);
 ensureSecureAdmZip(stagingRoot, { strict: true });
