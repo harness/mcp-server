@@ -220,4 +220,55 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("defines RuntimeV1 string shorthand and rejects converter boolean shell runtime", () => {
+    const unified = (SCHEMAS.pipeline_v1.definitions as Record<string, Record<string, unknown>>)
+      .pipeline_v1.stages.unified as Record<string, unknown>;
+    const runtimeV1 = unified.RuntimeV1 as {
+      oneOf: Array<{ type?: string; enum?: string[]; properties?: Record<string, unknown> }>;
+    };
+
+    const stringBranch = runtimeV1.oneOf.find((branch) => branch.type === "string");
+    expect(stringBranch?.enum).toEqual(expect.arrayContaining(["cloud", "shell", "vm", "k8"]));
+
+    const objectBranch = runtimeV1.oneOf.find((branch) => branch.type === "object");
+    expect(objectBranch?.properties?.shell).toBeDefined();
+    const shellSpec = objectBranch?.properties?.shell as { $ref?: string };
+    expect(shellSpec.$ref).toContain("ShellRuntimeSpec");
+  });
+
+  it("defines EnvironmentV1 without a name property and with additionalProperties false", () => {
+    const unified = (SCHEMAS.pipeline_v1.definitions as Record<string, Record<string, unknown>>)
+      .pipeline_v1.stages.unified as Record<string, unknown>;
+    const environmentV1 = unified.EnvironmentV1 as {
+      oneOf: Array<{
+        properties?: Record<string, unknown>;
+        additionalProperties?: boolean;
+      }>;
+    };
+
+    const objectBranch = environmentV1.oneOf.find(
+      (branch) => branch.properties != null && "id" in branch.properties,
+    );
+    expect(objectBranch).toBeDefined();
+    expect(objectBranch!.additionalProperties).toBe(false);
+    expect(objectBranch!.properties).toHaveProperty("id");
+    expect(objectBranch!.properties).toHaveProperty("deploy-to");
+    expect(objectBranch!.properties).not.toHaveProperty("name");
+  });
+
+  it("defines K8RuntimeSpec without node or os and with additionalProperties false", () => {
+    const unified = (SCHEMAS.pipeline_v1.definitions as Record<string, Record<string, unknown>>)
+      .pipeline_v1.stages.unified as Record<string, unknown>;
+    const k8Runtime = unified.K8RuntimeSpec as {
+      additionalProperties: boolean;
+      properties: Record<string, unknown>;
+    };
+
+    expect(k8Runtime.additionalProperties).toBe(false);
+    expect(k8Runtime.properties).toHaveProperty("namespace");
+    expect(k8Runtime.properties).toHaveProperty("connector");
+    expect(k8Runtime.properties).not.toHaveProperty("node");
+    expect(k8Runtime.properties).not.toHaveProperty("os");
+  });
 });

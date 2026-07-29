@@ -10,8 +10,11 @@
  * `identifier` / `type: run` / `type: agent` patterns that agents copy from.
  */
 import { describe, it, expect } from "vitest";
+import Ajv from "ajv";
+import type { ValidateFunction } from "ajv";
 import { parse as parseYaml } from "yaml";
 import { getExamplesForResource } from "../../src/data/examples/index.js";
+import { SCHEMAS } from "../../src/data/schemas/index.js";
 import { Registry } from "../../src/registry/index.js";
 import "../../src/data/examples/load-all.js";
 
@@ -150,38 +153,37 @@ function validateExampleStructure(name: string, yaml: string): Violation[] {
 
   walkStages(pipeline.stages, (stage, stagePath) => {
     const runtime = stage.runtime;
-    if (runtime == null) return;
 
-    // RuntimeV1 is either a string shorthand (cloud|shell|vm|k8) or an object
-    // carrying exactly one runtime spec. `shell: true` is the converter's
-    // invalid boolean form — the schema wants the string "shell".
-    if (typeof runtime === "string") {
-      if (!RUNTIME_STRINGS.has(runtime)) {
-        violations.push({
-          example: name,
-          path: `${stagePath}.runtime`,
-          message: `runtime string must be one of ${[...RUNTIME_STRINGS].join(", ")}`,
-        });
-      }
-      return;
-    }
-    if (!isRecord(runtime)) return;
-
-    if ("shell" in runtime && !isRecord(runtime.shell)) {
-      violations.push({
-        example: name,
-        path: `${stagePath}.runtime.shell`,
-        message: 'invalid converter shape `runtime: {shell: true}` — use the string `runtime: cloud` (or a shell spec object)',
-      });
-    }
-    if (isRecord(runtime.kubernetes)) {
-      for (const key of Object.keys(runtime.kubernetes)) {
-        if (!K8_RUNTIME_KEYS.has(key)) {
+    if (runtime != null) {
+      // RuntimeV1 is either a string shorthand (cloud|shell|vm|k8) or an object
+      // carrying exactly one runtime spec. `shell: true` is the converter's
+      // invalid boolean form — the schema wants the string "shell".
+      if (typeof runtime === "string") {
+        if (!RUNTIME_STRINGS.has(runtime)) {
           violations.push({
             example: name,
-            path: `${stagePath}.runtime.kubernetes.${key}`,
-            message: `"${key}" is not a valid K8RuntimeSpec key (converter emits node:/os: which the schema rejects)`,
+            path: `${stagePath}.runtime`,
+            message: `runtime string must be one of ${[...RUNTIME_STRINGS].join(", ")}`,
           });
+        }
+      } else if (isRecord(runtime)) {
+        if ("shell" in runtime && !isRecord(runtime.shell)) {
+          violations.push({
+            example: name,
+            path: `${stagePath}.runtime.shell`,
+            message: 'invalid converter shape `runtime: {shell: true}` — use the string `runtime: cloud` (or a shell spec object)',
+          });
+        }
+        if (isRecord(runtime.kubernetes)) {
+          for (const key of Object.keys(runtime.kubernetes)) {
+            if (!K8_RUNTIME_KEYS.has(key)) {
+              violations.push({
+                example: name,
+                path: `${stagePath}.runtime.kubernetes.${key}`,
+                message: `"${key}" is not a valid K8RuntimeSpec key (converter emits node:/os: which the schema rejects)`,
+              });
+            }
+          }
         }
       }
     }
@@ -242,6 +244,189 @@ function validateForbiddenPatterns(name: string, yaml: string): Violation[] {
 }
 
 const v1Examples = getExamplesForResource("pipeline_v1");
+
+function compilePipelineV1Validator(): ValidateFunction {
+  const ajv = new Ajv({ allErrors: true, strict: false });
+  return ajv.compile(SCHEMAS.pipeline_v1);
+}
+
+describe("pipeline_v1 examples conform to bundled JSON schema", () => {
+  const validate = compilePipelineV1Validator();
+
+  it.each(v1Examples.map((ex) => [ex.name, ex.yaml] as const))(
+    "%s validates against SCHEMAS.pipeline_v1",
+    (name, yaml) => {
+      const doc = parseYaml(yaml);
+      const valid = validate(doc);
+      expect(
+        valid,
+        validate.errors?.map((e) => `${e.instancePath}: ${e.message}`).join("\n"),
+      ).toBe(true);
+    },
+  );
+
+  it("rejects converter-invalid runtime: {shell: true}", () => {
+    const doc = parseYaml(`
+pipeline:
+  id: test_pipeline
+  stages:
+    - id: build
+      runtime:
+        shell: true
+      steps:
+        - id: step
+          run:
+            script: echo hi
+            shell: sh
+`);
+    expect(validate(doc)).toBe(false);
+  });
+
+  it("rejects environment.name on CD stages", () => {
+    const doc = parseYaml(`
+pipeline:
+  id: test_pipeline
+  stages:
+    - id: deploy
+      environment:
+        id: dev
+        name: dev
+      service: backend
+      steps:
+        - id: helm
+          template:
+            uses: helmDeployBasicStep
+`);
+    expect(validate(doc)).toBe(false);
+  });
+
+  it("rejects runtime.kubernetes.node and os converter artifacts", () => {
+    const doc = parseYaml(`
+pipeline:
+  id: test_pipeline
+  stages:
+    - id: build
+      runtime:
+        kubernetes:
+          namespace: harness-builds
+          connector: account.k8s
+          node: {}
+          os: Linux
+      steps:
+        - id: step
+          run:
+            script: echo hi
+            shell: sh
+`);
+    expect(validate(doc)).toBe(false);
+  });
+});
+
+describe("validateExampleStructure regression guards", () => {
+  it("flags runtime: {shell: true} converter shape", () => {
+    const violations = validateExampleStructure(
+      "synthetic",
+      `
+pipeline:
+  id: test
+  stages:
+    - id: build
+      runtime:
+        shell: true
+      steps:
+        - id: step
+          run:
+            script: hi
+            shell: sh
+`,
+    );
+    expect(violations.some((v) => v.path.includes("runtime.shell"))).toBe(true);
+  });
+
+  it("flags environment.name on CD stages without runtime", () => {
+    const violations = validateExampleStructure(
+      "synthetic",
+      `
+pipeline:
+  id: test
+  stages:
+    - id: deploy
+      environment:
+        id: dev
+        name: dev
+      service: svc
+      steps:
+        - id: step
+          template:
+            uses: helmDeployBasicStep
+`,
+    );
+    expect(violations.some((v) => v.path.includes("environment.name"))).toBe(true);
+  });
+
+  it("flags invalid K8RuntimeSpec keys node and os", () => {
+    const violations = validateExampleStructure(
+      "synthetic",
+      `
+pipeline:
+  id: test
+  stages:
+    - id: build
+      runtime:
+        kubernetes:
+          namespace: ns
+          connector: c
+          node: {}
+          os: Linux
+      steps:
+        - id: step
+          run:
+            script: hi
+            shell: sh
+`,
+    );
+    expect(violations.some((v) => v.path.includes("runtime.kubernetes.node"))).toBe(true);
+    expect(violations.some((v) => v.path.includes("runtime.kubernetes.os"))).toBe(true);
+  });
+
+  it("flags invalid runtime string shorthand", () => {
+    const violations = validateExampleStructure(
+      "synthetic",
+      `
+pipeline:
+  id: test
+  stages:
+    - id: build
+      runtime: invalid_runtime
+      steps:
+        - id: step
+          run:
+            script: hi
+            shell: sh
+`,
+    );
+    expect(violations.some((v) => v.path.endsWith(".runtime"))).toBe(true);
+  });
+
+  it("flags pipeline.identifier instead of id", () => {
+    const violations = validateExampleStructure(
+      "synthetic",
+      `
+pipeline:
+  identifier: legacy_id
+  stages:
+    - id: build
+      runtime: cloud
+      steps:
+        - id: step
+          run:
+            script: hi
+            shell: sh
+`,
+    );
+    expect(violations.some((v) => v.path === "pipeline.identifier")).toBe(true);
+  });
+});
 
 describe("pipeline_v1 example converter contract", () => {
   it("registers a meaningful catalog of v1 examples", () => {
