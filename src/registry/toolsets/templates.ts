@@ -1,7 +1,71 @@
 import YAML from "yaml";
-import type { BodySchema, PathBuilderConfig, ToolsetDefinition } from "../types.js";
+import type { BodySchema, ParamsSchema, PathBuilderConfig, ToolsetDefinition } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract } from "../extractors.js";
 import { SCOPE_BEHAVIOR_DOC, templateV1BasePathFromScope } from "../scope-utils.js";
+
+/** Pass via harness_get/update/delete `params` — not top-level tool fields. */
+const TEMPLATE_V0_GET_PARAMS: ParamsSchema = {
+  fields: [
+    {
+      name: "version_label",
+      required: false,
+      description: "Template version to fetch. Pass via params.",
+    },
+    {
+      name: "branch",
+      required: false,
+      description: "Git branch for remote/git-backed templates. Pass via params.",
+    },
+  ],
+};
+
+const TEMPLATE_V0_UPDATE_PARAMS: ParamsSchema = {
+  fields: [
+    {
+      name: "version_label",
+      required: true,
+      description: "Template version label to update. Pass via params.",
+    },
+  ],
+};
+
+const TEMPLATE_V0_DELETE_PARAMS: ParamsSchema = {
+  fields: [
+    {
+      name: "version_label",
+      required: false,
+      description:
+        "Version to delete. Omit to delete all versions (may require force_delete). Pass via params.",
+    },
+  ],
+};
+
+const TEMPLATE_V1_GET_PARAMS: ParamsSchema = {
+  fields: [
+    {
+      name: "global",
+      required: false,
+      description:
+        "When true, fetch a built-in global catalog template (routes to /v1/templates). Pass via params.",
+    },
+    {
+      name: "version_label",
+      required: false,
+      description:
+        "Template version to fetch. Omit for stable/default; set to pin a specific version. Pass via params.",
+    },
+  ],
+};
+
+const TEMPLATE_V1_VERSION_PARAMS: ParamsSchema = {
+  fields: [
+    {
+      name: "version_label",
+      required: true,
+      description: "Template version label to update or delete. Pass via params.",
+    },
+  ],
+};
 
 function getTemplateYamlFromInput(input: Record<string, unknown>): string {
   const b = (input.body as Record<string, unknown>) ?? {};
@@ -309,6 +373,7 @@ export const templatesToolset: ToolsetDefinition = {
             repo_name: "repoName",
           },
           responseExtractor: ngExtract,
+          paramsSchema: TEMPLATE_V0_GET_PARAMS,
           description:
             "Get template details and YAML. Use global=true for global templates account. For remote/git-backed templates, pass branch to specify which branch to read from. The response gitDetails.objectId and gitDetails.commitId are needed as last_object_id/last_commit_id when updating a remote template.",
         },
@@ -362,6 +427,7 @@ export const templatesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => buildTemplateYamlBody(input),
           bodySchema: templateV0UpdateSchema,
           responseExtractor: ngExtract,
+          paramsSchema: TEMPLATE_V0_UPDATE_PARAMS,
           description:
             "Update a v0 template version via NG API. Requires template_id and version_label. Body is full v0 template YAML. For remote/git-backed templates, pass store_type='REMOTE' with git details (branch, connector_ref, repo_name, file_path) and last_object_id/last_commit_id from the GET response's gitDetails (objectId/commitId) — without branch the API fails with 'No branch provided for modifying the file'. For Harness Code: add is_harness_code_repo=true (no connector_ref needed).",
         },
@@ -375,6 +441,7 @@ export const templatesToolset: ToolsetDefinition = {
             force_delete: "forceDelete",
           },
           responseExtractor: ngExtract,
+          paramsSchema: TEMPLATE_V0_DELETE_PARAMS,
           description:
             "Delete a template. Provide version_label to delete one version; omit to delete all versions (may require force_delete).",
         },
@@ -430,10 +497,12 @@ export const templatesToolset: ToolsetDefinition = {
             global: "global_template",
           },
           responseExtractor: passthrough,
+          paramsSchema: TEMPLATE_V1_GET_PARAMS,
           description:
             "Get unified v1 template YAML including its full inputs schema. " +
             "Use global=true to fetch a built-in global template by identifier — the response `yaml` field contains the `inputs:` block listing all valid `with:` params. " +
-            "Omit version_label for stable; pass version_label for a specific version.",
+            "Omit version_label for stable; pass version_label for a specific version. " +
+            "Pass global and version_label via params (see harness_describe).",
         },
         create: {
           method: "POST",
@@ -454,8 +523,9 @@ export const templatesToolset: ToolsetDefinition = {
           bodyBuilder: buildV1TemplateBody,
           bodySchema: templateV1UpdateSchema,
           responseExtractor: passthrough,
+          paramsSchema: TEMPLATE_V1_VERSION_PARAMS,
           description:
-            "Update a unified v1 template version via v1 REST API. Requires template_id and version_label. Body is JSON with template_yaml.",
+            "Update a unified v1 template version via v1 REST API. Requires template_id and version_label (via params). Body is JSON with template_yaml.",
         },
         delete: {
           method: "DELETE",
@@ -467,7 +537,9 @@ export const templatesToolset: ToolsetDefinition = {
             force_delete: "force_delete",
           },
           responseExtractor: passthrough,
-          description: "Delete a v1 template version. Requires template_id and version_label.",
+          paramsSchema: TEMPLATE_V1_VERSION_PARAMS,
+          description:
+            "Delete a v1 template version. Requires template_id and version_label (via params).",
         },
       },
     },

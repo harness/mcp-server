@@ -258,6 +258,35 @@ describe("template_v1 list filter metadata", () => {
   });
 });
 
+describe("template paramsSchema for harness_describe", () => {
+  const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+
+  it("template_v1 get documents global and version_label via params", () => {
+    const get = registry.getResource("template_v1").operations.get!;
+    const names = get.paramsSchema!.fields.map((f) => f.name);
+    expect(names).toEqual(expect.arrayContaining(["global", "version_label"]));
+    expect(get.paramsSchema!.fields.find((f) => f.name === "version_label")?.required).toBe(false);
+    expect(get.paramsSchema!.fields.find((f) => f.name === "global")?.required).toBe(false);
+  });
+
+  it("template_v1 update and delete require version_label via params", () => {
+    const def = registry.getResource("template_v1");
+    for (const op of ["update", "delete"] as const) {
+      const field = def.operations[op]!.paramsSchema!.fields.find((f) => f.name === "version_label");
+      expect(field?.required).toBe(true);
+    }
+  });
+
+  it("template (v0) get/update/delete expose version_label via params", () => {
+    const def = registry.getResource("template");
+    expect(def.operations.get!.paramsSchema!.fields.some((f) => f.name === "version_label")).toBe(true);
+    expect(def.operations.update!.paramsSchema!.fields.find((f) => f.name === "version_label")?.required).toBe(
+      true,
+    );
+    expect(def.operations.delete!.paramsSchema!.fields.some((f) => f.name === "version_label")).toBe(true);
+  });
+});
+
 describe("template_v1 create body builder", () => {
   it("preserves is_stable=false instead of dropping it via truthiness", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
