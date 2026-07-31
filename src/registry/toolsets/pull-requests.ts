@@ -127,7 +127,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pull_request",
       displayName: "Pull Request",
       description:
-        "Code pull request. Supports list, get, create, and update. Use execute actions for close and merge.",
+        "Code pull request. Supports list, get, create, and update. Use execute actions for close and merge. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
@@ -266,7 +266,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_reviewer",
       displayName: "PR Reviewer",
       description:
-        "Reviewers on a pull request. Supports list and create (add reviewer). Use execute action 'submit_review' to approve or request changes.",
+        "Reviewers on a pull request. Supports list and create (add reviewer). Use execute action 'submit_review' to approve or request changes. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
@@ -333,7 +333,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_comment",
       displayName: "PR Comment",
       description:
-        "Create, update, or delete comments on a pull request. To READ/LIST comments, use pr_activity with kind=comment.",
+        "Create, update, or delete comments on a pull request. To READ/LIST comments, use pr_activity with kind=comment. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
@@ -421,7 +421,8 @@ export const pullRequestsToolset: ToolsetDefinition = {
     {
       resourceType: "pr_check",
       displayName: "PR Check",
-      description: "Status checks on a pull request. Supports list.",
+      description:
+        "Status checks on a pull request. Supports list. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
@@ -445,7 +446,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_activity",
       displayName: "PR Activity",
       description:
-        "Activity timeline on a pull request (comments, reviews, status changes). This is the canonical way to READ comments — use kind=comment or type=comment to filter.",
+        "Activity timeline on a pull request (comments, reviews, status changes). This is the canonical way to READ comments — use kind=comment or type=comment to filter. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
