@@ -144,14 +144,14 @@ describe("scanned_risk execute actions", () => {
     registry = new Registry(makeConfig());
   });
 
-  it("occurrences: GETs occurrences sub-resource with query params", async () => {
+  it("occurrences: GETs occurrences sub-resource with query params and extracts paginated response", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       data: [{ scanId: "scan-1", timestamp: 1700000000 }],
-      pagination: { totalItems: 1 },
+      pagination: { totalItems: 3 },
     });
     const client = makeClient(mockRequest);
 
-    await registry.dispatchExecute(client, "scanned_risk", "occurrences", {
+    const result = (await registry.dispatchExecute(client, "scanned_risk", "occurrences", {
       identity: "sr-1",
       org_id: "default",
       project_id: "chaos-proj",
@@ -160,7 +160,7 @@ describe("scanned_risk execute actions", () => {
       scan_type: "PipelineExecution",
       start_time: 1700000000,
       end_time: 1700100000,
-    });
+    })) as { items: unknown[]; total: number };
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
@@ -168,22 +168,27 @@ describe("scanned_risk execute actions", () => {
     expect(call.params.scanType).toBe("PipelineExecution");
     expect(call.params.startTime).toBe(1700000000);
     expect(call.params.endTime).toBe(1700100000);
+    // chaosPageExtract unwraps { data, pagination } into { items, total }
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBe(3);
+    expect((result.items[0] as Record<string, unknown>).scanId).toBe("scan-1");
   });
 
-  it("summary_by_service: POSTs to summary endpoint with query params and empty body", async () => {
+  it("summary_by_service: POSTs to summary endpoint with query params and extracts paginated response", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       data: [{ serviceIdentity: "svc-1", totalRisks: 5 }],
+      pagination: { totalItems: 2 },
     });
     const client = makeClient(mockRequest);
 
-    await registry.dispatchExecute(client, "scanned_risk", "summary_by_service", {
+    const result = (await registry.dispatchExecute(client, "scanned_risk", "summary_by_service", {
       org_id: "default",
       project_id: "chaos-proj",
       service_type: "Kubernetes",
       environment_identity: "env-1",
       start_time: 1700000000,
       end_time: 1700100000,
-    });
+    })) as { items: unknown[]; total: number };
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
@@ -192,6 +197,10 @@ describe("scanned_risk execute actions", () => {
     expect(call.params.environmentIdentity).toBe("env-1");
     // bodyBuilder returns {}, but the registry injects scope params into POST bodies
     expect(call.body).toMatchObject({});
+    // chaosPageExtract unwraps { data, pagination } into { items, total }
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBe(2);
+    expect((result.items[0] as Record<string, unknown>).serviceIdentity).toBe("svc-1");
   });
 });
 
@@ -447,7 +456,7 @@ describe("chaos_risk_scan create", () => {
         identity: "scan-3",
         name: "Scan 3",
         scanType: "DiscoveryAgent",
-        source: {},
+        source: { discoveryAgent: { agentIdentity: "agent-1" } },
       },
     });
 
@@ -456,6 +465,60 @@ describe("chaos_risk_scan create", () => {
     expect(call.body.name).toBe("Scan 3");
     expect(call.body.description).toBeUndefined();
     expect(call.body.tags).toBeUndefined();
+  });
+
+  it("create: throws locally when required fields are missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_scan", "create", {
+        org_id: "org1",
+        project_id: "proj1",
+        body: { name: "incomplete" },
+      }),
+    ).rejects.toThrow(/Missing required field\(s\).*identity.*scanType.*source/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: throws when identity is missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "chaos_risk_scan", "create", {
+        org_id: "org1",
+        project_id: "proj1",
+        body: {
+          name: "scan",
+          scanType: "DiscoveryAgent",
+          source: { discoveryAgent: { agentIdentity: "a" } },
+        },
+      }),
+    ).rejects.toThrow(/Missing required field\(s\).*identity/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: preserves explicit empty description and empty tags array (not dropped by truthiness)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "scan-empty" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_risk_scan", "create", {
+      org_id: "org1",
+      project_id: "proj1",
+      body: {
+        identity: "scan-empty",
+        name: "Scan Empty",
+        description: "",
+        tags: [],
+        scanType: "DiscoveryAgent",
+        source: { discoveryAgent: { agentIdentity: "a" } },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.description).toBe("");
+    expect(call.body.tags).toEqual([]);
   });
 });
 
@@ -609,18 +672,21 @@ describe("chaos_risk_scan execute actions", () => {
     expect(call.path).toBe("/chaos/manager/api/v3/risk-scans/scan-1/report/download");
   });
 
-  it("heatmap: GETs /v3/risk-scans/{identity}/heatmap with pagination params", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+  it("heatmap: GETs /v3/risk-scans/{identity}/heatmap with pagination and extracts paginated response", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [{ serviceIdentity: "svc-1", ruleResults: [] }],
+      pagination: { totalItems: 5 },
+    });
     const client = makeClient(mockRequest);
 
-    await registry.dispatchExecute(client, "chaos_risk_scan", "heatmap", {
+    const result = (await registry.dispatchExecute(client, "chaos_risk_scan", "heatmap", {
       identity: "scan-1",
       org_id: "default",
       project_id: "chaos-proj",
       page: 0,
       limit: 20,
       search: "svc",
-    });
+    })) as { items: unknown[]; total: number };
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
@@ -628,5 +694,8 @@ describe("chaos_risk_scan execute actions", () => {
     expect(call.params.page).toBe(0);
     expect(call.params.limit).toBe(20);
     expect(call.params.search).toBe("svc");
+    // chaosPageExtract unwraps { data, pagination } into { items, total }
+    expect(result.items).toHaveLength(1);
+    expect(result.total).toBe(5);
   });
 });

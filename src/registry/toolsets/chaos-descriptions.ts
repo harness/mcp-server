@@ -664,7 +664,7 @@ scanType is one of PipelineExecution or DiscoveryAgent; the matching source (pip
 export const descListScannedRisks = `List risk findings detected by chaos risk scans. Supports filtering by severity, risk rule, validation type, target service, environment/agent, tags, time range, and free-text search.`;
 export const descGetScannedRisk = `Get a single scanned risk finding by its identity.`;
 export const descListScannedRiskOccurrences = `List all occurrences (per-scan detections) of a single scanned risk. Each occurrence carries evidence, remediation, resilience-testing recommendations, and the scan that detected it. Keyed by the scanned risk identity.`;
-export const descSummarizeScannedRisksByService = `Aggregate scanned-risk counts (total, critical, high, medium, low) per target service. Not keyed by a single risk — returns a paginated list of services with their risk breakdown, plus top-level stats. Supports service-type, environment/agent, time-range, and per-severity min/max count filters.`;
+export const descSummarizeScannedRisksByService = `Aggregate scanned-risk counts (total, critical, high, medium, low) per target service. Not keyed by a single risk — returns a paginated list of services with their risk breakdown. Supports service-type, environment/agent, and time-range filters.`;
 
 // Risk Rule operation descriptions
 export const descListRiskRules = `List chaos risk rules. Supports filtering by data source, isSystem, tags, and free-text search.`;

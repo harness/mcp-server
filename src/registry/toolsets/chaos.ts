@@ -3518,9 +3518,22 @@ export const chaosToolset: ToolsetDefinition = {
             end_time: "endTime",
           },
           defaultQueryParams: { page: "0", limit: "15" },
-          responseExtractor: passthrough,
+          responseExtractor: chaosPageExtract,
           actionDescription: descListScannedRiskOccurrences,
           bodySchema: { description: descBodyNoBody, fields: [] },
+          paramsSchema: {
+            fields: [
+              { name: "identity", required: true, description: "Identity of the scanned risk to list occurrences for." },
+              { name: "page", required: false, description: "Page number (0-indexed). Default 0." },
+              { name: "limit", required: false, description: "Page size. Default 15." },
+              { name: "search", required: false, description: descRiskSearch },
+              { name: "sort_field", required: false, description: descRiskSortField },
+              { name: "sort_ascending", required: false, description: descRiskSortAscending },
+              { name: "scan_type", required: false, description: descScannedRiskScanType },
+              { name: "start_time", required: false, description: descRiskStartTime },
+              { name: "end_time", required: false, description: descRiskEndTime },
+            ],
+          } satisfies ParamsSchema,
         },
         summary_by_service: {
           method: "POST",
@@ -3538,9 +3551,22 @@ export const chaosToolset: ToolsetDefinition = {
             end_time: "endTime",
           },
           bodyBuilder: () => ({}),
-          responseExtractor: passthrough,
+          responseExtractor: chaosPageExtract,
           actionDescription: descSummarizeScannedRisksByService,
           bodySchema: { description: descBodyNoBody, fields: [] },
+          paramsSchema: {
+            fields: [
+              { name: "page", required: false, description: "Page number (0-indexed). Default 0." },
+              { name: "limit", required: false, description: "Page size. Default 15." },
+              { name: "sort_field", required: false, description: descRiskSortField },
+              { name: "sort_ascending", required: false, description: descRiskSortAscending },
+              { name: "service_type", required: false, description: "Filter by service type (e.g. Kubernetes)." },
+              { name: "environment_identity", required: false, description: descRiskEnvironmentIdentity },
+              { name: "agent_identity", required: false, description: descRiskAgentIdentity },
+              { name: "start_time", required: false, description: descRiskStartTime },
+              { name: "end_time", required: false, description: descRiskEndTime },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },
@@ -3664,13 +3690,22 @@ export const chaosToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const b = coerceBody(input);
+            const missing: string[] = [];
+            if (!b.identity) missing.push("identity");
+            if (!b.name) missing.push("name");
+            const scanType = b.scanType ?? b.scan_type;
+            if (!scanType) missing.push("scanType");
+            if (!b.source) missing.push("source");
+            if (missing.length > 0) {
+              throw new Error(`Missing required field(s): ${missing.join(", ")}. All are required to create a risk scan.`);
+            }
             return {
               identity: b.identity,
               name: b.name,
-              ...(b.description ? { description: b.description } : {}),
-              ...(b.tags ? { tags: b.tags } : {}),
-              scanType: b.scanType ?? b.scan_type,
-              source: b.source ?? {},
+              ...(b.description != null ? { description: b.description } : {}),
+              ...(b.tags != null ? { tags: b.tags } : {}),
+              scanType,
+              source: b.source,
             };
           },
           responseExtractor: passthrough,
@@ -3770,9 +3805,17 @@ export const chaosToolset: ToolsetDefinition = {
             search: "search",
           },
           defaultQueryParams: { page: "0", limit: "15" },
-          responseExtractor: passthrough,
+          responseExtractor: chaosPageExtract,
           actionDescription: descGetRiskScanHeatmap,
           bodySchema: { description: descBodyNoBody, fields: [] },
+          paramsSchema: {
+            fields: [
+              { name: "identity", required: true, description: "Identity of the risk scan to get heatmap for." },
+              { name: "page", required: false, description: "Page number (0-indexed). Default 0." },
+              { name: "limit", required: false, description: "Page size. Default 15." },
+              { name: "search", required: false, description: descHeatmapSearch },
+            ],
+          } satisfies ParamsSchema,
         },
       },
     },
