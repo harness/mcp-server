@@ -220,10 +220,14 @@ describe("cost_anomaly_drilldown routing", () => {
       path: "/ccm/api/anomaly/v2/drill-down/list",
       params: { anomalyId: "anom-1" },
     }));
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       items: [{ resource: "i-abc" }],
       total: 1,
     });
+    expect((result as { items: Array<Record<string, unknown>> }).items[0]).toHaveProperty(
+      "openInHarness",
+      "https://app.harness.io/ng/account/test-account/ce/anomaly-detection",
+    );
   });
 });
 

@@ -978,8 +978,8 @@ describe("harness_update", () => {
     });
 
     expect(result.isError).toBeUndefined();
-    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, string> };
-    expect(callArgs.params.versionLabel).toBe("v2");
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string };
+    expect(callArgs.path).toBe("/template/api/templates/update/my_tpl/v2");
   });
 
   it("coerces JSON-string bodies before dispatch", async () => {
