@@ -693,57 +693,97 @@ export const chaosK8sInfraListExtract = (raw: unknown): { items: unknown[]; tota
   };
 };
 
-type LoadtestInputLike = { name?: unknown; value?: unknown; type?: unknown; required?: unknown };
+// Pick the tool-specific sub-object out of toolConfig; loadTestManager also
+// accepts flat toolConfig at the root for forward-compat, so fall back to that.
+const pickToolBlock = (
+  toolType: unknown,
+  toolConfig: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined => {
+  if (!toolConfig) return undefined;
+  const key = typeof toolType === "string" ? toolType.toLowerCase() : "";
+  const nested = key
+    ? (toolConfig[key] as Record<string, unknown> | undefined)
+    : undefined;
+  return nested ?? toolConfig;
+};
 
-// Read a well-known input value from the inputs[] slice by name.
-const readLoadtestInput = (inputs: LoadtestInputLike[] | undefined, name: string): unknown =>
-  (inputs ?? []).find((i) => i?.name === name)?.value;
+const readTunable = (
+  tc: Record<string, unknown> | undefined,
+  name: string,
+): unknown => {
+  if (!tc) return undefined;
+  const tunables = tc.tunables as Record<string, unknown> | undefined;
+  return tunables?.[name];
+};
 
 /**
- * Project a single load test (InternalApiLoadTestResponse) to a stable shape.
+ * Project a single load test (LoadTestResponse) to a stable shape.
  *
- * The new wire format carries every recognised tunable inside `inputs[]`
- * (TemplateInput) and user-defined non-secrets inside `variables[]`
- * (TemplateVariable). We pass both arrays through as-is for fidelity AND
- * surface derived convenience scalars (target_url / users / duration_sec / ...)
- * that mirror the create-side LLM surface so round-trips are intuitive.
+ * Since the variables migration, all tunables and custom env vars live under
+ * toolConfig.<tool>.tunables / toolConfig.<tool>.variables (see LocustSpec /
+ * K6Spec / JMeterSpec in loadTestManager/internal/domain). We pass toolConfig
+ * through as-is for fidelity AND surface derived convenience scalars mirroring
+ * the create-side LLM surface so round-trips are intuitive.
  *
- * Drops the large base64 scriptContent and backend user-detail envelopes.
  * Mirrors `identity` into `loadtestId` so the deep-link resolver fills
  * {loadtestId} instead of falling back to the name.
  */
 export const chaosLoadTestExtract = (raw: unknown): unknown => {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const t = raw as Record<string, unknown>;
-  const inputs = Array.isArray(t.inputs) ? (t.inputs as LoadtestInputLike[]) : undefined;
-  const variables = Array.isArray(t.variables) ? (t.variables as unknown[]) : undefined;
+  const toolConfig = t.toolConfig as Record<string, unknown> | undefined;
+  const toolBlock = pickToolBlock(t.toolType, toolConfig);
+  const variables = toolBlock?.variables as unknown[] | undefined;
+  const envVars = toolBlock?.envVars as unknown[] | undefined;
   return {
     loadtestId: t.identity,
+    uniqueId: t.uniqueId,
+    parentUniqueId: t.parentUniqueId,
     identity: t.identity,
     name: t.name,
     description: t.description,
     tags: t.tags,
+    serviceReferences: t.serviceReferences,
     environmentIdentifier: t.environmentIdentifier,
     infraIdentifier: t.infraIdentifier,
+    infraType: t.infraType,
     targetType: t.targetType,
     toolType: t.toolType,
     scriptSource: t.scriptSource,
-    // Canonical slices — passed through as-is for fidelity.
-    inputs,
+    importType: t.importType,
+    templateReference: t.templateReference,
+    templateUpdateAvailable: t.templateUpdateAvailable,
+    latestRevisionIdentifier: t.latestRevisionIdentifier,
+    maxDurationSec: t.maxDurationSec,
+    cleanupPolicy: t.cleanupPolicy,
+    resources: t.resources,
+    // Canonical tool config — passed through as-is for fidelity.
+    toolConfig,
     variables,
-    yaml: t.yaml,
-    // Derived convenience scalars (read-side mirror of the create-side LLM surface).
-    target_url: readLoadtestInput(inputs, "targetUrl"),
-    users: readLoadtestInput(inputs, "targetUsers"),
-    duration_sec: readLoadtestInput(inputs, "durationSeconds"),
-    ramp_up_sec: readLoadtestInput(inputs, "rampUpTimeSec"),
-    worker_count: readLoadtestInput(inputs, "workerCount"),
-    script_image: readLoadtestInput(inputs, "scriptImage"),
-    script_entrypoint: readLoadtestInput(inputs, "scriptEntrypoint"),
-    load_args: readLoadtestInput(inputs, "loadArgs"),
+    envVars,
+    // Denormalised display strings the backend emits for table renders.
+    targetUsersDisplay: t.targetUsers,
+    durationSecondsDisplay: t.durationSeconds,
+    // Derived convenience scalars (typed tunables under toolConfig.<tool>.tunables).
+    target_url: readTunable(toolBlock, "targetUrl"),
+    users: readTunable(toolBlock, "targetUsers"),
+    duration_sec: readTunable(toolBlock, "durationSeconds"),
+    ramp_up_sec: readTunable(toolBlock, "rampUpTimeSec"),
+    worker_count: readTunable(toolBlock, "workerCount"),
+    spawn_rate: readTunable(toolBlock, "spawnRate"),
+    host_url: readTunable(toolBlock, "hostUrl"),
+    iterations: readTunable(toolBlock, "iterations"),
+    rps_limit: readTunable(toolBlock, "rpsLimit"),
+    recentRuns: t.recentRuns,
+    isSampleTest: t.isSampleTest,
+    isApiGenerated: t.isApiGenerated,
+    isAIUsed: t.isAIUsed,
     lastExecuted: t.lastExecuted,
     createdAt: t.createdAt,
+    createdBy: t.createdBy,
     updatedAt: t.updatedAt,
+    updatedBy: t.updatedBy,
+    yaml: t.yaml,
   };
 };
 
@@ -754,6 +794,17 @@ export const chaosLoadTestExtract = (raw: unknown): unknown => {
 export const chaosLoadTestListExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as { items?: unknown[]; pagination?: { totalItems?: number } };
   const items = (r.items ?? []).map(chaosLoadTestExtract);
+  return { items, total: r.pagination?.totalItems ?? items.length };
+};
+
+/**
+ * Chaos Service (v3) list response: { data: [...], correlationID, pagination: { index, limit, totalPages, totalItems } }.
+ * Distinct from chaos_loadtest's { items, pagination } envelope — the v3 chaos-services API
+ * wraps the array under `data` per shared PaginationResponse contract.
+ */
+export const chaosServiceListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: unknown[]; pagination?: { totalItems?: number } };
+  const items = r.data ?? [];
   return { items, total: r.pagination?.totalItems ?? items.length };
 };
 
