@@ -154,6 +154,59 @@ describe("harness_list", () => {
     expect(schema.inputSchema.resource_scope?.description).toContain("Scope to query");
   });
 
+  it("documents that some resources enforce a lower size max than the global schema", () => {
+    const schema = server.schema("harness_list") as {
+      inputSchema: { size?: { description?: string | null } };
+    };
+    expect(schema.inputSchema.size?.description).toContain("security_exemption max 50");
+    expect(schema.inputSchema.size?.description).toContain("harness_describe");
+  });
+
+  it("canonicalizes lowercase list-filter enums on the public harness_list path", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      exemptions: [],
+      pagination: { page: 0, pageSize: 5, totalPages: 0, totalItems: 0 },
+      counts: {},
+    });
+    client = makeClient(mockRequest);
+    const stoServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(stoServer, registry, client);
+
+    const result = await stoServer.call("harness_list", {
+      resource_type: "security_exemption",
+      filters: { status: "pending", size: 5 },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.status).toBe("Pending");
+  });
+
+  it("canonicalizes whitespace-padded list-filter enums on the public harness_list path", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    mockRequest = vi.fn().mockResolvedValue({
+      exemptions: [],
+      pagination: { page: 0, pageSize: 5, totalPages: 0, totalItems: 0 },
+      counts: {},
+    });
+    client = makeClient(mockRequest);
+    const stoServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(stoServer, registry, client);
+
+    const result = await stoServer.call("harness_list", {
+      resource_type: "security_exemption",
+      filters: { status: " Pending ", size: 5 },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.status).toBe("Pending");
+  });
+
   it("uses account scope from account-level connector URLs instead of config defaults", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });
