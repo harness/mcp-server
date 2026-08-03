@@ -157,6 +157,8 @@ describe("security_exemption list preflight", () => {
   it("fails loud when size exceeds the documented maximum (50)", async () => {
     const input: Record<string, unknown> = { status: "Pending", size: 51 };
     await expect(runPreflight(input)).rejects.toThrow(/size.*<= 50/i);
+    await expect(runPreflight(input)).rejects.toThrow(/harness_list allows size up to 100 globally/i);
+    await expect(runPreflight(input)).rejects.toThrow(/recommended: 5/i);
   });
 
   it("fails loud when size is below 1", async () => {

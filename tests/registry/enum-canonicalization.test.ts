@@ -98,6 +98,28 @@ describe("canonicalizeListFilterEnums", () => {
     canonicalizeListFilterEnums(input, fields);
     expect(input.status).toBeUndefined();
   });
+
+  it("rewrites lowercase to UPPERCASE enum values", () => {
+    const uppercaseFields: FilterFieldSpec[] = [
+      { name: "status", description: "status", enum: ["CONNECTED", "DISCONNECTED", "ENABLED"] },
+    ];
+    const input: Record<string, unknown> = { status: "connected" };
+    canonicalizeListFilterEnums(input, uppercaseFields);
+    expect(input.status).toBe("CONNECTED");
+  });
+
+  it("canonicalizes comma-separated values with whitespace around tokens", () => {
+    const input: Record<string, unknown> = { severity_codes: " critical , HIGH , medium " };
+    canonicalizeListFilterEnums(input, fields);
+    expect(input.severity_codes).toBe("Critical,High,Medium");
+  });
+
+  it("leaves empty and comma-only strings untouched", () => {
+    const input: Record<string, unknown> = { status: "", severity_codes: "  ,  " };
+    canonicalizeListFilterEnums(input, fields);
+    expect(input.status).toBe("");
+    expect(input.severity_codes).toBe("  ,  ");
+  });
 });
 
 describe("registry.dispatch — list filter enum canonicalization", () => {
@@ -163,5 +185,34 @@ describe("registry.dispatch — list filter enum canonicalization", () => {
 
     const callArgs = requestSpy.mock.calls[0]![0] as { params: Record<string, unknown> };
     expect(callArgs.params.status).toBe("waiting");
+  });
+
+  it("sends canonical UPPERCASE status when agent passes lowercase (delegate)", async () => {
+    const requestSpy = vi.fn().mockResolvedValue({ resource: [] });
+    const client = makeClient(requestSpy);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "delegates" }));
+
+    await registry.dispatch(client, "delegate", "list", { status: "connected" });
+
+    expect(requestSpy).toHaveBeenCalledTimes(1);
+    const callArgs = requestSpy.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(callArgs.body.status).toBe("CONNECTED");
+  });
+
+  it("forwards undeclared connector category untouched (enum metadata can lag API)", async () => {
+    const requestSpy = vi.fn().mockResolvedValue({
+      data: { content: [], totalElements: 0 },
+    });
+    const client = makeClient(requestSpy);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
+
+    // "CONNECTOR" is not in listFilterFields.enum — must not be rejected or rewritten.
+    await registry.dispatch(client, "connector", "list", {
+      category: "CONNECTOR",
+      type: "DockerRegistry",
+    });
+
+    const callArgs = requestSpy.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(callArgs.body.categories).toEqual(["CONNECTOR"]);
   });
 });
