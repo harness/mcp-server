@@ -17,6 +17,21 @@
 - Dropped the initial fail-loud-on-unknown behavior: it broke the `cost_timeseries` unknown-`time_filter` fallback and a connector test using an undeclared `category`. Declared enums can lag the API, so unmatched values are forwarded untouched.
 - Full suite: 123 files, 2657 passed, 8 skipped. `pnpm typecheck` clean.
 
+## PR 729 — Sunil architecture review compliance (2026-08-03)
+- [x] Audit PR #729 against Sunil architecture standards (11-tool surface, registry-first, public contracts, Zod hygiene, focused tests, no silent incomplete transforms)
+- [x] Fix whitespace no-op on known enum values in `canonicalizeListFilterEnums`
+- [x] Correct misleading size guidance (top-level `size` works; harness_describe points at operation description)
+- [x] Add public `harness_list` path regression + whitespace unit coverage
+- [ ] Run focused + broad verification; commit, push, open PR
+
+### Plan
+- Keep the PR's registry-first canonicalize design (no new tools, pass-through unmatched).
+- Close the incomplete-transform gap and align agent-facing copy with the real `harness_list` contract.
+- Cover the public tool path so casing fixes cannot regress without failing CI.
+
+### Review
+- (in progress)
+
 ## Issue #119 — Full Registry Structural Invariants (2026-07-21)
 - [x] Confirm Issue #119 is unassigned, unclaimed by another contributor, has no Development branch/PR, and remains unresolved on current main
 - [x] Audit every invariant in `tests/registry/structural-validation.test.ts` against default, opt-in, and both pipeline resource types

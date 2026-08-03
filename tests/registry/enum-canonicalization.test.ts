@@ -47,6 +47,19 @@ describe("canonicalizeListFilterEnums", () => {
     expect(input.status).toBe("Approved");
   });
 
+  it("trims whitespace around known enum values", () => {
+    // Without writing back trim-only fixes, " Pending" would still 400 at the API.
+    const input: Record<string, unknown> = { status: " Pending " };
+    canonicalizeListFilterEnums(input, fields);
+    expect(input.status).toBe("Pending");
+  });
+
+  it("does not trim unknown values that never matched an enum token", () => {
+    const input: Record<string, unknown> = { status: " waiting " };
+    canonicalizeListFilterEnums(input, fields);
+    expect(input.status).toBe(" waiting ");
+  });
+
   it("canonicalizes comma-separated multi-values token-by-token", () => {
     const input: Record<string, unknown> = { severity_codes: "critical,HIGH,medium" };
     canonicalizeListFilterEnums(input, fields);

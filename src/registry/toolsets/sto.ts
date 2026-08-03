@@ -400,7 +400,7 @@ export const stoToolset: ToolsetDefinition = {
                 throw new Error(
                   `security_exemption: 'size' must be <= ${STO_EXEMPTION_SIZE_MAX}, got ${rawSize}. ` +
                     `harness_list allows size up to 100 globally, but this STO endpoint caps at ${STO_EXEMPTION_SIZE_MAX} ` +
-                    `(recommended: 5). Pass size inside filters and keep it constant across pages.`,
+                    `(recommended: 5). Pass size as a top-level argument or inside filters, and keep it constant across pages.`,
                 );
               }
             }

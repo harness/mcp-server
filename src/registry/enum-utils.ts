@@ -36,15 +36,24 @@ export function canonicalizeListFilterEnums(
 
     if (parts.length === 0) continue;
 
-    let changed = false;
+    // Rewrite only tokens that match a declared enum (case-insensitive). Unknown
+    // tokens stay as-is so hand-maintained enum metadata never becomes a gate.
+    // Write back whenever the normalized form differs from the raw string so
+    // whitespace around a known value (e.g. " Pending") is fixed too — otherwise
+    // agents still hit opaque API 400s after a no-op canonicalize pass.
+    // Do not trim/rewrite strings that contain no declared enum tokens.
+    let matched = false;
     const canonicalized = parts.map((part) => {
       const canonical = canonicalByLower.get(part.toLowerCase());
-      if (canonical === undefined || canonical === part) return part;
-      changed = true;
+      if (canonical === undefined) return part;
+      matched = true;
       return canonical;
     });
+    if (!matched) continue;
 
-    if (!changed) continue;
-    input[field.name] = hasMultiple ? canonicalized.join(",") : canonicalized[0]!;
+    const next = hasMultiple ? canonicalized.join(",") : canonicalized[0]!;
+    if (next !== raw) {
+      input[field.name] = next;
+    }
   }
 }
