@@ -111,29 +111,29 @@ const aitImportedCopilotTestExtract = (raw: unknown): unknown => {
   };
 };
 
-/** Extract run test response — picks key fields from the snake_case TestRunNew entity */
+/** Extract run test response — picks key fields from the camelCase TestRunNew entity */
 const aitRunTestExtract = (raw: unknown): unknown => {
   const r = raw as {
     id: number;
-    app_id: string;
-    test_id: number;
-    test_version_id: number;
-    test_environment_id: string;
+    appId: string;
+    testId: number;
+    testVersionId: number;
+    testEnvironmentId: string;
     status: string | null;
-    test_session_id: string | null;
-    start_epoch: number | null;
+    testSessionId: string | null;
+    startEpoch: number | null;
     error: string | null;
   };
 
   const aitBaseUrl = (process.env.HARNESS_BASE_URL ?? "https://app.harness.io").replace(/\/$/, "");
-  const testRunUrl = `${aitBaseUrl}/ait/${r.app_id}/test/${r.test_id}/version/${r.test_version_id}/test-run/${r.id}?tab=overview`;
+  const testRunUrl = `${aitBaseUrl}/ait/${r.appId}/test/${r.testId}/version/${r.testVersionId}/test-run/${r.id}?tab=overview`;
 
   return {
     test_run_url: testRunUrl,
-    app_id: r.app_id,
-    test_id: r.test_id,
-    test_version_id: r.test_version_id,
-    test_environment_id: r.test_environment_id,
+    app_id: r.appId,
+    test_id: r.testId,
+    test_version_id: r.testVersionId,
+    test_environment_id: r.testEnvironmentId,
     status: r.status,
     error: r.error,
     _note: "Always display the test_run_url to the user.",
@@ -337,8 +337,8 @@ export const aitToolset: ToolsetDefinition = {
       executeActions: {
         run: {
           method: "POST",
-          path: "/ait/api/v1/testNew/{test_id}/version/{test_version_id}/run",
-          pathParams: { test_id: "test_id", test_version_id: "test_version_id" },
+          path: "/ait/api/v1/testNew/{testId}/version/{testVersionId}/run",
+          pathParams: { test_id: "testId", test_version_id: "testVersionId" },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input: Record<string, unknown>) => {
             const b = (input.body ?? input) as Record<string, unknown>;

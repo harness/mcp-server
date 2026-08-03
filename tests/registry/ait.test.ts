@@ -339,3 +339,81 @@ describe("ait registry dispatch", () => {
     expect(request.params.appId).toBe("abc-123");
   });
 });
+
+// ─── Response extractor: aitRunTestExtract ────────────────────────────────
+
+describe("aitRunTestExtract", () => {
+  function extract(raw: unknown) {
+    const resource = findResource("ait_run_test");
+    const spec = resource.executeActions?.run;
+    if (!spec?.responseExtractor) throw new Error("run responseExtractor not found");
+    return spec.responseExtractor(raw);
+  }
+
+  it("reads camelCase TestRunNew fields from the API response", () => {
+    const raw = {
+      id: 42,
+      appId: "app-uuid",
+      testId: 80,
+      testVersionId: 91,
+      testEnvironmentId: "env-uuid",
+      status: "RUNNING",
+      testSessionId: "session-1",
+      startEpoch: 1700000000,
+      error: null,
+    };
+    const result = extract(raw) as Record<string, unknown>;
+    expect(result).toMatchObject({
+      app_id: "app-uuid",
+      test_id: 80,
+      test_version_id: 91,
+      test_environment_id: "env-uuid",
+      status: "RUNNING",
+      error: null,
+    });
+    expect(result.test_run_url).toBe(
+      "https://app.harness.io/ait/app-uuid/test/80/version/91/test-run/42?tab=overview",
+    );
+  });
+});
+
+// ─── Execute dispatch: ait_run_test ───────────────────────────────────────
+
+describe("ait_run_test execute dispatch", () => {
+  it("posts to camelCase path placeholders with camelCase request body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      id: 42,
+      appId: "app-uuid",
+      testId: 80,
+      testVersionId: 91,
+      testEnvironmentId: "env-uuid",
+      status: "RUNNING",
+      testSessionId: null,
+      startEpoch: null,
+      error: null,
+    });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
+
+    await registry.dispatchExecute(makeClient(mockRequest), "ait_run_test", "run", {
+      test_id: 80,
+      test_version_id: 91,
+      body: {
+        appId: "app-uuid",
+        environmentId: "env-uuid",
+      },
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      body: Record<string, unknown>;
+    };
+    expect(request.method).toBe("POST");
+    expect(request.path).toBe("/ait/api/v1/testNew/80/version/91/run");
+    expect(request.body).toEqual({
+      appId: "app-uuid",
+      environmentId: "env-uuid",
+      params: '{"RUN_MODE":"no-mock","TestExecutorNamespace.fastExecutorMode":"false"}',
+    });
+  });
+});
