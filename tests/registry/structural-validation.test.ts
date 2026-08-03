@@ -589,6 +589,32 @@ describe("Toolset structural validation", () => {
     });
   });
 
+  describe("pagination consistency", () => {
+    const ONE_BASED_PAGINATION = /page\s*>=\s*1|1-based|first page is page\s*=\s*1/i;
+
+    it("list operations documenting 1-based pagination wire pageOneIndexed and page queryParams", () => {
+      const violations: string[] = [];
+
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
+        const listSpec = def.operations.list;
+        if (!listSpec) continue;
+
+        const text = `${def.description ?? ""} ${listSpec.description ?? ""}`;
+        if (!ONE_BASED_PAGINATION.test(text)) continue;
+
+        if (!listSpec.pageOneIndexed) {
+          violations.push(`${type}.list: documents 1-based pagination but missing pageOneIndexed`);
+        }
+        if (!listSpec.queryParams?.page) {
+          violations.push(`${type}.list: documents 1-based pagination but missing page in queryParams`);
+        }
+      }
+
+      expect(violations, violations.join("\n")).toEqual([]);
+    });
+  });
+
   describe("default/opt-in exposure semantics", () => {
     // These checks intentionally compare default visibility with the expanded
     // registry; structural quality is validated above for every full-registry resource.

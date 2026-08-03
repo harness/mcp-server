@@ -421,6 +421,16 @@ export const iacmToolset: ToolsetDefinition = {
           description: "The workspace identifier. Use harness_list with iacm_workspace to find it.",
           type: "string",
         },
+        {
+          name: "page",
+          description: "Page number (1-based). Default: 1.",
+          type: "number",
+        },
+        {
+          name: "size",
+          description: "Number of cost entries per page. Default: 30 (max).",
+          type: "number",
+        },
       ],
       relatedResources: [
         {
@@ -438,6 +448,11 @@ export const iacmToolset: ToolsetDefinition = {
             project_id: "project",
             workspace_id: "workspaceId",
           },
+          queryParams: {
+            page: "page",
+            size: "size",
+          },
+          pageOneIndexed: true,
           preflight: requireProjectScope,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: costsListExtract,

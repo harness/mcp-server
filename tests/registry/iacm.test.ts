@@ -76,8 +76,15 @@ describe("iacmToolset structure", () => {
     expect(findResource("iacm_module").scope).toBe("account");
   });
 
-  it("iacm_module list has pageOneIndexed=true", () => {
-    expect(getOp("iacm_module", "list").pageOneIndexed).toBe(true);
+  it("all list operations with page query param have pageOneIndexed=true", () => {
+    for (const resource of iacmToolset.resources) {
+      const listSpec = resource.operations["list"];
+      if (!listSpec?.queryParams?.page) continue;
+      expect(
+        listSpec.pageOneIndexed,
+        `${resource.resourceType}.list should have pageOneIndexed=true`,
+      ).toBe(true);
+    }
   });
 
   it("iacm_workspace, iacm_resource, iacm_workspace_costs, iacm_activity_resource_change are project-scoped", () => {
@@ -403,6 +410,24 @@ describe("iacm registry dispatch", () => {
 
     const request = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
     expect(request.params.page).toBe(2);
+  });
+
+  it("iacm_workspace_costs list converts harness_list page 0 to API page 1", async () => {
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_workspace_costs", "list", {
+      org_id: "default",
+      project_id: "Testim",
+      workspace_id: "ws-1",
+      page: 0,
+      size: 20,
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(request.path).toContain("/costs/ws-1");
+    expect(request.params.page).toBe(1);
+    expect(request.params.size).toBe(20);
   });
 
   it("dispatches activity resource changes by activity id", async () => {
