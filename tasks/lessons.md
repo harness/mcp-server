@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## List-Filter Enums Must Be Canonicalized at Dispatch
+- **Issue**: `listFilterFields.enum` is only visible via `harness_describe`. The global `harness_list` schema cannot encode per-resource enums, so agents often send lowercase (`pending`) while APIs require PascalCase/UPPERCASE. Those 400s count as `tool_error` and can page on-call.
+- **Fix**: `canonicalizeListFilterEnums` in `Registry.dispatch` rewrites case-insensitive matches to declared enum values (including comma-separated tokens) and fails loud on unknowns. Also clarify that some resources have a lower `size` max than the global 1–100 tool schema.
+- **Rule**: When adding a new `listFilterFields` entry with `enum`, assume agents will mistype casing — dispatch-level canonicalization covers it. Prefer fail-loud on unknown values over silent drop. Do not silently clamp pagination; keep fail-loud with a clear max hint.
+
 ## Historical Test Helpers Must Be Revalidated Against Current Runtime Architecture
 - **Issue**: Issue #119 and its original `fullRegistryV0` / `fullRegistryV1` helpers were created when `HARNESS_PIPELINE_VERSION` filtered one pipeline type out of the Registry. A later change made `pipeline` and `pipeline_v1` simultaneously available and reduced the config to a default preference, but the first implementation treated the stale helpers as two real variants, duplicated every invariant over identical objects, inferred opt-in resources from default/full set differences, and used a hand-built array instead of an end-to-end Registry fixture.
 - **Fix**: Trace current constructor behavior and relevant history before preserving an old helper. Use one full Registry for the current architecture, derive opt-in coverage from `ToolsetDefinition.optIn`, and inject malformed regression definitions through `RegistryOptions.additionalToolsets` so fixtures traverse the same Registry and validator path as production definitions.

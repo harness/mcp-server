@@ -8,6 +8,7 @@ import type { AuditContext, AuditEvent, AuditOutcome } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 import { isFormDataBody } from "../utils/type-guards.js";
+import { canonicalizeListFilterEnums } from "./enum-utils.js";
 
 // Import all toolsets
 import { pipelinesToolset } from "./toolsets/pipelines.js";
@@ -397,6 +398,9 @@ export class Registry {
           `Pass them via filters (e.g. filters: { ${missing.map(n => `${n}: "..."`).join(", ")} }).`
         );
       }
+      // Rewrite case variants (e.g. "pending" → "Pending") to declared enum values
+      // so agents that skip harness_describe don't get opaque API 400s.
+      canonicalizeListFilterEnums(resourceType, input, def.listFilterFields);
     }
 
     if (spec.paramsSchema) {
