@@ -1743,9 +1743,10 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 37 of 38 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
+By default, 37 of 39 toolsets are enabled. Two toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
+- **`ait`** — AIT knowledge base (crawl an application environment, read crawled pages and artifacts). Opt-in because it requires the AIT service behind the same base URL.
 
 ### Adding toolsets with `+` prefix
 
@@ -1822,6 +1823,7 @@ Available toolset names:
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item, eval_git_registration, online_eval |
 | `iacm`                  | iacm_workspace, iacm_resource, iacm_module, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                                                                 |
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
+| `ait` *(opt-in)*        | kb_crawl, kb_crawl_page, kb_page_artifact                                                                                                                                                                                                                                                      |
 
 
 ## Architecture

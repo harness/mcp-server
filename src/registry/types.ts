@@ -153,7 +153,8 @@ export type ToolsetName =
   | "incidents"
   | "deploys"
   | "knowledge-graph"
-  | "semantic-layer";
+  | "semantic-layer"
+  | "ait";
 
 export type ProductName = "harness" | "fme";
 
