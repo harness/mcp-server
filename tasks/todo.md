@@ -1,5 +1,45 @@
 # Harness MCP Server — Task Tracking
 
+## List-filter enum canonicalization (2026-07-31)
+- [x] Add `canonicalizeListFilterEnums` helper
+- [x] Wire into `Registry.dispatch` for list ops
+- [x] Clearer `security_exemption` size>50 error + `harness_list` size description
+- [x] Unit tests (`enum-canonicalization.test.ts` + existing STO exemptions)
+- [ ] Version bump / publish / bump mcpServerInternal dep (pending)
+- [ ] STO chatbot still should use PascalCase + size≤50 (follow-up outside MCP)
+
+### Plan
+- Case-insensitive rewrite of declared `listFilterFields.enum` values before API call.
+- Pass unmatched values through to the API; do not silently clamp size (fail-loud stays).
+
+### Review
+- `pending`/`approved` now become `Pending`/`Approved` at dispatch for any resource with enums.
+- Dropped the initial fail-loud-on-unknown behavior: it broke the `cost_timeseries` unknown-`time_filter` fallback and a connector test using an undeclared `category`. Declared enums can lag the API, so unmatched values are forwarded untouched.
+- Full suite: 123 files, 2657 passed, 8 skipped. `pnpm typecheck` clean.
+
+## PR 729 — Sunil architecture review compliance (2026-08-03)
+- [x] Audit PR #729 against Sunil architecture standards (11-tool surface, registry-first, public contracts, Zod hygiene, focused tests, no silent incomplete transforms)
+- [x] Fix whitespace no-op on known enum values in `canonicalizeListFilterEnums`
+- [x] Correct misleading size guidance (top-level `size` works; harness_describe points at operation description)
+- [x] Add public `harness_list` path regression + whitespace unit coverage
+- [x] Run focused + broad verification; commit, push, open PR
+
+### Plan
+- Keep the PR's registry-first canonicalize design (no new tools, pass-through unmatched).
+- Close the incomplete-transform gap and align agent-facing copy with the real `harness_list` contract.
+- Cover the public tool path so casing fixes cannot regress without failing CI.
+
+### Review
+- PR #734 changes comply with all architecture rules: no new MCP tools, logic in `Registry.dispatch` (not toolsets), pass-through for unmatched enum values, stderr-only logging, Zod `.describe()` hygiene.
+- Cherry-picked strengthened guardrails from PR #726: `security.test.ts` (§9), `multi-scope-pathbuilders.test.ts` (§4), AGENTS.md/docs consistency checks.
+- Verification passed: `pnpm standards:check` (89 tests), `pnpm typecheck`, `pnpm build`, `pnpm test` (125 files / 2681 tests).
+
+## Coding standards audit (2026-08-03)
+- [x] Audit codebase against docs/coding-standards.md (11-tool surface, registry-first, pure toolsets, singleton client, stderr logging)
+- [x] Integrate PR #726 guardrails (security, multi-scope pathBuilders, AGENTS.md alignment)
+- [x] Confirm PR #734 enum canonicalization follows registry-first pattern
+- [x] Run full verification suite
+
 ## Issue #119 — Full Registry Structural Invariants (2026-07-21)
 - [x] Confirm Issue #119 is unassigned, unclaimed by another contributor, has no Development branch/PR, and remains unresolved on current main
 - [x] Audit every invariant in `tests/registry/structural-validation.test.ts` against default, opt-in, and both pipeline resource types
