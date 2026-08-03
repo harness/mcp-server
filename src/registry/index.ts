@@ -400,7 +400,7 @@ export class Registry {
       }
       // Rewrite case variants (e.g. "pending" → "Pending") to declared enum values
       // so agents that skip harness_describe don't get opaque API 400s.
-      canonicalizeListFilterEnums(resourceType, input, def.listFilterFields);
+      canonicalizeListFilterEnums(input, def.listFilterFields);
     }
 
     if (spec.paramsSchema) {

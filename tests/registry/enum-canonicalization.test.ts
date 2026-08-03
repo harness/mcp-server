@@ -3,8 +3,8 @@
  *
  * Agents often send lowercase status/type values while APIs require
  * PascalCase or UPPERCASE. canonicalizeListFilterEnums rewrites
- * case-insensitive matches to the declared enum form and fails loud
- * on unknown values.
+ * case-insensitive matches to the declared enum form and leaves
+ * everything else alone.
  */
 import { describe, it, expect, vi } from "vitest";
 import { canonicalizeListFilterEnums } from "../../src/registry/enum-utils.js";
@@ -31,51 +31,58 @@ describe("canonicalizeListFilterEnums", () => {
 
   it("rewrites lowercase single values to canonical PascalCase", () => {
     const input: Record<string, unknown> = { status: "pending" };
-    canonicalizeListFilterEnums("security_exemption", input, fields);
+    canonicalizeListFilterEnums(input, fields);
     expect(input.status).toBe("Pending");
   });
 
   it("preserves already-canonical values", () => {
     const input: Record<string, unknown> = { status: "Approved" };
-    canonicalizeListFilterEnums("security_exemption", input, fields);
+    canonicalizeListFilterEnums(input, fields);
     expect(input.status).toBe("Approved");
   });
 
   it("rewrites mixed-case values", () => {
     const input: Record<string, unknown> = { status: "aPpRoVeD" };
-    canonicalizeListFilterEnums("security_exemption", input, fields);
+    canonicalizeListFilterEnums(input, fields);
     expect(input.status).toBe("Approved");
   });
 
   it("canonicalizes comma-separated multi-values token-by-token", () => {
     const input: Record<string, unknown> = { severity_codes: "critical,HIGH,medium" };
-    canonicalizeListFilterEnums("security_issue", input, fields);
+    canonicalizeListFilterEnums(input, fields);
     expect(input.severity_codes).toBe("Critical,High,Medium");
   });
 
-  it("fails loud on unknown values and lists allowed options", () => {
+  it("passes through values with no case-insensitive match", () => {
+    // Declared enums are documentation metadata that can lag the API, and some
+    // resources apply their own fallback — never block an undeclared value here.
     const input: Record<string, unknown> = { status: "waiting" };
-    expect(() => canonicalizeListFilterEnums("security_exemption", input, fields)).toThrow(
-      /invalid 'status' value 'waiting'.*Must be one of: Pending, Approved, Rejected/i,
-    );
+    canonicalizeListFilterEnums(input, fields);
+    expect(input.status).toBe("waiting");
+  });
+
+  it("canonicalizes known tokens and preserves unknown ones in a multi-value", () => {
+    const input: Record<string, unknown> = { severity_codes: "critical,unknown-code" };
+    canonicalizeListFilterEnums(input, fields);
+    expect(input.severity_codes).toBe("Critical,unknown-code");
   });
 
   it("leaves fields without enums untouched", () => {
     const input: Record<string, unknown> = { search: "log4j", status: "pending" };
-    canonicalizeListFilterEnums("security_exemption", input, fields);
+    canonicalizeListFilterEnums(input, fields);
     expect(input.search).toBe("log4j");
     expect(input.status).toBe("Pending");
   });
 
   it("ignores non-string filter values", () => {
     const input: Record<string, unknown> = { status: 42 };
-    canonicalizeListFilterEnums("security_exemption", input, fields);
+    canonicalizeListFilterEnums(input, fields);
     expect(input.status).toBe(42);
   });
 
   it("no-ops when the filter is omitted", () => {
     const input: Record<string, unknown> = {};
-    canonicalizeListFilterEnums("security_exemption", input, fields);
+    canonicalizeListFilterEnums(input, fields);
     expect(input.status).toBeUndefined();
   });
 });
@@ -127,14 +134,21 @@ describe("registry.dispatch — list filter enum canonicalization", () => {
     expect(callArgs.params.status).toBe("Pending");
   });
 
-  it("rejects unknown status before calling the API", async () => {
-    const requestSpy = vi.fn().mockResolvedValue({});
+  it("forwards an undeclared status untouched and lets the API decide", async () => {
+    const requestSpy = vi.fn().mockResolvedValue({
+      exemptions: [],
+      pagination: { page: 0, pageSize: 5, totalPages: 0, totalItems: 0 },
+      counts: {},
+    });
     const client = makeClient(requestSpy);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
 
-    await expect(
-      registry.dispatch(client, "security_exemption", "list", { status: "waiting", size: 5 }),
-    ).rejects.toThrow(/invalid 'status' value 'waiting'/i);
-    expect(requestSpy).not.toHaveBeenCalled();
+    await registry.dispatch(client, "security_exemption", "list", {
+      status: "waiting",
+      size: 5,
+    });
+
+    const callArgs = requestSpy.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.status).toBe("waiting");
   });
 });

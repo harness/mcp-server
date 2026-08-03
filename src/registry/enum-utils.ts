@@ -10,44 +10,41 @@ import type { FilterFieldSpec } from "./types.js";
  * global `harness_list` schema cannot encode per-resource enums — so
  * canonicalize here instead of relying on agents to call describe first.
  *
- * - Exact / case-insensitive match → rewrite to the declared enum value
+ * - Case-insensitive match → rewrite to the declared enum value
  * - Comma-separated multi-values are canonicalized token-by-token
- * - Unknown values fail loud with the allowed set (never silently dropped)
  * - Non-string values are left untouched (typed filters stay as-is)
+ *
+ * Values with no case-insensitive match are passed through unchanged.
+ * `listFilterFields.enum` is hand-maintained documentation metadata that
+ * can lag the API, and some resources apply their own fallback for
+ * unrecognized values, so this must not become a validation gate.
  */
 export function canonicalizeListFilterEnums(
-  resourceType: string,
   input: Record<string, unknown>,
   fields: FilterFieldSpec[],
 ): void {
   for (const field of fields) {
     if (!field.enum?.length) continue;
     const raw = input[field.name];
-    if (raw === undefined || raw === null) continue;
     if (typeof raw !== "string") continue;
 
     const canonicalByLower = new Map(field.enum.map((v) => [v.toLowerCase(), v]));
-    const parts = raw.includes(",")
+    const hasMultiple = raw.includes(",");
+    const parts = hasMultiple
       ? raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0)
       : [raw.trim()];
 
     if (parts.length === 0) continue;
 
-    const canonicalized: string[] = [];
-    for (const part of parts) {
+    let changed = false;
+    const canonicalized = parts.map((part) => {
       const canonical = canonicalByLower.get(part.toLowerCase());
-      if (!canonical) {
-        throw new Error(
-          `${resourceType}: invalid '${field.name}' value '${part}'. ` +
-            `Must be one of: ${field.enum.join(", ")}. ` +
-            `Use harness_describe(resource_type="${resourceType}") for filter details.`,
-        );
-      }
-      canonicalized.push(canonical);
-    }
+      if (canonical === undefined || canonical === part) return part;
+      changed = true;
+      return canonical;
+    });
 
-    input[field.name] = raw.includes(",")
-      ? canonicalized.join(",")
-      : canonicalized[0]!;
+    if (!changed) continue;
+    input[field.name] = hasMultiple ? canonicalized.join(",") : canonicalized[0]!;
   }
 }
