@@ -1045,12 +1045,16 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
           path: "/ccm/api/recommendation/overview/list",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           bodyBuilder: (input) => {
+            const limit = (input.limit as number | undefined) ?? (input.size as number | undefined) ?? 20;
+            const offset =
+              (input.offset as number | undefined) ??
+              (typeof input.page === "number" ? input.page * limit : 0);
             const body: Record<string, unknown> = {
               filterType: "CCMRecommendation",
               minSaving: (input.min_saving as number) ?? 0,
               daysBack: (input.days_back as number) ?? 4,
-              offset: (input.offset as number) ?? 0,
-              limit: (input.limit as number) ?? 20,
+              offset,
+              limit,
             };
 
             if (input.sort_by) {
