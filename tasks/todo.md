@@ -22,7 +22,7 @@
 - [x] Fix whitespace no-op on known enum values in `canonicalizeListFilterEnums`
 - [x] Correct misleading size guidance (top-level `size` works; harness_describe points at operation description)
 - [x] Add public `harness_list` path regression + whitespace unit coverage
-- [ ] Run focused + broad verification; commit, push, open PR
+- [x] Run focused + broad verification; commit, push, open PR
 
 ### Plan
 - Keep the PR's registry-first canonicalize design (no new tools, pass-through unmatched).
@@ -30,7 +30,10 @@
 - Cover the public tool path so casing fixes cannot regress without failing CI.
 
 ### Review
-- (in progress)
+- PR #729 kept the 11-tool / registry-first model and correctly treated `listFilterFields.enum` as a normalization hint (not a gate) after the fail-loud-on-unknown correction — that part already matched Sunil's public-contract bar.
+- Architecture gaps found and fixed: (1) trim-only known values like `" Pending"` were left unchanged so canonicalize could still 400; (2) STO size error told agents to pass size "inside filters" even though top-level `size` works; (3) size schema copy overclaimed structured "per-resource limits" via describe; (4) no public `harness_list` path coverage (Sunil recurring "no focused coverage" finding).
+- Verification passed: focused enum/STO/`harness_list` Vitest (178), `pnpm typecheck`, `pnpm standards:check` (77), full `pnpm test` (123 files / 2669 passed).
+- Opened follow-up PR #734 (fork #729 is not pushable from this environment).
 
 ## Issue #119 — Full Registry Structural Invariants (2026-07-21)
 - [x] Confirm Issue #119 is unassigned, unclaimed by another contributor, has no Development branch/PR, and remains unresolved on current main
