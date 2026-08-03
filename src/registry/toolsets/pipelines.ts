@@ -2,27 +2,53 @@ import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract, dynamicExecutionExtract } from "../extractors.js";
 import YAML from "yaml";
 
+function coerceTriggerBodyRecord(body: unknown): Record<string, unknown> {
+  if (body == null || body === "") {
+    throw new Error("body must be a JSON object or YAML object for trigger.");
+  }
+  if (typeof body === "string") {
+    let parsed: unknown;
+    try {
+      parsed = YAML.parse(body);
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new Error(
+        `body must be a JSON object or YAML object for trigger. Failed to parse YAML body: ${detail}`,
+      );
+    }
+    if (parsed == null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("body must be a JSON object or YAML object for trigger.");
+    }
+    return parsed as Record<string, unknown>;
+  }
+  if (typeof body === "object" && !Array.isArray(body)) {
+    return body as Record<string, unknown>;
+  }
+  throw new Error("body must be a JSON object or YAML object for trigger.");
+}
+
 /**
  * Normalize a trigger body into the canonical `{ trigger: { ... } }` shape,
  * hoist `pipelineIdentifier` onto `input.pipeline_id` for the query param,
  * and ensure it ends up inside the trigger object for YAML serialization.
  *
- * Handles three caller-provided shapes:
+ * Handles caller-provided shapes (JSON object or YAML string):
  *  1. Flat:    `{ name, identifier, pipelineIdentifier, ... }`
  *  2. Wrapped: `{ trigger: { ..., pipelineIdentifier } }`
  *  3. Sibling: `{ trigger: { ... }, pipelineIdentifier }`
  */
 function normalizeTriggerBody(
-  body: Record<string, unknown>,
+  body: unknown,
   input: Record<string, unknown>,
 ): Record<string, unknown> {
-  const hasWrapper = body.trigger && typeof body.trigger === "object";
+  const record = coerceTriggerBodyRecord(body);
+  const hasWrapper = record.trigger && typeof record.trigger === "object";
   const inner = hasWrapper
-    ? (body.trigger as Record<string, unknown>)
-    : body;
+    ? (record.trigger as Record<string, unknown>)
+    : record;
 
   // Resolve pipelineIdentifier: prefer inner, fall back to root-level sibling
-  const pipelineId = (inner.pipelineIdentifier ?? body.pipelineIdentifier) as string | undefined;
+  const pipelineId = (inner.pipelineIdentifier ?? record.pipelineIdentifier) as string | undefined;
   if (pipelineId && !input.pipeline_id) {
     input.pipeline_id = pipelineId;
   }
@@ -32,11 +58,11 @@ function normalizeTriggerBody(
     if (!inner.pipelineIdentifier && pipelineId) {
       inner.pipelineIdentifier = pipelineId;
     }
-    delete body.pipelineIdentifier;
-    return body;
+    delete record.pipelineIdentifier;
+    return record;
   }
   // Flat shape: auto-wrap
-  return { trigger: body };
+  return { trigger: record };
 }
 
 // ---------------------------------------------------------------------------
@@ -735,15 +761,15 @@ export const pipelinesToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           queryParams: { pipeline_id: "targetIdentifier" },
           bodyBuilder: (input) => {
-            const body = input.body as Record<string, unknown> | undefined;
-            if (!body) return "";
+            const body = input.body;
+            if (body == null || body === "") return "";
             const triggerObj = normalizeTriggerBody(body, input);
             return YAML.stringify(triggerObj);
           },
           responseExtractor: ngExtract,
           description: "Create a new pipeline trigger. Requires pipeline_id to identify the target pipeline. Use harness_schema(resource_type='trigger') to discover the body structure.",
           bodySchema: {
-            description: "Trigger configuration as JSON — auto-converted to YAML for the API. Pass trigger fields directly (auto-wrapped in trigger envelope). Use harness_schema(resource_type='trigger') for the full schema. The pipeline_id is auto-extracted from pipelineIdentifier in the body.",
+            description: "Trigger configuration — auto-converted to YAML for the API. Pass a raw YAML string (including trigger: root), a JSON object with trigger fields (auto-wrapped in trigger envelope), or { trigger: { ... } }. Use harness_schema(resource_type='trigger') for the full schema. The pipeline_id query param is auto-extracted from pipelineIdentifier in the body when omitted.",
             fields: [
               { name: "trigger", type: "object", required: false, description: "Wrapper key (optional — body is auto-wrapped if not present). Inner fields: name (required), identifier (required), enabled (bool), pipelineIdentifier (required — target pipeline), source (required — e.g. { type: 'Scheduled', spec: { type: 'Cron', spec: { expression: '0 8 * * *' } } }), inputYaml (optional — runtime input YAML for triggered execution). Use harness_schema(resource_type='trigger', path='trigger_source') for source structure." },
             ],
@@ -756,15 +782,15 @@ export const pipelinesToolset: ToolsetDefinition = {
           pathParams: { trigger_id: "triggerIdentifier" },
           queryParams: { pipeline_id: "targetIdentifier" },
           bodyBuilder: (input) => {
-            const body = input.body as Record<string, unknown> | undefined;
-            if (!body) return "";
+            const body = input.body;
+            if (body == null || body === "") return "";
             const triggerObj = normalizeTriggerBody(body, input);
             return YAML.stringify(triggerObj);
           },
           responseExtractor: ngExtract,
           description: "Update a pipeline trigger. Use harness_schema(resource_type='trigger') to discover the body structure.",
           bodySchema: {
-            description: "Full trigger configuration (replaces existing). Pass trigger fields directly — auto-wrapped and converted to YAML. Use harness_schema(resource_type='trigger') for the full schema.",
+            description: "Full trigger configuration (replaces existing). Pass a raw YAML string, JSON trigger fields (auto-wrapped), or { trigger: { ... } } — converted to YAML for the API. Use harness_schema(resource_type='trigger') for the full schema.",
             fields: [
               { name: "trigger", type: "object", required: false, description: "Wrapper key (optional — body is auto-wrapped if not present). Inner fields: name, identifier, enabled, pipelineIdentifier, source, inputYaml. Use harness_schema for full structure." },
             ],
