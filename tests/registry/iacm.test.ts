@@ -76,6 +76,17 @@ describe("iacmToolset structure", () => {
     expect(findResource("iacm_module").scope).toBe("account");
   });
 
+  it("all paginated list operations have pageOneIndexed=true", () => {
+    for (const resource of iacmToolset.resources) {
+      const listSpec = resource.operations["list"];
+      if (!listSpec?.queryParams?.page) continue;
+      expect(
+        listSpec.pageOneIndexed,
+        `${resource.resourceType}.list must set pageOneIndexed=true when queryParams includes page`,
+      ).toBe(true);
+    }
+  });
+
   it("iacm_workspace, iacm_resource, iacm_workspace_costs, iacm_activity_resource_change are project-scoped", () => {
     for (const type of ["iacm_workspace", "iacm_resource", "iacm_workspace_costs", "iacm_activity_resource_change"]) {
       expect(findResource(type).scope).toBe("project");
@@ -371,6 +382,95 @@ describe("iacm registry dispatch", () => {
 
     const request = mockRequest.mock.calls[0]![0] as { path: string };
     expect(request.path).toBe("/iacm/api/modules/4640");
+  });
+
+  it("iacm_module list converts harness_list page 0 to API page 1", async () => {
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_module", "list", {
+      page: 0,
+      size: 20,
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(request.path).toBe("/iacm/api/modules");
+    expect(request.params.page).toBe(1);
+    expect(request.params.size).toBe(20);
+  });
+
+  it("iacm_module list converts harness_list page 1 to API page 2", async () => {
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_module", "list", {
+      page: 1,
+      size: 20,
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(request.params.page).toBe(2);
+  });
+
+  it("iacm_module list omits page param when harness_list page is not provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_module", "list", {});
+
+    const request = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(request.params.page).toBeUndefined();
+  });
+
+  it("iacm_module list passes tag, version, and provider filters to the API", async () => {
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_module", "list", {
+      page: 0,
+      tag: "networking",
+      version: "1.2.0",
+      provider: "aws",
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(request.params.page).toBe(1);
+    expect(request.params.tag).toBe("networking");
+    expect(request.params.version).toBe("1.2.0");
+    expect(request.params.provider).toBe("aws");
+  });
+
+  it("iacm_workspace list converts harness_list page 0 to API page 1", async () => {
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_workspace", "list", {
+      org_id: "default",
+      project_id: "Testim",
+      page: 0,
+      size: 30,
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(request.path).toBe("/iacm/api/orgs/default/projects/Testim/workspaces");
+    expect(request.params.page).toBe(1);
+    expect(request.params.size).toBe(30);
+  });
+
+  it("iacm_resource list converts harness_list page 0 to API page 1", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ resources: [] });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_resource", "list", {
+      org_id: "default",
+      project_id: "Testim",
+      workspace_id: "ws-1",
+      page: 0,
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(request.path).toBe("/iacm/api/orgs/default/projects/Testim/workspaces/ws-1/resources");
+    expect(request.params.page).toBe(1);
   });
 
   it("dispatches activity resource changes by activity id", async () => {
