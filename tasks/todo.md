@@ -22,7 +22,7 @@
 - [x] Fix whitespace no-op on known enum values in `canonicalizeListFilterEnums`
 - [x] Correct misleading size guidance (top-level `size` works; harness_describe points at operation description)
 - [x] Add public `harness_list` path regression + whitespace unit coverage
-- [ ] Run focused + broad verification; commit, push, open PR
+- [x] Run focused + broad verification; commit, push, open PR
 
 ### Plan
 - Keep the PR's registry-first canonicalize design (no new tools, pass-through unmatched).
@@ -30,7 +30,15 @@
 - Cover the public tool path so casing fixes cannot regress without failing CI.
 
 ### Review
-- (in progress)
+- PR #734 changes comply with all architecture rules: no new MCP tools, logic in `Registry.dispatch` (not toolsets), pass-through for unmatched enum values, stderr-only logging, Zod `.describe()` hygiene.
+- Cherry-picked strengthened guardrails from PR #726: `security.test.ts` (§9), `multi-scope-pathbuilders.test.ts` (§4), AGENTS.md/docs consistency checks.
+- Verification passed: `pnpm standards:check` (89 tests), `pnpm typecheck`, `pnpm build`, `pnpm test` (125 files / 2681 tests).
+
+## Coding standards audit (2026-08-03)
+- [x] Audit codebase against docs/coding-standards.md (11-tool surface, registry-first, pure toolsets, singleton client, stderr logging)
+- [x] Integrate PR #726 guardrails (security, multi-scope pathBuilders, AGENTS.md alignment)
+- [x] Confirm PR #734 enum canonicalization follows registry-first pattern
+- [x] Run full verification suite
 
 ## Issue #119 — Full Registry Structural Invariants (2026-07-21)
 - [x] Confirm Issue #119 is unassigned, unclaimed by another contributor, has no Development branch/PR, and remains unresolved on current main
