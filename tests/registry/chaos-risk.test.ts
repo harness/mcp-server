@@ -114,12 +114,16 @@ describe("scanned_risk list/get", () => {
     expect(params.tags).toBe("team:platform");
   });
 
-  it("get: builds correct path with identity param", async () => {
+  it("get: builds correct path with identity param and unwraps scannedRisk envelope", async () => {
+    // Backend returns { scannedRisk: ScannedRisk } — extractor must unwrap so
+    // callers see the entity at the root like every other *.get op.
     const mockRequest = vi.fn().mockResolvedValue({
-      identity: "sr-1",
-      name: "Missing resource limits",
-      severity: "HIGH",
-      riskRuleId: "rule-abc",
+      scannedRisk: {
+        identity: "sr-1",
+        name: "Missing resource limits",
+        severity: "HIGH",
+        riskRuleId: "rule-abc",
+      },
     });
     const client = makeClient(mockRequest);
 
@@ -134,6 +138,25 @@ describe("scanned_risk list/get", () => {
     expect(call.path).toBe("/chaos/manager/api/v3/scanned-risks/sr-1");
     expect(result.identity).toBe("sr-1");
     expect(result.severity).toBe("HIGH");
+    expect(result.riskRuleId).toBe("rule-abc");
+    expect(result.scannedRisk).toBeUndefined();
+  });
+
+  it("get: leaves already-unwrapped responses untouched (defensive)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      identity: "sr-2",
+      severity: "MEDIUM",
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "scanned_risk", "get", {
+      identity: "sr-2",
+      org_id: "default",
+      project_id: "chaos-proj",
+    })) as Record<string, unknown>;
+
+    expect(result.identity).toBe("sr-2");
+    expect(result.severity).toBe("MEDIUM");
   });
 });
 
@@ -672,9 +695,11 @@ describe("chaos_risk_scan execute actions", () => {
     expect(call.path).toBe("/chaos/manager/api/v3/risk-scans/scan-1/report/download");
   });
 
-  it("heatmap: GETs /v3/risk-scans/{identity}/heatmap with pagination and extracts paginated response", async () => {
+  it("heatmap: GETs /v3/risk-scans/{identity}/heatmap with pagination and extracts heatmap rows", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
-      data: [{ serviceIdentity: "svc-1", ruleResults: [] }],
+      summary: { score: 333, totalRisks: 15 },
+      riskRules: [{ identity: "r1", name: "Missing probes" }],
+      rows: [{ serviceIdentity: "svc-1", serviceName: "nginx-deployment", cells: [] }],
       pagination: { totalItems: 5 },
     });
     const client = makeClient(mockRequest);
@@ -686,7 +711,12 @@ describe("chaos_risk_scan execute actions", () => {
       page: 0,
       limit: 20,
       search: "svc",
-    })) as { items: unknown[]; total: number };
+    })) as {
+      summary?: unknown;
+      riskRules?: unknown[];
+      items: unknown[];
+      total: number;
+    };
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
@@ -694,8 +724,10 @@ describe("chaos_risk_scan execute actions", () => {
     expect(call.params.page).toBe(0);
     expect(call.params.limit).toBe(20);
     expect(call.params.search).toBe("svc");
-    // chaosPageExtract unwraps { data, pagination } into { items, total }
+    // chaosHeatmapExtract unwraps { rows, riskRules, summary, pagination }
     expect(result.items).toHaveLength(1);
     expect(result.total).toBe(5);
+    expect(result.riskRules).toHaveLength(1);
+    expect(result.summary).toEqual({ score: 333, totalRisks: 15 });
   });
 });
