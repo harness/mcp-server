@@ -85,6 +85,18 @@ describe("canonicalizeListFilterEnums", () => {
     canonicalizeListFilterEnums(input, fields);
     expect(input.status).toBeUndefined();
   });
+
+  it("rewrites whitespace-padded lowercase values", () => {
+    const input: Record<string, unknown> = { status: "  pending  " };
+    canonicalizeListFilterEnums(input, fields);
+    expect(input.status).toBe("Pending");
+  });
+
+  it("leaves all-comma tokens unchanged", () => {
+    const input: Record<string, unknown> = { severity_codes: ",,," };
+    canonicalizeListFilterEnums(input, fields);
+    expect(input.severity_codes).toBe(",,,");
+  });
 });
 
 describe("registry.dispatch — list filter enum canonicalization", () => {
@@ -150,5 +162,46 @@ describe("registry.dispatch — list filter enum canonicalization", () => {
 
     const callArgs = requestSpy.mock.calls[0]![0] as { params: Record<string, unknown> };
     expect(callArgs.params.status).toBe("waiting");
+  });
+
+  it("canonicalizes lowercase chaos_risk_scan status and scan_type at dispatch", async () => {
+    const requestSpy = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(requestSpy);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "chaos" }));
+
+    await registry.dispatch(client, "chaos_risk_scan", "list", {
+      org_id: "default",
+      project_id: "chaos-proj",
+      status: "completed",
+      scan_type: "pipelineexecution",
+    });
+
+    const params = (requestSpy.mock.calls[0]![0] as { params: Record<string, unknown> }).params;
+    expect(params.status).toBe("COMPLETED");
+    expect(params.scanType).toBe("PipelineExecution");
+  });
+
+  it("canonicalizes lowercase scanned_risk validation_type at dispatch", async () => {
+    const requestSpy = vi.fn().mockResolvedValue({ data: [], pagination: { totalItems: 0 } });
+    const client = makeClient(requestSpy);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "chaos" }));
+
+    await registry.dispatch(client, "scanned_risk", "list", {
+      org_id: "default",
+      project_id: "chaos-proj",
+      validation_type: "confirmed",
+    });
+
+    const params = (requestSpy.mock.calls[0]![0] as { params: Record<string, unknown> }).params;
+    expect(params.validationType).toBe("Confirmed");
+  });
+
+  it("security_exemption size limit error mentions harness_list global cap", async () => {
+    const client = makeClient();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    await expect(
+      registry.dispatch(client, "security_exemption", "list", { status: "Pending", size: 51 }),
+    ).rejects.toThrow(/harness_list allows size up to 100/);
   });
 });
