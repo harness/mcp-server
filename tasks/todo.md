@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Dependency security advisories (2026-08-03)
+- [x] Confirm affected dependency chains and fixed versions for `fast-uri` and `ip-address`
+- [x] Update pnpm overrides and regenerate both dependency lockfiles
+- [x] Verify vulnerable versions are absent and run audit, typecheck, build, standards, and tests
+- [x] Review and commit only the dependency-security changes
+- [x] Raise `hono` to a version that fixes `GHSA-8j4g-w8fx-2239`
+- [x] Regenerate both lockfiles and rerun audit and repository checks
+
+### Plan
+- Keep the existing transitive-dependency override pattern and raise only the two vulnerable minimum versions.
+- Regenerate the lockfile with the repository-pinned pnpm version; do not add packages or change unrelated dependencies.
+- Verify both resolved versions and the relevant audit alerts before broad repository checks.
+- Keep the existing direct dependency and override pattern while raising Hono's minimum to the patched release.
+
+### Review
+- `fast-uri` resolves to `4.1.2`; `ip-address` resolves to `10.4.0` in both lockfiles.
+- `hono` resolves to `4.13.0`, above the patched minimum of `4.12.34`, in both lockfiles.
+- `pnpm audit` reports zero vulnerabilities; typecheck, build, standards, and all 2,711 tests pass.
+
 ## List-filter enum canonicalization (2026-07-31)
 - [x] Add `canonicalizeListFilterEnums` helper
 - [x] Wire into `Registry.dispatch` for list ops

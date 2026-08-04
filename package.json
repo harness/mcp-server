@@ -61,7 +61,7 @@
     "adm-zip": "^0.6.0",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
-    "hono": "^4.12.27",
+    "hono": "^4.12.34",
     "jsonwebtoken": "^9.0.3",
     "yaml": "^2.8.3",
     "zod": "^4.0.0"
@@ -101,15 +101,15 @@
   "pnpm": {
     "overrides": {
       "picomatch": ">=4.0.4",
-      "hono": ">=4.12.27",
+      "hono": ">=4.12.34",
       "path-to-regexp": ">=8.4.0",
       "@hono/node-server": ">=2.0.10",
       "express-rate-limit": ">=8.2.2",
-      "ip-address": ">=10.1.1",
+      "ip-address": ">=10.3.1",
       "vite": "^7.3.5",
       "esbuild": ">=0.28.1",
       "postcss": ">=8.5.18",
-      "fast-uri": ">=3.1.4",
+      "fast-uri": ">=4.1.2",
       "body-parser": ">=2.3.0",
       "sharp": ">=0.35.0",
       "protobufjs": ">=8.6.0",
