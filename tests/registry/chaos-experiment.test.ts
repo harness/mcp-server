@@ -98,6 +98,27 @@ describe("chaos_experiment list/get", () => {
     expect((result.items[1] as Record<string, unknown>).name).toBe("Exp B");
   });
 
+  it("list: forwards infra_id and environment_id together when both provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [{ experimentID: "exp-1", name: "pod-delete" }],
+      pagination: { totalItems: 1 },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_experiment", "list", {
+      project_id: "PM_Signoff",
+      org_id: "default",
+      infra_id: "demo/infra-1",
+      environment_id: "demo",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params).toMatchObject({
+      infraId: "demo/infra-1",
+      environmentIdentifier: "demo",
+    });
+  });
+
   it("list: per-item openInHarness uses the experiment UUID (not name) and the chaos-studio route", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       data: [
