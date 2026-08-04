@@ -1,5 +1,11 @@
 # Lessons Learned
 
+## List-Filter Enums Must Be Canonicalized at Dispatch
+- **Issue**: `listFilterFields.enum` is only visible via `harness_describe`. The global `harness_list` schema cannot encode per-resource enums, so agents often send lowercase (`pending`) while APIs require PascalCase/UPPERCASE. Those 400s count as `tool_error` and can page on-call.
+- **Fix**: `canonicalizeListFilterEnums` in `Registry.dispatch` rewrites case-insensitive matches to declared enum values (including comma-separated tokens). Also clarify that some resources have a lower `size` max than the global 1–100 tool schema.
+- **Correction**: The first implementation also threw on values with no enum match. That broke two existing suites — `cost_timeseries` deliberately falls back to `LAST_30_DAYS` for unrecognized `time_filter`, and a connector test passed an undeclared `category`. `listFilterFields.enum` is hand-maintained documentation across 200+ resource types, so it can lag the API; using it as a hard gate would reject values the backend accepts.
+- **Rule**: Treat `listFilterFields.enum` as a normalization hint, not a validation contract. Canonicalize casing, pass unmatched values through to the API, and never let doc metadata become a gate. Do not silently clamp pagination; keep fail-loud with a clear max hint.
+
 ## Historical Test Helpers Must Be Revalidated Against Current Runtime Architecture
 - **Issue**: Issue #119 and its original `fullRegistryV0` / `fullRegistryV1` helpers were created when `HARNESS_PIPELINE_VERSION` filtered one pipeline type out of the Registry. A later change made `pipeline` and `pipeline_v1` simultaneously available and reduced the config to a default preference, but the first implementation treated the stale helpers as two real variants, duplicated every invariant over identical objects, inferred opt-in resources from default/full set differences, and used a hand-built array instead of an end-to-end Registry fixture.
 - **Fix**: Trace current constructor behavior and relevant history before preserving an old helper. Use one full Registry for the current architecture, derive opt-in coverage from `ToolsetDefinition.optIn`, and inject malformed regression definitions through `RegistryOptions.additionalToolsets` so fixtures traverse the same Registry and validator path as production definitions.
