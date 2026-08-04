@@ -137,6 +137,7 @@ export type ToolsetName =
   | "ccm"
   | "sei"
   | "scs"
+  | "evidence-vault"
   | "sto"
   | "dbops"
   | "access_control"
