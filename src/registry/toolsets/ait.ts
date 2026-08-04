@@ -4,19 +4,20 @@ import type { ToolsetDefinition } from "../types.js";
  * AIT (AI Test Automation) toolset.
  * Base path: /ait/api/v1/...
  * Hosted on the Harness platform and authenticated via standard Harness PAT.
+ *
+ * Resources:
+ *   ait_app              — list applications
+ *   ait_test_environment — list test environments for an app
+ *   ait_test             — list, create (AI), and execute (run) tests
  */
 
-// ─── Reusable response extractors for AIT APIs ─────────────────────────────
-// AIT APIs follow these response patterns:
-//   1. TableResponse<T> — paginated lists: { data: T[], totalPages, totalItems, itemsPerPage, currentPage }
-//   2. Single object   — direct entity (e.g. TestNew, TestNewExtended)
-//   3. Simple values   — string, string[], { success: boolean }
-//
-// Each new endpoint picks the appropriate extractor or uses passthrough for
-// single-object / simple-value responses.
+// ─── Response extractors ────────────────────────────────────────────────────
 
-/** Extract applications list (simple array pattern): normalize camelCase fields to snake_case items */
-const aitAppsForOrgExtract = (raw: unknown): unknown => {
+/** Extract applications list: normalize camelCase fields to snake_case */
+const aitAppListExtract = (raw: unknown): unknown => {
+  if (!Array.isArray(raw)) {
+    throw new Error("ait_app: expected array response from API, got " + typeof raw);
+  }
   const arr = raw as Array<{
     appId?: string;
     appName?: string;
@@ -42,8 +43,11 @@ const aitAppsForOrgExtract = (raw: unknown): unknown => {
   return { items, total: items.length };
 };
 
-/** Extract test environments list (simple array pattern): normalize camelCase fields to snake_case items */
-const aitTestEnvironmentsExtract = (raw: unknown): unknown => {
+/** Extract test environments list: normalize camelCase fields to snake_case */
+const aitTestEnvironmentListExtract = (raw: unknown): unknown => {
+  if (!Array.isArray(raw)) {
+    throw new Error("ait_test_environment: expected array response from API, got " + typeof raw);
+  }
   const arr = raw as Array<{
     id?: string;
     appId?: string;
@@ -60,14 +64,16 @@ const aitTestEnvironmentsExtract = (raw: unknown): unknown => {
     test: env.test,
     monitor: env.monitor,
     pre_release: env.preRelease,
-
     base_url: env.baseUrl ?? null,
   }));
   return { items, total: items.length };
 };
 
-/** Extract paginated TableResponse for test list: picks key fields per TestEntry item */
-const aitTestsListExtract = (raw: unknown): unknown => {
+/** Extract paginated TableResponse for test list */
+const aitTestListExtract = (raw: unknown): unknown => {
+  if (raw == null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("ait_test: expected paginated object response from API, got " + (Array.isArray(raw) ? "array" : typeof raw));
+  }
   const r = raw as {
     data?: Array<Record<string, unknown>>;
     totalPages?: number;
@@ -75,6 +81,9 @@ const aitTestsListExtract = (raw: unknown): unknown => {
     itemsPerPage?: number;
     currentPage?: number;
   };
+  if (r.data !== undefined && !Array.isArray(r.data)) {
+    throw new Error("ait_test: expected data field to be an array, got " + typeof r.data);
+  }
   const items = (r.data ?? []).map((t) => {
     const runDetailsList = t.lastKRunDetailsList as Array<Record<string, unknown>> | null | undefined;
     const latestRun = runDetailsList?.[0];
@@ -98,21 +107,20 @@ const aitTestsListExtract = (raw: unknown): unknown => {
   };
 };
 
-/** Extract imported copilot test response — normalizes camelCase testId/testVersionId to snake_case */
-const aitImportedCopilotTestExtract = (raw: unknown): unknown => {
+/** Extract create-test-using-AI response */
+const aitTestCreateExtract = (raw: unknown): unknown => {
   const r = raw as {
     testId: number;
     testVersionId: number;
   };
-
   return {
     test_id: r.testId,
     test_version_id: r.testVersionId,
   };
 };
 
-/** Extract run test response — picks key fields from the snake_case TestRunNew entity */
-const aitRunTestExtract = (raw: unknown): unknown => {
+/** Extract run-test response */
+const aitTestRunExtract = (raw: unknown): unknown => {
   const r = raw as {
     id: number;
     app_id: string;
@@ -124,19 +132,14 @@ const aitRunTestExtract = (raw: unknown): unknown => {
     start_epoch: number | null;
     error: string | null;
   };
-
-  const aitBaseUrl = (process.env.HARNESS_BASE_URL ?? "https://app.harness.io").replace(/\/$/, "");
-  const testRunUrl = `${aitBaseUrl}/ait/${r.app_id}/test/${r.test_id}/version/${r.test_version_id}/test-run/${r.id}?tab=overview`;
-
   return {
-    test_run_url: testRunUrl,
+    id: r.id,
     app_id: r.app_id,
     test_id: r.test_id,
     test_version_id: r.test_version_id,
     test_environment_id: r.test_environment_id,
     status: r.status,
     error: r.error,
-    _note: "Always display the test_run_url to the user.",
   };
 };
 
@@ -146,15 +149,17 @@ export const aitToolset: ToolsetDefinition = {
   name: "ait",
   displayName: "AI Test Automation (AIT)",
   description:
-    "Harness AI Test Automation (AIT) — list and manage automated tests for applications.",
+    "Harness AI Test Automation (AIT) — list and manage automated tests for applications. " +
+    "TERMINOLOGY MAPPING (AIT ↔ Harness): AIT \"org\" = Harness \"account\"; AIT \"app\" = Harness \"project\".",
   optIn: true,
   resources: [
+    // ── ait_app ─────────────────────────────────────────────────────────────
     {
-      resourceType: "ait_apps_for_org",
-      displayName: "AIT Apps for Org",
+      resourceType: "ait_app",
+      displayName: "AIT Application",
       description:
-        "List all applications for the current organization. Returns app IDs, names, and metadata. " +
-        "Use this to discover app_id values needed for other AIT operations.",
+        "An application (also called 'project' in Harness) in the AIT module. List applications to discover app_id values " +
+        "needed for other AIT operations (tests, environments).",
       toolset: "ait",
       scope: "account",
       identifierFields: [],
@@ -163,20 +168,20 @@ export const aitToolset: ToolsetDefinition = {
           method: "GET",
           path: "/ait/api/v1/application",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: aitAppsForOrgExtract,
+          responseExtractor: aitAppListExtract,
           skipCompact: true,
           description:
             "List all apps for the organization. Returns app details including app_id, app_name, workspace_id, and created_at.",
         },
       },
     },
+    // ── ait_test_environment ────────────────────────────────────────────────
     {
-      resourceType: "ait_test_environments",
-      displayName: "AIT Test Environments",
+      resourceType: "ait_test_environment",
+      displayName: "AIT Test Environment",
       description:
-        "List test environments for a given application. Returns environment IDs, names, " +
-        "base URLs, and flags (test, monitor, pre_release). Use this to discover env_id " +
-        "values needed for running copilot tests.",
+        "A test environment for an AIT application. List environments to discover " +
+        "environment IDs needed for creating and running tests.",
       toolset: "ait",
       scope: "account",
       identifierFields: ["app_id"],
@@ -195,22 +200,23 @@ export const aitToolset: ToolsetDefinition = {
           queryParams: {
             app_id: "appId",
           },
-          responseExtractor: aitTestEnvironmentsExtract,
+          responseExtractor: aitTestEnvironmentListExtract,
           description:
             "List all test environments for an application. Requires app_id in filters. " +
             "Returns environment details including id, env_name, base_url, and type flags.",
         },
       },
     },
+    // ── ait_test ────────────────────────────────────────────────────────────
     {
-      resourceType: "ait_tests_list",
-      displayName: "AIT Tests List",
+      resourceType: "ait_test",
+      displayName: "AIT Test",
       description:
-        "An automated test in the AIT module. List tests for an application by appId. " +
-        "Supports filtering by activation status, run status, and pagination.",
+        "An automated test in the AIT module. Supports listing tests for an app, " +
+        "creating a test using AI (copilot), and executing a test run.",
       toolset: "ait",
       scope: "account",
-      identifierFields: ["app_id"],
+      identifierFields: ["test_id", "test_version_id"],
       listFilterFields: [
         {
           name: "app_id",
@@ -257,7 +263,7 @@ export const aitToolset: ToolsetDefinition = {
             sort_by: "sortBy",
             sort_order: "sortOrder",
             page: "page",
-            limit: "limit",
+            size: "limit",
             filter: "filter",
             should_hide_disabled_flows: "shouldHideDisabledFlows",
             is_debug_mode: "isDebugMode",
@@ -272,41 +278,32 @@ export const aitToolset: ToolsetDefinition = {
             isDebugMode: "false",
             runStatusesPerTest: "5",
           },
-          responseExtractor: aitTestsListExtract,
+          responseExtractor: aitTestListExtract,
           skipCompact: true,
           description:
             "List all tests for an application. Requires app_id in filters. " +
             "Returns paginated test entries with name, created_by, created_at, display_status, and tags.",
         },
-      },
-    },
-    {
-      resourceType: "ait_create_test_using_ai",
-      displayName: "AIT Create Test Using AI",
-      description:
-        "Create test using AI in AIT. Provide an appId, envId, and a test description. " +
-        "The API creates a test and returns the test ID and version ID of the created test. " +
-        "Optionally specify authType ('auth' or 'no_auth') and an entryUrl.",
-      toolset: "ait",
-      scope: "account",
-      identifierFields: ["app_id"],
-      operations: {
         create: {
           method: "POST",
           path: "/ait/api/v1/testNew/copilotTest/import",
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const b = (input.body ?? input) as Record<string, unknown>;
+            const appId = (b.app_id ?? b.appId) as string;
+            const envId = (b.env_id ?? b.envId) as string;
+            const authType = b.auth_type ?? b.authType;
+            const entryUrl = b.entry_url ?? b.entryUrl;
             return {
-              appId: b.appId,
-              envId: b.envId,
+              appId,
+              envId,
               description: b.description,
-              ...(b.authType !== undefined ? { authType: b.authType } : {}),
-              ...(b.entryUrl !== undefined ? { entryUrl: b.entryUrl } : {}),
+              ...(authType !== undefined ? { authType: authType as string } : {}),
+              ...(entryUrl !== undefined ? { entryUrl: entryUrl as string } : {}),
             };
           },
           bodySchema: {
-            description: "Create a test using AI",
+            description: "Create a test using AI (copilot)",
             fields: [
               { name: "appId", type: "string", required: true, description: "Application ID" },
               { name: "envId", type: "string", required: true, description: "Environment ID" },
@@ -315,25 +312,11 @@ export const aitToolset: ToolsetDefinition = {
               { name: "entryUrl", type: "string", required: false, description: "Optional entry URL for the test" },
             ],
           },
-          responseExtractor: aitImportedCopilotTestExtract,
+          responseExtractor: aitTestCreateExtract,
           description:
-            "Create a test using AI. Returns test_id and test_version_id.",
+            "Create a test using AI. Provide app_id, env_id, and a description. Returns test_id and test_version_id.",
         },
       },
-    },
-    {
-      resourceType: "ait_run_test",
-      displayName: "AIT Run Test",
-      description:
-        "Execute a test with a given test ID and test version. " +
-        "Requires appId (UUID — look up via ait_apps_for_org if only name is known) and " +
-        "environmentId (UUID — look up via ait_test_environments if only name is known). " +
-        "Pass test_id and test_version_id via params (e.g. params: { test_id: 80, test_version_id: 91 }). " +
-        "Returns the scheduled TestRun details including id, status, test_session_id, and test run URL.",
-      toolset: "ait",
-      scope: "account",
-      identifierFields: ["test_id", "test_version_id"],
-      operations: {},
       executeActions: {
         run: {
           method: "POST",
@@ -342,23 +325,25 @@ export const aitToolset: ToolsetDefinition = {
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input: Record<string, unknown>) => {
             const b = (input.body ?? input) as Record<string, unknown>;
+            const appId = (b.app_id ?? b.appId) as string;
+            const environmentId = (b.environment_id ?? b.environmentId) as string;
             return {
-              appId: b.appId,
-              environmentId: b.environmentId,
+              appId,
+              environmentId,
               params: b.params ?? '{"RUN_MODE":"no-mock","TestExecutorNamespace.fastExecutorMode":"false"}',
             };
           },
           bodySchema: {
             description: "Execute a test run",
             fields: [
-              { name: "appId", type: "string", required: true, description: "Application UUID (e.g. ecaab215-65cd-45d6-8426-09ba1e04eabb). Look up via ait_apps_for_org if only app name is known." },
-              { name: "environmentId", type: "string", required: true, description: "Environment UUID (e.g. 1289b517-5f1b-4927-b30b-6f2e895dae8e). Look up via ait_test_environments if only env name is known." },
+              { name: "appId", type: "string", required: true, description: "Application UUID (e.g. ecaab215-65cd-45d6-8426-09ba1e04eabb). Look up via ait_app if only app name is known." },
+              { name: "environmentId", type: "string", required: true, description: "Environment UUID (e.g. 1289b517-5f1b-4927-b30b-6f2e895dae8e). Look up via ait_test_environment if only env name is known." },
               { name: "params", type: "string", required: false, description: "Test params — JSON stringified Map<string, string>. Defaults to '{\"RUN_MODE\":\"no-mock\",\"TestExecutorNamespace.fastExecutorMode\":\"false\"}'" },
             ],
           },
-          responseExtractor: aitRunTestExtract,
+          responseExtractor: aitTestRunExtract,
           actionDescription:
-            "Execute a test. Returns TestRun details including id, status, test_session_id, and start_epoch.",
+            "Execute a test. Returns TestRun details including id, status, and error.",
         },
       },
     },
