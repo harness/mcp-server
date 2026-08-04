@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
-import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract, dynamicExecutionExtract } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract, dynamicExecutionExtract, pipelineScopedListExtract } from "../extractors.js";
 import YAML from "yaml";
 
 function coerceTriggerBodyRecord(body: unknown): Record<string, unknown> {
@@ -743,7 +743,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
           },
-          responseExtractor: pageExtract,
+          responseExtractor: pipelineScopedListExtract,
           description: "List triggers for a pipeline",
         },
         get: {
@@ -801,8 +801,14 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/pipeline/api/triggers/{triggerIdentifier}",
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { trigger_id: "triggerIdentifier" },
+          queryParams: { pipeline_id: "targetIdentifier" },
+          paramsSchema: {
+            fields: [
+              { name: "pipeline_id", required: true, description: "Target pipeline identifier" },
+            ],
+          } satisfies ParamsSchema,
           responseExtractor: ngExtract,
-          description: "Delete a pipeline trigger",
+          description: "Delete a pipeline trigger. Requires pipeline_id (target pipeline) and trigger_id.",
         },
       },
     },
@@ -846,7 +852,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
           },
-          responseExtractor: pageExtract,
+          responseExtractor: pipelineScopedListExtract,
           description: "List input sets for a pipeline",
         },
         get: {

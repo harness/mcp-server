@@ -5,6 +5,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { Registry } from "../../src/registry/index.js";
+import { pageExtract } from "../../src/registry/extractors.js";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 
@@ -124,6 +125,31 @@ describe("Coding standards — registry metadata", () => {
     }
 
     expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("child list resources with parent deep-link placeholder do not use bare pageExtract", () => {
+    const violations: string[] = [];
+
+    for (const resourceType of registry.getAllResourceTypes()) {
+      const def = registry.getResource(resourceType);
+      const listSpec = def.operations.list;
+      if (!listSpec || !def.deepLinkTemplate) continue;
+      if (def.identifierFields.length < 2) continue;
+
+      const parentField = def.identifierFields[0]!;
+      if (!def.deepLinkTemplate.includes(`{${parentField}}`)) continue;
+
+      if (listSpec.responseExtractor === pageExtract) {
+        violations.push(
+          `${resourceType}: list uses pageExtract but deepLinkTemplate needs {${parentField}} — use parentScopedListExtract`,
+        );
+      }
+    }
+
+    expect(
+      violations,
+      `Parent-scoped list deep links will use child identifier:\n${violations.join("\n")}`,
+    ).toEqual([]);
   });
 });
 
