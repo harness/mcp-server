@@ -44,10 +44,17 @@ function findResource(type: string): ResourceDefinition {
   return res;
 }
 
-function getOp(type: string, op: "list" | "get"): EndpointSpec {
+function getOp(type: string, op: "list" | "get" | "create"): EndpointSpec {
   const res = findResource(type);
   const spec = res.operations[op];
   if (!spec) throw new Error(`Operation "${op}" not found on "${type}"`);
+  return spec;
+}
+
+function getExecuteAction(type: string, action: string): EndpointSpec & { actionDescription: string } {
+  const res = findResource(type);
+  const spec = res.executeActions?.[action];
+  if (!spec) throw new Error(`Execute action "${action}" not found on "${type}"`);
   return spec;
 }
 
@@ -62,14 +69,19 @@ describe("aitToolset structure", () => {
     expect(aitToolset.optIn).toBe(true);
   });
 
-  it("registers all 5 resource types", () => {
+  it("registers 3 noun-based resource types", () => {
     const types = aitToolset.resources.map((r) => r.resourceType);
-    expect(types).toContain("ait_apps_for_org");
-    expect(types).toContain("ait_test_environments");
-    expect(types).toContain("ait_tests_list");
-    expect(types).toContain("ait_create_test_using_ai");
-    expect(types).toContain("ait_run_test");
-    expect(types).toHaveLength(5);
+    expect(types).toContain("ait_app");
+    expect(types).toContain("ait_test_environment");
+    expect(types).toContain("ait_test");
+    expect(types).toHaveLength(3);
+  });
+
+  it("ait_test exposes list, create, and execute.run", () => {
+    const testResource = findResource("ait_test");
+    expect(testResource.operations.list).toBeDefined();
+    expect(testResource.operations.create).toBeDefined();
+    expect(testResource.executeActions?.run).toBeDefined();
   });
 
   it("all resources are account-scoped", () => {
@@ -95,21 +107,19 @@ describe("aitToolset structure", () => {
 describe("ait opt-in with Registry", () => {
   it("is NOT present when HARNESS_TOOLSETS is unset (all defaults)", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: undefined }));
-    expect(registry.getAllResourceTypes()).not.toContain("ait_apps_for_org");
+    expect(registry.getAllResourceTypes()).not.toContain("ait_app");
   });
 
   it("IS present when explicitly enabled with HARNESS_TOOLSETS=+ait", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ait" }));
-    expect(registry.getAllResourceTypes()).toContain("ait_apps_for_org");
-    expect(registry.getAllResourceTypes()).toContain("ait_test_environments");
-    expect(registry.getAllResourceTypes()).toContain("ait_tests_list");
-    expect(registry.getAllResourceTypes()).toContain("ait_create_test_using_ai");
-    expect(registry.getAllResourceTypes()).toContain("ait_run_test");
+    expect(registry.getAllResourceTypes()).toContain("ait_app");
+    expect(registry.getAllResourceTypes()).toContain("ait_test_environment");
+    expect(registry.getAllResourceTypes()).toContain("ait_test");
   });
 
   it("IS present when listed explicitly in HARNESS_TOOLSETS=ait", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
-    expect(registry.getAllResourceTypes()).toContain("ait_apps_for_org");
+    expect(registry.getAllResourceTypes()).toContain("ait_app");
   });
 });
 
@@ -117,7 +127,7 @@ describe("ait opt-in with Registry", () => {
 
 describe("aitAppsForOrgExtract", () => {
   function extract(raw: unknown) {
-    return getOp("ait_apps_for_org", "list").responseExtractor!(raw);
+    return getOp("ait_app", "list").responseExtractor!(raw);
   }
 
   it("normalizes camelCase app fields to snake_case", () => {
@@ -169,7 +179,7 @@ describe("aitAppsForOrgExtract", () => {
 
 describe("aitTestEnvironmentsExtract", () => {
   function extract(raw: unknown) {
-    return getOp("ait_test_environments", "list").responseExtractor!(raw);
+    return getOp("ait_test_environment", "list").responseExtractor!(raw);
   }
 
   it("normalizes camelCase env fields to snake_case", () => {
@@ -215,7 +225,7 @@ describe("aitTestEnvironmentsExtract", () => {
 
 describe("aitTestsListExtract", () => {
   function extract(raw: unknown) {
-    return getOp("ait_tests_list", "list").responseExtractor!(raw);
+    return getOp("ait_test", "list").responseExtractor!(raw);
   }
 
   it("extracts paginated test list with key fields", () => {
@@ -284,40 +294,50 @@ describe("aitTestsListExtract", () => {
 // ─── API paths ───────────────────────────────────────────────────────────────
 
 describe("endpoint paths", () => {
-  it("ait_apps_for_org list uses /ait/api/v1/application", () => {
-    expect(getOp("ait_apps_for_org", "list").path).toBe("/ait/api/v1/application");
+  it("ait_app list uses /ait/api/v1/application", () => {
+    expect(getOp("ait_app", "list").path).toBe("/ait/api/v1/application");
   });
 
-  it("ait_test_environments list uses /ait/api/v1/testEnvironments", () => {
-    expect(getOp("ait_test_environments", "list").path).toBe("/ait/api/v1/testEnvironments");
+  it("ait_test_environment list uses /ait/api/v1/testEnvironments", () => {
+    expect(getOp("ait_test_environment", "list").path).toBe("/ait/api/v1/testEnvironments");
   });
 
-  it("ait_tests_list list uses /ait/api/v1/testNew", () => {
-    expect(getOp("ait_tests_list", "list").path).toBe("/ait/api/v1/testNew");
+  it("ait_test list uses /ait/api/v1/testNew", () => {
+    expect(getOp("ait_test", "list").path).toBe("/ait/api/v1/testNew");
+  });
+
+  it("ait_test create uses copilot import endpoint", () => {
+    expect(getOp("ait_test", "create").path).toBe("/ait/api/v1/testNew/copilotTest/import");
+  });
+
+  it("ait_test run uses camelCase path placeholders", () => {
+    const runAction = getExecuteAction("ait_test", "run");
+    expect(runAction.path).toBe("/ait/api/v1/testNew/{testId}/version/{testVersionId}/run");
+    expect(runAction.pathParams).toEqual({ test_id: "testId", test_version_id: "testVersionId" });
   });
 });
 
 // ─── Registry dispatch integration ─────────────────────────────────────────
 
 describe("ait registry dispatch", () => {
-  it("dispatches ait_apps_for_org list", async () => {
+  it("dispatches ait_app list", async () => {
     const mockRequest = vi.fn().mockResolvedValue([
       { appId: "abc", appName: "test-app", isDeleted: false },
     ]);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
 
-    const result = await registry.dispatch(makeClient(mockRequest), "ait_apps_for_org", "list", {});
+    const result = await registry.dispatch(makeClient(mockRequest), "ait_app", "list", {});
 
     const request = mockRequest.mock.calls[0]![0] as { path: string };
     expect(request.path).toBe("/ait/api/v1/application");
     expect((result as { items: unknown[] }).items).toHaveLength(1);
   });
 
-  it("dispatches ait_tests_list list with app_id filter", async () => {
+  it("dispatches ait_test list with app_id filter", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ data: [], totalItems: 0 });
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
 
-    await registry.dispatch(makeClient(mockRequest), "ait_tests_list", "list", {
+    await registry.dispatch(makeClient(mockRequest), "ait_test", "list", {
       app_id: "abc-123",
     });
 
@@ -326,17 +346,48 @@ describe("ait registry dispatch", () => {
     expect(request.params.appId).toBe("abc-123");
   });
 
-  it("dispatches ait_test_environments list with app_id filter", async () => {
+  it("dispatches ait_test_environment list with app_id filter", async () => {
     const mockRequest = vi.fn().mockResolvedValue([]);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
 
-    await registry.dispatch(makeClient(mockRequest), "ait_test_environments", "list", {
+    await registry.dispatch(makeClient(mockRequest), "ait_test_environment", "list", {
       app_id: "abc-123",
     });
 
     const request = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
     expect(request.path).toBe("/ait/api/v1/testEnvironments");
     expect(request.params.appId).toBe("abc-123");
+  });
+
+  it("dispatches ait_test run with camelCase path", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      id: 42,
+      app_id: "app-1",
+      test_id: 80,
+      test_version_id: 91,
+      test_environment_id: "env-1",
+      status: "RUNNING",
+      test_session_id: null,
+      start_epoch: null,
+      error: null,
+    });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
+
+    await registry.dispatchExecute(makeClient(mockRequest), "ait_test", "run", {
+      test_id: 80,
+      test_version_id: 91,
+      body: {
+        appId: "app-1",
+        environmentId: "env-1",
+      },
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as { path: string; body: Record<string, unknown> };
+    expect(request.path).toBe("/ait/api/v1/testNew/80/version/91/run");
+    expect(request.body).toMatchObject({
+      appId: "app-1",
+      environmentId: "env-1",
+    });
   });
 });
 

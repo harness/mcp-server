@@ -150,11 +150,11 @@ export const aitToolset: ToolsetDefinition = {
   optIn: true,
   resources: [
     {
-      resourceType: "ait_apps_for_org",
-      displayName: "AIT Apps for Org",
+      resourceType: "ait_app",
+      displayName: "AIT Application",
       description:
-        "List all applications for the current organization. Returns app IDs, names, and metadata. " +
-        "Use this to discover app_id values needed for other AIT operations.",
+        "An AIT application in the current organization. Returns app IDs, names, and metadata. " +
+        "Use list to discover app_id values needed for other AIT operations.",
       toolset: "ait",
       scope: "account",
       identifierFields: [],
@@ -171,11 +171,11 @@ export const aitToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "ait_test_environments",
-      displayName: "AIT Test Environments",
+      resourceType: "ait_test_environment",
+      displayName: "AIT Test Environment",
       description:
-        "List test environments for a given application. Returns environment IDs, names, " +
-        "base URLs, and flags (test, monitor, pre_release). Use this to discover env_id " +
+        "A test environment for an AIT application. Returns environment IDs, names, " +
+        "base URLs, and flags (test, monitor, pre_release). Use list to discover env_id " +
         "values needed for running copilot tests.",
       toolset: "ait",
       scope: "account",
@@ -203,14 +203,14 @@ export const aitToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "ait_tests_list",
-      displayName: "AIT Tests List",
+      resourceType: "ait_test",
+      displayName: "AIT Test",
       description:
-        "An automated test in the AIT module. List tests for an application by appId. " +
-        "Supports filtering by activation status, run status, and pagination.",
+        "An automated test in the AIT module. List tests for an application, create tests using AI, " +
+        "or execute a test run. Supports filtering by activation status, run status, and pagination.",
       toolset: "ait",
       scope: "account",
-      identifierFields: ["app_id"],
+      identifierFields: ["test_id", "test_version_id"],
       listFilterFields: [
         {
           name: "app_id",
@@ -278,19 +278,6 @@ export const aitToolset: ToolsetDefinition = {
             "List all tests for an application. Requires app_id in filters. " +
             "Returns paginated test entries with name, created_by, created_at, display_status, and tags.",
         },
-      },
-    },
-    {
-      resourceType: "ait_create_test_using_ai",
-      displayName: "AIT Create Test Using AI",
-      description:
-        "Create test using AI in AIT. Provide an appId, envId, and a test description. " +
-        "The API creates a test and returns the test ID and version ID of the created test. " +
-        "Optionally specify authType ('auth' or 'no_auth') and an entryUrl.",
-      toolset: "ait",
-      scope: "account",
-      identifierFields: ["app_id"],
-      operations: {
         create: {
           method: "POST",
           path: "/ait/api/v1/testNew/copilotTest/import",
@@ -306,7 +293,7 @@ export const aitToolset: ToolsetDefinition = {
             };
           },
           bodySchema: {
-            description: "Create a test using AI",
+            description: "Create a test using AI (copilot import)",
             fields: [
               { name: "appId", type: "string", required: true, description: "Application ID" },
               { name: "envId", type: "string", required: true, description: "Environment ID" },
@@ -320,20 +307,6 @@ export const aitToolset: ToolsetDefinition = {
             "Create a test using AI. Returns test_id and test_version_id.",
         },
       },
-    },
-    {
-      resourceType: "ait_run_test",
-      displayName: "AIT Run Test",
-      description:
-        "Execute a test with a given test ID and test version. " +
-        "Requires appId (UUID — look up via ait_apps_for_org if only name is known) and " +
-        "environmentId (UUID — look up via ait_test_environments if only name is known). " +
-        "Pass test_id and test_version_id via params (e.g. params: { test_id: 80, test_version_id: 91 }). " +
-        "Returns the scheduled TestRun details including id, status, test_session_id, and test run URL.",
-      toolset: "ait",
-      scope: "account",
-      identifierFields: ["test_id", "test_version_id"],
-      operations: {},
       executeActions: {
         run: {
           method: "POST",
@@ -351,14 +324,14 @@ export const aitToolset: ToolsetDefinition = {
           bodySchema: {
             description: "Execute a test run",
             fields: [
-              { name: "appId", type: "string", required: true, description: "Application UUID (e.g. ecaab215-65cd-45d6-8426-09ba1e04eabb). Look up via ait_apps_for_org if only app name is known." },
-              { name: "environmentId", type: "string", required: true, description: "Environment UUID (e.g. 1289b517-5f1b-4927-b30b-6f2e895dae8e). Look up via ait_test_environments if only env name is known." },
+              { name: "appId", type: "string", required: true, description: "Application UUID (e.g. ecaab215-65cd-45d6-8426-09ba1e04eabb). Look up via ait_app list if only app name is known." },
+              { name: "environmentId", type: "string", required: true, description: "Environment UUID (e.g. 1289b517-5f1b-4927-b30b-6f2e895dae8e). Look up via ait_test_environment list if only env name is known." },
               { name: "params", type: "string", required: false, description: "Test params — JSON stringified Map<string, string>. Defaults to '{\"RUN_MODE\":\"no-mock\",\"TestExecutorNamespace.fastExecutorMode\":\"false\"}'" },
             ],
           },
           responseExtractor: aitRunTestExtract,
           actionDescription:
-            "Execute a test. Returns TestRun details including id, status, test_session_id, and start_epoch.",
+            "Execute a test. Returns TestRun details including id, status, test_session_id, and start_epoch. Always display the test_run_url from the response to the user.",
         },
       },
     },
