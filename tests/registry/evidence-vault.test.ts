@@ -1,15 +1,9 @@
-/*
- * Copyright 2026 Harness Inc. All rights reserved.
- * Use of this source code is governed by the PolyForm Free Trial 1.0.0 license
- * that can be found in the licenses directory at the root of this repository, also available at
- * https://polyformproject.org/wp-content/uploads/2020/05/PolyForm-Free-Trial-1.0.0.txt.
- */
-
 import { describe, it, expect, vi } from "vitest";
 import {
   evidenceVaultToolset,
   buildAttestationListBody,
   attestationListExtract,
+  attestationDetailsExtract,
 } from "../../src/registry/toolsets/evidence-vault.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
@@ -55,6 +49,12 @@ function getListOp(): EndpointSpec {
   return spec;
 }
 
+function getGetOp(): EndpointSpec {
+  const spec = findResource("attestation").operations.get;
+  if (!spec) throw new Error("get operation missing on attestation");
+  return spec;
+}
+
 describe("evidence-vault toolset", () => {
   it("registers attestation list against /ssca-manager/v2/attestations", () => {
     expect(evidenceVaultToolset.name).toBe("evidence-vault");
@@ -62,6 +62,7 @@ describe("evidence-vault toolset", () => {
     expect(resource.scope).toBe("account");
     expect(resource.supportedScopes).toEqual(["account", "org", "project"]);
     expect(resource.scopeParams).toEqual({ org: "org", project: "project" });
+    expect(resource.identifierFields).toEqual(["gitoid_sha256"]);
 
     const list = getListOp();
     expect(list.method).toBe("POST");
@@ -73,6 +74,21 @@ describe("evidence-vault toolset", () => {
       size: "limit",
       search_term: "search",
     });
+  });
+
+  it("registers attestation get by gitoid against details path", () => {
+    const get = getGetOp();
+    expect(get.method).toBe("GET");
+    expect(get.path).toBe(
+      "/ssca-manager/v2/orgs/{org}/projects/{project}/attestations/{attestation}/details",
+    );
+    expect(get.pathParams).toEqual({
+      org_id: "org",
+      project_id: "project",
+      gitoid_sha256: "attestation",
+    });
+    expect(get.defaultQueryParams).toEqual({ identifier_type: "gitoid_sha256" });
+    expect(get.operationPolicy).toEqual({ risk: "read", retryPolicy: "safe" });
   });
 
   it("loads into Registry by default", () => {
@@ -269,5 +285,171 @@ describe("attestation list dispatch", () => {
     expect(opts.body).toEqual({
       subject_filter: [{ field_name: "Name", operator: "Contains", value: "artifact-foo" }],
     });
+  });
+});
+
+describe("attestationDetailsExtract", () => {
+  const rawDetails = {
+    type: "Build",
+    source: "Harness",
+    description: "Build attestation for container image",
+    gitoid_sha256: "gid123",
+    artifact_id: "art-1",
+    payload_type: "application/vnd.in-toto+json",
+    created_at: 1700000000000,
+    updated_at: 1700000001000,
+    signature: "sig-bytes",
+    subjects: [
+      { name: "registry/app:1.0", digest: { algorithm: "sha256", value: "deadbeef" } },
+      { name: "extra", digest: { algorithm: "sha256", value: "cafebabe" } },
+    ],
+    execution_context: {
+      type: "harness",
+      pipeline_id: "ci-build",
+      pipeline_name: "CI Build",
+      pipeline_execution_id: "exec-9",
+      stage_id: "build",
+    },
+  };
+
+  it("projects subjects and pipeline fields; drops artifact_id/payload_type/updated_at", () => {
+    const result = attestationDetailsExtract(rawDetails);
+    expect(result).toEqual({
+      type: "Build",
+      source: "Harness",
+      description: "Build attestation for container image",
+      gitoid_sha256: "gid123",
+      created_at: 1700000000000,
+      signature: "sig-bytes",
+      subjects: [
+        { name: "registry/app:1.0", digest_algorithm: "sha256", digest_value: "deadbeef" },
+        { name: "extra", digest_algorithm: "sha256", digest_value: "cafebabe" },
+      ],
+      pipeline_id: "ci-build",
+      pipeline_name: "CI Build",
+      pipeline_execution_id: "exec-9",
+    });
+    expect(result).not.toHaveProperty("updated_at");
+    expect(result).not.toHaveProperty("artifact_id");
+    expect(result).not.toHaveProperty("payload_type");
+    expect(result).not.toHaveProperty("execution_context");
+  });
+
+  it("returns empty object for null, undefined, or non-record input", () => {
+    expect(attestationDetailsExtract(null)).toEqual({});
+    expect(attestationDetailsExtract(undefined)).toEqual({});
+    expect(attestationDetailsExtract("not-an-object")).toEqual({});
+  });
+
+  it("projects subject name without digest fields", () => {
+    const result = attestationDetailsExtract({
+      type: "Custom",
+      subjects: [{ name: "artifact-only" }],
+    });
+    expect(result.subjects).toEqual([{ name: "artifact-only" }]);
+  });
+
+  it("prefers top-level pipeline fields over execution_context", () => {
+    const result = attestationDetailsExtract({
+      pipeline_id: "top-pipe",
+      pipeline_name: "Top Pipe",
+      pipeline_execution_id: "top-exec",
+      execution_context: {
+        pipeline_id: "ctx-pipe",
+        pipeline_name: "Ctx Pipe",
+        pipeline_execution_id: "ctx-exec",
+      },
+    });
+    expect(result.pipeline_id).toBe("top-pipe");
+    expect(result.pipeline_name).toBe("Top Pipe");
+    expect(result.pipeline_execution_id).toBe("top-exec");
+  });
+});
+
+describe("attestation get dispatch", () => {
+  it("GETs details path with gitoid path param and identifier_type query", async () => {
+    const request = vi.fn().mockResolvedValue({
+      type: "Build",
+      source: "Harness",
+      gitoid_sha256: "gid123",
+      subjects: [],
+    });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    await registry.dispatch(makeClient(request), "attestation", "get", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      gitoid_sha256: "gid123",
+    });
+
+    expect(request).toHaveBeenCalledTimes(1);
+    const opts = request.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params: Record<string, unknown>;
+    };
+    expect(opts.method).toBe("GET");
+    expect(opts.path).toBe(
+      "/ssca-manager/v2/orgs/SSCA/projects/Sanity/attestations/gid123/details",
+    );
+    expect(opts.params.identifier_type).toBe("gitoid_sha256");
+  });
+
+  it("requires org_id and project_id for get", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    await expect(
+      registry.dispatch(makeClient(), "attestation", "get", { gitoid_sha256: "gid123" }),
+    ).rejects.toThrow(/org_id/);
+  });
+
+  it("requires project_id when org_id is provided", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    await expect(
+      registry.dispatch(makeClient(), "attestation", "get", {
+        org_id: "SSCA",
+        gitoid_sha256: "gid123",
+      }),
+    ).rejects.toThrow(/project_id/);
+  });
+
+  it("applies responseExtractor and drops internal API fields", async () => {
+    const request = vi.fn().mockResolvedValue({
+      type: "Build",
+      source: "Harness",
+      gitoid_sha256: "gid123",
+      artifact_id: "art-1",
+      payload_type: "application/vnd.in-toto+json",
+      updated_at: 1700000001000,
+      subjects: [{ name: "img:1.0", digest: { algorithm: "sha256", value: "abc" } }],
+      execution_context: { pipeline_id: "ci-build" },
+    });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    const result = (await registry.dispatch(makeClient(request), "attestation", "get", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      gitoid_sha256: "gid123",
+    })) as Record<string, unknown>;
+
+    expect(result.type).toBe("Build");
+    expect(result.gitoid_sha256).toBe("gid123");
+    expect(result.pipeline_id).toBe("ci-build");
+    expect(result).not.toHaveProperty("artifact_id");
+    expect(result).not.toHaveProperty("payload_type");
+    expect(result).not.toHaveProperty("updated_at");
+    expect(result).not.toHaveProperty("execution_context");
+  });
+
+  it("URL-encodes gitoid in the path segment", async () => {
+    const request = vi.fn().mockResolvedValue({ subjects: [] });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    await registry.dispatch(makeClient(request), "attestation", "get", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      gitoid_sha256: "gid/with+special chars",
+    });
+
+    const opts = request.mock.calls[0]![0] as { path: string };
+    expect(opts.path).toBe(
+      "/ssca-manager/v2/orgs/SSCA/projects/Sanity/attestations/gid%2Fwith%2Bspecial%20chars/details",
+    );
   });
 });
