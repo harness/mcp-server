@@ -217,6 +217,10 @@ export const aitToolset: ToolsetDefinition = {
       toolset: "ait",
       scope: "account",
       identifierFields: ["test_id", "test_version_id"],
+      executeHint:
+        "After harness_execute(resource_type='ait_test', action='run', ...), share the test run overview URL with the user: " +
+        "/ait/{app_id}/test/{test_id}/version/{test_version_id}/test-run/{id}?tab=overview " +
+        "(substitute ids from the run response; prefix with the Harness base URL for the session).",
       listFilterFields: [
         {
           name: "app_id",
@@ -343,7 +347,8 @@ export const aitToolset: ToolsetDefinition = {
           },
           responseExtractor: aitTestRunExtract,
           actionDescription:
-            "Execute a test. Returns TestRun details including id, status, and error.",
+            "Execute a test run. Returns id, app_id, test_id, test_version_id, status, and error. " +
+            "Share the test run overview URL with the user (see executeHint on this resource).",
         },
       },
     },

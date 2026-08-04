@@ -77,6 +77,12 @@ describe("aitToolset structure", () => {
     expect(res.executeActions?.run).toBeDefined();
   });
 
+  it("ait_test documents test run URL guidance in executeHint and run actionDescription", () => {
+    const res = findResource("ait_test");
+    expect(res.executeHint).toContain("test-run/{id}");
+    expect(res.executeActions?.run.actionDescription).toContain("executeHint");
+  });
+
   it("all resources are account-scoped", () => {
     for (const resource of aitToolset.resources) {
       expect(resource.scope, `${resource.resourceType} should be account-scoped`).toBe("account");
