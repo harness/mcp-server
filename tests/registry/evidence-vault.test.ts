@@ -141,6 +141,34 @@ describe("buildAttestationListBody", () => {
     const scopes = { myOrg: ["projA"] };
     expect(buildAttestationListBody({ scopes })).toEqual({ scopes });
   });
+
+  it("wraps scalar types/sources to arrays and omits null/empty filters", () => {
+    expect(buildAttestationListBody({ types: "Security", sources: ["GithubActions"] })).toEqual({
+      types: ["Security"],
+      sources: ["GithubActions"],
+    });
+    expect(buildAttestationListBody({ types: null, sources: "" })).toEqual({});
+    expect(buildAttestationListBody({ types: ["Build", "Deploy"] })).toEqual({
+      types: ["Build", "Deploy"],
+    });
+  });
+
+  it("parses string epoch ms for start_time/end_time and ignores invalid values", () => {
+    expect(buildAttestationListBody({ start_time: "1700000000000", end_time: "not-a-number" })).toEqual({
+      start_time: 1700000000000,
+    });
+    expect(buildAttestationListBody({ start_time: NaN, end_time: "" })).toEqual({});
+  });
+
+  it("deletes whitespace-only search_term and ignores non-string search_term", () => {
+    const blank = { search_term: "   " };
+    buildAttestationListBody(blank);
+    expect(blank).not.toHaveProperty("search_term");
+
+    const numeric = { search_term: 42 };
+    buildAttestationListBody(numeric);
+    expect(numeric.search_term).toBe(42);
+  });
 });
 
 describe("attestationListExtract", () => {
@@ -201,6 +229,66 @@ describe("attestationListExtract", () => {
     expect(result.items).toHaveLength(2);
     expect((result.items[0] as Record<string, unknown>).id).toBe("att-1");
     expect(result._display_hint).toMatch(/gitoid_sha256/);
+  });
+
+  it("returns empty items for non-array API responses", () => {
+    expect(attestationListExtract(null)).toEqual({
+      items: [],
+      total: 0,
+      _display_hint: expect.stringMatching(/gitoid_sha256/),
+    });
+    expect(attestationListExtract({ unexpected: "wrapper" })).toEqual({
+      items: [],
+      total: 0,
+      _display_hint: expect.stringMatching(/gitoid_sha256/),
+    });
+  });
+
+  it("projects non-record rows to empty objects", () => {
+    const result = attestationListExtract(["bad-row", null, 42]);
+    expect(result.items).toEqual([{}, {}, {}]);
+    expect(result.total).toBe(3);
+  });
+
+  it("prefers top-level subject and pipeline fields over nested fallbacks", () => {
+    const result = attestationListExtract([
+      {
+        id: "att-top",
+        subject_name: "top-level-name",
+        subject_digest: "top-level-digest",
+        pipeline_id: "top-pipe",
+        pipeline_name: "Top Pipeline",
+        pipeline_execution_id: "top-exec",
+        subject: {
+          name: "nested-name",
+          digest: { value: "nested-digest" },
+          sha256: "nested-sha256",
+        },
+        execution_context: {
+          pipeline_id: "nested-pipe",
+          pipeline_name: "Nested Pipeline",
+          pipeline_execution_id: "nested-exec",
+        },
+      },
+    ]);
+    expect(result.items[0]).toEqual({
+      id: "att-top",
+      subject_name: "top-level-name",
+      subject_digest: "top-level-digest",
+      pipeline_id: "top-pipe",
+      pipeline_name: "Top Pipeline",
+      pipeline_execution_id: "top-exec",
+    });
+  });
+
+  it("falls back to subject.sha256 when digest.value is absent", () => {
+    const result = attestationListExtract([
+      {
+        id: "att-sha",
+        subject: { name: "img", sha256: "sha-only" },
+      },
+    ]);
+    expect((result.items[0] as Record<string, unknown>).subject_digest).toBe("sha-only");
   });
 
   it("is idempotent under compactItem re-application (harness_list default compact)", () => {
@@ -269,5 +357,55 @@ describe("attestation list dispatch", () => {
     expect(opts.body).toEqual({
       subject_filter: [{ field_name: "Name", operator: "Contains", value: "artifact-foo" }],
     });
+  });
+
+  it("injects org query param at org scope without project", async () => {
+    const request = vi.fn().mockResolvedValue([]);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    await registry.dispatch(makeClient(request), "attestation", "list", {
+      resource_scope: "org",
+      org_id: "SSCA",
+      types: ["Build", "Security"],
+      start_time: 1000,
+    });
+
+    const opts = request.mock.calls[0]![0] as {
+      params: Record<string, unknown>;
+      body: Record<string, unknown>;
+    };
+    expect(opts.params.org).toBe("SSCA");
+    expect(opts.params.project).toBeUndefined();
+    expect(opts.body).toEqual({ types: ["Build", "Security"], start_time: 1000 });
+  });
+
+  it("applies attestationListExtract on dispatch response", async () => {
+    const raw = [
+      {
+        id: "att-dispatch",
+        gitoid_sha256: "gid-dispatch",
+        type: "Build",
+        status: "INDEXED",
+        updated_at: 1,
+        subject: { name: "app:1.0", digest: { value: "abc" } },
+      },
+    ];
+    const request = vi.fn().mockResolvedValue(raw);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    const result = await registry.dispatch(makeClient(request), "attestation", "list", {
+      resource_scope: "account",
+    });
+
+    expect(result).toMatchObject({
+      total: 1,
+      _display_hint: expect.stringMatching(/gitoid_sha256/),
+    });
+    expect((result as { items: Record<string, unknown>[] }).items[0]).toEqual({
+      id: "att-dispatch",
+      type: "Build",
+      gitoid_sha256: "gid-dispatch",
+      subject_name: "app:1.0",
+      subject_digest: "abc",
+    });
+    expect((result as { items: Record<string, unknown>[] }).items[0]).not.toHaveProperty("status");
   });
 });
