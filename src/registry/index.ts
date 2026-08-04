@@ -32,6 +32,7 @@ import { chaosToolset } from "./toolsets/chaos.js";
 import { ccmToolset } from "./toolsets/ccm.js";
 import { seiToolset } from "./toolsets/sei.js";
 import { scsToolset } from "./toolsets/scs.js";
+import { evidenceVaultToolset } from "./toolsets/evidence-vault.js";
 import { stoToolset } from "./toolsets/sto.js";
 import { dbopsToolset } from "./toolsets/dbops.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
@@ -146,6 +147,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   ccmToolset,
   seiToolset,
   scsToolset,
+  evidenceVaultToolset,
   stoToolset,
   dbopsToolset,
   accessControlToolset,
