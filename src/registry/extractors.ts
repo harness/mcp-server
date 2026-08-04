@@ -855,3 +855,68 @@ export const fmeGetExtract = (raw: unknown): unknown => {
   }
   return raw;
 };
+
+/** Slim Evidence Vault attestation list row — drops status, updated_at, raw subjects/execution_context. */
+export function projectAttestationListItem(raw: unknown): Record<string, unknown> {
+  if (!isRecord(raw)) return {};
+  const subject = isRecord(raw.subject) ? raw.subject : undefined;
+  const digest = subject && isRecord(subject.digest) ? subject.digest : undefined;
+  const exec = isRecord(raw.execution_context) ? raw.execution_context : undefined;
+
+  const out: Record<string, unknown> = {};
+  if (raw.id !== undefined) out.id = raw.id;
+  if (raw.type !== undefined) out.type = raw.type;
+  if (raw.source !== undefined) out.source = raw.source;
+  if (typeof raw.description === "string" && raw.description) out.description = raw.description;
+  if (typeof raw.created_at === "number") out.created_at = raw.created_at;
+  if (typeof raw.org === "string" && raw.org) out.org = raw.org;
+  if (typeof raw.project === "string" && raw.project) out.project = raw.project;
+
+  const subjectName =
+    (typeof raw.subject_name === "string" && raw.subject_name) ||
+    (subject && typeof subject.name === "string" ? subject.name : undefined);
+  if (subjectName) out.subject_name = subjectName;
+
+  const subjectDigest =
+    (typeof raw.subject_digest === "string" && raw.subject_digest) ||
+    (digest && typeof digest.value === "string" ? digest.value : undefined) ||
+    (subject && typeof subject.sha256 === "string" ? subject.sha256 : undefined);
+  if (subjectDigest) out.subject_digest = subjectDigest;
+
+  if (typeof raw.additional_subject_count === "number") {
+    out.additional_subject_count = raw.additional_subject_count;
+  }
+  if (typeof raw.gitoid_sha256 === "string" && raw.gitoid_sha256) out.gitoid_sha256 = raw.gitoid_sha256;
+
+  const pipelineId =
+    (typeof raw.pipeline_id === "string" && raw.pipeline_id) ||
+    (exec && typeof exec.pipeline_id === "string" ? exec.pipeline_id : undefined);
+  if (pipelineId) out.pipeline_id = pipelineId;
+  const pipelineName =
+    (typeof raw.pipeline_name === "string" && raw.pipeline_name) ||
+    (exec && typeof exec.pipeline_name === "string" ? exec.pipeline_name : undefined);
+  if (pipelineName) out.pipeline_name = pipelineName;
+  const pipelineExecutionId =
+    (typeof raw.pipeline_execution_id === "string" && raw.pipeline_execution_id) ||
+    (exec && typeof exec.pipeline_execution_id === "string" ? exec.pipeline_execution_id : undefined);
+  if (pipelineExecutionId) out.pipeline_execution_id = pipelineExecutionId;
+
+  return out;
+}
+
+/** Bare attestation array → `{ items, total }` with slim rows (page-length total). */
+export function attestationListExtract(raw: unknown): {
+  items: unknown[];
+  total: number;
+  _display_hint: string;
+} {
+  const items = (Array.isArray(raw) ? raw : []).map(projectAttestationListItem);
+  return {
+    items,
+    total: items.length,
+    _display_hint:
+      "When showing attestations in a table, ALWAYS include gitoid_sha256 as a column "
+      + "(plus type, source, org, project, created_at, description; subject_name when present). "
+      + "Never omit gitoid_sha256.",
+  };
+}
