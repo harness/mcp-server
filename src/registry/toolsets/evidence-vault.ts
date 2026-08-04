@@ -132,6 +132,46 @@ export function attestationListExtract(raw: unknown): {
   };
 }
 
+function projectAttestationSubject(raw: unknown): Record<string, unknown> {
+  if (!isRecord(raw)) return {};
+  const out: Record<string, unknown> = {};
+  if (asString(raw.name)) out.name = raw.name;
+  const digest = asRecord(raw.digest);
+  if (!digest) return out;
+  const algorithm = asString(digest.algorithm);
+  const value = asString(digest.value);
+  if (algorithm) out.digest_algorithm = algorithm;
+  if (value) out.digest_value = value;
+  return out;
+}
+
+/** Slim details — all subjects + signature; pipeline flatten like list; drops artifact_id/payload_type/updated_at. */
+export function attestationDetailsExtract(raw: unknown): Record<string, unknown> {
+  if (!isRecord(raw)) return {};
+  const exec = asRecord(raw.execution_context);
+
+  const out: Record<string, unknown> = {};
+  if (raw.type !== undefined) out.type = raw.type;
+  if (raw.source !== undefined) out.source = raw.source;
+  if (asString(raw.description)) out.description = raw.description;
+  if (asString(raw.gitoid_sha256)) out.gitoid_sha256 = raw.gitoid_sha256;
+  if (asNumber(raw.created_at) !== undefined) out.created_at = raw.created_at;
+  if (asString(raw.signature)) out.signature = raw.signature;
+
+  const subjectsRaw = Array.isArray(raw.subjects) ? raw.subjects : [];
+  out.subjects = subjectsRaw.map(projectAttestationSubject);
+
+  const pipelineId = asString(raw.pipeline_id) ?? (exec ? asString(exec.pipeline_id) : undefined);
+  if (pipelineId) out.pipeline_id = pipelineId;
+  const pipelineName = asString(raw.pipeline_name) ?? (exec ? asString(exec.pipeline_name) : undefined);
+  if (pipelineName) out.pipeline_name = pipelineName;
+  const pipelineExecutionId =
+    asString(raw.pipeline_execution_id) ?? (exec ? asString(exec.pipeline_execution_id) : undefined);
+  if (pipelineExecutionId) out.pipeline_execution_id = pipelineExecutionId;
+
+  return out;
+}
+
 export const evidenceVaultToolset: ToolsetDefinition = {
   name: "evidence-vault",
   displayName: "Evidence Vault",
@@ -143,11 +183,12 @@ export const evidenceVaultToolset: ToolsetDefinition = {
       resourceType: "attestation",
       displayName: "Attestation",
       description:
-        "Evidence Vault attestation (in-toto evidence). List only — retain `gitoid_sha256` for follow-ups. "
-        + "When listing, always show gitoid_sha256 in any table. "
+        "Evidence Vault attestation (in-toto evidence). "
+        + "List: always show gitoid_sha256 in tables; retain gitoid_sha256 + org + project for get. "
+        + "Get: harness_get(resource_id=<gitoid_sha256>, org_id, project_id) — lookup by gitoid only. "
         + "Singular free-text (pipeline, artifact alone, gitoid) → search_term; additional Name → filters.subject_name; "
         + "subject digest → filters.subject_digest (not gitoid). Use item `description` to explain a single attestation. "
-        + "Default scope is account; pass resource_scope org/project as needed. Requires SCS_EVIDENCE_VAULT.",
+        + "Default list scope is account; get requires org_id and project_id. Requires SCS_EVIDENCE_VAULT.",
       searchAliases: [
         "evidence vault",
         "attestation",
@@ -160,7 +201,7 @@ export const evidenceVaultToolset: ToolsetDefinition = {
       scope: "account",
       supportedScopes: ["account", "org", "project"],
       scopeParams: { org: "org", project: "project" },
-      identifierFields: ["attestation_id"],
+      identifierFields: ["gitoid_sha256"],
       listFilterFields: [
         { name: "search_term", description: "Singular free-text filter (pipeline, artifact, gitoid, keyword) → query search" },
         { name: "subject_name", description: "Additional Name filter → subject_filter Name/Contains" },
@@ -197,6 +238,19 @@ export const evidenceVaultToolset: ToolsetDefinition = {
           bodyBuilder: buildAttestationListBody,
           responseExtractor: attestationListExtract,
           description: "List attestations (default sort created_at DESC)",
+        },
+        get: {
+          method: "GET",
+          path: `${SCS}/v2/orgs/{org}/projects/{project}/attestations/{attestation}/details`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            gitoid_sha256: "attestation",
+          },
+          defaultQueryParams: { identifier_type: "gitoid_sha256" },
+          responseExtractor: attestationDetailsExtract,
+          description: "Get attestation details by gitoid_sha256",
         },
       },
     },
