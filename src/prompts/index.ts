@@ -51,6 +51,9 @@ import { registerAddMetricPrompt } from "./add-metric.js";
 import { registerRunEvaluationPrompt } from "./run-evaluation.js";
 import { registerCreateEvalSuitePrompt } from "./create-eval-suite.js";
 
+// AIT Knowledge Base
+import { registerExploreKnowledgeBasePrompt } from "./explore-knowledge-base.js";
+
 export function registerAllPrompts(server: McpServer): void {
   // Existing prompts
   registerDebugPipelinePrompt(server);
@@ -103,4 +106,7 @@ export function registerAllPrompts(server: McpServer): void {
   registerAddMetricPrompt(server);
   registerRunEvaluationPrompt(server);
   registerCreateEvalSuitePrompt(server);
+
+  // AIT Knowledge Base
+  registerExploreKnowledgeBasePrompt(server);
 }

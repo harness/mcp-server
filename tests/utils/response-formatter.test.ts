@@ -36,6 +36,18 @@ describe("jsonResult", () => {
     });
   });
 
+  it("appends extra content items after the JSON text block", () => {
+    const result = jsonResult(
+      { ok: true },
+      [{ type: "image", data: "abc", mimeType: "image/png" }],
+    );
+    expect(result.content).toEqual([
+      { type: "text", text: JSON.stringify({ ok: true }) },
+      { type: "image", data: "abc", mimeType: "image/png" },
+    ]);
+    expect(result.structuredContent).toEqual({ ok: true });
+  });
+
   it("handles arrays without structuredContent", () => {
     const result = jsonResult([1, 2, 3]);
     expect(result.content[0].text).toBe(JSON.stringify([1, 2, 3]));

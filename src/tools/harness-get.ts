@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
+import { jsonResultWithKbScreenshots } from "../utils/kb-screenshot-content.js";
 import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint, HarnessApiError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, coerceRecord } from "../utils/type-guards.js";
@@ -128,6 +129,11 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
               metadata: buildEntityMetadata(resourceType, identifier, String(item["name"] ?? ""), entityScope),
             }).catch(() => { /* never surface indexing errors */ });
           }
+        }
+
+        // KB screenshots: keep signed_url in JSON and attach an MCP image block when fetchable.
+        if (resourceType === "kb_page_artifact" || resourceType === "kb_crawl_page") {
+          return await jsonResultWithKbScreenshots(resourceType, result);
         }
 
         return jsonResult(result);

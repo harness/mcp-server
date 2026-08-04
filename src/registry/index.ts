@@ -776,17 +776,31 @@ export class Registry {
     // Validate required fields if bodySchema is defined.
     // When the API body is transformed into a raw array, validate the caller's
     // canonical object-shaped input body so registry behavior matches harness_describe.
+    // When a bodyBuilder rewrites field names for the wire, validate the agent payload
+    // (input.body, or top-level input fields) rather than the built body.
     // Multipart validation is enforced inside the resource bodyBuilder.
-    if (spec.bodySchema && body && typeof body === "object" && !isFormDataBody(body)) {
-      const payload = this.getBodySchemaValidationPayload(spec, input, body);
-      const missing = spec.bodySchema.fields
-        .filter(f => f.required && payload[f.name] === undefined)
-        .map(f => f.name);
-      if (missing.length > 0) {
-        throw new Error(
-          `Missing required fields for ${def.resourceType}: ${missing.join(", ")}. ` +
-          `Use harness_describe(resource_type="${def.resourceType}") to see the schema.`
-        );
+    if (spec.bodySchema) {
+      let validationTarget: unknown = body;
+      if (
+        spec.bodyBuilder &&
+        input.body != null &&
+        typeof input.body === "object" &&
+        !Array.isArray(input.body) &&
+        !isFormDataBody(input.body)
+      ) {
+        validationTarget = input.body;
+      }
+      if (validationTarget && typeof validationTarget === "object" && !isFormDataBody(validationTarget)) {
+        const payload = this.getBodySchemaValidationPayload(spec, input, validationTarget as object);
+        const missing = spec.bodySchema.fields
+          .filter(f => f.required && payload[f.name] === undefined)
+          .map(f => f.name);
+        if (missing.length > 0) {
+          throw new Error(
+            `Missing required fields for ${def.resourceType}: ${missing.join(", ")}. ` +
+            `Use harness_describe(resource_type="${def.resourceType}") to see the schema.`
+          );
+        }
       }
     }
 

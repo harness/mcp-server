@@ -5,7 +5,9 @@
  * Errors keep minimal formatting for readability in tool-call error surfaces.
  */
 
-export type ContentItem = { type: "text"; text: string };
+export type TextContentItem = { type: "text"; text: string };
+export type ImageContentItem = { type: "image"; data: string; mimeType: string };
+export type ContentItem = TextContentItem | ImageContentItem;
 
 export interface ToolResult {
   /** Required: MCP SDK's CallToolResult extends Result which has an index signature. */
@@ -57,9 +59,9 @@ export function normalizeHarnessListPayload(
   return result;
 }
 
-export function jsonResult(data: unknown): ToolResult {
+export function jsonResult(data: unknown, extraContent: ContentItem[] = []): ToolResult {
   return {
-    content: [{ type: "text", text: JSON.stringify(data) }],
+    content: [{ type: "text", text: JSON.stringify(data) }, ...extraContent],
     // MCP structuredContent must be an object; arrays and primitives are intentionally excluded.
     ...(data !== null && typeof data === "object" && !Array.isArray(data)
       ? { structuredContent: data as Record<string, unknown> }

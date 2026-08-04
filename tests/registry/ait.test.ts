@@ -200,7 +200,7 @@ describe("ait_test_environment list extractor", () => {
     const result = extract(raw) as { items: Record<string, unknown>[]; total: number };
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toEqual({
-      id: "env-1",
+      test_environment_id: "env-1",
       app_id: "app-1",
       env_name: "production",
       test: true,
@@ -215,6 +215,7 @@ describe("ait_test_environment list extractor", () => {
     const raw = [{ id: "env-1", baseUrl: null }];
     const result = extract(raw) as { items: Record<string, unknown>[] };
     expect(result.items[0]!.base_url).toBeNull();
+    expect(result.items[0]!.test_environment_id).toBe("env-1");
   });
 
   it("handles empty array", () => {
@@ -418,6 +419,18 @@ describe("ait_test create bodyBuilder", () => {
     });
   });
 
+  it("accepts test_environment_id as the preferred env field", () => {
+    const builder = getBodyBuilder();
+    const result = builder({
+      body: { app_id: "a1", test_environment_id: "e1", description: "test desc" },
+    });
+    expect(result).toEqual({
+      appId: "a1",
+      envId: "e1",
+      description: "test desc",
+    });
+  });
+
   it("accepts camelCase fields as aliases", () => {
     const builder = getBodyBuilder();
     const result = builder({ body: { appId: "a1", envId: "e1", description: "test desc" } });
@@ -438,6 +451,16 @@ describe("ait_test run bodyBuilder", () => {
   it("accepts snake_case fields and maps to camelCase wire format", () => {
     const builder = getBodyBuilder();
     const result = builder({ body: { app_id: "a1", environment_id: "e1" } });
+    expect(result).toEqual({
+      appId: "a1",
+      environmentId: "e1",
+      params: '{"RUN_MODE":"no-mock","TestExecutorNamespace.fastExecutorMode":"false"}',
+    });
+  });
+
+  it("accepts test_environment_id as the preferred env field", () => {
+    const builder = getBodyBuilder();
+    const result = builder({ body: { app_id: "a1", test_environment_id: "e1" } });
     expect(result).toEqual({
       appId: "a1",
       environmentId: "e1",
@@ -509,5 +532,125 @@ describe("ait registry dispatch", () => {
     const request = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
     expect(request.path).toBe("/ait/api/v1/testEnvironments");
     expect(request.params.appId).toBe("abc-123");
+  });
+});
+
+// ─── Knowledge base response extractors ──────────────────────────────────────
+
+describe("kb_crawl list extractor", () => {
+  function extract(raw: unknown) {
+    return getOp("kb_crawl", "list").responseExtractor!(raw);
+  }
+
+  it("maps crawl history items and next_cursor to snake_case", () => {
+    const raw = {
+      items: [
+        {
+          crawlRunId: "run-1",
+          testEnvironmentId: "env-1",
+          status: "completed",
+          pagesDiscovered: 3,
+        },
+      ],
+      nextCursor: "cursor-token",
+    };
+    const result = extract(raw) as { items: Record<string, unknown>[]; next_cursor: string; total: number };
+    expect(result.items[0]).toEqual({
+      crawl_run_id: "run-1",
+      test_environment_id: "env-1",
+      status: "completed",
+      pages_discovered: 3,
+    });
+    expect(result.next_cursor).toBe("cursor-token");
+    expect(result.total).toBe(1);
+  });
+});
+
+describe("kb_crawl get extractor", () => {
+  function extract(raw: unknown) {
+    return getOp("kb_crawl", "get").responseExtractor!(raw);
+  }
+
+  it("projects crawl run fields to snake_case", () => {
+    const result = extract({
+      crawlRunId: "run-1",
+      knowledgeSourceId: "src-1",
+      temporalWorkflowId: "wf-1",
+      pagesDiscovered: 2,
+      startedAt: "2026-01-01T00:00:00.000Z",
+    }) as Record<string, unknown>;
+    expect(result).toEqual({
+      crawl_run_id: "run-1",
+      knowledge_source_id: "src-1",
+      temporal_workflow_id: "wf-1",
+      pages_discovered: 2,
+      started_at: "2026-01-01T00:00:00.000Z",
+    });
+  });
+});
+
+describe("kb_crawl create bodyBuilder", () => {
+  function getBodyBuilder() {
+    return getOp("kb_crawl", "create").bodyBuilder!;
+  }
+
+  it("accepts snake_case fields and maps to camelCase wire format", () => {
+    const builder = getBodyBuilder();
+    const result = builder({
+      body: {
+        app_id: "app-1",
+        test_environment_id: "env-1",
+        config: { max_depth: 2, tunnel_name: "t1" },
+      },
+    });
+    expect(result).toEqual({
+      appId: "app-1",
+      testEnvironmentId: "env-1",
+      config: { maxDepth: 2, tunnelName: "t1" },
+    });
+  });
+});
+
+describe("kb_crawl_page list extractor", () => {
+  function extract(raw: unknown) {
+    return getOp("kb_crawl_page", "list").responseExtractor!(raw);
+  }
+
+  it("maps page summaries to snake_case", () => {
+    const result = extract({
+      items: [{ pageId: "p1", crawlRunId: "r1", url: "https://a", capturedAt: "2026-01-01T00:00:00.000Z" }],
+    }) as { items: Record<string, unknown>[] };
+    expect(result.items[0]).toEqual({
+      page_id: "p1",
+      crawl_run_id: "r1",
+      url: "https://a",
+      captured_at: "2026-01-01T00:00:00.000Z",
+    });
+  });
+});
+
+describe("kb_page_artifact get extractor", () => {
+  function extract(raw: unknown) {
+    return getOp("kb_page_artifact", "get").responseExtractor!(raw);
+  }
+
+  it("maps artifact fields to snake_case and drops sha256", () => {
+    const result = extract({
+      pageId: "p1",
+      crawlRunId: "r1",
+      kind: "markdown",
+      contentType: "text/plain",
+      text: "hello",
+      sha256: "deadbeef",
+      truncated: true,
+    }) as Record<string, unknown>;
+    expect(result).toEqual({
+      page_id: "p1",
+      crawl_run_id: "r1",
+      kind: "markdown",
+      content_type: "text/plain",
+      text: "hello",
+      truncated: true,
+    });
   });
 });
