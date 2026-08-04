@@ -141,6 +141,34 @@ describe("buildAttestationListBody", () => {
     const scopes = { myOrg: ["projA"] };
     expect(buildAttestationListBody({ scopes })).toEqual({ scopes });
   });
+
+  it("removes search_term when trimmed value is empty", () => {
+    const input: Record<string, unknown> = { search_term: "   " };
+    expect(buildAttestationListBody(input)).toEqual({});
+    expect(input.search_term).toBeUndefined();
+  });
+
+  it("parses start_time and end_time from numeric strings", () => {
+    expect(
+      buildAttestationListBody({ start_time: "1700000000000", end_time: "1700000001000" }),
+    ).toEqual({
+      start_time: 1700000000000,
+      end_time: 1700000001000,
+    });
+  });
+
+  it("coerces scalar types and sources into arrays", () => {
+    expect(
+      buildAttestationListBody({ types: "Build", sources: "Harness" }),
+    ).toEqual({
+      types: ["Build"],
+      sources: ["Harness"],
+    });
+  });
+
+  it("ignores empty types/sources strings", () => {
+    expect(buildAttestationListBody({ types: "", sources: null })).toEqual({});
+  });
 });
 
 describe("attestationListExtract", () => {
@@ -203,6 +231,33 @@ describe("attestationListExtract", () => {
     expect(result._display_hint).toMatch(/gitoid_sha256/);
   });
 
+  it("prefers pre-flattened subject and pipeline fields over nested objects", () => {
+    const result = attestationListExtract([
+      {
+        id: "att-flat",
+        type: "Deploy",
+        subject_name: "flat-name",
+        subject_digest: "flat-digest",
+        pipeline_id: "flat-pipeline",
+        pipeline_name: "Flat Pipeline",
+        pipeline_execution_id: "flat-exec",
+        subject: { name: "nested-name", digest: { value: "nested-digest" } },
+        execution_context: {
+          pipeline_id: "nested-pipeline",
+          pipeline_name: "Nested Pipeline",
+          pipeline_execution_id: "nested-exec",
+        },
+      },
+    ]);
+    expect(result.items[0]).toMatchObject({
+      subject_name: "flat-name",
+      subject_digest: "flat-digest",
+      pipeline_id: "flat-pipeline",
+      pipeline_name: "Flat Pipeline",
+      pipeline_execution_id: "flat-exec",
+    });
+  });
+
   it("is idempotent under compactItem re-application (harness_list default compact)", () => {
     const compactItem = findResource("attestation").compactItem;
     expect(compactItem).toBeTypeOf("function");
@@ -246,6 +301,24 @@ describe("attestation list dispatch", () => {
     expect(opts.params.limit).toBe(20);
     expect(opts.body).toEqual({});
     expect(opts.params).not.toHaveProperty("data_source");
+  });
+
+  it("injects org query param at org scope without project", async () => {
+    const request = vi.fn().mockResolvedValue([]);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    await registry.dispatch(makeClient(request), "attestation", "list", {
+      resource_scope: "org",
+      org_id: "SSCA",
+      types: "Build",
+    });
+
+    const opts = request.mock.calls[0]![0] as {
+      params: Record<string, unknown>;
+      body: Record<string, unknown>;
+    };
+    expect(opts.params.org).toBe("SSCA");
+    expect(opts.params.project).toBeUndefined();
+    expect(opts.body).toEqual({ types: ["Build"] });
   });
 
   it("injects org/project query params at project scope with subject_filter", async () => {
