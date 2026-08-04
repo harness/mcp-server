@@ -549,55 +549,6 @@ export const chaosPageExtract = (raw: unknown): { items: unknown[]; total: numbe
 };
 
 /**
- * Extract chaos risk-scan heatmap response:
- * { summary, riskRules, rows, pagination: { totalItems } }
- *
- * Unlike most chaos list endpoints (which use `data`), heatmap returns
- * service rows under `rows` plus column metadata in `riskRules`. Preserve
- * the full matrix shape so callers can render the heatmap.
- */
-export const chaosHeatmapExtract = (
-  raw: unknown,
-): {
-  summary?: unknown;
-  riskRules?: unknown[];
-  items: unknown[];
-  total: number;
-} => {
-  const r = raw as {
-    summary?: unknown;
-    riskRules?: unknown[];
-    rows?: unknown[];
-    pagination?: { totalItems?: number };
-  };
-  const items = Array.isArray(r.rows) ? r.rows : [];
-  return {
-    summary: r.summary,
-    riskRules: Array.isArray(r.riskRules) ? r.riskRules : [],
-    items,
-    total: r.pagination?.totalItems ?? items.length,
-  };
-};
-
-/**
- * Extract chaos scanned-risk get response: { scannedRisk: ScannedRisk }.
- *
- * Unlike sibling chaos_risk_rule.get and chaos_risk_scan.get (which return the
- * entity at the root), the v3 scanned-risks get handler wraps the entity in a
- * `scannedRisk` envelope. Unwrap so the tool contract matches every other
- * *.get op in the registry and identifier-field resolution / deep links work.
- */
-export const chaosScannedRiskGetExtract = (raw: unknown): unknown => {
-  if (raw && typeof raw === "object" && !Array.isArray(raw)) {
-    const r = raw as { scannedRisk?: unknown };
-    if (r.scannedRisk && typeof r.scannedRisk === "object") {
-      return r.scannedRisk;
-    }
-  }
-  return raw;
-};
-
-/**
  * Chaos v2 experiment list items expose their id as `experimentID` (capital ID),
  * but the deep-link resolver and the get-op path param use `experimentId`. Mirror
  * the value so per-item `openInHarness` links use the UUID instead of falling back
