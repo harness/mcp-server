@@ -666,6 +666,48 @@ export const chaosInputSetListExtract = (
 };
 
 /**
+ * For child resources listed under a parent scope (e.g. triggers, input sets under a pipeline),
+ * list rows often lack the parent id field needed for deep links. Inject from item alternate
+ * API fields or the required list filter input so openInHarness does not fall back to
+ * item.identifier (the child id).
+ */
+export function parentScopedListExtract(
+  parentField: string,
+  itemAlternateFields: string[] = [],
+): (raw: unknown, input?: Record<string, unknown>) => { items: unknown[]; total: number } {
+  return (raw, input) => {
+    const page = pageExtract(raw);
+    const fromInput = input?.[parentField];
+    const inputParentId = typeof fromInput === "string" && fromInput !== "" ? fromInput : undefined;
+    const items = page.items.map((item) => {
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const rec = item as Record<string, unknown>;
+        if (rec[parentField] !== undefined && typeof rec[parentField] !== "object") {
+          return item;
+        }
+        let fromItem: string | undefined;
+        for (const alt of itemAlternateFields) {
+          const altValue = rec[alt];
+          if (typeof altValue === "string" && altValue !== "") {
+            fromItem = altValue;
+            break;
+          }
+        }
+        const resolved = fromItem ?? inputParentId;
+        if (resolved !== undefined) {
+          return { ...rec, [parentField]: resolved };
+        }
+      }
+      return item;
+    });
+    return { items, total: page.total };
+  };
+}
+
+/** Pipeline-scoped child lists (triggers, input sets) use pipelineIdentifier on rows. */
+export const pipelineScopedListExtract = parentScopedListExtract("pipeline_id", ["pipelineIdentifier"]);
+
+/**
  * Normalize chaos experiment variables response (RunTimeInputs shape):
  * { experiment: [...] | null, tasks: { taskName: [...] } | null }
  * → { items: [{ task, variables }], total }
