@@ -4612,11 +4612,18 @@ const schema: Record<string, any> = {
                 ]
               },
               "entrypoint": {
-                "description": "Container entrypoint.",
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
+                "description": "Container entrypoint. Supports expressions.",
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               },
               "args": {
                 "description": "Container arguments.",

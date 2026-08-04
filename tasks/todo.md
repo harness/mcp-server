@@ -1,5 +1,22 @@
 # Harness MCP Server — Task Tracking
 
+## List-filter enum canonicalization (2026-07-31)
+- [x] Add `canonicalizeListFilterEnums` helper
+- [x] Wire into `Registry.dispatch` for list ops
+- [x] Clearer `security_exemption` size>50 error + `harness_list` size description
+- [x] Unit tests (`enum-canonicalization.test.ts` + existing STO exemptions)
+- [ ] Version bump / publish / bump mcpServerInternal dep (pending)
+- [ ] STO chatbot still should use PascalCase + size≤50 (follow-up outside MCP)
+
+### Plan
+- Case-insensitive rewrite of declared `listFilterFields.enum` values before API call.
+- Pass unmatched values through to the API; do not silently clamp size (fail-loud stays).
+
+### Review
+- `pending`/`approved` now become `Pending`/`Approved` at dispatch for any resource with enums.
+- Dropped the initial fail-loud-on-unknown behavior: it broke the `cost_timeseries` unknown-`time_filter` fallback and a connector test using an undeclared `category`. Declared enums can lag the API, so unmatched values are forwarded untouched.
+- Full suite: 123 files, 2657 passed, 8 skipped. `pnpm typecheck` clean.
+
 ## Issue #119 — Full Registry Structural Invariants (2026-07-21)
 - [x] Confirm Issue #119 is unassigned, unclaimed by another contributor, has no Development branch/PR, and remains unresolved on current main
 - [x] Audit every invariant in `tests/registry/structural-validation.test.ts` against default, opt-in, and both pipeline resource types

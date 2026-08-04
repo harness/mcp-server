@@ -16040,6 +16040,22 @@ const schema: Record<string, any> = {
                     }
                   }
                 }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "MythosAgent"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/MythosAgentStepInfo"
+                    }
+                  }
+                }
               }
             ]
           },
@@ -28964,9 +28980,20 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/ci/ParameterFieldListString"
                   },
                   "config": {
-                    "type": "string",
-                    "enum": [
-                      "default"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "default",
+                          "full",
+                          "incremental"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "connectorRef": {
@@ -29086,9 +29113,20 @@ const schema: Record<string, any> = {
                 "$ref": "#/definitions/pipeline/steps/ci/ParameterFieldListString"
               },
               "config": {
-                "type": "string",
-                "enum": [
-                  "default"
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "default",
+                      "full",
+                      "incremental"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
                 ]
               },
               "connectorRef": {
@@ -29191,6 +29229,282 @@ const schema: Record<string, any> = {
                 "desc": "This is the description for OpenAiStepInfo"
               }
             }
+          },
+          "MythosAgentStepInfo": {
+            "title": "MythosAgentStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "config",
+                  "mode",
+                  "target"
+                ],
+                "properties": {
+                  "advanced": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlAdvancedSettings"
+                  },
+                  "auth": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlAuth"
+                  },
+                  "baseImageConnectorRefs": {
+                    "$ref": "#/definitions/pipeline/steps/ci/ParameterFieldListString"
+                  },
+                  "config": {
+                    "type": "string",
+                    "enum": [
+                      "hunt",
+                      "scan"
+                    ]
+                  },
+                  "connectorRef": {
+                    "type": "string"
+                  },
+                  "imageTag": {
+                    "type": "string"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "ingestion": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlIngestion"
+                  },
+                  "mode": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ingestion",
+                          "orchestration"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "outputVariables": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/pipeline/common/OutputNGVariable"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "privileged": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "runAsUser": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "settings": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "target": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
+                  },
+                  "tool": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlMythosAgentToolData"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "config",
+              "mode",
+              "target"
+            ],
+            "properties": {
+              "advanced": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlAdvancedSettings"
+              },
+              "auth": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlAuth"
+              },
+              "baseImageConnectorRefs": {
+                "$ref": "#/definitions/pipeline/steps/ci/ParameterFieldListString"
+              },
+              "config": {
+                "type": "string",
+                "enum": [
+                  "hunt",
+                  "scan"
+                ]
+              },
+              "connectorRef": {
+                "type": "string"
+              },
+              "imageTag": {
+                "type": "string"
+              },
+              "imagePullPolicy": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Always",
+                      "Never",
+                      "IfNotPresent"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "ingestion": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlIngestion"
+              },
+              "mode": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "ingestion",
+                      "orchestration"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "outputVariables": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/OutputNGVariable"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "privileged": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "runAsUser": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "settings": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "target": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
+              },
+              "tool": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlMythosAgentToolData"
+              },
+              "description": {
+                "desc": "This is the description for MythosAgentStepInfo"
+              }
+            }
+          },
+          "STOYamlMythosAgentToolData": {
+            "title": "STOYamlMythosAgentToolData",
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string"
+              },
+              "base_url": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for STOYamlMythosAgentToolData"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "CheckovScanNode": {
             "title": "CheckovScanNode",
@@ -42761,6 +43075,101 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/steps/common/OpenAiStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "MythosAgentNode": {
+            "title": "MythosAgentNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for MythosAgentNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "MythosAgent"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "MythosAgent"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/MythosAgentStepInfo"
                     }
                   }
                 }
@@ -117337,6 +117746,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/OpenAiNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/MythosAgentNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
                   },
                   {
@@ -118110,6 +118522,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/OpenAiNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/MythosAgentNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaComplianceStepNode"

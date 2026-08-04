@@ -376,6 +376,7 @@ export const iacmToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
           },
+          pageOneIndexed: true,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: moduleListExtract,
           description:
