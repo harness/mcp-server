@@ -51,13 +51,6 @@ function getOp(type: string, op: "list" | "get" | "create"): EndpointSpec {
   return spec;
 }
 
-function getExecuteAction(type: string, action: string): EndpointSpec & { actionDescription: string } {
-  const res = findResource(type);
-  const spec = res.executeActions?.[action];
-  if (!spec) throw new Error(`Execute action "${action}" not found on "${type}"`);
-  return spec;
-}
-
 // ─── Toolset structure ───────────────────────────────────────────────────────
 
 describe("aitToolset structure", () => {
@@ -69,7 +62,7 @@ describe("aitToolset structure", () => {
     expect(aitToolset.optIn).toBe(true);
   });
 
-  it("registers 3 noun-based resource types", () => {
+  it("registers 3 noun-oriented resource types", () => {
     const types = aitToolset.resources.map((r) => r.resourceType);
     expect(types).toContain("ait_app");
     expect(types).toContain("ait_test_environment");
@@ -77,11 +70,17 @@ describe("aitToolset structure", () => {
     expect(types).toHaveLength(3);
   });
 
-  it("ait_test exposes list, create, and execute.run", () => {
-    const testResource = findResource("ait_test");
-    expect(testResource.operations.list).toBeDefined();
-    expect(testResource.operations.create).toBeDefined();
-    expect(testResource.executeActions?.run).toBeDefined();
+  it("ait_test has list, create operations and run executeAction", () => {
+    const res = findResource("ait_test");
+    expect(res.operations.list).toBeDefined();
+    expect(res.operations.create).toBeDefined();
+    expect(res.executeActions?.run).toBeDefined();
+  });
+
+  it("ait_test documents test run URL guidance in executeHint and run actionDescription", () => {
+    const res = findResource("ait_test");
+    expect(res.executeHint).toContain("test-run/{id}");
+    expect(res.executeActions?.run.actionDescription).toContain("executeHint");
   });
 
   it("all resources are account-scoped", () => {
@@ -90,7 +89,7 @@ describe("aitToolset structure", () => {
     }
   });
 
-  it("all list/get endpoint specs have operationPolicy", () => {
+  it("all list/get/create endpoint specs have operationPolicy", () => {
     for (const resource of aitToolset.resources) {
       for (const [opName, spec] of Object.entries(resource.operations)) {
         expect(
@@ -123,9 +122,9 @@ describe("ait opt-in with Registry", () => {
   });
 });
 
-// ─── Response extractor: aitAppsForOrgExtract ───────────────────────────────
+// ─── Response extractor: ait_app list ───────────────────────────────────────
 
-describe("aitAppsForOrgExtract", () => {
+describe("ait_app list extractor", () => {
   function extract(raw: unknown) {
     return getOp("ait_app", "list").responseExtractor!(raw);
   }
@@ -173,11 +172,17 @@ describe("aitAppsForOrgExtract", () => {
     expect(result.items).toEqual([]);
     expect(result.total).toBe(0);
   });
+
+  it("throws on non-array response", () => {
+    expect(() => extract({ error: "unauthorized" })).toThrow("ait_app: expected array response");
+    expect(() => extract("string")).toThrow("ait_app: expected array response");
+    expect(() => extract(null)).toThrow("ait_app: expected array response");
+  });
 });
 
-// ─── Response extractor: aitTestEnvironmentsExtract ─────────────────────────
+// ─── Response extractor: ait_test_environment list ──────────────────────────
 
-describe("aitTestEnvironmentsExtract", () => {
+describe("ait_test_environment list extractor", () => {
   function extract(raw: unknown) {
     return getOp("ait_test_environment", "list").responseExtractor!(raw);
   }
@@ -219,11 +224,17 @@ describe("aitTestEnvironmentsExtract", () => {
     expect(result.items).toEqual([]);
     expect(result.total).toBe(0);
   });
+
+  it("throws on non-array response", () => {
+    expect(() => extract({ error: "unauthorized" })).toThrow("ait_test_environment: expected array response");
+    expect(() => extract("string")).toThrow("ait_test_environment: expected array response");
+    expect(() => extract(null)).toThrow("ait_test_environment: expected array response");
+  });
 });
 
-// ─── Response extractor: aitTestsListExtract ────────────────────────────────
+// ─── Response extractor: ait_test list ──────────────────────────────────────
 
-describe("aitTestsListExtract", () => {
+describe("ait_test list extractor", () => {
   function extract(raw: unknown) {
     return getOp("ait_test", "list").responseExtractor!(raw);
   }
@@ -289,6 +300,80 @@ describe("aitTestsListExtract", () => {
     expect(result.items).toEqual([]);
     expect(result.total).toBe(0);
   });
+
+  it("throws on non-object response", () => {
+    expect(() => extract("string")).toThrow("ait_test: expected paginated object response");
+    expect(() => extract(null)).toThrow("ait_test: expected paginated object response");
+    expect(() => extract([1, 2, 3])).toThrow("ait_test: expected paginated object response");
+  });
+
+  it("throws when data field is not an array", () => {
+    expect(() => extract({ data: "not-array" })).toThrow("ait_test: expected data field to be an array");
+  });
+});
+
+// ─── Response extractor: ait_test create ────────────────────────────────────
+
+describe("ait_test create extractor", () => {
+  function extract(raw: unknown) {
+    return getOp("ait_test", "create").responseExtractor!(raw);
+  }
+
+  it("normalizes camelCase to snake_case", () => {
+    const raw = { testId: 42, testVersionId: 7 };
+    const result = extract(raw) as Record<string, unknown>;
+    expect(result).toEqual({ test_id: 42, test_version_id: 7 });
+  });
+});
+
+// ─── Response extractor: ait_test execute.run ───────────────────────────────
+
+describe("ait_test run extractor", () => {
+  function extract(raw: unknown) {
+    const res = findResource("ait_test");
+    return res.executeActions!.run.responseExtractor!(raw);
+  }
+
+  it("reads camelCase API fields and projects snake_case output", () => {
+    const raw = {
+      id: 99,
+      appId: "app-uuid",
+      testId: 10,
+      testVersionId: 20,
+      testEnvironmentId: "env-uuid",
+      status: "RUNNING",
+      testSessionId: "sess-1",
+      startEpoch: 1700000000,
+      error: null,
+    };
+    const result = extract(raw) as Record<string, unknown>;
+    expect(result).toEqual({
+      id: 99,
+      app_id: "app-uuid",
+      test_id: 10,
+      test_version_id: 20,
+      test_environment_id: "env-uuid",
+      status: "RUNNING",
+      error: null,
+    });
+  });
+
+  it("does not include process.env-dependent URLs or _note", () => {
+    const raw = {
+      id: 1,
+      appId: "a",
+      testId: 2,
+      testVersionId: 3,
+      testEnvironmentId: "e",
+      status: null,
+      testSessionId: null,
+      startEpoch: null,
+      error: null,
+    };
+    const result = extract(raw) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("test_run_url");
+    expect(result).not.toHaveProperty("_note");
+  });
 });
 
 // ─── API paths ───────────────────────────────────────────────────────────────
@@ -306,14 +391,71 @@ describe("endpoint paths", () => {
     expect(getOp("ait_test", "list").path).toBe("/ait/api/v1/testNew");
   });
 
-  it("ait_test create uses copilot import endpoint", () => {
+  it("ait_test create uses /ait/api/v1/testNew/copilotTest/import", () => {
     expect(getOp("ait_test", "create").path).toBe("/ait/api/v1/testNew/copilotTest/import");
   });
 
-  it("ait_test run uses camelCase path placeholders", () => {
-    const runAction = getExecuteAction("ait_test", "run");
-    expect(runAction.path).toBe("/ait/api/v1/testNew/{testId}/version/{testVersionId}/run");
-    expect(runAction.pathParams).toEqual({ test_id: "testId", test_version_id: "testVersionId" });
+  it("ait_test execute.run uses camelCase path placeholders", () => {
+    const res = findResource("ait_test");
+    expect(res.executeActions!.run.path).toBe("/ait/api/v1/testNew/{testId}/version/{testVersionId}/run");
+    expect(res.executeActions!.run.pathParams).toEqual({ test_id: "testId", test_version_id: "testVersionId" });
+  });
+});
+
+// ─── bodyBuilder snake_case acceptance ──────────────────────────────────────
+
+describe("ait_test create bodyBuilder", () => {
+  function getBodyBuilder() {
+    return getOp("ait_test", "create").bodyBuilder!;
+  }
+
+  it("accepts snake_case fields and maps to camelCase wire format", () => {
+    const builder = getBodyBuilder();
+    const result = builder({ body: { app_id: "a1", env_id: "e1", description: "test desc", auth_type: "no_auth", entry_url: "https://example.com" } });
+    expect(result).toEqual({
+      appId: "a1",
+      envId: "e1",
+      description: "test desc",
+      authType: "no_auth",
+      entryUrl: "https://example.com",
+    });
+  });
+
+  it("accepts camelCase fields as aliases", () => {
+    const builder = getBodyBuilder();
+    const result = builder({ body: { appId: "a1", envId: "e1", description: "test desc" } });
+    expect(result).toEqual({
+      appId: "a1",
+      envId: "e1",
+      description: "test desc",
+    });
+  });
+});
+
+describe("ait_test run bodyBuilder", () => {
+  function getBodyBuilder() {
+    const res = findResource("ait_test");
+    return res.executeActions!.run.bodyBuilder!;
+  }
+
+  it("accepts snake_case fields and maps to camelCase wire format", () => {
+    const builder = getBodyBuilder();
+    const result = builder({ body: { app_id: "a1", environment_id: "e1" } });
+    expect(result).toEqual({
+      appId: "a1",
+      environmentId: "e1",
+      params: '{"RUN_MODE":"no-mock","TestExecutorNamespace.fastExecutorMode":"false"}',
+    });
+  });
+
+  it("accepts camelCase fields as aliases", () => {
+    const builder = getBodyBuilder();
+    const result = builder({ body: { appId: "a1", environmentId: "e1", params: '{"custom":"value"}' } });
+    expect(result).toEqual({
+      appId: "a1",
+      environmentId: "e1",
+      params: '{"custom":"value"}',
+    });
   });
 });
 
@@ -346,6 +488,19 @@ describe("ait registry dispatch", () => {
     expect(request.params.appId).toBe("abc-123");
   });
 
+  it("maps size parameter to limit query param for ait_test list", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], totalItems: 0 });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
+
+    await registry.dispatch(makeClient(mockRequest), "ait_test", "list", {
+      app_id: "abc-123",
+      size: 5,
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(request.params.limit).toBe(5);
+  });
+
   it("dispatches ait_test_environment list with app_id filter", async () => {
     const mockRequest = vi.fn().mockResolvedValue([]);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
@@ -362,13 +517,13 @@ describe("ait registry dispatch", () => {
   it("dispatches ait_test run with camelCase path", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       id: 42,
-      app_id: "app-1",
-      test_id: 80,
-      test_version_id: 91,
-      test_environment_id: "env-1",
+      appId: "app-1",
+      testId: 80,
+      testVersionId: 91,
+      testEnvironmentId: "env-1",
       status: "RUNNING",
-      test_session_id: null,
-      start_epoch: null,
+      testSessionId: null,
+      startEpoch: null,
       error: null,
     });
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
@@ -377,8 +532,8 @@ describe("ait registry dispatch", () => {
       test_id: 80,
       test_version_id: 91,
       body: {
-        appId: "app-1",
-        environmentId: "env-1",
+        app_id: "app-1",
+        environment_id: "env-1",
       },
     });
 
@@ -387,84 +542,6 @@ describe("ait registry dispatch", () => {
     expect(request.body).toMatchObject({
       appId: "app-1",
       environmentId: "env-1",
-    });
-  });
-});
-
-// ─── Response extractor: aitRunTestExtract ────────────────────────────────
-
-describe("aitRunTestExtract", () => {
-  function extract(raw: unknown) {
-    const resource = findResource("ait_run_test");
-    const spec = resource.executeActions?.run;
-    if (!spec?.responseExtractor) throw new Error("run responseExtractor not found");
-    return spec.responseExtractor(raw);
-  }
-
-  it("reads camelCase TestRunNew fields from the API response", () => {
-    const raw = {
-      id: 42,
-      appId: "app-uuid",
-      testId: 80,
-      testVersionId: 91,
-      testEnvironmentId: "env-uuid",
-      status: "RUNNING",
-      testSessionId: "session-1",
-      startEpoch: 1700000000,
-      error: null,
-    };
-    const result = extract(raw) as Record<string, unknown>;
-    expect(result).toMatchObject({
-      app_id: "app-uuid",
-      test_id: 80,
-      test_version_id: 91,
-      test_environment_id: "env-uuid",
-      status: "RUNNING",
-      error: null,
-    });
-    expect(result.test_run_url).toBe(
-      "https://app.harness.io/ait/app-uuid/test/80/version/91/test-run/42?tab=overview",
-    );
-  });
-});
-
-// ─── Execute dispatch: ait_run_test ───────────────────────────────────────
-
-describe("ait_run_test execute dispatch", () => {
-  it("posts to camelCase path placeholders with camelCase request body", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({
-      id: 42,
-      appId: "app-uuid",
-      testId: 80,
-      testVersionId: 91,
-      testEnvironmentId: "env-uuid",
-      status: "RUNNING",
-      testSessionId: null,
-      startEpoch: null,
-      error: null,
-    });
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
-
-    await registry.dispatchExecute(makeClient(mockRequest), "ait_run_test", "run", {
-      test_id: 80,
-      test_version_id: 91,
-      body: {
-        appId: "app-uuid",
-        environmentId: "env-uuid",
-      },
-    });
-
-    const request = mockRequest.mock.calls[0]![0] as {
-      method: string;
-      path: string;
-      body: Record<string, unknown>;
-    };
-    expect(request.method).toBe("POST");
-    expect(request.path).toBe("/ait/api/v1/testNew/80/version/91/run");
-    expect(request.body).toEqual({
-      appId: "app-uuid",
-      environmentId: "env-uuid",
-      params: '{"RUN_MODE":"no-mock","TestExecutorNamespace.fastExecutorMode":"false"}',
     });
   });
 });
