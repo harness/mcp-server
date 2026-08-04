@@ -439,6 +439,22 @@ describe("Coding standards — toolset purity", () => {
 
     expect(violations, violations.join("\n")).toEqual([]);
   });
+
+  it("toolset files do not export response extractor functions (use extractors.ts)", () => {
+    const violations: string[] = [];
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const content = readFileSync(file, "utf8");
+      if (/export function \w+Extract\b/.test(content)) {
+        violations.push(`${fileRel}: exported *Extract function — move to extractors.ts`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
 });
 
 describe("Coding standards — Zod input schemas", () => {
