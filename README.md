@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 216 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 217 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,8 +10,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 216 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 37 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
+- **11 tools, 217 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 38 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **34 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -1199,7 +1199,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-216 resource types organized across 37 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+217 resource types organized across 38 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1598,6 +1598,17 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 | `scs_sbom`                 |      | x   |        |        |        |                 |
 
 
+### Evidence Vault
+
+Evidence Vault stores in-toto attestations (SDLC evidences). List supports account/org/project scope via `resource_scope`. Singular free-text filters (pipeline, artifact alone, gitoid) use `search_term`; an additional Name constraint uses `filters.subject_name`; subject content digest uses `filters.subject_digest`. Requires feature flag `SCS_EVIDENCE_VAULT`.
+
+
+| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
+| ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `attestation` | x    |     |        |        |        |                 |
+
+
+
 ### Security Testing Orchestration (STO)
 
 
@@ -1743,7 +1754,7 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 37 of 38 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
+By default, 38 of 39 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 
@@ -1810,6 +1821,7 @@ Available toolset names:
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
 | `sei`                   | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric                                                                                     |
 | `scs`                   | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom                                                                                                                             |
+| `evidence-vault`        | attestation                                                                                                                                                                                                                                                                                     |
 | `sto`                   | security_issue, security_issue_filter, security_exemption, sast_remediation_diff                                                                                                                                                                                                                |
 | `dbops`                 | database_schema, database_instance, database_snapshot_object, database_llm_authoring_pipeline                                                                                                                                                                                                   |
 | `access_control`        | user, user_group, service_account, role, role_assignment, resource_group, permission                                                                                                                                                                                                            |
@@ -1839,8 +1851,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  37 Toolsets      |      (data files, not code)
-                |  216 Resource Types|
+                |  38 Toolsets      |      (data files, not code)
+                |  217 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
