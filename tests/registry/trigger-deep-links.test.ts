@@ -131,3 +131,87 @@ describe("trigger delete targetIdentifier", () => {
     ).rejects.toThrow(/Missing required param\(s\) for trigger\.delete: pipeline_id/);
   });
 });
+
+describe("trigger get targetIdentifier", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+  });
+
+  it("sends pipeline_id as targetIdentifier query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "trigger", "get", {
+      org_id: "default",
+      project_id: "test-project",
+      trigger_id: "mcp_yaml_verify_cron",
+      pipeline_id: "test",
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params: Record<string, unknown>;
+    };
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/pipeline/api/triggers/mcp_yaml_verify_cron");
+    expect(call.params.targetIdentifier).toBe("test");
+  });
+});
+
+describe("trigger update YAML body", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+  });
+
+  it("parses YAML string body and sends NGTriggerConfigV2 object YAML", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+    const client = makeClient(mockRequest);
+    const yamlBody = [
+      "trigger:",
+      "  name: my-trigger",
+      "  identifier: myTrigger",
+      "  pipelineIdentifier: myPipeline",
+      "  source:",
+      "    type: Scheduled",
+    ].join("\n");
+
+    await registry.dispatch(client, "trigger", "update", {
+      org_id: "default",
+      project_id: "test-project",
+      trigger_id: "myTrigger",
+      body: yamlBody,
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params: Record<string, unknown>;
+      body: string;
+    };
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/pipeline/api/triggers/myTrigger");
+    expect(call.params.targetIdentifier).toBe("myPipeline");
+    expect(call.body).toContain("pipelineIdentifier: myPipeline");
+    expect(call.body).not.toMatch(/^trigger: \|\s/m);
+    expect(call.body).not.toContain("trigger: |\n  trigger:");
+  });
+
+  it("invalid YAML string body throws a clear error", async () => {
+    const client = makeClient();
+    await expect(
+      registry.dispatch(client, "trigger", "update", {
+        org_id: "default",
+        project_id: "test-project",
+        trigger_id: "myTrigger",
+        body: "trigger:\n  name: [unclosed",
+      }),
+    ).rejects.toThrow(/body must be a JSON object or YAML object for trigger/);
+  });
+});
