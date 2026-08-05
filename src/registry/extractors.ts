@@ -666,6 +666,37 @@ export const chaosInputSetListExtract = (
 };
 
 /**
+ * Trigger list items do not carry the parent pipeline id in the row, but deep links
+ * need {pipeline_id}. Inject from item.pipelineIdentifier or the required list filter
+ * so the shared resolver does not fall back to item.identifier (the trigger id).
+ */
+export const triggerListExtract = (
+  raw: unknown,
+  input?: Record<string, unknown>,
+): { items: unknown[]; total: number } => {
+  const page = pageExtract(raw);
+  const fromInput = input?.pipeline_id;
+  const inputPipelineId = typeof fromInput === "string" && fromInput !== "" ? fromInput : undefined;
+  const items = page.items.map((item) => {
+    if (item && typeof item === "object" && !Array.isArray(item)) {
+      const rec = item as Record<string, unknown>;
+      if (rec.pipeline_id !== undefined && typeof rec.pipeline_id !== "object") {
+        return item;
+      }
+      const fromItem =
+        typeof rec.pipelineIdentifier === "string" && rec.pipelineIdentifier !== ""
+          ? rec.pipelineIdentifier
+          : inputPipelineId;
+      if (fromItem !== undefined) {
+        return { ...rec, pipeline_id: fromItem };
+      }
+    }
+    return item;
+  });
+  return { items, total: page.total };
+};
+
+/**
  * Normalize chaos experiment variables response (RunTimeInputs shape):
  * { experiment: [...] | null, tasks: { taskName: [...] } | null }
  * → { items: [{ task, variables }], total }
