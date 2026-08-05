@@ -64,7 +64,7 @@ describe("aitToolset structure", () => {
 
   it("registers 3 noun-oriented resource types", () => {
     const types = aitToolset.resources.map((r) => r.resourceType);
-    expect(types).toContain("ait_app");
+    expect(types).toContain("ait_project");
     expect(types).toContain("ait_test_environment");
     expect(types).toContain("ait_test");
     expect(types).toHaveLength(3);
@@ -100,27 +100,27 @@ describe("aitToolset structure", () => {
 describe("ait opt-in with Registry", () => {
   it("is NOT present when HARNESS_TOOLSETS is unset (all defaults)", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: undefined }));
-    expect(registry.getAllResourceTypes()).not.toContain("ait_app");
+    expect(registry.getAllResourceTypes()).not.toContain("ait_project");
   });
 
   it("IS present when explicitly enabled with HARNESS_TOOLSETS=+ait", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+ait" }));
-    expect(registry.getAllResourceTypes()).toContain("ait_app");
+    expect(registry.getAllResourceTypes()).toContain("ait_project");
     expect(registry.getAllResourceTypes()).toContain("ait_test_environment");
     expect(registry.getAllResourceTypes()).toContain("ait_test");
   });
 
   it("IS present when listed explicitly in HARNESS_TOOLSETS=ait", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
-    expect(registry.getAllResourceTypes()).toContain("ait_app");
+    expect(registry.getAllResourceTypes()).toContain("ait_project");
   });
 });
 
-// ─── Response extractor: ait_app list ───────────────────────────────────────
+// ─── Response extractor: ait_project list ───────────────────────────────────────
 
-describe("ait_app list extractor", () => {
+describe("ait_project list extractor", () => {
   function extract(raw: unknown) {
-    return getOp("ait_app", "list").responseExtractor!(raw);
+    return getOp("ait_project", "list").responseExtractor!(raw);
   }
 
   it("normalizes camelCase app fields to snake_case", () => {
@@ -142,10 +142,6 @@ describe("ait_app list extractor", () => {
       app_id: "abc-123",
       app_name: "my-app",
       created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-02T00:00:00Z",
-      workspace_id: 1,
-      sandbox: false,
-      has_sessions: true,
     });
     expect(result.total).toBe(1);
   });
@@ -168,9 +164,9 @@ describe("ait_app list extractor", () => {
   });
 
   it("throws on non-array response", () => {
-    expect(() => extract({ error: "unauthorized" })).toThrow("ait_app: expected array response");
-    expect(() => extract("string")).toThrow("ait_app: expected array response");
-    expect(() => extract(null)).toThrow("ait_app: expected array response");
+    expect(() => extract({ error: "unauthorized" })).toThrow("ait_project: expected array response");
+    expect(() => extract("string")).toThrow("ait_project: expected array response");
+    expect(() => extract(null)).toThrow("ait_project: expected array response");
   });
 });
 
@@ -197,11 +193,7 @@ describe("ait_test_environment list extractor", () => {
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toEqual({
       id: "env-1",
-      app_id: "app-1",
       env_name: "production",
-      test: true,
-      monitor: false,
-      pre_release: true,
       base_url: "https://example.com",
     });
     expect(result.total).toBe(1);
@@ -264,7 +256,6 @@ describe("ait_test list extractor", () => {
       display_status: "PASSED",
       last_run_id: 10,
       test_version_id: 2,
-      tags: "[]",
     });
     expect(result.total).toBe(1);
     expect(result.totalPages).toBe(1);
@@ -373,8 +364,8 @@ describe("ait_test run extractor", () => {
 // ─── API paths ───────────────────────────────────────────────────────────────
 
 describe("endpoint paths", () => {
-  it("ait_app list uses /ait/api/v1/application", () => {
-    expect(getOp("ait_app", "list").path).toBe("/ait/api/v1/application");
+  it("ait_project list uses /ait/api/v1/application", () => {
+    expect(getOp("ait_project", "list").path).toBe("/ait/api/v1/application");
   });
 
   it("ait_test_environment list uses /ait/api/v1/testEnvironments", () => {
@@ -455,13 +446,13 @@ describe("ait_test run bodyBuilder", () => {
 // ─── Registry dispatch integration ─────────────────────────────────────────
 
 describe("ait registry dispatch", () => {
-  it("dispatches ait_app list", async () => {
+  it("dispatches ait_project list", async () => {
     const mockRequest = vi.fn().mockResolvedValue([
       { appId: "abc", appName: "test-app", isDeleted: false },
     ]);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
 
-    const result = await registry.dispatch(makeClient(mockRequest), "ait_app", "list", {});
+    const result = await registry.dispatch(makeClient(mockRequest), "ait_project", "list", {});
 
     const request = mockRequest.mock.calls[0]![0] as { path: string };
     expect(request.path).toBe("/ait/api/v1/application");
@@ -481,18 +472,6 @@ describe("ait registry dispatch", () => {
     expect(request.params.appId).toBe("abc-123");
   });
 
-  it("maps size parameter to limit query param for ait_test list", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({ data: [], totalItems: 0 });
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ait" }));
-
-    await registry.dispatch(makeClient(mockRequest), "ait_test", "list", {
-      app_id: "abc-123",
-      size: 5,
-    });
-
-    const request = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
-    expect(request.params.limit).toBe(5);
-  });
 
   it("dispatches ait_test_environment list with app_id filter", async () => {
     const mockRequest = vi.fn().mockResolvedValue([]);

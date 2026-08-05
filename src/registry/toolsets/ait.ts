@@ -1,4 +1,4 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, PreflightContext } from "../types.js";
 
 /**
  * AIT (AI Test Automation) toolset.
@@ -6,28 +6,44 @@ import type { ToolsetDefinition } from "../types.js";
  * Hosted on the Harness platform and authenticated via standard Harness PAT.
  *
  * Resources:
- *   ait_app              — list applications
- *   ait_test_environment — list test environments for an app
- *   ait_test             — list, create (AI), and execute (run) tests
+ *   ait_project          — list projects with AIT enabled
+ *   ait_test_environment — list AIT test environments for a project
+ *   ait_test             — list, create (AI), and execute (run) AIT tests
  */
+
+// ─── Preflight guards ───────────────────────────────────────────────────────
+
+/**
+ * Throws a clear error when the caller passes org_id or project_id to an AIT resource.
+ * AIT APIs use app_id for scoping — org_id and project_id are silently ignored by the API,
+ * leading to incorrect results.
+ */
+const rejectProjectScope = async (ctx: PreflightContext): Promise<void> => {
+  const passed: string[] = [];
+  if (ctx.input["org_id"]) passed.push("org_id");
+  if (ctx.input["project_id"]) passed.push("project_id");
+  if (ctx.input["account_id"]) passed.push("account_id");
+  if (passed.length > 0) {
+    throw new Error(
+      `Invalid parameter(s) for AIT: ${passed.join(", ")}. ` +
+        "AIT uses app_id as its project scope (1:1 mapping with Harness project_id but different values — cannot substitute one for the other). " +
+        "WORKFLOW: First call harness_list(resource_type='ait_project') with no scope params, match app_name to the Harness project name, then use that app_id.",
+    );
+  }
+};
 
 // ─── Response extractors ────────────────────────────────────────────────────
 
 /** Extract applications list: normalize camelCase fields to snake_case */
 const aitAppListExtract = (raw: unknown): unknown => {
   if (!Array.isArray(raw)) {
-    throw new Error("ait_app: expected array response from API, got " + typeof raw);
+    throw new Error("ait_project: expected array response from API, got " + typeof raw);
   }
   const arr = raw as Array<{
     appId?: string;
     appName?: string;
     createdAt?: string;
-    updatedAt?: string;
-    version?: string;
-    workspaceId?: number;
     isDeleted?: boolean;
-    sandbox?: boolean;
-    hasSessions?: boolean;
   }>;
   const items = arr
     .filter((app) => !app.isDeleted)
@@ -35,10 +51,6 @@ const aitAppListExtract = (raw: unknown): unknown => {
       app_id: app.appId,
       app_name: app.appName,
       created_at: app.createdAt,
-      updated_at: app.updatedAt,
-      workspace_id: app.workspaceId,
-      sandbox: app.sandbox,
-      has_sessions: app.hasSessions,
     }));
   return { items, total: items.length };
 };
@@ -50,20 +62,12 @@ const aitTestEnvironmentListExtract = (raw: unknown): unknown => {
   }
   const arr = raw as Array<{
     id?: string;
-    appId?: string;
     envName?: string;
-    test?: boolean;
-    monitor?: boolean;
-    preRelease?: boolean;
     baseUrl?: string | null;
   }>;
   const items = arr.map((env) => ({
     id: env.id,
-    app_id: env.appId,
     env_name: env.envName,
-    test: env.test,
-    monitor: env.monitor,
-    pre_release: env.preRelease,
     base_url: env.baseUrl ?? null,
   }));
   return { items, total: items.length };
@@ -95,7 +99,6 @@ const aitTestListExtract = (raw: unknown): unknown => {
       display_status: latestRun?.displayStatus ?? null,
       last_run_id: t.lastRunId,
       test_version_id: t.testVersionId,
-      tags: t.tags,
     };
   });
   return {
@@ -149,17 +152,20 @@ export const aitToolset: ToolsetDefinition = {
   name: "ait",
   displayName: "AI Test Automation (AIT)",
   description:
-    "Harness AI Test Automation (AIT) — list and manage automated tests for applications. " +
-    "TERMINOLOGY MAPPING (AIT ↔ Harness): AIT \"org\" = Harness \"account\"; AIT \"app\" = Harness \"project\".",
+    "Harness AI Test Automation (AIT) — list and manage AIT tests for projects. " +
+    "SCOPING: AIT APIs do NOT accept org_id, project_id, or account_id. Instead, AIT uses app_id as its project scope. " + 
+    "app_id is AIT's equivalent of a Harness project ID (they have a 1:1 mapping but their values are different — you cannot use project_id in place of app_id). " +
+    "All AIT API calls use app_id, not project_id. Do NOT pass org_id or project_id to any AIT resource. " +
+    "WORKFLOW: To interact with AIT resources for a Harness project, first list ait_project, match app_name to the project name, then use that app_id for subsequent AIT operations.",
   optIn: true,
   resources: [
-    // ── ait_app ─────────────────────────────────────────────────────────────
+    // ── ait_project ─────────────────────────────────────────────────────────────
     {
-      resourceType: "ait_app",
-      displayName: "AIT Application",
+      resourceType: "ait_project",
+      displayName: "AIT Project",
       description:
-        "An application (also called 'project' in Harness) in the AIT module. List applications to discover app_id values " +
-        "needed for other AIT operations (tests, environments).",
+        "A Harness project onboarded to AIT. Created when a user sets up their first AIT environment for that project — not all Harness projects appear here. " +
+        "The app_name field IS the Harness project name. Match app_name to find the app_id needed for all other AIT operations.",
       toolset: "ait",
       scope: "account",
       identifierFields: [],
@@ -167,11 +173,12 @@ export const aitToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ait/api/v1/application",
+          preflight: rejectProjectScope,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: aitAppListExtract,
-          skipCompact: true,
           description:
-            "List all apps for the organization. Returns app details including app_id, app_name, workspace_id, and created_at.",
+            "List all Harness projects onboarded to AIT. " +
+            "Returns app_id (needed for all other AIT operations), app_name (= Harness project name), workspace_id, and created_at.",
         },
       },
     },
@@ -180,15 +187,15 @@ export const aitToolset: ToolsetDefinition = {
       resourceType: "ait_test_environment",
       displayName: "AIT Test Environment",
       description:
-        "A test environment for an AIT application. List environments to discover " +
-        "environment IDs needed for creating and running tests.",
+        "An AIT test environment for a project. Requires app_id filter. " +
+        "List environments to discover environment IDs needed for creating and running tests.",
       toolset: "ait",
       scope: "account",
       identifierFields: ["app_id"],
       listFilterFields: [
         {
           name: "app_id",
-          description: "Application ID (required)",
+          description: "app_id (required, from ait_project list)",
           required: true,
         },
       ],
@@ -196,14 +203,15 @@ export const aitToolset: ToolsetDefinition = {
         list: {
           method: "GET",
           path: "/ait/api/v1/testEnvironments",
+          preflight: rejectProjectScope,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             app_id: "appId",
           },
           responseExtractor: aitTestEnvironmentListExtract,
           description:
-            "List all test environments for an application. Requires app_id in filters. " +
-            "Returns environment details including id, env_name, base_url, and type flags.",
+            "List all AIT test environments for a project. Requires app_id in filters. " +
+            "Returns id, env_name, base_url, and type flags.",
         },
       },
     },
@@ -212,42 +220,16 @@ export const aitToolset: ToolsetDefinition = {
       resourceType: "ait_test",
       displayName: "AIT Test",
       description:
-        "An automated test in the AIT module. Supports listing tests for an app, " +
-        "creating a test using AI (copilot), and executing a test run.",
+        "A test in the AIT module. Requires app_id filter. " +
+        "Supports listing tests, creating a test using AI (copilot), and executing a test run.",
       toolset: "ait",
       scope: "account",
       identifierFields: ["test_id", "test_version_id"],
       listFilterFields: [
         {
           name: "app_id",
-          description: "Application ID (required)",
+          description: "app_id (required, from ait_project list)",
           required: true,
-        },
-        {
-          name: "activation_status",
-          description: "Filter by activation status",
-        },
-        {
-          name: "run_status",
-          description: "Filter by test run status",
-        },
-        {
-          name: "sort_by",
-          description: "Field to sort by (e.g. createdAt)",
-        },
-        {
-          name: "sort_order",
-          description: "Sort order: ASC or DESC",
-          enum: ["ASC", "DESC"],
-        },
-        {
-          name: "filter",
-          description: "Text filter for test name",
-        },
-        {
-          name: "should_hide_disabled_flows",
-          description: "Whether to hide disabled flows",
-          type: "boolean",
         },
       ],
       operations: {
@@ -255,38 +237,20 @@ export const aitToolset: ToolsetDefinition = {
           method: "GET",
           path: "/ait/api/v1/testNew",
           pageOneIndexed: true,
+          preflight: rejectProjectScope,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             app_id: "appId",
-            activation_status: "activationStatus",
-            run_status: "runStatus",
-            sort_by: "sortBy",
-            sort_order: "sortOrder",
-            page: "page",
-            size: "limit",
-            filter: "filter",
-            should_hide_disabled_flows: "shouldHideDisabledFlows",
-            is_debug_mode: "isDebugMode",
-            last_run_start_epoch_ms: "lastRunStartEpochMs",
-            run_statuses_per_test: "runStatusesPerTest",
-          },
-          defaultQueryParams: {
-            sortOrder: "DESC",
-            page: "1",
-            limit: "20",
-            shouldHideDisabledFlows: "true",
-            isDebugMode: "false",
-            runStatusesPerTest: "5",
           },
           responseExtractor: aitTestListExtract,
-          skipCompact: true,
           description:
-            "List all tests for an application. Requires app_id in filters. " +
+            "List all AIT tests for a project. Requires app_id in filters. " +
             "Returns paginated test entries with name, created_by, created_at, display_status, and tags.",
         },
         create: {
           method: "POST",
           path: "/ait/api/v1/testNew/copilotTest/import",
+          preflight: rejectProjectScope,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const b = (input.body ?? input) as Record<string, unknown>;
@@ -303,9 +267,9 @@ export const aitToolset: ToolsetDefinition = {
             };
           },
           bodySchema: {
-            description: "Create a test using AI (copilot)",
+            description: "Create an AIT test using AI (copilot)",
             fields: [
-              { name: "appId", type: "string", required: true, description: "Application ID" },
+              { name: "appId", type: "string", required: true, description: "app_id (from ait_project list)" },
               { name: "envId", type: "string", required: true, description: "Environment ID" },
               { name: "description", type: "string", required: true, description: "Copilot task description (also used as the test name)" },
               { name: "authType", type: "string", required: false, description: "Auth type: 'auth' (default) or 'no_auth'" },
@@ -314,7 +278,7 @@ export const aitToolset: ToolsetDefinition = {
           },
           responseExtractor: aitTestCreateExtract,
           description:
-            "Create a test using AI. Provide app_id, env_id, and a description. Returns test_id and test_version_id.",
+            "Create an AIT test using AI. Provide app_id, env_id, and a description. Returns test_id and test_version_id.",
         },
       },
       executeActions: {
@@ -322,6 +286,7 @@ export const aitToolset: ToolsetDefinition = {
           method: "POST",
           path: "/ait/api/v1/testNew/{test_id}/version/{test_version_id}/run",
           pathParams: { test_id: "test_id", test_version_id: "test_version_id" },
+          preflight: rejectProjectScope,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input: Record<string, unknown>) => {
             const b = (input.body ?? input) as Record<string, unknown>;
@@ -334,16 +299,16 @@ export const aitToolset: ToolsetDefinition = {
             };
           },
           bodySchema: {
-            description: "Execute a test run",
+            description: "Execute an AIT test run",
             fields: [
-              { name: "appId", type: "string", required: true, description: "Application UUID (e.g. ecaab215-65cd-45d6-8426-09ba1e04eabb). Look up via ait_app if only app name is known." },
+              { name: "appId", type: "string", required: true, description: "app_id (from ait_project list)" },
               { name: "environmentId", type: "string", required: true, description: "Environment UUID (e.g. 1289b517-5f1b-4927-b30b-6f2e895dae8e). Look up via ait_test_environment if only env name is known." },
               { name: "params", type: "string", required: false, description: "Test params — JSON stringified Map<string, string>. Defaults to '{\"RUN_MODE\":\"no-mock\",\"TestExecutorNamespace.fastExecutorMode\":\"false\"}'" },
             ],
           },
           responseExtractor: aitTestRunExtract,
           actionDescription:
-            "Execute a test. Returns TestRun details including id, status, and error.",
+            "Execute an AIT test. Returns TestRun details including id, status, and error.",
         },
       },
     },
