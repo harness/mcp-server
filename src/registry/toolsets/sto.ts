@@ -337,7 +337,7 @@ export const stoToolset: ToolsetDefinition = {
       description: "Security issue exemption/waiver. THIS is the resource for exemption approval/rejection workflows — even when the user mentions a vulnerability title like 'SQL Injection'. Supports list (POST with status filter), create, and approve/reject actions. Approval with body.scope='ACCOUNT', 'ORG', or 'PROJECT' routes through STO promotion internally. " +
         "CRITICAL SCOPE DISTINCTION: There are TWO different scope concepts that must NOT be confused: " +
         "(1) LISTING scope — security_exemption ALWAYS lists at project scope. NEVER pass resource_scope='account' or resource_scope='org' to harness_list. " +
-        "When HARNESS_ORG / HARNESS_PROJECT defaults are unset (typical in Harness AI chat), pass org_id and project_id on every harness_list call — use the user's current org/project from context. " +
+        "When HARNESS_ORG / HARNESS_PROJECT defaults are unset (common in multi-user HTTP mode), pass org_id and project_id on every harness_list call — use the caller's current org/project when available. " +
         "(2) APPROVAL scope — the scope the exemption is approved AT, passed as body.scope to harness_execute. This CAN be 'ACCOUNT', 'ORG', 'PROJECT', or 'CURRENT'. " +
         "If harness_list returns an error about 'account scope not supported', that means you passed resource_scope='account' to the LIST call — NOT that account-level approval is impossible. Fix: remove resource_scope from the list call, keep project org_id/project_id, then approve with body={scope:'ACCOUNT'}. " +
         "Phrases like 'for org' or 'for account' refer to the APPROVAL SCOPE (body.scope on execute), NOT to resource_scope on list. " +
@@ -420,7 +420,7 @@ export const stoToolset: ToolsetDefinition = {
           },
           responseExtractor: stoExemptionsExtract,
           skipCompact: true,
-          description: "List security exemptions filtered by status. ALWAYS uses project scope — NEVER pass resource_scope='account' or resource_scope='org'. When defaults are unset, pass org_id and project_id (from user context). Use filters.status, not exemption_statuses. Recommended `size`: 5 (pass explicitly via `filters` — the shared default of 20 is too large for this resource). Response includes items[], total, page, pageSize, totalPages and `_nextPageHint`. ALWAYS read `_nextPageHint` — it spells out the exact follow-up call, including all active filters. NEVER re-use the same page for a 'next' request, NEVER drop filters between pages, and NEVER change size mid-session.",
+          description: "List security exemptions filtered by status. ALWAYS uses project scope — NEVER pass resource_scope='account' or resource_scope='org'. When defaults are unset, pass org_id and project_id explicitly. Use filters.status, not exemption_statuses. Recommended `size`: 5 (pass explicitly via `filters` — the shared default of 20 is too large for this resource). Response includes items[], total, page, pageSize, totalPages and `_nextPageHint`. ALWAYS read `_nextPageHint` — it spells out the exact follow-up call, including all active filters. NEVER re-use the same page for a 'next' request, NEVER drop filters between pages, and NEVER change size mid-session.",
         },
         create: {
           method: "POST",
