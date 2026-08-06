@@ -818,7 +818,8 @@ export const stoToolset: ToolsetDefinition = {
             "Legacy alias for validation_execution_id. Prefer validation_execution_id.",
           required: false,
         },
-        { name: "only_true_positive", type: "boolean", description: "When true (default), only TRUE_POSITIVE triage verdicts are treated as in-scope on the original scan." },
+        { name: "only_true_positive", type: "boolean", description: "When true, only TRUE_POSITIVE triage verdicts are treated as in-scope on the original scan (default false)." },
+        { name: "exclude_unreachable", type: "boolean", description: "When true, occurrences with 'unreachable' reachability are excluded from the original in-scope set (default false). Must match the value the remediation scope step used." },
         { name: "limit", type: "number", description: "Max occurrences to return (1–10000, default 1000)." },
         { name: "severity_codes", description: "Comma-separated severities.", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
         { name: "exclude_repo_patterns", description: "Comma-separated glob patterns matching repository target.name to exclude." },
@@ -834,6 +835,7 @@ export const stoToolset: ToolsetDefinition = {
             // Legacy alias — prefer validation_execution_id.
             execution_id: "validationExecutionId",
             only_true_positive: "onlyTruePositive",
+            exclude_unreachable: "excludeUnreachable",
             limit: "limit",
             severity_codes: "severityCodes",
             exclude_repo_patterns: "excludeRepoPatterns",
