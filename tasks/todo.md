@@ -1,6 +1,6 @@
 # Harness MCP Server — Task Tracking
 
-## IaCM workspace create/update (this PR)
+## IaCM workspace create/update (merged #793)
 - [x] Add create/update tests and implement `iacm_workspace` writes
 - [x] bodySchema + medium_write policy + project-scope preflight
 - [x] Run build, typecheck, standards, docs checks, and full tests
@@ -10,6 +10,18 @@
 - Follow the declarative registry model; no endpoint-specific MCP tools.
 - IaCM APIs own validation, RBAC, persistence, and audit; MCP forwards the caller token.
 - Stacked follow-ups (separate PRs): variable sets → modules → providers.
+
+## IaCM variable set list/get/create/update (this PR)
+- [x] Add `iacm_variable_set` list/get/create/update with multi-scope pathBuilder
+- [x] bodySchema + medium_write policy + skipScopeBodyInjection
+- [ ] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
+- [ ] Note Experimental RBAC: `iac_variableset_*` always permitted until iac-server enforces
+- [ ] Open PR stacked on merged workspace (#793)
+
+### Plan
+- Variable sets are multi-scope (account/org/project) via pathBuilder + resource_scope.
+- Create/update return the VariableSet resource (not policy_evaluation).
+- Do not claim deny-path RBAC coverage while permissions are Experimental.
 
 ## Dependency security advisories (2026-08-03)
 - [x] Confirm affected dependency chains and fixed versions for `fast-uri` and `ip-address`

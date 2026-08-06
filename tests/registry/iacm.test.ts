@@ -62,14 +62,15 @@ describe("iacmToolset structure", () => {
     expect(iacmToolset.optIn).toBe(false);
   });
 
-  it("registers all 5 resource types", () => {
+  it("registers all 6 resource types", () => {
     const types = iacmToolset.resources.map((r) => r.resourceType);
     expect(types).toContain("iacm_workspace");
     expect(types).toContain("iacm_resource");
     expect(types).toContain("iacm_module");
     expect(types).toContain("iacm_workspace_costs");
     expect(types).toContain("iacm_activity_resource_change");
-    expect(types).toHaveLength(5);
+    expect(types).toContain("iacm_variable_set");
+    expect(types).toHaveLength(6);
   });
 
   it("iacm_module is account-scoped", () => {
@@ -78,6 +79,12 @@ describe("iacmToolset structure", () => {
 
   it("iacm_module list has pageOneIndexed=true", () => {
     expect(getOp("iacm_module", "list").pageOneIndexed).toBe(true);
+  });
+
+  it("iacm_variable_set supports account, org, and project scopes", () => {
+    const resource = findResource("iacm_variable_set");
+    expect(resource.scope).toBe("project");
+    expect(resource.supportedScopes).toEqual(["account", "org", "project"]);
   });
 
   it("iacm_workspace, iacm_resource, iacm_workspace_costs, iacm_activity_resource_change are project-scoped", () => {
@@ -245,6 +252,48 @@ describe("workspaceWriteExtract", () => {
   });
 });
 
+// ─── Variable set contract ───────────────────────────────────────────────────
+
+describe("iacm_variable_set contract", () => {
+  it("registers list/get/create/update with medium_write writes", () => {
+    for (const op of ["list", "get"] as const) {
+      expect(getOp("iacm_variable_set", op).operationPolicy.risk).toBe("read");
+    }
+    for (const op of ["create", "update"] as const) {
+      expect(getOp("iacm_variable_set", op).operationPolicy).toEqual({
+        risk: "medium_write",
+        retryPolicy: "do_not_retry",
+      });
+    }
+  });
+
+  it("documents create and update body requirements", () => {
+    const createRequired = getOp("iacm_variable_set", "create")
+      .bodySchema!.fields.filter((field) => field.required)
+      .map((field) => field.name);
+    const updateRequired = getOp("iacm_variable_set", "update")
+      .bodySchema!.fields.filter((field) => field.required)
+      .map((field) => field.name);
+
+    expect(createRequired).toEqual(["identifier", "name"]);
+    expect(updateRequired).toEqual(["name"]);
+  });
+
+  it("normalizes list responses that already wrap items", () => {
+    const extract = getOp("iacm_variable_set", "list").responseExtractor!;
+    const result = extract({
+      items: [{ identifier: "shared-env" }, { identifier: "prod-tf" }],
+    }) as Record<string, unknown>;
+
+    expect(result.items).toEqual([
+      { identifier: "shared-env" },
+      { identifier: "prod-tf" },
+    ]);
+    expect(result.page_count).toBe(2);
+    expect(result.has_more).toBe(false);
+  });
+});
+
 // ─── Registry default-on behaviour ───────────────────────────────────────────
 
 describe("iacm default-on with Registry", () => {
@@ -260,6 +309,7 @@ describe("iacm default-on with Registry", () => {
     expect(registry.getAllResourceTypes()).toContain("iacm_module");
     expect(registry.getAllResourceTypes()).toContain("iacm_workspace_costs");
     expect(registry.getAllResourceTypes()).toContain("iacm_activity_resource_change");
+    expect(registry.getAllResourceTypes()).toContain("iacm_variable_set");
   });
 
   it("IS present when enabled with +iacm modifier", () => {
@@ -745,5 +795,69 @@ describe("iacm registry dispatch", () => {
     const request = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
     expect(request.path).toBe("/iacm/api/orgs/default/projects/Testim/activities/exec-123/resource-changes");
     expect(request.params.workspace).toBe("ws-1");
+  });
+
+  it("dispatches variable set list/create/update across scopes", async () => {
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({ items: [{ identifier: "shared-env" }] })
+      .mockResolvedValueOnce({ identifier: "shared-env", name: "Shared Env" })
+      .mockResolvedValueOnce({ identifier: "shared-env", name: "Shared Env Updated" });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_variable_set", "list", {
+      resource_scope: "account",
+    });
+    await registry.dispatch(makeClient(mockRequest), "iacm_variable_set", "create", {
+      org_id: "default",
+      project_id: "Testim",
+      body: {
+        identifier: "shared-env",
+        name: "Shared Env",
+        terraform_variables: {},
+        environment_variables: {},
+      },
+    });
+    await registry.dispatch(makeClient(mockRequest), "iacm_variable_set", "update", {
+      resource_scope: "org",
+      org_id: "default",
+      variable_set_id: "shared-env",
+      body: { name: "Shared Env Updated" },
+    });
+
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "GET",
+      path: "/iacm/api/variable-sets",
+    });
+    expect(mockRequest.mock.calls[1]![0]).toMatchObject({
+      method: "POST",
+      path: "/iacm/api/orgs/default/projects/Testim/variable-set",
+      body: {
+        identifier: "shared-env",
+        name: "Shared Env",
+        terraform_variables: {},
+        environment_variables: {},
+      },
+    });
+    expect(mockRequest.mock.calls[2]![0]).toMatchObject({
+      method: "PUT",
+      path: "/iacm/api/orgs/default/variable-set/shared-env",
+      body: { name: "Shared Env Updated" },
+    });
+  });
+
+  it("dispatches variable set get at project scope by identifier", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "shared-env" });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_variable_set", "get", {
+      org_id: "default",
+      project_id: "Testim",
+      variable_set_id: "shared-env",
+    });
+
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "GET",
+      path: "/iacm/api/orgs/default/projects/Testim/variable-set/shared-env",
+    });
   });
 });
