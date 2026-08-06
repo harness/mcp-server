@@ -336,16 +336,20 @@ export const stoToolset: ToolsetDefinition = {
       searchAliases: ["approve", "reject", "promote", "waiver", "exception", "exempt", "approval"],
       description: "Security issue exemption/waiver. THIS is the resource for exemption approval/rejection workflows — even when the user mentions a vulnerability title like 'SQL Injection'. Supports list (POST with status filter), create, and approve/reject actions. Approval with body.scope='ACCOUNT', 'ORG', or 'PROJECT' routes through STO promotion internally. " +
         "CRITICAL SCOPE DISTINCTION: There are TWO different scope concepts that must NOT be confused: " +
-        "(1) LISTING scope — security_exemption ALWAYS lists at project scope. NEVER pass resource_scope='account' or resource_scope='org' to harness_list — it will fail. Always list using project defaults. " +
+        "(1) LISTING scope — security_exemption ALWAYS lists at project scope. NEVER pass resource_scope='account' or resource_scope='org' to harness_list. " +
+        "When HARNESS_ORG / HARNESS_PROJECT defaults are unset (typical in Harness AI chat), pass org_id and project_id on every harness_list call — use the user's current org/project from context. " +
         "(2) APPROVAL scope — the scope the exemption is approved AT, passed as body.scope to harness_execute. This CAN be 'ACCOUNT', 'ORG', 'PROJECT', or 'CURRENT'. " +
-        "If harness_list returns an error about 'account scope not supported', that means you passed resource_scope='account' to the LIST call — NOT that account-level approval is impossible. Fix: remove resource_scope from the list call, keep project defaults, then approve with body={scope:'ACCOUNT'}. " +
-        "IMPORTANT: When listing exemptions, NEVER pass resource_scope, org_id, or project_id overrides. " +
-        "Phrases like 'for org' or 'for account' refer to the APPROVAL SCOPE (body.scope on execute), NOT to resource_scope or org_id on list. " +
+        "If harness_list returns an error about 'account scope not supported', that means you passed resource_scope='account' to the LIST call — NOT that account-level approval is impossible. Fix: remove resource_scope from the list call, keep project org_id/project_id, then approve with body={scope:'ACCOUNT'}. " +
+        "Phrases like 'for org' or 'for account' refer to the APPROVAL SCOPE (body.scope on execute), NOT to resource_scope on list. " +
+        "LIST FILTER: use filters.status (not exemption_statuses — that field belongs to security_issue). " +
         "PAGINATION CONTRACT: (1) Pass `size: 5` explicitly inside `filters` for the first call — the recommended default for this resource is 5, not the global 20. (2) Page is 0-indexed: page=0 → items 1–5, page=1 → items 6–10. (3) CRITICAL — `size` AND all other filters (status, search, …) MUST stay identical across every page in a session. The backend computes offset = page × size, so altering either silently shifts the dataset. (4) For 'next N' requests, increment `page` by 1 and keep `size` constant. If the user asks for 'next 10' after showing 5, make TWO sequential calls with the same size=5 — do NOT bump size mid-session. (5) After each response, read `_nextPageHint` — it spells out the exact follow-up call to make.",
       toolset: "sto",
       scope: "project",
       scopeParams: STO_SCOPE,
       identifierFields: ["exemption_id"],
+      listFilterAliases: {
+        exemption_statuses: "status",
+      },
       listFilterFields: [
         { name: "status", description: "Exemption status filter — SINGLE value only, not comma-separated. Make separate calls for each status.", enum: ["Pending", "Approved", "Rejected", "Expired", "Canceled"], required: true },
         { name: "search", description: "Free-text search for issue/exemption titles" },
@@ -416,7 +420,7 @@ export const stoToolset: ToolsetDefinition = {
           },
           responseExtractor: stoExemptionsExtract,
           skipCompact: true,
-          description: "List security exemptions filtered by status. ALWAYS uses project scope — NEVER pass resource_scope='account' or resource_scope='org', it will fail. 'For account' / 'for org' are approval scopes for harness_execute, not list scopes. Recommended `size`: 5 (pass explicitly via `filters` — the shared default of 20 is too large for this resource). Response includes items[], total, page, pageSize, totalPages and `_nextPageHint`. ALWAYS read `_nextPageHint` — it spells out the exact follow-up call, including all active filters. NEVER re-use the same page for a 'next' request, NEVER drop filters between pages, and NEVER change size mid-session.",
+          description: "List security exemptions filtered by status. ALWAYS uses project scope — NEVER pass resource_scope='account' or resource_scope='org'. When defaults are unset, pass org_id and project_id (from user context). Use filters.status, not exemption_statuses. Recommended `size`: 5 (pass explicitly via `filters` — the shared default of 20 is too large for this resource). Response includes items[], total, page, pageSize, totalPages and `_nextPageHint`. ALWAYS read `_nextPageHint` — it spells out the exact follow-up call, including all active filters. NEVER re-use the same page for a 'next' request, NEVER drop filters between pages, and NEVER change size mid-session.",
         },
         create: {
           method: "POST",

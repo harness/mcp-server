@@ -9,6 +9,7 @@ import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 import { isFormDataBody } from "../utils/type-guards.js";
 import { canonicalizeListFilterEnums } from "./enum-utils.js";
+import { applyListFilterAliases, assertListScopeResolved } from "./list-filter-utils.js";
 
 // Import all toolsets
 import { pipelinesToolset } from "./toolsets/pipelines.js";
@@ -390,19 +391,29 @@ export class Registry {
       throw new Error(`Resource "${resourceType}" does not support "${operation}". Supported: ${supported}`);
     }
 
-    if (operation === "list" && def.listFilterFields) {
-      const missing = def.listFilterFields
-        .filter(f => f.required && input[f.name] === undefined)
-        .map(f => f.name);
-      if (missing.length > 0) {
-        throw new Error(
-          `Missing required filter(s) for listing ${resourceType}: ${missing.join(", ")}. ` +
-          `Pass them via filters (e.g. filters: { ${missing.map(n => `${n}: "..."`).join(", ")} }).`
-        );
+    if (operation === "list") {
+      applyListFilterAliases(input, def.listFilterAliases);
+      assertListScopeResolved(
+        resourceType,
+        def,
+        input,
+        this.config.HARNESS_ORG,
+        this.config.HARNESS_PROJECT,
+      );
+      if (def.listFilterFields) {
+        const missing = def.listFilterFields
+          .filter(f => f.required && input[f.name] === undefined)
+          .map(f => f.name);
+        if (missing.length > 0) {
+          throw new Error(
+            `Missing required filter(s) for listing ${resourceType}: ${missing.join(", ")}. ` +
+            `Pass them via filters (e.g. filters: { ${missing.map(n => `${n}: "..."`).join(", ")} }).`
+          );
+        }
+        // Rewrite case variants (e.g. "pending" → "Pending") to declared enum values
+        // so agents that skip harness_describe don't get opaque API 400s.
+        canonicalizeListFilterEnums(input, def.listFilterFields);
       }
-      // Rewrite case variants (e.g. "pending" → "Pending") to declared enum values
-      // so agents that skip harness_describe don't get opaque API 400s.
-      canonicalizeListFilterEnums(input, def.listFilterFields);
     }
 
     if (spec.paramsSchema) {

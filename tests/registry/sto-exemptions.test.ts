@@ -242,6 +242,34 @@ describe("security_exemption list — registry dispatch", () => {
     expect(requestSpy).not.toHaveBeenCalled();
   });
 
+  it("maps exemption_statuses to status before required-filter validation", async () => {
+    const requestSpy = vi.fn().mockResolvedValue(rawApiResponse);
+    const client = makeClient(requestSpy);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    await registry.dispatch(client, "security_exemption", "list", {
+      exemption_statuses: ["pending"],
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    const callArgs = requestSpy.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.status).toBe("Pending");
+  });
+
+  it("fails loud when org_id and project_id are missing and config defaults are unset", async () => {
+    const requestSpy = vi.fn().mockResolvedValue(rawApiResponse);
+    const client = makeClient(requestSpy);
+    const registry = new Registry(
+      makeConfig({ HARNESS_TOOLSETS: "sto", HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }),
+    );
+
+    await expect(
+      registry.dispatch(client, "security_exemption", "list", { status: "Pending" }),
+    ).rejects.toThrow(/requires project scope \(org_id \+ project_id\)/i);
+    expect(requestSpy).not.toHaveBeenCalled();
+  });
+
   it("preserves projected display fields under skipCompact (severity, requested_by, …)", async () => {
     const client = makeClient(vi.fn().mockResolvedValue(rawApiResponse));
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
