@@ -4275,6 +4275,11 @@ const schema: Record<string, any> = {
                 },
                 {
                   "required": [
+                    "change-advisor"
+                  ]
+                },
+                {
+                  "required": [
                     "approval"
                   ]
                 },
@@ -4409,6 +4414,16 @@ const schema: Record<string, any> = {
                   },
                   "then": {
                     "$ref": "#/definitions/template_v1/steps/unified/UnifiedPolicyStepNode"
+                  }
+                },
+                {
+                  "if": {
+                    "required": [
+                      "change-advisor"
+                    ]
+                  },
+                  "then": {
+                    "$ref": "#/definitions/template_v1/steps/unified/UnifiedChangeAdvisorStepNode"
                   }
                 },
                 {
@@ -5242,6 +5257,92 @@ const schema: Record<string, any> = {
                       "payload": {
                         "description": "JSON payload to evaluate against policies. Supports expressions.",
                         "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "UnifiedChangeAdvisorStepNode": {
+            "title": "UnifiedChangeAdvisorStepNode",
+            "description": "Change Advisor step node for advisory evaluation before deployment.",
+            "allOf": [
+              {
+                "$ref": "#/definitions/template_v1/steps/unified/UnifiedPmsAbstractStepNode"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "change-advisor"
+                ],
+                "properties": {
+                  "change-advisor": {
+                    "description": "Change Advisor step configuration.",
+                    "type": "object",
+                    "properties": {
+                      "mode": {
+                        "description": "Advisory mode for the Change Advisor step.",
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "enum": [
+                              "ADVISORY",
+                              "ENFORCING"
+                            ]
+                          },
+                          {
+                            "$ref": "#/definitions/template_v1/common/Expression"
+                          }
+                        ]
+                      },
+                      "policy-pack": {
+                        "description": "Policy pack to evaluate the change against (e.g. balanced).",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "$ref": "#/definitions/template_v1/common/Expression"
+                          }
+                        ]
+                      },
+                      "timeout-minutes": {
+                        "description": "Maximum time in minutes to wait for the advisory call.",
+                        "oneOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "$ref": "#/definitions/template_v1/common/Expression"
+                          }
+                        ]
+                      },
+                      "presets": {
+                        "description": "Preset identifiers applied to the advisory evaluation.",
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "$ref": "#/definitions/template_v1/common/Expression"
+                          }
+                        ]
+                      },
+                      "env": {
+                        "description": "Target environment identifier for the change.",
+                        "oneOf": [
+                          {
+                            "type": "string"
+                          },
+                          {
+                            "$ref": "#/definitions/template_v1/common/Expression"
+                          }
+                        ]
                       }
                     }
                   }
