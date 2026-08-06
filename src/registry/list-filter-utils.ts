@@ -1,32 +1,5 @@
 import type { ResourceDefinition } from "./types.js";
 
-/**
- * Map common agent mistakes (e.g. security_issue field names on security_exemption)
- * to the canonical list-filter keys declared on the resource.
- */
-export function applyListFilterAliases(
-  input: Record<string, unknown>,
-  aliases: Record<string, string> | undefined,
-): void {
-  if (!aliases) return;
-
-  for (const [alias, target] of Object.entries(aliases)) {
-    if (input[target] !== undefined || input[alias] === undefined) continue;
-
-    const raw = input[alias];
-    if (Array.isArray(raw)) {
-      const first = raw.find((v) => v !== undefined && v !== null && String(v).trim() !== "");
-      if (first !== undefined) input[target] = typeof first === "string" ? first.trim() : first;
-    } else if (typeof raw === "string") {
-      const trimmed = raw.trim();
-      input[target] = trimmed.includes(",") ? trimmed.split(",")[0]!.trim() : trimmed;
-    } else {
-      input[target] = raw;
-    }
-    delete input[alias];
-  }
-}
-
 function resolveScopeId(
   inputValue: unknown,
   configDefault: string | undefined,
@@ -38,6 +11,23 @@ function resolveScopeId(
     return configDefault.trim();
   }
   return undefined;
+}
+
+/**
+ * Reject filter keys that belong to a sibling resource type but are commonly
+ * sent by mistake (e.g. security_issue's exemption_statuses on security_exemption).
+ */
+export function assertListFilterMiskeys(
+  resourceType: string,
+  input: Record<string, unknown>,
+  miskeys: Record<string, string> | undefined,
+): void {
+  if (!miskeys) return;
+
+  for (const [wrongKey, hint] of Object.entries(miskeys)) {
+    if (input[wrongKey] === undefined) continue;
+    throw new Error(`${resourceType}: ${hint}`);
+  }
 }
 
 /**

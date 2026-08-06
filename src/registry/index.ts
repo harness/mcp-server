@@ -9,7 +9,7 @@ import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
 import { isFormDataBody } from "../utils/type-guards.js";
 import { canonicalizeListFilterEnums } from "./enum-utils.js";
-import { applyListFilterAliases, assertListScopeResolved } from "./list-filter-utils.js";
+import { assertListFilterMiskeys, assertListScopeResolved } from "./list-filter-utils.js";
 
 // Import all toolsets
 import { pipelinesToolset } from "./toolsets/pipelines.js";
@@ -392,7 +392,6 @@ export class Registry {
     }
 
     if (operation === "list") {
-      applyListFilterAliases(input, def.listFilterAliases);
       assertListScopeResolved(
         resourceType,
         def,
@@ -400,6 +399,7 @@ export class Registry {
         this.config.HARNESS_ORG,
         this.config.HARNESS_PROJECT,
       );
+      assertListFilterMiskeys(resourceType, input, def.listFilterMiskeys);
       if (def.listFilterFields) {
         const missing = def.listFilterFields
           .filter(f => f.required && input[f.name] === undefined)

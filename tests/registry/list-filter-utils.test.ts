@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
-  applyListFilterAliases,
+  assertListFilterMiskeys,
   assertListScopeResolved,
 } from "../../src/registry/list-filter-utils.js";
 import type { ResourceDefinition } from "../../src/registry/types.js";
@@ -15,27 +15,32 @@ const projectScoped: ResourceDefinition = {
   operations: {},
 };
 
-describe("applyListFilterAliases", () => {
-  it("maps exemption_statuses array to status", () => {
-    const input: Record<string, unknown> = { exemption_statuses: ["pending"] };
-    applyListFilterAliases(input, { exemption_statuses: "status" });
-    expect(input.status).toBe("pending");
-    expect(input.exemption_statuses).toBeUndefined();
+describe("assertListFilterMiskeys", () => {
+  const miskeys = {
+    exemption_statuses:
+      "Invalid filter 'exemption_statuses' — use filters.status for security_exemption (that key is for security_issue).",
+  };
+
+  it("throws when a commonly confused filter key is present", () => {
+    expect(() =>
+      assertListFilterMiskeys(
+        "security_exemption",
+        { exemption_statuses: ["pending"] },
+        miskeys,
+      ),
+    ).toThrow(/use filters\.status for security_exemption/i);
   });
 
-  it("maps exemption_statuses string to status", () => {
-    const input: Record<string, unknown> = { exemption_statuses: "Pending" };
-    applyListFilterAliases(input, { exemption_statuses: "status" });
-    expect(input.status).toBe("Pending");
+  it("passes when only valid filter keys are present", () => {
+    expect(() =>
+      assertListFilterMiskeys("security_exemption", { status: "Pending" }, miskeys),
+    ).not.toThrow();
   });
 
-  it("does not overwrite an explicit status", () => {
-    const input: Record<string, unknown> = {
-      status: "Approved",
-      exemption_statuses: ["pending"],
-    };
-    applyListFilterAliases(input, { exemption_statuses: "status" });
-    expect(input.status).toBe("Approved");
+  it("no-ops when miskeys config is undefined", () => {
+    expect(() =>
+      assertListFilterMiskeys("security_exemption", { exemption_statuses: "Pending" }, undefined),
+    ).not.toThrow();
   });
 });
 

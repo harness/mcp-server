@@ -391,10 +391,10 @@ export interface ResourceDefinition {
   /** Additional filter fields for list operations */
   listFilterFields?: FilterFieldSpec[];
   /**
-   * Rename mistaken list-filter keys before required-filter validation.
-   * Keys are wrong names agents send; values are canonical `listFilterFields` names.
+   * Reject commonly confused list-filter keys before required-filter validation.
+   * Keys are wrong names agents send; values are full error hints (no API call).
    */
-  listFilterAliases?: Record<string, string>;
+  listFilterMiskeys?: Record<string, string>;
   /**
    * Optional per-resource compaction override for list items. When set,
    * harness_list applies this instead of the generic key-name whitelist

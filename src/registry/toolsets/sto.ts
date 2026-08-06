@@ -347,8 +347,9 @@ export const stoToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: STO_SCOPE,
       identifierFields: ["exemption_id"],
-      listFilterAliases: {
-        exemption_statuses: "status",
+      listFilterMiskeys: {
+        exemption_statuses:
+          "Invalid filter 'exemption_statuses' — use filters.status for security_exemption (that key is for security_issue).",
       },
       listFilterFields: [
         { name: "status", description: "Exemption status filter — SINGLE value only, not comma-separated. Make separate calls for each status.", enum: ["Pending", "Approved", "Rejected", "Expired", "Canceled"], required: true },
