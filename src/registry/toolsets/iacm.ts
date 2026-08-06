@@ -142,6 +142,27 @@ const moduleListExtract = (
 const moduleExtract = (raw: unknown): unknown => raw;
 
 /**
+ * Provider list: API returns a raw JSON array of provider objects.
+ */
+const providerListExtract = (
+  raw: unknown,
+): { items: unknown[]; page_count: number; has_more: boolean; pagination_note: string } => {
+  const items = Array.isArray(raw) ? raw : [];
+  const has_more = items.length >= IACM_PAGE_SIZE;
+  return {
+    items,
+    page_count: items.length,
+    has_more,
+    pagination_note: has_more
+      ? `Only ${items.length} providers returned (page is full). Call again with page+1 to fetch the next batch. Do NOT report ${items.length} as the total provider count.`
+      : `All providers on this page returned (${items.length} items). has_more=false means this is the last page.`,
+  };
+};
+
+/** Provider get/create/version ops return the API payload directly. */
+const providerExtract = (raw: unknown): unknown => raw;
+
+/**
  * IACM workspace costs: API returns a raw JSON array of cost entries.
  * Costs are typically a small finite list so has_more acts as a safety signal only.
  */
@@ -257,6 +278,52 @@ const variableSetItemPath = (
     );
   }
   return `${variableSetCollectionPath(input, config)}/${encodeURIComponent(id)}`;
+};
+
+const providerCreatePath = (input: Record<string, unknown>): string => {
+  const body = (input.body as Record<string, unknown> | undefined) ?? {};
+  const type = (input.type as string | undefined) ?? (body.type as string | undefined);
+  if (!type) {
+    throw new Error(
+      'Missing required field "type" for iacm_provider create. Pass it in body.type (e.g. "aws", "terraform").',
+    );
+  }
+  return `/iacm/api/providers/${encodeURIComponent(type)}`;
+};
+
+const providerCreateBody = (input: Record<string, unknown>): Record<string, unknown> => {
+  const body = { ...((input.body as Record<string, unknown> | undefined) ?? {}) };
+  delete body.type;
+  return body;
+};
+
+const providerVersionMethod = (input: Record<string, unknown>): "POST" | "PUT" =>
+  input.version ? "PUT" : "POST";
+
+const providerVersionPath = (input: Record<string, unknown>): string => {
+  const id = input.id as string | undefined;
+  if (!id) {
+    throw new Error(
+      'Missing required field "id" for iacm_provider update. Pass the provider id via params or as resource_id.',
+    );
+  }
+  if (input.version) {
+    return `/iacm/api/providers/${encodeURIComponent(id)}/version/${encodeURIComponent(String(input.version))}`;
+  }
+  return `/iacm/api/providers/${encodeURIComponent(id)}/version`;
+};
+
+const providerVersionBody = (input: Record<string, unknown>): Record<string, unknown> => {
+  const body = { ...((input.body as Record<string, unknown> | undefined) ?? {}) };
+  if (input.version) {
+    delete body.version;
+  } else if (body.version === undefined || body.version === "") {
+    throw new Error(
+      'Missing required field "version" for iacm_provider version create. ' +
+        "Pass version in body when creating a new version, or pass params.version to update an existing version.",
+    );
+  }
+  return body;
 };
 
 // ─── Workspace request schemas ───────────────────────────────────────────────
@@ -633,6 +700,47 @@ const moduleUpdateSchema: BodySchema = {
   ],
 };
 
+const providerCreateSchema: BodySchema = {
+  // type is REQUIRED at the call layer (enforced by pathBuilder), but declared required:false
+  // here because bodySchema validates the BUILT body — and providerCreateBody strips type
+  // from the wire payload (type is a path segment, not a JSON field).
+  description:
+    "IaCM provider registry create definition. body.type is REQUIRED (path segment); only description is forwarded in the JSON body.",
+  fields: [
+    {
+      name: "type",
+      type: "string",
+      required: false,
+      description:
+        "REQUIRED (enforced by pathBuilder). Provider type path segment (e.g. aws, terraform). Stripped from the JSON body.",
+    },
+    { name: "description", type: "string", required: false, description: "Optional provider description" },
+  ],
+};
+
+const providerUpdateSchema: BodySchema = {
+  description:
+    "Version-oriented provider update. There is no metadata PUT /providers/{id}. " +
+    "Omit params.version to POST a new version (include body.version). " +
+    "Pass params.version to PUT an existing version.",
+  fields: [
+    {
+      name: "version",
+      type: "string",
+      required: false,
+      description: "Required in body when creating a new version (no params.version). Omitted from body on PUT update.",
+    },
+    {
+      name: "protocol",
+      type: "array",
+      required: true,
+      itemType: "string",
+      description: "Supported Terraform/OpenTofu protocol versions (e.g. [\"5.0\"])",
+    },
+    { name: "gpg_key_id", type: "string", required: true, description: "GPG signing key id for the provider version" },
+  ],
+};
+
 // ─── Toolset definition ─────────────────────────────────────────────────────
 
 export const iacmToolset: ToolsetDefinition = {
@@ -641,10 +749,10 @@ export const iacmToolset: ToolsetDefinition = {
   description:
     "Harness IaCM (Infrastructure as Code Management) — manage Terraform workspaces " +
     "(list/get/create/update), shared variable sets, provisioned resources and Terraform outputs, " +
-    "the module registry, workspace cost history, and resource-change diffs from plan/apply/destroy. " +
+    "the module and provider registries, workspace cost history, and resource-change diffs from plan/apply/destroy. " +
     "Use iacm_workspace to list, get, create, or update workspaces; iacm_variable_set for reusable " +
     "variable sets (account/org/project); iacm_resource for Terraform resources and outputs; " +
-    "iacm_module to list/get/create/update the module registry (account/org/project); iacm_workspace_costs for cost breakdown; " +
+    "iacm_module (account/org/project) and iacm_provider for private registries; iacm_workspace_costs for cost breakdown; " +
     "and iacm_activity_resource_change for activity diffs.",
   optIn: false,
   resources: [
@@ -1060,6 +1168,102 @@ export const iacmToolset: ToolsetDefinition = {
             "these become scope_org/scope_project query params, never body fields. " +
             "Prefer harness_get then PUT the full desired module — omitting optional fields may clear them. " +
             "Returns the module resource. Registry RBAC is Active (iac_registry_edit). medium_write — requires confirmation.",
+        },
+      },
+    },
+
+    // ─── Provider Registry ─────────────────────────────────────────────────
+    {
+      resourceType: "iacm_provider",
+      displayName: "IaCM Provider Registry",
+      description:
+        "Private Terraform/OpenTofu providers registered in the Harness IaCM provider registry. " +
+        "Providers are account-scoped and identified by numeric/string id (not type alone). " +
+        "IMPORTANT: there is no metadata PUT /providers/{id}. harness_update is version-oriented: " +
+        "omit params.version to create a new version (POST), or pass params.version to update an existing version (PUT). " +
+        "PAGINATION: Results are capped at 30 per page (1-based). page_count is THIS page only.",
+      toolset: "iacm",
+      scope: "account",
+      identifierFields: ["id"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter providers by partial name match", type: "string" },
+        {
+          name: "sort",
+          description: "Sort order",
+          type: "string",
+          enum: ["name,ASC", "name,DESC", "updated,ASC", "updated,DESC"],
+        },
+        { name: "page", description: "Page number (1-based). Default: 1.", type: "number" },
+        { name: "size", description: "Page size (mapped to API limit). Default: 30.", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/iacm/api/providers",
+          queryParams: {
+            page: "page",
+            size: "limit",
+            search_term: "searchTerm",
+            sort: "sort",
+          },
+          pageOneIndexed: true,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: providerListExtract,
+          description:
+            "List providers in the IaCM provider registry (30 per page; page >= 1). " +
+            "Response fields: items, page_count (THIS page only), has_more, pagination_note.",
+        },
+        get: {
+          method: "GET",
+          path: "/iacm/api/providers/{providerId}",
+          pathParams: { id: "providerId" },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: providerExtract,
+          description:
+            "Get a provider by id. Use the id from harness_list — not the provider type string alone.",
+        },
+        create: {
+          method: "POST",
+          path: "/iacm/api/providers/{type}",
+          pathBuilder: providerCreatePath,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: providerCreateBody,
+          bodySchema: providerCreateSchema,
+          skipScopeBodyInjection: true,
+          responseExtractor: providerExtract,
+          description:
+            "Create a provider registry entry. Required body.type becomes the path segment; optional body.description is sent as JSON. " +
+            "Returns the provider id needed for get and version updates.",
+        },
+        update: {
+          method: "PUT",
+          path: "/iacm/api/providers/{providerId}/version/{version}",
+          methodBuilder: providerVersionMethod,
+          pathBuilder: providerVersionPath,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: providerVersionBody,
+          bodySchema: providerUpdateSchema,
+          skipScopeBodyInjection: true,
+          responseExtractor: providerExtract,
+          paramsSchema: {
+            fields: [
+              {
+                name: "id",
+                required: true,
+                description: "Provider id from list/create (also accepted as resource_id)",
+              },
+              {
+                name: "version",
+                required: false,
+                description:
+                  "When set, updates that existing version via PUT. When omitted, creates a new version via POST (include body.version).",
+              },
+            ],
+          },
+          description:
+            "Version-oriented provider update — NOT a metadata PATCH. " +
+            "Create version: omit params.version and pass body.version + protocol + gpg_key_id (POST /providers/{id}/version). " +
+            "Update version: pass params.version with body.protocol + gpg_key_id (PUT /providers/{id}/version/{version}).",
         },
       },
     },
