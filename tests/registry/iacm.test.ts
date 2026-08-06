@@ -44,7 +44,7 @@ function findResource(type: string): ResourceDefinition {
   return res;
 }
 
-function getOp(type: string, op: "list" | "get"): EndpointSpec {
+function getOp(type: string, op: "list" | "get" | "create" | "update"): EndpointSpec {
   const res = findResource(type);
   const spec = res.operations[op];
   if (!spec) throw new Error(`Operation "${op}" not found on "${type}"`);
@@ -93,9 +93,98 @@ describe("iacmToolset structure", () => {
           spec.operationPolicy,
           `${resource.resourceType}.${opName} is missing operationPolicy`,
         ).toBeDefined();
-        expect(spec.operationPolicy!.risk).toBe("read");
+        expect(spec.operationPolicy!.risk).toBe(
+          opName === "create" || opName === "update" ? "medium_write" : "read",
+        );
       }
     }
+  });
+});
+
+// ─── Workspace write contract ───────────────────────────────────────────────
+
+describe("iacm_workspace write contract", () => {
+  it("registers project-scoped create and update operations", () => {
+    const create = getOp("iacm_workspace", "create");
+    const update = getOp("iacm_workspace", "update");
+
+    expect(create.method).toBe("POST");
+    expect(create.path).toBe("/iacm/api/orgs/{org}/projects/{project}/workspaces");
+    expect(create.pathParams).toEqual({ org_id: "org", project_id: "project" });
+    expect(create.preflight).toBeDefined();
+    expect(create.operationPolicy).toEqual({
+      risk: "medium_write",
+      retryPolicy: "do_not_retry",
+    });
+
+    expect(update.method).toBe("PUT");
+    expect(update.path).toBe(
+      "/iacm/api/orgs/{org}/projects/{project}/workspaces/{workspaceId}",
+    );
+    expect(update.pathParams).toEqual({
+      org_id: "org",
+      project_id: "project",
+      workspace_id: "workspaceId",
+    });
+    expect(update.preflight).toBeDefined();
+    expect(update.operationPolicy).toEqual({
+      risk: "medium_write",
+      retryPolicy: "do_not_retry",
+    });
+  });
+
+  it("documents the API-required create body and optional template association", () => {
+    const fields = getOp("iacm_workspace", "create").bodySchema!.fields;
+    const required = fields.filter((field) => field.required).map((field) => field.name);
+
+    expect(required).toEqual([
+      "identifier",
+      "name",
+      "provider_connector",
+      "provisioner",
+      "terraform_variables",
+      "environment_variables",
+    ]);
+    expect(fields.find((field) => field.name === "associated_template")).toMatchObject({
+      type: "object",
+      required: false,
+      fields: [
+        expect.objectContaining({ name: "template_id", required: true }),
+        expect.objectContaining({ name: "version", required: true }),
+      ],
+    });
+    expect(fields.find((field) => field.name === "provisioner_configuration")).toMatchObject({
+      type: "object",
+      required: false,
+    });
+    expect(fields.find((field) => field.name === "sparse_checkout")).toMatchObject({
+      type: "array",
+      itemType: "string",
+      required: false,
+    });
+    expect(fields.find((field) => field.name === "terraform_variables")).toMatchObject({
+      type: "object",
+      required: true,
+      fields: [
+        expect.objectContaining({ name: "key", required: true }),
+        expect.objectContaining({ name: "value", required: true }),
+        expect.objectContaining({ name: "value_type", required: true }),
+      ],
+    });
+  });
+
+  it("documents the API-required update body", () => {
+    const fields = getOp("iacm_workspace", "update").bodySchema!.fields;
+    const required = fields.filter((field) => field.required).map((field) => field.name);
+
+    expect(required).toEqual([
+      "name",
+      "provider_connector",
+      "provisioner",
+      "terraform_variables",
+      "environment_variables",
+    ]);
+    expect(fields.some((field) => field.name === "identifier")).toBe(false);
   });
 });
 
@@ -367,6 +456,80 @@ describe("endpoint paths", () => {
 // ─── Registry dispatch integration ───────────────────────────────────────────
 
 describe("iacm registry dispatch", () => {
+  const workspaceBody = {
+    identifier: "payments-prod",
+    name: "Payments Production",
+    provider_connector: "account.aws",
+    provisioner: "terraform",
+    terraform_variables: {},
+    environment_variables: {},
+  };
+
+  it("dispatches workspace create with the IaCM body unchanged", async () => {
+    const response = { policy_evaluation: { status: "success" } };
+    const mockRequest = vi.fn().mockResolvedValue(response);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await registry.dispatch(makeClient(mockRequest), "iacm_workspace", "create", {
+      org_id: "default",
+      project_id: "Testim",
+      body: workspaceBody,
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      body: Record<string, unknown>;
+    };
+    expect(request.method).toBe("POST");
+    expect(request.path).toBe("/iacm/api/orgs/default/projects/Testim/workspaces");
+    expect(request.body).toEqual(workspaceBody);
+    expect(result).toEqual(response);
+  });
+
+  it("dispatches workspace update by workspace identifier", async () => {
+    const response = { policy_evaluation: { status: "success" } };
+    const mockRequest = vi.fn().mockResolvedValue(response);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const updateBody = { ...workspaceBody };
+    delete (updateBody as Partial<typeof workspaceBody>).identifier;
+
+    const result = await registry.dispatch(makeClient(mockRequest), "iacm_workspace", "update", {
+      org_id: "default",
+      project_id: "Testim",
+      workspace_id: "payments-prod",
+      body: updateBody,
+    });
+
+    const request = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      body: Record<string, unknown>;
+    };
+    expect(request.method).toBe("PUT");
+    expect(request.path).toBe(
+      "/iacm/api/orgs/default/projects/Testim/workspaces/payments-prod",
+    );
+    expect(request.body).toEqual(updateBody);
+    expect(result).toEqual(response);
+  });
+
+  it("rejects workspace create when an API-required field is missing", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const invalidBody = { ...workspaceBody };
+    delete (invalidBody as Partial<typeof workspaceBody>).provider_connector;
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_workspace", "create", {
+        org_id: "default",
+        project_id: "Testim",
+        body: invalidBody,
+      }),
+    ).rejects.toThrow("provider_connector");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("dispatches iacm_module get using the numeric id from harness_get resource_id mapping", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ id: 4640, name: "vpc" });
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
