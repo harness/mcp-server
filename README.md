@@ -132,7 +132,7 @@ Operational constraints in HTTP mode:
 - `POST /mcp` without `mcp-session-id` must be an `initialize` request.
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
 - `GET /mcp` is used for SSE notifications (progress updates and elicitation prompts).
-- Idle sessions are reaped after `MCP_SESSION_TTL_MS` milliseconds once no request or SSE stream is active (default `300000`, or 5 minutes).
+- Idle sessions are reaped after `MCP_SESSION_TTL_MS` milliseconds once no request or SSE stream is active (default `1800000`, or 30 minutes).
 - `GET /health` is the only non-MCP endpoint.
 - Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
 - Set `x-harness-pipeline-version: 0` or `1` on the `initialize` request to select V0 or V1 pipeline resources for that HTTP session.
@@ -555,7 +555,9 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_MCP_ALLOWED_HOSTS` | No       | --                          | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here                                                                                 |
 | `HARNESS_MCP_AUTH_TOKEN`    | No       | --                          | Bearer token required on `/mcp` HTTP routes when set. Required by default when HTTP transport binds to a non-loopback host                                                                                                                             |
 | `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | No | `false`         | Explicitly allow unauthenticated HTTP transport on non-loopback binds. Use only behind another authenticated control                                                                                                                                    |
+| `HARNESS_MCP_TRUST_PROXY`   | No       | `0`                         | Number of reverse proxy / load balancer hops to trust for client IP resolution (Express `trust proxy`). Set to the proxy count in front of the server so per-IP rate limiting keys on the real client rather than the proxy socket peer                |
 | `HARNESS_MCP_LOG_FILE`      | No       | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available                                                                                                                                                               |
+| `HARNESS_LOG_UNSAFE_BODIES` | No       | `false`                     | Include raw request/response bodies in logs. Off by default since bodies can contain secrets; enable only for local debugging                                                                                                                          |
 | `HARNESS_AUDIT_FILE`        | No       | --                          | Append audit events to a newline-delimited JSON file for durable local collection                                                                                                                                                                      |
 | `HARNESS_AUDIT_WEBHOOK_URL` | No       | --                          | HTTPS endpoint that receives batched audit events. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development                                                                                                                                   |
 | `HARNESS_AUDIT_WEBHOOK_TOKEN` | No     | --                          | Optional bearer token sent to the audit webhook                                                                                                                                                                                                        |
@@ -566,6 +568,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_SEARCH_SERVICE_URL` | No      | --                          | Base URL of the remote search service when `HARNESS_SEARCH_PROVIDER=remote` (e.g. `http://search-svc:8080`). Required when using the `remote` provider |
 | `HARNESS_SEARCH_SERVICE_HEADERS` | No  | --                          | JSON object of headers sent with every request to the remote search service. Supports any auth scheme: `{"Authorization":"Bearer tok"}`, `{"x-api-key":"key"}`, or multiple internal service-to-service headers |
 | `HARNESS_HF_CACHE_DIR`      | No       | `/tmp/hf-cache`             | Directory for the `@huggingface/transformers` model cache used by the `local` search provider. The Docker image pre-bakes the model into `/app/.cache/hf` to avoid runtime downloads. Set to a persistent volume path in production deployments       |
+| `HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY` | No | `3`              | Max concurrent log-blob downloads issued by `harness_diagnose` when fetching logs for failed steps. Increase only if diagnose latency is dominated by log-fetch wall-clock and the pod has memory headroom                                              |
 
 
 ### Semantic Search
