@@ -138,6 +138,9 @@ const moduleListExtract = (
   };
 };
 
+/** Module get/create/update return the module resource (or create result) directly. */
+const moduleExtract = (raw: unknown): unknown => raw;
+
 /**
  * IACM workspace costs: API returns a raw JSON array of cost entries.
  * Costs are typically a small finite list so has_more acts as a safety signal only.
@@ -527,6 +530,104 @@ const variableSetUpdateSchema: BodySchema = {
   ],
 };
 
+const moduleOptionalFields: BodyFieldSpec[] = [
+  { name: "description", type: "string", required: false, description: "Free-form module description" },
+  {
+    name: "tags",
+    type: "string",
+    required: false,
+    description: "Comma-separated tags (e.g. networking,vpc,aws)",
+  },
+  { name: "repository", type: "string", required: false, description: "Git repository name containing the module source" },
+  { name: "repository_branch", type: "string", required: false, description: "Repository branch" },
+  { name: "repository_commit", type: "string", required: false, description: "Repository commit or tag" },
+  {
+    name: "repository_connector",
+    type: "string",
+    required: false,
+    description: "Harness Git connector identifier; leave empty for Harness Code repositories",
+  },
+  { name: "repository_path", type: "string", required: false, description: "Path to the module within the repository" },
+  {
+    name: "git_tag_style",
+    type: "string",
+    required: false,
+    description: "Git tag pattern for versioning (e.g. module-name-*)",
+  },
+  {
+    name: "storage_type",
+    type: "string",
+    required: false,
+    description: "Version storage mode: git_reference or artifact",
+  },
+  {
+    name: "onboarding_pipeline",
+    type: "string",
+    required: false,
+    description: "Harness pipeline identifier used for module onboarding/metadata sync",
+  },
+  {
+    name: "onboarding_pipeline_org",
+    type: "string",
+    required: false,
+    description: "Org where the onboarding pipeline is defined",
+  },
+  {
+    name: "onboarding_pipeline_project",
+    type: "string",
+    required: false,
+    description: "Project where the onboarding pipeline is defined",
+  },
+  {
+    name: "onboarding_pipeline_sync",
+    type: "boolean",
+    required: false,
+    description: "When true, sync metadata automatically on new Git tags",
+  },
+  {
+    name: "org",
+    type: "string",
+    required: false,
+    description: "Org where the Git connector is defined (defaults to scope_org)",
+  },
+  {
+    name: "project",
+    type: "string",
+    required: false,
+    description: "Project where the Git connector is defined (defaults to scope_project)",
+  },
+];
+
+const moduleCreateSchema: BodySchema = {
+  description:
+    "IaCM module registry create definition. Account comes from auth headers. Optional org_id/project_id map to scope_org/scope_project query params.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Module name; unique within the same scope and system" },
+    {
+      name: "system",
+      type: "string",
+      required: true,
+      description: "Target provider/system in lowercase letters only (e.g. aws, gcp, azure, kubernetes)",
+    },
+    ...moduleOptionalFields,
+  ],
+};
+
+const moduleUpdateSchema: BodySchema = {
+  description:
+    "IaCM module registry update definition. Module id comes from the path (id / resource_id). Required body fields: name, system.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Module name; unique within the same scope and system" },
+    {
+      name: "system",
+      type: "string",
+      required: true,
+      description: "Target provider/system in lowercase letters only (e.g. aws, gcp, azure, kubernetes)",
+    },
+    ...moduleOptionalFields,
+  ],
+};
+
 // ─── Toolset definition ─────────────────────────────────────────────────────
 
 export const iacmToolset: ToolsetDefinition = {
@@ -846,12 +947,14 @@ export const iacmToolset: ToolsetDefinition = {
       displayName: "IaCM Module Registry",
       description:
         "Terraform modules registered in the Harness IaCM module registry. " +
-        "Modules have a name, version, provider, source_repo, tags, and invocation_count. " +
+        "Modules have a name, system/provider, version metadata, source_repo, tags, and invocation_count. " +
         "PAGINATION: Results are capped at 30 per page (1-based). " +
         "Response includes has_more (true = more pages exist) and page_count (items on THIS page only). " +
         "IMPORTANT: page_count is NOT the total module count. " +
         "To find the true total, paginate until has_more=false and sum the page_counts. " +
-        "Use harness_get with the numeric id field (from list) to fetch full module details.",
+        "Use harness_get with the numeric/UUID id from list (NOT the module name). " +
+        "Use harness_create with body.name + body.system to register a module; optional org_id/project_id become scope_org/scope_project query params. " +
+        "Use harness_update with id/resource_id plus body.name + body.system to update.",
       toolset: "iacm",
       scope: "account",
       identifierFields: ["id"],
@@ -898,12 +1001,48 @@ export const iacmToolset: ToolsetDefinition = {
           path: "/iacm/api/modules/{moduleId}",
           pathParams: { id: "moduleId" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: (raw: unknown) => raw,
+          responseExtractor: moduleExtract,
           description:
             "Get full details for a specific IaCM module. " +
-            "IMPORTANT: id must be the numeric id from the list response (e.g. '4640'), " +
+            "IMPORTANT: id must be the numeric/UUID id from the list response (e.g. '4640'), " +
             "NOT the module name (e.g. 'buha-module-v2'). " +
-            "Always call harness_list on iacm_module first to get the numeric id, then call harness_get.",
+            "Always call harness_list on iacm_module first to get the id, then call harness_get.",
+        },
+        create: {
+          method: "POST",
+          path: "/iacm/api/modules",
+          queryParams: {
+            org_id: "scope_org",
+            project_id: "scope_project",
+          },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          bodySchema: moduleCreateSchema,
+          skipScopeBodyInjection: true,
+          responseExtractor: moduleExtract,
+          description:
+            "Create a module in the IaCM module registry. Required body fields: name, system. " +
+            "Optional org_id/project_id are sent as scope_org/scope_project query params. " +
+            "Optional body fields include repository metadata, tags, storage_type, and onboarding pipeline settings. " +
+            "IaCM enforces permissions and validation. The response includes the module id needed for later get/update.",
+        },
+        update: {
+          method: "PUT",
+          path: "/iacm/api/modules/{moduleId}",
+          pathParams: { id: "moduleId" },
+          queryParams: {
+            org_id: "scope_org",
+            project_id: "scope_project",
+          },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          bodySchema: moduleUpdateSchema,
+          skipScopeBodyInjection: true,
+          responseExtractor: moduleExtract,
+          description:
+            "Update a module in the IaCM module registry by numeric/UUID id (id / resource_id). " +
+            "Required body fields: name, system. Optional org_id/project_id map to scope_org/scope_project query params. " +
+            "IaCM enforces permissions and validation.",
         },
       },
     },

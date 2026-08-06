@@ -252,6 +252,49 @@ describe("workspaceWriteExtract", () => {
   });
 });
 
+// ─── Module write contract ───────────────────────────────────────────────────
+
+describe("iacm_module write contract", () => {
+  it("registers create and update against the module registry paths", () => {
+    const create = getOp("iacm_module", "create");
+    const update = getOp("iacm_module", "update");
+
+    expect(create.method).toBe("POST");
+    expect(create.path).toBe("/iacm/api/modules");
+    expect(create.queryParams).toEqual({
+      org_id: "scope_org",
+      project_id: "scope_project",
+    });
+    expect(create.operationPolicy).toEqual({
+      risk: "medium_write",
+      retryPolicy: "do_not_retry",
+    });
+    expect(create.skipScopeBodyInjection).toBe(true);
+
+    expect(update.method).toBe("PUT");
+    expect(update.path).toBe("/iacm/api/modules/{moduleId}");
+    expect(update.pathParams).toEqual({ id: "moduleId" });
+    expect(update.queryParams).toEqual({
+      org_id: "scope_org",
+      project_id: "scope_project",
+    });
+    expect(update.operationPolicy).toEqual({
+      risk: "medium_write",
+      retryPolicy: "do_not_retry",
+    });
+    expect(update.skipScopeBodyInjection).toBe(true);
+  });
+
+  it("documents create/update required body fields as name and system", () => {
+    for (const op of ["create", "update"] as const) {
+      const required = getOp("iacm_module", op)
+        .bodySchema!.fields.filter((field) => field.required)
+        .map((field) => field.name);
+      expect(required).toEqual(["name", "system"]);
+    }
+  });
+});
+
 // ─── Variable set contract ───────────────────────────────────────────────────
 
 describe("iacm_variable_set contract", () => {
@@ -1018,6 +1061,73 @@ describe("iacm registry dispatch", () => {
         project_id: "Testim",
       }),
     ).rejects.toThrow("variable_set_id");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("dispatches module create and update with optional scope query params", async () => {
+    const created = { id: "4640", name: "vpc", system: "aws" };
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce(created)
+      .mockResolvedValueOnce({ ...created, description: "updated" });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_module", "create", {
+      org_id: "default",
+      project_id: "Testim",
+      body: {
+        name: "vpc",
+        system: "aws",
+        repository: "terraform-modules",
+        repository_connector: "account.github",
+      },
+    });
+    await registry.dispatch(makeClient(mockRequest), "iacm_module", "update", {
+      id: "4640",
+      org_id: "default",
+      body: {
+        name: "vpc",
+        system: "aws",
+        description: "updated",
+      },
+    });
+
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "POST",
+      path: "/iacm/api/modules",
+      params: {
+        scope_org: "default",
+        scope_project: "Testim",
+      },
+      body: {
+        name: "vpc",
+        system: "aws",
+        repository: "terraform-modules",
+        repository_connector: "account.github",
+      },
+    });
+    expect(mockRequest.mock.calls[1]![0]).toMatchObject({
+      method: "PUT",
+      path: "/iacm/api/modules/4640",
+      params: {
+        scope_org: "default",
+      },
+      body: {
+        name: "vpc",
+        system: "aws",
+        description: "updated",
+      },
+    });
+  });
+
+  it("rejects module create when system is missing", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_module", "create", {
+        body: { name: "vpc" },
+      }),
+    ).rejects.toThrow("system");
     expect(mockRequest).not.toHaveBeenCalled();
   });
 });

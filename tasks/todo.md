@@ -11,7 +11,7 @@
 - IaCM APIs own validation, RBAC, persistence, and audit; MCP forwards the caller token.
 - Stacked follow-ups (separate PRs): variable sets → modules → providers.
 
-## IaCM variable set list/get/create/update (this PR)
+## IaCM variable set list/get/create/update (#800 — awaiting merge)
 - [x] Add `iacm_variable_set` list/get/create/update with multi-scope pathBuilder
 - [x] bodySchema + medium_write policy + skipScopeBodyInjection
 - [x] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
@@ -22,6 +22,17 @@
 - Variable sets are multi-scope (account/org/project) via pathBuilder + resource_scope.
 - Create/update return the VariableSet resource (not policy_evaluation).
 - Do not claim deny-path RBAC coverage while permissions are Experimental.
+
+## IaCM module registry create/update (this PR)
+- [x] Add `iacm_module` create/update with name/system body schemas + scope_org/scope_project query mapping
+- [ ] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
+- [ ] Note Active RBAC: `iac_registry_view` / `iac_registry_edit` are enforceable
+- [ ] Open PR stacked on variable-set branch (#800)
+
+### Plan
+- Module registry is account-scoped; optional org_id/project_id → scope_org/scope_project query params.
+- Create/update return the module resource (includes id for later get/update).
+- Registry RBAC is Active — deny paths are testable via smoke script.
 
 ## Dependency security advisories (2026-08-03)
 - [x] Confirm affected dependency chains and fixed versions for `fast-uri` and `ip-address`
