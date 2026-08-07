@@ -803,12 +803,13 @@ describe("T9-v2: compactItems effectiveness for SCS", () => {
 
     const [compacted] = compactItems([scsArtifact]) as Record<string, unknown>[];
 
-    // Only name and tags survive the generic whitelist
+    // name, tags, and the resource's own id survive the generic whitelist.
+    // (id is now retained so drill-down resources can key off it.)
     expect(compacted.name).toBeDefined();
     expect(compacted.tags).toBeDefined();
+    expect(compacted.id).toBe("6799da3b");
 
-    // All these critical SCS fields are dropped
-    expect(compacted.id).toBeUndefined();
+
     expect(compacted.digest).toBeUndefined();
     expect(compacted.url).toBeUndefined();
     expect(compacted.components_count).toBeUndefined();

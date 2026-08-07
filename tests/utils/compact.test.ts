@@ -66,6 +66,15 @@ describe("compactItems", () => {
     expect(result[0]).toEqual({ pipelineIdentifier: "p1", projectId: "proj", env_id: "env1" });
   });
 
+  it("keeps bare id and uuid (the resource's own identifier)", () => {
+    // Regression: the IDENTIFIER_PATTERN /(?:Identifier|Id|_id)$/ matches folderId
+    // but NOT lowercase "id"/"uuid". Cost perspectives return their perspective_id
+    // as `id`; stripping it left the agent unable to call cost_breakdown.
+    const items = [{ id: "k0H5ygr7SriAlJNMgAapqg", uuid: "abc-123", name: "GenAI Cost", folderId: "F1" }];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toEqual({ id: "k0H5ygr7SriAlJNMgAapqg", uuid: "abc-123", name: "GenAI Cost", folderId: "F1" });
+  });
+
   it("strips verbose metadata fields", () => {
     const items = [{
       identifier: "p1",

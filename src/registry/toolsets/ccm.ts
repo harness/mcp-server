@@ -360,6 +360,37 @@ function buildPreferences(): Record<string, unknown> {
 }
 
 // ---------------------------------------------------------------------------
+// Compact a perspectiveTimeSeriesStats data point. Each stat is
+// { time, values: [{ key: { id, name, type }, value }] }. None of these
+// fields match the generic compaction whitelist, so without a resource-specific
+// compactItem the whole stat is stripped to `{}` (see harness-list compact pass).
+// Keep `time` and a slimmed `values` array; drop __typename noise.
+// ---------------------------------------------------------------------------
+
+function compactTimeseriesStat(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  if (typeof item.time === "number") slim.time = item.time;
+  if (Array.isArray(item.values)) {
+    slim.values = item.values.map((entry) => {
+      if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return entry;
+      const e = entry as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      if (e.key !== null && typeof e.key === "object" && !Array.isArray(e.key)) {
+        const k = e.key as Record<string, unknown>;
+        const keyOut: Record<string, unknown> = {};
+        if (k.id !== undefined) keyOut.id = k.id;
+        if (k.name !== undefined) keyOut.name = k.name;
+        if (k.type !== undefined) keyOut.type = k.type;
+        out.key = keyOut;
+      }
+      if (e.value !== undefined) out.value = e.value;
+      return out;
+    });
+  }
+  return slim;
+}
+
+// ---------------------------------------------------------------------------
 // GraphQL endpoint path helper
 // ---------------------------------------------------------------------------
 
@@ -900,6 +931,7 @@ Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, 
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
+      compactItem: compactTimeseriesStat,
       listFilterFields: [
         { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
