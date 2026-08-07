@@ -1605,12 +1605,12 @@ SEI resources are consolidated for token efficiency. Use `metric` or `aspect` pa
 
 ### Evidence Vault
 
-Evidence Vault stores in-toto attestations (SDLC evidences). List supports account/org/project scope via `resource_scope`. Singular free-text filters (pipeline, artifact alone, gitoid) use `search_term`; an additional Name constraint uses `filters.subject_name`; subject content digest uses `filters.subject_digest`. Get looks up by `gitoid_sha256` and requires `org_id`/`project_id` (from the list row). Requires feature flag `SCS_EVIDENCE_VAULT`.
+Evidence Vault stores in-toto attestations (SDLC evidences). List supports account/org/project scope via `resource_scope`. Singular free-text filters (pipeline, artifact alone, gitoid) use `search_term`; an additional Name constraint uses `filters.subject_name`; subject content digest uses `filters.subject_digest`. Get looks up by `gitoid_sha256` and requires `org_id`/`project_id` (from the list row). Download (`harness_execute` action `download`) returns a time-limited `download_url` — always show that link to the user. Requires feature flag `SCS_EVIDENCE_VAULT`.
 
 
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 | ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
-| `attestation` | x    | x   |        |        |        |                 |
+| `attestation` | x    | x   |        |        |        | `download`      |
 
 
 

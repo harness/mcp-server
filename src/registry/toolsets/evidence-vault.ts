@@ -1,5 +1,11 @@
 import type { ToolsetDefinition } from "../types.js";
-import { isRecord, asString, asNumber, asRecord } from "../../utils/type-guards.js";
+import { isRecord, asString } from "../../utils/type-guards.js";
+import {
+  attestationDetailsExtract,
+  attestationDownloadExtract,
+  attestationListExtract,
+  projectAttestationListItem,
+} from "../extractors.js";
 
 const SCS = "/ssca-manager";
 const SEARCH_MAX_LEN = 100;
@@ -74,104 +80,6 @@ export function buildAttestationListBody(input: Record<string, unknown>): Record
   return body;
 }
 
-/** Slim list row — drops status, updated_at, raw subjects/execution_context. */
-function projectAttestationListItem(raw: unknown): Record<string, unknown> {
-  if (!isRecord(raw)) return {};
-  const subject = asRecord(raw.subject);
-  const digest = subject ? asRecord(subject.digest) : undefined;
-  const exec = asRecord(raw.execution_context);
-
-  const out: Record<string, unknown> = {};
-  if (raw.id !== undefined) out.id = raw.id;
-  if (raw.type !== undefined) out.type = raw.type;
-  if (raw.source !== undefined) out.source = raw.source;
-  if (asString(raw.description)) out.description = raw.description;
-  if (asNumber(raw.created_at) !== undefined) out.created_at = raw.created_at;
-  if (asString(raw.org)) out.org = raw.org;
-  if (asString(raw.project)) out.project = raw.project;
-
-  const subjectName = asString(raw.subject_name) ?? (subject ? asString(subject.name) : undefined);
-  if (subjectName) out.subject_name = subjectName;
-
-  const subjectDigest =
-    asString(raw.subject_digest) ??
-    (digest ? asString(digest.value) : undefined) ??
-    (subject ? asString(subject.sha256) : undefined);
-  if (subjectDigest) out.subject_digest = subjectDigest;
-
-  if (asNumber(raw.additional_subject_count) !== undefined) {
-    out.additional_subject_count = raw.additional_subject_count;
-  }
-  if (asString(raw.gitoid_sha256)) out.gitoid_sha256 = raw.gitoid_sha256;
-
-  const pipelineId = asString(raw.pipeline_id) ?? (exec ? asString(exec.pipeline_id) : undefined);
-  if (pipelineId) out.pipeline_id = pipelineId;
-  const pipelineName = asString(raw.pipeline_name) ?? (exec ? asString(exec.pipeline_name) : undefined);
-  if (pipelineName) out.pipeline_name = pipelineName;
-  const pipelineExecutionId =
-    asString(raw.pipeline_execution_id) ?? (exec ? asString(exec.pipeline_execution_id) : undefined);
-  if (pipelineExecutionId) out.pipeline_execution_id = pipelineExecutionId;
-
-  return out;
-}
-
-/** Bare array → `{ items, total }` with slim rows (page-length total). */
-export function attestationListExtract(raw: unknown): {
-  items: unknown[];
-  total: number;
-  _display_hint: string;
-} {
-  const items = (Array.isArray(raw) ? raw : []).map(projectAttestationListItem);
-  return {
-    items,
-    total: items.length,
-    _display_hint:
-      "When showing attestations in a table, ALWAYS include gitoid_sha256 as a column "
-      + "(plus type, source, org, project, created_at, description; subject_name when present). "
-      + "Never omit gitoid_sha256.",
-  };
-}
-
-function projectAttestationSubject(raw: unknown): Record<string, unknown> {
-  if (!isRecord(raw)) return {};
-  const out: Record<string, unknown> = {};
-  if (asString(raw.name)) out.name = raw.name;
-  const digest = asRecord(raw.digest);
-  if (!digest) return out;
-  const algorithm = asString(digest.algorithm);
-  const value = asString(digest.value);
-  if (algorithm) out.digest_algorithm = algorithm;
-  if (value) out.digest_value = value;
-  return out;
-}
-
-/** Slim details — all subjects + signature; pipeline flatten like list; drops artifact_id/payload_type/updated_at. */
-export function attestationDetailsExtract(raw: unknown): Record<string, unknown> {
-  if (!isRecord(raw)) return {};
-  const exec = asRecord(raw.execution_context);
-
-  const out: Record<string, unknown> = {};
-  if (raw.type !== undefined) out.type = raw.type;
-  if (raw.source !== undefined) out.source = raw.source;
-  if (asString(raw.description)) out.description = raw.description;
-  if (asString(raw.gitoid_sha256)) out.gitoid_sha256 = raw.gitoid_sha256;
-  if (asNumber(raw.created_at) !== undefined) out.created_at = raw.created_at;
-  if (asString(raw.signature)) out.signature = raw.signature;
-
-  const subjectsRaw = Array.isArray(raw.subjects) ? raw.subjects : [];
-  out.subjects = subjectsRaw.map(projectAttestationSubject);
-
-  const pipelineId = asString(raw.pipeline_id) ?? (exec ? asString(exec.pipeline_id) : undefined);
-  if (pipelineId) out.pipeline_id = pipelineId;
-  const pipelineName = asString(raw.pipeline_name) ?? (exec ? asString(exec.pipeline_name) : undefined);
-  if (pipelineName) out.pipeline_name = pipelineName;
-  const pipelineExecutionId =
-    asString(raw.pipeline_execution_id) ?? (exec ? asString(exec.pipeline_execution_id) : undefined);
-  if (pipelineExecutionId) out.pipeline_execution_id = pipelineExecutionId;
-
-  return out;
-}
-
 export const evidenceVaultToolset: ToolsetDefinition = {
   name: "evidence-vault",
   displayName: "Evidence Vault",
@@ -184,11 +92,13 @@ export const evidenceVaultToolset: ToolsetDefinition = {
       displayName: "Attestation",
       description:
         "Evidence Vault attestation (in-toto evidence). "
-        + "List: always show gitoid_sha256 in tables; retain gitoid_sha256 + org + project for get. "
+        + "List: always show gitoid_sha256 in tables; retain gitoid_sha256 + org + project for get/download. "
         + "Get: harness_get(resource_id=<gitoid_sha256>, org_id, project_id) — lookup by gitoid only. "
+        + "Download: harness_execute(action='download', resource_id=<gitoid_sha256>, org_id, project_id) — "
+        + "returns a time-limited download_url; ALWAYS show that URL as a clickable link to the user. "
         + "Singular free-text (pipeline, artifact alone, gitoid) → search_term; additional Name → filters.subject_name; "
         + "subject digest → filters.subject_digest (not gitoid). Use item `description` to explain a single attestation. "
-        + "Default list scope is account; get requires org_id and project_id. Requires SCS_EVIDENCE_VAULT.",
+        + "Default list scope is account; get/download require org_id and project_id. Requires SCS_EVIDENCE_VAULT.",
       searchAliases: [
         "evidence vault",
         "attestation",
@@ -251,6 +161,23 @@ export const evidenceVaultToolset: ToolsetDefinition = {
           defaultQueryParams: { identifier_type: "gitoid_sha256" },
           responseExtractor: attestationDetailsExtract,
           description: "Get attestation details by gitoid_sha256",
+        },
+      },
+      executeActions: {
+        download: {
+          method: "GET",
+          path: `${SCS}/v2/orgs/{org}/projects/{project}/attestations/download-attestation/{digest}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            gitoid_sha256: "digest",
+          },
+          responseExtractor: attestationDownloadExtract,
+          actionDescription:
+            "Get a time-limited pre-signed URL for the DSSE attestation blob. "
+            + "ALWAYS show download_url as a clickable link to the user; do not omit it or only summarize.",
+          bodySchema: { description: "No body", fields: [] },
         },
       },
     },

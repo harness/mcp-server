@@ -2,9 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import {
   evidenceVaultToolset,
   buildAttestationListBody,
-  attestationListExtract,
-  attestationDetailsExtract,
 } from "../../src/registry/toolsets/evidence-vault.js";
+import {
+  attestationDetailsExtract,
+  attestationDownloadExtract,
+  attestationListExtract,
+} from "../../src/registry/extractors.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -55,6 +58,12 @@ function getGetOp(): EndpointSpec {
   return spec;
 }
 
+function getDownloadOp(): EndpointSpec {
+  const spec = findResource("attestation").executeActions?.download;
+  if (!spec) throw new Error("download execute action missing on attestation");
+  return spec;
+}
+
 describe("evidence-vault toolset", () => {
   it("registers attestation list against /ssca-manager/v2/attestations", () => {
     expect(evidenceVaultToolset.name).toBe("evidence-vault");
@@ -89,6 +98,20 @@ describe("evidence-vault toolset", () => {
     });
     expect(get.defaultQueryParams).toEqual({ identifier_type: "gitoid_sha256" });
     expect(get.operationPolicy).toEqual({ risk: "read", retryPolicy: "safe" });
+  });
+
+  it("registers attestation download execute action against download-attestation path", () => {
+    const download = getDownloadOp();
+    expect(download.method).toBe("GET");
+    expect(download.path).toBe(
+      "/ssca-manager/v2/orgs/{org}/projects/{project}/attestations/download-attestation/{digest}",
+    );
+    expect(download.pathParams).toEqual({
+      org_id: "org",
+      project_id: "project",
+      gitoid_sha256: "digest",
+    });
+    expect(download.operationPolicy).toEqual({ risk: "read", retryPolicy: "safe" });
   });
 
   it("loads into Registry by default", () => {
@@ -369,5 +392,75 @@ describe("attestation get dispatch", () => {
     await expect(
       registry.dispatch(makeClient(), "attestation", "get", { gitoid_sha256: "gid123" }),
     ).rejects.toThrow(/org_id/);
+  });
+});
+
+describe("attestationDownloadExtract", () => {
+  it("keeps download_url and expires_at with display hint", () => {
+    const result = attestationDownloadExtract({
+      download_url: "https://s3.example/presigned?X=1",
+      expires_at: 1700003600000,
+      extra: "drop-me",
+    });
+    expect(result).toEqual({
+      download_url: "https://s3.example/presigned?X=1",
+      expires_at: 1700003600000,
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+    expect(result).not.toHaveProperty("extra");
+  });
+});
+
+describe("attestation download dispatch", () => {
+  it("GETs download-attestation path with gitoid as digest", async () => {
+    const request = vi.fn().mockResolvedValue({
+      download_url: "https://s3.example/presigned",
+      expires_at: 1700003600000,
+    });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    const result = await registry.dispatchExecute(makeClient(request), "attestation", "download", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      gitoid_sha256: "gid123",
+    });
+
+    expect(request).toHaveBeenCalledTimes(1);
+    const opts = request.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+    };
+    expect(opts.method).toBe("GET");
+    expect(opts.path).toBe(
+      "/ssca-manager/v2/orgs/SSCA/projects/Sanity/attestations/download-attestation/gid123",
+    );
+    expect(result).toMatchObject({
+      download_url: "https://s3.example/presigned",
+      expires_at: 1700003600000,
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+  });
+
+  it("requires org_id and project_id for download", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    await expect(
+      registry.dispatchExecute(makeClient(), "attestation", "download", { gitoid_sha256: "gid123" }),
+    ).rejects.toThrow(/org_id/);
+  });
+
+  it("allows download under HARNESS_READ_ONLY (risk read)", async () => {
+    const request = vi.fn().mockResolvedValue({
+      download_url: "https://s3.example/presigned",
+      expires_at: 1700003600000,
+    });
+    const registry = new Registry(
+      makeConfig({ HARNESS_TOOLSETS: "evidence-vault", HARNESS_READ_ONLY: true }),
+    );
+    await expect(
+      registry.dispatchExecute(makeClient(request), "attestation", "download", {
+        org_id: "SSCA",
+        project_id: "Sanity",
+        gitoid_sha256: "gid123",
+      }),
+    ).resolves.toMatchObject({ download_url: "https://s3.example/presigned" });
   });
 });
