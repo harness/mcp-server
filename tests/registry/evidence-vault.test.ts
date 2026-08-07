@@ -407,6 +407,36 @@ describe("attestationDownloadExtract", () => {
     });
     expect(result).not.toHaveProperty("extra");
   });
+
+  it("returns empty object for non-object input", () => {
+    expect(attestationDownloadExtract(null)).toEqual({});
+    expect(attestationDownloadExtract(undefined)).toEqual({});
+    expect(attestationDownloadExtract("not-an-object")).toEqual({});
+    expect(attestationDownloadExtract([])).toEqual({});
+  });
+
+  it("filters invalid download_url and expires_at types", () => {
+    const result = attestationDownloadExtract({
+      download_url: 12345,
+      expires_at: "1700003600000",
+    });
+    expect(result).toEqual({
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+    expect(result).not.toHaveProperty("download_url");
+    expect(result).not.toHaveProperty("expires_at");
+  });
+
+  it("keeps download_url without expires_at when expiry is missing", () => {
+    const result = attestationDownloadExtract({
+      download_url: "https://s3.example/presigned",
+    });
+    expect(result).toEqual({
+      download_url: "https://s3.example/presigned",
+      _display_hint: expect.stringMatching(/expires_at/),
+    });
+    expect(result).not.toHaveProperty("expires_at");
+  });
 });
 
 describe("attestation download dispatch", () => {

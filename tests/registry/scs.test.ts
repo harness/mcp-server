@@ -2317,6 +2317,44 @@ describe("sbomDownloadExtract", () => {
 
   it("returns empty object for non-object input", () => {
     expect(sbomDownloadExtract(null)).toEqual({});
+    expect(sbomDownloadExtract(undefined)).toEqual({});
+    expect(sbomDownloadExtract("not-an-object")).toEqual({});
+    expect(sbomDownloadExtract([])).toEqual({});
+  });
+
+  it("filters invalid download_url and expires_at types", () => {
+    const result = sbomDownloadExtract({
+      download_url: 12345,
+      expires_at: "1700003600000",
+    });
+    expect(result).toEqual({
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+    expect(result).not.toHaveProperty("download_url");
+    expect(result).not.toHaveProperty("expires_at");
+  });
+
+  it("keeps download_url without expires_at when expiry is missing", () => {
+    const result = sbomDownloadExtract({
+      download_url: "https://s3.example/presigned",
+    });
+    expect(result).toEqual({
+      download_url: "https://s3.example/presigned",
+      _display_hint: expect.stringMatching(/expires_at/),
+    });
+    expect(result).not.toHaveProperty("expires_at");
+  });
+
+  it("omits empty download_url but keeps numeric expires_at", () => {
+    const result = sbomDownloadExtract({
+      download_url: "",
+      expires_at: 1700003600000,
+    });
+    expect(result).toEqual({
+      expires_at: 1700003600000,
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+    expect(result).not.toHaveProperty("download_url");
   });
 });
 
@@ -2364,6 +2402,30 @@ describe("scs_sbom download dispatch", () => {
         }),
       ]),
     );
+  });
+
+  it("requires org_id and project_id for get", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    await expect(
+      registry.dispatch(makeClient(), "scs_sbom", "get", { orchestration_id: "orch-123" }),
+    ).rejects.toThrow(/org_id/);
+  });
+
+  it("requires orchestration_id for get", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    await expect(
+      registry.dispatch(makeClient(), "scs_sbom", "get", {
+        org_id: "SSCA",
+        project_id: "Sanity",
+      }),
+    ).rejects.toThrow(/orchestration_id/);
+  });
+
+  it("uses singular org/project path segments (SCS API inconsistency)", () => {
+    const path = findResource("scs_sbom").operations.get?.path ?? "";
+    expect(path).toContain("/org/{org}/project/{project}/");
+    expect(path).not.toContain("/orgs/");
+    expect(path).not.toContain("/projects/");
   });
 
   it("allows scs_sbom get under HARNESS_READ_ONLY (risk read)", async () => {
