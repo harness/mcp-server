@@ -1,6 +1,6 @@
 /**
  * Tests for the `sast_remediation_diff` resource that wraps
- * STO DiffOccurrences (`GET /sto/api/v2/sast-remediation/diff-occurrences`).
+ * STO DiffOccurrences (`GET /sto/api/v2/remediation-agent/diff-occurrences`).
  */
 import { describe, it, expect, vi } from "vitest";
 import { stoToolset } from "../../src/registry/toolsets/sto.js";
@@ -49,7 +49,7 @@ function getListSpec(): EndpointSpec {
 }
 
 describe("sast_remediation_diff resource registration", () => {
-  it("registers list-only GET against sast-remediation/diff-occurrences", () => {
+  it("registers list-only GET against remediation-agent/diff-occurrences", () => {
     const resource = getResource();
     const list = getListSpec();
     expect(resource.scope).toBe("project");
@@ -59,11 +59,12 @@ describe("sast_remediation_diff resource registration", () => {
       project: "projectId",
     });
     expect(list.method).toBe("GET");
-    expect(list.path).toBe("/sto/api/v2/sast-remediation/diff-occurrences");
+    expect(list.path).toBe("/sto/api/v2/remediation-agent/diff-occurrences");
     expect(list.queryParams).toMatchObject({
       scan_id: "scanId",
       validation_execution_id: "validationExecutionId",
       execution_id: "validationExecutionId",
+      issue_types: "issueTypes",
       only_true_positive: "onlyTruePositive",
       limit: "limit",
       severity_codes: "severityCodes",
@@ -127,6 +128,39 @@ describe("sast_remediation_diff preflight", () => {
     ).resolves.toBeUndefined();
     expect(input.validation_execution_id).toBe("exec-legacy");
     expect(input.execution_id).toBeUndefined();
+  });
+
+  it("omits issue_types when unset (sto-core owns default)", async () => {
+    const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      validation_execution_id: "exec-1",
+    };
+    await expect(
+      spec.preflight!({
+        client: { account: "test-account" },
+        input,
+        registry: { dispatch: async () => undefined, getResource },
+      }),
+    ).resolves.toBeUndefined();
+    expect(input.issue_types).toBeUndefined();
+  });
+
+  it("normalizes issue_types when provided", async () => {
+    const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      validation_execution_id: "exec-1",
+      issue_types: " sast , secret ",
+    };
+    await expect(
+      spec.preflight!({
+        client: { account: "test-account" },
+        input,
+        registry: { dispatch: async () => undefined, getResource },
+      }),
+    ).resolves.toBeUndefined();
+    expect(input.issue_types).toBe("SAST,SECRET");
   });
 });
 
@@ -226,7 +260,7 @@ describe("sast_remediation_diff — registry dispatch", () => {
       params: Record<string, unknown>;
     };
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/sto/api/v2/sast-remediation/diff-occurrences");
+    expect(call.path).toBe("/sto/api/v2/remediation-agent/diff-occurrences");
     expect(call.params).toMatchObject({
       accountId: "test-account",
       orgId: "default",
@@ -237,6 +271,7 @@ describe("sast_remediation_diff — registry dispatch", () => {
       limit: 50,
       severityCodes: "HIGH,CRITICAL",
     });
+    expect(call.params.issueTypes).toBeUndefined();
     expect(call.params.executionId).toBeUndefined();
   });
 

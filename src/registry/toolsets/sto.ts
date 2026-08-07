@@ -818,7 +818,15 @@ export const stoToolset: ToolsetDefinition = {
             "Legacy alias for validation_execution_id. Prefer validation_execution_id.",
           required: false,
         },
-        { name: "only_true_positive", type: "boolean", description: "When true (default), only TRUE_POSITIVE triage verdicts are treated as in-scope on the original scan." },
+        {
+          name: "issue_types",
+          description:
+            "Comma-separated issue types to scope (sto-core issueTypes). "
+            + "v1: SAST,SECRET. Omit when unset — sto-core defaults to SAST+SECRET.",
+          enum: ["SAST", "SECRET"],
+        },
+        { name: "only_true_positive", type: "boolean", description: "When true, only TRUE_POSITIVE triage verdicts are treated as in-scope on the original scan (default false)." },
+        { name: "exclude_unreachable", type: "boolean", description: "When true, occurrences with 'unreachable' reachability are excluded from the original in-scope set (default false). Must match the value the remediation scope step used." },
         { name: "limit", type: "number", description: "Max occurrences to return (1–10000, default 1000)." },
         { name: "severity_codes", description: "Comma-separated severities.", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
         { name: "exclude_repo_patterns", description: "Comma-separated glob patterns matching repository target.name to exclude." },
@@ -826,14 +834,16 @@ export const stoToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/sto/api/v2/sast-remediation/diff-occurrences",
+          path: "/sto/api/v2/remediation-agent/diff-occurrences",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             scan_id: "scanId",
             validation_execution_id: "validationExecutionId",
             // Legacy alias — prefer validation_execution_id.
             execution_id: "validationExecutionId",
+            issue_types: "issueTypes",
             only_true_positive: "onlyTruePositive",
+            exclude_unreachable: "excludeUnreachable",
             limit: "limit",
             severity_codes: "severityCodes",
             exclude_repo_patterns: "excludeRepoPatterns",
@@ -857,6 +867,20 @@ export const stoToolset: ToolsetDefinition = {
             // Normalize so queryParams maps a single canonical key.
             input.validation_execution_id = validationExecutionId;
             delete input.execution_id;
+            // Omit issueTypes when unset — sto-core resolveIssueTypes defaults
+            // to SAST+SECRET. Only normalize when the caller passed a value.
+            if (typeof input.issue_types !== "string" || input.issue_types.length === 0) {
+              delete input.issue_types;
+            } else {
+              input.issue_types = String(input.issue_types)
+                .split(",")
+                .map((t: string) => t.trim().toUpperCase())
+                .filter(Boolean)
+                .join(",");
+              if (!input.issue_types) {
+                delete input.issue_types;
+              }
+            }
           },
           responseExtractor: stoSastRemediationDiffExtract,
           skipCompact: true,
