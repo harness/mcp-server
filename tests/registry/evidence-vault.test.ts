@@ -178,6 +178,31 @@ describe("buildAttestationListBody", () => {
     const scopes = { myOrg: ["projA"] };
     expect(buildAttestationListBody({ scopes })).toEqual({ scopes });
   });
+
+  it("coerces string epoch times and wraps scalar types/sources in arrays", () => {
+    const body = buildAttestationListBody({
+      types: "Build",
+      sources: "Harness",
+      start_time: "1700000000000",
+      end_time: "1700100000000",
+    });
+    expect(body).toEqual({
+      types: ["Build"],
+      sources: ["Harness"],
+      start_time: 1700000000000,
+      end_time: 1700100000000,
+    });
+  });
+
+  it("ignores non-numeric epoch strings", () => {
+    expect(buildAttestationListBody({ start_time: "not-a-number", end_time: "" })).toEqual({});
+  });
+
+  it("removes whitespace-only search_term so it is not sent as an empty query", () => {
+    const input: Record<string, unknown> = { search_term: "   " };
+    expect(buildAttestationListBody(input)).toEqual({});
+    expect(input.search_term).toBeUndefined();
+  });
 });
 
 describe("attestationListExtract", () => {
@@ -238,6 +263,42 @@ describe("attestationListExtract", () => {
     expect(result.items).toHaveLength(2);
     expect((result.items[0] as Record<string, unknown>).id).toBe("att-1");
     expect(result._display_hint).toMatch(/gitoid_sha256/);
+  });
+
+  it("prefers top-level subject_name and subject_digest over nested subject fields", () => {
+    const result = attestationListExtract([
+      {
+        id: "att-top",
+        subject_name: "top-level-name",
+        subject_digest: "top-level-digest",
+        subject: { name: "nested-name", digest: { value: "nested-digest" } },
+      },
+    ]);
+    expect(result.items[0]).toMatchObject({
+      subject_name: "top-level-name",
+      subject_digest: "top-level-digest",
+    });
+  });
+
+  it("falls back to subject.sha256 when digest.value is absent", () => {
+    const result = attestationListExtract([
+      {
+        id: "att-sha",
+        subject: { name: "img", sha256: "abc123" },
+      },
+    ]);
+    expect(result.items[0]).toMatchObject({
+      subject_name: "img",
+      subject_digest: "abc123",
+    });
+  });
+
+  it("returns an empty page for non-array input", () => {
+    expect(attestationListExtract(null)).toEqual({
+      items: [],
+      total: 0,
+      _display_hint: expect.stringMatching(/gitoid_sha256/),
+    });
   });
 
   it("is idempotent under compactItem re-application (harness_list default compact)", () => {
@@ -355,6 +416,17 @@ describe("attestationDetailsExtract", () => {
     expect(result).not.toHaveProperty("payload_type");
     expect(result).not.toHaveProperty("execution_context");
   });
+
+  it("returns {} for non-record API responses", () => {
+    expect(attestationDetailsExtract(null)).toEqual({});
+    expect(attestationDetailsExtract("bad")).toEqual({});
+  });
+
+  it("keeps subject name when digest metadata is missing", () => {
+    expect(attestationDetailsExtract({ subjects: [{ name: "unsigned-artifact" }] })).toEqual({
+      subjects: [{ name: "unsigned-artifact" }],
+    });
+  });
 });
 
 describe("attestation get dispatch", () => {
@@ -406,6 +478,17 @@ describe("attestationDownloadExtract", () => {
       _display_hint: expect.stringMatching(/download_url/),
     });
     expect(result).not.toHaveProperty("extra");
+  });
+
+  it("returns {} for non-record API responses", () => {
+    expect(attestationDownloadExtract(null)).toEqual({});
+  });
+
+  it("keeps download_url even when expires_at is absent", () => {
+    expect(attestationDownloadExtract({ download_url: "https://s3.example/presigned" })).toEqual({
+      download_url: "https://s3.example/presigned",
+      _display_hint: expect.stringMatching(/download_url/),
+    });
   });
 });
 
