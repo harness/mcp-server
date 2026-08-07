@@ -27,6 +27,11 @@ export function assertListScopeResolved(
 ): void {
   if (def.scopeOptional) return;
 
+  // Explicit resource_scope is validated in executeSpec via getExplicitScopeValues,
+  // which supports account/org/project narrowing on multi-scope resources (e.g. connector).
+  const rawScope = input.resource_scope;
+  if (rawScope !== undefined && rawScope !== "") return;
+
   const scopeKeywords = new Set(["org", "account", "project", "organization"]);
   const rawOrg = input.org_id;
   const orgFromInput =

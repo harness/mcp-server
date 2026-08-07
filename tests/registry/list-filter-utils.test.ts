@@ -60,4 +60,16 @@ describe("assertListScopeResolved", () => {
       ),
     ).toThrow(/requires project scope/i);
   });
+
+  it("defers to executeSpec when resource_scope is explicit", () => {
+    expect(() =>
+      assertListScopeResolved(
+        "connector",
+        { ...projectScoped, resourceType: "connector", supportedScopes: ["account", "org", "project"] },
+        { resource_scope: "org" },
+        undefined,
+        undefined,
+      ),
+    ).not.toThrow();
+  });
 });
