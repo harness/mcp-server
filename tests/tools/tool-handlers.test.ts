@@ -10,7 +10,7 @@ import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { Registry } from "../../src/registry/index.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
-import { listOutputSchema } from "../../src/tools/output-schemas.js";
+import { listOutputSchema, getOutputSchema } from "../../src/tools/output-schemas.js";
 
 // Top-level mocks for execution_log tests — must be before any imports that pull these in
 vi.mock("../../src/utils/log-resolver.js", () => ({
@@ -269,6 +269,58 @@ describe("harness_get", () => {
     expect(call.path).toBe("/internal/api/v2/splits/ws/workspace-1/my_flag");
     expect(call.params.orgIdentifier).toBeUndefined();
     expect(call.params.projectIdentifier).toBeUndefined();
+  });
+});
+
+describe("harness_get — scs_chain_of_custody", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let registry: Registry;
+  let client: HarnessClient;
+  let mockRequest: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    server = makeMcpServer();
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    mockRequest = vi.fn().mockResolvedValue([
+      { orchestration: { id: "orch-1" }, type: "SBOM" },
+      { orchestration: { id: "orch-2" }, type: "SLSA" },
+    ]);
+    client = makeClient(mockRequest);
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server, registry, client);
+  });
+
+  it("wraps top-level array API responses so structuredContent validates", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "scs_chain_of_custody",
+      artifact_id: "art-123",
+      org_id: "SSCA",
+      project_id: "Sanity",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({
+      items: [
+        { orchestration: { id: "orch-1" }, type: "SBOM" },
+        { orchestration: { id: "orch-2" }, type: "SLSA" },
+      ],
+      total: 2,
+    });
+    expect(result.structuredContent).toBeDefined();
+    expect(getOutputSchema.safeParse(result.structuredContent).success).toBe(true);
+  });
+
+  it("maps resource_id to artifact_id for chain of custody get", async () => {
+    const result = await server.call("harness_get", {
+      resource_type: "scs_chain_of_custody",
+      resource_id: "art-from-url",
+      org_id: "SSCA",
+      project_id: "Sanity",
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string };
+    expect(call.path).toContain("/artifacts/art-from-url/chain-of-custody");
   });
 });
 
