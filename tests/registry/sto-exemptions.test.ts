@@ -242,21 +242,6 @@ describe("security_exemption list — registry dispatch", () => {
     expect(requestSpy).not.toHaveBeenCalled();
   });
 
-  it("rejects exemption_statuses with a targeted miskey error", async () => {
-    const requestSpy = vi.fn().mockResolvedValue(rawApiResponse);
-    const client = makeClient(requestSpy);
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
-
-    await expect(
-      registry.dispatch(client, "security_exemption", "list", {
-        exemption_statuses: ["pending"],
-        org_id: "AI_Devops",
-        project_id: "Sanity",
-      }),
-    ).rejects.toThrow(/use filters\.status for security_exemption/i);
-    expect(requestSpy).not.toHaveBeenCalled();
-  });
-
   it("fails loud when org_id and project_id are missing and config defaults are unset", async () => {
     const requestSpy = vi.fn().mockResolvedValue(rawApiResponse);
     const client = makeClient(requestSpy);

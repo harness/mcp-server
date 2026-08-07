@@ -391,11 +391,6 @@ export interface ResourceDefinition {
   /** Additional filter fields for list operations */
   listFilterFields?: FilterFieldSpec[];
   /**
-   * Reject commonly confused list-filter keys before required-filter validation.
-   * Keys are wrong names agents send; values are full error hints (no API call).
-   */
-  listFilterMiskeys?: Record<string, string>;
-  /**
    * Optional per-resource compaction override for list items. When set,
    * harness_list applies this instead of the generic key-name whitelist
    * (utils/compact.ts) to each item in compact mode. Use when a resource's

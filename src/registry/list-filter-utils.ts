@@ -14,23 +14,6 @@ function resolveScopeId(
 }
 
 /**
- * Reject filter keys that belong to a sibling resource type but are commonly
- * sent by mistake (e.g. security_issue's exemption_statuses on security_exemption).
- */
-export function assertListFilterMiskeys(
-  resourceType: string,
-  input: Record<string, unknown>,
-  miskeys: Record<string, string> | undefined,
-): void {
-  if (!miskeys) return;
-
-  for (const [wrongKey, hint] of Object.entries(miskeys)) {
-    if (input[wrongKey] === undefined) continue;
-    throw new Error(`${resourceType}: ${hint}`);
-  }
-}
-
-/**
  * Fail loud before hitting APIs that 500 when org/project query params are omitted.
  * Matches explicit `resource_scope` validation — implicit config fallback must
  * actually resolve, not silently become `undefined` in the query string.
