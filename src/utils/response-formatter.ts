@@ -57,6 +57,18 @@ export function normalizeHarnessListPayload(
   return result;
 }
 
+/**
+ * Coerce registry get payloads into an object for MCP `structuredContent`.
+ * Top-level JSON arrays (e.g. scs_chain_of_custody) cannot be sent as structured
+ * content — wrap as `{ items, total }` like harness_list does for list responses.
+ */
+export function normalizeHarnessGetPayload(result: unknown): unknown {
+  if (Array.isArray(result)) {
+    return { items: result, total: result.length };
+  }
+  return result;
+}
+
 export function jsonResult(data: unknown): ToolResult {
   return {
     content: [{ type: "text", text: JSON.stringify(data) }],

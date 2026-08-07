@@ -2,10 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import {
   evidenceVaultToolset,
   buildAttestationListBody,
-  attestationListExtract,
-  attestationDetailsExtract,
-  attestationDownloadExtract,
 } from "../../src/registry/toolsets/evidence-vault.js";
+import {
+  attestationDetailsExtract,
+  attestationListExtract,
+  presignedDownloadExtract,
+} from "../../src/registry/extractors.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -393,9 +395,9 @@ describe("attestation get dispatch", () => {
   });
 });
 
-describe("attestationDownloadExtract", () => {
+describe("presignedDownloadExtract (attestation download)", () => {
   it("keeps download_url and expires_at with display hint", () => {
-    const result = attestationDownloadExtract({
+    const result = presignedDownloadExtract({
       download_url: "https://s3.example/presigned?X=1",
       expires_at: 1700003600000,
       extra: "drop-me",
