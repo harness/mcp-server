@@ -389,6 +389,37 @@ describe("harness_get — execution_inputs", () => {
   });
 });
 
+describe("harness_get — attestation", () => {
+  it("maps resource_id to gitoid_sha256 for attestation get", async () => {
+    const server = makeMcpServer();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    const mockRequest = vi.fn().mockResolvedValue({
+      type: "Build",
+      source: "Harness",
+      gitoid_sha256: "gid123",
+      subjects: [],
+    });
+    const client = makeClient(mockRequest);
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(server, registry, client);
+
+    const result = await server.call("harness_get", {
+      resource_type: "attestation",
+      resource_id: "gid123",
+      org_id: "SSCA",
+      project_id: "Sanity",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const call = mockRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe(
+      "/ssca-manager/v2/orgs/SSCA/projects/Sanity/attestations/gid123/details",
+    );
+  });
+});
+
 describe("harness_get — execution_log", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;
@@ -1904,6 +1935,38 @@ pipeline:
     expect(call.path).toBe("/sto/api/v2/exemptions/ex-1/approve");
     expect(call.body).toMatchObject({ approverId: "user-uuid-1" });
     expect(call.body).not.toHaveProperty("scope");
+  });
+
+  it("maps resource_id to gitoid_sha256 for attestation download", async () => {
+    const evServer = makeMcpServer("accept");
+    const evRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    const evRequest = vi.fn().mockResolvedValue({
+      download_url: "https://s3.example/presigned",
+      expires_at: 1700003600000,
+    });
+    const evClient = makeClient(evRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(evServer, evRegistry, evClient, makeConfig());
+
+    const result = await evServer.call("harness_execute", {
+      resource_type: "attestation",
+      action: "download",
+      resource_id: "gid123",
+      org_id: "SSCA",
+      project_id: "Sanity",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(evRequest).toHaveBeenCalledOnce();
+    const call = evRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe(
+      "/ssca-manager/v2/orgs/SSCA/projects/Sanity/attestations/download-attestation/gid123",
+    );
+
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.download_url).toBe("https://s3.example/presigned");
+    expect(data._display_hint).toMatch(/download_url/);
   });
 
   it("maps resource_id to feature_flag_name for successful FME kill and wraps primitive response", async () => {

@@ -178,6 +178,26 @@ describe("buildAttestationListBody", () => {
     const scopes = { myOrg: ["projA"] };
     expect(buildAttestationListBody({ scopes })).toEqual({ scopes });
   });
+
+  it("parses string epoch times", () => {
+    expect(buildAttestationListBody({ start_time: "1000", end_time: "2000" })).toEqual({
+      start_time: 1000,
+      end_time: 2000,
+    });
+  });
+
+  it("deletes whitespace-only search_term", () => {
+    const input: Record<string, unknown> = { search_term: "   " };
+    buildAttestationListBody(input);
+    expect(input).not.toHaveProperty("search_term");
+  });
+
+  it("wraps scalar types and sources into arrays", () => {
+    expect(buildAttestationListBody({ types: "Build", sources: "Harness" })).toEqual({
+      types: ["Build"],
+      sources: ["Harness"],
+    });
+  });
 });
 
 describe("attestationListExtract", () => {
@@ -237,6 +257,13 @@ describe("attestationListExtract", () => {
     expect(result.total).toBe(2);
     expect(result.items).toHaveLength(2);
     expect((result.items[0] as Record<string, unknown>).id).toBe("att-1");
+    expect(result._display_hint).toMatch(/gitoid_sha256/);
+  });
+
+  it("returns empty items for non-array input", () => {
+    const result = attestationListExtract(null);
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(0);
     expect(result._display_hint).toMatch(/gitoid_sha256/);
   });
 
@@ -407,6 +434,28 @@ describe("attestationDownloadExtract", () => {
     });
     expect(result).not.toHaveProperty("extra");
   });
+
+  it("returns empty object for non-record input", () => {
+    expect(attestationDownloadExtract(null)).toEqual({});
+    expect(attestationDownloadExtract("bad")).toEqual({});
+    expect(attestationDownloadExtract([])).toEqual({});
+  });
+
+  it("always includes _display_hint even when download_url is missing", () => {
+    const result = attestationDownloadExtract({ expires_at: 1700003600000 });
+    expect(result).toEqual({
+      expires_at: 1700003600000,
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+    expect(result).not.toHaveProperty("download_url");
+  });
+
+  it("filters empty download_url string", () => {
+    const result = attestationDownloadExtract({ download_url: "", expires_at: 1 });
+    expect(result).not.toHaveProperty("download_url");
+    expect(result.expires_at).toBe(1);
+    expect(result._display_hint).toMatch(/download_url/);
+  });
 });
 
 describe("attestation download dispatch", () => {
@@ -443,6 +492,16 @@ describe("attestation download dispatch", () => {
     await expect(
       registry.dispatchExecute(makeClient(), "attestation", "download", { gitoid_sha256: "gid123" }),
     ).rejects.toThrow(/org_id/);
+  });
+
+  it("requires gitoid_sha256 for download", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    await expect(
+      registry.dispatchExecute(makeClient(), "attestation", "download", {
+        org_id: "SSCA",
+        project_id: "Sanity",
+      }),
+    ).rejects.toThrow(/gitoid_sha256/);
   });
 
   it("allows download under HARNESS_READ_ONLY (risk read)", async () => {
