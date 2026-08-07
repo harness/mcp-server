@@ -2,7 +2,7 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
-import { jsonResult, errorResult } from "../utils/response-formatter.js";
+import { jsonResult, errorResult, normalizeHarnessGetPayload } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint, HarnessApiError } from "../utils/errors.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, coerceRecord } from "../utils/type-guards.js";
@@ -130,7 +130,7 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
           }
         }
 
-        return jsonResult(result);
+        return jsonResult(normalizeHarnessGetPayload(result));
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) {
