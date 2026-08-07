@@ -172,6 +172,18 @@ export function attestationDetailsExtract(raw: unknown): Record<string, unknown>
   return out;
 }
 
+/** Presigned download URL — surface download_url to the user; do not fetch the blob. */
+export function attestationDownloadExtract(raw: unknown): Record<string, unknown> {
+  if (!isRecord(raw)) return {};
+  const out: Record<string, unknown> = {};
+  if (asString(raw.download_url)) out.download_url = raw.download_url;
+  if (asNumber(raw.expires_at) !== undefined) out.expires_at = raw.expires_at;
+  out._display_hint =
+    "ALWAYS show download_url as a clickable download link to the user. "
+    + "Do not omit it or only summarize. The URL expires at expires_at (epoch ms).";
+  return out;
+}
+
 export const evidenceVaultToolset: ToolsetDefinition = {
   name: "evidence-vault",
   displayName: "Evidence Vault",
@@ -184,11 +196,13 @@ export const evidenceVaultToolset: ToolsetDefinition = {
       displayName: "Attestation",
       description:
         "Evidence Vault attestation (in-toto evidence). "
-        + "List: always show gitoid_sha256 in tables; retain gitoid_sha256 + org + project for get. "
+        + "List: always show gitoid_sha256 in tables; retain gitoid_sha256 + org + project for get/download. "
         + "Get: harness_get(resource_id=<gitoid_sha256>, org_id, project_id) — lookup by gitoid only. "
+        + "Download: harness_execute(action='download', resource_id=<gitoid_sha256>, org_id, project_id) — "
+        + "returns a time-limited download_url; ALWAYS show that URL as a clickable link to the user. "
         + "Singular free-text (pipeline, artifact alone, gitoid) → search_term; additional Name → filters.subject_name; "
         + "subject digest → filters.subject_digest (not gitoid). Use item `description` to explain a single attestation. "
-        + "Default list scope is account; get requires org_id and project_id. Requires SCS_EVIDENCE_VAULT.",
+        + "Default list scope is account; get/download require org_id and project_id. Requires SCS_EVIDENCE_VAULT.",
       searchAliases: [
         "evidence vault",
         "attestation",
@@ -251,6 +265,23 @@ export const evidenceVaultToolset: ToolsetDefinition = {
           defaultQueryParams: { identifier_type: "gitoid_sha256" },
           responseExtractor: attestationDetailsExtract,
           description: "Get attestation details by gitoid_sha256",
+        },
+      },
+      executeActions: {
+        download: {
+          method: "GET",
+          path: `${SCS}/v2/orgs/{org}/projects/{project}/attestations/download-attestation/{digest}`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            gitoid_sha256: "digest",
+          },
+          responseExtractor: attestationDownloadExtract,
+          actionDescription:
+            "Get a time-limited pre-signed URL for the DSSE attestation blob. "
+            + "ALWAYS show download_url as a clickable link to the user; do not omit it or only summarize.",
+          bodySchema: { description: "No body", fields: [] },
         },
       },
     },
