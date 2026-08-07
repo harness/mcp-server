@@ -129,7 +129,7 @@ export const stoExemptionsExtract = (raw: unknown, input?: Record<string, unknow
 
 /**
  * STO SAST remediation DiffOccurrences
- * (`GET /sto/api/v2/sast-remediation/diff-occurrences`).
+ * (`GET /sto/api/v2/remediation-agent/diff-occurrences`).
  *
  * API shape:
  *   { validationScanId, existingOccurrences: [...], newOccurrences: [...],

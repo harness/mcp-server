@@ -1,6 +1,6 @@
 /**
  * Tests for the `sast_remediation_diff` resource that wraps
- * STO DiffOccurrences (`GET /sto/api/v2/sast-remediation/diff-occurrences`).
+ * STO DiffOccurrences (`GET /sto/api/v2/remediation-agent/diff-occurrences`).
  */
 import { describe, it, expect, vi } from "vitest";
 import { stoToolset } from "../../src/registry/toolsets/sto.js";
@@ -49,7 +49,7 @@ function getListSpec(): EndpointSpec {
 }
 
 describe("sast_remediation_diff resource registration", () => {
-  it("registers list-only GET against sast-remediation/diff-occurrences", () => {
+  it("registers list-only GET against remediation-agent/diff-occurrences", () => {
     const resource = getResource();
     const list = getListSpec();
     expect(resource.scope).toBe("project");
@@ -59,11 +59,12 @@ describe("sast_remediation_diff resource registration", () => {
       project: "projectId",
     });
     expect(list.method).toBe("GET");
-    expect(list.path).toBe("/sto/api/v2/sast-remediation/diff-occurrences");
+    expect(list.path).toBe("/sto/api/v2/remediation-agent/diff-occurrences");
     expect(list.queryParams).toMatchObject({
       scan_id: "scanId",
       validation_execution_id: "validationExecutionId",
       execution_id: "validationExecutionId",
+      issue_type: "issueType",
       only_true_positive: "onlyTruePositive",
       limit: "limit",
       severity_codes: "severityCodes",
@@ -226,13 +227,14 @@ describe("sast_remediation_diff — registry dispatch", () => {
       params: Record<string, unknown>;
     };
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/sto/api/v2/sast-remediation/diff-occurrences");
+    expect(call.path).toBe("/sto/api/v2/remediation-agent/diff-occurrences");
     expect(call.params).toMatchObject({
       accountId: "test-account",
       orgId: "default",
       projectId: "test-project",
       scanId: "orig-scan",
       validationExecutionId: "val-exec",
+      issueType: "SAST",
       onlyTruePositive: false,
       limit: 50,
       severityCodes: "HIGH,CRITICAL",
