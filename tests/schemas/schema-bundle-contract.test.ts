@@ -220,4 +220,75 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream MergeQueue webhook trigger types and specs in v0 trigger", () => {
+    const triggerDefs = SCHEMAS.trigger.definitions as Record<string, Record<string, unknown>>;
+    const webhookTrigger = triggerDefs.trigger.webhook_trigger as Record<string, unknown>;
+
+    const githubSpec = webhookTrigger.github_spec as {
+      allOf: Array<{ properties?: { type?: { enum: string[] } } }>;
+    };
+    expect(githubSpec.allOf[1]?.properties?.type?.enum).toContain("MergeQueue");
+
+    const harnessSpec = webhookTrigger.harness_spec as {
+      allOf: Array<{ properties?: { type?: { enum: string[] } } }>;
+    };
+    expect(harnessSpec.allOf[1]?.properties?.type?.enum).toContain("MergeQueue");
+
+    const githubMergeQueue = webhookTrigger.github_merge_queue_spec as {
+      title: string;
+      allOf: Array<{ properties?: Record<string, unknown> }>;
+    };
+    expect(githubMergeQueue.title).toBe("github_merge_queue_spec");
+    expect(githubMergeQueue.allOf[1]?.properties).toHaveProperty("repoName");
+    expect(githubMergeQueue.allOf[1]?.properties).toHaveProperty("connectorRef");
+
+    const harnessMergeQueue = webhookTrigger.harness_merge_queue_spec as {
+      title: string;
+      allOf: Array<{ properties?: Record<string, unknown> }>;
+    };
+    expect(harnessMergeQueue.title).toBe("harness_merge_queue_spec");
+    expect(harnessMergeQueue.allOf[1]?.properties).toHaveProperty("repoName");
+  });
+
+  it("includes upstream Helm V4 helmVersion in v0 trigger manifest and pipeline CD manifests", () => {
+    const triggerDefs = SCHEMAS.trigger.definitions as Record<string, Record<string, unknown>>;
+    const helmSpec = triggerDefs.trigger.manifest_trigger.helm_spec as {
+      allOf: Array<{ properties?: { helmVersion?: { enum: string[] } } }>;
+    };
+    expect(helmSpec.allOf[1]?.properties?.helmVersion?.enum).toContain("V4");
+
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const helmChart = pipelineDefs.pipeline.steps.cd.HelmChartManifest as {
+      allOf: Array<{ properties?: { helmVersion?: { enum: string[] } } }>;
+    };
+    expect(helmChart.allOf[1]?.properties?.helmVersion?.enum).toContain("V4");
+  });
+
+  it("includes upstream MythosAgent hunt modes in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const mythosInfo = defs.pipeline.steps.common.MythosAgentStepInfo as {
+        properties: { config: { enum: string[] } };
+      };
+
+      expect(mythosInfo.properties.config.enum).toEqual(["hunt_full", "hunt_incremental", "scan"]);
+      expect(mythosInfo.properties.config.enum).not.toContain("hunt");
+    }
+  });
+
+  it("includes upstream IACMRemediationAgent resourceAddresses in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const remediation = defs.pipeline.steps.iacm.IACMRemediationAgentInfo as {
+        properties: {
+          resourceAddresses: { oneOf: Array<{ type?: string; pattern?: string }> };
+        };
+      };
+
+      expect(remediation.properties.resourceAddresses.oneOf).toHaveLength(2);
+      expect(remediation.properties.resourceAddresses.oneOf[0]?.type).toBe("array");
+      expect(remediation.properties.resourceAddresses.oneOf[1]?.pattern).toBe("^<\\+.*>$");
+    }
+  });
 });
