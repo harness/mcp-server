@@ -576,4 +576,22 @@ describe("Coding standards — Zod and tool annotations", () => {
 
     expect(violations, violations.join("\n")).toEqual([]);
   });
+
+  it("toolset files do not export responseExtractor functions (use extractors.ts)", () => {
+    const violations: string[] = [];
+    const toolsetDir = join(SRC, "registry/toolsets");
+    const exportExtractRe = /^export\s+(?:async\s+)?function\s+\w+Extract\s*\(/m;
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const content = readFileSync(file, "utf8");
+      if (exportExtractRe.test(content)) {
+        violations.push(`${fileRel}: exported *Extract function — move to src/registry/extractors.ts`);
+      }
+    }
+
+    expect(violations, violations.join("\n")).toEqual([]);
+  });
 });

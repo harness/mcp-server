@@ -10,7 +10,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { scsCleanExtract, scsListExtract } from "../../src/registry/extractors.js";
 import { compactItems } from "../../src/utils/compact.js";
-import { scsToolset, normalizePurl, sbomDownloadExtract } from "../../src/registry/toolsets/scs.js";
+import { scsToolset, normalizePurl } from "../../src/registry/toolsets/scs.js";
+import { presignedDownloadExtract } from "../../src/registry/extractors.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
@@ -283,20 +284,22 @@ describe("T11-v2: ID retention hints in descriptions", () => {
     expect(res.description).toContain("SBOM");
   });
 
-  it("scs_chain_of_custody get wraps arrays for MCP structuredContent", async () => {
-    const { chainOfCustodyExtract } = await import("../../src/registry/toolsets/scs.js");
+  it("scs_chain_of_custody get uses scsCleanExtract; harness_get wraps arrays for structuredContent", async () => {
+    const { scsCleanExtract } = await import("../../src/registry/extractors.js");
+    const { normalizeHarnessGetPayload } = await import("../../src/utils/response-formatter.js");
     const raw = [
       { orchestration: { id: "orch-1" }, type: "SBOM", empty: null },
       { orchestration: { id: "orch-2" }, type: "SLSA", name: "" },
     ];
-    expect(chainOfCustodyExtract(raw)).toEqual({
+    const cleaned = scsCleanExtract(raw);
+    expect(normalizeHarnessGetPayload(cleaned)).toEqual({
       items: [
         { orchestration: { id: "orch-1" }, type: "SBOM" },
         { orchestration: { id: "orch-2" }, type: "SLSA" },
       ],
       total: 2,
     });
-    expect(findResource("scs_chain_of_custody").operations.get?.responseExtractor).toBe(chainOfCustodyExtract);
+    expect(findResource("scs_chain_of_custody").operations.get?.responseExtractor).toBe(scsCleanExtract);
   });
 
   it("scs_artifact_component description mentions retaining purl", () => {
@@ -2316,9 +2319,9 @@ describe("scs_auto_pr_config path and scope", () => {
   });
 });
 
-describe("sbomDownloadExtract", () => {
+describe("presignedDownloadExtract (scs_sbom)", () => {
   it("keeps download_url and expires_at with display hint", () => {
-    const result = sbomDownloadExtract({
+    const result = presignedDownloadExtract({
       download_url: "https://s3.example/presigned?X=1",
       expires_at: 1700003600000,
       extra: "drop-me",
@@ -2332,7 +2335,7 @@ describe("sbomDownloadExtract", () => {
   });
 
   it("returns empty object for non-object input", () => {
-    expect(sbomDownloadExtract(null)).toEqual({});
+    expect(presignedDownloadExtract(null)).toEqual({});
   });
 });
 
@@ -2366,10 +2369,10 @@ describe("scs_sbom download dispatch", () => {
     });
   });
 
-  it("scs_sbom get uses sbomDownloadExtract and keeps CoC as parent for orchestration_id", () => {
+  it("scs_sbom get uses presignedDownloadExtract and keeps CoC as parent for orchestration_id", () => {
     const res = findResource("scs_sbom");
     expect(res.operations.get?.path).toContain("/download-sbom");
-    expect(res.operations.get?.responseExtractor?.name).toBe("sbomDownloadExtract");
+    expect(res.operations.get?.responseExtractor?.name).toBe("presignedDownloadExtract");
     expect(res.description).toMatch(/scs_chain_of_custody/);
     expect(res.diagnosticHint).toMatch(/scs_chain_of_custody/);
     expect(res.relatedResources).toEqual(
