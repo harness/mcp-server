@@ -29256,7 +29256,8 @@ const schema: Record<string, any> = {
                   "config": {
                     "type": "string",
                     "enum": [
-                      "hunt",
+                      "hunt_full",
+                      "hunt_incremental",
                       "scan"
                     ]
                   },
@@ -29382,7 +29383,8 @@ const schema: Record<string, any> = {
               "config": {
                 "type": "string",
                 "enum": [
-                  "hunt",
+                  "hunt_full",
+                  "hunt_incremental",
                   "scan"
                 ]
               },
@@ -55858,6 +55860,20 @@ const schema: Record<string, any> = {
                   },
                   "llmConnectorRef": {
                     "type": "string"
+                  },
+                  "resourceAddresses": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+.*>$"
+                      }
+                    ]
                   }
                 }
               }
@@ -55896,6 +55912,20 @@ const schema: Record<string, any> = {
               },
               "llmConnectorRef": {
                 "type": "string"
+              },
+              "resourceAddresses": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+.*>$"
+                  }
+                ]
               }
             }
           }
@@ -75877,7 +75907,8 @@ const schema: Record<string, any> = {
                     "enum": [
                       "V2",
                       "V3",
-                      "V380"
+                      "V380",
+                      "V4"
                     ]
                   },
                   "metadata": {
