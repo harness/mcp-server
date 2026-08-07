@@ -51,6 +51,7 @@ import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
 import { ansibleToolset } from "./toolsets/ansible.js";
 import { incidentsToolset } from "./toolsets/incidents.js";
 import { deploysToolset } from "./toolsets/deploys.js";
+import { aitToolset } from "./toolsets/ait.js";
 
 const log = createLogger("registry");
 
@@ -166,6 +167,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   ansibleToolset,
   incidentsToolset,
   deploysToolset,
+  aitToolset,
 ];
 
 /** All available toolset names — used by docs generation to discover opt-in toolsets. */
