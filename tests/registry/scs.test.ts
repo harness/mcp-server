@@ -2405,7 +2405,13 @@ describe("scs_sbom download dispatch", () => {
   });
 
   it("requires org_id and project_id for get", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const registry = new Registry(
+      makeConfig({
+        HARNESS_TOOLSETS: "scs",
+        HARNESS_ORG: undefined,
+        HARNESS_PROJECT: undefined,
+      }),
+    );
     await expect(
       registry.dispatch(makeClient(), "scs_sbom", "get", { orchestration_id: "orch-123" }),
     ).rejects.toThrow(/org_id/);
