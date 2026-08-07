@@ -8,7 +8,7 @@
  * - T14-v2: artifact_type, status, standards filter enrichment
  */
 import { describe, it, expect, vi } from "vitest";
-import { scsCleanExtract, scsListExtract } from "../../src/registry/extractors.js";
+import { scsCleanExtract, scsListExtract, presignedDownloadExtract } from "../../src/registry/extractors.js";
 import { compactItems } from "../../src/utils/compact.js";
 import { scsToolset, normalizePurl } from "../../src/registry/toolsets/scs.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
@@ -2297,5 +2297,89 @@ describe("scs_auto_pr_config path and scope", () => {
     expect(call.path).toContain("/v1/ssca-config/auto-pr-config");
     // Scope travels as query params under the configured names.
     expect(call.params).toMatchObject({ org_id: "myOrg", project_id: "myProj" });
+  });
+});
+
+describe("presignedDownloadExtract (SBOM)", () => {
+  it("keeps download_url and expires_at with display hint", () => {
+    const result = presignedDownloadExtract({
+      download_url: "https://s3.example/presigned?X=1",
+      expires_at: 1700003600000,
+      extra: "drop-me",
+    });
+    expect(result).toEqual({
+      download_url: "https://s3.example/presigned?X=1",
+      expires_at: 1700003600000,
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+    expect(result).not.toHaveProperty("extra");
+  });
+
+  it("returns empty object for non-object input", () => {
+    expect(presignedDownloadExtract(null)).toEqual({});
+  });
+});
+
+describe("scs_sbom download dispatch", () => {
+  it("GETs download-sbom path with orchestration_id", async () => {
+    const request = vi.fn().mockResolvedValue({
+      download_url: "https://s3.example/presigned",
+      expires_at: 1700003600000,
+    });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const result = await registry.dispatch(makeClient(request), "scs_sbom", "get", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      orchestration_id: "orch-123",
+    });
+
+    expect(request).toHaveBeenCalledTimes(1);
+    const opts = request.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+    };
+    expect(opts.method).toBe("GET");
+    expect(opts.path).toBe(
+      "/ssca-manager/v1/org/SSCA/project/Sanity/orchestration/orch-123/download-sbom",
+    );
+    expect(opts.path).not.toContain("sbom-download");
+    expect(result).toMatchObject({
+      download_url: "https://s3.example/presigned",
+      expires_at: 1700003600000,
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+  });
+
+  it("scs_sbom get uses presignedDownloadExtract and keeps CoC as parent for orchestration_id", () => {
+    const res = findResource("scs_sbom");
+    expect(res.operations.get?.path).toContain("/download-sbom");
+    expect(res.operations.get?.responseExtractor?.name).toBe("presignedDownloadExtract");
+    expect(res.description).toMatch(/scs_chain_of_custody/);
+    expect(res.diagnosticHint).toMatch(/scs_chain_of_custody/);
+    expect(res.relatedResources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          resourceType: "scs_chain_of_custody",
+          relationship: "parent",
+        }),
+      ]),
+    );
+  });
+
+  it("allows scs_sbom get under HARNESS_READ_ONLY (risk read)", async () => {
+    const request = vi.fn().mockResolvedValue({
+      download_url: "https://s3.example/presigned",
+      expires_at: 1700003600000,
+    });
+    const registry = new Registry(
+      makeConfig({ HARNESS_TOOLSETS: "scs", HARNESS_READ_ONLY: true }),
+    );
+    await expect(
+      registry.dispatch(makeClient(request), "scs_sbom", "get", {
+        org_id: "SSCA",
+        project_id: "Sanity",
+        orchestration_id: "orch-123",
+      }),
+    ).resolves.toMatchObject({ download_url: "https://s3.example/presigned" });
   });
 });

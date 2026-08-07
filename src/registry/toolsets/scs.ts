@@ -1,6 +1,7 @@
 import type { ToolsetDefinition, FilterFieldSpec, ParamsSchema } from "../types.js";
-import { scsCleanExtract, scsListExtract } from "../extractors.js";
+import { scsCleanExtract, scsListExtract, presignedDownloadExtract } from "../extractors.js";
 import { HarnessApiError } from "../../utils/errors.js";
+import { isRecord, asString, asNumber } from "../../utils/type-guards.js";
 
 function filterFieldsToParamsSchema(fields: FilterFieldSpec[]): ParamsSchema {
   return {
@@ -1486,9 +1487,15 @@ export const scsToolset: ToolsetDefinition = {
     {
       resourceType: "scs_sbom",
       displayName: "SBOM",
-      description: "Software Bill of Materials download. Requires an orchestration ID (from artifact chain of custody). "
-        + "Use this to download the full SBOM for an artifact build.",
-      diagnosticHint: "If you get a 404: verify orchestration_id is correct. Get orchestration IDs from harness_get(resource_type='scs_chain_of_custody', artifact_id='...').",
+      description: "Software Bill of Materials download via a time-limited pre-signed URL. "
+        + "Requires an orchestration ID from artifact chain of custody: "
+        + "harness_get(resource_type='scs_chain_of_custody', artifact_id='...') then "
+        + "harness_get(resource_type='scs_sbom', orchestration_id=...). "
+        + "Returns download_url + expires_at — ALWAYS show download_url as a clickable download link to the user; "
+        + "do not fetch or dump the SBOM blob into the conversation.",
+      diagnosticHint: "If you get a 404: verify orchestration_id is correct. "
+        + "Get orchestration IDs from harness_get(resource_type='scs_chain_of_custody', artifact_id='...'). "
+        + "Confirm the orchestration run produced an SBOM.",
       searchAliases: ["sbom", "software bill of materials", "bom", "sbom download"],
       relatedResources: [
         { resourceType: "scs_chain_of_custody", relationship: "parent", description: "Get orchestration_id needed for SBOM download" },
@@ -1500,11 +1507,12 @@ export const scsToolset: ToolsetDefinition = {
         get: {
           method: "GET",
           // Note: this endpoint uses singular org/project (no 's') — API inconsistency
-          path: `${SCS}/v1/org/{org}/project/{project}/orchestration/{orchestrationId}/sbom-download`,
+          path: `${SCS}/v1/org/{org}/project/{project}/orchestration/{orchestrationId}/download-sbom`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", orchestration_id: "orchestrationId" },
-          responseExtractor: scsCleanExtract,
-          description: "Get SBOM download URL for an orchestration run",
+          responseExtractor: presignedDownloadExtract,
+          description: "Get a time-limited pre-signed URL for the SBOM object. "
+            + "ALWAYS show download_url as a clickable link to the user; do not omit it or only summarize.",
         },
       },
     },
