@@ -4,6 +4,7 @@ import {
   buildAttestationListBody,
   attestationListExtract,
   attestationDetailsExtract,
+  attestationDownloadExtract,
 } from "../../src/registry/toolsets/evidence-vault.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
@@ -55,6 +56,12 @@ function getGetOp(): EndpointSpec {
   return spec;
 }
 
+function getDownloadOp(): EndpointSpec {
+  const spec = findResource("attestation").executeActions?.download;
+  if (!spec) throw new Error("download execute action missing on attestation");
+  return spec;
+}
+
 describe("evidence-vault toolset", () => {
   it("registers attestation list against /ssca-manager/v2/attestations", () => {
     expect(evidenceVaultToolset.name).toBe("evidence-vault");
@@ -89,6 +96,20 @@ describe("evidence-vault toolset", () => {
     });
     expect(get.defaultQueryParams).toEqual({ identifier_type: "gitoid_sha256" });
     expect(get.operationPolicy).toEqual({ risk: "read", retryPolicy: "safe" });
+  });
+
+  it("registers attestation download execute action against download-attestation path", () => {
+    const download = getDownloadOp();
+    expect(download.method).toBe("GET");
+    expect(download.path).toBe(
+      "/ssca-manager/v2/orgs/{org}/projects/{project}/attestations/download-attestation/{digest}",
+    );
+    expect(download.pathParams).toEqual({
+      org_id: "org",
+      project_id: "project",
+      gitoid_sha256: "digest",
+    });
+    expect(download.operationPolicy).toEqual({ risk: "read", retryPolicy: "safe" });
   });
 
   it("loads into Registry by default", () => {
@@ -157,6 +178,26 @@ describe("buildAttestationListBody", () => {
     const scopes = { myOrg: ["projA"] };
     expect(buildAttestationListBody({ scopes })).toEqual({ scopes });
   });
+
+  it("parses string epoch times", () => {
+    expect(buildAttestationListBody({ start_time: "1000", end_time: "2000" })).toEqual({
+      start_time: 1000,
+      end_time: 2000,
+    });
+  });
+
+  it("deletes whitespace-only search_term", () => {
+    const input: Record<string, unknown> = { search_term: "   " };
+    buildAttestationListBody(input);
+    expect(input).not.toHaveProperty("search_term");
+  });
+
+  it("wraps scalar types and sources into arrays", () => {
+    expect(buildAttestationListBody({ types: "Build", sources: "Harness" })).toEqual({
+      types: ["Build"],
+      sources: ["Harness"],
+    });
+  });
 });
 
 describe("attestationListExtract", () => {
@@ -216,6 +257,13 @@ describe("attestationListExtract", () => {
     expect(result.total).toBe(2);
     expect(result.items).toHaveLength(2);
     expect((result.items[0] as Record<string, unknown>).id).toBe("att-1");
+    expect(result._display_hint).toMatch(/gitoid_sha256/);
+  });
+
+  it("returns empty items for non-array input", () => {
+    const result = attestationListExtract(null);
+    expect(result.items).toEqual([]);
+    expect(result.total).toBe(0);
     expect(result._display_hint).toMatch(/gitoid_sha256/);
   });
 
@@ -369,5 +417,107 @@ describe("attestation get dispatch", () => {
     await expect(
       registry.dispatch(makeClient(), "attestation", "get", { gitoid_sha256: "gid123" }),
     ).rejects.toThrow(/org_id/);
+  });
+});
+
+describe("attestationDownloadExtract", () => {
+  it("keeps download_url and expires_at with display hint", () => {
+    const result = attestationDownloadExtract({
+      download_url: "https://s3.example/presigned?X=1",
+      expires_at: 1700003600000,
+      extra: "drop-me",
+    });
+    expect(result).toEqual({
+      download_url: "https://s3.example/presigned?X=1",
+      expires_at: 1700003600000,
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+    expect(result).not.toHaveProperty("extra");
+  });
+
+  it("returns empty object for non-record input", () => {
+    expect(attestationDownloadExtract(null)).toEqual({});
+    expect(attestationDownloadExtract("bad")).toEqual({});
+    expect(attestationDownloadExtract([])).toEqual({});
+  });
+
+  it("always includes _display_hint even when download_url is missing", () => {
+    const result = attestationDownloadExtract({ expires_at: 1700003600000 });
+    expect(result).toEqual({
+      expires_at: 1700003600000,
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+    expect(result).not.toHaveProperty("download_url");
+  });
+
+  it("filters empty download_url string", () => {
+    const result = attestationDownloadExtract({ download_url: "", expires_at: 1 });
+    expect(result).not.toHaveProperty("download_url");
+    expect(result.expires_at).toBe(1);
+    expect(result._display_hint).toMatch(/download_url/);
+  });
+});
+
+describe("attestation download dispatch", () => {
+  it("GETs download-attestation path with gitoid as digest", async () => {
+    const request = vi.fn().mockResolvedValue({
+      download_url: "https://s3.example/presigned",
+      expires_at: 1700003600000,
+    });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    const result = await registry.dispatchExecute(makeClient(request), "attestation", "download", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      gitoid_sha256: "gid123",
+    });
+
+    expect(request).toHaveBeenCalledTimes(1);
+    const opts = request.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+    };
+    expect(opts.method).toBe("GET");
+    expect(opts.path).toBe(
+      "/ssca-manager/v2/orgs/SSCA/projects/Sanity/attestations/download-attestation/gid123",
+    );
+    expect(result).toMatchObject({
+      download_url: "https://s3.example/presigned",
+      expires_at: 1700003600000,
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+  });
+
+  it("requires org_id and project_id for download", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    await expect(
+      registry.dispatchExecute(makeClient(), "attestation", "download", { gitoid_sha256: "gid123" }),
+    ).rejects.toThrow(/org_id/);
+  });
+
+  it("requires gitoid_sha256 for download", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    await expect(
+      registry.dispatchExecute(makeClient(), "attestation", "download", {
+        org_id: "SSCA",
+        project_id: "Sanity",
+      }),
+    ).rejects.toThrow(/gitoid_sha256/);
+  });
+
+  it("allows download under HARNESS_READ_ONLY (risk read)", async () => {
+    const request = vi.fn().mockResolvedValue({
+      download_url: "https://s3.example/presigned",
+      expires_at: 1700003600000,
+    });
+    const registry = new Registry(
+      makeConfig({ HARNESS_TOOLSETS: "evidence-vault", HARNESS_READ_ONLY: true }),
+    );
+    await expect(
+      registry.dispatchExecute(makeClient(request), "attestation", "download", {
+        org_id: "SSCA",
+        project_id: "Sanity",
+        gitoid_sha256: "gid123",
+      }),
+    ).resolves.toMatchObject({ download_url: "https://s3.example/presigned" });
   });
 });
