@@ -220,4 +220,33 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream UnifiedChangeAdvisorStepNode in v1 pipeline and template unified steps", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const unified = defs[key].steps.unified as Record<string, unknown>;
+
+      expect(unified).toHaveProperty("UnifiedChangeAdvisorStepNode");
+
+      const changeAdvisor = unified.UnifiedChangeAdvisorStepNode as {
+        allOf: Array<{ required?: string[]; properties?: Record<string, unknown> }>;
+        properties?: { "change-advisor": { properties: Record<string, unknown> } };
+      };
+
+      const configBlock = changeAdvisor.allOf?.find((part) =>
+        part.required?.includes("change-advisor"),
+      );
+      expect(configBlock?.required).toContain("change-advisor");
+
+      const config = configBlock?.properties?.["change-advisor"] as {
+        properties: Record<string, { oneOf?: Array<{ enum?: string[] }> }>;
+      };
+      expect(config.properties).toHaveProperty("mode");
+      expect(config.properties).toHaveProperty("policy-pack");
+      expect(config.properties).toHaveProperty("timeout-minutes");
+      expect(config.properties).toHaveProperty("presets");
+      expect(config.properties).toHaveProperty("env");
+      expect(config.properties.mode.oneOf?.[0]?.enum).toEqual(["ADVISORY", "ENFORCING"]);
+    }
+  });
 });
