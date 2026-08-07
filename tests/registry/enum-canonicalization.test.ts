@@ -85,6 +85,24 @@ describe("canonicalizeListFilterEnums", () => {
     canonicalizeListFilterEnums(input, fields);
     expect(input.status).toBeUndefined();
   });
+
+  it("trims surrounding whitespace before canonicalizing single values", () => {
+    const input: Record<string, unknown> = { status: "  pending  " };
+    canonicalizeListFilterEnums(input, fields);
+    expect(input.status).toBe("Pending");
+  });
+
+  it("canonicalizes comma-separated values with spaces around commas", () => {
+    const input: Record<string, unknown> = { severity_codes: " critical , high " };
+    canonicalizeListFilterEnums(input, fields);
+    expect(input.severity_codes).toBe("Critical,High");
+  });
+
+  it("no-ops when comma-separated input contains only empty tokens", () => {
+    const input: Record<string, unknown> = { severity_codes: " , , " };
+    canonicalizeListFilterEnums(input, fields);
+    expect(input.severity_codes).toBe(" , , ");
+  });
 });
 
 describe("registry.dispatch — list filter enum canonicalization", () => {
