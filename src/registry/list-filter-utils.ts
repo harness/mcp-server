@@ -1,0 +1,71 @@
+import type { ResourceDefinition } from "./types.js";
+
+function resolveScopeId(
+  inputValue: unknown,
+  configDefault: string | undefined,
+): string | undefined {
+  if (typeof inputValue === "string" && inputValue.trim() !== "") {
+    return inputValue.trim();
+  }
+  if (configDefault && configDefault.trim() !== "") {
+    return configDefault.trim();
+  }
+  return undefined;
+}
+
+/**
+ * Fail loud before hitting APIs that 500 when org/project query params are omitted.
+ * Matches explicit `resource_scope` validation — implicit config fallback must
+ * actually resolve, not silently become `undefined` in the query string.
+ */
+export function assertListScopeResolved(
+  resourceType: string,
+  def: ResourceDefinition,
+  input: Record<string, unknown>,
+  configOrg: string | undefined,
+  configProject: string | undefined,
+): void {
+  if (def.scopeOptional) return;
+
+  // Explicit resource_scope is validated in executeSpec via getExplicitScopeValues,
+  // which supports account/org/project narrowing on multi-scope resources (e.g. connector).
+  const rawScope = input.resource_scope;
+  if (rawScope !== undefined && rawScope !== "") return;
+
+  const scopeKeywords = new Set(["org", "account", "project", "organization"]);
+  const rawOrg = input.org_id;
+  const orgFromInput =
+    typeof rawOrg === "string" && rawOrg.trim() !== "" && !scopeKeywords.has(rawOrg.toLowerCase())
+      ? rawOrg.trim()
+      : undefined;
+  const rawProject = input.project_id;
+  const projectFromInput =
+    typeof rawProject === "string" &&
+    rawProject.trim() !== "" &&
+    !scopeKeywords.has(rawProject.toLowerCase())
+      ? rawProject.trim()
+      : undefined;
+
+  if (def.scope === "project") {
+    const orgId = orgFromInput ?? resolveScopeId(undefined, configOrg);
+    const projectId = projectFromInput ?? resolveScopeId(undefined, configProject);
+    if (!orgId || !projectId) {
+      throw new Error(
+        `${resourceType}: listing requires project scope (org_id + project_id). ` +
+          `Pass both on the harness_list call, set HARNESS_ORG and HARNESS_PROJECT, or use a Harness project URL. ` +
+          `Do not pass resource_scope='account' or 'org' on list — those refer to approval scope on harness_execute.`,
+      );
+    }
+    return;
+  }
+
+  if (def.scope === "org") {
+    const orgId = orgFromInput ?? resolveScopeId(undefined, configOrg);
+    if (!orgId) {
+      throw new Error(
+        `${resourceType}: listing requires org scope (org_id). ` +
+          `Pass org_id explicitly, set HARNESS_ORG, or use a Harness URL.`,
+      );
+    }
+  }
+}

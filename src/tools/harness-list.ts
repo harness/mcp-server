@@ -14,11 +14,9 @@ import { resourceTypeSchema } from "./input-schemas.js";
 import { listOutputSchema } from "./output-schemas.js";
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
-  // Build a dynamic description for the filters param from all enabled resource definitions
-  const allFilterNames = registry.getAllFilterFields().map((f) => f.name);
-  const filtersDesc = allFilterNames.length > 0
-    ? `Resource-specific filters as key-value pairs. Available keys across enabled resource types: ${allFilterNames.join(", ")}. Call harness_describe for filters available on a specific resource_type.`
-    : "Resource-specific filters as key-value pairs. Call harness_describe for available filters per resource_type.";
+  const filtersDesc =
+    "Resource-specific filters as key-value pairs. Valid keys depend on resource_type — " +
+    "call harness_describe(resource_type=\"<type>\") for filters, enums, and required fields for that type.";
 
   const listableTypes = registry.getTypesForOperation("list");
 
