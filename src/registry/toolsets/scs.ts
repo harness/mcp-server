@@ -176,6 +176,21 @@ const componentRemediationExtract = (raw: unknown): unknown => {
 };
 
 /**
+ * Chain of custody get returns a top-level JSON array. MCP harness_get declares an
+ * output schema that requires structuredContent (objects only) — wrap as { items, total }.
+ */
+export function chainOfCustodyExtract(raw: unknown): Record<string, unknown> {
+  const cleaned = scsCleanExtract(raw);
+  if (Array.isArray(cleaned)) {
+    return { items: cleaned, total: cleaned.length };
+  }
+  if (cleaned !== null && typeof cleaned === "object") {
+    return cleaned as Record<string, unknown>;
+  }
+  return { items: [], total: 0 };
+}
+
+/**
  * Custom extractor for scs_project_security_overview.
  * The agent tends to calculate percentages and invent total component counts
  * that are not present in the API response.
@@ -683,7 +698,7 @@ export const scsToolset: ToolsetDefinition = {
           path: `${SCS}/v2/orgs/{org}/projects/{project}/artifacts/{artifact}/chain-of-custody`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", artifact_id: "artifact" },
-          responseExtractor: scsCleanExtract,
+          responseExtractor: chainOfCustodyExtract,
           description: "Get chain of custody events for an artifact",
         },
       },
