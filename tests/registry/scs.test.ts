@@ -8,9 +8,9 @@
  * - T14-v2: artifact_type, status, standards filter enrichment
  */
 import { describe, it, expect, vi } from "vitest";
-import { scsCleanExtract, scsListExtract } from "../../src/registry/extractors.js";
+import { scsCleanExtract, scsListExtract, presignedDownloadExtract } from "../../src/registry/extractors.js";
 import { compactItems } from "../../src/utils/compact.js";
-import { scsToolset, normalizePurl, sbomDownloadExtract } from "../../src/registry/toolsets/scs.js";
+import { scsToolset, normalizePurl } from "../../src/registry/toolsets/scs.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
@@ -2300,9 +2300,9 @@ describe("scs_auto_pr_config path and scope", () => {
   });
 });
 
-describe("sbomDownloadExtract", () => {
+describe("presignedDownloadExtract (SBOM)", () => {
   it("keeps download_url and expires_at with display hint", () => {
-    const result = sbomDownloadExtract({
+    const result = presignedDownloadExtract({
       download_url: "https://s3.example/presigned?X=1",
       expires_at: 1700003600000,
       extra: "drop-me",
@@ -2316,7 +2316,7 @@ describe("sbomDownloadExtract", () => {
   });
 
   it("returns empty object for non-object input", () => {
-    expect(sbomDownloadExtract(null)).toEqual({});
+    expect(presignedDownloadExtract(null)).toEqual({});
   });
 });
 
@@ -2350,10 +2350,10 @@ describe("scs_sbom download dispatch", () => {
     });
   });
 
-  it("scs_sbom get uses sbomDownloadExtract and keeps CoC as parent for orchestration_id", () => {
+  it("scs_sbom get uses presignedDownloadExtract and keeps CoC as parent for orchestration_id", () => {
     const res = findResource("scs_sbom");
     expect(res.operations.get?.path).toContain("/download-sbom");
-    expect(res.operations.get?.responseExtractor?.name).toBe("sbomDownloadExtract");
+    expect(res.operations.get?.responseExtractor?.name).toBe("presignedDownloadExtract");
     expect(res.description).toMatch(/scs_chain_of_custody/);
     expect(res.diagnosticHint).toMatch(/scs_chain_of_custody/);
     expect(res.relatedResources).toEqual(

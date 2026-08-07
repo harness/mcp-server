@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, FilterFieldSpec, ParamsSchema } from "../types.js";
-import { scsCleanExtract, scsListExtract } from "../extractors.js";
+import { scsCleanExtract, scsListExtract, presignedDownloadExtract } from "../extractors.js";
 import { HarnessApiError } from "../../utils/errors.js";
 import { isRecord, asString, asNumber } from "../../utils/type-guards.js";
 
@@ -321,18 +321,6 @@ function ensureArray(val: unknown): unknown[] | undefined {
  * Endpoints use /v1/ (most) or /v2/ (chain of custody).
  */
 const SCS = "/ssca-manager";
-
-/** Presigned SBOM download URL — surface download_url to the user; do not fetch the blob. */
-export function sbomDownloadExtract(raw: unknown): Record<string, unknown> {
-  if (!isRecord(raw)) return {};
-  const out: Record<string, unknown> = {};
-  if (asString(raw.download_url)) out.download_url = raw.download_url;
-  if (asNumber(raw.expires_at) !== undefined) out.expires_at = raw.expires_at;
-  out._display_hint =
-    "ALWAYS show download_url as a clickable download link to the user. "
-    + "Do not omit it or only summarize. The URL expires at expires_at (epoch ms).";
-  return out;
-}
 
 export const scsToolset: ToolsetDefinition = {
   name: "scs",
@@ -1522,7 +1510,7 @@ export const scsToolset: ToolsetDefinition = {
           path: `${SCS}/v1/org/{org}/project/{project}/orchestration/{orchestrationId}/download-sbom`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", orchestration_id: "orchestrationId" },
-          responseExtractor: sbomDownloadExtract,
+          responseExtractor: presignedDownloadExtract,
           description: "Get a time-limited pre-signed URL for the SBOM object. "
             + "ALWAYS show download_url as a clickable link to the user; do not omit it or only summarize.",
         },
