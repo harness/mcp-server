@@ -129,6 +129,39 @@ describe("sast_remediation_diff preflight", () => {
     expect(input.validation_execution_id).toBe("exec-legacy");
     expect(input.execution_id).toBeUndefined();
   });
+
+  it("omits issue_types when unset (sto-core owns default)", async () => {
+    const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      validation_execution_id: "exec-1",
+    };
+    await expect(
+      spec.preflight!({
+        client: { account: "test-account" },
+        input,
+        registry: { dispatch: async () => undefined, getResource },
+      }),
+    ).resolves.toBeUndefined();
+    expect(input.issue_types).toBeUndefined();
+  });
+
+  it("normalizes issue_types when provided", async () => {
+    const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      validation_execution_id: "exec-1",
+      issue_types: " sast , secret ",
+    };
+    await expect(
+      spec.preflight!({
+        client: { account: "test-account" },
+        input,
+        registry: { dispatch: async () => undefined, getResource },
+      }),
+    ).resolves.toBeUndefined();
+    expect(input.issue_types).toBe("SAST,SECRET");
+  });
 });
 
 describe("sast_remediation_diff responseExtractor", () => {
@@ -234,11 +267,11 @@ describe("sast_remediation_diff — registry dispatch", () => {
       projectId: "test-project",
       scanId: "orig-scan",
       validationExecutionId: "val-exec",
-      issueTypes: "SAST,SECRET",
       onlyTruePositive: false,
       limit: 50,
       severityCodes: "HIGH,CRITICAL",
     });
+    expect(call.params.issueTypes).toBeUndefined();
     expect(call.params.executionId).toBeUndefined();
   });
 

@@ -822,7 +822,7 @@ export const stoToolset: ToolsetDefinition = {
           name: "issue_types",
           description:
             "Comma-separated issue types to scope (sto-core issueTypes). "
-            + "v1: SAST,SECRET. Defaults to SAST,SECRET when omitted.",
+            + "v1: SAST,SECRET. Omit when unset — sto-core defaults to SAST+SECRET.",
           enum: ["SAST", "SECRET"],
         },
         { name: "only_true_positive", type: "boolean", description: "When true, only TRUE_POSITIVE triage verdicts are treated as in-scope on the original scan (default false)." },
@@ -867,14 +867,19 @@ export const stoToolset: ToolsetDefinition = {
             // Normalize so queryParams maps a single canonical key.
             input.validation_execution_id = validationExecutionId;
             delete input.execution_id;
+            // Omit issueTypes when unset — sto-core resolveIssueTypes defaults
+            // to SAST+SECRET. Only normalize when the caller passed a value.
             if (typeof input.issue_types !== "string" || input.issue_types.length === 0) {
-              input.issue_types = "SAST,SECRET";
+              delete input.issue_types;
             } else {
               input.issue_types = String(input.issue_types)
                 .split(",")
                 .map((t: string) => t.trim().toUpperCase())
                 .filter(Boolean)
                 .join(",");
+              if (!input.issue_types) {
+                delete input.issue_types;
+              }
             }
           },
           responseExtractor: stoSastRemediationDiffExtract,
