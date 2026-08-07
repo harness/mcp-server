@@ -819,21 +819,11 @@ export const stoToolset: ToolsetDefinition = {
           required: false,
         },
         {
-          name: "issue_type",
+          name: "issue_types",
           description:
-            "Issue type to scope (sto-core issueType). Defaults to SAST when omitted.",
-          enum: [
-            "SAST",
-            "DAST",
-            "SCA",
-            "IAC",
-            "SECRET",
-            "MISCONFIG",
-            "BUG_SMELLS",
-            "CODE_SMELLS",
-            "CODE_COVERAGE",
-            "EXTERNAL_POLICY",
-          ],
+            "Comma-separated issue types to scope (sto-core issueTypes). "
+            + "v1: SAST,SECRET. Defaults to SAST,SECRET when omitted.",
+          enum: ["SAST", "SECRET"],
         },
         { name: "only_true_positive", type: "boolean", description: "When true, only TRUE_POSITIVE triage verdicts are treated as in-scope on the original scan (default false)." },
         { name: "exclude_unreachable", type: "boolean", description: "When true, occurrences with 'unreachable' reachability are excluded from the original in-scope set (default false). Must match the value the remediation scope step used." },
@@ -851,7 +841,7 @@ export const stoToolset: ToolsetDefinition = {
             validation_execution_id: "validationExecutionId",
             // Legacy alias — prefer validation_execution_id.
             execution_id: "validationExecutionId",
-            issue_type: "issueType",
+            issue_types: "issueTypes",
             only_true_positive: "onlyTruePositive",
             exclude_unreachable: "excludeUnreachable",
             limit: "limit",
@@ -877,10 +867,14 @@ export const stoToolset: ToolsetDefinition = {
             // Normalize so queryParams maps a single canonical key.
             input.validation_execution_id = validationExecutionId;
             delete input.execution_id;
-            if (typeof input.issue_type !== "string" || input.issue_type.length === 0) {
-              input.issue_type = "SAST";
+            if (typeof input.issue_types !== "string" || input.issue_types.length === 0) {
+              input.issue_types = "SAST,SECRET";
             } else {
-              input.issue_type = String(input.issue_type).toUpperCase();
+              input.issue_types = String(input.issue_types)
+                .split(",")
+                .map((t: string) => t.trim().toUpperCase())
+                .filter(Boolean)
+                .join(",");
             }
           },
           responseExtractor: stoSastRemediationDiffExtract,
