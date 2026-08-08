@@ -10,6 +10,7 @@ import {
   ccmSummaryExtract,
   ccmRecommendationsExtract,
   countExtract,
+  anomalyListExtract,
 } from "../../src/registry/extractors.js";
 
 describe("countExtract", () => {
@@ -102,6 +103,21 @@ describe("ccmSummaryExtract", () => {
   it("passes through raw when data envelope is absent", () => {
     const raw = { status: "ERROR" };
     expect(ccmSummaryExtract(raw)).toBe(raw);
+  });
+});
+
+describe("anomalyListExtract", () => {
+  it("maps data array to items and total", () => {
+    const raw = { data: [{ id: "anom-1" }, { id: "anom-2" }] };
+    expect(anomalyListExtract(raw)).toEqual({
+      items: [{ id: "anom-1" }, { id: "anom-2" }],
+      total: 2,
+    });
+  });
+
+  it("returns empty defaults when data is missing or not an array", () => {
+    expect(anomalyListExtract({})).toEqual({ items: [], total: 0 });
+    expect(anomalyListExtract({ data: "unexpected" })).toEqual({ items: [], total: 0 });
   });
 });
 
