@@ -218,6 +218,39 @@ describe("ensureYamlField", () => {
     expect((result.yaml as string).trim().length).toBeGreaterThan(0);
     expect(result.yaml as string).toContain("identifier: x");
   });
+
+  it("stringifies object-shaped yaml under the wrapper key", () => {
+    const result = ensureYamlField(
+      {
+        identifier: "k8s_staging_infra",
+        yaml: {
+          identifier: "k8s_staging_infra",
+          name: "K8s Staging Infrastructure",
+          type: "KubernetesDirect",
+          environmentRef: "staging",
+        },
+      },
+      "infrastructureDefinition",
+    ) as Record<string, unknown>;
+
+    expect(typeof result.yaml).toBe("string");
+    expect(result.yaml as string).toContain("infrastructureDefinition:");
+    expect(result.yaml as string).toContain("identifier: k8s_staging_infra");
+    expect(result.yaml as string).toContain("environmentRef: staging");
+  });
+
+  it("wraps object-shaped yaml when the wrapper key is absent", () => {
+    const result = ensureYamlField(
+      {
+        identifier: "k8s_staging_infra",
+        yaml: { name: "K8s Staging Infrastructure", type: "KubernetesDirect" },
+      },
+      "infrastructureDefinition",
+    ) as Record<string, unknown>;
+
+    expect(result.yaml as string).toContain("infrastructureDefinition:");
+    expect(result.yaml as string).toContain("name: K8s Staging Infrastructure");
+  });
 });
 
 describe("buildBodyNormalized ensureYamlWrapper", () => {

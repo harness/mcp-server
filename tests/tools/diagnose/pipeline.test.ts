@@ -1410,6 +1410,50 @@ describe("pipelineHandler", () => {
       expect(allLogs["step-ok"].log).toBeDefined();
     });
 
+    it("suppresses all_step_logs when step_id is set even if include_all_step_logs is true", async () => {
+      const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
+      const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
+      mockFn.mockClear();
+      mockFn.mockResolvedValue("resolved log line 1\nresolved log line 2");
+
+      const exec = makeExecution({
+        status: "Success",
+        stages: [{ id: "build", name: "Build", status: "Success", steps: [
+          { id: "step-a", name: "StepA", status: "Success" },
+          { id: "step-b", name: "StepB", status: "Success" },
+        ]}],
+        nodeMapEntries: {
+          "step-a": {
+            uuid: "step-a", identifier: "step-a", name: "StepA",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-a",
+            status: "Success", logBaseKey: "log/step-a", startTs: NOW, endTs: NOW + 5000,
+          },
+          "step-b": {
+            uuid: "step-b", identifier: "step-b", name: "StepB",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step-b",
+            status: "Success", logBaseKey: "log/step-b", startTs: NOW + 5000, endTs: NOW + 10000,
+          },
+        },
+      });
+
+      const registry = makePipelineRegistry(exec);
+      const ctx = makeContext({
+        input: { execution_id: "exec-001", step_id: "step-a" },
+        registry,
+        args: { summary: true, include_logs: true, include_all_step_logs: true },
+      });
+
+      const result = await pipelineHandler.diagnose(ctx);
+
+      // Single-step mode: fetch only the requested step, not the whole pipeline.
+      expect(mockFn).toHaveBeenCalledTimes(1);
+      expect(result.all_step_logs).toBeUndefined();
+      expect(result.requested_step_log).toBeDefined();
+      const stepLog = result.requested_step_log as Record<string, unknown>;
+      expect(stepLog.step_id).toBe("step-a");
+      expect(stepLog.log).toBe("resolved log line 1\nresolved log line 2");
+    });
+
     it("skips auto-fetch of deepest step when include_all_step_logs is set", async () => {
       const { resolveLogContent } = await import("../../../src/utils/log-resolver.js");
       const mockFn = resolveLogContent as ReturnType<typeof vi.fn>;
