@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
+import { pullRequestsToolset } from "../../src/registry/toolsets/pull-requests.js";
 import type { EndpointSpec } from "../../src/registry/types.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
@@ -30,6 +31,31 @@ function makeClient(requestFn: (...args: unknown[]) => unknown): HarnessClient {
     account: "test-account",
   } as unknown as HarnessClient;
 }
+
+const SCOPE_GUIDANCE =
+  /Works at account, org, or project scope — pass org_id\/project_id for the space the repo lives in/;
+
+const PR_SCOPE_RESOURCES = [
+  "pull_request",
+  "pr_reviewer",
+  "pr_comment",
+  "pr_check",
+  "pr_activity",
+] as const;
+
+describe("pull-requests scope documentation", () => {
+  it.each(PR_SCOPE_RESOURCES)("%s is scopeOptional at account scope", (resourceType) => {
+    const resource = pullRequestsToolset.resources.find((r) => r.resourceType === resourceType);
+    expect(resource).toBeDefined();
+    expect(resource!.scope).toBe("account");
+    expect(resource!.scopeOptional).toBe(true);
+  });
+
+  it.each(PR_SCOPE_RESOURCES)("%s description documents org/project scope guidance", (resourceType) => {
+    const resource = pullRequestsToolset.resources.find((r) => r.resourceType === resourceType);
+    expect(resource!.description).toMatch(SCOPE_GUIDANCE);
+  });
+});
 
 describe("pull_request registry mappings", () => {
   it("routes state-only updates to the Harness Code PR state endpoint", async () => {
