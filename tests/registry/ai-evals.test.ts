@@ -376,8 +376,55 @@ describe("AI Evals structured LLM config migration", () => {
     expect(action).toBeDefined();
     const fields = action!.bodySchema!.fields;
     expect(fields.find((field) => field.name === "llm_config")).toMatchObject({ type: "object" });
-    expect(fields.find((field) => field.name === "model_id")?.description).toContain("DEPRECATED");
     expect(fields.find((field) => field.name === "llm_connector_ref")?.description).toContain("DEPRECATED");
+    expect(fields.find((field) => field.name === "model_id")?.description).toContain("DEPRECATED");
+  });
+
+  it("eval run and suite run schemas document llm_config inside run_inputs", () => {
+    const evalRun = findResource("evaluation").executeActions!.run;
+    const suiteRun = findResource("eval_suite").executeActions!.run;
+    const evalRunInputs = evalRun.bodySchema!.fields.find((field) => field.name === "run_inputs");
+    const suiteRunInputs = suiteRun.bodySchema!.fields.find((field) => field.name === "run_inputs");
+
+    expect(evalRunInputs?.description).toContain("llm_config");
+    expect(evalRunInputs?.description).toContain("DEPRECATED");
+    expect(suiteRunInputs?.description).toContain("llm_config");
+    expect(suiteRunInputs?.description).toContain("DEPRECATED");
+  });
+
+  it("metric create config field documents judge_llm_config for LLM metrics", () => {
+    const res = findResource("eval_metric");
+    const configField = res.operations.create!.bodySchema!.fields.find((field) => field.name === "config");
+    expect(configField?.description).toContain("judge_llm_config");
+    expect(configField?.description).toContain("DEPRECATED");
+  });
+
+  it("evaluation run dispatch preserves llm_config inside run_inputs", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ id: "run-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "evaluation", "run", {
+      org_id: "myorg",
+      project_id: "myproj",
+      eval_id: "eval-1",
+      body: {
+        run_inputs: {
+          llm_config: { provider: "openai", model: "gpt-4o" },
+          variables: { env: "staging" },
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/evals/eval-1/run");
+    expect(call.body).toEqual({
+      run_inputs: {
+        llm_config: { provider: "openai", model: "gpt-4o" },
+        variables: { env: "staging" },
+      },
+    });
   });
 });
 
