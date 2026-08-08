@@ -232,6 +232,160 @@ describe("paramsSchema on pull_request operations", () => {
   });
 });
 
+const PULL_REQUEST_RESOURCE_TYPES = [
+  "pull_request",
+  "pr_reviewer",
+  "pr_comment",
+  "pr_check",
+  "pr_activity",
+] as const;
+
+describe("pull request scope metadata", () => {
+  const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+
+  it.each(PULL_REQUEST_RESOURCE_TYPES)(
+    "%s is scopeOptional with org_id/project_id guidance in description",
+    (resourceType) => {
+      const def = registry.getResource(resourceType);
+      expect(def.scope).toBe("account");
+      expect(def.scopeOptional).toBe(true);
+      expect(def.description).toMatch(/org_id\/project_id/);
+      expect(def.description).toMatch(/account-scoped repos/);
+    },
+  );
+});
+
+describe("pull request scope query params", () => {
+  it("forwards org_id and project_id on pull_request list for project-scoped repos", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ pullreqs: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "rc_tools",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/repos/rc_tools/pullreq",
+      params: expect.objectContaining({
+        orgIdentifier: "AI_Devops",
+        projectIdentifier: "Sanity",
+      }),
+    }));
+  });
+
+  it("forwards org_id and project_id on pull_request get for project-scoped repos", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ number: 42 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "get", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42",
+      params: expect.objectContaining({
+        orgIdentifier: "AI_Devops",
+        projectIdentifier: "Sanity",
+      }),
+    }));
+  });
+
+  it("forwards org_id and project_id on pr_activity list", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ activities: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_activity", "list", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+      kind: "comment",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/activities",
+      params: expect.objectContaining({
+        orgIdentifier: "AI_Devops",
+        projectIdentifier: "Sanity",
+        kind: "comment",
+      }),
+    }));
+  });
+
+  it("omits org/project query params when scope is not provided (account-scoped repo)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ pullreqs: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "account-repo",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("uses explicit org_id/project_id over configured defaults for scoped repos", async () => {
+    const registry = new Registry(makeConfig({
+      HARNESS_TOOLSETS: "pull-requests",
+      HARNESS_ORG: "configured-org",
+      HARNESS_PROJECT: "configured-project",
+    }));
+    const mockRequest = vi.fn().mockResolvedValue({ number: 7 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "get", {
+      repo_id: "scoped-repo",
+      pr_number: "7",
+      org_id: "explicit-org",
+      project_id: "explicit-project",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      params: expect.objectContaining({
+        orgIdentifier: "explicit-org",
+        projectIdentifier: "explicit-project",
+      }),
+    }));
+  });
+
+  it("forwards org_id and project_id on pull_request merge without injecting them into the body", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ merged: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pull_request", "merge", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+      body: { method: "squash" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/merge",
+      params: expect.objectContaining({
+        orgIdentifier: "AI_Devops",
+        projectIdentifier: "Sanity",
+      }),
+      body: { method: "squash" },
+    }));
+  });
+});
+
 describe("pr_comment bodyBuilder translation", () => {
   it("translates line_new to line_start/line_end with line_start_new=true", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
