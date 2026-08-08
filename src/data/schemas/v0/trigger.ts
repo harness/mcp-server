@@ -1821,7 +1821,8 @@ const schema: Record<string, any> = {
                   "enum": [
                     "V2",
                     "V3",
-                    "V380"
+                    "V380",
+                    "V4"
                   ]
                 },
                 "store": {
@@ -2823,7 +2824,8 @@ const schema: Record<string, any> = {
                     "Release",
                     "Delete",
                     "Create",
-                    "PullRequestReview"
+                    "PullRequestReview",
+                    "MergeQueue"
                   ]
                 }
               }
@@ -2936,6 +2938,22 @@ const schema: Record<string, any> = {
                 "properties": {
                   "spec": {
                     "$ref": "#/definitions/trigger/webhook_trigger/github_pr_review_spec"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "MergeQueue"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "spec": {
+                    "$ref": "#/definitions/trigger/webhook_trigger/github_merge_queue_spec"
                   }
                 }
               }
@@ -3236,6 +3254,41 @@ const schema: Record<string, any> = {
                 "autoAbortPreviousExecutions": {
                   "type": "boolean"
                 },
+                "connectorRef": {
+                  "type": "string"
+                },
+                "headerConditions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/trigger/trigger_event_data"
+                  }
+                },
+                "jexlCondition": {
+                  "type": "string"
+                },
+                "payloadConditions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/trigger/trigger_event_data"
+                  }
+                },
+                "repoName": {
+                  "type": "string"
+                }
+              }
+            }
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "github_merge_queue_spec": {
+          "title": "github_merge_queue_spec",
+          "allOf": [
+            {
+              "$ref": "#/definitions/trigger/webhook_trigger/github_event_spec"
+            },
+            {
+              "type": "object",
+              "properties": {
                 "connectorRef": {
                   "type": "string"
                 },
@@ -3600,7 +3653,8 @@ const schema: Record<string, any> = {
                     "PullRequest",
                     "Push",
                     "Branch",
-                    "Tag"
+                    "Tag",
+                    "MergeQueue"
                   ]
                 }
               }
@@ -3665,6 +3719,22 @@ const schema: Record<string, any> = {
                 "properties": {
                   "spec": {
                     "$ref": "#/definitions/trigger/webhook_trigger/harness_tag_spec"
+                  }
+                }
+              }
+            },
+            {
+              "if": {
+                "properties": {
+                  "type": {
+                    "const": "MergeQueue"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "spec": {
+                    "$ref": "#/definitions/trigger/webhook_trigger/harness_merge_queue_spec"
                   }
                 }
               }
@@ -3822,6 +3892,38 @@ const schema: Record<string, any> = {
                     ]
                   }
                 },
+                "headerConditions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/trigger/trigger_event_data"
+                  }
+                },
+                "jexlCondition": {
+                  "type": "string"
+                },
+                "payloadConditions": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/definitions/trigger/trigger_event_data"
+                  }
+                },
+                "repoName": {
+                  "type": "string"
+                }
+              }
+            }
+          ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "harness_merge_queue_spec": {
+          "title": "harness_merge_queue_spec",
+          "allOf": [
+            {
+              "$ref": "#/definitions/trigger/webhook_trigger/harness_event_spec"
+            },
+            {
+              "type": "object",
+              "properties": {
                 "headerConditions": {
                   "type": "array",
                   "items": {

@@ -29256,7 +29256,8 @@ const schema: Record<string, any> = {
                   "config": {
                     "type": "string",
                     "enum": [
-                      "hunt",
+                      "hunt_full",
+                      "hunt_incremental",
                       "scan"
                     ]
                   },
@@ -29382,7 +29383,8 @@ const schema: Record<string, any> = {
               "config": {
                 "type": "string",
                 "enum": [
-                  "hunt",
+                  "hunt_full",
+                  "hunt_incremental",
                   "scan"
                 ]
               },
@@ -55858,6 +55860,20 @@ const schema: Record<string, any> = {
                   },
                   "llmConnectorRef": {
                     "type": "string"
+                  },
+                  "resourceAddresses": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+.*>$"
+                      }
+                    ]
                   }
                 }
               }
@@ -55896,6 +55912,20 @@ const schema: Record<string, any> = {
               },
               "llmConnectorRef": {
                 "type": "string"
+              },
+              "resourceAddresses": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+.*>$"
+                  }
+                ]
               }
             }
           }
@@ -74929,7 +74959,8 @@ const schema: Record<string, any> = {
                   "GoogleMigInstanceTemplate",
                   "GoogleMigConfiguration",
                   "GoogleMigAutoscalerConfiguration",
-                  "GoogleMigHealthCheckConfiguration"
+                  "GoogleMigHealthCheckConfiguration",
+                  "AgentConfig"
                 ]
               },
               "description": {
@@ -75449,6 +75480,22 @@ const schema: Record<string, any> = {
                     }
                   }
                 }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "AgentConfig"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/AgentConfigManifest"
+                    }
+                  }
+                }
               }
             ]
           },
@@ -75877,7 +75924,8 @@ const schema: Record<string, any> = {
                     "enum": [
                       "V2",
                       "V3",
-                      "V380"
+                      "V380",
+                      "V4"
                     ]
                   },
                   "metadata": {
@@ -76599,6 +76647,31 @@ const schema: Record<string, any> = {
             "properties": {
               "description": {
                 "desc": "This is the description for GoogleMigHealthCheckConfiguration"
+              }
+            }
+          },
+          "AgentConfigManifest": {
+            "title": "AgentConfigManifest",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/steps/cd/ManifestAttributes"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "string"
+                  },
+                  "store": {
+                    "$ref": "#/definitions/pipeline/steps/cd/StoreConfigWrapper"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for AgentConfigManifest"
               }
             }
           },
