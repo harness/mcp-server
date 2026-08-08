@@ -2866,9 +2866,13 @@ describe("harness_describe", () => {
 
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as {
+      description?: string;
       operations: Array<{ operation: string; paramsSchema?: { fields: Array<{ name: string; required: boolean }> } }>;
       executeActions: Array<{ action: string; paramsSchema?: { fields: Array<{ name: string; required: boolean }> } }>;
     };
+    expect(data.description).toContain("org_id/project_id");
+    expect(data.description).toContain("account-scoped");
+
     const create = data.operations.find((op) => op.operation === "create");
     expect(create?.paramsSchema?.fields).toEqual(
       expect.arrayContaining([

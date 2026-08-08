@@ -3,6 +3,7 @@ import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
 import type { EndpointSpec } from "../../src/registry/types.js";
+import { pullRequestsToolset } from "../../src/registry/toolsets/pull-requests.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -182,6 +183,163 @@ describe("pull_request registry mappings", () => {
       }),
     ).rejects.toThrow(/repo_id/);
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("pull_request scope query params", () => {
+  // Regression: project-scoped Code repos 404 when org_id/project_id are omitted (#724).
+  // scopeOptional resources must forward explicit scope and must not fall back to config defaults.
+
+  it("forwards org_id and project_id on list for project-scoped repos", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ pullreqs: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "rc_tools",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/repos/rc_tools/pullreq",
+      params: expect.objectContaining({
+        orgIdentifier: "AI_Devops",
+        projectIdentifier: "Sanity",
+      }),
+    }));
+  });
+
+  it("forwards org_id and project_id on get for project-scoped repos", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ number: 42 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "get", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42",
+      params: expect.objectContaining({
+        orgIdentifier: "AI_Devops",
+        projectIdentifier: "Sanity",
+      }),
+    }));
+  });
+
+  it("forwards org_id and project_id on merge execute for project-scoped repos", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ merged: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pull_request", "merge", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+      body: { method: "squash" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/merge",
+      params: expect.objectContaining({
+        orgIdentifier: "AI_Devops",
+        projectIdentifier: "Sanity",
+      }),
+      body: { method: "squash" },
+    }));
+  });
+
+  it("omits org/project query params when scope is not provided (account-scoped repo)", async () => {
+    const registry = new Registry(makeConfig({
+      HARNESS_TOOLSETS: "pull-requests",
+      HARNESS_ORG: "configured-org",
+      HARNESS_PROJECT: "configured-project",
+    }));
+    const mockRequest = vi.fn().mockResolvedValue({ pullreqs: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "account-repo",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("uses explicit org_id/project_id over configured defaults for scoped repos", async () => {
+    const registry = new Registry(makeConfig({
+      HARNESS_TOOLSETS: "pull-requests",
+      HARNESS_ORG: "configured-org",
+      HARNESS_PROJECT: "configured-project",
+    }));
+    const mockRequest = vi.fn().mockResolvedValue({ number: 7 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "get", {
+      repo_id: "scoped-repo",
+      pr_number: "7",
+      org_id: "explicit-org",
+      project_id: "explicit-project",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      params: expect.objectContaining({
+        orgIdentifier: "explicit-org",
+        projectIdentifier: "explicit-project",
+      }),
+    }));
+  });
+});
+
+describe("pull_request multi-scope metadata", () => {
+  const PR_RESOURCE_TYPES = [
+    "pull_request",
+    "pr_reviewer",
+    "pr_comment",
+    "pr_check",
+    "pr_activity",
+  ] as const;
+
+  it("marks all pull-request resources as scopeOptional", () => {
+    const issues: string[] = [];
+    for (const type of PR_RESOURCE_TYPES) {
+      const def = pullRequestsToolset.resources.find((r) => r.resourceType === type);
+      if (!def) {
+        issues.push(`${type}: missing from pull-requests toolset`);
+        continue;
+      }
+      if (!def.scopeOptional) {
+        issues.push(`${type}: expected scopeOptional=true`);
+      }
+    }
+    expect(issues, issues.join("\n")).toEqual([]);
+  });
+
+  it("documents org_id/project_id scope in resource descriptions (#724)", () => {
+    const issues: string[] = [];
+    for (const type of PR_RESOURCE_TYPES) {
+      const def = pullRequestsToolset.resources.find((r) => r.resourceType === type);
+      if (!def?.description) {
+        issues.push(`${type}: missing description`);
+        continue;
+      }
+      if (!def.description.includes("org_id/project_id")) {
+        issues.push(`${type}: description should mention org_id/project_id for project-scoped repos`);
+      }
+      if (!def.description.includes("account-scoped")) {
+        issues.push(`${type}: description should mention account-scoped repos`);
+      }
+    }
+    expect(issues, issues.join("\n")).toEqual([]);
   });
 });
 
