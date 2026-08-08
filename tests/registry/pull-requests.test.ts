@@ -31,6 +31,69 @@ function makeClient(requestFn: (...args: unknown[]) => unknown): HarnessClient {
   } as unknown as HarnessClient;
 }
 
+describe("pull_request scopeOptional scoping", () => {
+  it("list omits org/project query params when caller does not provide them", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "rc_tools",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { params?: Record<string, unknown> };
+    expect(call.params?.orgIdentifier).toBeUndefined();
+    expect(call.params?.projectIdentifier).toBeUndefined();
+  });
+
+  it("list injects org_id and project_id when caller provides them for project-scoped repos", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "rc_tools",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { params?: Record<string, unknown> };
+    expect(call.params?.orgIdentifier).toBe("AI_Devops");
+    expect(call.params?.projectIdentifier).toBe("Sanity");
+  });
+
+  it("list with resource_scope account omits org/project even when org_id/project_id are set", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "account_repo",
+      resource_scope: "account",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { params?: Record<string, unknown> };
+    expect(call.params?.orgIdentifier).toBeUndefined();
+    expect(call.params?.projectIdentifier).toBeUndefined();
+  });
+
+  it("canonicalizes mixed-case state filter to declared enum casing", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "rc_tools",
+      state: "OPEN",
+    });
+
+    const call = mockRequest.mock.calls[0][0] as { params?: Record<string, unknown> };
+    expect(call.params?.state).toBe("open");
+  });
+});
+
 describe("pull_request registry mappings", () => {
   it("routes state-only updates to the Harness Code PR state endpoint", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
