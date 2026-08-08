@@ -41,6 +41,26 @@ describe("triggerListExtract", () => {
     });
   });
 
+  it("re-injects when pipeline_id is a non-scalar placeholder", () => {
+    const raw = {
+      data: {
+        content: [
+          {
+            identifier: "cron-trigger",
+            pipeline_id: { nested: "ignored" },
+            pipelineIdentifier: "from-item",
+          },
+        ],
+        totalElements: 1,
+      },
+    };
+    expect(triggerListExtract(raw, { pipeline_id: "from-input" }).items[0]).toEqual({
+      identifier: "cron-trigger",
+      pipeline_id: "from-item",
+      pipelineIdentifier: "from-item",
+    });
+  });
+
   it("does not overwrite an existing scalar pipeline_id", () => {
     const raw = {
       data: {
