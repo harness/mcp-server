@@ -1486,6 +1486,61 @@ describe("Registry", () => {
       ).rejects.toThrow(/body must be a JSON object or YAML object for trigger/);
     });
 
+    it("update: YAML string body parses and extracts pipelineIdentifier", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+      const yamlBody = [
+        "trigger:",
+        "  name: updated-trigger",
+        "  identifier: updatedTrigger",
+        "  pipelineIdentifier: updatePipeline",
+        "  source:",
+        "    type: Scheduled",
+      ].join("\n");
+      await registry.dispatch(client, "trigger", "update", {
+        trigger_id: "updatedTrigger",
+        pipeline_id: undefined,
+        body: yamlBody,
+      });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/pipeline/api/triggers/updatedTrigger");
+      expect(call.params.targetIdentifier).toBe("updatePipeline");
+      const outYaml = call.body as string;
+      expect(outYaml).toContain("pipelineIdentifier: updatePipeline");
+      expect(outYaml).not.toContain("trigger: |\n  trigger:");
+    });
+
+    it("update: invalid YAML string body throws a clear error", async () => {
+      const client = makeClient();
+      await expect(
+        registry.dispatch(client, "trigger", "update", {
+          trigger_id: "updatedTrigger",
+          pipeline_id: "parentPipe",
+          body: "trigger:\n  name: [unclosed",
+        }),
+      ).rejects.toThrow(/body must be a JSON object or YAML object for trigger/);
+    });
+
+    it("update: explicit pipeline_id takes precedence over YAML extraction", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+      await registry.dispatch(client, "trigger", "update", {
+        trigger_id: "updatedTrigger",
+        pipeline_id: "explicitPipeline",
+        body: {
+          trigger: {
+            name: "updated-trigger",
+            identifier: "updatedTrigger",
+            pipelineIdentifier: "yamlPipeline",
+            source: { type: "Scheduled" },
+          },
+        },
+      });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params.targetIdentifier).toBe("explicitPipeline");
+    });
+
     it("list without pipeline_id throws a clear error", async () => {
       const client = makeClient();
       await expect(

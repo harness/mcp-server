@@ -185,6 +185,23 @@ describe("pull_request registry mappings", () => {
   });
 });
 
+describe("pull request scope documentation", () => {
+  const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+  const scopeHint =
+    "Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in";
+
+  it.each([
+    "pull_request",
+    "pr_reviewer",
+    "pr_comment",
+    "pr_check",
+    "pr_activity",
+  ])("%s description documents org/project scope for repo space", (resourceType) => {
+    const def = registry.getResource(resourceType);
+    expect(def.description).toContain(scopeHint);
+  });
+});
+
 describe("paramsSchema on pull_request operations", () => {
   const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
   const def = registry.getResource("pull_request");

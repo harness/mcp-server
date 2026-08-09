@@ -409,6 +409,44 @@ describe("ConfigSchema — boolean env var coercion", () => {
     expect(result.success).toBe(true);
     if (result.success) expect(result.data.HARNESS_READ_ONLY).toBe(true);
   });
+
+  it("HARNESS_LOG_UNSAFE_BODIES defaults to false when unset", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.HARNESS_LOG_UNSAFE_BODIES).toBe(false);
+  });
+
+  it("HARNESS_LOG_UNSAFE_BODIES=true enables raw body logging", () => {
+    const result = ConfigSchema.safeParse({ ...validConfig, HARNESS_LOG_UNSAFE_BODIES: "true" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.HARNESS_LOG_UNSAFE_BODIES).toBe(true);
+  });
+
+  it("defaults HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY to 3 and coerces from env", () => {
+    const withDefault = ConfigSchema.safeParse(validConfig);
+    expect(withDefault.success).toBe(true);
+    if (withDefault.success) {
+      expect(withDefault.data.HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY).toBe(3);
+    }
+
+    const coerced = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: "5",
+    });
+    expect(coerced.success).toBe(true);
+    if (coerced.success) {
+      expect(coerced.data.HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY).toBe(5);
+    }
+  });
+
+  it("rejects HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY outside 1..20", () => {
+    expect(
+      ConfigSchema.safeParse({ ...validConfig, HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: "0" }).success,
+    ).toBe(false);
+    expect(
+      ConfigSchema.safeParse({ ...validConfig, HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: "21" }).success,
+    ).toBe(false);
+  });
 });
 
 describe("ConfigSchema — HTTPS enforcement", () => {
