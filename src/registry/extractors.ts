@@ -12,6 +12,30 @@ export const ngExtract = (raw: unknown): unknown => {
   return r.data ?? raw;
 };
 
+/**
+ * Extractor for CCM budget/budget-group writes (create, update, clone). These
+ * endpoints return the new/affected entity ID as a BARE STRING under `data`:
+ * `{ status: "SUCCESS", data: "<budgetId>" }`. The write tools (harness_create
+ * etc.) declare an object outputSchema, so a bare string fails structured-content
+ * validation. Wrap the id into `{ id, status }` so callers get a usable object.
+ * Falls back to ngExtract behavior for object payloads (e.g. DELETE returning
+ * `{ data: true }` or a full entity).
+ */
+export const ccmBudgetWriteExtract = (raw: unknown): unknown => {
+  if (raw === null || raw === undefined) return raw;
+  const r = raw as { data?: unknown; status?: unknown };
+  if (typeof r.data === "string") {
+    // create/clone return the new entity id (no spaces); delete returns a
+    // human-readable confirmation message (e.g. "Successfully deleted the budget").
+    const key = /\s/.test(r.data) ? "message" : "id";
+    return { [key]: r.data, status: r.status ?? "SUCCESS" };
+  }
+  if (typeof r.data === "boolean" || typeof r.data === "number") {
+    return { result: r.data, status: r.status ?? "SUCCESS" };
+  }
+  return r.data ?? raw;
+};
+
 /** Extract paginated content from NG API responses: `{ data: { content, totalElements|totalItems } }` */
 export const pageExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as { data?: { content?: unknown[]; totalElements?: number; totalItems?: number } };
@@ -442,6 +466,106 @@ export const ccmViewsExtract = (raw: unknown): { items: unknown[]; total: number
   return {
     items: r.data?.views ?? [],
     total: r.data?.totalCount ?? 0,
+  };
+};
+
+/**
+ * CCM budget list (POST /ccm/api/budgets/v2/list) — keep the essential budget
+ * health fields and drop noise. Strips alertThresholds (contains emails),
+ * budgetMonthlyBreakdown (mostly zeros), and internal UUIDs.
+ *
+ * Response shape: `{ status, data: { summaries: [...], totalCount: N } }`.
+ * Falls back to the standard paged shape if `summaries` is absent.
+ */
+export const ccmBudgetListCompactExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { data?: { summaries?: unknown[]; totalCount?: number } };
+  let items: unknown[] = r.data?.summaries ?? [];
+  let total = typeof r.data?.totalCount === "number" ? r.data.totalCount : items.length;
+
+  if (items.length === 0) {
+    const paged = pageExtract(raw);
+    items = paged.items;
+    total = paged.total;
+  }
+
+  const compact = items.map((item) => {
+    if (!isRecord(item)) return item;
+    return {
+      id: item.uuid ?? item.id,
+      name: item.name,
+      perspectiveId: item.perspectiveId,
+      perspectiveName: item.perspectiveName,
+      budgetAmount: item.budgetAmount,
+      actualCost: item.actualCost,
+      forecastCost: item.forecastCost,
+      timeLeft: item.timeLeft,
+      timeUnit: item.timeUnit,
+      period: item.period,
+      type: item.type,
+      growthRate: item.growthRate,
+      actualCostAlerts: item.actualCostAlerts,
+      forecastCostAlerts: item.forecastCostAlerts,
+      budgetGroup: item.budgetGroup,
+      folderId: item.folderId,
+    };
+  });
+
+  return { items: compact, total };
+};
+
+/**
+ * CCM budget variance detail — per-period actual-vs-budgeted time-series.
+ *
+ * Sourced from the REST budget detail (`GET /ccm/api/budgets/{id}`), which
+ * returns a populated `budgetHistory` map keyed by period-start epoch-ms. The
+ * GraphQL `FetchBudgetsGridData` grid resolver returns empty `costData` even
+ * for budgets with history, so we derive the series from budgetHistory instead.
+ *
+ * Each history entry: `{ time, endTime, actualCost, forecastCost, budgeted,
+ * budgetVariance, budgetVariancePercentage }`. We sort ascending by `time` so
+ * the last row is the current (partial) period. Also handles budget GROUPS,
+ * whose detail carries the same shape under `budgetGroupHistory`.
+ *
+ * Response shape: `{ data: { budgetHistory: {ts: {...}}, forecastCost, period,
+ * name, budgetAmount, ... } }` (NG-wrapped).
+ */
+export const ccmBudgetDetailExtract = (raw: unknown): unknown => {
+  const r = raw as {
+    data?: Record<string, unknown>;
+    // GraphQL fallback shape (kept for safety if the resolver ever returns data)
+    errors?: unknown;
+  };
+  const d = isRecord(r?.data) ? r.data : isRecord(raw) ? (raw as Record<string, unknown>) : undefined;
+  if (!d) return raw;
+
+  const history = (d.budgetHistory ?? d.budgetGroupHistory) as
+    | Record<string, unknown>
+    | undefined;
+
+  let costData: unknown[] = [];
+  if (isRecord(history)) {
+    costData = Object.values(history)
+      .filter(isRecord)
+      .map((e) => ({
+        time: e.time,
+        endTime: e.endTime,
+        actualCost: e.actualCost,
+        forecastCost: e.forecastCost,
+        budgeted: e.budgeted,
+        budgetVariance: e.budgetVariance,
+        budgetVariancePercentage: e.budgetVariancePercentage,
+      }))
+      .sort((a, b) => Number(a.time ?? 0) - Number(b.time ?? 0));
+  }
+
+  return {
+    budgetId: d.uuid ?? d.id,
+    name: d.name,
+    period: d.period,
+    budgetAmount: d.budgetAmount ?? d.budgetGroupAmount,
+    forecastCost: d.forecastCost,
+    actualCost: d.actualCost,
+    costData,
   };
 };
 
