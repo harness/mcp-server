@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { ccmToolset } from "../../src/registry/toolsets/ccm.js";
-import { ccmBudgetWriteExtract } from "../../src/registry/extractors.js";
+import { ccmBudgetWriteExtract, ccmBudgetListCompactExtract, ccmBudgetDetailExtract } from "../../src/registry/extractors.js";
 
 const budget = ccmToolset.resources.find((r) => r.resourceType === "cost_budget");
 const variance = ccmToolset.resources.find((r) => r.resourceType === "cost_budget_variance");
@@ -40,6 +40,13 @@ describe("cost_budget resource", () => {
       limit: 5,
       offset: 10,
       searchKey: "Q1",
+    });
+    // search_key alias and size alias for limit
+    expect(builder({ search_key: "  eng  ", size: 50 })).toEqual({
+      filterType: "CCMBudget",
+      limit: 50,
+      offset: 0,
+      searchKey: "eng",
     });
     // perspective_name accepts comma-separated string or array, trimmed + de-blanked
     expect(builder({ perspective_name: "Prod, , Staging" })).toEqual({
@@ -84,6 +91,10 @@ describe("cost_budget resource", () => {
     expect(builder({ budget_ids: ["a", "b"] })).toEqual({ budgetIds: ["a", "b"] });
     expect(builder({ body: { budgetIds: ["c"] } })).toEqual({ budgetIds: ["c"] });
   });
+
+  it("wires list to ccmBudgetListCompactExtract", () => {
+    expect(budget!.operations.list!.responseExtractor).toBe(ccmBudgetListCompactExtract);
+  });
 });
 
 describe("ccmBudgetWriteExtract", () => {
@@ -103,6 +114,12 @@ describe("ccmBudgetWriteExtract", () => {
 
   it("wraps boolean/number data under result", () => {
     expect(ccmBudgetWriteExtract({ status: "SUCCESS", data: true })).toEqual({ result: true, status: "SUCCESS" });
+    expect(ccmBudgetWriteExtract({ status: "SUCCESS", data: 42 })).toEqual({ result: 42, status: "SUCCESS" });
+  });
+
+  it("passes through null/undefined unchanged", () => {
+    expect(ccmBudgetWriteExtract(null)).toBeNull();
+    expect(ccmBudgetWriteExtract(undefined)).toBeUndefined();
   });
 
   it("passes object data through (full entity payloads)", () => {
@@ -138,6 +155,7 @@ describe("cost_budget_variance resource", () => {
     expect(variance!.operations.get).toMatchObject({ method: "GET", path: "/ccm/api/budgets/{budgetId}" });
     expect(variance!.operations.get!.operationPolicy.risk).toBe("read");
     expect(variance!.operations.get!.pathParams).toEqual({ budget_id: "budgetId" });
+    expect(variance!.operations.get!.responseExtractor).toBe(ccmBudgetDetailExtract);
   });
 });
 

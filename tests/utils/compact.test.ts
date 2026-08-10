@@ -8,6 +8,12 @@ describe("compactItems", () => {
     expect(result[0]).toEqual({ identifier: "p1", name: "Pipeline 1", description: "A pipeline", slug: "p1" });
   });
 
+  it("keeps id and uuid identity fields (budget list compacting)", () => {
+    const items = [{ id: "bud-1", uuid: "uuid-ignored-when-id-present", name: "Q1 Budget" }];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toEqual({ id: "bud-1", uuid: "uuid-ignored-when-id-present", name: "Q1 Budget" });
+  });
+
   it("keeps status fields", () => {
     const items = [{ status: "Running", enabled: true, health: "good" }];
     const result = compactItems(items) as Record<string, unknown>[];

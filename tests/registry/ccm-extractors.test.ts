@@ -9,6 +9,8 @@ import {
   ccmTimeseriesExtract,
   ccmSummaryExtract,
   ccmRecommendationsExtract,
+  ccmBudgetListCompactExtract,
+  ccmBudgetDetailExtract,
   countExtract,
 } from "../../src/registry/extractors.js";
 
@@ -102,6 +104,186 @@ describe("ccmSummaryExtract", () => {
   it("passes through raw when data envelope is absent", () => {
     const raw = { status: "ERROR" };
     expect(ccmSummaryExtract(raw)).toBe(raw);
+  });
+});
+
+describe("ccmBudgetListCompactExtract", () => {
+  it("maps summaries to compact items and totalCount to total", () => {
+    const raw = {
+      data: {
+        summaries: [
+          {
+            uuid: "bud-1",
+            name: "Q1 Prod",
+            perspectiveName: "Production",
+            budgetAmount: 1000,
+            actualCost: 800,
+            forecastCost: 950,
+            alertThresholds: [{ emailAddresses: ["admin@example.com"] }],
+            budgetMonthlyBreakdown: { budgetMonthlyAmount: [] },
+          },
+        ],
+        totalCount: 1,
+      },
+    };
+    expect(ccmBudgetListCompactExtract(raw)).toEqual({
+      items: [
+        {
+          id: "bud-1",
+          name: "Q1 Prod",
+          perspectiveId: undefined,
+          perspectiveName: "Production",
+          budgetAmount: 1000,
+          actualCost: 800,
+          forecastCost: 950,
+          timeLeft: undefined,
+          timeUnit: undefined,
+          period: undefined,
+          type: undefined,
+          growthRate: undefined,
+          actualCostAlerts: undefined,
+          forecastCostAlerts: undefined,
+          budgetGroup: undefined,
+          folderId: undefined,
+        },
+      ],
+      total: 1,
+    });
+  });
+
+  it("prefers uuid over id and falls back to pageExtract when summaries is empty", () => {
+    const paged = {
+      data: {
+        content: [{ id: "bud-2", name: "Staging", budgetAmount: 500 }],
+        totalElements: 3,
+      },
+    };
+    expect(ccmBudgetListCompactExtract(paged)).toEqual({
+      items: [{ id: "bud-2", name: "Staging", perspectiveId: undefined, perspectiveName: undefined, budgetAmount: 500, actualCost: undefined, forecastCost: undefined, timeLeft: undefined, timeUnit: undefined, period: undefined, type: undefined, growthRate: undefined, actualCostAlerts: undefined, forecastCostAlerts: undefined, budgetGroup: undefined, folderId: undefined }],
+      total: 3,
+    });
+  });
+
+  it("uses items.length as total when totalCount is absent", () => {
+    const raw = { data: { summaries: [{ uuid: "a" }, { uuid: "b" }] } };
+    expect(ccmBudgetListCompactExtract(raw).total).toBe(2);
+  });
+
+  it("passes through non-record summary entries unchanged", () => {
+    const raw = { data: { summaries: ["bad-row"], totalCount: 1 } };
+    expect(ccmBudgetListCompactExtract(raw)).toEqual({ items: ["bad-row"], total: 1 });
+  });
+});
+
+describe("ccmBudgetDetailExtract", () => {
+  it("derives ascending costData from budgetHistory and strips envelope fields", () => {
+    const raw = {
+      data: {
+        uuid: "bud-1",
+        name: "Q1 Prod",
+        period: "MONTHLY",
+        budgetAmount: 1000,
+        forecastCost: 950,
+        actualCost: 800,
+        budgetHistory: {
+          "1704067200000": {
+            time: 1704067200000,
+            endTime: 1706745600000,
+            actualCost: 400,
+            forecastCost: 450,
+            budgeted: 500,
+            budgetVariance: -100,
+            budgetVariancePercentage: -20,
+          },
+          "1701388800000": {
+            time: 1701388800000,
+            endTime: 1704067200000,
+            actualCost: 300,
+            forecastCost: 350,
+            budgeted: 500,
+            budgetVariance: -200,
+            budgetVariancePercentage: -40,
+          },
+        },
+        alertThresholds: [{ emailAddresses: ["admin@example.com"] }],
+      },
+    };
+    expect(ccmBudgetDetailExtract(raw)).toEqual({
+      budgetId: "bud-1",
+      name: "Q1 Prod",
+      period: "MONTHLY",
+      budgetAmount: 1000,
+      forecastCost: 950,
+      actualCost: 800,
+      costData: [
+        {
+          time: 1701388800000,
+          endTime: 1704067200000,
+          actualCost: 300,
+          forecastCost: 350,
+          budgeted: 500,
+          budgetVariance: -200,
+          budgetVariancePercentage: -40,
+        },
+        {
+          time: 1704067200000,
+          endTime: 1706745600000,
+          actualCost: 400,
+          forecastCost: 450,
+          budgeted: 500,
+          budgetVariance: -100,
+          budgetVariancePercentage: -20,
+        },
+      ],
+    });
+  });
+
+  it("reads budgetGroupHistory and budgetGroupAmount for budget groups", () => {
+    const raw = {
+      data: {
+        id: "grp-1",
+        name: "Eng Group",
+        period: "QUARTERLY",
+        budgetGroupAmount: 5000,
+        budgetGroupHistory: {
+          "1": { time: 2, endTime: 3, actualCost: 100, forecastCost: 110, budgeted: 120, budgetVariance: -20, budgetVariancePercentage: -16.7 },
+        },
+      },
+    };
+    const result = ccmBudgetDetailExtract(raw) as { budgetAmount: number; costData: unknown[] };
+    expect(result.budgetAmount).toBe(5000);
+    expect(result.costData).toHaveLength(1);
+  });
+
+  it("returns empty costData when history is absent and accepts unwrapped payloads", () => {
+    const raw = { uuid: "bud-3", name: "No History", period: "YEARLY" };
+    expect(ccmBudgetDetailExtract(raw)).toEqual({
+      budgetId: "bud-3",
+      name: "No History",
+      period: "YEARLY",
+      budgetAmount: undefined,
+      forecastCost: undefined,
+      actualCost: undefined,
+      costData: [],
+    });
+  });
+
+  it("passes through non-record raw values unchanged", () => {
+    expect(ccmBudgetDetailExtract(null)).toBeNull();
+    expect(ccmBudgetDetailExtract("not-json")).toBe("not-json");
+  });
+
+  it("returns empty costData for error envelopes without history", () => {
+    const raw = { status: "ERROR", message: "not found" };
+    expect(ccmBudgetDetailExtract(raw)).toEqual({
+      budgetId: undefined,
+      name: undefined,
+      period: undefined,
+      budgetAmount: undefined,
+      forecastCost: undefined,
+      actualCost: undefined,
+      costData: [],
+    });
   });
 });
 
