@@ -967,18 +967,12 @@ describe("HarnessClient", () => {
       }
     });
 
-    it("throws clear error for empty response body", async () => {
-      fetchSpy.mockResolvedValue(new Response("", { status: 200 }));
+    it("treats empty 2xx body as success (204 / IaCM provider version 201)", async () => {
+      fetchSpy.mockResolvedValue(new Response("", { status: 201 }));
       const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
 
-      try {
-        await client.request({ path: "/test" });
-        expect.fail("should have thrown");
-      } catch (err) {
-        expect(err).toBeInstanceOf(HarnessApiError);
-        expect((err as HarnessApiError).statusCode).toBe(502);
-        expect((err as HarnessApiError).message).toContain("Empty response body");
-      }
+      const result = await client.request({ path: "/test" });
+      expect(result).toEqual({ status: "SUCCESS", message: "No content" });
     });
 
     it("parses valid JSON response normally", async () => {
