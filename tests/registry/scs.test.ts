@@ -819,12 +819,13 @@ describe("T9-v2: compactItems effectiveness for SCS", () => {
 
     const [compacted] = compactItems([scsArtifact]) as Record<string, unknown>[];
 
-    // Only name and tags survive the generic whitelist
+    // name, tags, and the generic id survive the whitelist
     expect(compacted.name).toBeDefined();
     expect(compacted.tags).toBeDefined();
+    expect(compacted.id).toBeDefined();
 
-    // All these critical SCS fields are dropped
-    expect(compacted.id).toBeUndefined();
+    // But these SCS-specific fields are still dropped — which is why SCS uses
+    // scsCleanExtract to bypass compaction entirely (see test above).
     expect(compacted.digest).toBeUndefined();
     expect(compacted.url).toBeUndefined();
     expect(compacted.components_count).toBeUndefined();
