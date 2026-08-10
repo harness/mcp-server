@@ -283,6 +283,22 @@ describe("T11-v2: ID retention hints in descriptions", () => {
     expect(res.description).toContain("SBOM");
   });
 
+  it("scs_chain_of_custody get wraps arrays for MCP structuredContent", async () => {
+    const { chainOfCustodyExtract } = await import("../../src/registry/toolsets/scs.js");
+    const raw = [
+      { orchestration: { id: "orch-1" }, type: "SBOM", empty: null },
+      { orchestration: { id: "orch-2" }, type: "SLSA", name: "" },
+    ];
+    expect(chainOfCustodyExtract(raw)).toEqual({
+      items: [
+        { orchestration: { id: "orch-1" }, type: "SBOM" },
+        { orchestration: { id: "orch-2" }, type: "SLSA" },
+      ],
+      total: 2,
+    });
+    expect(findResource("scs_chain_of_custody").operations.get?.responseExtractor).toBe(chainOfCustodyExtract);
+  });
+
   it("scs_artifact_component description mentions retaining purl", () => {
     const res = findResource("scs_artifact_component");
     expect(res.description).toContain("purl");
