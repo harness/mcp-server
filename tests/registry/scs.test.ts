@@ -2316,6 +2316,69 @@ describe("scs_auto_pr_config path and scope", () => {
   });
 });
 
+describe("chainOfCustodyExtract", () => {
+  it("returns empty items/total for null, undefined, and primitives", async () => {
+    const { chainOfCustodyExtract } = await import("../../src/registry/toolsets/scs.js");
+    expect(chainOfCustodyExtract(null)).toEqual({ items: [], total: 0 });
+    expect(chainOfCustodyExtract(undefined)).toEqual({ items: [], total: 0 });
+    expect(chainOfCustodyExtract("not-an-array")).toEqual({ items: [], total: 0 });
+  });
+
+  it("returns empty items for an empty array", async () => {
+    const { chainOfCustodyExtract } = await import("../../src/registry/toolsets/scs.js");
+    expect(chainOfCustodyExtract([])).toEqual({ items: [], total: 0 });
+  });
+
+  it("passes through already-structured object responses unchanged", async () => {
+    const { chainOfCustodyExtract } = await import("../../src/registry/toolsets/scs.js");
+    const structured = { items: [{ orchestration: { id: "orch-1" } }], total: 1 };
+    expect(chainOfCustodyExtract(structured)).toEqual(structured);
+  });
+});
+
+describe("scs_chain_of_custody dispatch", () => {
+  it("GETs chain-of-custody path and wraps array response for MCP structuredContent", async () => {
+    const request = vi.fn().mockResolvedValue([
+      { orchestration: { id: "orch-1" }, type: "SBOM" },
+      { orchestration: { id: "orch-2" }, type: "SLSA" },
+    ]);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const result = await registry.dispatch(makeClient(request), "scs_chain_of_custody", "get", {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      artifact_id: "art-123",
+    });
+
+    expect(request).toHaveBeenCalledTimes(1);
+    const opts = request.mock.calls[0]![0] as { method: string; path: string };
+    expect(opts.method).toBe("GET");
+    expect(opts.path).toBe(
+      "/ssca-manager/v2/orgs/SSCA/projects/Sanity/artifacts/art-123/chain-of-custody",
+    );
+    expect(result).toMatchObject({
+      items: [
+        { orchestration: { id: "orch-1" }, type: "SBOM" },
+        { orchestration: { id: "orch-2" }, type: "SLSA" },
+      ],
+      total: 2,
+    });
+  });
+
+  it("allows scs_chain_of_custody get under HARNESS_READ_ONLY (risk read)", async () => {
+    const request = vi.fn().mockResolvedValue([]);
+    const registry = new Registry(
+      makeConfig({ HARNESS_TOOLSETS: "scs", HARNESS_READ_ONLY: true }),
+    );
+    await expect(
+      registry.dispatch(makeClient(request), "scs_chain_of_custody", "get", {
+        org_id: "SSCA",
+        project_id: "Sanity",
+        artifact_id: "art-123",
+      }),
+    ).resolves.toEqual({ items: [], total: 0 });
+  });
+});
+
 describe("sbomDownloadExtract", () => {
   it("keeps download_url and expires_at with display hint", () => {
     const result = sbomDownloadExtract({
