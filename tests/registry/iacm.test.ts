@@ -161,6 +161,7 @@ describe("iacm_workspace write contract", () => {
       type: "array",
       itemType: "string",
       required: false,
+      description: expect.stringContaining("string array on the wire"),
     });
     expect(fields.find((field) => field.name === "terraform_variables")).toMatchObject({
       type: "object",

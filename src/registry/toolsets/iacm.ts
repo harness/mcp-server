@@ -205,7 +205,9 @@ const workspaceOptionalFields: BodyFieldSpec[] = [
     type: "array",
     required: false,
     itemType: "string",
-    description: "Git sparse-checkout path patterns",
+    description:
+      "Git sparse-checkout path patterns (string array on the wire). " +
+      "Published OpenAPI shows type string due to Goa custom-type flattening.",
   },
   {
     name: "cost_estimation_enabled",
