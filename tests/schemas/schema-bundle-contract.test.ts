@@ -220,4 +220,69 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream MythosAgent step definitions in v0 pipeline", () => {
+    const common = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>).pipeline
+      .steps.common as Record<string, unknown>;
+
+    expect(common).toHaveProperty("MythosAgentStepInfo");
+    expect(common).toHaveProperty("MythosAgentNode");
+    expect(common).toHaveProperty("STOYamlMythosAgentToolData");
+
+    const stepNode = common.MythosAgentNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("MythosAgent");
+
+    const stepInfo = common.MythosAgentStepInfo as {
+      required: string[];
+      properties: {
+        config: { enum: string[] };
+        tool: { $ref: string };
+      };
+    };
+    expect(stepInfo.required).toEqual(expect.arrayContaining(["config", "mode", "target"]));
+    expect(stepInfo.properties.config.enum).toEqual(expect.arrayContaining(["hunt", "scan"]));
+    expect(stepInfo.properties.tool.$ref).toContain("STOYamlMythosAgentToolData");
+
+    const toolData = common.STOYamlMythosAgentToolData as {
+      properties: Record<string, unknown>;
+    };
+    expect(toolData.properties).toHaveProperty("model");
+    expect(toolData.properties).toHaveProperty("base_url");
+  });
+
+  it("includes upstream MythosAgent step definitions in v0 template", () => {
+    const common = (SCHEMAS.template.definitions as Record<string, Record<string, unknown>>).pipeline
+      .steps.common as Record<string, unknown>;
+
+    expect(common).toHaveProperty("MythosAgentStepInfo");
+    expect(common).toHaveProperty("MythosAgentNode");
+    expect(common).toHaveProperty("STOYamlMythosAgentToolData");
+
+    const stepNode = common.MythosAgentNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("MythosAgent");
+  });
+
+  it("allows expression-backed entrypoint in v1 pipeline and template Container definitions", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const container = (defs[key].steps as Record<string, Record<string, unknown>>).unified
+        .Container as {
+        properties: {
+          entrypoint: {
+            description: string;
+            oneOf: Array<{ type?: string; $ref?: string }>;
+          };
+        };
+      };
+
+      expect(container.properties.entrypoint.description).toContain("Supports expressions");
+      expect(container.properties.entrypoint.oneOf).toHaveLength(2);
+      expect(container.properties.entrypoint.oneOf[0]?.type).toBe("array");
+      expect(container.properties.entrypoint.oneOf[1]?.$ref).toContain("Expression");
+    }
+  });
 });
