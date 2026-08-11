@@ -283,6 +283,24 @@ describe("requireProjectScope preflight", () => {
   });
 });
 
+// ─── Response extractor: workspaceWriteExtract ────────────────────────────────
+
+describe("workspaceWriteExtract", () => {
+  function extract(raw: unknown) {
+    return getOp("iacm_workspace", "create").responseExtractor!(raw) as Record<string, unknown>;
+  }
+
+  it("projects policy_evaluation only", () => {
+    const raw = { policy_evaluation: { status: "success" }, id: "ws-1", name: "prod" };
+    expect(extract(raw)).toEqual({ policy_evaluation: { status: "success" } });
+  });
+
+  it("returns empty object when policy_evaluation is absent", () => {
+    expect(extract({ id: "ws-1", name: "prod" })).toEqual({});
+    expect(extract(null)).toEqual({});
+  });
+});
+
 // ─── Response extractor: workspaceListExtract ─────────────────────────────────
 
 describe("workspaceListExtract (via registry dispatch)", () => {
@@ -466,7 +484,11 @@ describe("iacm registry dispatch", () => {
   };
 
   it("dispatches workspace create with the IaCM body unchanged", async () => {
-    const response = { policy_evaluation: { status: "success" } };
+    const response = {
+      policy_evaluation: { status: "success" },
+      id: "ws-1",
+      identifier: "payments-prod",
+    };
     const mockRequest = vi.fn().mockResolvedValue(response);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
 
@@ -484,11 +506,15 @@ describe("iacm registry dispatch", () => {
     expect(request.method).toBe("POST");
     expect(request.path).toBe("/iacm/api/orgs/default/projects/Testim/workspaces");
     expect(request.body).toEqual(workspaceBody);
-    expect(result).toEqual(response);
+    expect(result).toEqual({ policy_evaluation: { status: "success" } });
   });
 
   it("dispatches workspace update by workspace identifier", async () => {
-    const response = { policy_evaluation: { status: "success" } };
+    const response = {
+      policy_evaluation: { status: "success" },
+      id: "ws-1",
+      identifier: "payments-prod",
+    };
     const mockRequest = vi.fn().mockResolvedValue(response);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
     const updateBody = { ...workspaceBody };
@@ -511,7 +537,7 @@ describe("iacm registry dispatch", () => {
       "/iacm/api/orgs/default/projects/Testim/workspaces/payments-prod",
     );
     expect(request.body).toEqual(updateBody);
-    expect(result).toEqual(response);
+    expect(result).toEqual({ policy_evaluation: { status: "success" } });
   });
 
   it("rejects workspace create when an API-required field is missing", async () => {

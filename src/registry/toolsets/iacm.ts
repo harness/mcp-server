@@ -36,10 +36,16 @@ const workspaceListExtract = (
 const workspaceGetExtract = (raw: unknown): unknown => raw;
 
 /**
- * Workspace create/update return the IaCM policy evaluation result directly.
- * Keep that public contract intact rather than wrapping it in an NG envelope.
+ * Workspace create/update publish only the IaCM policy evaluation result.
+ * Drop any other server fields so agents have a stable post-write contract.
  */
-const workspaceWriteExtract = (raw: unknown): unknown => raw;
+const workspaceWriteExtract = (raw: unknown): { policy_evaluation?: unknown } => {
+  const r = raw as { policy_evaluation?: unknown };
+  if (r?.policy_evaluation === undefined) {
+    return {};
+  }
+  return { policy_evaluation: r.policy_evaluation };
+};
 
 /**
  * IACM resources list: API returns a ResourcesResponse with resources, outputs,
@@ -463,7 +469,9 @@ export const iacmToolset: ToolsetDefinition = {
           responseExtractor: workspaceWriteExtract,
           description:
             "Create an IaCM workspace. Supply the full required workspace body; to create from a template, " +
-            "also provide associated_template with template_id and version. IaCM enforces permissions, validation, and policy evaluation.",
+            "also provide associated_template with template_id and version. IaCM enforces permissions, validation, and policy evaluation. " +
+            "Response contract: returns { policy_evaluation? } only — not the workspace object. " +
+            "Follow up with harness_get(resource_type=iacm_workspace, workspace_id=<identifier>) to read the created workspace.",
         },
         update: {
           method: "PUT",
@@ -482,7 +490,9 @@ export const iacmToolset: ToolsetDefinition = {
           description:
             "Update an IaCM workspace by identifier. This endpoint uses full-replacement semantics for core fields: " +
             "include name, provider_connector, provisioner, terraform_variables, and environment_variables. " +
-            "IaCM enforces permissions, validation, and policy evaluation.",
+            "IaCM enforces permissions, validation, and policy evaluation. " +
+            "Response contract: returns { policy_evaluation? } only — not the workspace object. " +
+            "Follow up with harness_get(resource_type=iacm_workspace, workspace_id=<identifier>) to read the updated workspace.",
         },
       },
     },
