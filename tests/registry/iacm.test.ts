@@ -156,6 +156,11 @@ describe("iacm_workspace write contract", () => {
     expect(fields.find((field) => field.name === "provisioner_configuration")).toMatchObject({
       type: "object",
       required: false,
+      description: expect.stringContaining("object on the wire"),
+    });
+    expect(fields.find((field) => field.name === "ccm_cost_enabled")).toMatchObject({
+      type: "boolean",
+      required: false,
     });
     expect(fields.find((field) => field.name === "sparse_checkout")).toMatchObject({
       type: "array",

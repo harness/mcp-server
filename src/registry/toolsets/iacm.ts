@@ -176,7 +176,9 @@ const workspaceOptionalFields: BodyFieldSpec[] = [
     name: "provisioner_configuration",
     type: "object",
     required: false,
-    description: "Provisioner-specific configuration as a string-to-string map",
+    description:
+      "Provisioner-specific configuration as a string-to-string map (object on the wire). " +
+      "Published OpenAPI shows type string due to Goa custom-type flattening.",
   },
   { name: "terragrunt_provider", type: "boolean", required: false, description: "Whether the workspace uses Terragrunt" },
   { name: "terragrunt_version", type: "string", required: false, description: "Terragrunt version" },
