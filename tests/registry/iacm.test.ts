@@ -133,6 +133,20 @@ describe("iacm_workspace write contract", () => {
     });
   });
 
+  it("documents harness_get follow-up and policy_evaluation-only write response", () => {
+    const create = getOp("iacm_workspace", "create");
+    const update = getOp("iacm_workspace", "update");
+
+    expect(create.description).toContain("policy_evaluation");
+    expect(create.description).toContain("harness_get");
+    expect(update.description).toContain("policy_evaluation");
+    expect(update.description).toContain("harness_get");
+  });
+
+  it("mentions create and update in the toolset description", () => {
+    expect(iacmToolset.description).toMatch(/create.*update|update.*create/);
+  });
+
   it("documents the API-required create body and optional template association", () => {
     const fields = getOp("iacm_workspace", "create").bodySchema!.fields;
     const required = fields.filter((field) => field.required).map((field) => field.name);
@@ -161,6 +175,7 @@ describe("iacm_workspace write contract", () => {
       type: "array",
       itemType: "string",
       required: false,
+      description: expect.stringContaining("string array on the wire"),
     });
     expect(fields.find((field) => field.name === "terraform_variables")).toMatchObject({
       type: "object",
@@ -466,7 +481,10 @@ describe("iacm registry dispatch", () => {
   };
 
   it("dispatches workspace create with the IaCM body unchanged", async () => {
-    const response = { policy_evaluation: { status: "success" } };
+    const response = {
+      policy_evaluation: { status: "success" },
+      workspace: { identifier: "payments-prod" },
+    };
     const mockRequest = vi.fn().mockResolvedValue(response);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
 
@@ -484,11 +502,14 @@ describe("iacm registry dispatch", () => {
     expect(request.method).toBe("POST");
     expect(request.path).toBe("/iacm/api/orgs/default/projects/Testim/workspaces");
     expect(request.body).toEqual(workspaceBody);
-    expect(result).toEqual(response);
+    expect(result).toEqual({ policy_evaluation: { status: "success" } });
   });
 
   it("dispatches workspace update by workspace identifier", async () => {
-    const response = { policy_evaluation: { status: "success" } };
+    const response = {
+      policy_evaluation: { status: "success" },
+      workspace: { identifier: "payments-prod" },
+    };
     const mockRequest = vi.fn().mockResolvedValue(response);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
     const updateBody = { ...workspaceBody };
@@ -511,7 +532,7 @@ describe("iacm registry dispatch", () => {
       "/iacm/api/orgs/default/projects/Testim/workspaces/payments-prod",
     );
     expect(request.body).toEqual(updateBody);
-    expect(result).toEqual(response);
+    expect(result).toEqual({ policy_evaluation: { status: "success" } });
   });
 
   it("rejects workspace create when an API-required field is missing", async () => {
