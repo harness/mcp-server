@@ -131,6 +131,10 @@ describe("iacm_workspace write contract", () => {
       risk: "medium_write",
       retryPolicy: "do_not_retry",
     });
+    expect(create.description).toContain("policy_evaluation");
+    expect(create.description).toContain("harness_get");
+    expect(update.description).toContain("policy_evaluation");
+    expect(update.description).toContain("harness_get");
   });
 
   it("documents the API-required create body and optional template association", () => {
@@ -466,7 +470,10 @@ describe("iacm registry dispatch", () => {
   };
 
   it("dispatches workspace create with the IaCM body unchanged", async () => {
-    const response = { policy_evaluation: { status: "success" } };
+    const response = {
+      policy_evaluation: { status: "success" },
+      extra_server_field: "should-be-dropped",
+    };
     const mockRequest = vi.fn().mockResolvedValue(response);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
 
@@ -484,11 +491,14 @@ describe("iacm registry dispatch", () => {
     expect(request.method).toBe("POST");
     expect(request.path).toBe("/iacm/api/orgs/default/projects/Testim/workspaces");
     expect(request.body).toEqual(workspaceBody);
-    expect(result).toEqual(response);
+    expect(result).toEqual({ policy_evaluation: { status: "success" } });
   });
 
   it("dispatches workspace update by workspace identifier", async () => {
-    const response = { policy_evaluation: { status: "success" } };
+    const response = {
+      policy_evaluation: { status: "success" },
+      extra_server_field: "should-be-dropped",
+    };
     const mockRequest = vi.fn().mockResolvedValue(response);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
     const updateBody = { ...workspaceBody };
@@ -511,7 +521,7 @@ describe("iacm registry dispatch", () => {
       "/iacm/api/orgs/default/projects/Testim/workspaces/payments-prod",
     );
     expect(request.body).toEqual(updateBody);
-    expect(result).toEqual(response);
+    expect(result).toEqual({ policy_evaluation: { status: "success" } });
   });
 
   it("rejects workspace create when an API-required field is missing", async () => {

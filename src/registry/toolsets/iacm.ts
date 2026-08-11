@@ -36,10 +36,19 @@ const workspaceListExtract = (
 const workspaceGetExtract = (raw: unknown): unknown => raw;
 
 /**
- * Workspace create/update return the IaCM policy evaluation result directly.
- * Keep that public contract intact rather than wrapping it in an NG envelope.
+ * Workspace create/update return `{ policy_evaluation? }` only — not the workspace.
+ * Project that stable shape so agents don't treat the write response as workspace
+ * metadata; follow up with harness_get for the workspace itself.
  */
-const workspaceWriteExtract = (raw: unknown): unknown => raw;
+const workspaceWriteExtract = (raw: unknown): unknown => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  const rec = raw as Record<string, unknown>;
+  return {
+    policy_evaluation: rec.policy_evaluation ?? null,
+  };
+};
 
 /**
  * IACM resources list: API returns a ResourcesResponse with resources, outputs,
@@ -176,7 +185,9 @@ const workspaceOptionalFields: BodyFieldSpec[] = [
     name: "provisioner_configuration",
     type: "object",
     required: false,
-    description: "Provisioner-specific configuration as a string-to-string map",
+    description:
+      "Provisioner-specific configuration as a string-to-string map " +
+      "(IaCM wire type is map[string]string; OpenAPI may show string due to a custom goa type).",
   },
   { name: "terragrunt_provider", type: "boolean", required: false, description: "Whether the workspace uses Terragrunt" },
   { name: "terragrunt_version", type: "string", required: false, description: "Terragrunt version" },
@@ -205,7 +216,9 @@ const workspaceOptionalFields: BodyFieldSpec[] = [
     type: "array",
     required: false,
     itemType: "string",
-    description: "Git sparse-checkout path patterns",
+    description:
+      "Git sparse-checkout path patterns as a JSON string array " +
+      "(IaCM wire type is string[]; OpenAPI may show string due to a custom goa type).",
   },
   {
     name: "cost_estimation_enabled",
@@ -343,12 +356,13 @@ export const iacmToolset: ToolsetDefinition = {
   name: "iacm",
   displayName: "Infrastructure as Code Management (IaCM)",
   description:
-    "Harness IaCM (Infrastructure as Code Management) — manage Terraform workspaces, " +
-    "inspect provisioned resources and Terraform outputs, browse the module registry, " +
-    "review workspace cost history, and diff resource changes from past plan/apply/destroy activities. " +
-    "Use iacm_workspace to list and get workspaces, iacm_resource for Terraform resources and outputs, " +
-    "iacm_module for the module registry, iacm_workspace_costs for cost breakdown, " +
-    "and iacm_activity_resource_change for activity diffs.",
+    "Harness IaCM (Infrastructure as Code Management) — manage Terraform workspaces " +
+    "(list/get/create/update), inspect provisioned resources and Terraform outputs, " +
+    "browse the module registry, review workspace cost history, and diff resource changes " +
+    "from past plan/apply/destroy activities. " +
+    "Use iacm_workspace to list, get, create, or update workspaces; iacm_resource for Terraform " +
+    "resources and outputs; iacm_module for the module registry; iacm_workspace_costs for cost " +
+    "breakdown; and iacm_activity_resource_change for activity diffs.",
   optIn: false,
   resources: [
     // ─── Workspace ─────────────────────────────────────────────────────────
@@ -463,7 +477,9 @@ export const iacmToolset: ToolsetDefinition = {
           responseExtractor: workspaceWriteExtract,
           description:
             "Create an IaCM workspace. Supply the full required workspace body; to create from a template, " +
-            "also provide associated_template with template_id and version. IaCM enforces permissions, validation, and policy evaluation.",
+            "also provide associated_template with template_id and version. IaCM enforces permissions, validation, and policy evaluation. " +
+            "Response is { policy_evaluation } only — not the workspace. Follow up with harness_get " +
+            "(resource_type=iacm_workspace, workspace_id=<identifier>) to fetch the created workspace.",
         },
         update: {
           method: "PUT",
@@ -482,7 +498,9 @@ export const iacmToolset: ToolsetDefinition = {
           description:
             "Update an IaCM workspace by identifier. This endpoint uses full-replacement semantics for core fields: " +
             "include name, provider_connector, provisioner, terraform_variables, and environment_variables. " +
-            "IaCM enforces permissions, validation, and policy evaluation.",
+            "IaCM enforces permissions, validation, and policy evaluation. " +
+            "Response is { policy_evaluation } only — not the workspace. Follow up with harness_get " +
+            "(resource_type=iacm_workspace, workspace_id=<identifier>) to fetch the updated workspace.",
         },
       },
     },
