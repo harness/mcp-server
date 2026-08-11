@@ -8,6 +8,12 @@ describe("compactItems", () => {
     expect(result[0]).toEqual({ identifier: "p1", name: "Pipeline 1", description: "A pipeline", slug: "p1" });
   });
 
+  it("keeps id and uuid identity fields (CCM budget list compacting)", () => {
+    const items = [{ uuid: "budget-uuid", id: "budget-id", name: "Q1", alertThresholds: [{ percentage: 80 }] }];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toEqual({ uuid: "budget-uuid", id: "budget-id", name: "Q1" });
+  });
+
   it("keeps status fields", () => {
     const items = [{ status: "Running", enabled: true, health: "good" }];
     const result = compactItems(items) as Record<string, unknown>[];
