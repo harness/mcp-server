@@ -49,7 +49,7 @@ describe("assertListScopeResolved", () => {
     ).toThrow(/requires project scope \(org_id \+ project_id\)/i);
   });
 
-  it("ignores scope-keyword org_id values mistaken for identifiers", () => {
+  it("accepts org_id values that match scope keyword names when used as identifiers", () => {
     expect(() =>
       assertListScopeResolved(
         "security_exemption",
@@ -58,7 +58,44 @@ describe("assertListScopeResolved", () => {
         undefined,
         undefined,
       ),
-    ).toThrow(/requires project scope/i);
+    ).not.toThrow();
+  });
+
+  it("includes multi-scope hint for resources that support account/org/project", () => {
+    expect(() =>
+      assertListScopeResolved(
+        "connector",
+        {
+          ...projectScoped,
+          resourceType: "connector",
+          supportedScopes: ["account", "org", "project"],
+        },
+        { type: "Github" },
+        undefined,
+        undefined,
+      ),
+    ).toThrow(/Supported scopes: account, org, project/);
+  });
+
+  it("does not include multi-scope hint for project-only resources", () => {
+    expect(() =>
+      assertListScopeResolved(
+        "security_exemption",
+        projectScoped,
+        { status: "Pending" },
+        undefined,
+        undefined,
+      ),
+    ).toThrow(/requires project scope \(org_id \+ project_id\)/);
+    expect(() =>
+      assertListScopeResolved(
+        "security_exemption",
+        projectScoped,
+        { status: "Pending" },
+        undefined,
+        undefined,
+      ),
+    ).not.toThrow(/resource_scope/);
   });
 
   it("defers to executeSpec when resource_scope is explicit", () => {
