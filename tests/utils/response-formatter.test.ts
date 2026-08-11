@@ -1,5 +1,20 @@
 import { describe, it, expect } from "vitest";
-import { jsonResult, errorResult, normalizeHarnessListPayload } from "../../src/utils/response-formatter.js";
+import { jsonResult, errorResult, normalizeHarnessListPayload, normalizeHarnessGetPayload } from "../../src/utils/response-formatter.js";
+
+describe("normalizeHarnessGetPayload", () => {
+  it("wraps a top-level array into { items, total } for MCP structured output", () => {
+    const events = [{ id: 1 }, { id: 2 }];
+    const normalized = normalizeHarnessGetPayload(events);
+    expect(normalized).toEqual({ items: events, total: 2 });
+    const tool = jsonResult(normalized);
+    expect(tool.structuredContent).toEqual({ items: events, total: 2 });
+  });
+
+  it("leaves object payloads unchanged", () => {
+    const shaped = { download_url: "https://example.com" };
+    expect(normalizeHarnessGetPayload(shaped)).toBe(shaped);
+  });
+});
 
 describe("normalizeHarnessListPayload", () => {
   it("wraps a top-level array into { items, total, page } for MCP structured output", () => {
