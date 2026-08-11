@@ -151,16 +151,6 @@ const VALID_TIME_FILTERS = [
   "LAST_6_MONTHS", "LAST_12_MONTHS",
 ] as const;
 
-const VALID_GROUP_BY_FIELDS = [
-  "region", "awsUsageaccountid", "awsServicecode", "awsBillingEntity",
-  "awsInstancetype", "awsLineItemType", "awspayeraccountid", "awsUsageType",
-  "cloudProvider", "none", "product",
-  // GenAI / AI (identifier "AI") — drill-down dimensions for the DEFAULT "GenAI"
-  // perspective (providers: Anthropic, Cursor, Devin, OpenAI).
-  "genAIModel", "genAIProvider", "genAIUsageType", "genAIPrincipal",
-  "genAIPrincipalId", "genAISubAccountId", "genAISubProvider",
-] as const;
-
 const OUTPUT_FIELDS: Record<string, Record<string, string>> = {
   region:              { fieldId: "region",              fieldName: "Region",         identifier: "COMMON", identifierName: "Common" },
   awsUsageaccountid:   { fieldId: "awsUsageaccountid",   fieldName: "Account",        identifier: "AWS",    identifierName: "AWS" },
@@ -177,6 +167,8 @@ const OUTPUT_FIELDS: Record<string, Record<string, string>> = {
   // perspective UI (Model, Provider, Token Type, Principal, …). Without these
   // entries buildGroupBy() falls through to LABEL_V2 and returns a single
   // "No <field>" bucket, since the raw string isn't a real label key.
+  // Drill-down dimensions for the DEFAULT "GenAI" perspective (providers:
+  // Anthropic, Cursor, Devin, OpenAI).
   genAIModel:          { fieldId: "genAIModel",          fieldName: "Model",          identifier: "AI",     identifierName: "AI" },
   genAIProvider:       { fieldId: "genAIProvider",       fieldName: "Provider",       identifier: "AI",     identifierName: "AI" },
   genAIUsageType:      { fieldId: "genAIUsageType",      fieldName: "Token Type",     identifier: "AI",     identifierName: "AI" },
@@ -185,6 +177,9 @@ const OUTPUT_FIELDS: Record<string, Record<string, string>> = {
   genAISubAccountId:   { fieldId: "genAISubAccountId",   fieldName: "Sub Account ID", identifier: "AI",     identifierName: "AI" },
   genAISubProvider:    { fieldId: "genAISubProvider",    fieldName: "Sub Provider",   identifier: "AI",     identifierName: "AI" },
 };
+
+/** Public predefined group_by list — derived from OUTPUT_FIELDS so descriptions can't drift from wire mappings. */
+const VALID_GROUP_BY_FIELDS = Object.keys(OUTPUT_FIELDS);
 
 /**
  * Build the startTime AFTER/BEFORE timeFilter pair from an explicit epoch-ms
