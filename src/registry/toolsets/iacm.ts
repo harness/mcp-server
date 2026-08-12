@@ -441,51 +441,89 @@ const workspaceUpdateSchema: BodySchema = {
   ],
 };
 
-const variableSetOptionalFields: BodyFieldSpec[] = [
-  { name: "description", type: "string", required: false, description: "Long-form variable set description" },
-  {
-    name: "environment_variables",
-    type: "object",
-    required: false,
-    description: "Environment variable map (key -> { key, value, value_type })",
-  },
-  {
-    name: "terraform_variables",
-    type: "object",
-    required: false,
-    description: "Terraform variable map (key -> { key, value, value_type })",
-  },
+const variableSetOptionalCollections: BodyFieldSpec[] = [
   {
     name: "terraform_variable_files",
     type: "array",
     required: false,
     itemType: "variable-set Terraform variable-file reference",
-    description: "Variable files stored in external repositories",
+    description:
+      "Variable files stored in external repositories. On update this is full-replacement: " +
+      "omit or [] clears existing files. Prefer get-then-put and resend current files to keep them.",
   },
   {
     name: "connectors",
     type: "array",
     required: false,
     itemType: "variable-set connector",
-    description: "Connector references attached to the variable set",
+    description:
+      "Connector references attached to the variable set ({ connector_ref, type }). " +
+      "On update this is full-replacement: omit or [] clears existing connectors. " +
+      "Prefer get-then-put and resend current connectors to keep them.",
   },
 ];
 
 const variableSetCreateSchema: BodySchema = {
-  description: "IaCM variable set definition for create.",
+  description:
+    "IaCM variable set definition for create. Optional maps use key → { key, value, value_type } " +
+    'where value_type is "string" or "secret".',
   fields: [
     { name: "identifier", type: "string", required: true, description: "Unique variable set identifier" },
     { name: "name", type: "string", required: true, description: "Variable set display name" },
-    ...variableSetOptionalFields,
+    { name: "description", type: "string", required: false, description: "Long-form variable set description" },
+    {
+      name: "environment_variables",
+      type: "object",
+      required: false,
+      description:
+        "Environment variable map (key → { key, value, value_type }). " +
+        'Use {} when none are configured. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    {
+      name: "terraform_variables",
+      type: "object",
+      required: false,
+      description:
+        "Terraform variable map (key → { key, value, value_type }). " +
+        'Use {} when none are configured. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    ...variableSetOptionalCollections,
   ],
 };
 
 const variableSetUpdateSchema: BodySchema = {
   description:
-    "IaCM variable set update definition. Identifier comes from the path (variable_set_id / resource_id).",
+    "Complete IaCM variable set update body (HTTP PUT — not a partial patch). " +
+    "Identifier comes from the path (variable_set_id / resource_id). " +
+    "IaCM merges collections by full replacement: omitting terraform_variables, environment_variables, " +
+    "connectors, or terraform_variable_files clears those collections. " +
+    "Always harness_get first, then PUT the full desired state (or {} / [] to clear).",
   fields: [
     { name: "name", type: "string", required: true, description: "Variable set display name" },
-    ...variableSetOptionalFields,
+    { name: "description", type: "string", required: false, description: "Long-form variable set description" },
+    {
+      name: "environment_variables",
+      type: "object",
+      required: true,
+      description:
+        "Complete environment variable map (key → { key, value, value_type }). " +
+        "Required on update so agents cannot accidentally wipe vars by omitting the field — " +
+        'send the current map from harness_get, or {} to clear. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    {
+      name: "terraform_variables",
+      type: "object",
+      required: true,
+      description:
+        "Complete Terraform variable map (key → { key, value, value_type }). " +
+        "Required on update so agents cannot accidentally wipe vars by omitting the field — " +
+        'send the current map from harness_get, or {} to clear. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    ...variableSetOptionalCollections,
   ],
 };
 
@@ -655,6 +693,8 @@ export const iacmToolset: ToolsetDefinition = {
         SCOPE_BEHAVIOR_DOC +
         " Use harness_list/harness_get to discover sets, harness_create to create, and harness_update with variable_set_id to update. " +
         "Create/update return the VariableSet resource (identifier, name, variables, connectors). " +
+        "IMPORTANT: harness_update is HTTP PUT with full-replacement collections — call harness_get first, then PUT the full desired body " +
+        "(omitting terraform_variables / environment_variables / connectors / terraform_variable_files clears them on the server). " +
         "NOTE: IaCM variable-set RBAC permissions (iac_variableset_*) are currently Experimental in Harness — " +
         "deny paths are not enforceable until iac-server activates them; MCP still forwards the caller token unchanged. " +
         "See also: iacm_workspace.variable_sets for attaching sets to a workspace.",
@@ -702,6 +742,7 @@ export const iacmToolset: ToolsetDefinition = {
           description:
             "Create an IaCM variable set. Required body fields: identifier, name. " +
             "Optional: description, environment_variables, terraform_variables, terraform_variable_files, connectors. " +
+            "Variable maps use key → { key, value, value_type } with value_type string|secret. " +
             "Response is the created VariableSet resource. " +
             "MCP forwards the caller token; variable-set RBAC permissions are Experimental until iac-server enforces them.",
         },
@@ -716,7 +757,11 @@ export const iacmToolset: ToolsetDefinition = {
           responseExtractor: variableSetExtract,
           description:
             "Update an IaCM variable set by identifier (variable_set_id / resource_id). " +
-            "Required body field: name. Optional maps/files/connectors replace configured values when provided. " +
+            "HTTP PUT with full-replacement semantics for collections (same behavior as iac-server): " +
+            "required body fields are name, terraform_variables, and environment_variables " +
+            "(send maps from harness_get, or {} to clear). " +
+            "connectors and terraform_variable_files are also full-replacement — omit or [] clears them; " +
+            "prefer get-then-put and resend current values to keep them. " +
             "Response is the updated VariableSet resource. " +
             "MCP forwards the caller token; variable-set RBAC permissions are Experimental until iac-server enforces them.",
         },

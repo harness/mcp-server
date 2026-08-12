@@ -278,10 +278,34 @@ describe("iacm_variable_set contract", () => {
     const updateRequired = update.bodySchema!.fields.filter((field) => field.required).map((field) => field.name);
 
     expect(createRequired).toEqual(["identifier", "name"]);
-    expect(updateRequired).toEqual(["name"]);
+    expect(updateRequired).toEqual(["name", "environment_variables", "terraform_variables"]);
     expect(create.description).toMatch(/VariableSet resource/i);
     expect(create.description).toMatch(/Experimental/i);
     expect(update.description).toMatch(/Experimental/i);
+    expect(update.description).toMatch(/full-replacement|get-then-put|harness_get/i);
+    expect(update.bodySchema!.description).toMatch(/not a partial patch|full replacement/i);
+
+    for (const fieldName of ["terraform_variables", "environment_variables"] as const) {
+      const createField = create.bodySchema!.fields.find((field) => field.name === fieldName);
+      const updateField = update.bodySchema!.fields.find((field) => field.name === fieldName);
+      expect(createField).toMatchObject({
+        type: "object",
+        fields: [
+          expect.objectContaining({ name: "key", required: true }),
+          expect.objectContaining({ name: "value", required: true }),
+          expect.objectContaining({ name: "value_type", required: true }),
+        ],
+      });
+      expect(updateField).toMatchObject({
+        type: "object",
+        required: true,
+        fields: [
+          expect.objectContaining({ name: "key", required: true }),
+          expect.objectContaining({ name: "value", required: true }),
+          expect.objectContaining({ name: "value_type", required: true }),
+        ],
+      });
+    }
   });
 
   it("normalizes list responses that already wrap items", () => {
@@ -848,7 +872,11 @@ describe("iacm registry dispatch", () => {
       resource_scope: "org",
       org_id: "default",
       variable_set_id: "shared-env",
-      body: { name: "Shared Env Updated" },
+      body: {
+        name: "Shared Env Updated",
+        terraform_variables: {},
+        environment_variables: {},
+      },
     });
 
     expect(mockRequest.mock.calls[0]![0]).toMatchObject({
@@ -868,7 +896,51 @@ describe("iacm registry dispatch", () => {
     expect(mockRequest.mock.calls[2]![0]).toMatchObject({
       method: "PUT",
       path: "/iacm/api/orgs/default/variable-set/shared-env",
-      body: { name: "Shared Env Updated" },
+      body: {
+        name: "Shared Env Updated",
+        terraform_variables: {},
+        environment_variables: {},
+      },
+    });
+  });
+
+  it("dispatches variable set create and get at account scope", async () => {
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({ identifier: "acct-defaults", name: "Account Defaults" })
+      .mockResolvedValueOnce({
+        identifier: "acct-defaults",
+        name: "Account Defaults",
+        terraform_variables: {},
+      });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_variable_set", "create", {
+      resource_scope: "account",
+      body: {
+        identifier: "acct-defaults",
+        name: "Account Defaults",
+        terraform_variables: {},
+        environment_variables: {},
+      },
+    });
+    await registry.dispatch(makeClient(mockRequest), "iacm_variable_set", "get", {
+      resource_scope: "account",
+      variable_set_id: "acct-defaults",
+    });
+
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "POST",
+      path: "/iacm/api/variable-set",
+      body: {
+        identifier: "acct-defaults",
+        name: "Account Defaults",
+        terraform_variables: {},
+        environment_variables: {},
+      },
+    });
+    expect(mockRequest.mock.calls[1]![0]).toMatchObject({
+      method: "GET",
+      path: "/iacm/api/variable-set/acct-defaults",
     });
   });
 
@@ -911,9 +983,28 @@ describe("iacm registry dispatch", () => {
         org_id: "default",
         project_id: "Testim",
         variable_set_id: "shared-env",
-        body: { description: "no name" },
+        body: {
+          description: "no name",
+          terraform_variables: {},
+          environment_variables: {},
+        },
       }),
     ).rejects.toThrow("name");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects variable set update when variable maps are omitted (prevents silent wipe)", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_variable_set", "update", {
+        org_id: "default",
+        project_id: "Testim",
+        variable_set_id: "shared-env",
+        body: { name: "Shared Env Updated" },
+      }),
+    ).rejects.toThrow(/terraform_variables|environment_variables/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 

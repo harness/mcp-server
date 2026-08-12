@@ -1021,7 +1021,11 @@ describe("iacm_variable_set create/update via MCP tools", () => {
       resource_id: "shared-env",
       org_id: "default",
       project_id: "test-project",
-      body: { name: "Shared Env Updated" },
+      body: {
+        name: "Shared Env Updated",
+        terraform_variables: {},
+        environment_variables: {},
+      },
     });
 
     expect(result.isError).toBeUndefined();
@@ -1029,11 +1033,16 @@ describe("iacm_variable_set create/update via MCP tools", () => {
       identifier: "shared-env",
       name: "Shared Env Updated",
     });
-    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string };
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
     expect(callArgs.method).toBe("PUT");
     expect(callArgs.path).toBe(
       "/iacm/api/orgs/default/projects/test-project/variable-set/shared-env",
     );
+    expect(callArgs.body).toEqual({
+      name: "Shared Env Updated",
+      terraform_variables: {},
+      environment_variables: {},
+    });
   });
 });
 

@@ -590,13 +590,22 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
         resource_scope: "org",
         org_id: "default",
         variable_set_id: "shared-env",
-        body: { name: "Shared Env Updated" },
+        body: {
+          name: "Shared Env Updated",
+          terraform_variables: {},
+          environment_variables: {},
+        },
       });
 
       const [url, options] = fetchSpy.mock.calls[0]!;
       const urlStr = url instanceof URL ? url.toString() : String(url);
       expect(urlStr).toContain("/iacm/api/orgs/default/variable-set/shared-env");
       expect((options as RequestInit).method?.toUpperCase()).toBe("PUT");
+      expect(JSON.parse((options as RequestInit).body as string)).toEqual({
+        name: "Shared Env Updated",
+        terraform_variables: {},
+        environment_variables: {},
+      });
       expect(result).toEqual({ identifier: "shared-env", name: "Shared Env Updated" });
     });
   });

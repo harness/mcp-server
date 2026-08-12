@@ -1424,7 +1424,7 @@ Template operations use the Harness Template service paths (`/template/api/templ
 
 IaCM resources are default-enabled and mostly project-scoped. Start with `iacm_workspace` to find workspace identifiers, then use that `workspace_id` for workspace resources, costs, and activity diffs. Use `iacm_variable_set` for reusable variable sets at account, org, or project scope. The module registry is account-scoped.
 
-`iacm_workspace` create/update return `{ policy_evaluation }` only — follow up with `harness_get` to fetch the workspace. `iacm_variable_set` create/update return the VariableSet resource itself. Writes are `medium_write` and require confirmation (elicitation or `confirm: true`).
+`iacm_workspace` create/update return `{ policy_evaluation }` only — follow up with `harness_get` to fetch the workspace. `iacm_variable_set` create/update return the VariableSet resource itself. Variable-set **update is HTTP PUT with full-replacement collections** — always `harness_get` first, then PUT the full desired body (`terraform_variables` / `environment_variables` are required on update; omit/empty clears connectors and variable files). Writes are `medium_write` and require confirmation (elicitation or `confirm: true`).
 
 Variable-set RBAC (`iac_variableset_*`) is currently Experimental in Harness — access checks always allow until iac-server activates enforcement. MCP still forwards the caller PAT/SAT unchanged.
 
