@@ -13,7 +13,7 @@ import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
 
-function makeConfig(): Config {
+function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
     HARNESS_API_KEY: "pat.test.abc.xyz",
     HARNESS_ACCOUNT_ID: "test-account",
@@ -23,6 +23,7 @@ function makeConfig(): Config {
     HARNESS_API_TIMEOUT_MS: 30000,
     HARNESS_MAX_RETRIES: 3,
     LOG_LEVEL: "info",
+    ...overrides,
   };
 }
 
@@ -82,7 +83,7 @@ describe("Elicitation flow: harness_create", () => {
   let client: HarnessClient;
 
   beforeEach(() => {
-    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" } as any));
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
     client = makeClient();
   });
 
@@ -320,6 +321,108 @@ describe("Elicitation flow: harness_update", () => {
 
     expect(result.isError).toBeUndefined();
     expect(server._elicitInput).not.toHaveBeenCalled();
+  });
+});
+
+describe("Elicitation flow: iacm_workspace medium_write", () => {
+  const workspaceBody = {
+    identifier: "payments-prod",
+    name: "Payments Production",
+    provider_connector: "account.aws",
+    provisioner: "terraform",
+    terraform_variables: {},
+    environment_variables: {},
+  };
+
+  let registry: Registry;
+  let mockRequest: ReturnType<typeof vi.fn>;
+  let client: HarnessClient;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    mockRequest = vi.fn().mockResolvedValue({ policy_evaluation: { status: "success" } });
+    client = {
+      request: mockRequest,
+      account: "test-account",
+    } as unknown as HarnessClient;
+  });
+
+  it("elicits confirmation for medium_write create and proceeds on accept", async () => {
+    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await server.call("harness_create", {
+      resource_type: "iacm_workspace",
+      org_id: "default",
+      project_id: "test-project",
+      body: workspaceBody,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(mockRequest).toHaveBeenCalledOnce();
+    expect(JSON.parse(result.content[0]!.text)).toEqual({
+      policy_evaluation: { status: "success" },
+    });
+  });
+
+  it("blocks medium_write create when user declines confirmation", async () => {
+    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "decline" });
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await server.call("harness_create", {
+      resource_type: "iacm_workspace",
+      org_id: "default",
+      project_id: "test-project",
+      body: workspaceBody,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("elicits confirmation for medium_write update and proceeds on accept", async () => {
+    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const updateBody = { ...workspaceBody };
+    delete (updateBody as { identifier?: string }).identifier;
+
+    const result = await server.call("harness_update", {
+      resource_type: "iacm_workspace",
+      resource_id: "payments-prod",
+      org_id: "default",
+      project_id: "test-project",
+      body: updateBody,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(mockRequest).toHaveBeenCalledOnce();
+    expect(JSON.parse(result.content[0]!.text)).toEqual({
+      policy_evaluation: { status: "success" },
+    });
+  });
+
+  it("allows medium_write create with confirm: true when elicitation is unavailable", async () => {
+    const server = makeMcpServer({ supportsElicitation: false });
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await server.call("harness_create", {
+      resource_type: "iacm_workspace",
+      org_id: "default",
+      project_id: "test-project",
+      body: workspaceBody,
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(server._elicitInput).not.toHaveBeenCalled();
+    expect(mockRequest).toHaveBeenCalledOnce();
   });
 });
 

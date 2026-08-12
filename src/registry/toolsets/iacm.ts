@@ -1,4 +1,9 @@
-import type { ToolsetDefinition, PreflightContext } from "../types.js";
+import type {
+  BodyFieldSpec,
+  BodySchema,
+  ToolsetDefinition,
+  PreflightContext,
+} from "../types.js";
 
 // ─── Response extractors ─────────────────────────────────────────────────────
 
@@ -29,6 +34,21 @@ const workspaceListExtract = (
  * IACM workspace get: API returns a single workspace object directly.
  */
 const workspaceGetExtract = (raw: unknown): unknown => raw;
+
+/**
+ * Workspace create/update return `{ policy_evaluation? }` only — not the workspace.
+ * Project that stable shape so agents don't treat the write response as workspace
+ * metadata; follow up with harness_get for the workspace itself.
+ */
+const workspaceWriteExtract = (raw: unknown): unknown => {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return {};
+  }
+  const rec = raw as Record<string, unknown>;
+  return {
+    policy_evaluation: rec.policy_evaluation ?? null,
+  };
+};
 
 /**
  * IACM resources list: API returns a ResourcesResponse with resources, outputs,
@@ -145,18 +165,204 @@ const requireProjectScope = async (ctx: PreflightContext): Promise<void> => {
   }
 };
 
+// ─── Workspace request schemas ───────────────────────────────────────────────
+
+const workspaceVariableValueFields: BodyFieldSpec[] = [
+  { name: "key", type: "string", required: true, description: "Variable key (must match the map entry key)" },
+  { name: "value", type: "string", required: true, description: "Variable value, or secret reference when value_type is secret" },
+  {
+    name: "value_type",
+    type: "string",
+    required: true,
+    description: "Variable value type: string or secret",
+  },
+];
+
+const workspaceOptionalFields: BodyFieldSpec[] = [
+  { name: "description", type: "string", required: false, description: "Long-form workspace description" },
+  { name: "provisioner_version", type: "string", required: false, description: "Provisioner version; defaults to latest" },
+  {
+    name: "provisioner_configuration",
+    type: "object",
+    required: false,
+    description:
+      "Provisioner-specific configuration as a string-to-string map " +
+      "(IaCM wire type is map[string]string; OpenAPI may show string due to a custom goa type).",
+  },
+  { name: "terragrunt_provider", type: "boolean", required: false, description: "Whether the workspace uses Terragrunt" },
+  { name: "terragrunt_version", type: "string", required: false, description: "Terragrunt version" },
+  { name: "run_all", type: "boolean", required: false, description: "Run all Terragrunt modules" },
+  {
+    name: "repository",
+    type: "string",
+    required: false,
+    description:
+      "Infrastructure repository name. Required by IaCM when repository_connector is empty " +
+      '(API returns "repository name can\'t be empty").',
+  },
+  { name: "repository_branch", type: "string", required: false, description: "Repository branch" },
+  { name: "repository_commit", type: "string", required: false, description: "Repository commit or tag" },
+  { name: "repository_sha", type: "string", required: false, description: "Repository commit SHA" },
+  { name: "repository_connector", type: "string", required: false, description: "Harness connector for the infrastructure repository" },
+  { name: "repository_path", type: "string", required: false, description: "Path to the infrastructure code within the repository" },
+  {
+    name: "repository_submodules",
+    type: "string",
+    required: false,
+    description: "Submodule checkout mode: false, true, or recursive",
+  },
+  {
+    name: "sparse_checkout",
+    type: "array",
+    required: false,
+    itemType: "string",
+    description:
+      "Git sparse-checkout path patterns as a JSON string array " +
+      "(IaCM wire type is string[]; OpenAPI may show string due to a custom goa type).",
+  },
+  {
+    name: "cost_estimation_enabled",
+    type: "boolean",
+    required: false,
+    description: "Enable cost-estimation operations for the workspace",
+  },
+  {
+    name: "terraform_variable_files",
+    type: "array",
+    required: false,
+    itemType: "workspace Terraform variable-file reference",
+    description: "Variable files stored in repositories other than the workspace repository",
+  },
+  { name: "budget", type: "number", required: false, description: "Workspace budget" },
+  {
+    name: "default_pipelines",
+    type: "object",
+    required: false,
+    description: "Operation-to-default-pipeline map with optional workspace overrides",
+  },
+  {
+    name: "variable_sets",
+    type: "array",
+    required: false,
+    itemType: "string",
+    description: "Identifiers of variable sets attached to the workspace",
+  },
+  { name: "tags", type: "object", required: false, description: "String key-value tags" },
+  {
+    name: "provider_connectors",
+    type: "array",
+    required: false,
+    itemType: "workspace provider connector",
+    description: "Additional provider connector definitions",
+  },
+  {
+    name: "prune_sensitive_data",
+    type: "boolean",
+    required: false,
+    description: "Prune sensitive data from workspace output",
+  },
+  {
+    name: "ccm_cost_enabled",
+    type: "boolean",
+    required: false,
+    description: "Enable CCM cost integration for the workspace",
+  },
+];
+
+const workspaceCreateSchema: BodySchema = {
+  description:
+    "IaCM workspace definition. Create from a template by also supplying associated_template.",
+  fields: [
+    { name: "identifier", type: "string", required: true, description: "Unique workspace identifier" },
+    { name: "name", type: "string", required: true, description: "Workspace display name" },
+    {
+      name: "provider_connector",
+      type: "string",
+      required: true,
+      description: "Harness connector reference for the infrastructure provider",
+    },
+    { name: "provisioner", type: "string", required: true, description: "Provisioner such as terraform, opentofu, terragrunt, or awscdk" },
+    {
+      name: "terraform_variables",
+      type: "object",
+      required: true,
+      description:
+        "Map of Terraform variables (key → { key, value, value_type }). " +
+        'Use {} when none are required. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    {
+      name: "environment_variables",
+      type: "object",
+      required: true,
+      description:
+        "Map of environment variables (key → { key, value, value_type }). " +
+        'Use {} when none are required. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    {
+      name: "associated_template",
+      type: "object",
+      required: false,
+      description: "Optional workspace template reference",
+      fields: [
+        { name: "template_id", type: "string", required: true, description: "Template identifier" },
+        { name: "version", type: "string", required: true, description: "Template version" },
+      ],
+    },
+    ...workspaceOptionalFields,
+  ],
+};
+
+const workspaceUpdateSchema: BodySchema = {
+  description:
+    "Complete IaCM workspace update definition. Send the full workspace body (not a partial patch). " +
+    "Include repository (and related git fields) when updating a git-backed workspace — " +
+    "IaCM rejects an empty repository when repository_connector is empty.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Workspace display name" },
+    {
+      name: "provider_connector",
+      type: "string",
+      required: true,
+      description: "Harness connector reference for the infrastructure provider",
+    },
+    { name: "provisioner", type: "string", required: true, description: "Provisioner such as terraform, opentofu, terragrunt, or awscdk" },
+    {
+      name: "terraform_variables",
+      type: "object",
+      required: true,
+      description:
+        "Complete Terraform variable map (key → { key, value, value_type }). " +
+        'Use {} when none are configured. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    {
+      name: "environment_variables",
+      type: "object",
+      required: true,
+      description:
+        "Complete environment variable map (key → { key, value, value_type }). " +
+        'Use {} when none are configured. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    ...workspaceOptionalFields,
+  ],
+};
+
 // ─── Toolset definition ─────────────────────────────────────────────────────
 
 export const iacmToolset: ToolsetDefinition = {
   name: "iacm",
   displayName: "Infrastructure as Code Management (IaCM)",
   description:
-    "Harness IaCM (Infrastructure as Code Management) — manage Terraform workspaces, " +
-    "inspect provisioned resources and Terraform outputs, browse the module registry, " +
-    "review workspace cost history, and diff resource changes from past plan/apply/destroy activities. " +
-    "Use iacm_workspace to list and get workspaces, iacm_resource for Terraform resources and outputs, " +
-    "iacm_module for the module registry, iacm_workspace_costs for cost breakdown, " +
-    "and iacm_activity_resource_change for activity diffs.",
+    "Harness IaCM (Infrastructure as Code Management) — manage Terraform workspaces " +
+    "(list/get/create/update), inspect provisioned resources and Terraform outputs, " +
+    "browse the module registry, review workspace cost history, and diff resource changes " +
+    "from past plan/apply/destroy activities. " +
+    "Use iacm_workspace to list, get, create, or update workspaces; iacm_resource for Terraform " +
+    "resources and outputs; iacm_module for the module registry; iacm_workspace_costs for cost " +
+    "breakdown; and iacm_activity_resource_change for activity diffs.",
   optIn: false,
   resources: [
     // ─── Workspace ─────────────────────────────────────────────────────────
@@ -171,7 +377,8 @@ export const iacmToolset: ToolsetDefinition = {
         "The response includes has_more (true = more pages exist) and page_count (items on THIS page only). " +
         "IMPORTANT: page_count is NOT the total number of workspaces. " +
         "To find the true total or list all workspaces, keep calling with page+1 until has_more=false, then sum the page_counts. " +
-        "Use harness_get with workspace_id to fetch full details of a single workspace. " +
+        "Use harness_get with workspace_id to fetch full details, harness_create to create from scratch or a template, " +
+        "and harness_update with workspace_id to update an existing workspace. " +
         "See also: iacm_resource for Terraform resources, iacm_workspace_costs for cost breakdown.",
       toolset: "iacm",
       scope: "project",
@@ -257,6 +464,43 @@ export const iacmToolset: ToolsetDefinition = {
           description:
             "Get full metadata for a specific IaCM workspace by its identifier. " +
             "Returns id, identifier, name, status, last_run, variables, cost_summary, and project_id.",
+        },
+        create: {
+          method: "POST",
+          path: "/iacm/api/orgs/{org}/projects/{project}/workspaces",
+          pathParams: { org_id: "org", project_id: "project" },
+          preflight: requireProjectScope,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          bodySchema: workspaceCreateSchema,
+          skipScopeBodyInjection: true,
+          responseExtractor: workspaceWriteExtract,
+          description:
+            "Create an IaCM workspace. Supply the full required workspace body; to create from a template, " +
+            "also provide associated_template with template_id and version. IaCM enforces permissions, validation, and policy evaluation. " +
+            "Response is { policy_evaluation } only — not the workspace. Follow up with harness_get " +
+            "(resource_type=iacm_workspace, workspace_id=<identifier>) to fetch the created workspace.",
+        },
+        update: {
+          method: "PUT",
+          path: "/iacm/api/orgs/{org}/projects/{project}/workspaces/{workspaceId}",
+          pathParams: {
+            org_id: "org",
+            project_id: "project",
+            workspace_id: "workspaceId",
+          },
+          preflight: requireProjectScope,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          bodySchema: workspaceUpdateSchema,
+          skipScopeBodyInjection: true,
+          responseExtractor: workspaceWriteExtract,
+          description:
+            "Update an IaCM workspace by identifier. This endpoint uses full-replacement semantics for core fields: " +
+            "include name, provider_connector, provisioner, terraform_variables, and environment_variables. " +
+            "IaCM enforces permissions, validation, and policy evaluation. " +
+            "Response is { policy_evaluation } only — not the workspace. Follow up with harness_get " +
+            "(resource_type=iacm_workspace, workspace_id=<identifier>) to fetch the updated workspace.",
         },
       },
     },

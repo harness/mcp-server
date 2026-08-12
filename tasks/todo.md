@@ -1,5 +1,16 @@
 # Harness MCP Server — Task Tracking
 
+## IaCM workspace create/update (this PR)
+- [x] Add create/update tests and implement `iacm_workspace` writes
+- [x] bodySchema + medium_write policy + project-scope preflight
+- [x] Run build, typecheck, standards, docs checks, and full tests
+- [x] QA RBAC smoke for workspaces (view/none/edit)
+
+### Plan
+- Follow the declarative registry model; no endpoint-specific MCP tools.
+- IaCM APIs own validation, RBAC, persistence, and audit; MCP forwards the caller token.
+- Stacked follow-ups (separate PRs): variable sets → modules → providers.
+
 ## Dependency security advisories (2026-08-03)
 - [x] Confirm affected dependency chains and fixed versions for `fast-uri` and `ip-address`
 - [x] Update pnpm overrides and regenerate both dependency lockfiles

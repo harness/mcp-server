@@ -1424,9 +1424,11 @@ Template operations use the Harness Template service paths (`/template/api/templ
 
 IaCM resources are default-enabled and mostly project-scoped. Start with `iacm_workspace` to find workspace identifiers, then use that `workspace_id` for workspace resources, costs, and activity diffs. The module registry is account-scoped.
 
+`iacm_workspace` create/update return `{ policy_evaluation }` only — follow up with `harness_get` to fetch the workspace. Writes are `medium_write` and require confirmation (elicitation or `confirm: true`).
+
 | Resource Type                   | List | Get | Create | Update | Delete | Execute Actions |
 | ------------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
-| `iacm_workspace`                | x    | x   |        |        |        |                 |
+| `iacm_workspace`                | x    | x   | x      | x      |        |                 |
 | `iacm_resource`                 | x    |     |        |        |        |                 |
 | `iacm_module`                   | x    | x   |        |        |        |                 |
 | `iacm_workspace_costs`          | x    |     |        |        |        |                 |
@@ -1435,9 +1437,11 @@ IaCM resources are default-enabled and mostly project-scoped. Start with `iacm_w
 Typical workflow:
 
 1. `harness_list(resource_type="iacm_workspace", org_id="...", project_id="...")` to find the workspace.
-2. `harness_list(resource_type="iacm_resource", org_id="...", project_id="...", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
-3. `harness_list(resource_type="iacm_workspace_costs", org_id="...", project_id="...", workspace_id="...")` to review per-execution cost entries.
-4. `harness_list(resource_type="iacm_activity_resource_change", org_id="...", project_id="...", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
+2. `harness_create` / `harness_update` on `iacm_workspace` to create from scratch or a template (`associated_template`), or update an existing workspace — response is `{ policy_evaluation }` only.
+3. `harness_get(resource_type="iacm_workspace", workspace_id="...")` to fetch the created/updated workspace.
+4. `harness_list(resource_type="iacm_resource", org_id="...", project_id="...", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
+5. `harness_list(resource_type="iacm_workspace_costs", org_id="...", project_id="...", workspace_id="...")` to review per-execution cost entries.
+6. `harness_list(resource_type="iacm_activity_resource_change", org_id="...", project_id="...", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
 
 IaCM list responses expose `page_count` as the count for the current page only. When `has_more` is true, keep requesting the next 1-based page and sum page counts if you need a total.
 

@@ -879,6 +879,101 @@ describe("harness_create", () => {
   });
 });
 
+describe("iacm_workspace create/update via MCP tools", () => {
+  const workspaceBody = {
+    identifier: "payments-prod",
+    name: "Payments Production",
+    provider_connector: "account.aws",
+    provisioner: "terraform",
+    terraform_variables: {},
+    environment_variables: {},
+  };
+
+  it("harness_create dispatches iacm_workspace and returns projected policy_evaluation", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const mockRequest = vi.fn().mockResolvedValue({
+      policy_evaluation: { status: "success" },
+      identifier: "payments-prod",
+    });
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await server.call("harness_create", {
+      resource_type: "iacm_workspace",
+      org_id: "default",
+      project_id: "test-project",
+      body: workspaceBody,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toEqual({ policy_evaluation: { status: "success" } });
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      body: Record<string, unknown>;
+    };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/iacm/api/orgs/default/projects/test-project/workspaces");
+    expect(callArgs.body).toEqual(workspaceBody);
+  });
+
+  it("harness_update maps resource_id to workspace_id and projects policy_evaluation", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const mockRequest = vi.fn().mockResolvedValue({
+      policy_evaluation: { status: "success" },
+      name: "Payments Production",
+    });
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const updateBody = { ...workspaceBody };
+    delete (updateBody as { identifier?: string }).identifier;
+
+    const result = await server.call("harness_update", {
+      resource_type: "iacm_workspace",
+      resource_id: "payments-prod",
+      org_id: "default",
+      project_id: "test-project",
+      body: updateBody,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toEqual({ policy_evaluation: { status: "success" } });
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      body: Record<string, unknown>;
+    };
+    expect(callArgs.method).toBe("PUT");
+    expect(callArgs.path).toBe(
+      "/iacm/api/orgs/default/projects/test-project/workspaces/payments-prod",
+    );
+    expect(callArgs.body).toEqual(updateBody);
+  });
+
+  it("harness_create declines medium_write iacm_workspace without calling the API", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    const declineServer = makeMcpServer("decline");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(declineServer, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await declineServer.call("harness_create", {
+      resource_type: "iacm_workspace",
+      org_id: "default",
+      project_id: "test-project",
+      body: workspaceBody,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
 describe("harness_update", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;

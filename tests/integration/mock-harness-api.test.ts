@@ -434,4 +434,109 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       expect(getResult).toBeDefined();
     });
   });
+
+  describe("iacm workspace writes", () => {
+    const workspaceBody = {
+      identifier: "payments-prod",
+      name: "Payments Production",
+      provider_connector: "account.aws",
+      provisioner: "terraform",
+      terraform_variables: {},
+      environment_variables: {},
+    };
+
+    it("create posts JSON body to IaCM path and projects policy_evaluation", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          policy_evaluation: { status: "success" },
+          identifier: "payments-prod",
+          extra: "dropped",
+        }),
+      );
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      const result = await registry.dispatch(client, "iacm_workspace", "create", {
+        org_id: "default",
+        project_id: "test-project",
+        body: workspaceBody,
+      });
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      const init = options as RequestInit;
+      const headers = init.headers as Record<string, string>;
+
+      expect(urlStr).toContain("/iacm/api/orgs/default/projects/test-project/workspaces");
+      expect(urlStr).toContain("accountIdentifier=testaccount");
+      expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+      expect(headers["x-api-key"]).toBe("pat.testaccount.tokenid.secret");
+      expect(headers["Content-Type"]).toBe("application/json");
+      const sentBody = JSON.parse(init.body as string);
+      expect(sentBody).toEqual(workspaceBody);
+      expect(sentBody).not.toHaveProperty("orgIdentifier");
+      expect(sentBody).not.toHaveProperty("projectIdentifier");
+      expect(result).toEqual({ policy_evaluation: { status: "success" } });
+    });
+
+    it("update puts JSON body by workspace identifier and projects policy_evaluation", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          policy_evaluation: { status: "success" },
+          name: "Payments Production",
+        }),
+      );
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+      const updateBody = {
+        name: "Payments Production",
+        provider_connector: "account.aws",
+        provisioner: "terraform",
+        terraform_variables: {},
+        environment_variables: {},
+      };
+
+      const result = await registry.dispatch(client, "iacm_workspace", "update", {
+        org_id: "default",
+        project_id: "test-project",
+        workspace_id: "payments-prod",
+        body: updateBody,
+      });
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      const init = options as RequestInit;
+
+      expect(urlStr).toContain(
+        "/iacm/api/orgs/default/projects/test-project/workspaces/payments-prod",
+      );
+      expect((init.method ?? "GET").toUpperCase()).toBe("PUT");
+      expect(JSON.parse(init.body as string)).toEqual(updateBody);
+      expect(result).toEqual({ policy_evaluation: { status: "success" } });
+    });
+
+    it("rejects invalid create bodies before calling fetch", async () => {
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+      const invalidBody = { ...workspaceBody };
+      delete (invalidBody as { provider_connector?: string }).provider_connector;
+
+      await expect(
+        registry.dispatch(client, "iacm_workspace", "create", {
+          org_id: "default",
+          project_id: "test-project",
+          body: invalidBody,
+        }),
+      ).rejects.toThrow("provider_connector");
+
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
 });
