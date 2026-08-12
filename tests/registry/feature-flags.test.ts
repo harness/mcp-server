@@ -81,13 +81,12 @@ describe("FME registry metadata", () => {
     expect(createSpec.description).not.toContain("traffic_type_id (get from fme_workspace)");
   });
 
-  it("documents fme_traffic_type list workspace_id requirement", () => {
+  it("documents fme_traffic_type list workspace_id as a deprecated (non-required) filter", () => {
     const resource = findResource("fme_traffic_type");
 
     expect(resource.listFilterFields).toContainEqual({
       name: "workspace_id",
-      description: "FME workspace ID (get from fme_workspace)",
-      required: true,
+      description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping.",
     });
   });
 
@@ -279,7 +278,6 @@ describe("fme_identity create", () => {
       traffic_type_id: "tt-user",
       environment_id: "env-prod",
       org_id: "ignored-org",
-      project_id: "ignored-project",
       body: {
         items: [
           { key: "user-1", values: { name: "Ada", company: "Acme" } },
@@ -353,7 +351,6 @@ describe("fme_segment_keys update", () => {
       environment_id: "env-prod",
       segment_name: "beta_users",
       org_id: "ignored-org",
-      project_id: "ignored-project",
       body: {
         add: ["user-1", "user-2"],
         comment: "metadata only",
@@ -595,6 +592,247 @@ describe("fme_rule_based_segment dual-mode routing", () => {
         project_id: "p1",
         traffic_type_id: "tt1",
         body: { name: "x" },
+      }),
+    ).rejects.toThrow(/not yet implemented/i);
+  });
+});
+
+describe("FME new-mode (NYI) resources", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it.each([
+    ["fme_feature_flag_definition", "get", { workspace_id: "ws1", feature_flag_name: "f1", environment_id: "e1" }],
+    [
+      "fme_feature_flag_definition",
+      "create",
+      {
+        workspace_id: "ws1",
+        feature_flag_name: "f1",
+        environment_id: "e1",
+        body: { treatments: [{ name: "on" }], defaultTreatment: "on", defaultRule: [{ treatment: "on", size: 100 }] },
+      },
+    ],
+    [
+      "fme_feature_flag_definition",
+      "update",
+      { workspace_id: "ws1", feature_flag_name: "f1", environment_id: "e1", body: { treatments: [{ name: "on" }] } },
+    ],
+    ["fme_rule_based_segment_definition", "list", { workspace_id: "ws1", environment_id: "e1" }],
+    [
+      "fme_rule_based_segment_definition",
+      "update",
+      { workspace_id: "ws1", segment_name: "seg1", environment_id: "e1", body: {} },
+    ],
+    ["fme_rollout_status", "list", { workspace_id: "ws1" }],
+    ["fme_traffic_type", "list", { workspace_id: "ws1" }],
+  ] as [string, "get" | "create" | "update" | "list", Record<string, unknown>][])(
+    "%s.%s: legacy mode still works, new mode throws not-yet-implemented",
+    async (resourceType, operation, legacyInput) => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, resourceType, operation, legacyInput);
+      expect(mockRequest).toHaveBeenCalledTimes(1);
+
+      const newModeInput = { ...legacyInput, workspace_id: undefined, org_id: "o1", project_id: "p1" };
+      await expect(registry.dispatch(client, resourceType, operation, newModeInput)).rejects.toThrow(
+        /not yet implemented/i,
+      );
+    },
+  );
+
+  it.each([
+    ["enable", { workspace_id: "ws1", environment_id: "e1", segment_name: "seg1" }],
+    ["disable", { workspace_id: "ws1", environment_id: "e1", segment_name: "seg1" }],
+    [
+      "change_request",
+      {
+        workspace_id: "ws1",
+        environment_id: "e1",
+        title: "t",
+        operationType: "UPDATE",
+        ruleBasedSegment: { title: "seg" },
+      },
+    ],
+  ] as [string, Record<string, unknown>][])(
+    "fme_rule_based_segment_definition.%s action: legacy mode still works, new mode throws not-yet-implemented",
+    async (action, legacyInput) => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await registry.dispatchExecute(client, "fme_rule_based_segment_definition", action, legacyInput);
+      expect(mockRequest).toHaveBeenCalledTimes(1);
+
+      const newModeInput = { ...legacyInput, workspace_id: undefined, org_id: "o1", project_id: "p1" };
+      await expect(
+        registry.dispatchExecute(client, "fme_rule_based_segment_definition", action, newModeInput),
+      ).rejects.toThrow(/not yet implemented/i);
+    },
+  );
+});
+
+describe("fme_workspace permissive resolver", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("legacy mode: list with zero identifiers still works and logs a deprecation warning", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_workspace", "list", {});
+
+    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/workspaces");
+    expect(spy).toHaveBeenCalledWith(expect.stringContaining("[DEPRECATION] fme_workspace"));
+    spy.mockRestore();
+  });
+
+  it("org_id+project_id throws a dedicated no-equivalent error, not the generic NYI message", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_workspace", "list", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/no Harness-native equivalent/i);
+  });
+});
+
+describe("fme_identity permissive mode-selector", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("legacy mode (current traffic_type_id/environment_id contract) still works for create", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ ok: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_identity", "create", {
+      traffic_type_id: "tt-user",
+      environment_id: "env-prod",
+      body: { items: [{ key: "user-1", values: { name: "Ada" } }] },
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/trafficTypes/tt-user/environments/env-prod/identities");
+  });
+
+  it("org_id+project_id throws not-yet-implemented for create", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_identity", "create", {
+        traffic_type_id: "tt-user",
+        environment_id: "env-prod",
+        org_id: "o1",
+        project_id: "p1",
+        body: { items: [{ key: "user-1", values: { name: "Ada" } }] },
+      }),
+    ).rejects.toThrow(/not yet implemented/i);
+  });
+
+  it("legacy mode still works for update", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ ok: true });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_identity", "update", {
+      traffic_type_id: "tt-user",
+      environment_id: "env-prod",
+      key: "user-1",
+      body: { values: { name: "Ada" } },
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(firstRequest(mockRequest).path).toBe(
+      "/internal/api/v2/trafficTypes/tt-user/environments/env-prod/identities/user-1",
+    );
+  });
+
+  it("org_id+project_id throws not-yet-implemented for update", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_identity", "update", {
+        traffic_type_id: "tt-user",
+        environment_id: "env-prod",
+        key: "user-1",
+        org_id: "o1",
+        project_id: "p1",
+        body: { values: { name: "Ada" } },
+      }),
+    ).rejects.toThrow(/not yet implemented/i);
+  });
+});
+
+describe("fme_segment_keys permissive mode-selector", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("legacy mode (current environment_id/segment_name contract) still works for list", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment_keys", "list", {
+      environment_id: "env-prod",
+      segment_name: "beta_users",
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/env-prod/beta_users/keys");
+  });
+
+  it("org_id+project_id throws not-yet-implemented for list", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment_keys", "list", {
+        environment_id: "env-prod",
+        segment_name: "beta_users",
+        org_id: "o1",
+        project_id: "p1",
+      }),
+    ).rejects.toThrow(/not yet implemented/i);
+  });
+
+  it("legacy mode still works for update", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment_keys", "update", {
+      environment_id: "env-prod",
+      segment_name: "beta_users",
+      body: { add: ["user-1"] },
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/env-prod/beta_users/upload");
+  });
+
+  it("org_id+project_id throws not-yet-implemented for update", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment_keys", "update", {
+        environment_id: "env-prod",
+        segment_name: "beta_users",
+        org_id: "o1",
+        project_id: "p1",
+        body: { add: ["user-1"] },
       }),
     ).rejects.toThrow(/not yet implemented/i);
   });

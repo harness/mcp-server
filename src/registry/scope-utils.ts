@@ -82,3 +82,13 @@ export function resolveFmeDualMode(input: Record<string, unknown>, resourceType:
     `${resourceType}: org_id and project_id are required (account is taken from config), or pass the deprecated workspace_id instead.`,
   );
 }
+
+/**
+ * Toolset files may not call `console.*` directly (see architecture.test.ts —
+ * logging belongs in handlers/registry, not toolsets). Route deprecation
+ * logging that doesn't go through `resolveFmeDualMode` (e.g. permissive
+ * mode-selector resolvers) through here instead.
+ */
+export function logFmeDeprecation(message: string): void {
+  console.error(message);
+}
