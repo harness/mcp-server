@@ -149,14 +149,20 @@ export const featureFlagsToolset: ToolsetDefinition = {
       identifierFields: ["workspace_id", "environment_id"],
       product: "fme",
       listFilterFields: [
-        { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace)", required: true },
+        { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
       ],
       operations: {
         list: {
           method: "GET",
-          path: "/internal/api/v2/environments/ws/{wsId}",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_environment");
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/environments/ws/${encodeURIComponent(mode.workspaceId)}` };
+            }
+            return { path: "/fme/internal/api/v4/environments", product: "harness" };
+          },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { workspace_id: "wsId" },
           responseExtractor: passthrough,
           description: "List FME environments for a workspace",
         },
@@ -494,30 +500,51 @@ export const featureFlagsToolset: ToolsetDefinition = {
       identifierFields: ["workspace_id", "segment_name"],
       product: "fme",
       listFilterFields: [
-        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace)", required: true },
+        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
       ],
       operations: {
         list: {
           method: "GET",
-          path: "/internal/api/v2/rule-based-segments/ws/{wsId}",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_rule_based_segment");
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}` };
+            }
+            return { path: "/fme/internal/api/v4/segments", product: "harness" };
+          },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { workspace_id: "wsId" },
           responseExtractor: passthrough,
           description: "List all rule-based segments in a workspace",
         },
         get: {
           method: "GET",
-          path: "/internal/api/v2/rule-based-segments/ws/{wsId}/{rbSegmentName}",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_rule_based_segment");
+            const segmentName = encodeURIComponent(String(input.segment_name ?? ""));
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
+            }
+            return { path: `/fme/internal/api/v4/segments/${segmentName}`, product: "harness" };
+          },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { workspace_id: "wsId", segment_name: "rbSegmentName" },
           responseExtractor: passthrough,
           description: "Get a rule-based segment by name (workspace-level metadata)",
         },
         create: {
           method: "POST",
-          path: "/internal/api/v2/rule-based-segments/ws/{wsId}/trafficTypes/{trafficTypeId}",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_rule_based_segment");
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_rule_based_segment.create: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
+              );
+            }
+            return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/trafficTypes/${encodeURIComponent(String(input.traffic_type_id ?? ""))}` };
+          },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          pathParams: { workspace_id: "wsId", traffic_type_id: "trafficTypeId" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             return {
@@ -531,9 +558,16 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/internal/api/v2/rule-based-segments/ws/{wsId}/{rbSegmentName}",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_rule_based_segment");
+            const segmentName = encodeURIComponent(String(input.segment_name ?? ""));
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
+            }
+            return { path: `/fme/internal/api/v4/segments/${segmentName}`, product: "harness" };
+          },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          pathParams: { workspace_id: "wsId", segment_name: "rbSegmentName" },
           responseExtractor: passthrough,
           description: "Delete a rule-based segment from a workspace. Environment-level configs must be removed separately.",
         },
@@ -701,22 +735,35 @@ export const featureFlagsToolset: ToolsetDefinition = {
       identifierFields: ["workspace_id", "segment_name"],
       product: "fme",
       listFilterFields: [
-        { name: "workspace_id", description: "Workspace ID (get from fme_workspace)", required: true },
+        { name: "workspace_id", description: "Workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
       ],
       operations: {
         list: {
           method: "GET",
-          path: "/internal/api/v2/segments/ws/{wsId}",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_standard_segment");
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/segments/ws/${encodeURIComponent(mode.workspaceId)}` };
+            }
+            return { path: "/fme/internal/api/v4/segments", product: "harness" };
+          },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { workspace_id: "wsId" },
           responseExtractor: passthrough,
           description: "List all standard segments in a workspace. Returns segment name, description, and creation metadata.",
         },
         get: {
           method: "GET",
-          path: "/internal/api/v2/segments/ws/{wsId}/{segmentName}",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_standard_segment");
+            const segmentName = encodeURIComponent(String(input.segment_name ?? ""));
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
+            }
+            return { path: `/fme/internal/api/v4/segments/${segmentName}`, product: "harness" };
+          },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { workspace_id: "wsId", segment_name: "segmentName" },
           responseExtractor: passthrough,
           description: "Get a standard segment's metadata by name.",
         },

@@ -417,3 +417,185 @@ describe("fme_segment_keys update", () => {
     expect(getOperation("fme_segment_keys", "update").skipScopeBodyInjection).toBe(true);
   });
 });
+
+describe("fme_environment dual-mode routing", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("new mode: list routes to /fme/internal/api/v4/environments", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_environment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/fme/internal/api/v4/environments");
+  });
+
+  it("legacy mode: list routes to /internal/api/v2/environments/ws/{wsId}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_environment", "list", {
+      workspace_id: "ws1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/environments/ws/ws1");
+  });
+});
+
+describe("fme_standard_segment dual-mode routing", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("new mode: list routes to /fme/internal/api/v4/segments", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_standard_segment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/fme/internal/api/v4/segments");
+  });
+
+  it("legacy mode: list routes to /internal/api/v2/segments/ws/{wsId}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_standard_segment", "list", {
+      workspace_id: "ws1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/ws/ws1");
+  });
+
+  it("new mode: get routes to /fme/internal/api/v4/segments/{segment_name}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_standard_segment", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      segment_name: "seg1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/fme/internal/api/v4/segments/seg1");
+  });
+
+  it("legacy mode: get routes to /internal/api/v2/segments/ws/{wsId}/{segment_name}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_standard_segment", "get", {
+      workspace_id: "ws1",
+      segment_name: "seg1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/ws/ws1/seg1");
+  });
+});
+
+describe("fme_rule_based_segment dual-mode routing", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("new mode: list also routes to /fme/internal/api/v4/segments (shared collection)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_rule_based_segment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/fme/internal/api/v4/segments");
+  });
+
+  it("legacy mode: list routes to /internal/api/v2/rule-based-segments/ws/{wsId}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_rule_based_segment", "list", {
+      workspace_id: "ws1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/rule-based-segments/ws/ws1");
+  });
+
+  it("new mode: get routes to /fme/internal/api/v4/segments/{segment_name}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_rule_based_segment", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      segment_name: "seg1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/fme/internal/api/v4/segments/seg1");
+  });
+
+  it("legacy mode: get routes to /internal/api/v2/rule-based-segments/ws/{wsId}/{segment_name}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_rule_based_segment", "get", {
+      workspace_id: "ws1",
+      segment_name: "seg1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/rule-based-segments/ws/ws1/seg1");
+  });
+
+  it("new mode: delete routes /fme/internal/api/v4/segments/{segment_name}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_rule_based_segment", "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      segment_name: "seg1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/fme/internal/api/v4/segments/seg1");
+  });
+
+  it("legacy mode: delete routes to /internal/api/v2/rule-based-segments/ws/{wsId}/{segment_name}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_rule_based_segment", "delete", {
+      workspace_id: "ws1",
+      segment_name: "seg1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/rule-based-segments/ws/ws1/seg1");
+  });
+
+  it("new mode: create throws not-yet-implemented", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_rule_based_segment", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        traffic_type_id: "tt1",
+        body: { name: "x" },
+      }),
+    ).rejects.toThrow(/not yet implemented/i);
+  });
+});
