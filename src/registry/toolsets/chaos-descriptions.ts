@@ -158,35 +158,39 @@ export const descUpdateChaosService = `Update an existing chaos service, identif
 export const descBodyChaosServiceUpdate = `Chaos service update body. Required: name, external_service_id, agent_id, environment_id, infrastructure_id (the last four are re-validated server-side via a Service Discovery lookup). Optional (schema-wise): description, tags, probes — but "optional" only means the request validates without them. Omitting description or tags CLEARS them server-side (full replace, no partial patch); re-supply the current value from a prior harness_get if you want it preserved. Omitting probes clears all probe associations, which is the correct way to detach every probe. Do NOT include 'identity' — pass it at the top level so it goes on the URL.`;
 
 export const descChaosLoadtest = `Load test (Resilience Testing) instance. Supports list, get, create, delete; run/stop via execute actions.
-Locust is supported on Linux VM and Kubernetes (script + image modes). K6 is supported on Kubernetes only (script + image modes; UI mode deferred) — LinuxVM K6 is not supported. JMeter is coming soon.
-To create one, first pick a load-runner infrastructure: for Linux VM use chaos_infrastructure (loadEnabled infras), for Kubernetes use chaos_enabled_infrastructure. Then pass its environment_id + infra_id with target_url and the Python (locust) script.
+Locust is supported on Linux VM and Kubernetes (script + image modes). K6 and JMeter are Kubernetes-only (target_type='kubernetes' required) — Linux VM supports Locust only; MCP rejects K6/JMeter with a Linux target_type at create time. JMeter accepts script/script_image scalars like Locust/K6 (plus properties/env_vars/thresholds/worker_count); 'tool_config' remains available as an advanced escape hatch (e.g. .zip bundles).
+To create one, follow the prerequisite chain declared in relatedResources: (1) pick a load-runner infra via chaos_infrastructure (Linux VM) or chaos_enabled_infrastructure (Kubernetes), then (2) list chaos_service with infrastructure_ids='<environment_id>/<infra_id>' and pick one — or create a chaos_service if the list is empty — feeding its identity into service_references. When picking a Kubernetes infra, remember to set target_type='kubernetes' explicitly; it is not derived from the infra you chose.
 
 Response / read schema (what list/get returns — agents NEVER need to construct these on create; MCP builds them automatically):
-- inputs: array of {name, value, type ("Integer" | "String"), required?: true}. Well-known names the backend recognises:
-    targetUsers (Integer, required), durationSeconds (Integer), rampUpTimeSec (Integer),
-    workerCount (Integer; Kubernetes only), targetUrl (String),
-    scriptImage (String, required in image mode), scriptEntrypoint (String, required in image mode),
-    loadArgs (String; image mode only).
-- variables: array of {name, value, type ("String" | "Number")} — user-defined non-secret env vars (currently always empty; custom variables are a deferred feature).
+- toolConfig.<tool> (canonical, per loadTestManager LocustSpec / K6Spec / JMeterSpec):
+    mode: "script" | "image"
+    script: { content? (base64), image?, entrypoint?, loadArgs?, imagePullSecret? }
+    tunables: { targetUrl?, targetUsers?, spawnRate? (Locust), rampUpTimeSec?, durationSeconds?, workerCount?, hostUrl? (K6), iterations? (K6) }
+    options?: { rpsLimit } (K6)
+    envVars?: [{key, value, secret?}] (K6/JMeter)
+    variables?: template.VariableList (currently always empty; custom variables are a deferred feature)
+    properties?: [{key, value, sendToEngines?}] (JMeter)
+    thresholds?: [{metric, stat?, operator, value, abortOnFail?}] (JMeter)
 - yaml: base64-encoded LoadTest manifest. Decoded shape:
     kind: LoadTest
     apiVersion: v1alpha1
-    name: <name>
-    description: <optional>
-    tags: [<optional>]
+    metadata:
+      name: <name>
+      description?: <string>
+      tags?: [<string>]
+      serviceReferences?: [<chaosService identity>]
     spec:
       identity: <slug>
-      toolType: Locust
+      toolType: Locust | K6 | JMeter
       infraType: kubernetes | linux           # derived from targetType
       targetType: kubernetes | machine-chaos-linux | linux-chaos
-      scriptSource: inline | image
-      scriptContent: <PLAIN TEXT inside YAML; inline mode only>
+      cleanupPolicy: delete | retain
       infraId: <id>
       envId: <id>
-      inputs: [<same shape as response.inputs>]
-- scriptContent: base64-encoded Python script (inline mode). Large — dropped from list responses.
-- Derived convenience scalars (read-side projection of inputs[] by MCP, matching the create-side scalars):
-    target_url, users, duration_sec, ramp_up_sec, worker_count, script_image, script_entrypoint, load_args.`;
+      toolConfig: { <tool>: { mode, script, tunables, ... } }
+- Derived convenience scalars (read-side projection of toolConfig.<tool> by MCP, matching the create-side scalars):
+    target_url, users, duration_sec, ramp_up_sec, worker_count, spawn_rate, host_url, iterations, rps_limit,
+    script_image, script_entrypoint, load_args, image_pull_secret.`;
 
 export const descChaosK8sInfrastructure = `Kubernetes chaos infrastructure (chaos server) available for running experiments.
 Use chaos_environment list first to get an environmentId, then pass it here to filter infrastructures for that environment.
@@ -502,32 +506,259 @@ export const descCreateLoadtest = `Creates a Locust load test (Resilience Testin
 IMPORTANT: You MUST NOT auto-select, assume, or pre-fill any value on behalf of the user.
 At every step below, present the options / ask for the value and wait for explicit user confirmation before proceeding.
 Do NOT assume org/project/infrastructure/script/URL based on previous activity — the user may choose differently each time.
-Locust (Python) and K6 (JavaScript) are supported. JMeter is coming soon. K6 requires Kubernetes (LinuxVM K6 is not supported). For K6, "Upload K6 script" and "Custom Image" modes are supported via MCP; "Define test via UI" is deferred.
+Locust (Python), K6 (JavaScript), and JMeter (Java) are supported. K6 and JMeter are Kubernetes-only; Linux VM supports Locust only. JMeter requires a full 'tool_config.jmeter' object (script/image scalar shortcuts are NOT supported). For K6, "Upload K6 script" and "Custom Image" modes are supported via MCP; "Define test via UI" is deferred.
 
-Required workflow — follow in order, pausing for user input after each step:
+Required workflow -- follow in order, pausing for user input after each step.
 
-Step 1 — Select the execution environment target type:
-  Ask whether the load test runs on "Linux VM" (target_type=machine-chaos-linux) or "Kubernetes" (target_type=kubernetes). Wait for the user to choose.
+COMMON STEPS (identical for Locust, K6, and JMeter):
 
-Step 1b — Select the tool type:
-  Linux VM only supports Locust. Kubernetes supports Locust or K6 — ask which. Pass tool_type='Locust' (default) or 'K6'.
-  K6 is JavaScript; Locust is Python. K6 currently supports script-mode only (Custom Image and UI are deferred).
+Each step below shows the slice of the canonical stored LoadTest YAML that its inputs populate (what the user sees in the Harness UI YAML view). You NEVER hand-write this YAML -- MCP synthesizes it from the scalars/objects you pass to harness_create; the slices exist only so you can reason about which of your inputs affects which YAML path and echo an accurate preview back to the user.
+Two paths of the stored YAML are set from top-level body fields rather than the MCP-built manifest itself and are merged by the backend: metadata.serviceReferences (from body.service_references) and spec.cleanupPolicy (from body.cleanup_policy). All other YAML paths below correspond 1:1 to what MCP writes into body.yaml.
 
-Step 2 — Select a load-runner infrastructure:
-  Linux VM: call harness_list resource_type=chaos_infrastructure, show the list, wait for the user to pick one. Only infras with loadEnabled=true and status ACTIVE can run load tests.
-  Kubernetes: call harness_list resource_type=chaos_enabled_infrastructure, show the list, wait for the user to pick one (results are always ACTIVE and chaos-enabled).
-  From the chosen row take environmentID -> environment_id and infraID -> infra_id. Do NOT choose an infrastructure yourself.
+Step 1 -- Name / description / tags:
+  Ask for a name (any non-empty string) -> name. identity is auto-derived from name by stripping non-alphanumerics unless the user supplies one (letters / numbers / underscores).
+  description and tags are optional -- ask, but do not require them.
+
+  YAML populated after this step:
+
+    kind: LoadTest
+    apiVersion: v1alpha1
+    metadata:
+      name: <name>
+      description: <description>        # omitted when empty
+      tags:                             # omitted when empty
+        - <tag>
+    spec:
+      identity: <identity>              # auto-derived slug from name unless user supplies one
+
+Step 2 -- Execution environment target type:
+  Ask "Linux VM" (target_type=machine-chaos-linux) or "Kubernetes" (target_type=kubernetes). Wait for the user to choose.
+  Linux VM supports Locust only. Kubernetes supports Locust, K6, or JMeter.
+
+  YAML populated after this step (delta only):
+
+    spec:
+      targetType: kubernetes | machine-chaos-linux
+      infraType:  kubernetes | linux    # derived from targetType, not user-supplied
+
+Step 3 -- Load-runner infrastructure (see chaos_loadtest.relatedResources for canonical guidance):
+  Linux VM   -> harness_list resource_type=chaos_infrastructure           (loadEnabled + ACTIVE only).
+  Kubernetes -> harness_list resource_type=chaos_enabled_infrastructure   (already ACTIVE + chaos-enabled).
+  From the chosen row: environmentID -> environment_id, infraID -> infra_id. Do NOT choose an infra yourself.
+  If NO eligible infra is returned (empty list, or every row fails the eligibility filter above), STOP and tell the user no eligible load-runner infra exists in the current scope. Ask them to (a) switch org/project scope, (b) pick a different target type at Step 2 (Linux VM <-> Kubernetes), or (c) exit/stop. Do NOT fall back to an ineligible infra and do NOT proceed to Step 4 -- a load test cannot be created without an eligible infra.
+
+  YAML populated after this step (delta only):
+
+    spec:
+      infraId: <infraID from the chosen infra row>
+      envId:   <environmentID from the chosen infra row>
+
+Step 4 -- Resilience Testing Services (chaos_service):
+  Call harness_list resource_type=chaos_service with infrastructure_ids='<environment_id>/<infra_id>'. Show the list to the user.
+  The user may (a) pick one or more identities from the list, OR (b) onboard a brand-new service via chaos_service's create flow -- offer BOTH options regardless of whether the list is empty. Pass the chosen identity/identities as service_references.
+
+  YAML populated after this step (delta only):
+
+    metadata:
+      serviceReferences:                # merged in by backend from the top-level service_references body field
+        - <chaos_service identity>
+        - ...
+
+  Passed on the wire as body.service_references (snake_case scalar), NOT as part of the yaml manifest MCP builds -- the backend writes it into the stored YAML at metadata.serviceReferences.
+
+Step 5 -- Tool type:
+  Linux VM: Locust only. Kubernetes: ask Locust / K6 / JMeter.
+  Pass tool_type='Locust' | 'K6' | 'JMeter'. K6 and JMeter with a non-Kubernetes target_type will be rejected by MCP.
+
+  YAML populated after this step (delta only):
+
+    spec:
+      toolType: Locust | K6 | JMeter
+      cleanupPolicy: delete             # default; overridable via cleanup_policy body field
+      toolConfig:
+        <lowercase(toolType)>:          # e.g. locust / k6 / jmeter
+          mode: script | image          # tool_config detail filled in Step 6
+          script:
+            content: ""                 # base64 on the wire, decoded plain-text in the YAML view; filled in Step 6
+          tunables:                     # filled in Step 8 (load configuration)
+            targetUsers: <int>
+            durationSeconds: <int>
+            rampUpTimeSec: <int>
+            workerCount: <int>          # Kubernetes only
+
+  Notes:
+   - JMeter has NO scalar shortcuts; the entire toolConfig.jmeter block is caller-supplied via tool_config.jmeter.
+   - Locust / K6 tunables and script are populated by later steps; MCP builds the toolConfig block from your Step-6/7/8 scalars for those two tools.
+
+Step 6 -- Tool-specific configuration (branch on tool_type from Step 5):
+
+Every tool type supports two authoring modes:
+  (a) Upload script (script_source='inline', mode='script') -- paste the raw script; MCP base64-encodes it into toolConfig.<tool>.script.content.
+  (b) Using Custom Image (script_source='image', mode='image') -- point at a prebuilt container image; no script is uploaded.
+Mode lives at toolConfig.<tool>.mode; script_source on the wire body mirrors it ('inline' <-> 'script', 'image' <-> 'image').
+
+Fields marked (*) in a branch below are MANDATORY for that branch -- the UI (and MCP validation) reject creation with any '*' field empty. Unmarked fields are OPTIONAL.
+
+Fixed vs runtime input: fields noted "(fixed|<+input>)" below accept EITHER a concrete value NOW, OR the literal string '<+input>' meaning "prompt for this value at run time". Pass the placeholder verbatim -- MCP forwards it as-is into the tunables and into the base64 YAML manifest.
+
+Shared field taxonomy -- each branch below references these by letter instead of restating them:
+
+  (a) Script file / Custom image -> script | script_image (+script_entrypoint) -> toolConfig.<tool>.script.{content|image|entrypoint}. ALL tools; mandatory in whichever mode is chosen.
+  (b) Host / Target URL -> target_url (fixed|<+input>) -> toolConfig.<tool>.tunables.targetUrl. ALL tools, optional. K6 additionally derives tunables.hostUrl from the URL's origin (feeds the script as __ENV.HOST_URL); leave blank if the script/locustfile declares its own host.
+  (c) Users -> users (fixed|<+input>) -> toolConfig.<tool>.tunables.targetUsers. ALL tools.
+  (d) Duration (seconds) -> duration_sec (fixed|<+input>) -> toolConfig.<tool>.tunables.durationSeconds. ALL tools.
+  (e) Ramp Up Duration (seconds) -> ramp_up_sec (fixed|<+input>) -> toolConfig.<tool>.tunables.rampUpTimeSec. LOCUST ONLY (no Ramp Up field in the K6 UI form). Must not exceed Duration when both are fixed values.
+  (f) Iterations (cap) -> iterations (fixed|<+input>) -> toolConfig.k6.tunables.iterations. K6 ONLY. Duration takes precedence when both are set.
+  (g) RPS Limit -> rps_limit (fixed|<+input>) -> toolConfig.k6.options.rpsLimit. K6 ONLY. Global cap, split evenly across replicas; always applies (unlike (c)/(d)/(f), which k6 ignores once the script declares its own scenarios/stages).
+  (h) Worker Count / Replicas -> worker_count (fixed|<+input>) -> toolConfig.<tool>.tunables.workerCount. LOCUST + K6 + JMETER, Kubernetes only (VM always runs a single worker/pod -- skip entirely for target_type='machine-chaos-linux'). Locust: Users are DISTRIBUTED across workers, not multiplied. K6: <=1 = single pod; higher values fan out to multiple runner pods via --execution-segment. JMeter: workers MULTIPLY load -- each injector runs the FULL uploaded plan unchanged; thread counts inside the file are NOT sliced across workers.
+  (i) Environment Variables -> env_vars -> toolConfig.<tool>.envVars[]. K6 + JMETER. Structured array; each entry is a literal {key, value}, a runtime {key, value: "<+input>"}, or a secret reference {key, secret_id, secret_scope?}. See the env_vars field's own description (descLoadtestEnvVars) and legacy Step 4c below for the full validator, reserved-name list, and secret_scope discovery flow (harness_list resource_type=secret type=SecretText) -- not repeated here. K6 additionally rejects HOST_URL/K6_VUS/K6_DURATION/K6_ITERATIONS/K6_STAGES/K6_RPS (tool-specific reserved names on top of the shared list).
+  (j) Property Overrides -> properties -> toolConfig.jmeter.properties[]. JMETER ONLY. Array of {key, value, send_to_engines?}; injects/overrides JMeter properties at run time without editing the uploaded plan -- reference as \${__P(NAME)} inside the plan. send_to_engines (-G) controls whether the property also reaches remote workers in Distributed Execution; omit for controller-only properties.
+  (k) Thresholds -> thresholds -> toolConfig.jmeter.thresholds[]. JMETER ONLY. Array of {metric, stat?, operator, value, abort_on_fail?}; pass/fail criteria evaluated against the run's .jtl results AFTER the test (the uploaded plan's own Assertions still apply per-request during the run). metric one of response_time_ms|error_rate_pct|throughput_rps|latency_ms; operator one of < <= > >= == !=; stat (e.g. p95/p99/avg/median/max) is REQUIRED when metric is response_time_ms or latency_ms.
+
+Step 6.LocustScript -- Locust + Upload Python script (mode='script'):
+
+  Ask, in order: (*)(a) Script file, (b) Host URL, (*)(c) Users, (*)(d) Duration, (*)(e) Ramp Up, (h) Worker Count [Kubernetes only].
+
+  YAML populated after this step (delta only):
+
+    spec:
+      toolConfig:
+        locust:
+          mode: script
+          script:
+            content: |                        # plain text in YAML view; base64 on wire
+              <the Python locust script>
+          tunables:                           # omit keys the user left blank
+            targetUrl: http://www.example.com
+            targetUsers: 100
+            durationSeconds: 600
+            rampUpTimeSec: 120
+            workerCount: 1                    # Kubernetes only
+
+Step 6.LocustImage -- Locust + Using Custom Image (mode='image'):
+
+  Kubernetes only (script_source=image, or inferred when script_image is set). VM is always inline.
+
+  Ask, in order:
+    (b) Host URL                 -> target_url          (optional; Locust --host; leave blank if the locustfile sets host in code)
+    (a) Load Test Image*         -> script_image        (required; container image, e.g. my-registry/my-load-test:latest)
+    (a) Entrypoint*              -> script_entrypoint   (path inside the image, e.g. /scripts/locustfile.py; passed to locust -f)
+    (a) Load args                -> load_args           (optional; semicolon-separated k=v pairs, e.g. "tags=smoke,fast;headless=true" -- NOT bare CLI flags)
+    (a) Image Registry Type      -> Public: omit image_pull_secret
+                                    Private: image_pull_secret (name of the Kubernetes image-pull secret)
+    (c) Users*                   -> users
+    (d) Duration*                -> duration_sec
+    (e) Ramp Up*                 -> ramp_up_sec
+    (h) Worker Count             -> worker_count        (K8s; 0/omit = standalone)
+
+  YAML populated after this step (delta only):
+
+    spec:
+      toolConfig:
+        locust:
+          mode: image
+          script:
+            image: my-registry/my-load-test:latest
+            entrypoint: /scripts/locustfile.py
+            loadArgs: tags=smoke                     # omit when blank
+            imagePullSecret: my-pull-secret          # omit when Public
+          tunables:                                  # omit keys the user left blank
+            targetUrl: https://www.google.com
+            targetUsers: 100
+            durationSeconds: 600
+            rampUpTimeSec: 120
+            workerCount: 1
+
+Step 6.K6Script -- K6 + Upload K6 script (mode='script'):
+
+  Kubernetes-only: MCP rejects K6 with target_type='machine-chaos-linux' at create time.
+
+  Ask, in order: (*)(a) Script file [MANDATORY: script MUST contain 'export default function ...' -- reject before calling MCP if missing, matching Harness UI validateScriptContent], (b) Host URL, (c) Users, (d) Duration, (f) Iterations, (g) RPS Limit, (i) Environment Variables, (h) Replicas.
+
+  Load-profile semantics reminder: (c)/(d)/(f) are ignored by k6 once the script declares its own scenarios/stages -- leave them blank for scripted scenarios. (g) RPS Limit always applies.
+
+  YAML populated after this step (delta only):
+
+    spec:
+      toolConfig:
+        k6:
+          mode: script
+          script:
+            content: |                        # plain text in YAML view; base64 on wire
+              <the K6 JavaScript source>
+          tunables:                           # omit keys the user left blank
+            targetUrl: https://www.examplek6.com
+            targetUsers: <+input>
+            durationSeconds: <+input>
+            iterations: <+input>
+            workerCount: 1
+          options:
+            rpsLimit: 100
+          envVars:                            # omit entirely when no env vars are set
+            - key: env_var_1
+              value: some_val_1
+              secret: false
+            - key: env_var_2
+              value: <+input>
+              secret: false
+            - key: somekey
+              value: secrets.getValue("account.gcp-ca-cert")   # scope prefix per env_vars docs: account./org./none for project
+              secret: true
+
+Step 6.K6Image -- K6 + Using Custom Image (mode='image'):
+  TBD in a follow-up iteration.
+
+Step 6.JMeterScript -- JMeter + Upload JMX / XML / ZIP (mode='script'):
+
+  Kubernetes-only: MCP rejects JMeter with target_type='machine-chaos-linux' at create time.
+
+  Ask, in order: (*)(a) Test Plan file [.jmx/.xml -- raw plan text, verbatim; do NOT parse, modify, or pre-encode. A .zip bundle (plan + CSV data/dependencies) is also accepted but must be supplied pre-base64'd via tool_config.jmeter.script.content instead of the scalar 'script' field], (j) Property Overrides, (i) Environment Variables, (k) Thresholds, (h) Workers.
+
+  Notes: (b)/(c)/(d)/(e)/(f)/(g) do not apply to JMeter -- thread count, ramp-up, and duration live inside the uploaded plan's ThreadGroup elements, not as separate MCP inputs. If the user wants to change load shape, tell them to edit the .jmx and re-upload (or use tool_config.jmeter.tunables.{targetUsers,durationSeconds,rampUpTimeSec} as an advanced override -- backend-accepted but not exposed as a scalar here since the Harness UI does not expose it either).
+
+  YAML populated after this step (delta only):
+
+    spec:
+      toolConfig:
+        jmeter:
+          mode: script
+          script:
+            content: |                        # plain text in YAML view; base64 on wire
+              <the .jmx/.xml plan>
+          tunables:
+            workerCount: 1                    # Kubernetes only
+          properties:                         # omit entirely when no property overrides are set
+            - key: someProperty
+              value: someValue
+              sendToEngines: true
+          envVars:                            # omit entirely when no env vars are set
+            - key: secretKeyAtProject
+              value: secrets.getValue("datat-api")
+              secret: true
+            - key: fixedKey
+              value: fixedValue
+            - key: RuntimeKey
+              value: <+input>
+          thresholds:                         # omit entirely when no thresholds are set
+            - metric: response_time_ms
+              stat: p95
+              operator: <
+              value: 5000
+              abortOnFail: false
+
+Step 6.JMeterImage -- JMeter + Using Custom Image (mode='image'):
+  TBD in a follow-up iteration. Requires the caller to hand-build the full tool_config.jmeter block.
 
 Step 3 — Collect the target (host) URL:
   Ask for the base URL of the application under test (e.g. https://www.google.com) -> target_url. Do NOT assume it.
 
 Step 4 — Test configuration (branch on tool_type from Step 1b):
   Locust (Linux VM or Kubernetes):
-    (a) Upload Python script (script_source=inline): ask for the raw Python locust script -> script (verbatim; do NOT generate or pre-encode). MCP base64-encodes it into top-level scriptContent.
-    (b) Custom Image (script_source=image, Kubernetes only): ask for script_image (+ optional script_entrypoint, load_args).
+    (a) Upload Python script (script_source=inline): ask for the raw Python locust script -> script (verbatim; do NOT generate or pre-encode). MCP base64-encodes it into toolConfig.locust.script.content.
+    (b) Custom Image (script_source=image, Kubernetes only): ask for script_image (+ optional script_entrypoint, load_args, image_pull_secret for private registries). Maps to toolConfig.locust.script.{image,entrypoint,loadArgs,imagePullSecret}. See Step 6.LocustImage below for the exact flow.
   K6 (Kubernetes only):
-    (a) Upload K6 script (script_source=inline): ask the user to paste the raw K6 JavaScript source. Pass it verbatim in 'script'. MANDATORY rule: the script MUST contain 'export default function ...'. If it does not, REJECT before calling MCP — MCP will throw and no load test will be created. MCP base64-encodes the script into toolConfig.scriptContent; do NOT pre-encode.
-    (b) Custom Image (script_source=image): ask for the container image -> script_image (e.g. my-registry/my-load-test:latest); optionally an entrypoint inside the image -> script_entrypoint (e.g. /script.js); optional container args -> load_args. MCP routes script_image and script_entrypoint into BOTH toolConfig.customImage (image, entrypoint) AND inputs[] (scriptImage required:true, scriptEntrypoint required:true); load_args rides ONLY in inputs[name=loadArgs]. No script is needed.
+    (a) Upload K6 script (script_source=inline): ask the user to paste the raw K6 JavaScript source. Pass it verbatim in 'script'. MANDATORY rule: the script MUST contain 'export default function ...'. If it does not, REJECT before calling MCP — MCP will throw and no load test will be created. MCP base64-encodes the script into toolConfig.k6.script.content; do NOT pre-encode.
+    (b) Custom Image (script_source=image): ask for the container image -> script_image (e.g. my-registry/my-load-test:latest); optionally an entrypoint inside the image -> script_entrypoint (e.g. /script.js); optional container args -> load_args. Maps to toolConfig.k6.script.{image,entrypoint,loadArgs}. No script is needed.
     (c) Define test via UI: NOT YET SUPPORTED via MCP. Inform the user it is deferred and stop.
   Optional K6-only knobs to ask the user about (skip if user says no):
     - host_url: origin of the target system (protocol+host, no path). Defaults to the origin of target_url.
@@ -563,43 +794,43 @@ Step 6 — Collect name and optional metadata:
 Only after the user confirms all of the above should you call harness_create resource_type=chaos_loadtest.
 
 HOW THE BODY IS BUILT (you do NOT construct any of this — MCP handles it):
-- Your scalars (users / duration_sec / ramp_up_sec / worker_count / target_url / script_image / script_entrypoint / load_args)
-  are translated into a canonical inputs[] array with backend-wire names
-  (targetUsers / durationSeconds / rampUpTimeSec / workerCount / targetUrl / scriptImage / scriptEntrypoint / loadArgs).
-- Inline mode (Locust): your raw 'script' is base64-encoded into top-level scriptContent.
-- Image mode (Locust): scriptContent is omitted; script_image / script_entrypoint / load_args ride in inputs[].
-- K6 script mode: top-level scriptContent is OMITTED. The base64 script lives in toolConfig.scriptContent only.
-  toolConfig also carries hostUrl, optional options.rpsLimit, optional iterations, and optional envVars.
-- env_vars (K6): structured only. {key, value} for literals; {key, secret_id, secret_scope?} for secrets —
+- Your scalars (users / duration_sec / ramp_up_sec / worker_count / target_url) map to
+  toolConfig.<tool>.tunables.{targetUsers,durationSeconds,rampUpTimeSec,workerCount,targetUrl}.
+- Inline mode: your raw 'script' is base64-encoded into toolConfig.<tool>.script.content.
+- Image mode (Locust/K6/JMeter): script.content is omitted; script_image / script_entrypoint / load_args /
+  image_pull_secret land at toolConfig.<tool>.script.{image,entrypoint,loadArgs,imagePullSecret}.
+- K6 also carries hostUrl / iterations (in tunables), optional options.rpsLimit, and optional envVars.
+- env_vars (K6/JMeter): structured only. {key, value} for literals; {key, secret_id, secret_scope?} for secrets —
   MCP builds the wire 'secrets.getValue("<prefix><id>")' string and sets secret: true automatically.
 - A canonical LoadTest YAML manifest is synthesized and base64-encoded into the 'yaml' request field.
-- description defaults to "", tags defaults to []. tool_type is fixed to "Locust" server-side (K6/JMeter coming).
+- description defaults to "", tags defaults to [].
 
 INPUT FIELDS:
   name (string, required): Display name for the load test. Any non-empty string (e.g. "My Load Test", "locust-1").
   environment_id (string, required): environmentID of the chosen infrastructure (Step 2).
   infra_id (string, required): infraID of the chosen infrastructure (Step 2).
-  target_url (string, required): Base URL of the application under test (Step 3). Goes into inputs[name=targetUrl].
-  script (string): Raw Python locust script. VM always requires this; K8s when inline. MCP base64-encodes it into the top-level scriptContent field — do NOT pre-encode.
+  target_url (string, required): Base URL of the application under test (Step 3). Maps to toolConfig.<tool>.tunables.targetUrl.
+  script (string): Raw script contents (Python/JS/JMX). VM always requires this; K8s when inline. MCP base64-encodes it into toolConfig.<tool>.script.content — do NOT pre-encode.
   script_source (string): "inline" (default) or "image". "image" is K8s-only; VM is always "inline". Inferred as "image" when script_image is set.
-  script_image (string): K8s + image mode only — prebuilt container image. Required when script_source=image. Goes into inputs[name=scriptImage, required:true].
-  script_entrypoint (string): Custom Image mode — entrypoint file inside the image. Goes into inputs[name=scriptEntrypoint, required:true] when provided.
-  load_args (string): Custom Image mode — container args as "k=v,v2;k2=v" pairs. Goes into inputs[name=loadArgs] when provided.
+  script_image (string): K8s + image mode only — prebuilt container image. Required when script_source=image. Maps to toolConfig.<tool>.script.image.
+  script_entrypoint (string): Custom Image mode — entrypoint file inside the image. Maps to toolConfig.<tool>.script.entrypoint.
+  load_args (string): Custom Image mode — container args as semicolon-separated k=v pairs (e.g. "tags=smoke;headless=true"; keys must not start with '-'). Maps to toolConfig.<tool>.script.loadArgs.
+  image_pull_secret (string): Custom Image mode, private registry only — name of the Kubernetes image-pull secret. Maps to toolConfig.<tool>.script.imagePullSecret. Omit for public images.
   target_type (string): machine-chaos-linux (Linux VM, default), linux-chaos, or kubernetes.
-  users (number, default 100): Number of simulated users. Goes into inputs[name=targetUsers, required:true].
-  duration_sec (number, default 600): Total test duration in seconds. Goes into inputs[name=durationSeconds].
-  ramp_up_sec (number, default 120): Ramp-up duration in seconds. Goes into inputs[name=rampUpTimeSec].
-  worker_count (number, default 0): K8s — agent must ask; default 0. VM: N/A. Goes into inputs[name=workerCount].
-  tool_type (string, default "Locust"): "Locust" or "K6". K6 requires target_type=kubernetes.
-  host_url (string, K6 only): K6 host origin (protocol://host, no path). Defaults to origin of target_url. Goes into toolConfig.hostUrl.
-  rps_limit (number, K6 only): requests-per-second cap. Goes into toolConfig.options.rpsLimit when > 0.
-  iterations (number, K6 only): total iteration cap. Goes into toolConfig.iterations when > 0.
-  env_vars (array, K6 only): environment variables. Array of {key, value} (literal) or {key, secret_id, secret_scope?} (secret reference). See Step 4c.
+  users (number, default 100): Number of simulated users. Maps to toolConfig.<tool>.tunables.targetUsers.
+  duration_sec (number, default 600): Total test duration in seconds. Maps to toolConfig.<tool>.tunables.durationSeconds.
+  ramp_up_sec (number, default 120): Ramp-up duration in seconds. Maps to toolConfig.<tool>.tunables.rampUpTimeSec.
+  worker_count (number, default 0): K8s — agent must ask; default 0. VM: N/A. Maps to toolConfig.<tool>.tunables.workerCount.
+  tool_type (string, default "Locust"): "Locust", "K6", or "JMeter". K6/JMeter require target_type=kubernetes.
+  host_url (string, K6 only): K6 host origin (protocol://host, no path). Defaults to origin of target_url. Maps to toolConfig.k6.tunables.hostUrl.
+  rps_limit (number, K6 only): requests-per-second cap. Maps to toolConfig.k6.options.rpsLimit when > 0.
+  iterations (number, K6 only): total iteration cap. Maps to toolConfig.k6.tunables.iterations when > 0.
+  env_vars (array, K6/JMeter): environment variables. Array of {key, value} (literal) or {key, secret_id, secret_scope?} (secret reference). See Step 4c.
   identity (string): Stable slug-safe identifier (letters / numbers / underscores). Auto-derived from name by stripping non-alphanumerics when omitted.
   description (string): Optional human-readable description. Defaults to "".
   tags (string[]): Optional tags. Defaults to [].
 
-Returns the created load test (identity, name, environment/infra, targetType, toolType, scriptSource, inputs[], plus derived target_url/users/duration_sec/ramp_up_sec/worker_count convenience scalars) and an openInHarness deep link.`;
+Returns the created load test, including the full toolConfig echo (script/tunables/options/envVars as stored), serviceReferences, cleanupPolicy, the base64 canonical yaml, createdAt/updatedAt, and an openInHarness deep link.`;
 export const descDeleteLoadtest = `Delete a load test instance`;
 
 export const descUpdateLoadtest = `Update fields on an existing load test. Omit any field to leave it unchanged; for k6/JMeter/Locust, edit script or tunables via a full 'tool_config' object (top-level scriptSource/scriptContent are rejected).`;
@@ -992,15 +1223,18 @@ Requires the template identity, hub identity, and two revision numbers.`;
 export const descBodyExperimentRun = `Optional runtime inputs for the chaos experiment. Use chaos_experiment_variable list to discover required variables first.`;
 export const descBodyNoBody = `No body required. Resource identified by path parameter.`;
 export const descBodyCreateFromTemplate = `Chaos experiment from template`;
-export const descBodyLoadtestDefinition = `Locust load test definition. Required: name, environment_id, infra_id, target_url. Mode: either 'script' (inline Python, script_source=inline, default) or 'script_image' (Custom Image, script_source=image).
-MCP translates your scalars into the wire shape automatically:
-  - users / duration_sec / ramp_up_sec  → inputs[targetUsers / durationSeconds / rampUpTimeSec] (Integer)
-  - target_url                          → inputs[targetUrl] (String)
-  - worker_count                        → inputs[workerCount] (Integer; Kubernetes only)
-  - script_image / script_entrypoint / load_args → inputs[scriptImage / scriptEntrypoint / loadArgs] (String; image mode)
-  - script (raw Python)                 → top-level scriptContent (base64)
+export const descBodyLoadtestDefinition = `Load test definition (Locust / K6 / JMeter). Required: name, environment_id, infra_id, target_url. Mode: 'inline' (upload raw script, default) or 'image' (Custom Image via script_image; Kubernetes only).
+MCP translates your scalars into the canonical toolConfig.<tool> wire shape automatically:
+  - users / duration_sec / ramp_up_sec / worker_count / target_url
+      → toolConfig.<tool>.tunables.{targetUsers, durationSeconds, rampUpTimeSec, workerCount, targetUrl}
+  - script (raw Python/JS/JMX)          → toolConfig.<tool>.script.content (base64)
+  - script_image / script_entrypoint / load_args / image_pull_secret (image mode)
+      → toolConfig.<tool>.script.{image, entrypoint, loadArgs, imagePullSecret}
+  - K6 host_url / iterations            → toolConfig.k6.tunables.{hostUrl, iterations}
+  - K6 rps_limit                        → toolConfig.k6.options.rpsLimit
+  - env_vars (K6/JMeter)                → toolConfig.<tool>.envVars
   - A canonical LoadTest YAML manifest is built and base64-encoded into a 'yaml' field.
-You never construct inputs[], scriptContent base64, or the yaml field — pass scalars only.`;
+You never construct toolConfig, script.content base64, or the yaml field — pass scalars only.`;
 
 // ── Field Descriptions ───────────────────────────────────────────────
 
@@ -1013,27 +1247,31 @@ export const descInfraRef = `Infrastructure reference in format: environmentId/i
 export const descExperimentId = `Chaos experiment identifier. Accepts either the internal UUID (default, with is_identity=false) or the human-readable identity slug (set is_identity=true). Use harness_list with resource_type=chaos_experiment to find experiment IDs.`;
 export const descInfraStatus = `Filter by infra status: Active (default) or All`;
 export const descLoadtestName = `Display name for the load test. Any non-empty string (e.g. "My Load Test", "locust-1"). The slug-safe identifier rule applies to 'identity' (auto-derived from name) — not to name.`;
-export const descLoadtestType = `Load test tool type: "Locust" (default; Python on Linux VM or Kubernetes) or "K6" (JavaScript on Kubernetes only). JMeter is coming soon. K6 supports script mode and Custom Image mode; "Define test via UI" is deferred.`;
+export const descLoadtestType = `Load test tool type: "Locust" (default; Python on Linux VM or Kubernetes), "K6" (JavaScript, Kubernetes only), or "JMeter" (Java, Kubernetes only). All three support script mode and Custom Image mode; "Define test via UI" is deferred (K6/Locust) or not applicable (JMeter, which is always plan-upload-based).`;
 export const descLoadtestIdentity = `Stable identifier (letters, numbers and underscores). Auto-derived from name by stripping non-alphanumerics when omitted.`;
 export const descLoadtestDescription = `Optional human-readable description. Defaults to "".`;
 export const descLoadtestTags = `Optional tags (array of strings, or comma-separated string). Defaults to [].`;
 export const descLoadtestEnvId = `Environment identifier of the load-runner infrastructure. Use the 'environmentID' from chaos_infrastructure (Linux VM) or chaos_enabled_infrastructure (Kubernetes).`;
 export const descLoadtestInfraId = `Load-runner infrastructure identifier. Use the 'infraID' from chaos_infrastructure (Linux VM) or chaos_enabled_infrastructure (Kubernetes).`;
-export const descLoadtestTargetType = `Execution environment target type: "machine-chaos-linux" (Linux VM, default), "linux-chaos", or "kubernetes". "workerCount" is only emitted into inputs[] for "kubernetes".`;
-export const descLoadtestTargetUrl = `Base URL of the application under test (e.g. https://www.google.com). Sent as an entry in inputs[] with name="targetUrl", type="String".`;
-export const descLoadtestScript = `Raw script contents for inline mode (script_source=inline). Locust expects Python (locustfile.py); K6 expects JavaScript and MUST contain 'export default function ...' (mandatory — MCP rejects scripts without it). MCP base64-encodes onto the wire — do NOT pre-encode. For Locust this lands at top-level scriptContent; for K6 it lands at toolConfig.scriptContent (and top-level scriptContent is omitted). Required for inline mode; omit for Custom Image mode.`;
-export const descLoadtestScriptSource = `Test definition source: "inline" (default — upload a raw Python locust script via 'script') or "image" (use a prebuilt container image via 'script_image'). "image" is K8s-only; VM is always "inline". Inferred as "image" when script_image is set, otherwise "inline".`;
-export const descLoadtestScriptImage = `Custom Image mode (both Locust and K6, Kubernetes only): prebuilt container image used as the load test source, e.g. "my-registry/my-load-test:latest". Required when script_source=image. Sent as inputs[name=scriptImage, type=String, required:true]. For K6 also wired into toolConfig.customImage.image.`;
-export const descLoadtestScriptEntrypoint = `Custom Image mode (optional, both Locust and K6): entrypoint file inside the image, e.g. "locustfile.py" (Locust) or "/script.js" (K6). Sent as inputs[name=scriptEntrypoint, type=String, required:true] when provided. For K6 also wired into toolConfig.customImage.entrypoint.`;
-export const descLoadtestLoadArgs = `Custom Image mode (optional, both Locust and K6): arguments passed to the container as key=value pairs — comma-separated for multiple values per key, separated by ';'. Example: "tags=smoke,random;headless=true". Sent as inputs[name=loadArgs, type=String] only — for K6 this does NOT go into toolConfig.customImage.`;
-export const descLoadtestUsers = `Number of simulated users. Default: 100. Sent as inputs[name=targetUsers, type=Integer, required:true].`;
-export const descLoadtestDurationSec = `Total test duration in seconds. Default: 600. Sent as inputs[name=durationSeconds, type=Integer].`;
-export const descLoadtestRampUpSec = `Ramp-up duration in seconds. Default: 120. Sent as inputs[name=rampUpTimeSec, type=Integer].`;
-export const descLoadtestWorkerCount = `K8s: agent must ask; default 0 (0 = standalone). VM: N/A. Sent as inputs[name=workerCount, type=Integer]. Ignored for Linux target types.`;
+export const descLoadtestTargetType = `Execution environment target type: "machine-chaos-linux" (Linux VM, default), "linux-chaos", or "kubernetes". "workerCount" is only honoured for "kubernetes".`;
+export const descLoadtestTargetUrl = `Base URL of the application under test (e.g. https://www.google.com). Maps to toolConfig.<tool>.tunables.targetUrl. For Locust it is passed as --host; leave blank if the locustfile sets host in code.`;
+export const descLoadtestScript = `Raw script contents for inline mode (script_source=inline). Locust expects Python (locustfile.py); K6 expects JavaScript and MUST contain 'export default function ...' (mandatory — MCP rejects scripts without it); JMeter expects the raw .jmx/.xml test plan text (verbatim; for a .zip bundle use tool_config.jmeter.script.content with a pre-computed base64 string instead). MCP base64-encodes onto the wire — do NOT pre-encode. Lands at toolConfig.<tool>.script.content for all three tools. Required for inline mode; omit for Custom Image mode.`;
+export const descLoadtestScriptSource = `Test definition source: "inline" (default — upload a raw script via 'script') or "image" (use a prebuilt container image via 'script_image'). "image" is K8s-only; VM is always "inline". Inferred as "image" when script_image is set, otherwise "inline".`;
+export const descLoadtestScriptImage = `Custom Image mode (Locust/K6/JMeter, Kubernetes only): prebuilt container image used as the load test source, e.g. "my-registry/my-load-test:latest". Required when script_source=image. Maps to toolConfig.<tool>.script.image.`;
+export const descLoadtestScriptEntrypoint = `Custom Image mode (optional): entrypoint file inside the image, e.g. "locustfile.py" (Locust) or "/script.js" (K6); passed to the tool as its -f/--script flag equivalent. Maps to toolConfig.<tool>.script.entrypoint.`;
+export const descLoadtestLoadArgs = `Custom Image mode (optional): container args as semicolon-separated key=value pairs — commas allowed inside a value. Example: "tags=smoke,fast;headless=true". Keys must be non-empty, contain no whitespace, and must NOT start with '-' (bare CLI flags like "--headless" are rejected — mirrors loadTestManager ValidateLoadArgs). Maps to toolConfig.<tool>.script.loadArgs.`;
+export const descLoadtestImagePullSecret = `Custom Image mode (Kubernetes, private registry only): name of the Kubernetes image-pull secret used to pull script_image. Maps to toolConfig.<tool>.script.imagePullSecret. Omit for public images (UI "Image Registry Type = Public"); there is no separate Public/Private field on the wire — presence of this scalar is the private signal.`;
+export const descLoadtestUsers = `Number of simulated users. Default: 100. Maps to toolConfig.<tool>.tunables.targetUsers.`;
+export const descLoadtestDurationSec = `Total test duration in seconds. Default: 600. Maps to toolConfig.<tool>.tunables.durationSeconds.`;
+export const descLoadtestRampUpSec = `Ramp-up duration in seconds. Default: 120. Maps to toolConfig.<tool>.tunables.rampUpTimeSec.`;
+export const descLoadtestWorkerCount = `K8s: agent must ask; default 0 (0 = standalone). VM: N/A (ignored for Linux target types). Goes to toolConfig.<tool>.tunables.workerCount. Semantics differ per tool: Locust DISTRIBUTES users across workers (load not multiplied); K6 <=1 is a single pod and higher values fan out via --execution-segment; JMeter MULTIPLIES load -- each worker runs the full uploaded plan unchanged.`;
 export const descLoadtestHostUrl = `K6 only: host origin (protocol+host with no path, e.g. https://api.example.com). Defaults to the origin parsed from target_url when omitted. Goes into toolConfig.hostUrl.`;
 export const descLoadtestRpsLimit = `K6 only: requests-per-second cap. Goes into toolConfig.options.rpsLimit when > 0. Omitted from the wire when unset or 0.`;
 export const descLoadtestIterations = `K6 only: total iteration cap. Goes into toolConfig.iterations when > 0. Omitted from the wire when unset or 0.`;
-export const descLoadtestEnvVars = `K6 only: environment variables for the K6 runner. Array of entries — each sets EITHER {key, value} for a literal OR {key, secret_id, secret_scope?: "account"|"org"|"project"} for a Harness secret (default secret_scope = "project"). MCP builds the wire 'secrets.getValue("<prefix><id>")' string and sets secret: true automatically — do NOT construct that string yourself. Discover secrets via harness_list resource_type=secret type=SecretText and read each item's secret.{identifier, orgIdentifier?, projectIdentifier?} to derive scope. Key pattern: /^[A-Za-z_][A-Za-z0-9_]*$/. Reserved names (case-insensitive) are rejected: RUN_ID, LOAD_TEST_ID, TARGET_USERS, SPAWN_RATE, SCRIPT_CONTENT_BASE64, TARGET_URL, ACCOUNT_ID, ORG_ID, PROJECT_ID, ENV_ID, DURATION_SECONDS, CONTROL_PLANE_URL, CONTROL_PLANE_TOKEN, HARNESS_CUSTOM_VAR_NAMES, METRICS_PUSH_INTERVAL, INFRA_ID, ACCESS_KEY, TENANT_ID, PYTHONPATH, PATH, HOME, USER, SHELL, LANG, TERM, HOSTNAME, PWD, LD_LIBRARY_PATH, LD_PRELOAD, TMPDIR, TMP, TEMP.`;
+export const descLoadtestEnvVars = `K6 and JMeter only: environment variables for the runner. Array of entries — each sets EITHER {key, value} for a literal OR {key, secret_id, secret_scope?: "account"|"org"|"project"} for a Harness secret (default secret_scope = "project"). MCP builds the wire 'secrets.getValue("<prefix><id>")' string and sets secret: true automatically — do NOT construct that string yourself. Discover secrets via harness_list resource_type=secret type=SecretText and read each item's secret.{identifier, orgIdentifier?, projectIdentifier?} to derive scope. Key pattern: /^[A-Za-z_][A-Za-z0-9_]*$/. Reserved names (case-insensitive), rejected for BOTH tools: RUN_ID, LOAD_TEST_ID, TARGET_USERS, SPAWN_RATE, SCRIPT_CONTENT_BASE64, TARGET_URL, ACCOUNT_ID, ORG_ID, PROJECT_ID, ENV_ID, DURATION_SECONDS, CONTROL_PLANE_URL, CONTROL_PLANE_TOKEN, HARNESS_CUSTOM_VAR_NAMES, METRICS_PUSH_INTERVAL, INFRA_ID, ACCESS_KEY, TENANT_ID, PYTHONPATH, PATH, HOME, USER, SHELL, LANG, TERM, HOSTNAME, PWD, LD_LIBRARY_PATH, LD_PRELOAD, TMPDIR, TMP, TEMP. K6 ALSO rejects: HOST_URL, K6_VUS, K6_DURATION, K6_ITERATIONS, K6_STAGES, K6_RPS.`;
+
+export const descLoadtestProperties = "JMeter only: runtime property overrides injected into the plan without editing the uploaded file -- reference as ${__P(NAME)} in the .jmx. Array of {key, value, send_to_engines?}. send_to_engines (maps to sendToEngines / the JMeter -G flag) controls whether the property also reaches remote Distributed Execution workers; omit (false) for controller-only properties.";
+export const descLoadtestThresholds = "JMeter only: pass/fail criteria evaluated against the run's .jtl results after the test completes (the uploaded plan's own Assertions still apply per-request during the run). Array of {metric, stat?, operator, value, abort_on_fail?}. metric: one of response_time_ms | error_rate_pct | throughput_rps | latency_ms. operator: one of < | <= | > | >= | == | !=. stat (e.g. p95, p99, avg, median, max) is REQUIRED when metric is response_time_ms or latency_ms. abort_on_fail (maps to abortOnFail) marks the threshold as run-aborting on failure.";
 
 export const descHubIdentityExact = `The unique identity of the ChaosHub. Use harness_list with resource_type=chaos_hub to find hub identities.`;
 export const descHubName = `Display name for the ChaosHub.`;

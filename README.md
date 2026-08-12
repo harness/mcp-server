@@ -1523,40 +1523,43 @@ Use `harness_execute(resource_type="pull_request", action="close", ...)` for an 
 ### Chaos Engineering
 
 
-| Resource Type                | List | Get | Create | Update | Delete | Execute Actions                                          |
-|------------------------------| ---- | --- | ------ | ------ | ------ |----------------------------------------------------------|
-| `chaos_experiment`           | x    | x   | x      |        | x      | `run`, `stop`                                            |
-| `chaos_experiment_run`       |      | x   |        |        |        |                                                          |
-| `chaos_experiment_variable`  | x    |     |        |        |        |                                                          |
-| `chaos_component_variable`   |      | x   |        |        |        |                                                          |
-| `chaos_input_set`            | x    | x   | x      | x      | x      |                                                          |
-| `chaos_experiment_template`  | x    | x   |        |        | x      | `create_from_template`                                   |
-| `chaos_probe`                | x    | x   | x      |        | x      | `enable`, `verify`                                       |
-| `chaos_probe_in_run`         | x    |     |        |        |        |                                                          |
-| `chaos_probe_template`       | x    | x   |        |        | x      |                                                          |
-| `chaos_infrastructure`       | x    |     |        |        |        |                                                          |
-| `chaos_k8s_infrastructure`   | x    | x   |        |        |        | `check_health`                                           |
-| `chaos_environment`          | x    |     |        |        |        |                                                          |
-| `chaos_hub`                  | x    | x   | x      | x      | x      |                                                          |
-| `chaos_hub_fault`            | x    |     |        |        |        |                                                          |
-| `chaos_fault`                | x    | x   |        |        | x      |                                                          |
-| `chaos_fault_template`       | x    | x   |        |        | x      |                                                          |
-| `chaos_fault_experiment_run` | x    |     |        |        |        |                                                          |
-| `chaos_action`               | x    | x   |        |        | x      |                                                          |
-| `chaos_action_template`      | x    | x   |        |        | x      |                                                          |
-| `chaos_loadtest`             | x    | x   | x      |        | x      | `run`, `stop`                                            |
-| `chaos_application_map`      | x    | x   |        |        |        |                                                          |
-| `discovered_namespace`       | x    |     |        |        |        |                                                          |
-| `discovered_service`         | x    |     |        |        |        |                                                          |
-| `discovered_network_map`     | x    |     |        |        |        |                                                          |
-| `chaos_guard_condition`      | x    | x   |        |        | x      |                                                          |
-| `chaos_guard_rule`           | x    | x   |        |        | x      | `enable`                                                 |
-| `chaos_recommendation`       | x    | x   |        |        |        |                                                          |
-| `chaos_risk`                 | x    | x   |        |        |        |                                                          |
-| `chaos_dr_test`              | x    |     | x      |        |        |                                                          |
-| `scanned_risk`               | x    | x   |        |        |        | `occurrences`, `summary_by_service`                      |
-| `chaos_risk_rule`            | x    | x   |        |        |        |                                                          |
-| `chaos_risk_scan`            | x    | x   | x      | x      | x      | `retry`, `abort`, `report`, `report_download`, `heatmap` |
+| Resource Type                    | List | Get | Create | Update | Delete | Execute Actions                                                              |
+|----------------------------------| ---- | --- | ------ | ------ | ------ |------------------------------------------------------------------------------|
+| `chaos_experiment`               | x    | x   | x      |        | x      | `run`, `stop`                                                                |
+| `chaos_experiment_run`           |      | x   |        |        |        |                                                                              |
+| `chaos_experiment_variable`      | x    |     |        |        |        |                                                                              |
+| `chaos_component_variable`       |      | x   |        |        |        |                                                                              |
+| `chaos_input_set`                | x    | x   | x      | x      | x      |                                                                              |
+| `chaos_experiment_template`      | x    | x   |        |        | x      | `create_from_template`, `list_revisions`, `get_variables`, `get_yaml`, `compare_revisions` |
+| `chaos_probe`                    | x    | x   | x      |        | x      | `enable`, `verify`, `get_manifest`                                           |
+| `chaos_probe_in_run`             | x    |     |        |        |        |                                                                              |
+| `chaos_probe_template`           | x    | x   |        |        | x      | `get_variables`                                                              |
+| `chaos_infrastructure`           | x    |     |        |        |        |                                                                              |
+| `chaos_k8s_infrastructure`       | x    | x   | x      |        |        | `check_health`                                                               |
+| `chaos_enabled_infrastructure`   | x    |     |        |        |        |                                                                              |
+| `chaos_environment`              | x    |     |        |        |        |                                                                              |
+| `chaos_hub`                      | x    | x   | x      | x      | x      |                                                                              |
+| `chaos_hub_fault`                | x    |     |        |        |        |                                                                              |
+| `chaos_fault`                    | x    | x   |        |        | x      | `get_variables`, `get_yaml`                                                  |
+| `chaos_fault_template`           | x    | x   |        |        | x      | `list_revisions`, `get_variables`, `get_yaml`, `compare_revisions`           |
+| `chaos_fault_experiment_run`     | x    |     |        |        |        |                                                                              |
+| `chaos_action`                   | x    | x   | x      |        | x      | `get_manifest`                                                               |
+| `chaos_action_template`          | x    | x   |        |        | x      | `list_revisions`, `get_variables`, `compare_revisions`                       |
+| `chaos_loadtest`                 | x    | x   | x      | x      | x      | `run`, `stop`                                                                |
+| `chaos_service`                  | x    | x   | x      | x      | x      | `list_experiment_runs`, `list_load_tests`                                    |
+| `chaos_application_map`          | x    | x   |        |        |        |                                                                              |
+| `discovered_agent`               | x    |     |        |        |        |                                                                              |
+| `discovered_namespace`           | x    |     |        |        |        |                                                                              |
+| `discovered_service`             | x    |     |        |        |        |                                                                              |
+| `discovered_network_map`         | x    |     |        |        |        |                                                                              |
+| `chaos_guard_condition`          | x    | x   |        |        | x      |                                                                              |
+| `chaos_guard_rule`               | x    | x   |        |        | x      | `enable`                                                                     |
+| `chaos_recommendation`           | x    | x   |        |        |        |                                                                              |
+| `chaos_risk`                     | x    | x   |        |        |        |                                                                              |
+| `chaos_dr_test`                  | x    |     | x      |        |        |                                                                              |
+| `scanned_risk`                   | x    | x   |        |        |        | `occurrences`, `summary_by_service`                                          |
+| `chaos_risk_rule`                | x    | x   |        |        |        |                                                                              |
+| `chaos_risk_scan`                | x    | x   | x      | x      | x      | `retry`, `abort`, `report`, `report_download`, `heatmap`                     |
 
 ### Cloud Cost Management (CCM)
 

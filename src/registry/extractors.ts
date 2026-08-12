@@ -920,6 +920,15 @@ const readTunable = (
   return tunables?.[name];
 };
 
+const readScriptField = (
+  tc: Record<string, unknown> | undefined,
+  name: string,
+): unknown => {
+  if (!tc) return undefined;
+  const script = tc.script as Record<string, unknown> | undefined;
+  return script?.[name];
+};
+
 /**
  * Project a single load test (LoadTestResponse) to a stable shape.
  *
@@ -978,6 +987,11 @@ export const chaosLoadTestExtract = (raw: unknown): unknown => {
     host_url: readTunable(toolBlock, "hostUrl"),
     iterations: readTunable(toolBlock, "iterations"),
     rps_limit: readTunable(toolBlock, "rpsLimit"),
+    // Derived convenience scalars from toolConfig.<tool>.script (image mode).
+    script_image: readScriptField(toolBlock, "image"),
+    script_entrypoint: readScriptField(toolBlock, "entrypoint"),
+    load_args: readScriptField(toolBlock, "loadArgs"),
+    image_pull_secret: readScriptField(toolBlock, "imagePullSecret"),
     recentRuns: t.recentRuns,
     isSampleTest: t.isSampleTest,
     isApiGenerated: t.isApiGenerated,

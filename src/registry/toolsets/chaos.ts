@@ -110,8 +110,9 @@ import {
   descLoadtestTargetUrl, descLoadtestScript, descLoadtestUsers,
   descLoadtestDurationSec, descLoadtestRampUpSec, descLoadtestWorkerCount,
   descLoadtestScriptSource, descLoadtestScriptImage,
-  descLoadtestScriptEntrypoint, descLoadtestLoadArgs,
+  descLoadtestScriptEntrypoint, descLoadtestLoadArgs, descLoadtestImagePullSecret,
   descLoadtestHostUrl, descLoadtestRpsLimit, descLoadtestIterations, descLoadtestEnvVars,
+  descLoadtestProperties, descLoadtestThresholds,
   descHubIdentityExact, descHubName, descHubNameUpdate,
   descHubDescription, descHubDescriptionUpdate,
   descHubTags, descHubTagsReplace,
@@ -239,15 +240,14 @@ function coerceBody(input: Record<string, unknown>): Record<string, unknown> {
 // them into the nested toolConfig shape here, so agents never construct the
 // nested map, base64, or YAML themselves.
 
-// ── K6-specific helpers ──────────────────────────────────────────────
-// K6 is a Kubernetes-only load test runner. Script mode wraps the K6 JS source
-// in a `toolConfig` object (rather than top-level `scriptContent` like Locust).
-// Env vars and secret references live exclusively in `toolConfig.envVars`.
+// ── Shared env-var helper (K6 + JMeter) ──────────────────────────────
+// Env vars and secret references live in `toolConfig.<tool>.envVars`.
 
-// Reserved K6 env-var names (case-insensitive). Mirrors
-// loadTestManager/internal/domain/ReservedEnvVarNames; the frontend list is at
+// Reserved env-var names (case-insensitive). Mirrors
+// loadTestManager/internal/domain/ReservedEnvVarNames (shared base set, all
+// tools) + K6ReservedEnvVarNames (K6-only extras). The frontend list is at
 // hce-saas/web/src/services/loadTest/loadTestVariables.ts:337-372.
-const RESERVED_K6_ENV_VAR_NAMES = new Set<string>([
+const BASE_RESERVED_ENV_VAR_NAMES = new Set<string>([
   "RUN_ID", "LOAD_TEST_ID", "TARGET_USERS", "SPAWN_RATE", "SCRIPT_CONTENT_BASE64",
   "TARGET_URL", "ACCOUNT_ID", "ORG_ID", "PROJECT_ID", "ENV_ID", "DURATION_SECONDS",
   "CONTROL_PLANE_URL", "CONTROL_PLANE_TOKEN", "HARNESS_CUSTOM_VAR_NAMES",
@@ -255,9 +255,12 @@ const RESERVED_K6_ENV_VAR_NAMES = new Set<string>([
   "PYTHONPATH", "PATH", "HOME", "USER", "SHELL", "LANG", "TERM", "HOSTNAME",
   "PWD", "LD_LIBRARY_PATH", "LD_PRELOAD", "TMPDIR", "TMP", "TEMP",
 ]);
-const K6_ENV_VAR_KEY_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const K6_EXTRA_RESERVED_ENV_VAR_NAMES = new Set<string>([
+  "HOST_URL", "K6_VUS", "K6_DURATION", "K6_ITERATIONS", "K6_STAGES", "K6_RPS",
+]);
+const ENV_VAR_KEY_REGEX = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-type K6EnvVarWire = { key: string; value: string; secret?: true };
+type EnvVarWire = { key: string; value: string; secret?: true };
 
 // Build the HSM secret reference: account → "account.<id>", org → "org.<id>", project → "<id>".
 // Matches the Harness UI convention (scope prefix encodes which secret manager the value lives in).
@@ -266,11 +269,11 @@ function buildSecretReference(secretId: string, scope: "account" | "org" | "proj
   return `secrets.getValue("${prefix}${secretId}")`;
 }
 
-// Validate + project the structured env_vars input into the wire shape K6 expects.
+// Validate + project the structured env_vars input into the wire shape K6/JMeter expect.
 // Each entry sets exactly one of:
 //   - { key, value }                              → literal env var
 //   - { key, secret_id, secret_scope?: "..." }    → MCP builds the secrets.getValue(...) string
-function buildK6EnvVars(raw: unknown): K6EnvVarWire[] {
+function buildEnvVars(raw: unknown, tool: "K6" | "JMeter"): EnvVarWire[] {
   if (raw == null) return [];
   if (!Array.isArray(raw)) {
     throw new Error("env_vars must be an array of {key, value | secret_id, secret_scope?} entries.");
@@ -282,12 +285,13 @@ function buildK6EnvVars(raw: unknown): K6EnvVarWire[] {
     if (!key || typeof key !== "string") {
       throw new Error(`env_vars[${idx}].key is required.`);
     }
-    if (!K6_ENV_VAR_KEY_REGEX.test(key)) {
+    if (!ENV_VAR_KEY_REGEX.test(key)) {
       throw new Error(
         `env_vars[${idx}].key '${key}' is invalid: must match /^[A-Za-z_][A-Za-z0-9_]*$/.`,
       );
     }
-    if (RESERVED_K6_ENV_VAR_NAMES.has(key.toUpperCase())) {
+    const upper = key.toUpperCase();
+    if (BASE_RESERVED_ENV_VAR_NAMES.has(upper) || (tool === "K6" && K6_EXTRA_RESERVED_ENV_VAR_NAMES.has(upper))) {
       throw new Error(
         `env_vars[${idx}].key '${key}' is a reserved name and cannot be used as a custom env var.`,
       );
@@ -343,7 +347,7 @@ function buildK6ToolConfig(
     parseHostOrigin(args.targetUrl);
   const rpsLimit = b.rps_limit != null ? (b.rps_limit as number) : undefined;
   const iterations = b.iterations != null ? (b.iterations as number) : undefined;
-  const envVars = buildK6EnvVars(b.env_vars);
+  const envVars = buildEnvVars(b.env_vars, "K6");
 
   // Script/image artifact lives under `script`, not `scriptContent`/`customImage`.
   let mode: "script" | "image";
@@ -380,17 +384,138 @@ function buildK6ToolConfig(
   if (b.worker_count != null) tunables.workerCount = b.worker_count;
   if (hostUrl) tunables.hostUrl = hostUrl;
   if (iterations != null && iterations > 0) tunables.iterations = iterations;
-  if (rpsLimit != null && rpsLimit > 0) tunables.rpsLimit = rpsLimit;
 
   const toolConfig: Record<string, unknown> = { mode, script };
   if (Object.keys(tunables).length > 0) toolConfig.tunables = tunables;
+  if (rpsLimit != null && rpsLimit > 0) toolConfig.options = { rpsLimit };
   if (envVars.length > 0) toolConfig.envVars = envVars;
   return toolConfig;
 }
 
+// ── JMeter-specific helpers ──────────────────────────────────────────
+// Matches JMeterSpec in loadTestManager/internal/domain/jmeter.go.
+
+type JMeterProperty = { key: string; value: string; sendToEngines?: true };
+type JMeterThreshold = { metric: string; stat?: string; operator: string; value: number; abortOnFail?: true };
+
+const JMETER_THRESHOLD_METRICS = new Set(["response_time_ms", "error_rate_pct", "throughput_rps", "latency_ms"]);
+const JMETER_THRESHOLD_OPERATORS = new Set(["<", "<=", ">", ">=", "==", "!="]);
+const JMETER_STAT_REQUIRED_METRICS = new Set(["response_time_ms", "latency_ms"]);
+
+// Validate + project the structured properties input into toolConfig.jmeter.properties[].
+function buildJMeterProperties(raw: unknown): JMeterProperty[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) {
+    throw new Error("properties must be an array of {key, value, send_to_engines?} entries.");
+  }
+  return raw.map((entry, idx) => {
+    const p = entry as Record<string, unknown>;
+    const key = p.key as string | undefined;
+    if (!key) {
+      throw new Error(`properties[${idx}].key is required.`);
+    }
+    const out: JMeterProperty = { key, value: String(p.value ?? "") };
+    if (p.send_to_engines === true) out.sendToEngines = true;
+    return out;
+  });
+}
+
+// Validate + project the structured thresholds input into toolConfig.jmeter.thresholds[].
+// Mirrors JMeterThreshold.validate() in loadTestManager/internal/domain/jmeter.go:245-256.
+function buildJMeterThresholds(raw: unknown): JMeterThreshold[] {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) {
+    throw new Error("thresholds must be an array of {metric, stat?, operator, value, abort_on_fail?} entries.");
+  }
+  return raw.map((entry, idx) => {
+    const t = entry as Record<string, unknown>;
+    const metric = t.metric as string | undefined;
+    if (!metric || !JMETER_THRESHOLD_METRICS.has(metric)) {
+      throw new Error(`thresholds[${idx}].metric must be one of ${[...JMETER_THRESHOLD_METRICS].join(", ")}.`);
+    }
+    const operator = t.operator as string | undefined;
+    if (!operator || !JMETER_THRESHOLD_OPERATORS.has(operator)) {
+      throw new Error(`thresholds[${idx}].operator must be one of ${[...JMETER_THRESHOLD_OPERATORS].join(", ")}.`);
+    }
+    const stat = t.stat as string | undefined;
+    if (JMETER_STAT_REQUIRED_METRICS.has(metric) && !stat) {
+      throw new Error(`thresholds[${idx}]: metric '${metric}' requires 'stat' (e.g. p95, p99, avg, median, max).`);
+    }
+    if (t.value == null) {
+      throw new Error(`thresholds[${idx}].value is required.`);
+    }
+    const out: JMeterThreshold = { metric, operator, value: t.value as number };
+    if (stat) out.stat = stat;
+    if (t.abort_on_fail === true) out.abortOnFail = true;
+    return out;
+  });
+}
+
+// Build the JMeter `toolConfig.jmeter` block for script or image mode.
+// Matches JMeterSpec in loadTestManager/internal/domain/jmeter.go: mode + script{content|image|entrypoint}
+// + tunables{workerCount} + properties[] + envVars[] + thresholds[].
+function buildJMeterToolConfig(
+  b: Record<string, unknown>,
+  args: { scriptSource: string; script?: string },
+): Record<string, unknown> {
+  let mode: "script" | "image";
+  const script: Record<string, unknown> = {};
+  if (args.scriptSource === "image") {
+    const scriptImage = (b.script_image ?? b.scriptImage) as string | undefined;
+    if (scriptImage == null) {
+      throw new Error("JMeter image mode requires 'script_image'.");
+    }
+    mode = "image";
+    script.image = scriptImage;
+    const entrypoint = (b.script_entrypoint ?? b.scriptEntrypoint) as string | undefined;
+    if (entrypoint != null) script.entrypoint = entrypoint;
+  } else {
+    if (args.script == null) {
+      throw new Error("JMeter script mode requires 'script' (the raw .jmx/.xml plan text).");
+    }
+    mode = "script";
+    script.content = Buffer.from(args.script, "utf8").toString("base64");
+  }
+
+  const toolConfig: Record<string, unknown> = { mode, script };
+
+  if (b.worker_count != null) toolConfig.tunables = { workerCount: b.worker_count };
+
+  const properties = buildJMeterProperties(b.properties);
+  if (properties.length > 0) toolConfig.properties = properties;
+
+  const envVars = buildEnvVars(b.env_vars, "JMeter");
+  if (envVars.length > 0) toolConfig.envVars = envVars;
+
+  const thresholds = buildJMeterThresholds(b.thresholds);
+  if (thresholds.length > 0) toolConfig.thresholds = thresholds;
+
+  return toolConfig;
+}
+
+// Validate the Locust/K6/JMeter load_args string. Mirrors ValidateLoadArgs in
+// loadTestManager/internal/api/dto.go: semicolon-separated k=v pairs; keys
+// must be non-empty, contain no whitespace, and not start with '-'.
+function validateLoadArgs(loadArgs: string): void {
+  for (const raw of loadArgs.split(";")) {
+    const pair = raw.trim();
+    if (!pair) continue;
+    const eq = pair.indexOf("=");
+    const key = (eq >= 0 ? pair.slice(0, eq) : pair).trim();
+    if (!key) throw new Error(`load_args: empty key in pair ${JSON.stringify(pair)}`);
+    if (/[ \t]/.test(key)) {
+      throw new Error(`load_args: key ${JSON.stringify(key)} must not contain spaces`);
+    }
+    if (key.startsWith("-")) {
+      throw new Error(`load_args: key ${JSON.stringify(key)} must not start with '-'`);
+    }
+  }
+}
+
 // Build the Locust `toolConfig.locust` block for script or image mode. Matches
-// LocustSpec in loadTestManager/internal/domain/locust.go: mode + script{content|image|entrypoint}
-// + tunables{targetUrl, targetUsers, spawnRate, rampUpTimeSec, durationSeconds, workerCount}.
+// LocustSpec + ScriptSpec in loadTestManager: mode +
+// script{content|image|entrypoint|loadArgs|imagePullSecret} +
+// tunables{targetUrl, targetUsers, spawnRate, rampUpTimeSec, durationSeconds, workerCount}.
 function buildLocustToolConfig(
   b: Record<string, unknown>,
   args: { scriptSource: string; script?: string; targetUrl?: string },
@@ -406,6 +531,17 @@ function buildLocustToolConfig(
     script.image = scriptImage;
     const entrypoint = (b.script_entrypoint ?? b.scriptEntrypoint) as string | undefined;
     if (entrypoint != null) script.entrypoint = entrypoint;
+
+    const loadArgs = (b.load_args ?? b.loadArgs) as string | undefined;
+    if (loadArgs != null && loadArgs !== "") {
+      validateLoadArgs(loadArgs);
+      script.loadArgs = loadArgs;
+    }
+
+    const imagePullSecret = (b.image_pull_secret ?? b.imagePullSecret) as string | undefined;
+    if (imagePullSecret != null && imagePullSecret !== "") {
+      script.imagePullSecret = imagePullSecret;
+    }
   } else {
     if (args.script == null) {
       throw new Error("Locust script mode requires 'script' (the raw Python locustfile).");
@@ -439,21 +575,29 @@ function buildLoadtestYamlManifest(args: {
   name: string;
   description?: string;
   tags?: string[];
+  serviceReferences?: string[];
   identity: string;
   toolType: "Locust" | "K6" | "JMeter";
   targetType: string;
   toolBlock: Record<string, unknown>;
   environmentIdentifier: string;
   infraIdentifier: string;
+  cleanupPolicy?: string;
 }): string {
   const infraType = args.targetType === "kubernetes" ? "kubernetes" : "linux";
+
+  const metadata: Record<string, unknown> = { name: args.name };
+  if (args.description) metadata.description = args.description;
+  if (args.tags && args.tags.length) metadata.tags = args.tags;
+  if (args.serviceReferences && args.serviceReferences.length) {
+    metadata.serviceReferences = args.serviceReferences;
+  }
+
   const manifest: Record<string, unknown> = {
     kind: "LoadTest",
     apiVersion: "v1alpha1",
-    name: args.name,
+    metadata,
   };
-  if (args.description) manifest.description = args.description;
-  if (args.tags && args.tags.length) manifest.tags = args.tags;
 
   // In the YAML view we want plain-text script content for readability; the
   // wire toolConfig carries it base64. Decode a copy for the manifest.
@@ -475,6 +619,7 @@ function buildLoadtestYamlManifest(args: {
     toolType: args.toolType,
     infraType,
     targetType: args.targetType,
+    cleanupPolicy: args.cleanupPolicy ?? "delete",
     infraId: args.infraIdentifier,
     envId: args.environmentIdentifier,
     toolConfig: { [args.toolType.toLowerCase()]: yamlToolBlock },
@@ -1727,6 +1872,26 @@ export const chaosToolset: ToolsetDefinition = {
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["loadtest_id"],
       deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/load-tests/{loadtestId}",
+      relatedResources: [
+        {
+          resourceType: "chaos_infrastructure",
+          relationship: "prerequisite",
+          description:
+            "Linux VM load-runner infrastructure. When the load test targets Linux VM (target_type='machine-chaos-linux', the default), its 'environmentID' supplies environment_id and its 'infraID' supplies infra_id. Only loadEnabled + ACTIVE infras are usable. Linux VM supports tool_type Locust only -- K6 and JMeter with a Linux target_type are rejected by MCP.",
+        },
+        {
+          resourceType: "chaos_enabled_infrastructure",
+          relationship: "prerequisite",
+          description:
+            "Kubernetes load-runner infrastructure. When the load test targets Kubernetes, filter this list by infra_type='KubernetesV2'; its 'environmentID' supplies environment_id and its 'infraID' supplies infra_id. Kubernetes infra supports tool_type Locust, K6, or JMeter. IMPORTANT: target_type MUST be explicitly set to 'kubernetes' -- it is not auto-derived from which infra list you picked from; omitting it defaults to Linux naming and dispatches wrong.",
+        },
+        {
+          resourceType: "chaos_service",
+          relationship: "prerequisite",
+          description:
+            "Resilience Testing Services attached to a load test. List with infrastructure_ids='<environment_id>/<infra_id>' to see services already onboarded on the chosen load-runner infra. A user may pick one or more identities from the list, OR onboard a brand-new service via chaos_service's create flow (see chaos_service.relatedResources for the discovered_agent/discovered_service chain) regardless of whether the list is empty -- creating a new service is a user-intent decision, not gated on list length. The chosen identity/identities are passed on the load test as service_references (required when the account has CHAOS_RISK_SERVICES_ENABLED on).",
+        },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -1809,21 +1974,19 @@ export const chaosToolset: ToolsetDefinition = {
                 ? (rawTags as string).split(",").map((t) => t.trim()).filter(Boolean)
                 : [];
 
-            // Build toolConfig.<tool>. JMeter is caller-supplied pass-through only.
+            // Build toolConfig.<tool>. JMeter builds from scalars by default;
+            // 'tool_config' remains an escape hatch for advanced/back-compat callers
+            // (e.g. .zip bundles) who want to hand-construct the object.
             let toolBlock: Record<string, unknown>;
             if (toolType === "K6") {
               toolBlock = buildK6ToolConfig(b, { scriptSource, script, targetUrl });
             } else if (toolType === "Locust") {
               toolBlock = buildLocustToolConfig(b, { scriptSource, script, targetUrl });
             } else {
-              // JMeter: caller must supply the full toolConfig object.
               const supplied = b.tool_config as Record<string, unknown> | undefined;
-              if (!supplied) {
-                throw new Error(
-                  "JMeter load tests require 'tool_config' (nested under a 'jmeter' key).",
-                );
-              }
-              toolBlock = (supplied.jmeter as Record<string, unknown>) ?? supplied;
+              toolBlock = supplied != null
+                ? ((supplied.jmeter as Record<string, unknown>) ?? supplied)
+                : buildJMeterToolConfig(b, { scriptSource, script });
             }
             const toolKey = toolType.toLowerCase();
             const toolConfig: Record<string, unknown> = { [toolKey]: toolBlock };
@@ -1857,12 +2020,14 @@ export const chaosToolset: ToolsetDefinition = {
               name,
               description: b.description as string | undefined,
               tags,
+              serviceReferences: body.serviceReferences as string[] | undefined,
               identity,
               toolType,
               targetType,
               toolBlock,
               environmentIdentifier: environmentIdentifier as string,
               infraIdentifier: infraIdentifier as string,
+              cleanupPolicy: body.cleanupPolicy as string | undefined,
             });
             body.yaml = Buffer.from(yamlManifest, "utf8").toString("base64");
 
@@ -1891,6 +2056,8 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "script", type: "string", required: false, description: descLoadtestScript },
               { name: "script_image", type: "string", required: false, description: descLoadtestScriptImage },
               { name: "script_entrypoint", type: "string", required: false, description: descLoadtestScriptEntrypoint },
+              { name: "load_args", type: "string", required: false, description: descLoadtestLoadArgs },
+              { name: "image_pull_secret", type: "string", required: false, description: descLoadtestImagePullSecret },
               { name: "users", type: "number", required: false, description: descLoadtestUsers },
               { name: "spawn_rate", type: "number", required: false, description: "Locust spawn rate (users/sec)." },
               { name: "duration_sec", type: "number", required: false, description: descLoadtestDurationSec },
@@ -1900,8 +2067,10 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "rps_limit", type: "number", required: false, description: descLoadtestRpsLimit },
               { name: "iterations", type: "number", required: false, description: descLoadtestIterations },
               { name: "env_vars", type: "array", required: false, description: descLoadtestEnvVars },
+              { name: "properties", type: "array", required: false, description: descLoadtestProperties },
+              { name: "thresholds", type: "array", required: false, description: descLoadtestThresholds },
               { name: "variables", type: "array", required: false, description: "Custom template.Variable entries stored under toolConfig.<tool>.variables." },
-              { name: "tool_config", type: "object", required: false, description: "Pass-through toolConfig object. Required for tool_type=JMeter; optional override for Locust/K6." },
+              { name: "tool_config", type: "object", required: false, description: "Pass-through toolConfig object -- escape hatch for advanced/back-compat use (e.g. JMeter .zip bundles). Not required for Locust/K6/JMeter; prefer the scalar fields (script/script_image/properties/env_vars/thresholds/worker_count)." },
               { name: "service_references", type: "array", required: false, description: "chaosService identity strings; required when CHAOS_RISK_SERVICES_ENABLED is on." },
               { name: "cleanup_policy", type: "string", required: false, description: "'delete' (default) or 'retain' — run resource lifecycle." },
               { name: "max_duration_sec", type: "number", required: false, description: "Per-load-test hard cap on any run." },

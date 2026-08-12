@@ -145,7 +145,7 @@ describe("chaos_loadtest create (Locust)", () => {
     expect(body.projectIdentifier).toBeUndefined();
   });
 
-  it("Kubernetes image: nests customImage under toolConfig.locust.script, drops inputs[]", async () => {
+  it("Kubernetes image (private registry): nests script.{image,entrypoint,loadArgs,imagePullSecret} under toolConfig.locust", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
     await registry.dispatch(client, "chaos_loadtest", "create", {
@@ -156,6 +156,8 @@ describe("chaos_loadtest create (Locust)", () => {
       script_source: "image",
       script_image: "my-registry/locust:latest",
       script_entrypoint: "/script/xyz",
+      load_args: "tags=smoke",
+      image_pull_secret: "Some secret name",
       worker_count: 1,
     });
     const body = mockRequest.mock.calls[0][0].body;
@@ -166,11 +168,58 @@ describe("chaos_loadtest create (Locust)", () => {
     expect(locust.script).toEqual({
       image: "my-registry/locust:latest",
       entrypoint: "/script/xyz",
+      loadArgs: "tags=smoke",
+      imagePullSecret: "Some secret name",
     });
     expect(locust.tunables).toEqual({
       targetUrl: "http://www.example.com",
       workerCount: 1,
     });
+
+    // YAML manifest carries the same script scalars (plain text on the YAML side).
+    const yamlB64 = body.yaml as string;
+    const manifest = YAML.parse(Buffer.from(yamlB64, "base64").toString("utf8"));
+    expect(manifest.spec.toolConfig.locust.script).toEqual({
+      image: "my-registry/locust:latest",
+      entrypoint: "/script/xyz",
+      loadArgs: "tags=smoke",
+      imagePullSecret: "Some secret name",
+    });
+  });
+
+  it("Kubernetes image (public registry): omits imagePullSecret and loadArgs when not supplied", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      name: "img-lt-public", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script_source: "image",
+      script_image: "my-registry/locust:latest",
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    const locust = (body.toolConfig as Record<string, unknown>).locust as Record<string, unknown>;
+    expect(locust.mode).toBe("image");
+    expect(locust.script).toEqual({ image: "my-registry/locust:latest" });
+    const script = locust.script as Record<string, unknown>;
+    expect(script.imagePullSecret).toBeUndefined();
+    expect(script.loadArgs).toBeUndefined();
+  });
+
+  it("Kubernetes image: rejects load_args whose keys start with '-'", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "chaos_loadtest", "create", {
+        org_id: "o", project_id: "p",
+        name: "img-lt-bad", environment_id: "e", infra_id: "i",
+        target_type: "kubernetes",
+        script_source: "image",
+        script_image: "my-registry/locust:latest",
+        load_args: "--headless",
+      }),
+    ).rejects.toThrow(/must not start with '-'/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("passes optional service_references / cleanup_policy / max_duration_sec / resources through", async () => {
