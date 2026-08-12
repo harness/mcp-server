@@ -29256,7 +29256,8 @@ const schema: Record<string, any> = {
                   "config": {
                     "type": "string",
                     "enum": [
-                      "hunt",
+                      "hunt_full",
+                      "hunt_incremental",
                       "scan"
                     ]
                   },
@@ -29382,7 +29383,8 @@ const schema: Record<string, any> = {
               "config": {
                 "type": "string",
                 "enum": [
-                  "hunt",
+                  "hunt_full",
+                  "hunt_incremental",
                   "scan"
                 ]
               },
@@ -55663,6 +55665,18 @@ const schema: Record<string, any> = {
                         "minLength": 1
                       }
                     ]
+                  },
+                  "filters": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/iacm/AnsibleFilters"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
                   }
                 }
               }
@@ -55720,8 +55734,63 @@ const schema: Record<string, any> = {
                 "items": {
                   "$ref": "#/definitions/pipeline/steps/iacm/ImportCommandParameterField"
                 }
+              },
+              "filters": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/iacm/AnsibleFilters"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
               }
             }
+          },
+          "AnsibleFilters": {
+            "title": "AnsibleFilters",
+            "type": "object",
+            "properties": {
+              "tags": {
+                "description": "Only run tasks and roles carrying one of these tags.",
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "skipTags": {
+                "description": "Skip tasks and roles carrying one of these tags. Takes precedence over tags.",
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "limit": {
+                "description": "Restrict the run to matching hosts. A single ansible host pattern, e.g. \"web,db:!staging\".",
+                "type": "string"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "IACMRemediationAgentStepNode": {
             "title": "IACMRemediationAgentStepNode",
@@ -55858,6 +55927,20 @@ const schema: Record<string, any> = {
                   },
                   "llmConnectorRef": {
                     "type": "string"
+                  },
+                  "resourceAddresses": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+.*>$"
+                      }
+                    ]
                   }
                 }
               }
@@ -55896,6 +55979,20 @@ const schema: Record<string, any> = {
               },
               "llmConnectorRef": {
                 "type": "string"
+              },
+              "resourceAddresses": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+.*>$"
+                  }
+                ]
               }
             }
           }
@@ -74929,7 +75026,8 @@ const schema: Record<string, any> = {
                   "GoogleMigInstanceTemplate",
                   "GoogleMigConfiguration",
                   "GoogleMigAutoscalerConfiguration",
-                  "GoogleMigHealthCheckConfiguration"
+                  "GoogleMigHealthCheckConfiguration",
+                  "AgentConfig"
                 ]
               },
               "description": {
@@ -75449,6 +75547,22 @@ const schema: Record<string, any> = {
                     }
                   }
                 }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "AgentConfig"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/AgentConfigManifest"
+                    }
+                  }
+                }
               }
             ]
           },
@@ -75877,7 +75991,8 @@ const schema: Record<string, any> = {
                     "enum": [
                       "V2",
                       "V3",
-                      "V380"
+                      "V380",
+                      "V4"
                     ]
                   },
                   "metadata": {
@@ -76599,6 +76714,31 @@ const schema: Record<string, any> = {
             "properties": {
               "description": {
                 "desc": "This is the description for GoogleMigHealthCheckConfiguration"
+              }
+            }
+          },
+          "AgentConfigManifest": {
+            "title": "AgentConfigManifest",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/steps/cd/ManifestAttributes"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "metadata": {
+                    "type": "string"
+                  },
+                  "store": {
+                    "$ref": "#/definitions/pipeline/steps/cd/StoreConfigWrapper"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for AgentConfigManifest"
               }
             }
           },
