@@ -1619,7 +1619,7 @@ Evidence Vault stores in-toto attestations (SDLC evidences). List supports accou
 | `security_issue`          | x    |     |        |        |        |                                |
 | `security_issue_filter`   | x    |     |        |        |        |                                |
 | `security_exemption`      | x    |     | x      |        |        | `approve`, `reject` |
-| `sast_remediation_diff`   | x    |     |        |        |        |                                |
+| `remediation_diff`        | x    |     |        |        |        |                                |
 
 `security_exemption` create is a `high_write` operation. The server derives `requester_id` from the authenticated PAT, sets `exemptFutureOccurrences=true`, and defaults `duration_days` to 30 when not provided. For listing exemptions, pass a small explicit page size (for example `filters: { "status": "Pending", "size": 5 }`) and follow the `_nextPageHint` returned in each response.
 
@@ -1824,7 +1824,7 @@ Available toolset names:
 | `sei`                   | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric                                                                                     |
 | `scs`                   | scs_artifact_source, artifact_security, scs_artifact_component, scs_artifact_remediation, scs_chain_of_custody, scs_compliance_result, code_repo_security, scs_sbom                                                                                                                             |
 | `evidence-vault`        | attestation                                                                                                                                                                                                                                                                                     |
-| `sto`                   | security_issue, security_issue_filter, security_exemption, sast_remediation_diff                                                                                                                                                                                                                |
+| `sto`                   | security_issue, security_issue_filter, security_exemption, remediation_diff                                                                                                                                                                                                                     |
 | `dbops`                 | database_schema, database_instance, database_snapshot_object, database_llm_authoring_pipeline                                                                                                                                                                                                   |
 | `access_control`        | user, user_group, service_account, role, role_assignment, resource_group, permission                                                                                                                                                                                                            |
 | `governance`            | policy, policy_set, policy_evaluation                                                                                                                                                                                                                                                           |
