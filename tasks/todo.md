@@ -16,7 +16,7 @@
 - [x] bodySchema + medium_write policy + skipScopeBodyInjection
 - [x] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
 - [x] Note Experimental RBAC: `iac_variableset_*` always permitted until iac-server enforces
-- [ ] Open PR stacked on merged workspace (#793)
+- [x] Open PR stacked on merged workspace (#793) — https://github.com/harness/mcp-server/pull/800
 
 ### Plan
 - Variable sets are multi-scope (account/org/project) via pathBuilder + resource_scope.
