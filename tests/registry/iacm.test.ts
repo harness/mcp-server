@@ -264,19 +264,24 @@ describe("iacm_variable_set contract", () => {
         risk: "medium_write",
         retryPolicy: "do_not_retry",
       });
+      expect(getOp("iacm_variable_set", op).skipScopeBodyInjection).toBe(true);
+      expect(getOp("iacm_variable_set", op).bodyBuilder!({ body: { name: "x" } })).toEqual({
+        name: "x",
+      });
     }
   });
 
   it("documents create and update body requirements", () => {
-    const createRequired = getOp("iacm_variable_set", "create")
-      .bodySchema!.fields.filter((field) => field.required)
-      .map((field) => field.name);
-    const updateRequired = getOp("iacm_variable_set", "update")
-      .bodySchema!.fields.filter((field) => field.required)
-      .map((field) => field.name);
+    const create = getOp("iacm_variable_set", "create");
+    const update = getOp("iacm_variable_set", "update");
+    const createRequired = create.bodySchema!.fields.filter((field) => field.required).map((field) => field.name);
+    const updateRequired = update.bodySchema!.fields.filter((field) => field.required).map((field) => field.name);
 
     expect(createRequired).toEqual(["identifier", "name"]);
     expect(updateRequired).toEqual(["name"]);
+    expect(create.description).toMatch(/VariableSet resource/i);
+    expect(create.description).toMatch(/Experimental/i);
+    expect(update.description).toMatch(/Experimental/i);
   });
 
   it("normalizes list responses that already wrap items", () => {
@@ -291,6 +296,28 @@ describe("iacm_variable_set contract", () => {
     ]);
     expect(result.page_count).toBe(2);
     expect(result.has_more).toBe(false);
+  });
+
+  it("normalizes bare array and empty list payloads", () => {
+    const extract = getOp("iacm_variable_set", "list").responseExtractor!;
+    expect(extract([{ identifier: "a" }])).toMatchObject({
+      items: [{ identifier: "a" }],
+      page_count: 1,
+      has_more: false,
+    });
+    expect(extract(null)).toMatchObject({ items: [], page_count: 0, has_more: false });
+  });
+
+  it("passes through get/create/update VariableSet payloads", () => {
+    const payload = {
+      identifier: "shared-env",
+      name: "Shared Env",
+      terraform_variables: {},
+      environment_variables: {},
+    };
+    expect(getOp("iacm_variable_set", "create").responseExtractor!(payload)).toEqual(payload);
+    expect(getOp("iacm_variable_set", "update").responseExtractor!(payload)).toEqual(payload);
+    expect(getOp("iacm_variable_set", "get").responseExtractor!(payload)).toEqual(payload);
   });
 });
 
@@ -859,5 +886,47 @@ describe("iacm registry dispatch", () => {
       method: "GET",
       path: "/iacm/api/orgs/default/projects/Testim/variable-set/shared-env",
     });
+  });
+
+  it("rejects variable set create when identifier is missing", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_variable_set", "create", {
+        org_id: "default",
+        project_id: "Testim",
+        body: { name: "Missing Identifier" },
+      }),
+    ).rejects.toThrow("identifier");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects variable set update when name is missing", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_variable_set", "update", {
+        org_id: "default",
+        project_id: "Testim",
+        variable_set_id: "shared-env",
+        body: { description: "no name" },
+      }),
+    ).rejects.toThrow("name");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("requires variable_set_id for get/update path building", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_variable_set", "get", {
+        org_id: "default",
+        project_id: "Testim",
+      }),
+    ).rejects.toThrow("variable_set_id");
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });

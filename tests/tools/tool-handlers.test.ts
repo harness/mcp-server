@@ -974,6 +974,69 @@ describe("iacm_workspace create/update via MCP tools", () => {
   });
 });
 
+describe("iacm_variable_set create/update via MCP tools", () => {
+  const variableSetBody = {
+    identifier: "shared-env",
+    name: "Shared Env",
+    terraform_variables: {},
+    environment_variables: {},
+  };
+
+  it("harness_create returns the VariableSet resource for iacm_variable_set", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const mockRequest = vi.fn().mockResolvedValue(variableSetBody);
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await server.call("harness_create", {
+      resource_type: "iacm_variable_set",
+      org_id: "default",
+      project_id: "test-project",
+      body: variableSetBody,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toEqual(variableSetBody);
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/iacm/api/orgs/default/projects/test-project/variable-set");
+    expect(callArgs.body).toEqual(variableSetBody);
+  });
+
+  it("harness_update maps resource_id to variable_set_id", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const mockRequest = vi.fn().mockResolvedValue({
+      identifier: "shared-env",
+      name: "Shared Env Updated",
+    });
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await server.call("harness_update", {
+      resource_type: "iacm_variable_set",
+      resource_id: "shared-env",
+      org_id: "default",
+      project_id: "test-project",
+      body: { name: "Shared Env Updated" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toEqual({
+      identifier: "shared-env",
+      name: "Shared Env Updated",
+    });
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string };
+    expect(callArgs.method).toBe("PUT");
+    expect(callArgs.path).toBe(
+      "/iacm/api/orgs/default/projects/test-project/variable-set/shared-env",
+    );
+  });
+});
+
 describe("harness_update", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;

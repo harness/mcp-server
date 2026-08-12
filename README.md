@@ -1422,13 +1422,16 @@ Template operations use the Harness Template service paths (`/template/api/templ
 
 ### Infrastructure as Code Management (IaCM)
 
-IaCM resources are default-enabled and mostly project-scoped. Start with `iacm_workspace` to find workspace identifiers, then use that `workspace_id` for workspace resources, costs, and activity diffs. The module registry is account-scoped.
+IaCM resources are default-enabled and mostly project-scoped. Start with `iacm_workspace` to find workspace identifiers, then use that `workspace_id` for workspace resources, costs, and activity diffs. Use `iacm_variable_set` for reusable variable sets at account, org, or project scope. The module registry is account-scoped.
 
-`iacm_workspace` create/update return `{ policy_evaluation }` only — follow up with `harness_get` to fetch the workspace. Writes are `medium_write` and require confirmation (elicitation or `confirm: true`).
+`iacm_workspace` create/update return `{ policy_evaluation }` only — follow up with `harness_get` to fetch the workspace. `iacm_variable_set` create/update return the VariableSet resource itself. Writes are `medium_write` and require confirmation (elicitation or `confirm: true`).
+
+Variable-set RBAC (`iac_variableset_*`) is currently Experimental in Harness — access checks always allow until iac-server activates enforcement. MCP still forwards the caller PAT/SAT unchanged.
 
 | Resource Type                   | List | Get | Create | Update | Delete | Execute Actions |
 | ------------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `iacm_workspace`                | x    | x   | x      | x      |        |                 |
+| `iacm_variable_set`             | x    | x   | x      | x      |        |                 |
 | `iacm_resource`                 | x    |     |        |        |        |                 |
 | `iacm_module`                   | x    | x   |        |        |        |                 |
 | `iacm_workspace_costs`          | x    |     |        |        |        |                 |
@@ -1439,11 +1442,12 @@ Typical workflow:
 1. `harness_list(resource_type="iacm_workspace", org_id="...", project_id="...")` to find the workspace.
 2. `harness_create` / `harness_update` on `iacm_workspace` to create from scratch or a template (`associated_template`), or update an existing workspace — response is `{ policy_evaluation }` only.
 3. `harness_get(resource_type="iacm_workspace", workspace_id="...")` to fetch the created/updated workspace.
-4. `harness_list(resource_type="iacm_resource", org_id="...", project_id="...", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
-5. `harness_list(resource_type="iacm_workspace_costs", org_id="...", project_id="...", workspace_id="...")` to review per-execution cost entries.
-6. `harness_list(resource_type="iacm_activity_resource_change", org_id="...", project_id="...", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
+4. `harness_list` / `harness_create` / `harness_update` on `iacm_variable_set` (optionally with `resource_scope`) for reusable Terraform/env variable sets — response is the VariableSet resource.
+5. `harness_list(resource_type="iacm_resource", org_id="...", project_id="...", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
+6. `harness_list(resource_type="iacm_workspace_costs", org_id="...", project_id="...", workspace_id="...")` to review per-execution cost entries.
+7. `harness_list(resource_type="iacm_activity_resource_change", org_id="...", project_id="...", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
 
-IaCM list responses expose `page_count` as the count for the current page only. When `has_more` is true, keep requesting the next 1-based page and sum page counts if you need a total.
+IaCM list responses expose `page_count` as the count for the current page only (except `iacm_variable_set`, which is not paginated). When `has_more` is true, keep requesting the next 1-based page and sum page counts if you need a total.
 
 ### Internal Developer Portal (IDP)
 
@@ -1841,7 +1845,7 @@ Available toolset names:
 | `knowledge-graph`       | kg_queryable_type_summary, kg_grammar, hql_query                                                                                                                                                                                                                                                |
 | `semantic-layer`        | kg_type, kg_related_type                                                                                                                                                                                                                                                                        |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item, eval_git_registration, online_eval |
-| `iacm`                  | iacm_workspace, iacm_resource, iacm_module, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                                                                 |
+| `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                                              |
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
 
 

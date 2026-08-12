@@ -539,4 +539,65 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       expect(fetchSpy).not.toHaveBeenCalled();
     });
   });
+
+  describe("iacm variable set writes", () => {
+    it("create posts JSON body through pathBuilder and returns the VariableSet", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({
+          identifier: "shared-env",
+          name: "Shared Env",
+          terraform_variables: {},
+          environment_variables: {},
+        }),
+      );
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+      const body = {
+        identifier: "shared-env",
+        name: "Shared Env",
+        terraform_variables: {},
+        environment_variables: {},
+      };
+
+      const result = await registry.dispatch(client, "iacm_variable_set", "create", {
+        org_id: "default",
+        project_id: "test-project",
+        body,
+      });
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      const init = options as RequestInit;
+      expect(urlStr).toContain("/iacm/api/orgs/default/projects/test-project/variable-set");
+      expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+      expect(JSON.parse(init.body as string)).toEqual(body);
+      expect(result).toEqual(body);
+    });
+
+    it("update puts by variable_set_id at org scope", async () => {
+      fetchSpy.mockResolvedValueOnce(
+        mockFetchResponse({ identifier: "shared-env", name: "Shared Env Updated" }),
+      );
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      const result = await registry.dispatch(client, "iacm_variable_set", "update", {
+        resource_scope: "org",
+        org_id: "default",
+        variable_set_id: "shared-env",
+        body: { name: "Shared Env Updated" },
+      });
+
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      expect(urlStr).toContain("/iacm/api/orgs/default/variable-set/shared-env");
+      expect((options as RequestInit).method?.toUpperCase()).toBe("PUT");
+      expect(result).toEqual({ identifier: "shared-env", name: "Shared Env Updated" });
+    });
+  });
 });

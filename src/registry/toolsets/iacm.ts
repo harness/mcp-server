@@ -75,7 +75,8 @@ const variableSetListExtract = (
 };
 
 /**
- * Variable-set get/create/update return the VariableSet resource/save result directly.
+ * Variable-set get/create/update return the VariableSet resource directly
+ * (identifier, name, variables, connectors, …) — not a policy_evaluation envelope.
  */
 const variableSetExtract = (raw: unknown): unknown => raw;
 
@@ -653,6 +654,9 @@ export const iacmToolset: ToolsetDefinition = {
         "Supports account, org, and project scope. " +
         SCOPE_BEHAVIOR_DOC +
         " Use harness_list/harness_get to discover sets, harness_create to create, and harness_update with variable_set_id to update. " +
+        "Create/update return the VariableSet resource (identifier, name, variables, connectors). " +
+        "NOTE: IaCM variable-set RBAC permissions (iac_variableset_*) are currently Experimental in Harness — " +
+        "deny paths are not enforceable until iac-server activates them; MCP still forwards the caller token unchanged. " +
         "See also: iacm_workspace.variable_sets for attaching sets to a workspace.",
       toolset: "iacm",
       scope: "project",
@@ -684,7 +688,7 @@ export const iacmToolset: ToolsetDefinition = {
           responseExtractor: variableSetExtract,
           description:
             "Get a variable set by identifier at the selected account/org/project scope. " +
-            "Pass variable_set_id via params or as resource_id.",
+            "Pass variable_set_id via params or as resource_id. Response is the VariableSet resource.",
         },
         create: {
           method: "POST",
@@ -698,7 +702,8 @@ export const iacmToolset: ToolsetDefinition = {
           description:
             "Create an IaCM variable set. Required body fields: identifier, name. " +
             "Optional: description, environment_variables, terraform_variables, terraform_variable_files, connectors. " +
-            "IaCM enforces permissions and validation.",
+            "Response is the created VariableSet resource. " +
+            "MCP forwards the caller token; variable-set RBAC permissions are Experimental until iac-server enforces them.",
         },
         update: {
           method: "PUT",
@@ -712,7 +717,8 @@ export const iacmToolset: ToolsetDefinition = {
           description:
             "Update an IaCM variable set by identifier (variable_set_id / resource_id). " +
             "Required body field: name. Optional maps/files/connectors replace configured values when provided. " +
-            "IaCM enforces permissions and validation.",
+            "Response is the updated VariableSet resource. " +
+            "MCP forwards the caller token; variable-set RBAC permissions are Experimental until iac-server enforces them.",
         },
       },
     },

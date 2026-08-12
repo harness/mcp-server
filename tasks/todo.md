@@ -14,8 +14,8 @@
 ## IaCM variable set list/get/create/update (this PR)
 - [x] Add `iacm_variable_set` list/get/create/update with multi-scope pathBuilder
 - [x] bodySchema + medium_write policy + skipScopeBodyInjection
-- [ ] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
-- [ ] Note Experimental RBAC: `iac_variableset_*` always permitted until iac-server enforces
+- [x] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
+- [x] Note Experimental RBAC: `iac_variableset_*` always permitted until iac-server enforces
 - [ ] Open PR stacked on merged workspace (#793)
 
 ### Plan
