@@ -1,5 +1,15 @@
 # Harness MCP Server — Task Tracking
 
+## Test coverage automation (2026-08-12)
+- [x] Add CCM budget list/detail extractor regressions and dispatch coverage
+- [x] Extend assertListScopeResolved tests for org scope and scopeOptional
+- [x] Run focused and full test suites
+
+### Review
+- `ccmBudgetListCompactExtract` and `ccmBudgetDetailExtract` from CCM budgets (#790) had no direct tests despite shaping list/variance responses agents rely on.
+- Added extractor unit tests plus registry dispatch coverage for `cost_budget` list and `cost_budget_variance` get.
+- Added org-scope and `scopeOptional` regressions for `assertListScopeResolved` (#768).
+
 ## IaCM workspace create/update (this PR)
 - [x] Add create/update tests and implement `iacm_workspace` writes
 - [x] bodySchema + medium_write policy + project-scope preflight

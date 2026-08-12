@@ -109,4 +109,40 @@ describe("assertListScopeResolved", () => {
       ),
     ).not.toThrow();
   });
+
+  it("throws when org-scoped listing cannot resolve org_id", () => {
+    const orgScoped: ResourceDefinition = {
+      ...projectScoped,
+      resourceType: "org_setting",
+      scope: "org",
+    };
+
+    expect(() =>
+      assertListScopeResolved("org_setting", orgScoped, {}, undefined, undefined),
+    ).toThrow(/requires org scope \(org_id\)/i);
+  });
+
+  it("passes when org-scoped listing resolves org_id from config defaults", () => {
+    const orgScoped: ResourceDefinition = {
+      ...projectScoped,
+      resourceType: "org_setting",
+      scope: "org",
+    };
+
+    expect(() =>
+      assertListScopeResolved("org_setting", orgScoped, {}, "AI_Devops", undefined),
+    ).not.toThrow();
+  });
+
+  it("skips validation when scopeOptional is true", () => {
+    expect(() =>
+      assertListScopeResolved(
+        "gitops_application",
+        { ...projectScoped, resourceType: "gitops_application", scopeOptional: true },
+        {},
+        undefined,
+        undefined,
+      ),
+    ).not.toThrow();
+  });
 });

@@ -2,13 +2,48 @@
  * Unit tests for the CCM cost_budget resource registration and bodyBuilders.
  * Guards the public contract of the budget CRUD + clone + bulk_delete tools.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ccmToolset } from "../../src/registry/toolsets/ccm.js";
-import { ccmBudgetWriteExtract } from "../../src/registry/extractors.js";
+import {
+  ccmBudgetWriteExtract,
+  ccmBudgetListCompactExtract,
+  ccmBudgetDetailExtract,
+} from "../../src/registry/extractors.js";
+import { Registry } from "../../src/registry/index.js";
+import type { Config } from "../../src/config.js";
+import type { HarnessClient } from "../../src/client/harness-client.js";
 
 const budget = ccmToolset.resources.find((r) => r.resourceType === "cost_budget");
 const variance = ccmToolset.resources.find((r) => r.resourceType === "cost_budget_variance");
 const budgetGroup = ccmToolset.resources.find((r) => r.resourceType === "cost_budget_group");
+
+function makeConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    HARNESS_API_KEY: "pat.test",
+    HARNESS_ACCOUNT_ID: "test-account",
+    HARNESS_BASE_URL: "https://app.harness.io",
+    HARNESS_ORG: "default",
+    HARNESS_PROJECT: "test-project",
+    HARNESS_API_TIMEOUT_MS: 30000,
+    HARNESS_MAX_RETRIES: 3,
+    LOG_LEVEL: "info",
+    HARNESS_MAX_BODY_SIZE_MB: 10,
+    HARNESS_RATE_LIMIT_RPS: 10,
+    HARNESS_READ_ONLY: false,
+    HARNESS_SKIP_ELICITATION: false,
+    HARNESS_ALLOW_HTTP: false,
+    HARNESS_FME_BASE_URL: "https://api.split.io",
+    HARNESS_TOOLSETS: "ccm",
+    ...overrides,
+  } as Config;
+}
+
+function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient {
+  return {
+    request: requestFn ?? vi.fn().mockResolvedValue({}),
+    account: "test-account",
+  } as unknown as HarnessClient;
+}
 
 describe("cost_budget resource", () => {
   it("is registered in the ccm toolset", () => {
@@ -83,6 +118,236 @@ describe("cost_budget resource", () => {
     const builder = budget!.executeActions!.bulk_delete.bodyBuilder!;
     expect(builder({ budget_ids: ["a", "b"] })).toEqual({ budgetIds: ["a", "b"] });
     expect(builder({ body: { budgetIds: ["c"] } })).toEqual({ budgetIds: ["c"] });
+  });
+});
+
+describe("ccmBudgetListCompactExtract", () => {
+  it("projects summaries to essential budget health fields and strips noise", () => {
+    const raw = {
+      status: "SUCCESS",
+      data: {
+        summaries: [
+          {
+            uuid: "bud-1",
+            name: "Q1 Prod",
+            perspectiveName: "Production",
+            budgetAmount: 1000,
+            actualCost: 850,
+            forecastCost: 920,
+            alertThresholds: [{ percentage: 80, emailAddresses: ["ops@example.com"] }],
+            budgetMonthlyBreakdown: { budgetBreakdown: "MONTHLY" },
+          },
+        ],
+        totalCount: 12,
+      },
+    };
+
+    const result = ccmBudgetListCompactExtract(raw);
+    expect(result.total).toBe(12);
+    expect(result.items).toEqual([
+      {
+        id: "bud-1",
+        name: "Q1 Prod",
+        perspectiveId: undefined,
+        perspectiveName: "Production",
+        budgetAmount: 1000,
+        actualCost: 850,
+        forecastCost: 920,
+        timeLeft: undefined,
+        timeUnit: undefined,
+        period: undefined,
+        type: undefined,
+        growthRate: undefined,
+        actualCostAlerts: undefined,
+        forecastCostAlerts: undefined,
+        budgetGroup: undefined,
+        folderId: undefined,
+      },
+    ]);
+    expect(result.items[0]).not.toHaveProperty("alertThresholds");
+    expect(result.items[0]).not.toHaveProperty("budgetMonthlyBreakdown");
+  });
+
+  it("falls back to standard paged content when summaries is absent", () => {
+    const raw = {
+      data: {
+        content: [{ id: "legacy-1", name: "Legacy Budget" }],
+        totalElements: 1,
+      },
+    };
+
+    expect(ccmBudgetListCompactExtract(raw)).toEqual({
+      items: [{ id: "legacy-1", name: "Legacy Budget" }],
+      total: 1,
+    });
+  });
+
+  it("is wired into cost_budget list", () => {
+    expect(budget!.operations.list!.responseExtractor).toBe(ccmBudgetListCompactExtract);
+  });
+});
+
+describe("ccmBudgetDetailExtract", () => {
+  it("sorts budgetHistory into ascending costData for variance views", () => {
+    const raw = {
+      data: {
+        uuid: "bud-1",
+        name: "Q1 Prod",
+        period: "MONTHLY",
+        budgetAmount: 1000,
+        actualCost: 850,
+        forecastCost: 920,
+        budgetHistory: {
+          "1704067200000": {
+            time: 1704067200000,
+            endTime: 1706745599999,
+            actualCost: 400,
+            forecastCost: 450,
+            budgeted: 500,
+            budgetVariance: -100,
+            budgetVariancePercentage: -20,
+          },
+          "1701388800000": {
+            time: 1701388800000,
+            endTime: 1704067199999,
+            actualCost: 300,
+            forecastCost: 320,
+            budgeted: 500,
+            budgetVariance: -200,
+            budgetVariancePercentage: -40,
+          },
+        },
+      },
+    };
+
+    expect(ccmBudgetDetailExtract(raw)).toEqual({
+      budgetId: "bud-1",
+      name: "Q1 Prod",
+      period: "MONTHLY",
+      budgetAmount: 1000,
+      forecastCost: 920,
+      actualCost: 850,
+      costData: [
+        {
+          time: 1701388800000,
+          endTime: 1704067199999,
+          actualCost: 300,
+          forecastCost: 320,
+          budgeted: 500,
+          budgetVariance: -200,
+          budgetVariancePercentage: -40,
+        },
+        {
+          time: 1704067200000,
+          endTime: 1706745599999,
+          actualCost: 400,
+          forecastCost: 450,
+          budgeted: 500,
+          budgetVariance: -100,
+          budgetVariancePercentage: -20,
+        },
+      ],
+    });
+  });
+
+  it("reads budgetGroupHistory and budgetGroupAmount for budget groups", () => {
+    const raw = {
+      data: {
+        id: "grp-1",
+        name: "Eng Group",
+        period: "YEARLY",
+        budgetGroupAmount: 5000,
+        budgetGroupHistory: {
+          "1700000000000": {
+            time: 1700000000000,
+            actualCost: 1200,
+            budgeted: 1500,
+          },
+        },
+      },
+    };
+
+    expect(ccmBudgetDetailExtract(raw)).toMatchObject({
+      budgetId: "grp-1",
+      name: "Eng Group",
+      budgetAmount: 5000,
+      costData: [{ time: 1700000000000, actualCost: 1200, budgeted: 1500 }],
+    });
+  });
+
+  it("is wired into cost_budget_variance get", () => {
+    expect(variance!.operations.get!.responseExtractor).toBe(ccmBudgetDetailExtract);
+  });
+});
+
+describe("cost_budget registry dispatch", () => {
+  it("list uses compact extractor output and forwards search_term in the POST body", async () => {
+    const requestSpy = vi.fn().mockResolvedValue({
+      status: "SUCCESS",
+      data: {
+        summaries: [
+          {
+            uuid: "bud-1",
+            name: "Q1 Prod",
+            budgetAmount: 1000,
+            actualCost: 850,
+            alertThresholds: [{ emailAddresses: ["ops@example.com"] }],
+          },
+        ],
+        totalCount: 1,
+      },
+    });
+    const registry = new Registry(makeConfig());
+
+    const result = (await registry.dispatch(makeClient(requestSpy), "cost_budget", "list", {
+      search_term: "Q1",
+      limit: 5,
+      offset: 10,
+    })) as { items: Array<Record<string, unknown>>; total: number };
+
+    expect(requestSpy).toHaveBeenCalledOnce();
+    const call = requestSpy.mock.calls[0]![0] as { method: string; path: string; body: Record<string, unknown> };
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/ccm/api/budgets/v2/list");
+    expect(call.body).toMatchObject({
+      filterType: "CCMBudget",
+      searchKey: "Q1",
+      limit: 5,
+      offset: 10,
+    });
+
+    expect(result.total).toBe(1);
+    expect(result.items[0]).toMatchObject({ id: "bud-1", name: "Q1 Prod", actualCost: 850 });
+    expect(result.items[0]).not.toHaveProperty("alertThresholds");
+  });
+});
+
+describe("cost_budget_variance registry dispatch", () => {
+  it("get projects sorted costData from budgetHistory", async () => {
+    const requestSpy = vi.fn().mockResolvedValue({
+      data: {
+        uuid: "bud-1",
+        name: "Q1 Prod",
+        budgetAmount: 1000,
+        budgetHistory: {
+          "2": { time: 2, actualCost: 200, budgeted: 500 },
+          "1": { time: 1, actualCost: 100, budgeted: 500 },
+        },
+      },
+    });
+    const registry = new Registry(makeConfig());
+
+    const result = (await registry.dispatch(makeClient(requestSpy), "cost_budget_variance", "get", {
+      budget_id: "bud-1",
+    })) as { budgetId: string; costData: Array<{ time: number }> };
+
+    expect(requestSpy).toHaveBeenCalledOnce();
+    const call = requestSpy.mock.calls[0]![0] as { method: string; path: string };
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/ccm/api/budgets/bud-1");
+
+    expect(result.budgetId).toBe("bud-1");
+    expect(result.costData.map((row) => row.time)).toEqual([1, 2]);
   });
 });
 
