@@ -301,7 +301,12 @@ export function applyUrlDefaults(
   ) {
     merged.resource_scope = parsed.resource_scope;
   }
+  // A legacy workspace_id (FME's Split.io identifier) takes precedence over
+  // org/project incidentally present in a UI URL — the two are mutually
+  // exclusive scoping modes for FME resources (see resolveFmeDualMode).
+  const skipOrgProjectFromUrl = args.workspace_id !== undefined && parsed.resource_type?.startsWith("fme_");
   for (const field of MERGEABLE_FIELDS) {
+    if (skipOrgProjectFromUrl && (field === "org_id" || field === "project_id")) continue;
     if ((merged[field] === undefined || merged[field] === "") && parsed[field] !== undefined) {
       merged[field] = parsed[field];
     }

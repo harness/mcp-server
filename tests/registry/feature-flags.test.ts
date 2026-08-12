@@ -196,6 +196,74 @@ describe("FME execute action response projection", () => {
   });
 });
 
+describe("fme_feature_flag dual-mode routing", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("legacy mode: workspace_id routes to Split.io unchanged", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "list", { workspace_id: "ws1" });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1");
+    expect(req.product).toBe("fme");
+    expect(req.params?.orgIdentifier).toBeUndefined();
+  });
+
+  it("new mode: org_id+project_id routes to the Harness-native feature-flags path", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "list", { org_id: "o1", project_id: "p1" });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/internal/api/v4/feature-flags");
+    expect(req.product).toBeUndefined();
+  });
+
+  it("new mode: get routes to the Harness-native path with the flag name in the URL", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/internal/api/v4/feature-flags/my_flag");
+  });
+
+  it("new mode: create throws not-yet-implemented", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_feature_flag", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        traffic_type_id: "tt1",
+        body: { name: "x" },
+      }),
+    ).rejects.toThrow(/not yet implemented/i);
+  });
+
+  it("mixed params throws the shared error", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_feature_flag", "list", { workspace_id: "ws1", org_id: "o1" }),
+    ).rejects.toThrow("fme_feature_flag: pass either workspace_id (deprecated) OR org_id+project_id, not both.");
+  });
+});
+
 describe("fme_identity create", () => {
   let registry: Registry;
 

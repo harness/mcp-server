@@ -1,5 +1,6 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { passthrough, fmeListExtract, fmeGetExtract } from "../extractors.js";
+import { resolveFmeDualMode } from "../scope-utils.js";
 
 const fmeActionExtract = (raw: unknown) => {
   if (raw !== null && typeof raw === "object" && !Array.isArray(raw)) return raw;
@@ -173,7 +174,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       product: "fme",
       deepLinkTemplate: "/ng/account/{accountId}/module/fme/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/targets/{trafficTypeId}/splits/{id}",
       listFilterFields: [
-        { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace)", required: true },
+        { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
         { name: "offset", description: "Pagination offset for FME feature flags", type: "number" },
         { name: "rollout_status_id", description: "Filter by rollout status UUID (use fme_rollout_status to discover valid IDs)", type: "string" },
         { name: "name", description: "Filter flags by name (partial match)", type: "string" },
@@ -182,9 +183,15 @@ export const featureFlagsToolset: ToolsetDefinition = {
       operations: {
         list: {
           method: "GET",
-          path: "/internal/api/v2/splits/ws/{wsId}",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_feature_flag");
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}` };
+            }
+            return { path: "/fme/internal/api/v4/feature-flags", product: "harness" };
+          },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { workspace_id: "wsId" },
           queryParams: {
             offset: "offset",
             size: "limit",
@@ -194,19 +201,35 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: fmeListExtract,
           description:
-            "List feature flags for a workspace with filtering and pagination (offset and size params, max 50).",
+            "List feature flags by workspace_id (legacy, deprecated) or org_id+project_id (Harness-native), with filtering and pagination (offset and size params, max 50).",
         },
         get: {
           method: "GET",
-          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_feature_flag");
+            const flagName = encodeURIComponent(String(input.feature_flag_name ?? ""));
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}` };
+            }
+            return { path: `/fme/internal/api/v4/feature-flags/${flagName}`, product: "harness" };
+          },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           responseExtractor: fmeGetExtract,
-          description: "Get a specific feature flag's metadata without requiring an environment",
+          description: "Get a specific feature flag's metadata without requiring an environment (legacy: workspace_id; Harness-native: org_id+project_id).",
         },
         create: {
           method: "POST",
           path: "/internal/api/v2/splits/ws/{wsId}/trafficTypes/{trafficTypeId}",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_feature_flag");
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_feature_flag.create: Harness-native (org_id/project_id) mode is not yet implemented for this operation — pass workspace_id (deprecated) instead.",
+              );
+            }
+            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/trafficTypes/${encodeURIComponent(String(input.traffic_type_id ?? ""))}` };
+          },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", traffic_type_id: "trafficTypeId" },
           bodyBuilder: (input) => {
@@ -222,15 +245,32 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
         delete: {
           method: "DELETE",
-          path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_feature_flag");
+            const flagName = encodeURIComponent(String(input.feature_flag_name ?? ""));
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}` };
+            }
+            return { path: `/fme/internal/api/v4/feature-flags/${flagName}`, product: "harness" };
+          },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           responseExtractor: passthrough,
-          description: "Delete a feature flag from a workspace",
+          description: "Delete a feature flag from a workspace (legacy) or org_id+project_id-scoped project (Harness-native)",
         },
         update: {
           method: "PATCH",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_feature_flag");
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_feature_flag.update: Harness-native (org_id/project_id) mode is not yet implemented for this operation — pass workspace_id (deprecated) instead.",
+              );
+            }
+            const flagName = encodeURIComponent(String(input.feature_flag_name ?? ""));
+            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}` };
+          },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           bodyBuilder: (input) => {
@@ -264,6 +304,17 @@ export const featureFlagsToolset: ToolsetDefinition = {
         kill: {
           method: "PUT",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}/kill",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_feature_flag");
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_feature_flag.kill: Harness-native (org_id/project_id) mode is not yet implemented for this operation — pass workspace_id (deprecated) instead.",
+              );
+            }
+            const flagName = encodeURIComponent(String(input.feature_flag_name ?? ""));
+            const environmentId = encodeURIComponent(String(input.environment_id ?? ""));
+            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}/kill` };
+          },
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: {
             workspace_id: "wsId",
@@ -281,6 +332,17 @@ export const featureFlagsToolset: ToolsetDefinition = {
         restore: {
           method: "PUT",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}/restore",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_feature_flag");
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_feature_flag.restore: Harness-native (org_id/project_id) mode is not yet implemented for this operation — pass workspace_id (deprecated) instead.",
+              );
+            }
+            const flagName = encodeURIComponent(String(input.feature_flag_name ?? ""));
+            const environmentId = encodeURIComponent(String(input.environment_id ?? ""));
+            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}/restore` };
+          },
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: {
             workspace_id: "wsId",
@@ -298,6 +360,16 @@ export const featureFlagsToolset: ToolsetDefinition = {
         archive: {
           method: "POST",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/archive",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_feature_flag");
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_feature_flag.archive: Harness-native (org_id/project_id) mode is not yet implemented for this operation — pass workspace_id (deprecated) instead.",
+              );
+            }
+            const flagName = encodeURIComponent(String(input.feature_flag_name ?? ""));
+            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/archive` };
+          },
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           bodyBuilder: () => ({}),
@@ -311,6 +383,16 @@ export const featureFlagsToolset: ToolsetDefinition = {
         unarchive: {
           method: "POST",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/unarchive",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_feature_flag");
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_feature_flag.unarchive: Harness-native (org_id/project_id) mode is not yet implemented for this operation — pass workspace_id (deprecated) instead.",
+              );
+            }
+            const flagName = encodeURIComponent(String(input.feature_flag_name ?? ""));
+            return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/unarchive` };
+          },
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           bodyBuilder: () => ({}),
