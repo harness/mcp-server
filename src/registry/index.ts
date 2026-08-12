@@ -610,6 +610,8 @@ export class Registry {
     const explicitScopeValues = requestedScope ? getExplicitScopeValues(requestedScope, input, this.config) : undefined;
     const pathDefaultScope = requestedScope ?? def.scope;
 
+    const resolvedRoute = spec.routeResolver ? spec.routeResolver(input, resolvedConfig) : undefined;
+
     // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
     if (spec.preflight) {
       await spec.preflight({ client, input, registry: this, signal });
@@ -625,7 +627,9 @@ export class Registry {
 
     // Build path with substitutions (or pathBuilder when present)
     let path: string;
-    if (spec.pathBuilder) {
+    if (resolvedRoute) {
+      path = resolvedRoute.path;
+    } else if (spec.pathBuilder) {
       path = spec.pathBuilder(input, resolvedConfig);
     } else {
       path = spec.path;
@@ -805,7 +809,7 @@ export class Registry {
     }
 
     // Make request — resolve base URL and auth from product backend
-    const product = def.product ?? "harness";
+    const product = resolvedRoute?.product ?? def.product ?? "harness";
     const baseUrl = resolveProductBaseUrl(this.config, product);
     const productHeaders: Record<string, string> = { ...spec.headers };
 
@@ -820,7 +824,7 @@ export class Registry {
       ...(product !== "harness" ? { product } : {}),
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
-      ...(!spec.pathBuilder ? { tracing: { route: spec.path } } : {}),
+      ...(!spec.pathBuilder && !resolvedRoute ? { tracing: { route: spec.path } } : {}),
       signal,
     };
 

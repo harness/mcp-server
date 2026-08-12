@@ -243,6 +243,17 @@ export interface InputExpansionRule {
 export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_ORG?: string; HARNESS_PROJECT?: string };
 
 /**
+ * Output of `EndpointSpec.routeResolver`: fully-resolved path for a specific call,
+ * plus optional product override. When `product` is omitted, the resource-level
+ * `def.product` applies. Enables dual-mode routing (e.g. FME legacy Split.io
+ * vs. Harness-native based on caller-supplied params).
+ */
+export interface ResolvedRoute {
+  path: string;
+  product?: ProductName;
+}
+
+/**
  * Specifies how a single CRUD operation maps to the Harness API.
  */
 export interface EndpointSpec {
@@ -253,6 +264,15 @@ export interface EndpointSpec {
   path: string;
   /** Optional dynamic path builder. When set, used instead of path + pathParams for account-scoped or multi-endpoint resources. */
   pathBuilder?: (input: Record<string, unknown>, config: PathBuilderConfig) => string;
+  /**
+   * Optional per-call route resolver. When set, its output supersedes BOTH
+   * `path`/`pathParams`/`pathBuilder` on this endpoint AND the resource-level
+   * `product` on the call. Use when a single resourceType has multiple route paths
+   * AND different backend products depending on caller-supplied params
+   * (e.g. FME dual-mode: legacy Split.io vs. Harness-native). Purely additive;
+   * resources that don't set it are completely unaffected.
+   */
+  routeResolver?: (input: Record<string, unknown>, config: PathBuilderConfig) => ResolvedRoute;
   /** Maps tool input field names to path param placeholders */
   pathParams?: Record<string, string>;
   /** Maps tool input field names to query param names */
