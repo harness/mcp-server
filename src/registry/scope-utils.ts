@@ -42,3 +42,43 @@ export function templateV1BasePathFromScope(
   }
   return "/v1/templates";
 }
+
+export type FmeDualModeResult =
+  | { mode: "legacy"; workspaceId: string }
+  | { mode: "harness_native"; orgId: string; projectId: string };
+
+/**
+ * Detects whether FME call uses deprecated `workspace_id` contract or
+ * new Harness-native `org_id`+`project_id` contract. Shared by every
+ * `fme_*` resource's `routeResolver` in `feature-flags.ts`.
+ */
+export function resolveFmeDualMode(input: Record<string, unknown>, resourceType: string): FmeDualModeResult {
+  const workspaceId = input.workspace_id as string | undefined;
+  const orgId = input.org_id as string | undefined;
+  const projectId = input.project_id as string | undefined;
+
+  // Check for mixing deprecated and new approaches
+  if (workspaceId && (orgId || projectId)) {
+    throw new Error(
+      `${resourceType}: pass either workspace_id (deprecated) OR org_id+project_id, not both.`,
+    );
+  }
+
+  // Handle legacy workspace_id mode
+  if (workspaceId) {
+    console.error(
+      "[DEPRECATION] workspace_id-based FME resources are deprecated. Please migrate to org_id+project_id.",
+    );
+    return { mode: "legacy", workspaceId };
+  }
+
+  // Handle Harness-native mode
+  if (orgId && projectId) {
+    return { mode: "harness_native", orgId, projectId };
+  }
+
+  // If neither mode is satisfied, throw
+  throw new Error(
+    `${resourceType}: org_id and project_id are required (account is taken from config), or pass deprecated workspace_id instead.`,
+  );
+}
