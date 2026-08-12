@@ -30,6 +30,25 @@ const securityIssueListExtract = (raw: unknown): unknown => {
  */
 const STO_SCOPE = { account: "accountId", org: "orgId", project: "projectId" } as const;
 
+/**
+ * Normalize RemAgentScopeFilters list fields to string[].
+ * sto-core goa decodes ArrayOf(String) via repeated query params
+ * (`issueTypes=SAST&issueTypes=SECRET`), matching rem-agent's `list(...)` clients.
+ * Registry queryParams already forwards arrays as string[]; comma-joined strings
+ * would arrive as one enum value and fail goa validation.
+ * Accepts array or comma-separated string; returns undefined when empty/unset.
+ */
+function normalizeRemAgentEnumList(raw: unknown): string[] | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const parts = Array.isArray(raw)
+    ? raw.map((v) => String(v))
+    : String(raw).split(",");
+  const normalized = parts
+    .map((t) => t.trim().toUpperCase())
+    .filter((t) => t.length > 0);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 export const stoToolset: ToolsetDefinition = {
   name: "sto",
   displayName: "Security Testing Orchestration",
@@ -827,16 +846,16 @@ export const stoToolset: ToolsetDefinition = {
         {
           name: "issue_types",
           description:
-            "Comma-separated issue types to scope (sto-core issueTypes). Filters i.type. "
+            "Issue types to scope (sto-core issueTypes). Array or comma-separated string. Filters i.type. "
             + "v1: SAST,SECRET. Empty/omit — sto-core defaults to SAST+SECRET.",
           enum: ["SAST", "SECRET"],
         },
         {
           name: "only_true_positive_issue_types",
           description:
-            "Comma-separated issue types that must have a TRUE_POSITIVE triage verdict to stay in scope "
-            + "(sto-core onlyTruePositiveIssueTypes). Other scoped types are not TP-filtered. "
-            + "Empty/omit → no TP filter.",
+            "Issue types that must have a TRUE_POSITIVE triage verdict to stay in scope "
+            + "(sto-core onlyTruePositiveIssueTypes). Array or comma-separated string. "
+            + "Other scoped types are not TP-filtered. Empty/omit → no TP filter.",
           enum: ["SAST", "SECRET"],
         },
         {
@@ -854,13 +873,15 @@ export const stoToolset: ToolsetDefinition = {
         {
           name: "severity_codes",
           description:
-            "Comma-separated severities (sto-core severityCodes). Empty means all. CRITICAL, HIGH, MEDIUM, LOW, INFO.",
+            "Severities (sto-core severityCodes). Array or comma-separated string. Empty means all. "
+            + "CRITICAL, HIGH, MEDIUM, LOW, INFO.",
           enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
         },
         {
           name: "exclude_repo_patterns",
           description:
-            "Comma-separated glob patterns matching target.name on repository targets (sto-core excludeRepoPatterns).",
+            "Glob patterns matching target.name on repository targets (sto-core excludeRepoPatterns). "
+            + "Array or comma-separated string.",
         },
       ],
       operations: {
@@ -900,31 +921,20 @@ export const stoToolset: ToolsetDefinition = {
             input.validation_execution_id = validationExecutionId;
             delete input.execution_id;
 
-            // Normalize comma-separated RemAgentScopeFilters enum arrays.
+            // RemAgentScopeFilters ArrayOf(String) → keep as string[] so registry
+            // emits repeated query params (goa + rem-agent wire shape).
             // Omit when unset — sto-core owns defaults (issueTypes → SAST+SECRET;
             // excludeUnreachable → false; limit → 1000).
-            for (const key of ["issue_types", "only_true_positive_issue_types"] as const) {
-              if (typeof input[key] !== "string" || input[key].length === 0) {
+            for (const key of [
+              "issue_types",
+              "only_true_positive_issue_types",
+              "severity_codes",
+            ] as const) {
+              const normalized = normalizeRemAgentEnumList(input[key]);
+              if (normalized === undefined) {
                 delete input[key];
               } else {
-                input[key] = String(input[key])
-                  .split(",")
-                  .map((t: string) => t.trim().toUpperCase())
-                  .filter(Boolean)
-                  .join(",");
-                if (!input[key]) {
-                  delete input[key];
-                }
-              }
-            }
-            if (typeof input.severity_codes === "string" && input.severity_codes.length > 0) {
-              input.severity_codes = String(input.severity_codes)
-                .split(",")
-                .map((t: string) => t.trim().toUpperCase())
-                .filter(Boolean)
-                .join(",");
-              if (!input.severity_codes) {
-                delete input.severity_codes;
+                input[key] = normalized;
               }
             }
           },
