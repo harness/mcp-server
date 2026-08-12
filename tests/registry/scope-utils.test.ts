@@ -76,17 +76,17 @@ describe("resolveFmeDualMode", () => {
   });
 
   it("returns legacy mode and logs deprecation warning when workspace_id passed", () => {
-    const spy = vi.spyOn(console, "error");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const result = resolveFmeDualMode({ workspace_id: "ws1" }, "fme_feature_flag");
     expect(result).toEqual({ mode: "legacy", workspaceId: "ws1" });
     expect(spy).toHaveBeenCalledWith(
-      "[DEPRECATION] workspace_id-based FME resources are deprecated. Please migrate to org_id+project_id.",
+      "[DEPRECATION] fme_feature_flag: workspace_id-based FME calls are deprecated — pass org_id+project_id instead.",
     );
     spy.mockRestore();
   });
 
   it("returns harness_native mode when org_id and project_id passed without workspace_id", () => {
-    const spy = vi.spyOn(console, "error");
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const result = resolveFmeDualMode({ org_id: "o1", project_id: "p1" }, "fme_feature_flag");
     expect(result).toEqual({ mode: "harness_native", orgId: "o1", projectId: "p1" });
     expect(spy).not.toHaveBeenCalled();
@@ -95,19 +95,19 @@ describe("resolveFmeDualMode", () => {
 
   it("throws when only project_id is passed", () => {
     expect(() => resolveFmeDualMode({ project_id: "p1" }, "fme_feature_flag")).toThrow(
-      "fme_feature_flag: org_id and project_id are required (account is taken from config), or pass deprecated workspace_id instead.",
+      "fme_feature_flag: org_id and project_id are required (account is taken from config), or pass the deprecated workspace_id instead.",
     );
   });
 
   it("throws when only org_id is passed", () => {
     expect(() => resolveFmeDualMode({ org_id: "o1" }, "fme_feature_flag")).toThrow(
-      "fme_feature_flag: org_id and project_id are required (account is taken from config), or pass deprecated workspace_id instead.",
+      "fme_feature_flag: org_id and project_id are required (account is taken from config), or pass the deprecated workspace_id instead.",
     );
   });
 
   it("throws when neither workspace_id nor org_id/project_id are passed", () => {
     expect(() => resolveFmeDualMode({}, "fme_feature_flag")).toThrow(
-      "fme_feature_flag: org_id and project_id are required (account is taken from config), or pass deprecated workspace_id instead.",
+      "fme_feature_flag: org_id and project_id are required (account is taken from config), or pass the deprecated workspace_id instead.",
     );
   });
 });

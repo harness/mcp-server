@@ -67,7 +67,7 @@ export function resolveFmeDualMode(input: Record<string, unknown>, resourceType:
   // Handle legacy workspace_id mode
   if (workspaceId) {
     console.error(
-      "[DEPRECATION] workspace_id-based FME resources are deprecated. Please migrate to org_id+project_id.",
+      `[DEPRECATION] ${resourceType}: workspace_id-based FME calls are deprecated — pass org_id+project_id instead.`,
     );
     return { mode: "legacy", workspaceId };
   }
@@ -79,6 +79,6 @@ export function resolveFmeDualMode(input: Record<string, unknown>, resourceType:
 
   // If neither mode is satisfied, throw
   throw new Error(
-    `${resourceType}: org_id and project_id are required (account is taken from config), or pass deprecated workspace_id instead.`,
+    `${resourceType}: org_id and project_id are required (account is taken from config), or pass the deprecated workspace_id instead.`,
   );
 }
