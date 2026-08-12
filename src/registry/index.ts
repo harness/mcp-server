@@ -676,10 +676,13 @@ export class Registry {
       }
     } else if (def.scopeOptional) {
       // Dynamic scoping: only inject when caller explicitly provides them.
-      if (input.org_id) {
+      // A legacy workspace_id (FME's Split.io identifier) takes precedence over
+      // any org/project incidentally picked up from a UI URL — these are two
+      // mutually exclusive scoping modes for FME resources.
+      if (input.org_id && !input.workspace_id) {
         params[orgParam] = input.org_id as string;
       }
-      if (input.project_id) {
+      if (input.project_id && !input.workspace_id) {
         params[projectParam] = input.project_id as string;
       }
     } else {

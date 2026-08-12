@@ -118,6 +118,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       description: "Feature Management workspace. Supports list with pagination (offset/size, default 20, max 1000).",
       toolset: "feature-flags",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["workspace_id"],
       product: "fme",
       listFilterFields: [
@@ -143,9 +144,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
       description: "Feature Management environment. Supports list. Requires a workspace_id.",
       toolset: "feature-flags",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["workspace_id", "environment_id"],
       product: "fme",
-      baseUrlOverride: "fme",
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace)", required: true },
       ],
@@ -167,6 +168,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Feature flag via the Split.io API. List flags by workspace with filtering (name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50). Supports create (requires traffic_type_id), get, delete, update, and kill/restore/archive/unarchive execute actions.",
       toolset: "feature-flags",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["workspace_id", "feature_flag_name"],
       product: "fme",
       deepLinkTemplate: "/ng/account/{accountId}/module/fme/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/targets/{trafficTypeId}/splits/{id}",
@@ -328,6 +330,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation. Supports create, get, and update. Create requires treatments, defaultTreatment, and defaultRule.",
       toolset: "feature-flags",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["workspace_id", "environment_id", "feature_flag_name"],
       product: "fme",
       operations: {
@@ -380,6 +383,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Rollout status definitions for a workspace (e.g. Killed, Permanent, Ramping). Use to discover valid rollout_status_id UUIDs for filtering fme_feature_flag lists. Note: this endpoint may not be available on all account types — rollout status IDs are also returned inline with fme_feature_flag list results.",
       toolset: "feature-flags",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["workspace_id"],
       product: "fme",
       listFilterFields: [
@@ -404,6 +408,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Rule-based segment in a workspace. Supports list, get, create (requires traffic_type_id), and delete. Create requires traffic_type_id passed via params.",
       toolset: "feature-flags",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["workspace_id", "segment_name"],
       product: "fme",
       listFilterFields: [
@@ -459,6 +464,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Environment-specific definition of a rule-based segment, including targeting rules, exclusions, and matchers. Supports list (by environment), update, and enable/disable/change_request execute actions.",
       toolset: "feature-flags",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["workspace_id", "environment_id", "segment_name"],
       product: "fme",
       listFilterFields: [
@@ -534,6 +540,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Traffic type in a workspace (e.g. 'user', 'account'). List traffic types to discover traffic_type_id values needed for identity queries and flag/segment creation.",
       toolset: "feature-flags",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["workspace_id"],
       product: "fme",
       listFilterFields: [
@@ -558,6 +565,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Identity (target) in an environment. Create or update identities to manage display name aliases and custom attributes. Requires traffic_type_id and environment_id. Note: the Split Admin API does not support listing or getting individual identities — use create (batch upsert) and update (PATCH single key).",
       toolset: "feature-flags",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["traffic_type_id", "environment_id", "key"],
       product: "fme",
       operations: {
@@ -607,6 +615,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Standard (static list) segment in a workspace. List all segments to see names, descriptions, and member counts. For member management, use fme_segment_keys.",
       toolset: "feature-flags",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["workspace_id", "segment_name"],
       product: "fme",
       listFilterFields: [
@@ -638,6 +647,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Membership keys (members) of a standard segment. List keys with pagination, or update to add members. Removal is not supported by this endpoint. Limit: 10,000 keys per request, 100,000 per segment total.",
       toolset: "feature-flags",
       scope: "account",
+      scopeOptional: true,
       identifierFields: ["environment_id", "segment_name"],
       product: "fme",
       listFilterFields: [

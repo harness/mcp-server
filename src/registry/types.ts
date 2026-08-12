@@ -448,7 +448,11 @@ export interface ResourceDefinition {
   executeActions?: Record<string, EndpointSpec & { actionDescription: string }>;
   /**
    * Product backend for this resource. Defaults to "harness" (uses HARNESS_BASE_URL).
-   * Set to "fme" to use the Split.io API at https://api.split.io.
+   * @deprecated The "fme" value (Split.io API at https://api.split.io) is legacy-only,
+   * used solely by FME resources' deprecated workspace_id-mode calls (see
+   * `routeResolver` on `EndpointSpec` and `resolveFmeDualMode` in scope-utils.ts).
+   * New code should not introduce new "fme"-product resources — FME itself is
+   * migrating to plain Harness-native ("harness") routing per-call.
    */
   product?: ProductName;
   baseUrlOverride?: "fme";
