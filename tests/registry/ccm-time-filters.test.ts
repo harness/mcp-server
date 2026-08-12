@@ -272,3 +272,103 @@ describe("CCM custom time window — start_time/end_time override across perspec
     expect(before).toBe(Date.UTC(2026, 3, 30, 23, 59, 59, 999));
   });
 });
+
+describe("CCM group_by mapping — GenAI (identifier 'AI') and label fallback", () => {
+  let registry: Registry;
+  let mockRequest: ReturnType<typeof vi.fn>;
+  let client: HarnessClient;
+
+  const BREAKDOWN_RESPONSE = { data: { perspectiveGrid: { data: [] }, perspectiveTotalCount: 0 } };
+  const TIMESERIES_RESPONSE = { data: { perspectiveTimeSeriesStats: { stats: [] } } };
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+    mockRequest = vi.fn().mockResolvedValue(BREAKDOWN_RESPONSE);
+    client = makeClient(mockRequest);
+  });
+
+  /** Pull the single entityGroupBy field object out of a cost_breakdown request. */
+  async function breakdownEntityGroupBy(groupBy: string): Promise<Record<string, string>> {
+    mockRequest.mockResolvedValue(BREAKDOWN_RESPONSE);
+    await registry.dispatch(client, "cost_breakdown", "list", {
+      perspective_id: "test-perspective",
+      time_filter: "LAST_30_DAYS",
+      group_by: groupBy,
+    });
+    const call = mockRequest.mock.calls[0][0] as Record<string, unknown>;
+    const body = call.body as { variables: { groupBy: Array<{ entityGroupBy: Record<string, string> }> } };
+    return body.variables.groupBy[0].entityGroupBy;
+  }
+
+  /**
+   * cost_timeseries groupBy is [timeTruncGroupBy, entityGroupBy[0]] — assert the
+   * entity half of that chart-path shape so GenAI → AI can't regress independently
+   * of the breakdown path.
+   */
+  async function timeseriesGroupBy(
+    groupBy: string,
+  ): Promise<{
+    timeTrunc: { resolution: string };
+    entity: Record<string, string>;
+  }> {
+    mockRequest.mockResolvedValue(TIMESERIES_RESPONSE);
+    await registry.dispatch(client, "cost_timeseries", "list", {
+      perspective_id: "test-perspective",
+      time_filter: "LAST_30_DAYS",
+      time_resolution: "DAY",
+      group_by: groupBy,
+    });
+    const call = mockRequest.mock.calls[0][0] as Record<string, unknown>;
+    const body = call.body as {
+      variables: {
+        groupBy: Array<
+          | { timeTruncGroupBy: { resolution: string } }
+          | { entityGroupBy: Record<string, string> }
+        >;
+      };
+    };
+    expect(body.variables.groupBy).toHaveLength(2);
+    const [first, second] = body.variables.groupBy;
+    expect(first).toHaveProperty("timeTruncGroupBy");
+    expect(second).toHaveProperty("entityGroupBy");
+    return {
+      timeTrunc: (first as { timeTruncGroupBy: { resolution: string } }).timeTruncGroupBy,
+      entity: (second as { entityGroupBy: Record<string, string> }).entityGroupBy,
+    };
+  }
+
+  // Each genAI fieldId must resolve to identifier "AI" with the CCM UI fieldName —
+  // NOT the LABEL_V2 fallback that caused the "No <field>" single-bucket bug.
+  const GENAI_CASES: Array<[string, string]> = [
+    ["genAIModel", "Model"],
+    ["genAIProvider", "Provider"],
+    ["genAIUsageType", "Token Type"],
+    ["genAIPrincipal", "Principal"],
+    ["genAIPrincipalId", "Principal Id"],
+    ["genAISubAccountId", "Sub Account ID"],
+    ["genAISubProvider", "Sub Provider"],
+  ];
+
+  for (const [fieldId, fieldName] of GENAI_CASES) {
+    it(`cost_breakdown: ${fieldId} → entityGroupBy identifier 'AI' (fieldName '${fieldName}')`, async () => {
+      const gb = await breakdownEntityGroupBy(fieldId);
+      expect(gb).toEqual({ fieldId, fieldName, identifier: "AI", identifierName: "AI" });
+    });
+
+    it(`cost_timeseries: ${fieldId} → [timeTrunc, entityGroupBy] with identifier 'AI'`, async () => {
+      const { timeTrunc, entity } = await timeseriesGroupBy(fieldId);
+      expect(timeTrunc).toEqual({ resolution: "DAY" });
+      expect(entity).toEqual({ fieldId, fieldName, identifier: "AI", identifierName: "AI" });
+    });
+  }
+
+  it("unknown field still falls through to the LABEL_V2 label-key mapping", async () => {
+    const gb = await breakdownEntityGroupBy("team");
+    expect(gb).toEqual({
+      fieldId: "labels.value",
+      fieldName: "team",
+      identifier: "LABEL_V2",
+      identifierName: "Label V2",
+    });
+  });
+});

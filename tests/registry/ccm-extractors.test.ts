@@ -11,6 +11,29 @@ import {
   ccmRecommendationsExtract,
   countExtract,
 } from "../../src/registry/extractors.js";
+import { Registry } from "../../src/registry/index.js";
+import { compactItems } from "../../src/utils/compact.js";
+import type { Config } from "../../src/config.js";
+
+function makeCcmConfig(): Config {
+  return {
+    HARNESS_API_KEY: "pat.test",
+    HARNESS_ACCOUNT_ID: "test-account",
+    HARNESS_BASE_URL: "https://app.harness.io",
+    HARNESS_ORG: "default",
+    HARNESS_PROJECT: "test-project",
+    HARNESS_API_TIMEOUT_MS: 30000,
+    HARNESS_MAX_RETRIES: 3,
+    HARNESS_MAX_BODY_SIZE_MB: 10,
+    HARNESS_RATE_LIMIT_RPS: 10,
+    HARNESS_READ_ONLY: false,
+    HARNESS_SKIP_ELICITATION: false,
+    HARNESS_ALLOW_HTTP: false,
+    HARNESS_FME_BASE_URL: "https://api.split.io",
+    LOG_LEVEL: "info",
+    HARNESS_TOOLSETS: "ccm",
+  } as Config;
+}
 
 describe("countExtract", () => {
   it("extracts numeric data from NG envelope", () => {
@@ -121,5 +144,48 @@ describe("ccmRecommendationsExtract", () => {
 
   it("returns empty items and undefined stats when data is missing", () => {
     expect(ccmRecommendationsExtract({})).toEqual({ items: [], stats: undefined });
+  });
+});
+
+describe("cost_timeseries compactItem", () => {
+  // A perspectiveTimeSeriesStats data point: { time, values: [{ key: {id,name,type}, value }] }.
+  // None of these keys match the generic compaction whitelist, so without a
+  // resource-specific compactItem each stat is stripped to `{}` (regression:
+  // the AI cost chart returned [{},{},...]).
+  const stat = {
+    time: 1783468800000,
+    values: [
+      { key: { id: "ANTHROPIC", name: "Anthropic", type: "", __typename: "Ref" }, value: 696.18, __typename: "DataPoint" },
+    ],
+    __typename: "TimeSeriesDataPoints",
+  };
+
+  it("cost_timeseries resource exposes a compactItem function", () => {
+    const registry = new Registry(makeCcmConfig());
+    const resource = registry.getResource("cost_timeseries");
+    expect(typeof resource.compactItem).toBe("function");
+  });
+
+  it("preserves time and values (with slimmed keys) instead of stripping to {}", () => {
+    const registry = new Registry(makeCcmConfig());
+    const compactFn = registry.getResource("cost_timeseries").compactItem;
+    const [compacted] = compactItems([stat], compactFn) as Record<string, unknown>[];
+    expect(compacted).toEqual({
+      time: 1783468800000,
+      values: [{ key: { id: "ANTHROPIC", name: "Anthropic", type: "" }, value: 696.18 }],
+    });
+  });
+
+  it("would be stripped to {} without the compactItem (documents why it's needed)", () => {
+    const [stripped] = compactItems([stat]) as Record<string, unknown>[];
+    expect(stripped).toEqual({});
+  });
+
+  it("tolerates malformed stats without throwing", () => {
+    const registry = new Registry(makeCcmConfig());
+    const compactFn = registry.getResource("cost_timeseries").compactItem!;
+    expect(compactFn({})).toEqual({});
+    expect(compactFn({ time: 1, values: "not-an-array" })).toEqual({ time: 1 });
+    expect(compactFn({ values: [null, 42, { value: 5 }] })).toEqual({ values: [null, 42, { value: 5 }] });
   });
 });

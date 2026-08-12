@@ -151,12 +151,6 @@ const VALID_TIME_FILTERS = [
   "LAST_6_MONTHS", "LAST_12_MONTHS",
 ] as const;
 
-const VALID_GROUP_BY_FIELDS = [
-  "region", "awsUsageaccountid", "awsServicecode", "awsBillingEntity",
-  "awsInstancetype", "awsLineItemType", "awspayeraccountid", "awsUsageType",
-  "cloudProvider", "none", "product",
-] as const;
-
 const OUTPUT_FIELDS: Record<string, Record<string, string>> = {
   region:              { fieldId: "region",              fieldName: "Region",         identifier: "COMMON", identifierName: "Common" },
   awsUsageaccountid:   { fieldId: "awsUsageaccountid",   fieldName: "Account",        identifier: "AWS",    identifierName: "AWS" },
@@ -169,7 +163,23 @@ const OUTPUT_FIELDS: Record<string, Record<string, string>> = {
   cloudProvider:       { fieldId: "cloudProvider",        fieldName: "Cloud Provider", identifier: "COMMON", identifierName: "Common" },
   none:                { fieldId: "none",                 fieldName: "None",           identifier: "COMMON", identifierName: "Common" },
   product:             { fieldId: "product",              fieldName: "Product",        identifier: "COMMON", identifierName: "Common" },
+  // GenAI / AI dimensions — identifier "AI". fieldName values match the CCM
+  // perspective UI (Model, Provider, Token Type, Principal, …). Without these
+  // entries buildGroupBy() falls through to LABEL_V2 and returns a single
+  // "No <field>" bucket, since the raw string isn't a real label key.
+  // Drill-down dimensions for the DEFAULT "GenAI" perspective (providers:
+  // Anthropic, Cursor, Devin, OpenAI).
+  genAIModel:          { fieldId: "genAIModel",          fieldName: "Model",          identifier: "AI",     identifierName: "AI" },
+  genAIProvider:       { fieldId: "genAIProvider",       fieldName: "Provider",       identifier: "AI",     identifierName: "AI" },
+  genAIUsageType:      { fieldId: "genAIUsageType",      fieldName: "Token Type",     identifier: "AI",     identifierName: "AI" },
+  genAIPrincipal:      { fieldId: "genAIPrincipal",      fieldName: "Principal",      identifier: "AI",     identifierName: "AI" },
+  genAIPrincipalId:    { fieldId: "genAIPrincipalId",    fieldName: "Principal Id",   identifier: "AI",     identifierName: "AI" },
+  genAISubAccountId:   { fieldId: "genAISubAccountId",   fieldName: "Sub Account ID", identifier: "AI",     identifierName: "AI" },
+  genAISubProvider:    { fieldId: "genAISubProvider",    fieldName: "Sub Provider",   identifier: "AI",     identifierName: "AI" },
 };
+
+/** Public predefined group_by list — derived from OUTPUT_FIELDS so descriptions can't drift from wire mappings. */
+const VALID_GROUP_BY_FIELDS = Object.keys(OUTPUT_FIELDS);
 
 /**
  * Build the startTime AFTER/BEFORE timeFilter pair from an explicit epoch-ms
@@ -342,6 +352,37 @@ function buildPreferences(): Record<string, unknown> {
     azureViewPreferences: null,
     showAnomalies: false,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Compact a perspectiveTimeSeriesStats data point. Each stat is
+// { time, values: [{ key: { id, name, type }, value }] }. None of these
+// fields match the generic compaction whitelist, so without a resource-specific
+// compactItem the whole stat is stripped to `{}` (see harness-list compact pass).
+// Keep `time` and a slimmed `values` array; drop __typename noise.
+// ---------------------------------------------------------------------------
+
+function compactTimeseriesStat(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  if (typeof item.time === "number") slim.time = item.time;
+  if (Array.isArray(item.values)) {
+    slim.values = item.values.map((entry) => {
+      if (entry === null || typeof entry !== "object" || Array.isArray(entry)) return entry;
+      const e = entry as Record<string, unknown>;
+      const out: Record<string, unknown> = {};
+      if (e.key !== null && typeof e.key === "object" && !Array.isArray(e.key)) {
+        const k = e.key as Record<string, unknown>;
+        const keyOut: Record<string, unknown> = {};
+        if (k.id !== undefined) keyOut.id = k.id;
+        if (k.name !== undefined) keyOut.name = k.name;
+        if (k.type !== undefined) keyOut.type = k.type;
+        out.key = keyOut;
+      }
+      if (e.value !== undefined) out.value = e.value;
+      return out;
+    });
+  }
+  return slim;
 }
 
 // ---------------------------------------------------------------------------
@@ -885,6 +926,7 @@ Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, 
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
+      compactItem: compactTimeseriesStat,
       listFilterFields: [
         { name: "group_by", description: "Group results by field. Use predefined fields (region, product, etc.) OR any label key name (env, team, app, etc.)" },
         { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
