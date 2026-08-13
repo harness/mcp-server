@@ -261,6 +261,51 @@ describe("fme_feature_flag dual-mode routing", () => {
       registry.dispatch(client, "fme_feature_flag", "list", { workspace_id: "ws1", org_id: "o1" }),
     ).rejects.toThrow("fme_feature_flag: pass either workspace_id (deprecated) OR org_id+project_id, not both.");
   });
+
+  it("legacy mode: delete routes to Split.io unchanged", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "delete", {
+      workspace_id: "ws1",
+      feature_flag_name: "my_flag",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("DELETE");
+    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag");
+    expect(req.product).toBe("fme");
+  });
+
+  it("new mode: delete routes to the Harness-native path with the flag name in the URL", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("DELETE");
+    expect(req.path).toBe("/fme/internal/api/v4/feature-flags/my_flag");
+    expect(req.product).toBeUndefined();
+  });
+
+  it("legacy mode: logs deprecation exactly once per call", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "list", { workspace_id: "ws1" });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(
+      "[DEPRECATION] fme_feature_flag: workspace_id-based FME calls are deprecated — pass org_id+project_id instead.",
+    );
+    spy.mockRestore();
+  });
 });
 
 describe("fme_identity create", () => {

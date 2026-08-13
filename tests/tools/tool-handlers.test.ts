@@ -172,6 +172,27 @@ describe("harness_list", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
+  it("does not merge URL org/project when workspace_id is passed via filters for FME list", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    mockRequest = vi.fn().mockResolvedValue({ objects: [], totalCount: 0, offset: 0, limit: 20 });
+    client = makeClient(mockRequest);
+    const fmeServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(fmeServer, registry, client);
+
+    const result = await fmeServer.call("harness_list", {
+      resource_type: "fme_feature_flag",
+      url: "https://app.harness.io/ng/account/abc123/cf/orgs/default/projects/myProject/feature-flags",
+      filters: { workspace_id: "workspace-1" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(call.path).toBe("/internal/api/v2/splits/ws/workspace-1");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
   it("propagates user-fixable API errors as errorResult", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_list", { resource_type: "pipeline" });
