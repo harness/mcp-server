@@ -1,9 +1,12 @@
 import type {
   BodyFieldSpec,
   BodySchema,
+  PathBuilderConfig,
+  ResourceScope,
   ToolsetDefinition,
   PreflightContext,
 } from "../types.js";
+import { SCOPE_BEHAVIOR_DOC } from "../scope-utils.js";
 
 // ─── Response extractors ─────────────────────────────────────────────────────
 
@@ -49,6 +52,33 @@ const workspaceWriteExtract = (raw: unknown): unknown => {
     policy_evaluation: rec.policy_evaluation ?? null,
   };
 };
+
+/**
+ * Variable-set list: API returns `{ items: [...] }` with no pagination params.
+ * Normalize to the shared list shape used by other IaCM resources.
+ */
+const variableSetListExtract = (
+  raw: unknown,
+): { items: unknown[]; page_count: number; has_more: boolean; pagination_note: string } => {
+  const items = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === "object" && Array.isArray((raw as { items?: unknown[] }).items)
+      ? ((raw as { items: unknown[] }).items)
+      : [];
+  return {
+    items,
+    page_count: items.length,
+    has_more: false,
+    pagination_note:
+      `Returned ${items.length} variable set(s). This endpoint is not paginated — treat page_count as the full result size for the selected scope.`,
+  };
+};
+
+/**
+ * Variable-set get/create/update return the VariableSet resource directly
+ * (identifier, name, variables, connectors, …) — not a policy_evaluation envelope.
+ */
+const variableSetExtract = (raw: unknown): unknown => raw;
 
 /**
  * IACM resources list: API returns a ResourcesResponse with resources, outputs,
@@ -163,6 +193,67 @@ const requireProjectScope = async (ctx: PreflightContext): Promise<void> => {
         "and will fail silently without them.",
     );
   }
+};
+
+/**
+ * Resolve account/org/project path prefix for IaCM variable-set endpoints.
+ * Paths use `/variable-sets` for list and `/variable-set` for get/create/update.
+ */
+const resolveVariableSetScopePrefix = (
+  input: Record<string, unknown>,
+  config: PathBuilderConfig,
+): string => {
+  const requestedScope = input.resource_scope as ResourceScope | undefined;
+  const org = (input.org_id as string | undefined) ?? config.HARNESS_ORG;
+  const project = (input.project_id as string | undefined) ?? config.HARNESS_PROJECT;
+
+  const useProject =
+    requestedScope === "project" ||
+    (!requestedScope && Boolean(org && project));
+  const useOrg =
+    requestedScope === "org" ||
+    useProject ||
+    (!requestedScope && Boolean(org));
+
+  if (requestedScope === "project" && (!org || !project)) {
+    throw new Error(
+      'resource_scope="project" requires org_id and project_id (or HARNESS_ORG / HARNESS_PROJECT defaults).',
+    );
+  }
+  if (requestedScope === "org" && !org) {
+    throw new Error('resource_scope="org" requires org_id (or a HARNESS_ORG default).');
+  }
+
+  if (useProject && org && project) {
+    return `/iacm/api/orgs/${encodeURIComponent(org)}/projects/${encodeURIComponent(project)}`;
+  }
+  if (useOrg && org) {
+    return `/iacm/api/orgs/${encodeURIComponent(org)}`;
+  }
+  return "/iacm/api";
+};
+
+const variableSetListPath = (
+  input: Record<string, unknown>,
+  config: PathBuilderConfig,
+): string => `${resolveVariableSetScopePrefix(input, config)}/variable-sets`;
+
+const variableSetCollectionPath = (
+  input: Record<string, unknown>,
+  config: PathBuilderConfig,
+): string => `${resolveVariableSetScopePrefix(input, config)}/variable-set`;
+
+const variableSetItemPath = (
+  input: Record<string, unknown>,
+  config: PathBuilderConfig,
+): string => {
+  const id = input.variable_set_id as string | undefined;
+  if (!id) {
+    throw new Error(
+      'Missing required field "variable_set_id" for iacm_variable_set. Pass it via params or as resource_id.',
+    );
+  }
+  return `${variableSetCollectionPath(input, config)}/${encodeURIComponent(id)}`;
 };
 
 // ─── Workspace request schemas ───────────────────────────────────────────────
@@ -350,6 +441,92 @@ const workspaceUpdateSchema: BodySchema = {
   ],
 };
 
+const variableSetOptionalCollections: BodyFieldSpec[] = [
+  {
+    name: "terraform_variable_files",
+    type: "array",
+    required: false,
+    itemType: "variable-set Terraform variable-file reference",
+    description:
+      "Variable files stored in external repositories. On update this is full-replacement: " +
+      "omit or [] clears existing files. Prefer get-then-put and resend current files to keep them.",
+  },
+  {
+    name: "connectors",
+    type: "array",
+    required: false,
+    itemType: "variable-set connector",
+    description:
+      "Connector references attached to the variable set ({ connector_ref, type }). " +
+      "On update this is full-replacement: omit or [] clears existing connectors. " +
+      "Prefer get-then-put and resend current connectors to keep them.",
+  },
+];
+
+const variableSetCreateSchema: BodySchema = {
+  description:
+    "IaCM variable set definition for create. Optional maps use key → { key, value, value_type } " +
+    'where value_type is "string" or "secret".',
+  fields: [
+    { name: "identifier", type: "string", required: true, description: "Unique variable set identifier" },
+    { name: "name", type: "string", required: true, description: "Variable set display name" },
+    { name: "description", type: "string", required: false, description: "Long-form variable set description" },
+    {
+      name: "environment_variables",
+      type: "object",
+      required: false,
+      description:
+        "Environment variable map (key → { key, value, value_type }). " +
+        'Use {} when none are configured. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    {
+      name: "terraform_variables",
+      type: "object",
+      required: false,
+      description:
+        "Terraform variable map (key → { key, value, value_type }). " +
+        'Use {} when none are configured. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    ...variableSetOptionalCollections,
+  ],
+};
+
+const variableSetUpdateSchema: BodySchema = {
+  description:
+    "Complete IaCM variable set update body (HTTP PUT — not a partial patch). " +
+    "Identifier comes from the path (variable_set_id / resource_id). " +
+    "IaCM merges collections by full replacement: omitting terraform_variables, environment_variables, " +
+    "connectors, or terraform_variable_files clears those collections. " +
+    "Always harness_get first, then PUT the full desired state (or {} / [] to clear).",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Variable set display name" },
+    { name: "description", type: "string", required: false, description: "Long-form variable set description" },
+    {
+      name: "environment_variables",
+      type: "object",
+      required: true,
+      description:
+        "Complete environment variable map (key → { key, value, value_type }). " +
+        "Required on update so agents cannot accidentally wipe vars by omitting the field — " +
+        'send the current map from harness_get, or {} to clear. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    {
+      name: "terraform_variables",
+      type: "object",
+      required: true,
+      description:
+        "Complete Terraform variable map (key → { key, value, value_type }). " +
+        "Required on update so agents cannot accidentally wipe vars by omitting the field — " +
+        'send the current map from harness_get, or {} to clear. value_type is "string" or "secret".',
+      fields: workspaceVariableValueFields,
+    },
+    ...variableSetOptionalCollections,
+  ],
+};
+
 // ─── Toolset definition ─────────────────────────────────────────────────────
 
 export const iacmToolset: ToolsetDefinition = {
@@ -357,12 +534,12 @@ export const iacmToolset: ToolsetDefinition = {
   displayName: "Infrastructure as Code Management (IaCM)",
   description:
     "Harness IaCM (Infrastructure as Code Management) — manage Terraform workspaces " +
-    "(list/get/create/update), inspect provisioned resources and Terraform outputs, " +
-    "browse the module registry, review workspace cost history, and diff resource changes " +
-    "from past plan/apply/destroy activities. " +
-    "Use iacm_workspace to list, get, create, or update workspaces; iacm_resource for Terraform " +
-    "resources and outputs; iacm_module for the module registry; iacm_workspace_costs for cost " +
-    "breakdown; and iacm_activity_resource_change for activity diffs.",
+    "(list/get/create/update), shared variable sets, provisioned resources and Terraform outputs, " +
+    "the module registry, workspace cost history, and resource-change diffs from plan/apply/destroy. " +
+    "Use iacm_workspace to list, get, create, or update workspaces; iacm_variable_set for reusable " +
+    "variable sets (account/org/project); iacm_resource for Terraform resources and outputs; " +
+    "iacm_module for the module registry; iacm_workspace_costs for cost breakdown; " +
+    "and iacm_activity_resource_change for activity diffs.",
   optIn: false,
   resources: [
     // ─── Workspace ─────────────────────────────────────────────────────────
@@ -501,6 +678,92 @@ export const iacmToolset: ToolsetDefinition = {
             "IaCM enforces permissions, validation, and policy evaluation. " +
             "Response is { policy_evaluation } only — not the workspace. Follow up with harness_get " +
             "(resource_type=iacm_workspace, workspace_id=<identifier>) to fetch the updated workspace.",
+        },
+      },
+    },
+
+    // ─── Variable Sets ─────────────────────────────────────────────────────
+    {
+      resourceType: "iacm_variable_set",
+      displayName: "IaCM Variable Set",
+      description:
+        "A reusable IaCM variable set containing Terraform variables, environment variables, " +
+        "variable files, and connector references that can be attached to workspaces. " +
+        "Supports account, org, and project scope. " +
+        SCOPE_BEHAVIOR_DOC +
+        " Use harness_list/harness_get to discover sets, harness_create to create, and harness_update with variable_set_id to update. " +
+        "Create/update return the VariableSet resource (identifier, name, variables, connectors). " +
+        "IMPORTANT: harness_update is HTTP PUT with full-replacement collections — call harness_get first, then PUT the full desired body " +
+        "(omitting terraform_variables / environment_variables / connectors / terraform_variable_files clears them on the server). " +
+        "NOTE: IaCM variable-set RBAC permissions (iac_variableset_*) are currently Experimental in Harness — " +
+        "deny paths are not enforceable until iac-server activates them; MCP still forwards the caller token unchanged. " +
+        "See also: iacm_workspace.variable_sets for attaching sets to a workspace.",
+      toolset: "iacm",
+      scope: "project",
+      supportedScopes: ["account", "org", "project"],
+      identifierFields: ["variable_set_id"],
+      relatedResources: [
+        {
+          resourceType: "iacm_workspace",
+          relationship: "used by",
+          description: "Workspaces can attach this variable set via their variable_sets field",
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/iacm/api/orgs/{org}/projects/{project}/variable-sets",
+          pathBuilder: variableSetListPath,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: variableSetListExtract,
+          description:
+            "List IaCM variable sets at the selected account/org/project scope. " +
+            "Response fields: items, page_count (full result size — this API is not paginated), has_more=false.",
+        },
+        get: {
+          method: "GET",
+          path: "/iacm/api/orgs/{org}/projects/{project}/variable-set/{variableSetId}",
+          pathBuilder: variableSetItemPath,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: variableSetExtract,
+          description:
+            "Get a variable set by identifier at the selected account/org/project scope. " +
+            "Pass variable_set_id via params or as resource_id. Response is the VariableSet resource.",
+        },
+        create: {
+          method: "POST",
+          path: "/iacm/api/orgs/{org}/projects/{project}/variable-set",
+          pathBuilder: variableSetCollectionPath,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          bodySchema: variableSetCreateSchema,
+          skipScopeBodyInjection: true,
+          responseExtractor: variableSetExtract,
+          description:
+            "Create an IaCM variable set. Required body fields: identifier, name. " +
+            "Optional: description, environment_variables, terraform_variables, terraform_variable_files, connectors. " +
+            "Variable maps use key → { key, value, value_type } with value_type string|secret. " +
+            "Response is the created VariableSet resource. " +
+            "MCP forwards the caller token; variable-set RBAC permissions are Experimental until iac-server enforces them.",
+        },
+        update: {
+          method: "PUT",
+          path: "/iacm/api/orgs/{org}/projects/{project}/variable-set/{variableSetId}",
+          pathBuilder: variableSetItemPath,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          bodySchema: variableSetUpdateSchema,
+          skipScopeBodyInjection: true,
+          responseExtractor: variableSetExtract,
+          description:
+            "Update an IaCM variable set by identifier (variable_set_id / resource_id). " +
+            "HTTP PUT with full-replacement semantics for collections (same behavior as iac-server): " +
+            "required body fields are name, terraform_variables, and environment_variables " +
+            "(send maps from harness_get, or {} to clear). " +
+            "connectors and terraform_variable_files are also full-replacement — omit or [] clears them; " +
+            "prefer get-then-put and resend current values to keep them. " +
+            "Response is the updated VariableSet resource. " +
+            "MCP forwards the caller token; variable-set RBAC permissions are Experimental until iac-server enforces them.",
         },
       },
     },
