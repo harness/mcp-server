@@ -961,6 +961,8 @@ export class Registry {
           if (key === "accountId" || baseLinkParams[key]) continue;
           if (resultRecord[key] !== undefined) {
             baseLinkParams[key] = String(resultRecord[key]);
+          } else if (params[key] !== undefined && params[key] !== "") {
+            baseLinkParams[key] = String(params[key]);
           }
         }
       }
