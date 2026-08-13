@@ -223,6 +223,13 @@ describe("fme_feature_flag dual-mode routing", () => {
     const req = firstRequest(mockRequest);
     expect(req.path).toBe("/fme/api/v4/feature-flags");
     expect(req.product).toBeUndefined();
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(req.params?.orgIdentifier).toBeUndefined();
+    expect(req.params?.projectIdentifier).toBeUndefined();
   });
 
   it("new mode: get routes to the Harness-native path with the flag name in the URL", async () => {
@@ -237,6 +244,30 @@ describe("fme_feature_flag dual-mode routing", () => {
 
     const req = firstRequest(mockRequest);
     expect(req.path).toBe("/fme/api/v4/feature-flags/my_flag");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+  });
+
+  it("new mode: delete routes to the Harness-native path with the flag name in the URL", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/feature-flags/my_flag");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
   });
 
   it("new mode: create throws not-yet-implemented", async () => {
@@ -429,7 +460,15 @@ describe("fme_environment dual-mode routing", () => {
       project_id: "p1",
     });
 
-    expect(firstRequest(mockRequest).path).toBe("/fme/api/v4/environments");
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/environments");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(req.params?.orgIdentifier).toBeUndefined();
+    expect(req.params?.projectIdentifier).toBeUndefined();
   });
 
   it("legacy mode: list routes to /internal/api/v2/environments/ws/{wsId}", async () => {
@@ -567,6 +606,13 @@ describe("fme_segment", () => {
     const req = firstRequest(mockRequest);
     expect(req.path).toBe("/fme/api/v4/segments");
     expect(req.product).toBeUndefined();
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(req.params?.orgIdentifier).toBeUndefined();
+    expect(req.params?.projectIdentifier).toBeUndefined();
   });
 
   it("list: throws when org_id missing", async () => {
@@ -591,7 +637,13 @@ describe("fme_segment", () => {
       segment_name: "seg1",
     });
 
-    expect(firstRequest(mockRequest).path).toBe("/fme/api/v4/segments/seg1");
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/segments/seg1");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
   });
 
   it("get: throws when segment_name missing", async () => {
@@ -617,7 +669,13 @@ describe("fme_segment", () => {
       segment_name: "seg1",
     });
 
-    expect(firstRequest(mockRequest).path).toBe("/fme/api/v4/segments/seg1");
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/segments/seg1");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
   });
 
   it("delete: throws when segment_name missing", async () => {

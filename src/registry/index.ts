@@ -661,11 +661,13 @@ export class Registry {
     // Build query params (values may be string[] for repeated query keys — see HarnessClient.buildUrl)
     const params: Record<string, string | number | boolean | string[] | undefined> = {};
 
-    // Add scope params (allow per-resource override of query param names)
-    // When scopeOptional is true, only add org/project if explicitly provided in input.
-    // Otherwise, fall back to config defaults based on the resource's scope level.
-    const orgParam = def.scopeParams?.org ?? "orgIdentifier";
-    const projectParam = def.scopeParams?.project ?? "projectIdentifier";
+    // Add scope params (allow per-resource, or per-route via routeResolver, override
+    // of query param names). When scopeOptional is true, only add org/project if
+    // explicitly provided in input. Otherwise, fall back to config defaults based on
+    // the resource's scope level.
+    const effectiveScopeParams = resolvedRoute?.scopeParams ?? def.scopeParams;
+    const orgParam = effectiveScopeParams?.org ?? "orgIdentifier";
+    const projectParam = effectiveScopeParams?.project ?? "projectIdentifier";
     if (requestedScope) {
       // Explicit resource scoping: account omits org/project, org injects org only, project injects both.
       if (shouldUseOrg(requestedScope)) {
@@ -699,8 +701,8 @@ export class Registry {
     }
     // Inject custom account param when scopeParams.account is set
     // (in addition to the client's default accountIdentifier)
-    if (def.scopeParams?.account) {
-      params[def.scopeParams.account] = resolvedAccountId;
+    if (effectiveScopeParams?.account) {
+      params[effectiveScopeParams.account] = resolvedAccountId;
     }
 
 

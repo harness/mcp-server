@@ -251,6 +251,14 @@ export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_ORG?: str
 export interface ResolvedRoute {
   path: string;
   product?: ProductName;
+  /**
+   * Optional override of the resource-level `scopeParams` (query param names for
+   * account/org/project), scoped to this specific resolved route. When omitted,
+   * `def.scopeParams` applies. Use for dual-mode resources whose Harness-native
+   * branch needs different query param names than its legacy branch — the legacy
+   * branch's wire format stays untouched since it simply doesn't set this.
+   */
+  scopeParams?: { account?: string; org?: string; project?: string };
 }
 
 /**

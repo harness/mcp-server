@@ -7,6 +7,17 @@ const fmeActionExtract = (raw: unknown) => {
   return { success: true, result: raw };
 };
 
+// The confirmed Harness-native FME v4 API (/fme/api/v4/...) does not use the
+// standard NG orgIdentifier/projectIdentifier query param convention — it expects
+// account_id/organization_identifier/project_identifier instead (confirmed live
+// against qa.harness.io). Applied per-route (never resource-level) on dual-mode
+// resources so the legacy Split.io branch's wire format stays untouched.
+const FME_HARNESS_NATIVE_SCOPE_PARAMS = {
+  account: "account_id",
+  org: "organization_identifier",
+  project: "project_identifier",
+};
+
 const fmeFeatureFlagUpdateSchema: BodySchema = {
   description: "Partial update for an FME feature flag's metadata. Provide the fields you want to change — they are converted to JSON Patch (RFC 6902) operations automatically.",
   fields: [
@@ -186,7 +197,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             if (mode.mode === "legacy") {
               return { path: `/internal/api/v2/environments/ws/${encodeURIComponent(mode.workspaceId)}` };
             }
-            return { path: "/fme/api/v4/environments", product: "harness" };
+            return { path: "/fme/api/v4/environments", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
@@ -221,7 +232,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             if (mode.mode === "legacy") {
               return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}` };
             }
-            return { path: "/fme/api/v4/feature-flags", product: "harness" };
+            return { path: "/fme/api/v4/feature-flags", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
@@ -244,7 +255,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             if (mode.mode === "legacy") {
               return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}` };
             }
-            return { path: `/fme/api/v4/feature-flags/${flagName}`, product: "harness" };
+            return { path: `/fme/api/v4/feature-flags/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: fmeGetExtract,
@@ -284,7 +295,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             if (mode.mode === "legacy") {
               return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}` };
             }
-            return { path: `/fme/api/v4/feature-flags/${flagName}`, product: "harness" };
+            return { path: `/fme/api/v4/feature-flags/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
@@ -947,15 +958,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard and rule-based). Supports list, get, delete. create not yet implemented — Harness-native create request body not yet confirmed.",
       toolset: "feature-flags",
       scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
       identifierFields: ["segment_name"],
-      listFilterFields: [
-        {
-          name: "segment_type",
-          description:
-            'Segment kind: "standard" or "rule_based". Only meaningful on create (not yet implemented).',
-          enum: ["standard", "rule_based"],
-        },
-      ],
       operations: {
         list: {
           method: "GET",
@@ -1018,7 +1022,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Environment-specific definition of a segment (standard or rule-based) — description and lifecycle. Replaces fme_rule_based_segment_definition's role in Harness-native calls, generalized for all segment types. Harness-native only (org_id+project_id; no legacy workspace_id support). Supports list, get, create, update (description only, via JSON Merge Patch), and delete. Wired against Harness_Split/Main PR #12644, which was open (not yet merged) as of this writing — paths may still change before merge. There is no enable/disable/change_request action: the backend has no such endpoints for this unified resource; governance checks are surfaced inline in the create/update/delete responses instead.",
       toolset: "feature-flags",
       scope: "project",
-      scopeParams: { account: "account_id", org: "organization_identifier", project: "project_identifier" },
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
       identifierFields: ["segment_name", "environment_id"],
       listFilterFields: [
         { name: "environment_id", description: "FME environment ID (get from fme_environment)", required: true },

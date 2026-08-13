@@ -48,9 +48,9 @@
 
 | Test ID | Category | Description | Prompt | Expected Result |
 |---------|----------|-------------|--------|-----------------|
-| TC-fme_feature_flag-023 | List | List flags via Harness-native scope | `harness_list(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project")` | Routes to `/fme/internal/api/v4/feature-flags` with `product: "harness"` auth; returns 200 with paginated flags |
-| TC-fme_feature_flag-024 | Get | Get flag via Harness-native scope | `harness_get(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", feature_flag_name="my_flag")` | Routes to `/fme/internal/api/v4/feature-flags/{name}`; wired through end-to-end (currently blocked on a backend 500, tracked separately — not an MCP defect) |
-| TC-fme_feature_flag-025 | Delete | Delete flag via Harness-native scope | `harness_delete(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", feature_flag_name="my_flag")` | Routes to `/fme/internal/api/v4/feature-flags/{name}`; wired through end-to-end (currently blocked on a backend 500, tracked separately — not an MCP defect) |
+| TC-fme_feature_flag-023 | List | List flags via Harness-native scope | `harness_list(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project")` | Routes to `/fme/api/v4/feature-flags` with `account_id`/`organization_identifier`/`project_identifier` query params; returns 200 with paginated flags |
+| TC-fme_feature_flag-024 | Get | Get flag via Harness-native scope | `harness_get(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", params={feature_flag_name="my_flag"})` | Routes to `/fme/api/v4/feature-flags/{name}`; returns 200 with flag details |
+| TC-fme_feature_flag-025 | Delete | Delete flag via Harness-native scope | `harness_delete(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", params={feature_flag_name="my_flag"})` | Routes to `/fme/api/v4/feature-flags/{name}` |
 | TC-fme_feature_flag-026 | Error | Create via Harness-native scope | `harness_create(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", body={"name": "new_flag"})` | Error: "not yet implemented for this operation — pass workspace_id (deprecated) instead" |
 | TC-fme_feature_flag-027 | Error | Update via Harness-native scope | `harness_update(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", feature_flag_name="my_flag", body={"description": "x"})` | Error: "not yet implemented for this operation — pass workspace_id (deprecated) instead" |
 | TC-fme_feature_flag-028 | Error | Kill via Harness-native scope | `harness_execute(resource_type="fme_feature_flag", action="kill", org_id="my_org", project_id="my_project", feature_flag_name="my_flag", environment_id="env_1")` | Error: "not yet implemented for this operation — pass workspace_id (deprecated) instead" |
@@ -63,5 +63,5 @@
 - Account-scoped in legacy mode; does not use org/project identifiers there.
 - Uses offset-based pagination: `offset` and `size` params (default 20, max 50).
 - Legacy list path: `/internal/api/v2/splits/ws/{wsId}`; legacy get/delete path: `/internal/api/v2/splits/ws/{wsId}/{featureFlagName}`.
-- Harness-native list/get/delete path: `/fme/internal/api/v4/feature-flags[/{featureFlagName}]`.
+- Harness-native list/get/delete path: `/fme/api/v4/feature-flags[/{featureFlagName}]`, scoped via `account_id`/`organization_identifier`/`project_identifier` query params (not the standard NG `orgIdentifier`/`projectIdentifier`).
 - Does not require an environment for list/get/delete; environment is only needed for the `kill`/`restore` execute actions (legacy mode only today).

@@ -35,9 +35,9 @@
 | TC-fme_feature_flag-020 | Unarchive flag (legacy) | `harness_execute(resource_type="fme_feature_flag", action="unarchive", workspace_id="my_workspace", feature_flag_name="my_flag")` | Unarchives the flag | ⬜ Pending | | |
 | TC-fme_feature_flag-021 | Mixed-mode params rejected | `harness_list(resource_type="fme_feature_flag", workspace_id="my_workspace", org_id="my_org", project_id="my_project")` | Error: "pass either workspace_id (deprecated) OR org_id+project_id, not both" | ✅ Passed | Error thrown as expected (covered by `tests/registry/feature-flags.test.ts`) | |
 | TC-fme_feature_flag-022 | org_id without project_id rejected | `harness_list(resource_type="fme_feature_flag", org_id="my_org")` | Error: "org_id and project_id are required..." | ✅ Passed | Error thrown as expected | |
-| TC-fme_feature_flag-023 | List via Harness-native scope | `harness_list(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project")` | Routes to `/fme/internal/api/v4/feature-flags` with `product: "harness"` auth | ✅ Passed | Routing/product/header shape verified against a mocked client (`tests/registry/feature-flags.test.ts`); a live curl against this exact `product: "harness"` shape (camelCase params + `Harness-Account` header) confirmed 200 for the raw snake_case/no-header variant during design, not this exact request shape — live re-confirmation is a follow-up | Routing and auth construction verified correct; live-200 claim narrowed to what was actually tested |
-| TC-fme_feature_flag-024 | Get via Harness-native scope | `harness_get(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", feature_flag_name="my_flag")` | Routes to `/fme/internal/api/v4/feature-flags/{name}` | ⚠️ Blocked | Routing wired through and correct; backend currently returns 500 | Blocked on backend fix, not an MCP defect — same underlying issue as TC-fme_environment/list, TC-fme_standard_segment, TC-fme_rule_based_segment |
-| TC-fme_feature_flag-025 | Delete via Harness-native scope | `harness_delete(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", feature_flag_name="my_flag")` | Routes to `/fme/internal/api/v4/feature-flags/{name}` | ⚠️ Blocked | Routing wired through and correct; backend currently returns 500 | Blocked on backend fix, not an MCP defect |
+| TC-fme_feature_flag-023 | List via Harness-native scope | `harness_list(resource_type="fme_feature_flag", org_id="default", project_id="puthraya")` | Routes to `/fme/api/v4/feature-flags` with `account_id`/`organization_identifier`/`project_identifier` query params | ✅ Passed | Live call against qa.harness.io returned 200 with real flag data | Confirmed end-to-end, not just routing |
+| TC-fme_feature_flag-024 | Get via Harness-native scope | `harness_get(resource_type="fme_feature_flag", org_id="default", project_id="puthraya", params={feature_flag_name="TEST"})` | Routes to `/fme/api/v4/feature-flags/{name}` | ✅ Passed | Live call against qa.harness.io returned 200 with flag details | Previously blocked on what looked like a backend 500 — root cause was the stale `/internal` path segment and wrong query param names, not a backend defect. Resolved. |
+| TC-fme_feature_flag-025 | Delete via Harness-native scope | `harness_delete(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", params={feature_flag_name="my_flag"})` | Routes to `/fme/api/v4/feature-flags/{name}` | ✅ Passed | Routing/params verified correct (`tests/registry/feature-flags.test.ts`); not exercised live to avoid deleting a real flag | Same fix as TC-024; destructive op left unexercised live by design |
 | TC-fme_feature_flag-026 | Create via Harness-native scope rejected | `harness_create(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", body={"name": "new_flag"})` | Error: "not yet implemented for this operation" | ✅ Passed | Error thrown as expected | |
 | TC-fme_feature_flag-027 | Update via Harness-native scope rejected | `harness_update(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", feature_flag_name="my_flag", body={"description": "x"})` | Error: "not yet implemented for this operation" | ✅ Passed | Error thrown as expected | |
 | TC-fme_feature_flag-028 | Kill via Harness-native scope rejected | `harness_execute(resource_type="fme_feature_flag", action="kill", org_id="my_org", project_id="my_project", feature_flag_name="my_flag", environment_id="env_1")` | Error: "not yet implemented for this operation" | ✅ Passed | Error thrown as expected | |
@@ -50,16 +50,16 @@
 | Metric | Count |
 |--------|-------|
 | Total Tests | 31 |
-| ✅ Passed | 9 |
+| ✅ Passed | 11 |
 | ❌ Failed | 1 |
-| ⚠️ Blocked | 2 |
+| ⚠️ Blocked | 0 |
 | ⬜ Not Run | 19 |
 
 ## Issues Found
 
 | Issue ID | Severity | Description | Test ID | Status |
 |----------|----------|-------------|---------|--------|
-| FME-DUALMODE-500 | High | Harness-native `get`/`delete` for `fme_feature_flag` (and the corresponding wired-through operations on `fme_environment`, `fme_standard_segment`, `fme_rule_based_segment`) return HTTP 500 from the backend. MCP-side routing, path construction, and `product: "harness"` auth are confirmed correct — this is a backend-side gap, not an MCP defect. | TC-fme_feature_flag-024, TC-fme_feature_flag-025 | Open — tracked as a backend follow-up |
+| FME-DUALMODE-500 | High | Harness-native `get`/`delete` for `fme_feature_flag` (and the corresponding wired-through operations on `fme_environment`, `fme_standard_segment`, `fme_rule_based_segment`) returned HTTP 500. Root cause was MCP-side, not backend: the routes used a stale `/fme/internal/api/v4/...` path (the backend had dropped the `/internal` segment) and the standard NG `orgIdentifier`/`projectIdentifier` query params instead of the API's actual `account_id`/`organization_identifier`/`project_identifier`. | TC-fme_feature_flag-024, TC-fme_feature_flag-025 | Resolved — fixed path and query param names; re-verified live against qa.harness.io |
 
 ## Sample Responses
 _(To be filled during testing)_
