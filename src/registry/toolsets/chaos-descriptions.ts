@@ -499,8 +499,32 @@ export const descListExperimentVariables = `List variables for a chaos experimen
 
 export const descListLinuxInfra = `List chaos Linux infrastructures (load runners)`;
 
-export const descListLoadtests = `List load test instances`;
+export const descListLoadtests = `List load test instances.
+
+Pagination: use the top-level harness_list 'page' / 'size' arguments (0-indexed page, size 1-100) -- NOT 'limit'; a top-level 'limit' argument is silently dropped and the default size (20) applies instead.
+Filters (tool_type, environment_id, tags, sort_field, sort_ascending, search) must be passed inside harness_list's 'filters' object, e.g. filters: { tool_type: "Locust" }.
+KNOWN LIMITATION: 'search' matches only the load test's display name (case-insensitive substring) -- it does NOT match identity/slug, and is not fuzzy or prefix-tolerant. Use an exact or partial name substring, not an identity-style term.
+compact:true (the harness_list default) strips toolType/targetType/scriptSource/toolConfig/recentRuns from each item to keep responses lean -- pass compact:false, or call harness_get on a specific loadtest_id, for full tool config and run history.`;
 export const descGetLoadtest = `Get load test instance details`;
+
+// Shared, tool-agnostic map of scalar body fields -> toolConfig.<tool>.* wire paths.
+// Referenced verbatim by both descCreateLoadtest (Step 6 taxonomy) and
+// descUpdateLoadtest (scalar-edit path 1). The mapping is identical on create
+// and update -- callers pass the same scalars either way; MCP builds
+// toolConfig.<tool> from them via buildLocustToolConfig / buildK6ToolConfig /
+// buildJMeterToolConfig.
+export const descLoadtestFieldTaxonomy = `  (a) Script file / Custom image -> script | script_image (+script_entrypoint, load_args, image_pull_secret) -> toolConfig.<tool>.script.{content|image|entrypoint|loadArgs|imagePullSecret}. ALL tools; script_image + script_entrypoint mandatory in Custom Image mode; load_args and image_pull_secret optional (image_pull_secret only for Private registries).
+  (b) Host / Target URL -> target_url (fixed|<+input>) -> toolConfig.<tool>.tunables.targetUrl. ALL tools, optional. K6 additionally derives tunables.hostUrl from the URL's origin (feeds the script as __ENV.HOST_URL); leave blank if the script/locustfile declares its own host.
+  (c) Users -> users (fixed|<+input>) -> toolConfig.<tool>.tunables.targetUsers. ALL tools.
+  (d) Duration (seconds) -> duration_sec (fixed|<+input>) -> toolConfig.<tool>.tunables.durationSeconds. ALL tools.
+  (e) Ramp Up Duration (seconds) -> ramp_up_sec (fixed|<+input>) -> toolConfig.<tool>.tunables.rampUpTimeSec. LOCUST ONLY (no Ramp Up field in the K6 UI form). Must not exceed Duration when both are fixed values.
+  (f) Iterations (cap) -> iterations (fixed|<+input>) -> toolConfig.k6.tunables.iterations. K6 ONLY. Duration takes precedence when both are set.
+  (g) RPS Limit -> rps_limit (fixed|<+input>) -> toolConfig.k6.options.rpsLimit. K6 ONLY. Global cap, split evenly across replicas; always applies (unlike (c)/(d)/(f), which k6 ignores once the script declares its own scenarios/stages).
+  (h) Worker Count / Replicas -> worker_count (fixed|<+input>) -> toolConfig.<tool>.tunables.workerCount. LOCUST + K6 + JMETER, Kubernetes only (VM always runs a single worker/pod -- skip entirely for target_type='machine-chaos-linux'). Locust: Users are DISTRIBUTED across workers, not multiplied. K6: <=1 = single pod; higher values fan out to multiple runner pods via --execution-segment. JMeter: workers MULTIPLY load -- each injector runs the FULL uploaded plan unchanged; thread counts inside the file are NOT sliced across workers.
+  (i) Environment Variables -> env_vars -> toolConfig.<tool>.envVars[]. K6 + JMETER. Structured array; each entry is a literal {key, value}, a runtime {key, value: "<+input>"}, or a secret reference {key, secret_id, secret_scope?}. See the env_vars field's own description (descLoadtestEnvVars) for the full validator, reserved-name list, and secret_scope discovery flow (harness_list resource_type=secret type=SecretText) -- not repeated here. K6 additionally rejects HOST_URL/K6_VUS/K6_DURATION/K6_ITERATIONS/K6_STAGES/K6_RPS (tool-specific reserved names on top of the shared list).
+  (j) Property Overrides -> properties -> toolConfig.jmeter.properties[]. JMETER ONLY. Array of {key, value, send_to_engines?}; injects/overrides JMeter properties at run time without editing the uploaded plan -- reference as \${__P(NAME)} inside the plan. send_to_engines (-G) controls whether the property also reaches remote workers in Distributed Execution; omit for controller-only properties.
+  (k) Thresholds -> thresholds -> toolConfig.jmeter.thresholds[]. JMETER ONLY. Array of {metric, stat?, operator, value, abort_on_fail?}; pass/fail criteria evaluated against the run's .jtl results AFTER the test (the uploaded plan's own Assertions still apply per-request during the run). metric one of response_time_ms|error_rate_pct|throughput_rps|latency_ms; operator one of < <= > >= == !=; stat (e.g. p95/p99/avg/median/max) is REQUIRED when metric is response_time_ms or latency_ms.`;
+
 export const descCreateLoadtest = `Creates a Locust load test (Resilience Testing) on a Linux VM or Kubernetes load-runner infrastructure.
 
 IMPORTANT: You MUST NOT auto-select, assume, or pre-fill any value on behalf of the user.
@@ -603,17 +627,7 @@ Fixed vs runtime input: fields noted "(fixed|<+input>)" below accept EITHER a co
 
 Shared field taxonomy -- each branch below references these by letter instead of restating them:
 
-  (a) Script file / Custom image -> script | script_image (+script_entrypoint, load_args, image_pull_secret) -> toolConfig.<tool>.script.{content|image|entrypoint|loadArgs|imagePullSecret}. ALL tools; script_image + script_entrypoint mandatory in Custom Image mode; load_args and image_pull_secret optional (image_pull_secret only for Private registries).
-  (b) Host / Target URL -> target_url (fixed|<+input>) -> toolConfig.<tool>.tunables.targetUrl. ALL tools, optional. K6 additionally derives tunables.hostUrl from the URL's origin (feeds the script as __ENV.HOST_URL); leave blank if the script/locustfile declares its own host.
-  (c) Users -> users (fixed|<+input>) -> toolConfig.<tool>.tunables.targetUsers. ALL tools.
-  (d) Duration (seconds) -> duration_sec (fixed|<+input>) -> toolConfig.<tool>.tunables.durationSeconds. ALL tools.
-  (e) Ramp Up Duration (seconds) -> ramp_up_sec (fixed|<+input>) -> toolConfig.<tool>.tunables.rampUpTimeSec. LOCUST ONLY (no Ramp Up field in the K6 UI form). Must not exceed Duration when both are fixed values.
-  (f) Iterations (cap) -> iterations (fixed|<+input>) -> toolConfig.k6.tunables.iterations. K6 ONLY. Duration takes precedence when both are set.
-  (g) RPS Limit -> rps_limit (fixed|<+input>) -> toolConfig.k6.options.rpsLimit. K6 ONLY. Global cap, split evenly across replicas; always applies (unlike (c)/(d)/(f), which k6 ignores once the script declares its own scenarios/stages).
-  (h) Worker Count / Replicas -> worker_count (fixed|<+input>) -> toolConfig.<tool>.tunables.workerCount. LOCUST + K6 + JMETER, Kubernetes only (VM always runs a single worker/pod -- skip entirely for target_type='machine-chaos-linux'). Locust: Users are DISTRIBUTED across workers, not multiplied. K6: <=1 = single pod; higher values fan out to multiple runner pods via --execution-segment. JMeter: workers MULTIPLY load -- each injector runs the FULL uploaded plan unchanged; thread counts inside the file are NOT sliced across workers.
-  (i) Environment Variables -> env_vars -> toolConfig.<tool>.envVars[]. K6 + JMETER. Structured array; each entry is a literal {key, value}, a runtime {key, value: "<+input>"}, or a secret reference {key, secret_id, secret_scope?}. See the env_vars field's own description (descLoadtestEnvVars) and legacy Step 4c below for the full validator, reserved-name list, and secret_scope discovery flow (harness_list resource_type=secret type=SecretText) -- not repeated here. K6 additionally rejects HOST_URL/K6_VUS/K6_DURATION/K6_ITERATIONS/K6_STAGES/K6_RPS (tool-specific reserved names on top of the shared list).
-  (j) Property Overrides -> properties -> toolConfig.jmeter.properties[]. JMETER ONLY. Array of {key, value, send_to_engines?}; injects/overrides JMeter properties at run time without editing the uploaded plan -- reference as \${__P(NAME)} inside the plan. send_to_engines (-G) controls whether the property also reaches remote workers in Distributed Execution; omit for controller-only properties.
-  (k) Thresholds -> thresholds -> toolConfig.jmeter.thresholds[]. JMETER ONLY. Array of {metric, stat?, operator, value, abort_on_fail?}; pass/fail criteria evaluated against the run's .jtl results AFTER the test (the uploaded plan's own Assertions still apply per-request during the run). metric one of response_time_ms|error_rate_pct|throughput_rps|latency_ms; operator one of < <= > >= == !=; stat (e.g. p95/p99/avg/median/max) is REQUIRED when metric is response_time_ms or latency_ms.
+${descLoadtestFieldTaxonomy}
 
 Step 6.LocustScript -- Locust + Upload Python script (mode='script'):
 
@@ -865,7 +879,19 @@ Only after the user confirms all of the above (across Steps 1-7) should you call
 Returns the created load test, including the full toolConfig echo (script/tunables/options/envVars as stored), serviceReferences, cleanupPolicy, resources, the base64 canonical yaml, createdAt/updatedAt, and an openInHarness deep link.`;
 export const descDeleteLoadtest = `Delete a load test instance`;
 
-export const descUpdateLoadtest = `Update fields on an existing load test. Omit any field to leave it unchanged; for k6/JMeter/Locust, edit script or tunables via a full 'tool_config' object (top-level scriptSource/scriptContent are rejected).`;
+export const descUpdateLoadtest = `Update fields on an existing load test (PUT -- partial by field, full-replace within a field). Omit a field entirely to leave it unchanged.
+
+- name / description / tags / environment_id / infra_id / target_type / max_duration_sec: simple scalar replace when supplied.
+- service_references / variables: replace the ENTIRE list when non-null (a non-null service_references must still be non-empty); there is no per-item merge.
+- cleanup_policy / resources: identical top-level spec fields to create -- see their own field descriptions (descLoadtestCleanupPolicy / descLoadtestResources). Not repeated here.
+- Editing the script, image, tunables, properties, thresholds, or env vars (toolConfig.<tool>) requires resupplying the FULL desired sub-object -- the backend overwrites toolConfig.<tool> wholesale on any non-null write (no per-field merge server-side, except variables and JMeter's masked-.zip workspace preservation). You have two ways to do this:
+  1. Scalar fields (recommended, mirrors create): supply 'tool_type' (Locust/K6/JMeter -- required, NOT itself sent to the API since tool_type is immutable after creation; used only so MCP picks the right builder) plus any of the same scalar fields create accepts (target_url, script_source, script, script_image, script_entrypoint, load_args, image_pull_secret, users, spawn_rate, duration_sec, ramp_up_sec, worker_count, host_url, rps_limit, iterations, env_vars, properties, thresholds). MCP rebuilds the complete toolConfig.<tool> object from these exactly as it does on create -- you must resupply every scalar that should remain set, not just the ones changing. Field-to-path mapping:
+
+${descLoadtestFieldTaxonomy}
+  2. 'tool_config' escape hatch: hand-construct the object yourself (e.g. to preserve a JMeter .zip workspace or other advanced shape not covered by scalars). Pass 'tool_type' alongside it so MCP wraps/unwraps consistently with create; omitting 'tool_type' falls back to legacy behavior where 'tool_config' is sent to the API completely as-is (must already be the full \`{ <tool>: {...} }\` wire shape).
+- No 'yaml' manifest is sent on update (unlike create) -- the typed JSON fields above (cleanupPolicy, resources, toolConfig) are authoritative since the backend falls back to them whenever no yaml body is supplied.
+
+Returns the updated load test (same shape as harness_get resource_type=chaos_loadtest).`;
 
 export const descListK8sInfra = `List Kubernetes chaos infrastructures available for running experiments.
 Use chaos_environment list first to get an environmentId, then pass it here to filter infrastructures for that environment.

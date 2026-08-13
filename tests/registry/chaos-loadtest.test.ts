@@ -913,6 +913,88 @@ describe("chaos_loadtest update", () => {
     });
     expect(mockRequest.mock.calls[0][0].body.toolConfig).toEqual(tool_config);
   });
+
+  it("rebuilds toolConfig.jmeter from scalars when tool_type + a scalar field are supplied", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const plan = `<?xml version="1.0"?><jmeterTestPlan/>`;
+    await registry.dispatch(client, "chaos_loadtest", "update", {
+      loadtest_id: "jm-1", org_id: "o", project_id: "p",
+      tool_type: "JMeter",
+      script: plan,
+      worker_count: 3,
+      properties: [{ key: "threads1", value: "100", send_to_engines: true }],
+      thresholds: [{ metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 }],
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.toolConfig).toEqual({
+      jmeter: {
+        mode: "script",
+        script: { content: Buffer.from(plan, "utf8").toString("base64") },
+        tunables: { workerCount: 3 },
+        properties: [{ key: "threads1", value: "100", sendToEngines: true }],
+        thresholds: [{ metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 }],
+      },
+    });
+    // tool_type is immutable server-side; MCP must not forward it in the body.
+    expect(body.toolType).toBeUndefined();
+  });
+
+  it("rebuilds toolConfig.locust from scalars (image mode)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "update", {
+      loadtest_id: "locust-1", org_id: "o", project_id: "p",
+      tool_type: "Locust",
+      script_image: "my-registry/locust:latest",
+      script_entrypoint: "/scripts/locustfile.py",
+      users: 50,
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.toolConfig).toEqual({
+      locust: {
+        mode: "image",
+        script: { image: "my-registry/locust:latest", entrypoint: "/scripts/locustfile.py" },
+        tunables: { targetUsers: 50 },
+      },
+    });
+  });
+
+  it("throws when a scalar tool field is supplied without tool_type", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "chaos_loadtest", "update", {
+        loadtest_id: "lt-1", org_id: "o", project_id: "p",
+        worker_count: 3,
+      }),
+    ).rejects.toThrow(/tool_type is required/);
+  });
+
+  it("normalizes tool_config + tool_type (wraps a bare inner object)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "update", {
+      loadtest_id: "lt-1", org_id: "o", project_id: "p",
+      tool_type: "Locust",
+      tool_config: { mode: "script", script: { content: "AAA=" }, tunables: { targetUsers: 5 } },
+    });
+    expect(mockRequest.mock.calls[0][0].body.toolConfig).toEqual({
+      locust: { mode: "script", script: { content: "AAA=" }, tunables: { targetUsers: 5 } },
+    });
+  });
+
+  it("normalizes tool_config + tool_type (passes an already-wrapped object through)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const wrapped = { locust: { mode: "script", script: { content: "AAA=" }, tunables: { targetUsers: 5 } } };
+    await registry.dispatch(client, "chaos_loadtest", "update", {
+      loadtest_id: "lt-1", org_id: "o", project_id: "p",
+      tool_type: "Locust",
+      tool_config: wrapped,
+    });
+    expect(mockRequest.mock.calls[0][0].body.toolConfig).toEqual(wrapped);
+  });
 });
 
 // ── run / stop actions ────────────────────────────────────────────────

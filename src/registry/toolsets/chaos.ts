@@ -214,6 +214,24 @@ const chaosComponentVarExtract = (raw: unknown): unknown => {
   return r.items?.[0] ?? raw;
 };
 
+/** Compact projection for chaos_loadtest list items — keeps cheap discriminator
+ * scalars (toolType/targetType/scriptSource/infraType/cleanupPolicy) that the
+ * generic compactItems() whitelist in utils/compact.ts would otherwise drop
+ * (it only matches the literal key "type", not "toolType"/"targetType"), while
+ * still excluding heavy fields (toolConfig, yaml, variables, envVars, recentRuns). */
+function compactLoadTest(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "loadtestId", "uniqueId", "identity", "name", "description", "tags",
+    "environmentIdentifier", "infraIdentifier", "infraType", "targetType",
+    "toolType", "scriptSource", "cleanupPolicy", "latestRevisionIdentifier",
+    "createdAt", "updatedAt", "openInHarness",
+  ]) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
+}
+
 /**
  * Parse input.body when LLMs double-serialize it as a JSON string instead of an object.
  * Fails loudly on malformed JSON so callers' defaults can never silently produce a
@@ -1898,7 +1916,17 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["loadtest_id"],
+      compactItem: compactLoadTest,
       deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/load-tests/{loadtestId}",
+      listFilterFields: [
+        { name: "environment_id", description: descEnvironmentId },
+        { name: "tool_type", description: descLoadtestType, enum: ["Locust", "K6", "JMeter"] },
+        { name: "tags", description: descLoadtestTags },
+        { name: "search", description: "Free-text search. NOTE: backend currently matches only the load test's display name (substring, case-insensitive) -- it does not match identity/slug and is not fuzzy or prefix-tolerant." },
+        { name: "sort_field", description: "Field to sort by (e.g. createdAt, updatedAt, name)." },
+        { name: "sort_ascending", description: "Sort ascending when true, descending when false.", type: "boolean" },
+      ],
+      diagnosticHint: "Load tests are looked up by their identity slug (e.g. 'mcplocustscript001'), not the uniqueId UUID. If you only have a uniqueId, call harness_list resource_type=chaos_loadtest (optionally with search_term) and use the matching item's 'identity'/'loadtestId' field instead.",
       relatedResources: [
         {
           resourceType: "chaos_infrastructure",
@@ -2125,15 +2153,78 @@ export const chaosToolset: ToolsetDefinition = {
             if (b.max_duration_sec != null) body.maxDurationSec = b.max_duration_sec;
             if (b.cleanup_policy != null) body.cleanupPolicy = b.cleanup_policy;
             if (b.resources != null) body.resources = b.resources;
-            if (b.tool_config != null) body.toolConfig = b.tool_config;
-            if (b.variables != null) body.variables = b.variables;
+
+            // tool_type is never sent to the API (immutable after creation) --
+            // used only internally to pick the right scalar builder / wrap key.
+            const toolType = b.tool_type as "Locust" | "K6" | "JMeter" | undefined;
+            const toolConfigEscapeHatch = b.tool_config as Record<string, unknown> | undefined;
+
+            // Same scalar surface as create -- if any of these are present,
+            // toolConfig.<tool> must be rebuilt wholesale (server does a full
+            // overwrite; see UpdateLoadTestRequest.ToolConfig in loadTestManager).
+            const SCALAR_TOOL_FIELDS = [
+              "target_url", "script_source", "script", "script_image", "script_entrypoint",
+              "load_args", "image_pull_secret", "users", "spawn_rate", "duration_sec",
+              "ramp_up_sec", "worker_count", "host_url", "rps_limit", "iterations",
+              "env_vars", "properties", "thresholds",
+            ] as const;
+            const hasScalarToolField = SCALAR_TOOL_FIELDS.some((f) => b[f] != null);
+
+            if (hasScalarToolField) {
+              if (toolType == null) {
+                throw new Error(
+                  "tool_type is required to edit script/tunables/properties/thresholds/env_vars on update -- call harness_get first if you don't know the existing tool_type.",
+                );
+              }
+              if (toolType !== "Locust" && toolType !== "K6" && toolType !== "JMeter") {
+                throw new Error(`tool_type '${toolType}' must be 'Locust', 'K6', or 'JMeter'.`);
+              }
+              const targetUrl = (b.target_url ?? b.targetUrl) as string | undefined;
+              const script = b.script as string | undefined;
+              const scriptImage = (b.script_image ?? b.scriptImage) as string | undefined;
+              const scriptSource =
+                (b.script_source as string) ?? (scriptImage != null ? "image" : "inline");
+
+              let toolBlock: Record<string, unknown>;
+              if (toolType === "K6") {
+                toolBlock = buildK6ToolConfig(b, { scriptSource, script, targetUrl });
+              } else if (toolType === "Locust") {
+                toolBlock = buildLocustToolConfig(b, { scriptSource, script, targetUrl });
+              } else {
+                toolBlock = buildJMeterToolConfig(b, { scriptSource, script });
+              }
+              // Mirrors create: variables live under toolConfig.<tool>.variables,
+              // which ReconcileToolConfigVariables prefers over the top-level
+              // field -- do not also set body.variables to avoid two sources.
+              if (Array.isArray(b.variables)) {
+                toolBlock.variables = b.variables;
+              }
+              body.toolConfig = { [toolType.toLowerCase()]: toolBlock };
+            } else if (toolConfigEscapeHatch != null) {
+              if (toolType != null) {
+                const toolKey = toolType.toLowerCase();
+                const inner =
+                  (toolConfigEscapeHatch[toolKey] as Record<string, unknown> | undefined) ??
+                  toolConfigEscapeHatch;
+                body.toolConfig = { [toolKey]: inner };
+              } else {
+                // Back-compat: caller already sends the fully-wired { <tool>: {...} } shape.
+                body.toolConfig = toolConfigEscapeHatch;
+              }
+              if (b.variables != null) body.variables = b.variables;
+            } else if (b.variables != null) {
+              // No toolConfig rebuild in this call -- variables-only update,
+              // top-level field (server falls back to it when
+              // toolConfig.<tool>.variables is empty).
+              body.variables = b.variables;
+            }
+
             return body;
           },
           responseExtractor: chaosLoadTestExtract,
           description: descUpdateLoadtest,
           bodySchema: {
-            description:
-              "Update fields on an existing load test. Omit a field to leave it unchanged. For k6/JMeter/Locust, edit tunables/script by supplying a full 'tool_config' object (top-level scriptSource/scriptContent are rejected).",
+            description: descUpdateLoadtest,
             fields: [
               { name: "name", type: "string", required: false, description: descLoadtestName },
               { name: "description", type: "string", required: false, description: descLoadtestDescription },
@@ -2145,8 +2236,27 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "max_duration_sec", type: "number", required: false, description: "Per-load-test hard cap on any run." },
               { name: "cleanup_policy", type: "string", required: false, description: descLoadtestCleanupPolicy },
               { name: "resources", type: "object", required: false, description: descLoadtestResources },
-              { name: "tool_config", type: "object", required: false, description: "Full replacement toolConfig object; null to keep existing." },
-              { name: "variables", type: "array", required: false, description: "Full replacement variables list; null to keep existing." },
+              { name: "tool_type", type: "string", required: false, description: descLoadtestType },
+              { name: "target_url", type: "string", required: false, description: descLoadtestTargetUrl },
+              { name: "script_source", type: "string", required: false, description: descLoadtestScriptSource },
+              { name: "script", type: "string", required: false, description: descLoadtestScript },
+              { name: "script_image", type: "string", required: false, description: descLoadtestScriptImage },
+              { name: "script_entrypoint", type: "string", required: false, description: descLoadtestScriptEntrypoint },
+              { name: "load_args", type: "string", required: false, description: descLoadtestLoadArgs },
+              { name: "image_pull_secret", type: "string", required: false, description: descLoadtestImagePullSecret },
+              { name: "users", type: "number", required: false, description: descLoadtestUsers },
+              { name: "spawn_rate", type: "number", required: false, description: "Locust spawn rate (users/sec)." },
+              { name: "duration_sec", type: "number", required: false, description: descLoadtestDurationSec },
+              { name: "ramp_up_sec", type: "number", required: false, description: descLoadtestRampUpSec },
+              { name: "worker_count", type: "number", required: false, description: descLoadtestWorkerCount },
+              { name: "host_url", type: "string", required: false, description: descLoadtestHostUrl },
+              { name: "rps_limit", type: "number", required: false, description: descLoadtestRpsLimit },
+              { name: "iterations", type: "number", required: false, description: descLoadtestIterations },
+              { name: "env_vars", type: "array", required: false, description: descLoadtestEnvVars },
+              { name: "properties", type: "array", required: false, description: descLoadtestProperties },
+              { name: "thresholds", type: "array", required: false, description: descLoadtestThresholds },
+              { name: "tool_config", type: "object", required: false, description: "Advanced escape hatch to hand-construct toolConfig.<tool> directly (e.g. JMeter .zip bundles) instead of the scalar fields above. Pass 'tool_type' alongside it so MCP wraps/unwraps it consistently with create; without 'tool_type' it is sent to the API exactly as given (must already be the full '{ <tool>: {...} }' wire shape). Full replacement of toolConfig.<tool> either way -- null/omit to keep existing." },
+              { name: "variables", type: "array", required: false, description: "Full replacement variables list; null to keep existing. When also editing script/tunables via the scalar fields above, this is nested into toolConfig.<tool>.variables instead of sent top-level (mirrors create)." },
             ],
           },
         },
@@ -2313,6 +2423,14 @@ export const chaosToolset: ToolsetDefinition = {
               agentId,
               environmentId,
               infrastructureId,
+              // Dual-write snake_case keys so registry required-field validation
+              // (which checks bodySchema.fields names against this transformed
+              // payload) sees the fields it expects. See getBodySchemaValidationPayload
+              // in registry/index.ts.
+              external_service_id: externalServiceId,
+              agent_id: agentId,
+              environment_id: environmentId,
+              infrastructure_id: infrastructureId,
               ...(infrastructureType ? { infrastructureType } : {}),
               ...(onboardingId ? { onboardingId } : {}),
               ...(probes && probes.length > 0 ? { probes } : {}),
@@ -2370,6 +2488,11 @@ export const chaosToolset: ToolsetDefinition = {
               agentId,
               environmentId,
               infrastructureId,
+              // Dual-write snake_case keys — see comment in create bodyBuilder above.
+              external_service_id: externalServiceId,
+              agent_id: agentId,
+              environment_id: environmentId,
+              infrastructure_id: infrastructureId,
               ...(probes && probes.length > 0 ? { probes } : {}),
             };
           },
