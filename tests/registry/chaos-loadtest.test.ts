@@ -244,6 +244,13 @@ describe("chaos_loadtest create (Locust)", () => {
     expect(body.resources).toMatchObject({
       requests: { cpu: "100m", memory: "256Mi" },
     });
+
+    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
+    expect(manifest.spec.cleanupPolicy).toBe("retain");
+    expect(manifest.spec.resources).toEqual({
+      requests: { cpu: "100m", memory: "256Mi" },
+      limits: { cpu: "500m", memory: "512Mi" },
+    });
   });
 
   it("stores variables under toolConfig.<tool>.variables", async () => {
@@ -368,6 +375,76 @@ describe("chaos_loadtest create (K6)", () => {
     expect(k6.customImage).toBeUndefined();
   });
 
+  it("image mode (private registry): nests script.{image,entrypoint,loadArgs,imagePullSecret} under toolConfig.k6", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "K6",
+      name: "k6-img-priv", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script_source: "image",
+      script_image: "my-registry/k6:latest",
+      script_entrypoint: "/script.js",
+      load_args: "tags=smoke",
+      image_pull_secret: "Some secret name",
+      worker_count: 1,
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    const k6 = (body.toolConfig as Record<string, unknown>).k6 as Record<string, unknown>;
+    expect(k6.mode).toBe("image");
+    expect(k6.script).toEqual({
+      image: "my-registry/k6:latest",
+      entrypoint: "/script.js",
+      loadArgs: "tags=smoke",
+      imagePullSecret: "Some secret name",
+    });
+
+    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
+    expect(manifest.spec.toolConfig.k6.script).toEqual({
+      image: "my-registry/k6:latest",
+      entrypoint: "/script.js",
+      loadArgs: "tags=smoke",
+      imagePullSecret: "Some secret name",
+    });
+  });
+
+  it("image mode (public registry): omits imagePullSecret and loadArgs when not supplied", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "K6",
+      name: "k6-img-public", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script_source: "image",
+      script_image: "my-registry/k6:latest",
+    });
+    const k6 = (mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>)
+      .k6 as Record<string, unknown>;
+    const script = k6.script as Record<string, unknown>;
+    expect(script.image).toBe("my-registry/k6:latest");
+    expect(script.imagePullSecret).toBeUndefined();
+    expect(script.loadArgs).toBeUndefined();
+  });
+
+  it("image mode: rejects load_args whose keys start with '-'", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "chaos_loadtest", "create", {
+        org_id: "o", project_id: "p",
+        tool_type: "K6",
+        name: "k6-img-bad", environment_id: "e", infra_id: "i",
+        target_type: "kubernetes",
+        script_source: "image",
+        script_image: "my-registry/k6:latest",
+        load_args: "--headless",
+      }),
+    ).rejects.toThrow(/must not start with '-'/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("rejects target_type='machine-chaos-linux'", async () => {
     const client = makeClient(vi.fn());
     await expect(
@@ -378,6 +455,32 @@ describe("chaos_loadtest create (K6)", () => {
         target_type: "machine-chaos-linux",
       }),
     ).rejects.toThrow(/K6.*kubernetes/);
+  });
+
+  it("passes cleanup_policy / resources through and emits them into the built YAML (tool-agnostic)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "K6",
+      name: "k6-resources", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script: K6_SCRIPT,
+      cleanup_policy: "retain",
+      resources: {
+        limits: { cpu: "0.5", memory: "1Gi" },
+        requests: { cpu: "100m", memory: "128Mi" },
+      },
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.cleanupPolicy).toBe("retain");
+    expect(body.resources).toEqual({
+      limits: { cpu: "0.5", memory: "1Gi" },
+      requests: { cpu: "100m", memory: "128Mi" },
+    });
+    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
+    expect(manifest.spec.cleanupPolicy).toBe("retain");
+    expect(manifest.spec.resources).toEqual(body.resources);
   });
 
   it("rejects K6 script missing 'export default'", async () => {
@@ -401,7 +504,7 @@ describe("chaos_loadtest create (JMeter)", () => {
     registry = new Registry(makeConfig());
   });
 
-  it("passes tool_config through verbatim under toolConfig.jmeter", async () => {
+  it("passes tool_config through verbatim under toolConfig.jmeter (advanced escape hatch)", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
     const jmeter = {
@@ -420,7 +523,167 @@ describe("chaos_loadtest create (JMeter)", () => {
     expect(tc.jmeter).toEqual(jmeter);
   });
 
-  it("rejects JMeter when tool_config is missing", async () => {
+  it("script mode: base64-encodes plan into toolConfig.jmeter.script.content, wires properties/env_vars/thresholds/worker_count", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const plan = `<?xml version="1.0"?><jmeterTestPlan/>`;
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "JMeter",
+      name: "jm-script", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script: plan,
+      worker_count: 2,
+      properties: [
+        { key: "threads1", value: 100, send_to_engines: true },
+        { key: "someProperty", value: "200" },
+      ],
+      env_vars: [
+        { key: "fixed", value: "somefixed" },
+        { key: "runtime", value: "<+input>" },
+        { key: "somekey", secret_id: "datat-api", secret_scope: "project" },
+      ],
+      thresholds: [
+        { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 },
+        { metric: "error_rate_pct", operator: "<=", value: 50, abort_on_fail: true },
+        { metric: "throughput_rps", stat: "p99", operator: ">", value: 5000 },
+      ],
+    });
+
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.toolType).toBe("JMeter");
+    expect(body.scriptContent).toBeUndefined();
+    const jm = (body.toolConfig as Record<string, unknown>).jmeter as Record<string, unknown>;
+    expect(jm.mode).toBe("script");
+    expect(jm.script).toEqual({
+      content: Buffer.from(plan, "utf8").toString("base64"),
+    });
+    expect(jm.tunables).toEqual({ workerCount: 2 });
+    expect(jm.properties).toEqual([
+      { key: "threads1", value: "100", sendToEngines: true },
+      { key: "someProperty", value: "200" },
+    ]);
+    expect(jm.envVars).toEqual([
+      { key: "fixed", value: "somefixed" },
+      { key: "runtime", value: "<+input>" },
+      { key: "somekey", value: 'secrets.getValue("datat-api")', secret: true },
+    ]);
+    expect(jm.thresholds).toEqual([
+      { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 },
+      { metric: "error_rate_pct", operator: "<=", value: 50, abortOnFail: true },
+      { metric: "throughput_rps", stat: "p99", operator: ">", value: 5000 },
+    ]);
+
+    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
+    expect(manifest.spec.toolConfig.jmeter.mode).toBe("script");
+    expect(manifest.spec.toolConfig.jmeter.script.content).toBe(plan);
+    expect(manifest.spec.toolConfig.jmeter.tunables.workerCount).toBe(2);
+  });
+
+  it("image mode (private registry): nests script.{image,entrypoint,loadArgs,imagePullSecret} + extras under toolConfig.jmeter", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "JMeter",
+      name: "jm-update-3", identity: "jmupdate3",
+      environment_id: "env91x", infra_id: "test",
+      target_type: "kubernetes",
+      script_source: "image",
+      script_image: "<+input>",
+      script_entrypoint: "<+input>",
+      load_args: "proxyHost=8080",
+      image_pull_secret: "someSecretName",
+      worker_count: 1,
+      properties: [
+        { key: "threads1", value: "100", send_to_engines: true },
+        { key: "someProperty", value: "200" },
+      ],
+      env_vars: [
+        { key: "somekey", secret_id: "datat-api", secret_scope: "project" },
+        { key: "runtime", value: "<+input>" },
+        { key: "fixed", value: "somefixed" },
+      ],
+      thresholds: [
+        { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 },
+        { metric: "error_rate_pct", operator: "<=", value: 50, abort_on_fail: true },
+        { metric: "throughput_rps", stat: "p99", operator: ">", value: 5000 },
+      ],
+    });
+
+    const body = mockRequest.mock.calls[0][0].body;
+    const jm = (body.toolConfig as Record<string, unknown>).jmeter as Record<string, unknown>;
+    expect(jm.mode).toBe("image");
+    expect(jm.script).toEqual({
+      image: "<+input>",
+      entrypoint: "<+input>",
+      loadArgs: "proxyHost=8080",
+      imagePullSecret: "someSecretName",
+    });
+    expect(jm.tunables).toEqual({ workerCount: 1 });
+    expect(jm.properties).toEqual([
+      { key: "threads1", value: "100", sendToEngines: true },
+      { key: "someProperty", value: "200" },
+    ]);
+    expect(jm.envVars).toEqual([
+      { key: "somekey", value: 'secrets.getValue("datat-api")', secret: true },
+      { key: "runtime", value: "<+input>" },
+      { key: "fixed", value: "somefixed" },
+    ]);
+    expect(jm.thresholds).toEqual([
+      { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 },
+      { metric: "error_rate_pct", operator: "<=", value: 50, abortOnFail: true },
+      { metric: "throughput_rps", stat: "p99", operator: ">", value: 5000 },
+    ]);
+
+    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
+    expect(manifest.spec.toolConfig.jmeter.script).toEqual({
+      image: "<+input>",
+      entrypoint: "<+input>",
+      loadArgs: "proxyHost=8080",
+      imagePullSecret: "someSecretName",
+    });
+  });
+
+  it("image mode (public registry): omits imagePullSecret / loadArgs / entrypoint when not supplied", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "JMeter",
+      name: "jm-img-public", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script_source: "image",
+      script_image: "my-registry/jmeter:5.6",
+    });
+    const jm = (mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>)
+      .jmeter as Record<string, unknown>;
+    expect(jm.mode).toBe("image");
+    expect(jm.script).toEqual({ image: "my-registry/jmeter:5.6" });
+    const script = jm.script as Record<string, unknown>;
+    expect(script.entrypoint).toBeUndefined();
+    expect(script.loadArgs).toBeUndefined();
+    expect(script.imagePullSecret).toBeUndefined();
+  });
+
+  it("image mode: rejects load_args whose keys start with '-'", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "chaos_loadtest", "create", {
+        org_id: "o", project_id: "p",
+        tool_type: "JMeter",
+        name: "jm-img-bad", environment_id: "e", infra_id: "i",
+        target_type: "kubernetes",
+        script_source: "image",
+        script_image: "my-registry/jmeter:5.6",
+        load_args: "--headless",
+      }),
+    ).rejects.toThrow(/must not start with '-'/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects JMeter without script or script_image (scalar path)", async () => {
     const client = makeClient(vi.fn());
     await expect(
       registry.dispatch(client, "chaos_loadtest", "create", {
@@ -429,7 +692,7 @@ describe("chaos_loadtest create (JMeter)", () => {
         environment_id: "e", infra_id: "i",
         target_type: "kubernetes",
       }),
-    ).rejects.toThrow(/tool_config/);
+    ).rejects.toThrow(/JMeter.*script/);
   });
 
   it("rejects JMeter when target_type is not kubernetes", async () => {

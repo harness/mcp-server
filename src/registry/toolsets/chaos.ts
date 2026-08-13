@@ -113,6 +113,7 @@ import {
   descLoadtestScriptEntrypoint, descLoadtestLoadArgs, descLoadtestImagePullSecret,
   descLoadtestHostUrl, descLoadtestRpsLimit, descLoadtestIterations, descLoadtestEnvVars,
   descLoadtestProperties, descLoadtestThresholds,
+  descLoadtestCleanupPolicy, descLoadtestResources,
   descHubIdentityExact, descHubName, descHubNameUpdate,
   descHubDescription, descHubDescriptionUpdate,
   descHubTags, descHubTagsReplace,
@@ -334,9 +335,10 @@ function parseHostOrigin(rawUrl: string | undefined): string | undefined {
 }
 
 // Build the K6 `toolConfig.k6` block for script or image mode (UI mode deferred).
-// Matches K6Spec in loadTestManager/internal/domain/k6.go: mode + script{content|image|entrypoint}
-// + tunables{targetUrl, targetUsers, durationSeconds, rampUpTimeSec, workerCount, hostUrl,
-// iterations, rpsLimit} + envVars.
+// Matches K6Spec + ScriptSpec in loadTestManager: mode +
+// script{content|image|entrypoint|loadArgs|imagePullSecret} +
+// tunables{targetUrl, targetUsers, durationSeconds, rampUpTimeSec, workerCount, hostUrl,
+// iterations} + options.rpsLimit + envVars.
 function buildK6ToolConfig(
   b: Record<string, unknown>,
   args: { scriptSource: string; script?: string; targetUrl?: string },
@@ -361,6 +363,17 @@ function buildK6ToolConfig(
     script.image = scriptImage;
     const entrypoint = (b.script_entrypoint ?? b.scriptEntrypoint) as string | undefined;
     if (entrypoint != null) script.entrypoint = entrypoint;
+
+    const loadArgs = (b.load_args ?? b.loadArgs) as string | undefined;
+    if (loadArgs != null && loadArgs !== "") {
+      validateLoadArgs(loadArgs);
+      script.loadArgs = loadArgs;
+    }
+
+    const imagePullSecret = (b.image_pull_secret ?? b.imagePullSecret) as string | undefined;
+    if (imagePullSecret != null && imagePullSecret !== "") {
+      script.imagePullSecret = imagePullSecret;
+    }
   } else {
     if (args.script == null) {
       throw new Error("K6 script mode requires 'script' (the raw JavaScript K6 source).");
@@ -469,6 +482,17 @@ function buildJMeterToolConfig(
     script.image = scriptImage;
     const entrypoint = (b.script_entrypoint ?? b.scriptEntrypoint) as string | undefined;
     if (entrypoint != null) script.entrypoint = entrypoint;
+
+    const loadArgs = (b.load_args ?? b.loadArgs) as string | undefined;
+    if (loadArgs != null && loadArgs !== "") {
+      validateLoadArgs(loadArgs);
+      script.loadArgs = loadArgs;
+    }
+
+    const imagePullSecret = (b.image_pull_secret ?? b.imagePullSecret) as string | undefined;
+    if (imagePullSecret != null && imagePullSecret !== "") {
+      script.imagePullSecret = imagePullSecret;
+    }
   } else {
     if (args.script == null) {
       throw new Error("JMeter script mode requires 'script' (the raw .jmx/.xml plan text).");
@@ -583,6 +607,7 @@ function buildLoadtestYamlManifest(args: {
   environmentIdentifier: string;
   infraIdentifier: string;
   cleanupPolicy?: string;
+  resources?: Record<string, unknown>;
 }): string {
   const infraType = args.targetType === "kubernetes" ? "kubernetes" : "linux";
 
@@ -614,16 +639,18 @@ function buildLoadtestYamlManifest(args: {
     }
   }
 
-  manifest.spec = {
+  const spec: Record<string, unknown> = {
     identity: args.identity,
     toolType: args.toolType,
     infraType,
     targetType: args.targetType,
     cleanupPolicy: args.cleanupPolicy ?? "delete",
-    infraId: args.infraIdentifier,
-    envId: args.environmentIdentifier,
-    toolConfig: { [args.toolType.toLowerCase()]: yamlToolBlock },
   };
+  if (args.resources != null) spec.resources = args.resources;
+  spec.infraId = args.infraIdentifier;
+  spec.envId = args.environmentIdentifier;
+  spec.toolConfig = { [args.toolType.toLowerCase()]: yamlToolBlock };
+  manifest.spec = spec;
 
   return YAML.stringify(manifest);
 }
@@ -2028,6 +2055,7 @@ export const chaosToolset: ToolsetDefinition = {
               environmentIdentifier: environmentIdentifier as string,
               infraIdentifier: infraIdentifier as string,
               cleanupPolicy: body.cleanupPolicy as string | undefined,
+              resources: body.resources as Record<string, unknown> | undefined,
             });
             body.yaml = Buffer.from(yamlManifest, "utf8").toString("base64");
 
@@ -2072,9 +2100,9 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "variables", type: "array", required: false, description: "Custom template.Variable entries stored under toolConfig.<tool>.variables." },
               { name: "tool_config", type: "object", required: false, description: "Pass-through toolConfig object -- escape hatch for advanced/back-compat use (e.g. JMeter .zip bundles). Not required for Locust/K6/JMeter; prefer the scalar fields (script/script_image/properties/env_vars/thresholds/worker_count)." },
               { name: "service_references", type: "array", required: false, description: "chaosService identity strings; required when CHAOS_RISK_SERVICES_ENABLED is on." },
-              { name: "cleanup_policy", type: "string", required: false, description: "'delete' (default) or 'retain' — run resource lifecycle." },
+              { name: "cleanup_policy", type: "string", required: false, description: descLoadtestCleanupPolicy },
               { name: "max_duration_sec", type: "number", required: false, description: "Per-load-test hard cap on any run." },
-              { name: "resources", type: "object", required: false, description: "Per-pod CPU/memory requests/limits (Kubernetes infra only)." },
+              { name: "resources", type: "object", required: false, description: descLoadtestResources },
             ],
           },
         },
@@ -2115,8 +2143,8 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "infra_id", type: "string", required: false, description: descLoadtestInfraId },
               { name: "target_type", type: "string", required: false, description: descLoadtestTargetType },
               { name: "max_duration_sec", type: "number", required: false, description: "Per-load-test hard cap on any run." },
-              { name: "cleanup_policy", type: "string", required: false, description: "'delete' or 'retain'." },
-              { name: "resources", type: "object", required: false, description: "Per-pod CPU/memory requests/limits." },
+              { name: "cleanup_policy", type: "string", required: false, description: descLoadtestCleanupPolicy },
+              { name: "resources", type: "object", required: false, description: descLoadtestResources },
               { name: "tool_config", type: "object", required: false, description: "Full replacement toolConfig object; null to keep existing." },
               { name: "variables", type: "array", required: false, description: "Full replacement variables list; null to keep existing." },
             ],
