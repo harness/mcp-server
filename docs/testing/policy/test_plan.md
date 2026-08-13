@@ -32,6 +32,8 @@
 | TC-pol-014 | Update | Update rego source | `harness_update(resource_type="policy", policy_id="test_policy", body={rego: "package harness\ndefault allow = false"})` | Rego source updated |
 | TC-pol-015 | Delete | Delete policy | `harness_delete(resource_type="policy", policy_id="test_policy")` | Policy deleted |
 | TC-pol-016 | Scope | Custom org and project | `harness_list(resource_type="policy", org_id="custom_org", project_id="custom_project")` | Returns policies for specified scope |
+| TC-pol-016a | Scope | Account-level list | `harness_list(resource_type="policy", resource_scope="account")` | Returns account-level policies (no org/project query params) |
+| TC-pol-016b | Scope | Org-level list | `harness_list(resource_type="policy", resource_scope="org", org_id="custom_org")` | Returns org-level policies (org only, no project) |
 | TC-pol-017 | Error | Get nonexistent policy | `harness_get(resource_type="policy", policy_id="nonexistent")` | Returns not found error |
 | TC-pol-018 | Error | Create without rego | `harness_create(resource_type="policy", body={identifier: "bad_policy", name: "Bad"})` | Returns validation error (rego required) |
 | TC-pol-019 | Error | Create duplicate identifier | `harness_create(resource_type="policy", body={identifier: "<existing>", name: "Dup", rego: "package x"})` | Returns conflict error |
@@ -41,6 +43,7 @@
 ## Notes
 - Uses v1 API: `/pm/api/v1/policies`
 - List uses `per_page` instead of standard `pageSize` (mapped from `size`)
+- Supports account/org/project via `resource_scope` (default: project)
 - Create body: identifier (required), name (required), rego (required), git_connector_ref (optional), git_path (optional), git_repo (optional)
 - Update body (PATCH): name (optional), rego (optional)
 - Deep link: `/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/policies/edit/{identifier}`

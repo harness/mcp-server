@@ -67,6 +67,7 @@ export const governanceToolset: ToolsetDefinition = {
       resourceType: "policy",
       displayName: "OPA Policy",
       description: "OPA Rego policy for Harness governance. Supports full CRUD. "
+        + "Use resource_scope='account'|'org'|'project' to target account-, org-, or project-level policies. Default is project. "
         + "Use this for SCS/SBOM enforcement — create deny-list or allow-list policies that control which components are permitted in your supply chain. "
         + "Policies are written in Rego and evaluated against SBOM components during enforcement. "
         + "To list SBOM/SSCA-enforcement policies specifically, pass filter type='sbom_enforcement' "
@@ -80,6 +81,7 @@ export const governanceToolset: ToolsetDefinition = {
       ],
       toolset: "governance",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["policy_id"],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/policies/edit/{identifier}",
       listFilterFields: [
@@ -151,6 +153,7 @@ export const governanceToolset: ToolsetDefinition = {
       resourceType: "policy_set",
       displayName: "OPA Policy Set",
       description: "Policy set grouping OPA policies with an enforcement action and an entity type. Supports full CRUD. "
+        + "Use resource_scope='account'|'org'|'project' to target account-, org-, or project-level policy sets. Default is project. "
         + "For SCS/SBOM enforcement, use filter type='sbom' to list the policy sets that apply deny-list or allow-list rules during artifact scans — "
         + "the SBOM enforcement step (e.g. action='onstep') binds these sets to the artifact pipeline. "
         + "IMPORTANT TYPE ASYMMETRY: policy sets use type='sbom', while the individual policies they contain use type='sbom_enforcement'. "
@@ -166,6 +169,7 @@ export const governanceToolset: ToolsetDefinition = {
       ],
       toolset: "governance",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["policy_set_id"],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/governance/policy-sets/{identifier}",
       listFilterFields: [
