@@ -561,14 +561,14 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_rule_based_segment",
       displayName: "(Deprecated) FME Rule-Based Segment",
       description:
-        "Deprecated — use fme_segment instead for new integrations. Rule-based segment in a workspace. Supports list, get, create (requires traffic_type_id), and delete. Create requires traffic_type_id passed via params.",
+        "Deprecated — use fme_segment instead for new integrations. Rule-based segment in a workspace. Supports list, get, create (requires traffic_type_id), and delete via the legacy workspace_id contract only — org_id+project_id (Harness-native) is rejected on every operation here in favor of fme_segment. Create requires traffic_type_id passed via params.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id", "segment_name"],
       product: "fme",
       listFilterFields: [
-        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). This resource only supports the legacy workspace_id contract; use fme_segment for Harness-native org_id+project_id scoping." },
       ],
       operations: {
         list: {
@@ -576,10 +576,12 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_rule_based_segment");
-            if (mode.mode === "legacy") {
-              return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}` };
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_rule_based_segment.list: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
+              );
             }
-            return { path: "/fme/internal/api/v4/segments", product: "harness" };
+            return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
@@ -590,11 +592,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_rule_based_segment");
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment"));
-            if (mode.mode === "legacy") {
-              return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_rule_based_segment.get: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
+              );
             }
-            return { path: `/fme/internal/api/v4/segments/${segmentName}`, product: "harness" };
+            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment"));
+            return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
@@ -607,7 +611,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             const mode = resolveFmeDualMode(input, "fme_rule_based_segment");
             if (mode.mode === "harness_native") {
               throw new Error(
-                "fme_rule_based_segment.create: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
+                "fme_rule_based_segment.create: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead (create is not yet implemented there either).",
               );
             }
             return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/trafficTypes/${encodeURIComponent(requireFmeIdentifier(input, "traffic_type_id", "fme_rule_based_segment"))}` };
@@ -629,11 +633,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_rule_based_segment");
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment"));
-            if (mode.mode === "legacy") {
-              return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_rule_based_segment.delete: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
+              );
             }
-            return { path: `/fme/internal/api/v4/segments/${segmentName}`, product: "harness" };
+            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment"));
+            return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
@@ -663,7 +669,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             const mode = resolveFmeDualMode(input, "fme_rule_based_segment_definition");
             if (mode.mode === "harness_native") {
               throw new Error(
-                "fme_rule_based_segment_definition.list: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
+                "fme_rule_based_segment_definition.list: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment_definition instead.",
               );
             }
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
@@ -681,7 +687,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             const mode = resolveFmeDualMode(input, "fme_rule_based_segment_definition");
             if (mode.mode === "harness_native") {
               throw new Error(
-                "fme_rule_based_segment_definition.update: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
+                "fme_rule_based_segment_definition.update: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment_definition instead.",
               );
             }
             const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_rule_based_segment_definition"));
@@ -703,7 +709,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             if (isFmeHarnessNativeSelected(input, "fme_rule_based_segment_definition.enable")) {
               throw new Error(
-                "fme_rule_based_segment_definition.enable: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass environment_id/segment_name (current contract) instead.",
+                "fme_rule_based_segment_definition.enable: Harness-native (org_id/project_id) mode is not supported on this deprecated resource, and fme_segment_definition has no enable equivalent either — pass environment_id/segment_name (legacy contract) instead.",
               );
             }
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
@@ -723,7 +729,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             if (isFmeHarnessNativeSelected(input, "fme_rule_based_segment_definition.disable")) {
               throw new Error(
-                "fme_rule_based_segment_definition.disable: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass environment_id/segment_name (current contract) instead.",
+                "fme_rule_based_segment_definition.disable: Harness-native (org_id/project_id) mode is not supported on this deprecated resource, and fme_segment_definition has no disable equivalent either — pass environment_id/segment_name (legacy contract) instead.",
               );
             }
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
@@ -746,7 +752,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             const mode = resolveFmeDualMode(input, "fme_rule_based_segment_definition");
             if (mode.mode === "harness_native") {
               throw new Error(
-                "fme_rule_based_segment_definition.change_request: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
+                "fme_rule_based_segment_definition.change_request: Harness-native (org_id/project_id) mode is not supported on this deprecated resource, and fme_segment_definition has no change_request equivalent either — pass workspace_id (deprecated) instead.",
               );
             }
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_rule_based_segment_definition"));
@@ -889,14 +895,14 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_standard_segment",
       displayName: "(Deprecated) FME Standard Segment",
       description:
-        "Deprecated — use fme_segment instead for new integrations. Standard (static list) segment in a workspace. List all segments to see names, descriptions, and member counts. For member management, use fme_segment_keys.",
+        "Deprecated — use fme_segment instead for new integrations. Standard (static list) segment in a workspace. List all segments to see names, descriptions, and member counts, via the legacy workspace_id contract only — org_id+project_id (Harness-native) is rejected on every operation here in favor of fme_segment. For member management, use fme_segment_keys.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id", "segment_name"],
       product: "fme",
       listFilterFields: [
-        { name: "workspace_id", description: "Workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "workspace_id", description: "Workspace ID (get from fme_workspace). This resource only supports the legacy workspace_id contract; use fme_segment for Harness-native org_id+project_id scoping." },
       ],
       operations: {
         list: {
@@ -904,10 +910,12 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_standard_segment");
-            if (mode.mode === "legacy") {
-              return { path: `/internal/api/v2/segments/ws/${encodeURIComponent(mode.workspaceId)}` };
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_standard_segment.list: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
+              );
             }
-            return { path: "/fme/internal/api/v4/segments", product: "harness" };
+            return { path: `/internal/api/v2/segments/ws/${encodeURIComponent(mode.workspaceId)}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
@@ -918,11 +926,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_standard_segment");
-            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_standard_segment"));
-            if (mode.mode === "legacy") {
-              return { path: `/internal/api/v2/segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
+            if (mode.mode === "harness_native") {
+              throw new Error(
+                "fme_standard_segment.get: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
+              );
             }
-            return { path: `/fme/internal/api/v4/segments/${segmentName}`, product: "harness" };
+            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_standard_segment"));
+            return { path: `/internal/api/v2/segments/ws/${encodeURIComponent(mode.workspaceId)}/${segmentName}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
