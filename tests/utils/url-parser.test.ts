@@ -438,6 +438,37 @@ describe("applyUrlDefaults", () => {
     expect(result.execution_id).toBe("exec123");
   });
 
+  it("skips URL org/project for an FME legacy workspace_id call whose URL carries no FME resource type", () => {
+    const result = applyUrlDefaults(
+      { resource_type: "fme_feature_flag", workspace_id: "ws1" } as Record<string, unknown>,
+      "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/services",
+    );
+
+    expect(result.org_id).toBeUndefined();
+    expect(result.project_id).toBeUndefined();
+    expect(result.workspace_id).toBe("ws1");
+  });
+
+  it("still merges URL org/project when the caller declares a non-FME resource type", () => {
+    const result = applyUrlDefaults(
+      { resource_type: "service", workspace_id: "unrelated-workspace" } as Record<string, unknown>,
+      "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/services",
+    );
+
+    expect(result.org_id).toBe("myOrg");
+    expect(result.project_id).toBe("myProject");
+  });
+
+  it("falls back to the URL-parsed resource type when the caller declares none", () => {
+    const result = applyUrlDefaults(
+      { workspace_id: "ws1" } as Record<string, unknown>,
+      "https://app.harness.io/ng/account/abc/cf/orgs/myOrg/projects/myProject/feature-flags/my_flag",
+    );
+
+    expect(result.org_id).toBeUndefined();
+    expect(result.project_id).toBeUndefined();
+  });
+
   it("does not mutate the original args object", () => {
     const args = { resource_type: "pipeline" };
     const result = applyUrlDefaults(

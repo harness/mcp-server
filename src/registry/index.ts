@@ -678,11 +678,14 @@ export class Registry {
       // Dynamic scoping: only inject when caller explicitly provides them.
       // A legacy workspace_id (FME's Split.io identifier) takes precedence over
       // any org/project incidentally picked up from a UI URL — these are two
-      // mutually exclusive scoping modes for FME resources.
-      if (input.org_id && !input.workspace_id) {
+      // mutually exclusive scoping modes for FME resources. The suppression is
+      // keyed on product: "fme" so a future non-FME scopeOptional resource with an
+      // unrelated field literally named `workspace_id` never loses its scope params.
+      const suppressForFmeWorkspace = def.product === "fme" && input.workspace_id !== undefined;
+      if (input.org_id && !suppressForFmeWorkspace) {
         params[orgParam] = input.org_id as string;
       }
-      if (input.project_id && !input.workspace_id) {
+      if (input.project_id && !suppressForFmeWorkspace) {
         params[projectParam] = input.project_id as string;
       }
     } else {

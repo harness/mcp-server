@@ -277,7 +277,6 @@ describe("fme_identity create", () => {
     await registry.dispatch(client, "fme_identity", "create", {
       traffic_type_id: "tt-user",
       environment_id: "env-prod",
-      org_id: "ignored-org",
       body: {
         items: [
           { key: "user-1", values: { name: "Ada", company: "Acme" } },
@@ -350,7 +349,6 @@ describe("fme_segment_keys update", () => {
     await registry.dispatch(client, "fme_segment_keys", "update", {
       environment_id: "env-prod",
       segment_name: "beta_users",
-      org_id: "ignored-org",
       body: {
         add: ["user-1", "user-2"],
         comment: "metadata only",
@@ -835,5 +833,186 @@ describe("fme_segment_keys permissive mode-selector", () => {
         body: { add: ["user-1"] },
       }),
     ).rejects.toThrow(/not yet implemented/i);
+  });
+});
+
+describe("FME required identifier validation", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("fme_feature_flag get rejects a missing feature_flag_name before any request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_feature_flag", "get", { workspace_id: "ws1" }),
+    ).rejects.toThrow('fme_feature_flag: "feature_flag_name" is required.');
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_feature_flag delete rejects a missing feature_flag_name instead of sending a trailing-slash path", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_feature_flag", "delete", { workspace_id: "ws1" }),
+    ).rejects.toThrow('fme_feature_flag: "feature_flag_name" is required.');
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_feature_flag get rejects a missing feature_flag_name in Harness-native mode too", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_feature_flag", "get", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow('fme_feature_flag: "feature_flag_name" is required.');
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_rule_based_segment get rejects a missing segment_name", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_rule_based_segment", "get", { workspace_id: "ws1" }),
+    ).rejects.toThrow('fme_rule_based_segment: "segment_name" is required.');
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_rule_based_segment delete rejects an empty segment_name", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_rule_based_segment", "delete", { workspace_id: "ws1", segment_name: "" }),
+    ).rejects.toThrow('fme_rule_based_segment: "segment_name" is required.');
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_standard_segment get rejects a missing segment_name", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_standard_segment", "get", { workspace_id: "ws1" }),
+    ).rejects.toThrow('fme_standard_segment: "segment_name" is required.');
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_feature_flag kill rejects a missing environment_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "fme_feature_flag", "kill", { workspace_id: "ws1", feature_flag_name: "my_flag" }),
+    ).rejects.toThrow('fme_feature_flag: "environment_id" is required.');
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_identity update rejects a missing key", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_identity", "update", {
+        traffic_type_id: "tt-user",
+        environment_id: "env-prod",
+        body: { values: { name: "Ada" } },
+      }),
+    ).rejects.toThrow('fme_identity: "key" is required.');
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_segment_keys update rejects a missing segment_name", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment_keys", "update", {
+        environment_id: "env-prod",
+        body: { add: ["user-1"] },
+      }),
+    ).rejects.toThrow('fme_segment_keys: "segment_name" is required.');
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("FME permissive mode-selector partial scope pairs", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("fme_identity create rejects a lone org_id instead of leaking orgIdentifier onto the legacy call", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_identity", "create", {
+        traffic_type_id: "tt-user",
+        environment_id: "env-prod",
+        org_id: "o1",
+        body: { items: [{ key: "user-1", values: { name: "Ada" } }] },
+      }),
+    ).rejects.toThrow("fme_identity.create: project_id is required when org_id is provided.");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_identity create rejects a lone project_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_identity", "create", {
+        traffic_type_id: "tt-user",
+        environment_id: "env-prod",
+        project_id: "p1",
+        body: { items: [{ key: "user-1", values: { name: "Ada" } }] },
+      }),
+    ).rejects.toThrow("fme_identity.create: org_id is required when project_id is provided.");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_segment_keys list rejects a lone org_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment_keys", "list", {
+        environment_id: "env-prod",
+        segment_name: "beta_users",
+        org_id: "o1",
+      }),
+    ).rejects.toThrow("fme_segment_keys.list: project_id is required when org_id is provided.");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_rule_based_segment_definition enable rejects a lone org_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "fme_rule_based_segment_definition", "enable", {
+        environment_id: "env-prod",
+        segment_name: "beta_users",
+        org_id: "o1",
+      }),
+    ).rejects.toThrow("fme_rule_based_segment_definition.enable: project_id is required when org_id is provided.");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("fme_workspace list rejects a lone org_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_workspace", "list", { org_id: "o1" }),
+    ).rejects.toThrow("fme_workspace.list: project_id is required when org_id is provided.");
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });

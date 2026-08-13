@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { templateV1BasePathFromScope, resolveFmeDualMode } from "../../src/registry/scope-utils.js";
+import { templateV1BasePathFromScope, resolveFmeDualMode, requireFmeIdentifier, isFmeHarnessNativeSelected } from "../../src/registry/scope-utils.js";
 import type { PathBuilderConfig } from "../../src/registry/types.js";
 
 const config: PathBuilderConfig = {
@@ -108,6 +108,47 @@ describe("resolveFmeDualMode", () => {
   it("throws when neither workspace_id nor org_id/project_id are passed", () => {
     expect(() => resolveFmeDualMode({}, "fme_feature_flag")).toThrow(
       "fme_feature_flag: org_id and project_id are required (account is taken from config), or pass the deprecated workspace_id instead.",
+    );
+  });
+});
+
+describe("requireFmeIdentifier", () => {
+  it("returns the stringified value when present", () => {
+    expect(requireFmeIdentifier({ feature_flag_name: "my_flag" }, "feature_flag_name", "fme_feature_flag")).toBe("my_flag");
+    expect(requireFmeIdentifier({ traffic_type_id: 42 }, "traffic_type_id", "fme_feature_flag")).toBe("42");
+  });
+
+  it.each([undefined, null, ""])("throws for %p", (value) => {
+    expect(() => requireFmeIdentifier({ feature_flag_name: value }, "feature_flag_name", "fme_feature_flag")).toThrow(
+      'fme_feature_flag: "feature_flag_name" is required.',
+    );
+  });
+
+  it("throws when the field is absent entirely", () => {
+    expect(() => requireFmeIdentifier({}, "segment_name", "fme_standard_segment")).toThrow(
+      'fme_standard_segment: "segment_name" is required.',
+    );
+  });
+});
+
+describe("isFmeHarnessNativeSelected", () => {
+  it("returns true for a complete org_id+project_id pair", () => {
+    expect(isFmeHarnessNativeSelected({ org_id: "o1", project_id: "p1" }, "fme_identity.create")).toBe(true);
+  });
+
+  it("returns false when neither is provided (legacy contract)", () => {
+    expect(isFmeHarnessNativeSelected({ environment_id: "env" }, "fme_identity.create")).toBe(false);
+  });
+
+  it("throws for a lone org_id", () => {
+    expect(() => isFmeHarnessNativeSelected({ org_id: "o1" }, "fme_identity.create")).toThrow(
+      "fme_identity.create: project_id is required when org_id is provided.",
+    );
+  });
+
+  it("throws for a lone project_id", () => {
+    expect(() => isFmeHarnessNativeSelected({ project_id: "p1" }, "fme_identity.create")).toThrow(
+      "fme_identity.create: org_id is required when project_id is provided.",
     );
   });
 });

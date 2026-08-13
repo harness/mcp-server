@@ -123,7 +123,6 @@ All 11 `fme_*` resources now dispatch through `resolveFmeDualMode` (`src/registr
 
 **Throws a clear "not yet implemented" error in new mode (legacy mode fully functional):**
 - `fme_feature_flag` — `create`, `update`, `kill`, `restore`, `archive`, `unarchive`.
-- `fme_standard_segment` — `create`.
 - `fme_rule_based_segment` — `create`.
 - `fme_feature_flag_definition` — `get`, `create`, `update`.
 - `fme_rule_based_segment_definition` — `list`, `update`, `enable`, `disable`, `change_request`.

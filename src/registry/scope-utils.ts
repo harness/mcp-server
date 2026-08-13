@@ -84,6 +84,41 @@ export function resolveFmeDualMode(input: Record<string, unknown>, resourceType:
 }
 
 /**
+ * Validates that an FME identifier the caller must supply is actually present.
+ *
+ * FME `routeResolver`s build their own paths, which bypasses the registry's
+ * `pathParams` presence check — without this guard a missing identifier would
+ * silently produce a malformed URL (e.g. a trailing-slash DELETE) instead of a
+ * clear error. Returns the raw value; callers still encode it.
+ */
+export function requireFmeIdentifier(input: Record<string, unknown>, field: string, resourceType: string): string {
+  const value = input[field];
+  if (value === undefined || value === null || value === "") {
+    throw new Error(`${resourceType}: "${field}" is required.`);
+  }
+  return String(value);
+}
+
+/**
+ * Mode selector for FME operations that have no Harness-native implementation yet
+ * and therefore cannot use `resolveFmeDualMode`. Returns true when the caller
+ * selected the Harness-native contract (org_id+project_id), false for the legacy
+ * contract. A partial pair is rejected: half a scope would otherwise leak a stray
+ * orgIdentifier/projectIdentifier query param onto a legacy Split.io API call.
+ */
+export function isFmeHarnessNativeSelected(input: Record<string, unknown>, resourceType: string): boolean {
+  const orgId = input.org_id;
+  const projectId = input.project_id;
+  if (orgId && !projectId) {
+    throw new Error(`${resourceType}: project_id is required when org_id is provided.`);
+  }
+  if (projectId && !orgId) {
+    throw new Error(`${resourceType}: org_id is required when project_id is provided.`);
+  }
+  return Boolean(orgId && projectId);
+}
+
+/**
  * Toolset files may not call `console.*` directly (see architecture.test.ts —
  * logging belongs in handlers/registry, not toolsets). Route deprecation
  * logging that doesn't go through `resolveFmeDualMode` (e.g. permissive
