@@ -220,4 +220,121 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream AISRE incident and alert step definitions in v0 pipeline", () => {
+    const aisreSteps = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>)
+      .pipeline.steps.aisre as Record<string, unknown>;
+
+    expect(aisreSteps).toHaveProperty("AisreCreateIncidentStepNode");
+    expect(aisreSteps).toHaveProperty("AisreCreateIncidentStepInfo");
+    expect(aisreSteps).toHaveProperty("AisreCreateAlertStepNode");
+    expect(aisreSteps).toHaveProperty("AisreCreateAlertStepInfo");
+
+    const incidentNode = aisreSteps.AisreCreateIncidentStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(incidentNode.properties.type.enum).toContain("AISRE_CreateIncident");
+
+    const incidentInfo = aisreSteps.AisreCreateIncidentStepInfo as {
+      allOf: Array<{ required?: string[] }>;
+    };
+    const spec = incidentInfo.allOf.find((part) => part.required);
+    expect(spec?.required).toEqual(expect.arrayContaining(["title", "severity", "service"]));
+
+    const alertNode = aisreSteps.AisreCreateAlertStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(alertNode.properties.type.enum).toContain("AISRE_CreateAlert");
+  });
+
+  it("includes upstream AISRE step definitions in v0 template (including _template variants)", () => {
+    const aisreSteps = (SCHEMAS.template.definitions as Record<string, Record<string, unknown>>)
+      .pipeline.steps.aisre as Record<string, unknown>;
+
+    expect(aisreSteps).toHaveProperty("AisreCreateIncidentStepNode");
+    expect(aisreSteps).toHaveProperty("AisreCreateIncidentStepNode_template");
+    expect(aisreSteps).toHaveProperty("AisreCreateAlertStepNode");
+    expect(aisreSteps).toHaveProperty("AisreCreateAlertStepNode_template");
+  });
+
+  it("includes upstream IDP create/update step definitions in v0 pipeline", () => {
+    const idpSteps = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>)
+      .pipeline.steps.idp as Record<string, unknown>;
+
+    expect(idpSteps).toHaveProperty("IDPCreateOrganisationStepNode");
+    expect(idpSteps).toHaveProperty("IDPCreateProjectStepNode");
+    expect(idpSteps).toHaveProperty("IDPCreateResourceStepNode");
+    expect(idpSteps).toHaveProperty("IDPUpdateCatalogPropertyStepNode");
+    expect(idpSteps).toHaveProperty("IDPCreateOrganisationPlanInfo");
+
+    const orgNode = idpSteps.IDPCreateOrganisationStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(orgNode.properties.type.enum).toContain("CreateOrganization");
+
+    const orgPlan = idpSteps.IDPCreateOrganisationPlanInfo as {
+      allOf: Array<{ required?: string[] }>;
+    };
+    const spec = orgPlan.allOf.find((part) => part.required);
+    expect(spec?.required).toEqual(expect.arrayContaining(["orgName", "xApiKey"]));
+  });
+
+  it("includes upstream IDP step definitions in v0 template (including _template variants)", () => {
+    const idpSteps = (SCHEMAS.template.definitions as Record<string, Record<string, unknown>>)
+      .pipeline.steps.idp as Record<string, unknown>;
+
+    expect(idpSteps).toHaveProperty("IDPCreateOrganisationStepNode");
+    expect(idpSteps).toHaveProperty("IDPCreateOrganisationStepNode_template");
+    expect(idpSteps).toHaveProperty("IDPCreateProjectStepNode");
+    expect(idpSteps).toHaveProperty("IDPCreateResourceStepNode");
+    expect(idpSteps).toHaveProperty("IDPUpdateCatalogPropertyStepNode");
+  });
+
+  it("enforces additionalProperties: false on v1 pipeline root and pipeline object", () => {
+    expect(SCHEMAS.pipeline_v1.additionalProperties).toBe(false);
+    expect(SCHEMAS.pipeline_v1.$schema).toBe("http://json-schema.org/draft-07/schema#");
+
+    const pipelineDef = (
+      SCHEMAS.pipeline_v1.definitions as Record<string, Record<string, unknown>>
+    ).pipeline_v1.pipeline as { additionalProperties: boolean; properties: Record<string, unknown> };
+
+    expect(pipelineDef.additionalProperties).toBe(false);
+    expect(pipelineDef.properties).toHaveProperty("description");
+    expect(pipelineDef.properties.description).toMatchObject({
+      type: "string",
+      description: expect.stringContaining("Description of the pipeline"),
+    });
+  });
+
+  it("declares v1 StrategyConfigV1 strategy kinds on properties (matrix, for, while, repeat)", () => {
+    const strategy = (
+      SCHEMAS.pipeline_v1.definitions as Record<string, Record<string, unknown>>
+    ).pipeline_v1.common.StrategyConfigV1 as {
+      additionalProperties: boolean;
+      properties: Record<string, unknown>;
+      oneOf: Array<{ required: string[] }>;
+    };
+
+    expect(strategy.additionalProperties).toBe(false);
+    for (const kind of ["matrix", "for", "while", "repeat"]) {
+      expect(strategy.properties).toHaveProperty(kind);
+    }
+    expect(strategy.oneOf.map((branch) => branch.required[0])).toEqual(
+      expect.arrayContaining(["matrix", "for", "while", "repeat"]),
+    );
+  });
+
+  it("includes upstream CIResourceClass and PullPolicy enums in v1 pipeline and template", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const common = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>)[key]
+        .common as Record<string, { enum?: string[] }>;
+
+      expect(common.CIResourceClass.enum).toEqual(
+        expect.arrayContaining(["small", "medium", "large", "xlarge"]),
+      );
+      expect(common.PullPolicy.enum).toEqual(
+        expect.arrayContaining(["always", "never", "if-not-exists"]),
+      );
+    }
+  });
 });
