@@ -1,6 +1,31 @@
 import type { ToolsetDefinition } from "../types.js";
 import { buildBodyNormalized } from "../../utils/body-normalizer.js";
 import { ngExtract, pageExtract } from "../extractors.js";
+import { isRecord } from "../../utils/type-guards.js";
+
+/** Copy environmentRef onto environmentIdentifier so the deep-link template can resolve {environmentIdentifier}. */
+function aliasEnvironmentIdentifier(record: Record<string, unknown>): void {
+  if (typeof record.environmentIdentifier === "string" && record.environmentIdentifier) return;
+  const nested = isRecord(record.infrastructure) ? record.infrastructure : undefined;
+  const ref = record.environmentRef ?? nested?.environmentRef;
+  if (typeof ref === "string" && ref) {
+    record.environmentIdentifier = ref;
+  }
+}
+
+const infrastructureExtract = (raw: unknown): unknown => {
+  const data = ngExtract(raw);
+  if (isRecord(data)) aliasEnvironmentIdentifier(data);
+  return data;
+};
+
+const infrastructurePageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const page = pageExtract(raw);
+  for (const item of page.items) {
+    if (isRecord(item)) aliasEnvironmentIdentifier(item);
+  }
+  return page;
+};
 
 /**
  * Infra create/update body shaping (same unwrap/strip pattern as service/env), plus
@@ -49,7 +74,7 @@ export const infrastructureToolset: ToolsetDefinition = {
         { name: "sort", description: "Field to sort by (e.g. name, identifier)" },
         { name: "order", description: "Sort order", enum: ["asc", "desc"] },
       ],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/environments",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/environments/{environmentIdentifier}/details?sectionId=INFRASTRUCTURE",
       operations: {
         list: {
           method: "GET",
@@ -64,7 +89,7 @@ export const infrastructureToolset: ToolsetDefinition = {
             page: "page",
             size: "size",
           },
-          responseExtractor: pageExtract,
+          responseExtractor: infrastructurePageExtract,
           description: "List infrastructure definitions",
         },
         get: {
@@ -73,7 +98,7 @@ export const infrastructureToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { infrastructure_id: "infraIdentifier" },
           queryParams: { environment_id: "environmentIdentifier" },
-          responseExtractor: ngExtract,
+          responseExtractor: infrastructureExtract,
           description: "Get infrastructure definition details",
         },
         create: {
@@ -101,7 +126,7 @@ export const infrastructureToolset: ToolsetDefinition = {
               },
             ],
           },
-          responseExtractor: ngExtract,
+          responseExtractor: infrastructureExtract,
           description: "Create infrastructure definition",
         },
         update: {
@@ -126,7 +151,7 @@ export const infrastructureToolset: ToolsetDefinition = {
               },
             ],
           },
-          responseExtractor: ngExtract,
+          responseExtractor: infrastructureExtract,
           description: "Update infrastructure definition",
         },
         delete: {

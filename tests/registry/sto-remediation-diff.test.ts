@@ -1,6 +1,6 @@
 /**
- * Tests for the `sast_remediation_diff` resource that wraps
- * STO DiffOccurrences (`GET /sto/api/v2/sast-remediation/diff-occurrences`).
+ * Tests for the `remediation_diff` resource that wraps
+ * STO DiffOccurrences (`GET /sto/api/v2/remediation-agent/diff-occurrences`).
  */
 import { describe, it, expect, vi } from "vitest";
 import { stoToolset } from "../../src/registry/toolsets/sto.js";
@@ -37,19 +37,19 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
 }
 
 function getResource(): ResourceDefinition {
-  const r = stoToolset.resources.find((x) => x.resourceType === "sast_remediation_diff");
-  if (!r) throw new Error("sast_remediation_diff resource not registered");
+  const r = stoToolset.resources.find((x) => x.resourceType === "remediation_diff");
+  if (!r) throw new Error("remediation_diff resource not registered");
   return r;
 }
 
 function getListSpec(): EndpointSpec {
   const spec = getResource().operations.list;
-  if (!spec) throw new Error("sast_remediation_diff.list spec missing");
+  if (!spec) throw new Error("remediation_diff.list spec missing");
   return spec;
 }
 
-describe("sast_remediation_diff resource registration", () => {
-  it("registers list-only GET against sast-remediation/diff-occurrences", () => {
+describe("remediation_diff resource registration", () => {
+  it("registers list-only GET against remediation-agent/diff-occurrences", () => {
     const resource = getResource();
     const list = getListSpec();
     expect(resource.scope).toBe("project");
@@ -59,12 +59,14 @@ describe("sast_remediation_diff resource registration", () => {
       project: "projectId",
     });
     expect(list.method).toBe("GET");
-    expect(list.path).toBe("/sto/api/v2/sast-remediation/diff-occurrences");
+    expect(list.path).toBe("/sto/api/v2/remediation-agent/diff-occurrences");
     expect(list.queryParams).toMatchObject({
       scan_id: "scanId",
       validation_execution_id: "validationExecutionId",
       execution_id: "validationExecutionId",
-      only_true_positive: "onlyTruePositive",
+      issue_types: "issueTypes",
+      only_true_positive_issue_types: "onlyTruePositiveIssueTypes",
+      exclude_unreachable: "excludeUnreachable",
       limit: "limit",
       severity_codes: "severityCodes",
       exclude_repo_patterns: "excludeRepoPatterns",
@@ -73,7 +75,7 @@ describe("sast_remediation_diff resource registration", () => {
   });
 });
 
-describe("sast_remediation_diff preflight", () => {
+describe("remediation_diff preflight", () => {
   it("rejects missing scan_id", async () => {
     const spec = getListSpec();
     await expect(
@@ -128,9 +130,96 @@ describe("sast_remediation_diff preflight", () => {
     expect(input.validation_execution_id).toBe("exec-legacy");
     expect(input.execution_id).toBeUndefined();
   });
+
+  it("omits issue_types when unset (sto-core owns default)", async () => {
+    const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      validation_execution_id: "exec-1",
+    };
+    await expect(
+      spec.preflight!({
+        client: { account: "test-account" },
+        input,
+        registry: { dispatch: async () => undefined, getResource },
+      }),
+    ).resolves.toBeUndefined();
+    expect(input.issue_types).toBeUndefined();
+    expect(input.only_true_positive_issue_types).toBeUndefined();
+  });
+
+  it("normalizes comma-string issue_types to string[] (goa repeated params)", async () => {
+    const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      validation_execution_id: "exec-1",
+      issue_types: " sast , secret ",
+    };
+    await expect(
+      spec.preflight!({
+        client: { account: "test-account" },
+        input,
+        registry: { dispatch: async () => undefined, getResource },
+      }),
+    ).resolves.toBeUndefined();
+    expect(input.issue_types).toEqual(["SAST", "SECRET"]);
+  });
+
+  it("preserves array issue_types (does not delete non-strings)", async () => {
+    const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      validation_execution_id: "exec-1",
+      issue_types: ["sast", "SECRET"],
+      only_true_positive_issue_types: [" sast "],
+    };
+    await expect(
+      spec.preflight!({
+        client: { account: "test-account" },
+        input,
+        registry: { dispatch: async () => undefined, getResource },
+      }),
+    ).resolves.toBeUndefined();
+    expect(input.issue_types).toEqual(["SAST", "SECRET"]);
+    expect(input.only_true_positive_issue_types).toEqual(["SAST"]);
+  });
+
+  it("normalizes only_true_positive_issue_types when provided", async () => {
+    const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      validation_execution_id: "exec-1",
+      only_true_positive_issue_types: " sast ",
+    };
+    await expect(
+      spec.preflight!({
+        client: { account: "test-account" },
+        input,
+        registry: { dispatch: async () => undefined, getResource },
+      }),
+    ).resolves.toBeUndefined();
+    expect(input.only_true_positive_issue_types).toEqual(["SAST"]);
+  });
+
+  it("normalizes severity_codes when provided", async () => {
+    const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      validation_execution_id: "exec-1",
+      severity_codes: " high , critical ",
+    };
+    await expect(
+      spec.preflight!({
+        client: { account: "test-account" },
+        input,
+        registry: { dispatch: async () => undefined, getResource },
+      }),
+    ).resolves.toBeUndefined();
+    expect(input.severity_codes).toEqual(["HIGH", "CRITICAL"]);
+  });
 });
 
-describe("sast_remediation_diff responseExtractor", () => {
+describe("remediation_diff responseExtractor", () => {
   const MOCK_API_RESPONSE = {
     validationScanId: "val-scan-1",
     existingOccurrences: [
@@ -198,7 +287,7 @@ describe("sast_remediation_diff responseExtractor", () => {
   });
 });
 
-describe("sast_remediation_diff — registry dispatch", () => {
+describe("remediation_diff — registry dispatch", () => {
   it("passes required query params through to the Harness client", async () => {
     const request = vi.fn().mockResolvedValue({
       validationScanId: "val-scan-1",
@@ -211,10 +300,11 @@ describe("sast_remediation_diff — registry dispatch", () => {
     const client = makeClient(request);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
 
-    await registry.dispatch(client, "sast_remediation_diff", "list", {
+    await registry.dispatch(client, "remediation_diff", "list", {
       scan_id: "orig-scan",
       validation_execution_id: "val-exec",
-      only_true_positive: false,
+      only_true_positive_issue_types: "SAST",
+      exclude_unreachable: true,
       limit: 50,
       severity_codes: "HIGH,CRITICAL",
     });
@@ -226,18 +316,48 @@ describe("sast_remediation_diff — registry dispatch", () => {
       params: Record<string, unknown>;
     };
     expect(call.method).toBe("GET");
-    expect(call.path).toBe("/sto/api/v2/sast-remediation/diff-occurrences");
+    expect(call.path).toBe("/sto/api/v2/remediation-agent/diff-occurrences");
     expect(call.params).toMatchObject({
       accountId: "test-account",
       orgId: "default",
       projectId: "test-project",
       scanId: "orig-scan",
       validationExecutionId: "val-exec",
-      onlyTruePositive: false,
+      // string[] → harness-client emits repeated query params (goa ArrayOf)
+      onlyTruePositiveIssueTypes: ["SAST"],
+      excludeUnreachable: true,
       limit: 50,
-      severityCodes: "HIGH,CRITICAL",
+      severityCodes: ["HIGH", "CRITICAL"],
     });
+    expect(call.params.issueTypes).toBeUndefined();
+    expect(call.params.onlyTruePositive).toBeUndefined();
     expect(call.params.executionId).toBeUndefined();
+  });
+
+  it("forwards array issue_types as repeated-param string[]", async () => {
+    const request = vi.fn().mockResolvedValue({
+      validationScanId: "val-scan-1",
+      existingOccurrences: [],
+      newOccurrences: [],
+      existingCount: 0,
+      newCount: 0,
+      matchedCount: 0,
+    });
+    const client = makeClient(request);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    await registry.dispatch(client, "remediation_diff", "list", {
+      scan_id: "orig-scan",
+      validation_execution_id: "val-exec",
+      issue_types: ["SAST"],
+      only_true_positive_issue_types: ["SAST", "SECRET"],
+    });
+
+    const call = request.mock.calls[0]![0] as {
+      params: Record<string, unknown>;
+    };
+    expect(call.params.issueTypes).toEqual(["SAST"]);
+    expect(call.params.onlyTruePositiveIssueTypes).toEqual(["SAST", "SECRET"]);
   });
 
   it("normalizes legacy execution_id filter to validationExecutionId", async () => {
@@ -252,7 +372,7 @@ describe("sast_remediation_diff — registry dispatch", () => {
     const client = makeClient(request);
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
 
-    await registry.dispatch(client, "sast_remediation_diff", "list", {
+    await registry.dispatch(client, "remediation_diff", "list", {
       scan_id: "orig-scan",
       execution_id: "val-exec-legacy",
     });
