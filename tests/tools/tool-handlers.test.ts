@@ -1126,6 +1126,63 @@ describe("iacm_module create/update via MCP tools", () => {
   });
 });
 
+describe("iacm_provider create/update via MCP tools", () => {
+  it("harness_create maps body.type to the provider path segment", async () => {
+    const created = { id: "1", type: "aws", description: "AWS provider" };
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const mockRequest = vi.fn().mockResolvedValue(created);
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await server.call("harness_create", {
+      resource_type: "iacm_provider",
+      body: {
+        type: "aws",
+        description: "AWS provider",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toEqual(created);
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/iacm/api/providers/aws");
+    expect(callArgs.body).toEqual({ description: "AWS provider" });
+  });
+
+  it("harness_update creates a provider version when params.version is omitted", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", message: "No content" });
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await server.call("harness_update", {
+      resource_type: "iacm_provider",
+      resource_id: "1",
+      body: {
+        version: "1.0.0",
+        protocol: ["5.0"],
+        gpg_key_id: "key-1",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toEqual({ status: "SUCCESS", message: "No content" });
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/iacm/api/providers/1/version");
+    expect(callArgs.body).toEqual({
+      version: "1.0.0",
+      protocol: ["5.0"],
+      gpg_key_id: "key-1",
+    });
+  });
+});
+
 describe("harness_update", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;

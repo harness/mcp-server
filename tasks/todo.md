@@ -60,6 +60,19 @@
   params on `GET /iacm/api/modules`, and page size is `limit`, not `size`. Replace with
   `searchTerm` / `sort` / `limit` in a separate read-path PR.
 
+## IaCM provider registry list/get/create/version update (this PR)
+- [x] Add `iacm_provider` list/get/create and version-oriented update (POST/PUT `/providers/{id}/version`)
+- [x] Fix HarnessClient empty 2xx body handling for provider version writes
+- [x] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
+- [x] Note Experimental RBAC: `iac_providerregistry_*` always permitted until iac-server enforces
+- [ ] Open PR stacked on module branch (#810)
+
+### Plan
+- Provider registry is account-scoped; create maps `body.type` to the path segment (not JSON).
+- There is no metadata PUT — `harness_update` creates or updates provider **versions** only.
+- Version create/update may return empty 201/204; HarnessClient normalizes to `{ status: "SUCCESS", message: "No content" }`.
+- Provider-registry RBAC is Experimental — do not claim deny-path coverage; MCP still forwards the caller token.
+
 ## Dependency security advisories (2026-08-03)
 - [x] Confirm affected dependency chains and fixed versions for `fast-uri` and `ip-address`
 - [x] Update pnpm overrides and regenerate both dependency lockfiles

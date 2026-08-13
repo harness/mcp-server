@@ -705,7 +705,8 @@ const providerCreateSchema: BodySchema = {
   // here because bodySchema validates the BUILT body — and providerCreateBody strips type
   // from the wire payload (type is a path segment, not a JSON field).
   description:
-    "IaCM provider registry create definition. body.type is REQUIRED (path segment); only description is forwarded in the JSON body.",
+    "IaCM provider registry create definition. body.type is REQUIRED (path segment, e.g. aws); " +
+    "only description is forwarded in the JSON body.",
   fields: [
     {
       name: "type",
@@ -722,7 +723,7 @@ const providerUpdateSchema: BodySchema = {
   description:
     "Version-oriented provider update. There is no metadata PUT /providers/{id}. " +
     "Omit params.version to POST a new version (include body.version). " +
-    "Pass params.version to PUT an existing version.",
+    "Pass params.version to PUT an existing version. Version writes may return an empty 201/204 body.",
   fields: [
     {
       name: "version",
@@ -1181,6 +1182,8 @@ export const iacmToolset: ToolsetDefinition = {
         "Providers are account-scoped and identified by numeric/string id (not type alone). " +
         "IMPORTANT: there is no metadata PUT /providers/{id}. harness_update is version-oriented: " +
         "omit params.version to create a new version (POST), or pass params.version to update an existing version (PUT). " +
+        "Create returns the provider resource; version create/update may return an empty body (HarnessClient normalizes to success). " +
+        "Provider-registry RBAC (iac_providerregistry_*) is Experimental. " +
         "PAGINATION: Results are capped at 30 per page (1-based). page_count is THIS page only.",
       toolset: "iacm",
       scope: "account",
@@ -1233,7 +1236,8 @@ export const iacmToolset: ToolsetDefinition = {
           responseExtractor: providerExtract,
           description:
             "Create a provider registry entry. Required body.type becomes the path segment; optional body.description is sent as JSON. " +
-            "Returns the provider id needed for get and version updates.",
+            "Returns the provider resource (includes id for version updates). " +
+            "Provider-registry RBAC is Experimental (iac_providerregistry_edit). medium_write — requires confirmation.",
         },
         update: {
           method: "PUT",
@@ -1263,7 +1267,9 @@ export const iacmToolset: ToolsetDefinition = {
           description:
             "Version-oriented provider update — NOT a metadata PATCH. " +
             "Create version: omit params.version and pass body.version + protocol + gpg_key_id (POST /providers/{id}/version). " +
-            "Update version: pass params.version with body.protocol + gpg_key_id (PUT /providers/{id}/version/{version}).",
+            "Update version: pass params.version with body.protocol + gpg_key_id (PUT /providers/{id}/version/{version}). " +
+            "Version writes may return an empty 201/204 body; HarnessClient returns { status: \"SUCCESS\", message: \"No content\" }. " +
+            "Provider-registry RBAC is Experimental. medium_write — requires confirmation.",
         },
       },
     },

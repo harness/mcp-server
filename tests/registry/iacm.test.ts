@@ -393,6 +393,18 @@ describe("iacm_provider contract", () => {
     expect(result.page_count).toBe(1);
     expect(result.has_more).toBe(false);
   });
+
+  it("documents Experimental provider-registry RBAC and version-oriented update", () => {
+    const create = getOp("iacm_provider", "create");
+    const update = getOp("iacm_provider", "update");
+    expect(create.description).toMatch(/provider resource/i);
+    expect(create.description).toMatch(/Experimental/i);
+    expect(create.description).not.toMatch(/Active.*iac_registry/i);
+    expect(update.description).toMatch(/version-oriented|NOT a metadata PATCH/i);
+    expect(update.description).toMatch(/Experimental/i);
+    expect(update.description).toMatch(/empty|No content/i);
+    expect(update.bodySchema!.description).toMatch(/no metadata PUT|POST a new version/i);
+  });
 });
 
 // ─── Variable set contract ───────────────────────────────────────────────────

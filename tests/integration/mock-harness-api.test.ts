@@ -746,4 +746,77 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       expect(getUrlStr).toContain("scope_project=test-project");
     });
   });
+
+  describe("iacm provider registry writes", () => {
+    it("create posts type in path and returns the provider resource", async () => {
+      const provider = { id: "1", type: "aws", description: "AWS provider" };
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(provider));
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      const result = await registry.dispatch(client, "iacm_provider", "create", {
+        body: { type: "aws", description: "AWS provider" },
+      });
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      expect(urlStr).toContain("/iacm/api/providers/aws");
+      expect((options as RequestInit).method?.toUpperCase()).toBe("POST");
+      expect(JSON.parse((options as RequestInit).body as string)).toEqual({
+        description: "AWS provider",
+      });
+      expect(result).toEqual(provider);
+    });
+
+    it("update posts a new version and accepts empty 201 bodies", async () => {
+      fetchSpy.mockResolvedValueOnce(new Response("", { status: 201 }));
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      const result = await registry.dispatch(client, "iacm_provider", "update", {
+        id: "1",
+        body: { version: "1.0.0", protocol: ["5.0"], gpg_key_id: "key-1" },
+      });
+
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      expect(urlStr).toContain("/iacm/api/providers/1/version");
+      expect((options as RequestInit).method?.toUpperCase()).toBe("POST");
+      expect(JSON.parse((options as RequestInit).body as string)).toEqual({
+        version: "1.0.0",
+        protocol: ["5.0"],
+        gpg_key_id: "key-1",
+      });
+      expect(result).toEqual({ status: "SUCCESS", message: "No content" });
+    });
+
+    it("update puts an existing version by params.version", async () => {
+      fetchSpy.mockResolvedValueOnce(new Response("", { status: 201 }));
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      const result = await registry.dispatch(client, "iacm_provider", "update", {
+        id: "1",
+        version: "1.0.0",
+        body: { protocol: ["5.0"], gpg_key_id: "key-1" },
+      });
+
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      expect(urlStr).toContain("/iacm/api/providers/1/version/1.0.0");
+      expect((options as RequestInit).method?.toUpperCase()).toBe("PUT");
+      expect(JSON.parse((options as RequestInit).body as string)).toEqual({
+        protocol: ["5.0"],
+        gpg_key_id: "key-1",
+      });
+      expect(result).toEqual({ status: "SUCCESS", message: "No content" });
+    });
+  });
 });
