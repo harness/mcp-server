@@ -1117,22 +1117,116 @@ describe("fme_segment_definition", () => {
     registry = new Registry(makeConfig());
   });
 
-  it.each([
-    ["list", "operation", { org_id: "o1", project_id: "p1", segment_name: "seg1", environment_id: "e1" }],
-    ["update", "operation", { org_id: "o1", project_id: "p1", segment_name: "seg1", environment_id: "e1", body: {} }],
-    ["enable", "action", { org_id: "o1", project_id: "p1", segment_name: "seg1", environment_id: "e1" }],
-    ["disable", "action", { org_id: "o1", project_id: "p1", segment_name: "seg1", environment_id: "e1" }],
-    ["change_request", "action", { org_id: "o1", project_id: "p1", segment_name: "seg1", environment_id: "e1", body: {} }],
-  ])("%s (%s) throws not-yet-implemented", async (operation, type, input) => {
+  it("list: routes to /fme/internal/api/v4/segment-definitions with account_id/organization_identifier/project_identifier/environment_id params", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
-    const dispatchCall =
-      type === "operation"
-        ? registry.dispatch(client, "fme_segment_definition", operation as any, input)
-        : registry.dispatchExecute(client, "fme_segment_definition", operation as any, input);
+    await registry.dispatch(client, "fme_segment_definition", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "e1",
+    });
 
-    await expect(dispatchCall).rejects.toThrow(/not yet confirmed.*PR #12643/i);
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/internal/api/v4/segment-definitions");
+    expect(req.product).toBeUndefined();
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+      environment_id: "e1",
+    });
+  });
+
+  it("list: throws when org_id/project_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment_definition", "list", { environment_id: "e1" }),
+    ).rejects.toThrow("fme_segment_definition: org_id and project_id are required (account is taken from config).");
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: routes to /fme/internal/api/v4/segment-definitions/{segment_name}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment_definition", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "e1",
+      segment_name: "seg1",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/internal/api/v4/segment-definitions/seg1");
+    expect(req.params).toMatchObject({ environment_id: "e1" });
+  });
+
+  it("get: throws when segment_name missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment_definition", "get", { org_id: "o1", project_id: "p1", environment_id: "e1" }),
+    ).rejects.toThrow(/segment_name/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: POSTs to /fme/internal/api/v4/segment-definitions/{segment_name} with description body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment_definition", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "e1",
+      segment_name: "seg1",
+      body: { description: "beta users" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/internal/api/v4/segment-definitions/seg1");
+    expect(req.body).toEqual({ description: "beta users" });
+  });
+
+  it("update: PATCHes with merge-patch content type and only the description field", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment_definition", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "e1",
+      segment_name: "seg1",
+      body: { description: null },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("PATCH");
+    expect(req.path).toBe("/fme/internal/api/v4/segment-definitions/seg1");
+    expect(req.headers).toMatchObject({ "Content-Type": "application/merge-patch+json" });
+    expect(req.body).toEqual({ description: null });
+  });
+
+  it("delete: routes to /fme/internal/api/v4/segment-definitions/{segment_name}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment_definition", "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "e1",
+      segment_name: "seg1",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/fme/internal/api/v4/segment-definitions/seg1");
+  });
+
+  it("has no enable/disable/change_request execute actions", () => {
+    const resource = findResource("fme_segment_definition");
+    expect(resource.executeActions).toBeUndefined();
   });
 });

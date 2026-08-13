@@ -63,6 +63,16 @@ const fmeSegmentCreateSchema: BodySchema = {
   fields: [],
 };
 
+const fmeSegmentDefinitionCreateSchema: BodySchema = {
+  description: "Create a segment definition in an environment. Omit the body (or send {}) to create an empty/default shell.",
+  fields: [{ name: "description", type: "string", required: false, description: "Optional description for the definition" }],
+};
+
+const fmeSegmentDefinitionUpdateSchema: BodySchema = {
+  description: "Update a segment definition via JSON Merge Patch (RFC 7396). description is the only mutable field: omit it to leave unchanged, pass null to clear it, or a string to set it.",
+  fields: [{ name: "description", type: "string", required: false, description: "Omit to keep the current value, null to clear it, or a string to set it" }],
+};
+
 const fmeRbsUpdateDefinitionSchema: BodySchema = {
   description: "Update a rule-based segment definition in an environment. Rules use: {condition: {combiner: 'AND', matchers: [{type, attribute, ...}]}}. Matcher types: IN_LIST_STRING (strings:[]), GREATER_THAN_OR_EQUAL_NUMBER (number:N), LESS_THAN_OR_EQUAL_NUMBER (number:N), BETWEEN_NUMBER (between:{from,to}), BOOLEAN (bool:true/false), ON_DATE (date:ms), IN_SPLIT (depends:{splitName,treatment}). Combiner values: AND, OR.",
   fields: [
@@ -990,82 +1000,98 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
       },
     },
-    // ── FME Segment Definition (Harness-native, unified — pending backend PR #12643) ──
+    // ── FME Segment Definition (Harness-native, unified — Harness_Split/Main PR #12644) ──
     {
       resourceType: "fme_segment_definition",
       displayName: "FME Segment Definition",
       description:
-        "Environment-specific definition of a segment (standard or rule-based) targeting rules, exclusions, matchers. Replaces fme_rule_based_segment_definition's role in Harness-native calls, generalized for all segment types. Harness-native routes not yet confirmed (backend work landing in Harness_Split/Main PR #12643); operation and execute actions not-yet-implemented.",
+        "Environment-specific definition of a segment (standard or rule-based) — description and lifecycle. Replaces fme_rule_based_segment_definition's role in Harness-native calls, generalized for all segment types. Harness-native only (org_id+project_id; no legacy workspace_id support). Supports list, get, create, update (description only, via JSON Merge Patch), and delete. Wired against Harness_Split/Main PR #12644, which was open (not yet merged) as of this writing — paths may still change before merge. There is no enable/disable/change_request action: the backend has no such endpoints for this unified resource; governance checks are surfaced inline in the create/update/delete responses instead.",
       toolset: "feature-flags",
       scope: "project",
+      scopeParams: { account: "account_id", org: "organization_identifier", project: "project_identifier" },
       identifierFields: ["segment_name", "environment_id"],
+      listFilterFields: [
+        { name: "environment_id", description: "FME environment ID (get from fme_environment)", required: true },
+        { name: "status", description: "Filter by definition status", enum: ["ACTIVE", "ARCHIVED"] },
+        { name: "offset", description: "Pagination offset", type: "number" },
+        { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
+      ],
       operations: {
         list: {
           method: "GET",
           path: "",
-          routeResolver: () => {
-            throw new Error(
-              "fme_segment_definition.list: Harness-native segment-definition routes not yet confirmed (backend work landing in Harness_Split/Main PR #12643).",
-            );
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_segment_definition");
+            return { path: "/fme/internal/api/v4/segment-definitions" };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { environment_id: "environment_id", status: "status", offset: "offset", limit: "limit" },
           responseExtractor: passthrough,
-          description: "Not yet implemented — see Harness_Split/Main PR #12643.",
+          description: "List segment definitions in an environment, with pagination (offset/limit, max 100) and an optional status filter.",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_segment_definition");
+            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            return { path: `/fme/internal/api/v4/segment-definitions/${segmentName}` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { environment_id: "environment_id" },
+          responseExtractor: passthrough,
+          description: "Get a single segment definition by name in an environment.",
+        },
+        create: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_segment_definition");
+            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            return { path: `/fme/internal/api/v4/segment-definitions/${segmentName}` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return body?.description !== undefined ? { description: body.description } : {};
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeSegmentDefinitionCreateSchema,
+          description: "Create a segment definition in an environment. Omit the description (or send an empty body) to create an empty/default shell.",
         },
         update: {
-          method: "PUT",
+          method: "PATCH",
           path: "",
-          routeResolver: () => {
-            throw new Error(
-              "fme_segment_definition.update: Harness-native segment-definition routes not yet confirmed (backend work landing in Harness_Split/Main PR #12643).",
-            );
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_segment_definition");
+            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            return { path: `/fme/internal/api/v4/segment-definitions/${segmentName}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
-          bodyBuilder: () => ({}),
-          responseExtractor: passthrough,
-          bodySchema: { description: "Not yet implemented — Harness-native request body shape not yet confirmed (see Harness_Split/Main PR #12643).", fields: [] },
-          description: "Not yet implemented — see Harness_Split/Main PR #12643.",
-        },
-      },
-      executeActions: {
-        enable: {
-          method: "POST",
-          path: "",
-          routeResolver: () => {
-            throw new Error(
-              "fme_segment_definition.enable: Harness-native segment-definition routes not yet confirmed (backend work landing in Harness_Split/Main PR #12643).",
-            );
+          queryParams: { environment_id: "environment_id" },
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body || !("description" in body)) return {};
+            return { description: body.description };
           },
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
-          actionDescription: "Not yet implemented — see Harness_Split/Main PR #12643.",
-          bodySchema: { description: "Not yet implemented — Harness-native request body shape not yet confirmed (see Harness_Split/Main PR #12643).", fields: [] },
+          bodySchema: fmeSegmentDefinitionUpdateSchema,
+          description: "Update a segment definition's description via JSON Merge Patch (RFC 7396) — the only mutable field. Omit description to leave it unchanged, pass null to clear it, or a string to set it.",
         },
-        disable: {
+        delete: {
           method: "DELETE",
           path: "",
-          routeResolver: () => {
-            throw new Error(
-              "fme_segment_definition.disable: Harness-native segment-definition routes are not yet confirmed (backend work landing in Harness_Split/Main PR #12643).",
-            );
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_segment_definition");
+            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            return { path: `/fme/internal/api/v4/segment-definitions/${segmentName}` };
           },
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
           responseExtractor: passthrough,
-          actionDescription: "Not yet implemented — see Harness_Split/Main PR #12643.",
-          bodySchema: { description: "Not yet implemented — Harness-native request body shape not yet confirmed (see Harness_Split/Main PR #12643).", fields: [] },
-        },
-        change_request: {
-          method: "POST",
-          path: "",
-          routeResolver: () => {
-            throw new Error(
-              "fme_segment_definition.change_request: Harness-native segment-definition routes are not yet confirmed (backend work landing in Harness_Split/Main PR #12643).",
-            );
-          },
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          responseExtractor: passthrough,
-          actionDescription: "Not yet implemented — see Harness_Split/Main PR #12643.",
-          bodySchema: { description: "Not yet implemented — Harness-native request body shape not yet confirmed (see Harness_Split/Main PR #12643).", fields: [] },
+          description: "Delete a segment definition from an environment.",
         },
       },
     },
