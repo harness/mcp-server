@@ -23,16 +23,17 @@
 - Create/update return the VariableSet resource (not policy_evaluation).
 - Do not claim deny-path RBAC coverage while permissions are Experimental.
 
-## IaCM module registry create/update (this PR)
+## IaCM module registry create/update (#810 — stacked on #800)
 - [x] Add `iacm_module` create/update with name/system body schemas + scope_org/scope_project query mapping
 - [x] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
 - [x] Note Active RBAC: `iac_registry_view` / `iac_registry_edit` are enforceable
-- [ ] Open PR stacked on variable-set branch (#800)
+- [x] Open PR stacked on variable-set branch (#800) — https://github.com/harness/mcp-server/pull/810
 
 ### Plan
 - Module registry is account-scoped; optional org_id/project_id → scope_org/scope_project query params.
 - Create/update return the module resource (includes id for later get/update).
 - Registry RBAC is Active — deny paths are testable via smoke script.
+- After #800 merges, rebase onto `main` so the reviewable delta is module-only.
 
 ## Dependency security advisories (2026-08-03)
 - [x] Confirm affected dependency chains and fixed versions for `fast-uri` and `ip-address`
