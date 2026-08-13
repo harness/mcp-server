@@ -1,5 +1,5 @@
 import type { ToolsetDefinition } from "../types.js";
-import { passthrough, stoExemptionsExtract, stoSastRemediationDiffExtract } from "../extractors.js";
+import { passthrough, stoExemptionsExtract, stoRemediationDiffExtract } from "../extractors.js";
 
 /**
  * Injects a redirect hint into every security_issue list response.
@@ -29,6 +29,25 @@ const securityIssueListExtract = (raw: unknown): unknown => {
  * not an MCP server issue.
  */
 const STO_SCOPE = { account: "accountId", org: "orgId", project: "projectId" } as const;
+
+/**
+ * Normalize RemAgentScopeFilters list fields to string[].
+ * sto-core goa decodes ArrayOf(String) via repeated query params
+ * (`issueTypes=SAST&issueTypes=SECRET`), matching rem-agent's `list(...)` clients.
+ * Registry queryParams already forwards arrays as string[]; comma-joined strings
+ * would arrive as one enum value and fail goa validation.
+ * Accepts array or comma-separated string; returns undefined when empty/unset.
+ */
+function normalizeRemAgentEnumList(raw: unknown): string[] | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const parts = Array.isArray(raw)
+    ? raw.map((v) => String(v))
+    : String(raw).split(",");
+  const normalized = parts
+    .map((t) => t.trim().toUpperCase())
+    .filter((t) => t.length > 0);
+  return normalized.length > 0 ? normalized : undefined;
+}
 
 export const stoToolset: ToolsetDefinition = {
   name: "sto",
@@ -771,21 +790,26 @@ export const stoToolset: ToolsetDefinition = {
       },
     },
 
-    // ── SAST Remediation Diff (validation vs original scan) ───────────
+    // ── Remediation Diff (validation vs original scan) ─────────────────
     {
-      resourceType: "sast_remediation_diff",
-      displayName: "SAST Remediation Diff",
+      resourceType: "remediation_diff",
+      displayName: "Remediation Diff",
       description:
-        "Diff validation-scan occurrences against the original SAST scan's ignore set (STO DiffOccurrences). "
+        "Diff validation-scan occurrences against the original scan's ignore set (STO DiffOccurrences / "
+        + "GET /sto/api/v2/remediation-agent/diff-occurrences). "
         + "Requires BOTH `scan_id` (original scan) and `validation_execution_id` (validation pipeline execution). "
+        + "Scope filters match sto-core RemAgentScopeFilters: issue_types, only_true_positive_issue_types, "
+        + "exclude_unreachable, limit, severity_codes, exclude_repo_patterns. "
         + "Removes ignored fingerprints from the validation scan (server-side), then splits remaining occurrences into "
         + "`existing` (still present from original in-scope) and `new` (introduced by the remediations). "
         + "Response flattens both partitions into `items[]` tagged with `_partition`. "
         + "Fingerprint is not returned on items — matching stays inside STO Core.",
       searchAliases: [
-        "sast rem diff",
+        "remediation diff",
+        "remediation agent validation diff",
+        "remediation agent diff",
         "validation scan diff",
-        "sast occurrence diff",
+        "sast rem diff",
         "agent remediation validation",
       ],
       relatedResources: [
@@ -819,22 +843,61 @@ export const stoToolset: ToolsetDefinition = {
             "Legacy alias for validation_execution_id. Prefer validation_execution_id.",
           required: false,
         },
-        { name: "only_true_positive", type: "boolean", description: "When true (default), only TRUE_POSITIVE triage verdicts are treated as in-scope on the original scan." },
-        { name: "limit", type: "number", description: "Max occurrences to return (1–10000, default 1000)." },
-        { name: "severity_codes", description: "Comma-separated severities.", enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"] },
-        { name: "exclude_repo_patterns", description: "Comma-separated glob patterns matching repository target.name to exclude." },
+        // RemAgentScopeFilters (design/remediation_agent.go) — keep in sync with sto-core.
+        {
+          name: "issue_types",
+          description:
+            "Issue types to scope (sto-core issueTypes). Array or comma-separated string. Filters i.type. "
+            + "v1: SAST,SECRET. Empty/omit — sto-core defaults to SAST+SECRET.",
+          enum: ["SAST", "SECRET"],
+        },
+        {
+          name: "only_true_positive_issue_types",
+          description:
+            "Issue types that must have a TRUE_POSITIVE triage verdict to stay in scope "
+            + "(sto-core onlyTruePositiveIssueTypes). Array or comma-separated string. "
+            + "Other scoped types are not TP-filtered. Empty/omit → no TP filter.",
+          enum: ["SAST", "SECRET"],
+        },
+        {
+          name: "exclude_unreachable",
+          type: "boolean",
+          description:
+            "When true (sto-core excludeUnreachable, default false), exclude occurrences whose reachability is "
+            + "'unreachable' (SAST). Missing/unknown reachability stays in scope. Must match the remediation scope step.",
+        },
+        {
+          name: "limit",
+          type: "number",
+          description: "Max occurrences to return (sto-core limit; 1–10000, default 1000).",
+        },
+        {
+          name: "severity_codes",
+          description:
+            "Severities (sto-core severityCodes). Array or comma-separated string. Empty means all. "
+            + "CRITICAL, HIGH, MEDIUM, LOW, INFO.",
+          enum: ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"],
+        },
+        {
+          name: "exclude_repo_patterns",
+          description:
+            "Glob patterns matching target.name on repository targets (sto-core excludeRepoPatterns). "
+            + "Array or comma-separated string.",
+        },
       ],
       operations: {
         list: {
           method: "GET",
-          path: "/sto/api/v2/sast-remediation/diff-occurrences",
+          path: "/sto/api/v2/remediation-agent/diff-occurrences",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             scan_id: "scanId",
             validation_execution_id: "validationExecutionId",
             // Legacy alias — prefer validation_execution_id.
             execution_id: "validationExecutionId",
-            only_true_positive: "onlyTruePositive",
+            issue_types: "issueTypes",
+            only_true_positive_issue_types: "onlyTruePositiveIssueTypes",
+            exclude_unreachable: "excludeUnreachable",
             limit: "limit",
             severity_codes: "severityCodes",
             exclude_repo_patterns: "excludeRepoPatterns",
@@ -842,7 +905,7 @@ export const stoToolset: ToolsetDefinition = {
           preflight: async ({ input }) => {
             if (typeof input.scan_id !== "string" || input.scan_id.length === 0) {
               throw new Error(
-                "sast_remediation_diff: 'scan_id' is required (original STO scan id).",
+                "remediation_diff: 'scan_id' is required (original STO scan id).",
               );
             }
             const validationExecutionId =
@@ -851,18 +914,36 @@ export const stoToolset: ToolsetDefinition = {
               || "";
             if (!validationExecutionId) {
               throw new Error(
-                "sast_remediation_diff: 'validation_execution_id' is required "
+                "remediation_diff: 'validation_execution_id' is required "
                   + "(validation pipeline execution id; alias: execution_id).",
               );
             }
             // Normalize so queryParams maps a single canonical key.
             input.validation_execution_id = validationExecutionId;
             delete input.execution_id;
+
+            // RemAgentScopeFilters ArrayOf(String) → keep as string[] so registry
+            // emits repeated query params (goa + rem-agent wire shape).
+            // Omit when unset — sto-core owns defaults (issueTypes → SAST+SECRET;
+            // excludeUnreachable → false; limit → 1000).
+            for (const key of [
+              "issue_types",
+              "only_true_positive_issue_types",
+              "severity_codes",
+            ] as const) {
+              const normalized = normalizeRemAgentEnumList(input[key]);
+              if (normalized === undefined) {
+                delete input[key];
+              } else {
+                input[key] = normalized;
+              }
+            }
           },
-          responseExtractor: stoSastRemediationDiffExtract,
+          responseExtractor: stoRemediationDiffExtract,
           skipCompact: true,
           description:
-            "Diff validation-scan occurrences vs original scan ignore set. Requires scan_id + validation_execution_id. "
+            "Diff validation-scan occurrences vs original scan ignore set (sto-core DiffOccurrences). "
+            + "Requires scan_id + validation_execution_id. Scope filters match RemAgentScopeFilters. "
             + "Flattens existingOccurrences + newOccurrences into items[]; each item tagged with _partition.",
         },
       },

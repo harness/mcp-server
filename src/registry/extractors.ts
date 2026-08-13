@@ -152,8 +152,8 @@ export const stoExemptionsExtract = (raw: unknown, input?: Record<string, unknow
 };
 
 /**
- * STO SAST remediation DiffOccurrences
- * (`GET /sto/api/v2/sast-remediation/diff-occurrences`).
+ * STO Remediation DiffOccurrences
+ * (`GET /sto/api/v2/remediation-agent/diff-occurrences`).
  *
  * API shape:
  *   { validationScanId, existingOccurrences: [...], newOccurrences: [...],
@@ -163,7 +163,7 @@ export const stoExemptionsExtract = (raw: unknown, input?: Record<string, unknow
  * tell still-present vs newly introduced occurrences without two list calls.
  * Fingerprint is not on the wire (Diff matching is server-side only).
  */
-export const stoSastRemediationDiffExtract = (raw: unknown): unknown => {
+export const stoRemediationDiffExtract = (raw: unknown): unknown => {
   if (raw === null || raw === undefined || typeof raw !== "object") return raw;
   const r = raw as {
     validationScanId?: string;
