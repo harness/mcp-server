@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 223 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 225 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,7 +10,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 223 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 225 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 38 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **34 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -537,8 +537,8 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_API_KEY`           | Yes*     | --                          | Harness personal access token or service account token. Required in `single-user` mode. Must NOT be set in `multi-user` mode                                                                                                                          |
 | `HARNESS_ACCOUNT_ID`        | No       | *(from PAT/SAT)*            | Harness account identifier. Auto-extracted from PAT/SAT tokens in single-user mode; multi-user sessions can provide their own via `x-harness-account-id` when the API key does not embed one                                                          |
 | `HARNESS_BASE_URL`          | No       | `https://app.harness.io`    | Harness API/UI base URL for local stdio or self-hosted HTTP deployments. Set this to environments such as `https://harness0.harness.io` when running the server yourself. It does not affect the managed `https://mcp.harness.io/mcp` hosted endpoint |
-| `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources. This can be a legacy Split admin key or an FME-entitled Harness PAT/SAT. FME calls go directly to `api.split.io`, so hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate these requests. Must not be set in `multi-user` mode; FME must use each session's `x-harness-api-key` credential. If unset, FME falls back to a non-placeholder `HARNESS_API_KEY` for self-hosted sessions |
-| `HARNESS_FME_BASE_URL`      | No       | `https://api.split.io`      | Split/FME Admin API base URL used by `fme_` resources. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development                                                                                                                              |
+| `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources in **legacy (`workspace_id`) mode only**. This can be a legacy Split admin key or an FME-entitled Harness PAT/SAT. FME calls go directly to `api.split.io`, so hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate these requests. Must not be set in `multi-user` mode; FME must use each session's `x-harness-api-key` credential. If unset, FME falls back to a non-placeholder `HARNESS_API_KEY` for self-hosted sessions. Harness-native (`org_id`+`project_id`) mode ignores this and uses the standard `HARNESS_API_KEY`/`HARNESS_BASE_URL` instead |
+| `HARNESS_FME_BASE_URL`      | No       | `https://api.split.io`      | Split/FME Admin API base URL used by `fme_` resources in **legacy (`workspace_id`) mode only**. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development. Harness-native (`org_id`+`project_id`) mode ignores this and uses the standard `HARNESS_API_KEY`/`HARNESS_BASE_URL` instead |
 | `HARNESS_ORG`               | No       | --                          | Organization ID. Used when `org_id` is not specified per tool call. If omitted, `org_id` must be provided explicitly. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                      |
 | `HARNESS_PROJECT`           | No       | --                          | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                                          |
 | `HARNESS_API_TIMEOUT_MS`    | No       | `30000`                     | HTTP request timeout in milliseconds                                                                                                                                                                                                                  |
@@ -1202,7 +1202,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-223 resource types organized across 38 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+225 resource types organized across 38 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1490,9 +1490,27 @@ Use `harness_execute(resource_type="pull_request", action="close", ...)` for an 
 | `fme_identity`                      |      |     | x      | x      |        |                                           |
 | `fme_standard_segment`              | x    | x   |        |        |        |                                           |
 | `fme_segment_keys`                  | x    |     |        | x      |        |                                           |
+| `fme_segment`                       | x    | x   | x      |        | x      |                                           |
+| `fme_segment_definition`            | x    |     |        | x      |        | `enable`, `disable`, `change_request`     |
 
 
-**FME (Split.io) resources** — `fme_`* resources use the Split.io API (`api.split.io`) and are scoped by workspace ID rather than org/project. In single-user/self-hosted mode, auth uses a Bearer token from `HARNESS_FME_API_KEY`, falling back to a non-placeholder `HARNESS_API_KEY`. `HARNESS_FME_API_KEY` may be a legacy Split admin key or an FME-entitled Harness PAT/SAT, but it is rejected in `multi-user` mode so shared deployments cannot override each session user's credential. Hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate direct Split.io requests. `fme_feature_flag` supports full lifecycle management: create (requires `traffic_type_id`), list, get, update metadata, delete, and kill/restore/archive/unarchive execute actions. Use `fme_traffic_type` to discover traffic type IDs, `fme_identity` to create/update identity attributes, and `fme_standard_segment` / `fme_segment_keys` to inspect standard segments and add member keys. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows.
+**FME (Split.io) resources** — `fme_`* resources support **dual-mode scoping**: legacy calls pass `workspace_id` and hit the Split.io API (`api.split.io`); newer calls pass `org_id`+`project_id` together and hit Harness-native endpoints (standard `HARNESS_API_KEY`/`HARNESS_BASE_URL`, same auth as every other `harness_*` resource) instead. Passing both `workspace_id` and `org_id`/`project_id` on the same call, or mixing `org_id` with `project_id` alone, is an error — pick one mode per call. Every operation below is available in legacy mode, unchanged. Harness-native mode coverage is currently narrower:
+
+- **`fme_workspace`** — no Harness-native equivalent; legacy-only (used to discover `workspace_id` values).
+- **`fme_environment`** — `list` wired to the real endpoint (currently 500 pending a backend fix).
+- **`fme_feature_flag`** — `list` works (200); `get`/`delete` are wired through but currently 500 pending a backend fix; `create`/`update`/`kill`/`restore`/`archive`/`unarchive` are not yet implemented.
+- **`fme_feature_flag_definition`** — `get`/`create`/`update` are not yet implemented.
+- **`fme_rollout_status`** — `list` is not yet implemented.
+- **`fme_rule_based_segment`** — (Deprecated — see `fme_segment`.) `list`/`get`/`delete` are wired to the same segments endpoint as `fme_standard_segment` (currently 500 pending a backend fix); `create` is not yet implemented.
+- **`fme_rule_based_segment_definition`** — (Deprecated — see `fme_segment_definition`.) `list`/`update`/`enable`/`disable`/`change_request` are not yet implemented.
+- **`fme_traffic_type`** — `list` is not yet implemented.
+- **`fme_identity`** — `create`/`update` are not yet implemented if `org_id`+`project_id` are passed together; otherwise proceeds as a normal legacy call.
+- **`fme_standard_segment`** — (Deprecated — see `fme_segment`.) `list`/`get` are wired to the real endpoint (currently 500 pending a backend fix). There is no `create` operation for this resource in either mode.
+- **`fme_segment_keys`** — `list`/`update` are not yet implemented if `org_id`+`project_id` are passed together; otherwise proceeds as a normal legacy call.
+- **`fme_segment`** — `list`/`get`/`delete` are wired to the real `/fme/internal/api/v4/segments` endpoint (consolidates `fme_standard_segment`/`fme_rule_based_segment`); `create` is not yet implemented (request body not yet confirmed).
+- **`fme_segment_definition`** — `list`/`update`/`enable`/`disable`/`change_request` are not yet implemented (backend work landing in `Harness_Split/Main` PR #12643).
+
+In single-user/self-hosted mode, legacy-mode auth uses a Bearer token from `HARNESS_FME_API_KEY`, falling back to a non-placeholder `HARNESS_API_KEY`. `HARNESS_FME_API_KEY` may be a legacy Split admin key or an FME-entitled Harness PAT/SAT, but it is rejected in `multi-user` mode so shared deployments cannot override each session user's credential. Hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate direct Split.io requests. `fme_feature_flag` supports full lifecycle management in legacy mode: create (requires `traffic_type_id`), list, get, update metadata, delete, and kill/restore/archive/unarchive execute actions. Use `fme_traffic_type` to discover traffic type IDs, `fme_identity` to create/update identity attributes, and `fme_standard_segment` / `fme_segment_keys` to inspect standard segments and add member keys. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows.
 
 ### GitOps
 
@@ -1824,7 +1842,7 @@ Available toolset names:
 | `dashboards`            | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
 | `idp`                   | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc                                                                                                                                                                           |
 | `pull-requests`         | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
-| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys                                                           |
+| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys, fme_segment, fme_segment_definition                       |
 | `gitops`                | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree                                               |
 | `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_application_map, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk, chaos_dr_test, scanned_risk, chaos_risk_rule, chaos_risk_scan |
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
@@ -1861,7 +1879,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  38 Toolsets      |      (data files, not code)
-                |  223 Resource Types|
+                |  225 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
