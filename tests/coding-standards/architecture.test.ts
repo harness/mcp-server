@@ -57,6 +57,20 @@ const TOOLSET_HELPER_FILES = new Set([
   "src/registry/toolsets/scopes.ts",
 ]);
 
+/**
+ * Legacy exported extractors/body builders kept in toolset files for unit tests.
+ * New response extractors must live in src/registry/extractors.ts.
+ */
+const ALLOWED_EXPORTED_TOOLSET_SYMBOLS: Record<string, string[]> = {
+  "src/registry/toolsets/evidence-vault.ts": [
+    "buildAttestationListBody",
+    "attestationListExtract",
+    "attestationDetailsExtract",
+    "attestationDownloadExtract",
+  ],
+  "src/registry/toolsets/scs.ts": ["chainOfCustodyExtract", "sbomDownloadExtract"],
+};
+
 /** Legacy inline responseExtractor arrow functions — new ones must live in extractors.ts. */
 const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
   "src/registry/toolsets/ansible.ts": 4,
@@ -438,6 +452,32 @@ describe("Coding standards — toolset purity", () => {
     }
 
     expect(violations, violations.join("\n")).toEqual([]);
+  });
+
+  it("does not export new *Extract helpers from toolset files (use extractors.ts)", () => {
+    const violations: string[] = [];
+    const exportRe = /^export (?:function|const) (\w+Extract)\b/gm;
+
+    for (const file of walkTsFiles(toolsetDir)) {
+      const fileRel = rel(file);
+      if (TOOLSET_HELPER_FILES.has(fileRel)) continue;
+
+      const content = readFileSync(file, "utf8");
+      const allowed = new Set(ALLOWED_EXPORTED_TOOLSET_SYMBOLS[fileRel] ?? []);
+      let match: RegExpExecArray | null;
+
+      while ((match = exportRe.exec(content)) !== null) {
+        const symbol = match[1]!;
+        if (!allowed.has(symbol)) {
+          violations.push(`${fileRel}: exported ${symbol} — move to extractors.ts`);
+        }
+      }
+    }
+
+    expect(
+      violations,
+      `Unexpected exported *Extract symbols in toolsets:\n${violations.join("\n")}`,
+    ).toEqual([]);
   });
 });
 
