@@ -221,7 +221,7 @@ describe("fme_feature_flag dual-mode routing", () => {
     await registry.dispatch(client, "fme_feature_flag", "list", { org_id: "o1", project_id: "p1" });
 
     const req = firstRequest(mockRequest);
-    expect(req.path).toBe("/fme/internal/api/v4/feature-flags");
+    expect(req.path).toBe("/fme/api/v4/feature-flags");
     expect(req.product).toBeUndefined();
   });
 
@@ -236,7 +236,7 @@ describe("fme_feature_flag dual-mode routing", () => {
     });
 
     const req = firstRequest(mockRequest);
-    expect(req.path).toBe("/fme/internal/api/v4/feature-flags/my_flag");
+    expect(req.path).toBe("/fme/api/v4/feature-flags/my_flag");
   });
 
   it("new mode: create throws not-yet-implemented", async () => {
@@ -420,7 +420,7 @@ describe("fme_environment dual-mode routing", () => {
     registry = new Registry(makeConfig());
   });
 
-  it("new mode: list routes to /fme/internal/api/v4/environments", async () => {
+  it("new mode: list routes to /fme/api/v4/environments", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -429,7 +429,7 @@ describe("fme_environment dual-mode routing", () => {
       project_id: "p1",
     });
 
-    expect(firstRequest(mockRequest).path).toBe("/fme/internal/api/v4/environments");
+    expect(firstRequest(mockRequest).path).toBe("/fme/api/v4/environments");
   });
 
   it("legacy mode: list routes to /internal/api/v2/environments/ws/{wsId}", async () => {
@@ -555,7 +555,7 @@ describe("fme_segment", () => {
     registry = new Registry(makeConfig());
   });
 
-  it("list: routes /fme/internal/api/v4/segments org_id+project_id", async () => {
+  it("list: routes /fme/api/v4/segments org_id+project_id", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -565,7 +565,7 @@ describe("fme_segment", () => {
     });
 
     const req = firstRequest(mockRequest);
-    expect(req.path).toBe("/fme/internal/api/v4/segments");
+    expect(req.path).toBe("/fme/api/v4/segments");
     expect(req.product).toBeUndefined();
   });
 
@@ -581,7 +581,7 @@ describe("fme_segment", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("get: routes to /fme/internal/api/v4/segments/{segment_name}", async () => {
+  it("get: routes to /fme/api/v4/segments/{segment_name}", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -591,7 +591,7 @@ describe("fme_segment", () => {
       segment_name: "seg1",
     });
 
-    expect(firstRequest(mockRequest).path).toBe("/fme/internal/api/v4/segments/seg1");
+    expect(firstRequest(mockRequest).path).toBe("/fme/api/v4/segments/seg1");
   });
 
   it("get: throws when segment_name missing", async () => {
@@ -607,7 +607,7 @@ describe("fme_segment", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("delete: routes to /fme/internal/api/v4/segments/{segment_name}", async () => {
+  it("delete: routes to /fme/api/v4/segments/{segment_name}", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -617,7 +617,7 @@ describe("fme_segment", () => {
       segment_name: "seg1",
     });
 
-    expect(firstRequest(mockRequest).path).toBe("/fme/internal/api/v4/segments/seg1");
+    expect(firstRequest(mockRequest).path).toBe("/fme/api/v4/segments/seg1");
   });
 
   it("delete: throws when segment_name missing", async () => {
@@ -1083,7 +1083,7 @@ describe("fme_segment_definition", () => {
     registry = new Registry(makeConfig());
   });
 
-  it("list: routes to /fme/internal/api/v4/segment-definitions with account_id/organization_identifier/project_identifier/environment_id params", async () => {
+  it("list: routes to /fme/api/v4/segment-definitions with account_id/organization_identifier/project_identifier/environment_id params", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1094,7 +1094,7 @@ describe("fme_segment_definition", () => {
     });
 
     const req = firstRequest(mockRequest);
-    expect(req.path).toBe("/fme/internal/api/v4/segment-definitions");
+    expect(req.path).toBe("/fme/api/v4/segment-definitions");
     expect(req.product).toBeUndefined();
     expect(req.params).toMatchObject({
       account_id: "test-account",
@@ -1114,7 +1114,7 @@ describe("fme_segment_definition", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("get: routes to /fme/internal/api/v4/segment-definitions/{segment_name}", async () => {
+  it("get: routes to /fme/api/v4/segment-definitions/{segment_name}", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1126,7 +1126,7 @@ describe("fme_segment_definition", () => {
     });
 
     const req = firstRequest(mockRequest);
-    expect(req.path).toBe("/fme/internal/api/v4/segment-definitions/seg1");
+    expect(req.path).toBe("/fme/api/v4/segment-definitions/seg1");
     expect(req.params).toMatchObject({ environment_id: "e1" });
   });
 
@@ -1140,7 +1140,7 @@ describe("fme_segment_definition", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create: POSTs to /fme/internal/api/v4/segment-definitions/{segment_name} with description body", async () => {
+  it("create: POSTs to /fme/api/v4/segment-definitions/{segment_name} with description body", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1154,7 +1154,7 @@ describe("fme_segment_definition", () => {
 
     const req = firstRequest(mockRequest);
     expect(req.method).toBe("POST");
-    expect(req.path).toBe("/fme/internal/api/v4/segment-definitions/seg1");
+    expect(req.path).toBe("/fme/api/v4/segment-definitions/seg1");
     expect(req.body).toEqual({ description: "beta users" });
   });
 
@@ -1172,12 +1172,12 @@ describe("fme_segment_definition", () => {
 
     const req = firstRequest(mockRequest);
     expect(req.method).toBe("PATCH");
-    expect(req.path).toBe("/fme/internal/api/v4/segment-definitions/seg1");
+    expect(req.path).toBe("/fme/api/v4/segment-definitions/seg1");
     expect(req.headers).toMatchObject({ "Content-Type": "application/merge-patch+json" });
     expect(req.body).toEqual({ description: null });
   });
 
-  it("delete: routes to /fme/internal/api/v4/segment-definitions/{segment_name}", async () => {
+  it("delete: routes to /fme/api/v4/segment-definitions/{segment_name}", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1188,7 +1188,7 @@ describe("fme_segment_definition", () => {
       segment_name: "seg1",
     });
 
-    expect(firstRequest(mockRequest).path).toBe("/fme/internal/api/v4/segment-definitions/seg1");
+    expect(firstRequest(mockRequest).path).toBe("/fme/api/v4/segment-definitions/seg1");
   });
 
   it("has no enable/disable/change_request execute actions", () => {
