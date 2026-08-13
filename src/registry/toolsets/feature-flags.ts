@@ -133,7 +133,12 @@ const fmeRbsChangeRequestSchema: BodySchema = {
 export const featureFlagsToolset: ToolsetDefinition = {
   name: "feature-flags",
   displayName: "Feature Management & Experimentation",
-  description: "Harness FME — feature flags, rule-based segments, workspaces, environments, and rollout statuses via the Split.io API",
+  description:
+    "Harness FME — feature flags, segments, environments, and rollout statuses. " +
+    "Two mutually exclusive scoping modes: legacy workspace_id (Split.io API) or " +
+    "Harness-native org_id+project_id. If you already have org_id and project_id, use " +
+    "them directly and skip fme_workspace entirely — org/project fully identify scope " +
+    "on their own; there is no need to look up a workspace first.",
   resources: [
     // ── FME Resources (Split.io API at https://api.split.io) ───────────
     // These use account scope to avoid injecting orgIdentifier/projectIdentifier
@@ -142,7 +147,12 @@ export const featureFlagsToolset: ToolsetDefinition = {
     {
       resourceType: "fme_workspace",
       displayName: "FME Workspace",
-      description: "Feature Management workspace. Supports list with pagination (offset/size, default 20, max 1000).",
+      description:
+        "Feature Management workspace — legacy Split.io concept only, used solely to discover a " +
+        "workspace_id for other fme_* resources' deprecated legacy calls. Not used by Harness-native " +
+        "calls at all: if you already have org_id and project_id, skip this resource entirely and " +
+        "pass them directly to the fme_* resource you actually want. Supports list with pagination " +
+        "(offset/size, default 20, max 1000).",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -179,7 +189,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
     {
       resourceType: "fme_environment",
       displayName: "FME Environment",
-      description: "Feature Management environment. Supports list. Requires a workspace_id.",
+      description:
+        "Feature Management environment. Supports list. Dual-mode scoping: pass either org_id+project_id " +
+        "(Harness-native, preferred — no workspace lookup needed) or the deprecated workspace_id.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -209,7 +221,10 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag",
       displayName: "FME Feature Flag",
       description:
-        "Feature flag via the Split.io API. List flags by workspace with filtering (name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50). Supports create (requires traffic_type_id), get, delete, update, and kill/restore/archive/unarchive execute actions.",
+        "Feature flag. Dual-mode scoping: pass org_id+project_id (Harness-native, preferred — no " +
+        "workspace lookup needed; supports list/get/delete) or the deprecated workspace_id (Split.io " +
+        "API; supports list/get/create/delete/update/kill/restore/archive/unarchive). List supports " +
+        "filtering (name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50).",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
