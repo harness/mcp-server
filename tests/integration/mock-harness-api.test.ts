@@ -609,4 +609,69 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       expect(result).toEqual({ identifier: "shared-env", name: "Shared Env Updated" });
     });
   });
+
+  describe("iacm module registry writes", () => {
+    it("create posts JSON body with scope query params and returns the module", async () => {
+      const module = { id: "4640", name: "vpc", system: "aws" };
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(module));
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+      const body = {
+        name: "vpc",
+        system: "aws",
+        repository: "terraform-modules",
+        repository_connector: "account.github",
+      };
+
+      const result = await registry.dispatch(client, "iacm_module", "create", {
+        org_id: "default",
+        project_id: "test-project",
+        body,
+      });
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      const init = options as RequestInit;
+      expect(urlStr).toContain("/iacm/api/modules");
+      expect(urlStr).toContain("scope_org=default");
+      expect(urlStr).toContain("scope_project=test-project");
+      expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+      expect(JSON.parse(init.body as string)).toEqual(body);
+      expect(result).toEqual(module);
+    });
+
+    it("update puts by module id and maps resource_id", async () => {
+      const updated = { id: "4640", name: "vpc", system: "aws", description: "updated" };
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(updated));
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      const result = await registry.dispatch(client, "iacm_module", "update", {
+        id: "4640",
+        org_id: "default",
+        body: {
+          name: "vpc",
+          system: "aws",
+          description: "updated",
+        },
+      });
+
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      expect(urlStr).toContain("/iacm/api/modules/4640");
+      expect(urlStr).toContain("scope_org=default");
+      expect((options as RequestInit).method?.toUpperCase()).toBe("PUT");
+      expect(JSON.parse((options as RequestInit).body as string)).toEqual({
+        name: "vpc",
+        system: "aws",
+        description: "updated",
+      });
+      expect(result).toEqual(updated);
+    });
+  });
 });

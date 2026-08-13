@@ -25,8 +25,8 @@
 
 ## IaCM module registry create/update (this PR)
 - [x] Add `iacm_module` create/update with name/system body schemas + scope_org/scope_project query mapping
-- [ ] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
-- [ ] Note Active RBAC: `iac_registry_view` / `iac_registry_edit` are enforceable
+- [x] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
+- [x] Note Active RBAC: `iac_registry_view` / `iac_registry_edit` are enforceable
 - [ ] Open PR stacked on variable-set branch (#800)
 
 ### Plan

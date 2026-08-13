@@ -1046,6 +1046,86 @@ describe("iacm_variable_set create/update via MCP tools", () => {
   });
 });
 
+describe("iacm_module create/update via MCP tools", () => {
+  const moduleBody = {
+    name: "vpc",
+    system: "aws",
+    repository: "terraform-modules",
+    repository_connector: "account.github",
+  };
+
+  it("harness_create returns the module resource for iacm_module", async () => {
+    const created = { id: "4640", ...moduleBody };
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const mockRequest = vi.fn().mockResolvedValue(created);
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await server.call("harness_create", {
+      resource_type: "iacm_module",
+      org_id: "default",
+      project_id: "test-project",
+      body: moduleBody,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toEqual(created);
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params?: Record<string, unknown>;
+      body: unknown;
+    };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/iacm/api/modules");
+    expect(callArgs.params).toMatchObject({
+      scope_org: "default",
+      scope_project: "test-project",
+    });
+    expect(callArgs.body).toEqual(moduleBody);
+  });
+
+  it("harness_update maps resource_id to module id", async () => {
+    const updated = { id: "4640", name: "vpc", system: "aws", description: "updated" };
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const mockRequest = vi.fn().mockResolvedValue(updated);
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await server.call("harness_update", {
+      resource_type: "iacm_module",
+      resource_id: "4640",
+      org_id: "default",
+      body: {
+        name: "vpc",
+        system: "aws",
+        description: "updated",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toEqual(updated);
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params?: Record<string, unknown>;
+      body: unknown;
+    };
+    expect(callArgs.method).toBe("PUT");
+    expect(callArgs.path).toBe("/iacm/api/modules/4640");
+    expect(callArgs.params).toMatchObject({ scope_org: "default" });
+    expect(callArgs.body).toEqual({
+      name: "vpc",
+      system: "aws",
+      description: "updated",
+    });
+  });
+});
+
 describe("harness_update", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;

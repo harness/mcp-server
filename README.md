@@ -1424,16 +1424,16 @@ Template operations use the Harness Template service paths (`/template/api/templ
 
 IaCM resources are default-enabled and mostly project-scoped. Start with `iacm_workspace` to find workspace identifiers, then use that `workspace_id` for workspace resources, costs, and activity diffs. Use `iacm_variable_set` for reusable variable sets at account, org, or project scope. The module registry is account-scoped.
 
-`iacm_workspace` create/update return `{ policy_evaluation }` only — follow up with `harness_get` to fetch the workspace. `iacm_variable_set` create/update return the VariableSet resource itself. Variable-set **update is HTTP PUT with full-replacement collections** — always `harness_get` first, then PUT the full desired body (`terraform_variables` / `environment_variables` are required on update; omit/empty clears connectors and variable files). Writes are `medium_write` and require confirmation (elicitation or `confirm: true`).
+`iacm_workspace` create/update return `{ policy_evaluation }` only — follow up with `harness_get` to fetch the workspace. `iacm_variable_set` and `iacm_module` create/update return the resource itself. Variable-set **update is HTTP PUT with full-replacement collections** — always `harness_get` first, then PUT the full desired body (`terraform_variables` / `environment_variables` are required on update; omit/empty clears connectors and variable files). Module update is also PUT — prefer get-then-put for optional fields. Writes are `medium_write` and require confirmation (elicitation or `confirm: true`).
 
-Variable-set RBAC (`iac_variableset_*`) is currently Experimental in Harness — access checks always allow until iac-server activates enforcement. MCP still forwards the caller PAT/SAT unchanged.
+Variable-set RBAC (`iac_variableset_*`) is currently Experimental in Harness — access checks always allow until iac-server activates enforcement. Module registry RBAC (`iac_registry_view` / `iac_registry_edit`) is Active and enforceable. MCP always forwards the caller PAT/SAT unchanged.
 
 | Resource Type                   | List | Get | Create | Update | Delete | Execute Actions |
 | ------------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `iacm_workspace`                | x    | x   | x      | x      |        |                 |
 | `iacm_variable_set`             | x    | x   | x      | x      |        |                 |
 | `iacm_resource`                 | x    |     |        |        |        |                 |
-| `iacm_module`                   | x    | x   |        |        |        |                 |
+| `iacm_module`                   | x    | x   | x      | x      |        |                 |
 | `iacm_workspace_costs`          | x    |     |        |        |        |                 |
 | `iacm_activity_resource_change` | x    |     |        |        |        |                 |
 
@@ -1443,9 +1443,10 @@ Typical workflow:
 2. `harness_create` / `harness_update` on `iacm_workspace` to create from scratch or a template (`associated_template`), or update an existing workspace — response is `{ policy_evaluation }` only.
 3. `harness_get(resource_type="iacm_workspace", workspace_id="...")` to fetch the created/updated workspace.
 4. `harness_list` / `harness_create` / `harness_update` on `iacm_variable_set` (optionally with `resource_scope`) for reusable Terraform/env variable sets — response is the VariableSet resource.
-5. `harness_list(resource_type="iacm_resource", org_id="...", project_id="...", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
-6. `harness_list(resource_type="iacm_workspace_costs", org_id="...", project_id="...", workspace_id="...")` to review per-execution cost entries.
-7. `harness_list(resource_type="iacm_activity_resource_change", org_id="...", project_id="...", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
+5. `harness_list` / `harness_create` / `harness_update` on `iacm_module` for the account module registry (`name` + `system` required; optional `org_id`/`project_id` → scope query params) — response is the module resource.
+6. `harness_list(resource_type="iacm_resource", org_id="...", project_id="...", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
+7. `harness_list(resource_type="iacm_workspace_costs", org_id="...", project_id="...", workspace_id="...")` to review per-execution cost entries.
+8. `harness_list(resource_type="iacm_activity_resource_change", org_id="...", project_id="...", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
 
 IaCM list responses expose `page_count` as the count for the current page only (except `iacm_variable_set`, which is not paginated). When `has_more` is true, keep requesting the next 1-based page and sum page counts if you need a total.
 

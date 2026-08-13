@@ -457,6 +457,41 @@ describe("Elicitation flow: iacm_workspace medium_write", () => {
       name: "Shared Env",
     });
   });
+
+  it("elicits confirmation for iacm_module medium_write create", async () => {
+    mockRequest = vi.fn().mockResolvedValue({
+      id: "4640",
+      name: "vpc",
+      system: "aws",
+    });
+    client = {
+      request: mockRequest,
+      account: "test-account",
+    } as unknown as HarnessClient;
+
+    const server = makeMcpServer({ supportsElicitation: true, elicitAction: "accept" });
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    const result = await server.call("harness_create", {
+      resource_type: "iacm_module",
+      org_id: "default",
+      project_id: "test-project",
+      body: {
+        name: "vpc",
+        system: "aws",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(server._elicitInput).toHaveBeenCalledOnce();
+    expect(mockRequest).toHaveBeenCalledOnce();
+    expect(JSON.parse(result.content[0]!.text)).toEqual({
+      id: "4640",
+      name: "vpc",
+      system: "aws",
+    });
+  });
 });
 
 describe("Elicitation ordering: validate before elicit", () => {

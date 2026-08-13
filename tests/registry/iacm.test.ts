@@ -293,6 +293,18 @@ describe("iacm_module write contract", () => {
       expect(required).toEqual(["name", "system"]);
     }
   });
+
+  it("documents Active registry RBAC and module resource responses", () => {
+    const create = getOp("iacm_module", "create");
+    const update = getOp("iacm_module", "update");
+    expect(create.description).toMatch(/module resource/i);
+    expect(create.description).toMatch(/Active/i);
+    expect(create.description).not.toMatch(/Experimental/i);
+    expect(update.description).toMatch(/module resource/i);
+    expect(update.description).toMatch(/Active/i);
+    expect(update.description).toMatch(/get-then-put|harness_get/i);
+    expect(update.bodySchema!.description).toMatch(/get-then-put|omit.*clear/i);
+  });
 });
 
 // ─── Variable set contract ───────────────────────────────────────────────────
