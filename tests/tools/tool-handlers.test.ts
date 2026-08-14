@@ -272,6 +272,100 @@ describe("harness_get", () => {
   });
 });
 
+describe("FME legacy workspace_id + Harness URL precedence (params merged before applyUrlDefaults)", () => {
+  const fmeFlagUrl =
+    "https://app.harness.io/ng/account/abc123/cf/orgs/default/projects/myProject/feature-flags/my_flag";
+  const fmeFlagListUrl =
+    "https://app.harness.io/ng/account/abc123/cf/orgs/default/projects/myProject/feature-flags";
+
+  it("harness_create routes legacy create when workspace_id is only in params", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    const mockRequest = vi.fn().mockResolvedValue({ id: "new-flag" });
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+    registerCreateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+
+    const result = await server.call("harness_create", {
+      resource_type: "fme_feature_flag",
+      url: fmeFlagListUrl,
+      params: { workspace_id: "workspace-1", traffic_type_id: "tt-user" },
+      body: { name: "new-flag" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(call.path).toBe("/internal/api/v2/splits/ws/workspace-1/trafficTypes/tt-user");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("harness_update routes legacy update when workspace_id is only in params", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    const mockRequest = vi.fn().mockResolvedValue({ name: "my_flag" });
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+
+    const result = await server.call("harness_update", {
+      resource_type: "fme_feature_flag",
+      url: fmeFlagUrl,
+      params: { workspace_id: "workspace-1" },
+      body: { description: "updated" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(call.path).toBe("/internal/api/v2/splits/ws/workspace-1/my_flag");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("harness_delete routes legacy delete when workspace_id is only in params", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+
+    const result = await server.call("harness_delete", {
+      resource_type: "fme_feature_flag",
+      url: fmeFlagUrl,
+      params: { workspace_id: "workspace-1" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(call.path).toBe("/internal/api/v2/splits/ws/workspace-1/my_flag");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+
+  it("harness_execute kill routes legacy Split.io when workspace_id is only in params", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    const mockRequest = vi.fn().mockResolvedValue(true);
+    const client = makeClient(mockRequest);
+    const server = makeMcpServer("accept");
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server, registry, client, makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+
+    const result = await server.call("harness_execute", {
+      resource_type: "fme_feature_flag",
+      action: "kill",
+      url: fmeFlagUrl,
+      params: { workspace_id: "workspace-1", environment_id: "env-prod" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(call.path).toBe("/internal/api/v2/splits/ws/workspace-1/my_flag/environments/env-prod/kill");
+    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.projectIdentifier).toBeUndefined();
+  });
+});
+
 describe("harness_get — execution_inputs", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;

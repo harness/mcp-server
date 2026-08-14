@@ -324,6 +324,26 @@ describe("fme_feature_flag dual-mode routing", () => {
       registry.dispatch(client, "fme_feature_flag", "list", { workspace_id: "ws1", org_id: "o1" }),
     ).rejects.toThrow("fme_feature_flag: pass either workspace_id (deprecated) OR org_id+project_id, not both.");
   });
+
+  it("empty-string workspace_id selects Harness-native mode and still injects org/project scope params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "list", {
+      workspace_id: "",
+      org_id: "o1",
+      project_id: "p1",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/feature-flags");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(req.params?.orgIdentifier).toBeUndefined();
+  });
 });
 
 describe("fme_feature_flag kill/restore/reallocate/archive/unarchive dual-mode", () => {
