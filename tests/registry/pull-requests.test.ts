@@ -3,6 +3,10 @@ import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
 import type { EndpointSpec } from "../../src/registry/types.js";
+import { pullRequestsToolset } from "../../src/registry/toolsets/pull-requests.js";
+
+const PR_SCOPE_GUIDANCE =
+  "Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -30,6 +34,59 @@ function makeClient(requestFn: (...args: unknown[]) => unknown): HarnessClient {
     account: "test-account",
   } as unknown as HarnessClient;
 }
+
+describe("pull request scopeOptional dispatch", () => {
+  it("omits org/project query params when not explicitly provided (account-scoped repos)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "account_repo",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { params?: Record<string, unknown> };
+    expect(call.params?.orgIdentifier).toBeUndefined();
+    expect(call.params?.projectIdentifier).toBeUndefined();
+  });
+
+  it("forwards org_id and project_id when explicitly provided (org/project-scoped repos)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { number: 7 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "get", {
+      repo_id: "my_repo",
+      pr_number: "7",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { params?: Record<string, unknown> };
+    expect(call.params).toMatchObject({
+      orgIdentifier: "AI_Devops",
+      projectIdentifier: "Sanity",
+    });
+  });
+});
+
+describe("pull request resource scope documentation", () => {
+  const PR_RESOURCES = [
+    "pull_request",
+    "pr_reviewer",
+    "pr_comment",
+    "pr_check",
+    "pr_activity",
+  ] as const;
+
+  for (const resourceType of PR_RESOURCES) {
+    it(`${resourceType} description documents org/project scope guidance`, () => {
+      const resource = pullRequestsToolset.resources.find((r) => r.resourceType === resourceType);
+      expect(resource?.description).toContain(PR_SCOPE_GUIDANCE);
+      expect(resource?.scopeOptional).toBe(true);
+    });
+  }
+});
 
 describe("pull_request registry mappings", () => {
   it("routes state-only updates to the Harness Code PR state endpoint", async () => {
