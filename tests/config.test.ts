@@ -248,6 +248,55 @@ describe("ConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("defaults HARNESS_LOG_UNSAFE_BODIES to false and coerces boolean env values", () => {
+    const withDefault = ConfigSchema.safeParse(validConfig);
+    expect(withDefault.success).toBe(true);
+    if (withDefault.success) {
+      expect(withDefault.data.HARNESS_LOG_UNSAFE_BODIES).toBe(false);
+    }
+
+    const enabled = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_LOG_UNSAFE_BODIES: "true",
+    });
+    expect(enabled.success).toBe(true);
+    if (enabled.success) {
+      expect(enabled.data.HARNESS_LOG_UNSAFE_BODIES).toBe(true);
+    }
+  });
+
+  it("defaults HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY to 3 and coerces from env", () => {
+    const withDefault = ConfigSchema.safeParse(validConfig);
+    expect(withDefault.success).toBe(true);
+    if (withDefault.success) {
+      expect(withDefault.data.HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY).toBe(3);
+    }
+
+    const coerced = ConfigSchema.safeParse({
+      ...validConfig,
+      HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: "5",
+    });
+    expect(coerced.success).toBe(true);
+    if (coerced.success) {
+      expect(coerced.data.HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY).toBe(5);
+    }
+  });
+
+  it("rejects HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY outside 1..20", () => {
+    expect(
+      ConfigSchema.safeParse({
+        ...validConfig,
+        HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: "0",
+      }).success,
+    ).toBe(false);
+    expect(
+      ConfigSchema.safeParse({
+        ...validConfig,
+        HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY: "21",
+      }).success,
+    ).toBe(false);
+  });
+
   it("coerces string numbers for timeout and retries", () => {
     const result = ConfigSchema.safeParse({
       ...validConfig,
