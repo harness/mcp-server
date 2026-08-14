@@ -25,6 +25,8 @@ function normalizeFmeTags(tags: unknown): unknown {
   return Array.isArray(tags) ? tags.map((t) => (typeof t === "string" ? { name: t } : t)) : tags;
 }
 
+const FME_SEGMENT_TYPES = ["standard", "rule_based", "large"] as const;
+
 const fmeFeatureFlagUpdateSchema: BodySchema = {
   description: "Partial update for an FME feature flag's metadata. Provide the fields you want to change. Legacy mode (workspace_id): converted to JSON Patch (RFC 6902) automatically — description/tags/rolloutStatus only. Harness-native mode (org_id+project_id): sent as JSON Merge Patch (RFC 7396) — description/tags/owners/rolloutStatus; set description/tags/owners to null (or [] for tags/owners) to clear them, omit a field to leave it unchanged.",
   fields: [
@@ -98,9 +100,10 @@ const fmeRbsCreateSchema: BodySchema = {
 };
 
 const fmeSegmentCreateSchema: BodySchema = {
-  description: "Create a new segment. name and trafficType are required; description/tags/owners are optional.",
+  description: "Create a new segment. name, trafficType, and type are required; description/tags/owners are optional.",
   fields: [
     { name: "name", type: "string", required: true, description: "Segment name (must be unique within the project)" },
+    { name: "type", type: "string", required: true, description: "Segment kind. Must be one of: \"standard\" | \"rule_based\" | \"large\"." },
     { name: "description", type: "string", required: false, description: "Optional description of the segment" },
     { name: "trafficType", type: "string", required: true, description: "Traffic type name" },
     { name: "tags", type: "array", required: false, description: "Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
@@ -1094,7 +1097,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment",
       displayName: "FME Segment",
       description:
-        "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard and rule-based). Supports list, get, create, delete.",
+        "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard, rule-based, and large). Supports list, get, create, delete. create requires body.type (\"standard\" | \"rule_based\" | \"large\").",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
@@ -1150,9 +1153,15 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             const trafficType = (body?.trafficType ?? body?.traffic_type) as string | undefined;
+            if (body?.type !== undefined && !FME_SEGMENT_TYPES.includes(body.type as (typeof FME_SEGMENT_TYPES)[number])) {
+              throw new Error(
+                `fme_segment.create: invalid type '${body.type}'. Must be one of: ${FME_SEGMENT_TYPES.join(", ")}.`,
+              );
+            }
             return {
               name: body?.name,
               trafficType,
+              type: body?.type,
               ...(body?.description !== undefined ? { description: body.description } : {}),
               ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
               ...(body?.owners !== undefined ? { owners: body.owners } : {}),
@@ -1160,7 +1169,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           bodySchema: fmeSegmentCreateSchema,
-          description: "Create a new segment. Body requires name + trafficType; optional description/tags/owners.",
+          description: "Create a new segment. Body requires name + trafficType + type (\"standard\" | \"rule_based\" | \"large\"); optional description, tags, owners.",
         },
       },
     },

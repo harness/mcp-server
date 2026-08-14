@@ -1022,7 +1022,7 @@ describe("fme_segment", () => {
     await registry.dispatch(client, "fme_segment", "create", {
       org_id: "o1",
       project_id: "p1",
-      body: { name: "x", trafficType: "user", tags: ["a"] },
+      body: { name: "x", type: "standard", trafficType: "user", tags: ["a"] },
     });
 
     const req = firstRequest(mockRequest);
@@ -1032,7 +1032,35 @@ describe("fme_segment", () => {
       organization_identifier: "o1",
       project_identifier: "p1",
     });
-    expect(req.body).toEqual({ name: "x", trafficType: "user", tags: [{ name: "a" }] });
+    expect(req.body).toEqual({ name: "x", type: "standard", trafficType: "user", tags: [{ name: "a" }] });
+  });
+
+  it("create: rejects an invalid type value", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: { name: "x", type: "bogus", trafficType: "user" },
+      }),
+    ).rejects.toThrow(/invalid type 'bogus'/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: missing type surfaces as a missing-required-field error", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: { name: "x", trafficType: "user" },
+      }),
+    ).rejects.toThrow(/type/i);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("create: missing trafficType surfaces as a missing-required-field error", async () => {
