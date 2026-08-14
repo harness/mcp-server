@@ -2,10 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import {
   evidenceVaultToolset,
   buildAttestationListBody,
-  attestationListExtract,
+} from "../../src/registry/toolsets/evidence-vault.js";
+import {
   attestationDetailsExtract,
   attestationDownloadExtract,
-} from "../../src/registry/toolsets/evidence-vault.js";
+  attestationListExtract,
+} from "../../src/registry/extractors.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
