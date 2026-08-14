@@ -1493,6 +1493,10 @@ const schema: Record<string, any> = {
             },
             "sto": {
               "$ref": "#/definitions/pipeline_v1/common/TemplateRef"
+            },
+            "ai-eval": {
+              "description": "Alias for AI evaluation step template.",
+              "$ref": "#/definitions/pipeline_v1/common/TemplateRef"
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -2382,10 +2386,6 @@ const schema: Record<string, any> = {
               "if": {
                 "type": "string",
                 "description": "Conditional execution expression. Stage is skipped if condition resolves to false."
-              },
-              "variables": {
-                "description": "Stage-level variables.",
-                "$ref": "#/definitions/pipeline_v1/common/NGVariableV1Wrapper"
               },
               "inputs": {
                 "description": "Stage-level input variables.",
@@ -4017,10 +4017,6 @@ const schema: Record<string, any> = {
                 "description": "Conditional execution expression. Stage is skipped if condition resolves to false.",
                 "type": "string"
               },
-              "variables": {
-                "description": "Stage-level variables.",
-                "$ref": "#/definitions/pipeline_v1/common/NGVariableV1Wrapper"
-              },
               "on-failure": {
                 "$ref": "#/definitions/pipeline_v1/common/OnFailure"
               },
@@ -4285,6 +4281,11 @@ const schema: Record<string, any> = {
                   "required": [
                     "sto"
                   ]
+                },
+                {
+                  "required": [
+                    "ai-eval"
+                  ]
                 }
               ]
             },
@@ -4450,6 +4451,11 @@ const schema: Record<string, any> = {
                       {
                         "required": [
                           "sto"
+                        ]
+                      },
+                      {
+                        "required": [
+                          "ai-eval"
                         ]
                       }
                     ]
@@ -5289,6 +5295,56 @@ const schema: Record<string, any> = {
                         "oneOf": [
                           {
                             "type": "string"
+                          },
+                          {
+                            "$ref": "#/definitions/pipeline_v1/common/Expression"
+                          }
+                        ]
+                      },
+                      "user-groups": {
+                        "description": "User groups for approval when the advisory decision requires gating. Supports single value or array. Supports expressions.",
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "$ref": "#/definitions/pipeline_v1/common/Expression"
+                          }
+                        ]
+                      },
+                      "service-accounts": {
+                        "description": "Service accounts for approval when the advisory decision requires gating. Supports single value or array. Supports expressions.",
+                        "oneOf": [
+                          {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          {
+                            "$ref": "#/definitions/pipeline_v1/common/Expression"
+                          }
+                        ]
+                      },
+                      "approvers-min-count": {
+                        "description": "Minimum number of approvers required when the advisory decision requires gating. Supports expressions.",
+                        "oneOf": [
+                          {
+                            "type": "integer"
+                          },
+                          {
+                            "type": "string"
+                          }
+                        ]
+                      },
+                      "block-executor": {
+                        "description": "Block pipeline executor from approving when the advisory decision requires gating. Supports expressions.",
+                        "oneOf": [
+                          {
+                            "type": "boolean"
                           },
                           {
                             "$ref": "#/definitions/pipeline_v1/common/Expression"
