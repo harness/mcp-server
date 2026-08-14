@@ -58,6 +58,7 @@ import {
   descChaosServiceEnvironmentId, descChaosServiceInfrastructureId,
   descChaosServiceInfrastructureType, descChaosServiceOnboardingId,
   descChaosServiceProbes,
+  descChaosServiceProbesUpdate,
   descListK8sInfra, descGetK8sInfra, descCreateK8sInfra, descListChaosEnabledInfra,
   descBodyK8sInfraCreate, descK8sInfraIdentityCreate, descK8sInfraNameCreate,
   descK8sInfraEnvironmentIdCreate, descK8sInfraInfraIdCreate, descK8sInfraConnectorIdCreate,
@@ -165,7 +166,7 @@ import {
   descExperimentManifest, descExperimentInfraType, descExperimentInfraIdCreate, descExperimentCronSyntax,
   descExperimentIdUUID,
   // Service Discovery
-  descSDAgentIdentity, descSDEnvironmentId, descSDFetchAll, descSDAgentDiagnostic,
+  descSDAgentIdentity, descSDEnvironmentId, descSDAgentListEnvironmentId, descSDFetchAll, descSDAgentDiagnostic,
   descDiscoveredAgent, descListDiscoveredAgents, descDiscoveredAgentSearch,
   descDiscoveredNamespace, descListDiscoveredNamespaces, descSDNamespaceNameFilter,
   descDiscoveredService, descListDiscoveredServices, descSDNamespaceFilter, descSDSearchFilter,
@@ -225,6 +226,21 @@ function compactLoadTest(item: Record<string, unknown>): Record<string, unknown>
     "loadtestId", "uniqueId", "identity", "name", "description", "tags",
     "environmentIdentifier", "infraIdentifier", "infraType", "targetType",
     "toolType", "scriptSource", "cleanupPolicy", "latestRevisionIdentifier",
+    "createdAt", "updatedAt", "openInHarness",
+  ]) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
+}
+
+/** Compact projection for discovered_agent list items — keeps serviceCount/
+ * networkMapCount (STEP 1 of chaos_service create shows these) which the
+ * generic compactItems() whitelist in utils/compact.ts would otherwise drop. */
+function compactDiscoveredAgent(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "identity", "name", "description", "tags", "environmentIdentifier",
+    "serviceCount", "networkMapCount", "installationType",
     "createdAt", "updatedAt", "openInHarness",
   ]) {
     if (item[key] !== undefined) slim[key] = item[key];
@@ -356,7 +372,7 @@ function parseHostOrigin(rawUrl: string | undefined): string | undefined {
 // Matches K6Spec + ScriptSpec in loadTestManager: mode +
 // script{content|image|entrypoint|loadArgs|imagePullSecret} +
 // tunables{targetUrl, targetUsers, durationSeconds, rampUpTimeSec, workerCount, hostUrl,
-// iterations} + options.rpsLimit + envVars.
+// iterations, rpsLimit} + envVars.
 function buildK6ToolConfig(
   b: Record<string, unknown>,
   args: { scriptSource: string; script?: string; targetUrl?: string },
@@ -415,10 +431,12 @@ function buildK6ToolConfig(
   if (b.worker_count != null) tunables.workerCount = b.worker_count;
   if (hostUrl) tunables.hostUrl = hostUrl;
   if (iterations != null && iterations > 0) tunables.iterations = iterations;
+  // rpsLimit's sole authoring surface is tunables (loadTestManager k6.go);
+  // options.rpsLimit is a legacy run-dispatch fallback only, never written here.
+  if (rpsLimit != null && rpsLimit > 0) tunables.rpsLimit = rpsLimit;
 
   const toolConfig: Record<string, unknown> = { mode, script };
   if (Object.keys(tunables).length > 0) toolConfig.tunables = tunables;
-  if (rpsLimit != null && rpsLimit > 0) toolConfig.options = { rpsLimit };
   if (envVars.length > 0) toolConfig.envVars = envVars;
   return toolConfig;
 }
@@ -558,6 +576,10 @@ function validateLoadArgs(loadArgs: string): void {
 // LocustSpec + ScriptSpec in loadTestManager: mode +
 // script{content|image|entrypoint|loadArgs|imagePullSecret} +
 // tunables{targetUrl, targetUsers, spawnRate, rampUpTimeSec, durationSeconds, workerCount}.
+// NOTE: Locust intentionally has no target_type guard (unlike K6/JMeter) —
+// loadTestManager supports Locust script AND image mode on both Linux VM and
+// Kubernetes infra (loadtest_handlers.go has no Locust kubernetes-only check).
+// Do not add one here.
 function buildLocustToolConfig(
   b: Record<string, unknown>,
   args: { scriptSource: string; script?: string; targetUrl?: string },
@@ -1932,7 +1954,7 @@ export const chaosToolset: ToolsetDefinition = {
           resourceType: "chaos_infrastructure",
           relationship: "prerequisite",
           description:
-            "Linux VM load-runner infrastructure. When the load test targets Linux VM (target_type='machine-chaos-linux', the default), its 'environmentID' supplies environment_id and its 'infraID' supplies infra_id. Only loadEnabled + ACTIVE infras are usable. Linux VM supports tool_type Locust only -- K6 and JMeter with a Linux target_type are rejected by MCP.",
+            "Linux VM load-runner infrastructure. When the load test targets Linux VM (target_type='machine-chaos-linux', the default), its 'environmentID' supplies environment_id and its 'infraID' supplies infra_id. Only loadEnabled + ACTIVE infras are usable. In MCP, Linux VM supports tool_type Locust only -- K6 (a genuine backend restriction) and JMeter (an MCP/UI-parity restriction; the backend itself allows Linux JMeter) with a Linux target_type are rejected by MCP.",
         },
         {
           resourceType: "chaos_enabled_infrastructure",
@@ -2334,6 +2356,7 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["identity"],
+      deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/risks/services/{identity}",
       listFilterFields: [
         { name: "environment_ids", description: descChaosServiceEnvironmentIds },
         { name: "infrastructure_ids", description: descChaosServiceInfrastructureIds },
@@ -2493,7 +2516,12 @@ export const chaosToolset: ToolsetDefinition = {
               agent_id: agentId,
               environment_id: environmentId,
               infrastructure_id: infrastructureId,
-              ...(probes && probes.length > 0 ? { probes } : {}),
+              // Full desired-state replace (hce-saas reconcileProbeMappings):
+              // pass an explicit [] straight through (detach all) rather than
+              // dropping it, but leave the key absent when the caller omitted it
+              // so the required-field validation below rejects the request
+              // instead of silently clearing every probe.
+              ...(probes !== undefined ? { probes } : {}),
             };
           },
           responseExtractor: passthrough,
@@ -2508,7 +2536,7 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "infrastructure_id", type: "string", required: true, description: descChaosServiceInfrastructureId },
               { name: "description", type: "string", required: false, description: descChaosServiceDescription },
               { name: "tags", type: "array", required: false, description: descChaosServiceTagsBody },
-              { name: "probes", type: "array", required: false, description: descChaosServiceProbes },
+              { name: "probes", type: "array", required: true, description: descChaosServiceProbesUpdate },
             ],
           },
         },
@@ -2522,6 +2550,7 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: {
             page: "page",
             limit: "limit",
+            size: "limit",
             search: "search",
             sort_field: "sortField",
             sort_ascending: "sortAscending",
@@ -2542,6 +2571,7 @@ export const chaosToolset: ToolsetDefinition = {
           queryParams: {
             page: "page",
             limit: "limit",
+            size: "limit",
             search: "search",
             sort_field: "sortField",
             sort_ascending: "sortAscending",
@@ -3972,12 +4002,13 @@ export const chaosToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["identity"],
+      compactItem: compactDiscoveredAgent,
       searchAliases: [
         "service discovery agent", "sd agent", "discovery agent",
         "chaos discovery agent",
       ],
       listFilterFields: [
-        { name: "environment_id", description: descSDEnvironmentId },
+        { name: "environment_id", description: descSDAgentListEnvironmentId },
         { name: "search", description: descDiscoveredAgentSearch },
         { name: "all", type: "boolean", description: descSDFetchAll },
       ],

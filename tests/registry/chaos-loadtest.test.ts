@@ -334,8 +334,9 @@ describe("chaos_loadtest create (K6)", () => {
       workerCount: 3,
       hostUrl: "http://www.google.com",
       iterations: 42,
+      rpsLimit: 98,
     });
-    expect(k6.options).toEqual({ rpsLimit: 98 });
+    expect(k6.options).toBeUndefined();
     expect(k6.envVars).toEqual([
       { key: "var1", value: "static" },
       { key: "SECRET_VAR", value: 'secrets.getValue("vcenter")', secret: true },
@@ -350,7 +351,7 @@ describe("chaos_loadtest create (K6)", () => {
     expect(manifest.spec.toolConfig.k6.mode).toBe("script");
     expect(manifest.spec.toolConfig.k6.script.content).toBe(K6_SCRIPT);
     expect(manifest.spec.toolConfig.k6.tunables.workerCount).toBe(3);
-    expect(manifest.spec.toolConfig.k6.options.rpsLimit).toBe(98);
+    expect(manifest.spec.toolConfig.k6.tunables.rpsLimit).toBe(98);
   });
 
   it("image mode: nests script.image + entrypoint under toolConfig.k6.script", async () => {
