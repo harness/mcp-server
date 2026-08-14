@@ -705,8 +705,9 @@ const providerCreateSchema: BodySchema = {
   // here because bodySchema validates the BUILT body — and providerCreateBody strips type
   // from the wire payload (type is a path segment, not a JSON field).
   description:
-    "IaCM provider registry create definition. body.type is REQUIRED (path segment, e.g. aws); " +
-    "only description is forwarded in the JSON body.",
+    "IaCM provider registry create definition. Account-scoped (Harness-Account header only). " +
+    "body.type is REQUIRED (path segment, e.g. aws); only description is forwarded in the JSON body. " +
+    "API response is { id } only — call harness_get with that id for full details.",
   fields: [
     {
       name: "type",
@@ -1179,10 +1180,14 @@ export const iacmToolset: ToolsetDefinition = {
       displayName: "IaCM Provider Registry",
       description:
         "Private Terraform/OpenTofu providers registered in the Harness IaCM provider registry. " +
-        "Providers are account-scoped and identified by numeric/string id (not type alone). " +
+        "SCOPE: account-only — the IaCM provider-registry API has no scope_org/scope_project params " +
+        "(unlike iacm_module). Ambient org_id/project_id and HARNESS_ORG/HARNESS_PROJECT are ignored. " +
+        "Providers are identified by numeric/string id (not type alone). " +
+        "USER FLOW: harness_create → response is { id } only → harness_get/harness_list with that id → " +
+        "harness_update for versions (not metadata). " +
         "IMPORTANT: there is no metadata PUT /providers/{id}. harness_update is version-oriented: " +
         "omit params.version to create a new version (POST), or pass params.version to update an existing version (PUT). " +
-        "Create returns the provider resource; version create/update may return an empty body (HarnessClient normalizes to success). " +
+        "Version create/update may return an empty body (HarnessClient normalizes to success). " +
         "Provider-registry RBAC (iac_providerregistry_*) is Experimental. " +
         "PAGINATION: Results are capped at 30 per page (1-based). page_count is THIS page only.",
       toolset: "iacm",
@@ -1213,7 +1218,8 @@ export const iacmToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: providerListExtract,
           description:
-            "List providers in the IaCM provider registry (30 per page; page >= 1). " +
+            "List providers in the account-scoped IaCM provider registry (30 per page; page >= 1). " +
+            "org_id/project_id are ignored — this API has no scope_org/scope_project. " +
             "Response fields: items, page_count (THIS page only), has_more, pagination_note.",
         },
         get: {
@@ -1223,7 +1229,8 @@ export const iacmToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: providerExtract,
           description:
-            "Get a provider by id. Use the id from harness_list — not the provider type string alone.",
+            "Get a provider by id. Use the id from harness_create (response.id) or harness_list — " +
+            "not the provider type string alone. Account-scoped; org_id/project_id are ignored.",
         },
         create: {
           method: "POST",
@@ -1236,7 +1243,9 @@ export const iacmToolset: ToolsetDefinition = {
           responseExtractor: providerExtract,
           description:
             "Create a provider registry entry. Required body.type becomes the path segment; optional body.description is sent as JSON. " +
-            "Returns the provider resource (includes id for version updates). " +
+            "Response is { id } only — not the full provider. Follow up with harness_get " +
+            "(resource_type=iacm_provider, id=<id>) or harness_list before version updates. " +
+            "Account-scoped (no org/project query params). " +
             "Provider-registry RBAC is Experimental (iac_providerregistry_edit). medium_write — requires confirmation.",
         },
         update: {
@@ -1254,7 +1263,7 @@ export const iacmToolset: ToolsetDefinition = {
               {
                 name: "id",
                 required: true,
-                description: "Provider id from list/create (also accepted as resource_id)",
+                description: "Provider id from create/list (also accepted as resource_id) — not the type string",
               },
               {
                 name: "version",
@@ -1265,11 +1274,11 @@ export const iacmToolset: ToolsetDefinition = {
             ],
           },
           description:
-            "Version-oriented provider update — NOT a metadata PATCH. " +
+            "Version-oriented provider update — NOT a metadata PATCH. Use the id from harness_create/harness_list (not type). " +
             "Create version: omit params.version and pass body.version + protocol + gpg_key_id (POST /providers/{id}/version). " +
             "Update version: pass params.version with body.protocol + gpg_key_id (PUT /providers/{id}/version/{version}). " +
             "Version writes may return an empty 201/204 body; HarnessClient returns { status: \"SUCCESS\", message: \"No content\" }. " +
-            "Provider-registry RBAC is Experimental. medium_write — requires confirmation.",
+            "Account-scoped (no org/project query params). Provider-registry RBAC is Experimental. medium_write — requires confirmation.",
         },
       },
     },

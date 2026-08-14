@@ -1128,7 +1128,7 @@ describe("iacm_module create/update via MCP tools", () => {
 
 describe("iacm_provider create/update via MCP tools", () => {
   it("harness_create maps body.type to the provider path segment", async () => {
-    const created = { id: "1", type: "aws", description: "AWS provider" };
+    const created = { id: "1" };
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
     const mockRequest = vi.fn().mockResolvedValue(created);
     const client = makeClient(mockRequest);

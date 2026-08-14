@@ -84,8 +84,14 @@ describe("iacmToolset structure", () => {
     expect(resource.scopeParams).toEqual({ org: "scope_org", project: "scope_project" });
   });
 
-  it("iacm_provider is account-scoped", () => {
-    expect(findResource("iacm_provider").scope).toBe("account");
+  it("iacm_provider is account-scoped only (no multi-scope like modules)", () => {
+    const resource = findResource("iacm_provider");
+    expect(resource.scope).toBe("account");
+    expect(resource.supportedScopes).toBeUndefined();
+    expect(resource.scopeOptional).toBeUndefined();
+    expect(resource.scopeParams).toBeUndefined();
+    expect(resource.description).toMatch(/account-only|account-scoped/i);
+    expect(resource.description).toMatch(/\{ id \} only|response\.id/i);
   });
 
   it("iacm_module list has pageOneIndexed=true", () => {
@@ -397,13 +403,24 @@ describe("iacm_provider contract", () => {
   it("documents Experimental provider-registry RBAC and version-oriented update", () => {
     const create = getOp("iacm_provider", "create");
     const update = getOp("iacm_provider", "update");
-    expect(create.description).toMatch(/provider resource/i);
+    expect(create.description).toMatch(/\{ id \} only/i);
+    expect(create.description).toMatch(/harness_get/i);
     expect(create.description).toMatch(/Experimental/i);
     expect(create.description).not.toMatch(/Active.*iac_registry/i);
+    expect(create.bodySchema!.description).toMatch(/\{ id \} only/i);
     expect(update.description).toMatch(/version-oriented|NOT a metadata PATCH/i);
     expect(update.description).toMatch(/Experimental/i);
     expect(update.description).toMatch(/empty|No content/i);
     expect(update.bodySchema!.description).toMatch(/no metadata PUT|POST a new version/i);
+  });
+
+  it("supports only account scope (org/project resource_scope is rejected)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const client = makeClient();
+    expect(registry.getSupportedScopes("iacm_provider")).toEqual(["account"]);
+    await expect(
+      registry.dispatch(client, "iacm_provider", "list", { resource_scope: "org", org_id: "default" }),
+    ).rejects.toThrow(/does not support org scope/i);
   });
 });
 
