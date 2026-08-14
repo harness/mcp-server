@@ -121,7 +121,7 @@ In `src/registry/index.ts`:
 - `"org"` — adds `accountIdentifier`, `orgIdentifier`
 - `"account"` — adds `accountIdentifier` only
 
-Use `supportedScopes` when one Harness resource type can operate at multiple levels. For example, connectors, services, environments, infrastructure, secrets, and templates support `["account", "org", "project"]`. Tool callers select the level with `resource_scope`, and `harness_describe` surfaces both `supportedScopes` and a `scopeHint`. If `resource_scope` is omitted, the registry uses the resource's default `scope`; `scopeOptional: true` resources may omit org/project unless explicitly passed.
+Use `supportedScopes` when one Harness resource type can operate at multiple levels. For example, connectors, services, environments, infrastructure, secrets, templates, policies, and policy sets support `["account", "org", "project"]`. Tool callers select the level with `resource_scope`, and `harness_describe` surfaces both `supportedScopes` and a `scopeHint`. If `resource_scope` is omitted, the registry uses the resource's default `scope`; `scopeOptional: true` resources may omit org/project unless explicitly passed.
 
 **pathParams** maps tool input field names to URL placeholders. For `path: "/api/things/{thingId}"` and `pathParams: { resource_id: "thingId" }`, the user's `resource_id` value replaces `{thingId}`.
 

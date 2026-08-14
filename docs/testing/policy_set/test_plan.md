@@ -36,6 +36,8 @@
 | TC-ps-018 | Update | Update policies list | `harness_update(resource_type="policy_set", policy_set_id="test_ps", body={policies: [{identifier: "<policy_id>", severity: "warning"}]})` | Linked policies updated |
 | TC-ps-019 | Delete | Delete policy set | `harness_delete(resource_type="policy_set", policy_set_id="test_ps")` | Policy set deleted |
 | TC-ps-020 | Scope | Custom org and project | `harness_list(resource_type="policy_set", org_id="custom_org", project_id="custom_project")` | Returns policy sets for specified scope |
+| TC-ps-020a | Scope | Account-level list | `harness_list(resource_type="policy_set", resource_scope="account")` | Returns account-level policy sets (no org/project query params) |
+| TC-ps-020b | Scope | Org-level list | `harness_list(resource_type="policy_set", resource_scope="org", org_id="custom_org")` | Returns org-level policy sets (org only, no project) |
 | TC-ps-021 | Error | Get nonexistent policy set | `harness_get(resource_type="policy_set", policy_set_id="nonexistent")` | Returns not found error |
 | TC-ps-022 | Error | Create without required fields | `harness_create(resource_type="policy_set", body={identifier: "bad_ps", name: "Bad"})` | Returns validation error (action, type, enabled required) |
 | TC-ps-023 | Edge | Search with no matches | `harness_list(resource_type="policy_set", search_term="zzz_nonexistent_zzz")` | Returns empty list |
@@ -44,6 +46,7 @@
 ## Notes
 - Uses v1 API: `/pm/api/v1/policysets`
 - List uses `per_page` instead of standard `pageSize` (mapped from `size`)
+- Supports account/org/project via `resource_scope` (default: project)
 - Create body: identifier (required), name (required), action (required), type (required), enabled (required), description (optional), policies (optional array of {identifier, severity}), yaml_version (optional)
 - Update body (PATCH): name, action, type, enabled, description, policies, resource_groups, entity_selector — all optional
 - action values: onrun, onsave, onpush, etc.

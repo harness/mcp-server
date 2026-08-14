@@ -1,5 +1,19 @@
 # Harness MCP Server — Task Tracking
 
+## OPA policy multi-scope (this session)
+- [x] Add `supportedScopes: ["account", "org", "project"]` + description hints for `policy` and `policy_set`
+- [x] Extend governance tests for supportedScopes and `resource_scope` query-param dispatch
+- [x] Update README multi-scope list and policy/policy_set test plans; `pnpm build && pnpm docs:generate`
+- [x] Run typecheck, governance tests, and standards:check
+
+### Plan
+- Mirror connectors/secrets: keep default `scope: "project"`, add `supportedScopes`, do not set `scopeOptional`.
+- No endpoint path changes — registry scope injection already handles org/project query params.
+
+### Review
+- `policy` / `policy_set` declare `supportedScopes: ["account", "org", "project"]`.
+- Governance + registry unit tests: 193 passed; standards:check: 77 passed; build/typecheck/docs:generate OK.
+
 ## IaCM workspace create/update (merged #793)
 - [x] Add create/update tests and implement `iacm_workspace` writes
 - [x] bodySchema + medium_write policy + project-scope preflight

@@ -637,6 +637,8 @@ describe("Registry", () => {
       ["infrastructure", "infrastructure"],
       ["secrets", "secret"],
       ["templates", "template"],
+      ["governance", "policy"],
+      ["governance", "policy_set"],
     ])("supports account/org/project list scoping for %s", async (toolset, resourceType) => {
       const scopedRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: toolset }));
       const mockRequest = vi.fn().mockResolvedValue({

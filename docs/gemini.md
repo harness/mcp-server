@@ -134,7 +134,7 @@ Write operations (`harness_create`, `harness_update`, `harness_delete`, `harness
 
 Secret values are never exposed — only metadata (name, type, scope).
 
-Multi-scope resources such as connectors, services, environments, infrastructure, secrets, and templates can be called with `resource_scope: "account" | "org" | "project"`. Use `harness_describe(resource_type="...")` to see `supportedScopes`.
+Multi-scope resources such as connectors, services, environments, infrastructure, secrets, templates, policies, and policy sets can be called with `resource_scope: "account" | "org" | "project"`. Use `harness_describe(resource_type="...")` to see `supportedScopes`.
 
 ## Setup
 

@@ -656,7 +656,7 @@ The server exposes 11 MCP tools. Most API tools accept `org_id` and `project_id`
 - `resource_scope: "org"` sends `accountIdentifier` and `orgIdentifier`.
 - `resource_scope: "project"` sends account, org, and project identifiers.
 
-Current multi-scope resources include `connector`, `service`, `environment`, `infrastructure`, `secret`, `file_store`, and `template`. If `resource_scope` is omitted, the registry uses the resource's default scope and configured defaults, except resources marked as optional scope may omit org/project unless explicitly passed. Harness URLs can also set the scope automatically when the path contains account-level or project-level context.
+Current multi-scope resources include `connector`, `service`, `environment`, `infrastructure`, `secret`, `file_store`, `template`, `policy`, and `policy_set`. If `resource_scope` is omitted, the registry uses the resource's default scope and configured defaults, except resources marked as optional scope may omit org/project unless explicitly passed. Harness URLs can also set the scope automatically when the path contains account-level or project-level context.
 
 **Structured output:** Every tool declares an MCP `outputSchema`. `harness_list` normalizes list-like Harness responses into object-shaped structured content so strict clients can validate it: top-level arrays become `{ "items": [...], "total": <count>, "page": <page> }`, and common wrapper keys such as `content`, `data`, `body`, `objects`, or `features` are hoisted to `items` when needed. The text response still contains the compact JSON payload returned to all clients.
 

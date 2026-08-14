@@ -6,10 +6,14 @@
  *   - policy + policy_set descriptions mention SCS/SBOM enforcement
  *   - policy + policy_set have relatedResources cross-referencing SCS compliance
  *   - Structural integrity of governance CRUD operations
+ *   - policy + policy_set support account/org/project via resource_scope
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { governanceToolset } from "../../src/registry/toolsets/governance.js";
+import { Registry } from "../../src/registry/index.js";
 import type { ResourceDefinition, EndpointSpec } from "../../src/registry/types.js";
+import type { Config } from "../../src/config.js";
+import type { HarnessClient } from "../../src/client/harness-client.js";
 
 /** Helper: find a resource definition by resourceType */
 function findResource(type: string): ResourceDefinition {
@@ -24,6 +28,33 @@ function getOp(type: string, op: string): EndpointSpec {
   const spec = (res.operations as Record<string, EndpointSpec>)[op];
   if (!spec) throw new Error(`Operation "${op}" not found on "${type}"`);
   return spec;
+}
+
+function makeConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    HARNESS_API_KEY: "pat.test",
+    HARNESS_ACCOUNT_ID: "test-account",
+    HARNESS_BASE_URL: "https://app.harness.io",
+    HARNESS_ORG: "default",
+    HARNESS_PROJECT: "test-project",
+    HARNESS_API_TIMEOUT_MS: 30000,
+    HARNESS_MAX_RETRIES: 3,
+    HARNESS_MAX_BODY_SIZE_MB: 10,
+    HARNESS_RATE_LIMIT_RPS: 10,
+    HARNESS_READ_ONLY: false,
+    HARNESS_SKIP_ELICITATION: false,
+    HARNESS_ALLOW_HTTP: false,
+    HARNESS_FME_BASE_URL: "https://api.split.io",
+    LOG_LEVEL: "info",
+    ...overrides,
+  };
+}
+
+function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient {
+  return {
+    request: requestFn ?? vi.fn().mockResolvedValue({ data: [] }),
+    account: "test-account",
+  } as unknown as HarnessClient;
 }
 
 // ─── P3-10: policy resource — SCS/SBOM enforcement enhancements ─────────────
@@ -372,4 +403,97 @@ describe("SSCA-6347 review: policy_set body schemas document SBOM type", () => {
     expect(actionField).toBeDefined();
     expect(actionField!.description).toContain("onstep");
   });
+});
+
+// ─── Multi-scope: account / org / project via resource_scope ────────────────
+
+describe("policy and policy_set multi-scope support", () => {
+  it.each(["policy", "policy_set"] as const)(
+    "%s declares supportedScopes account/org/project without scopeOptional",
+    (resourceType) => {
+      const res = findResource(resourceType);
+      expect(res.scope).toBe("project");
+      expect(res.supportedScopes).toEqual(["account", "org", "project"]);
+      expect(res.scopeOptional).toBeFalsy();
+    },
+  );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s description documents resource_scope for account/org/project",
+    (resourceType) => {
+      const res = findResource(resourceType);
+      expect(res.description).toContain("resource_scope='account'|'org'|'project'");
+      expect(res.description).toMatch(/Default is project/i);
+    },
+  );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s list omits org/project for resource_scope=account",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, resourceType, "list", {
+        resource_scope: "account",
+      });
+
+      const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown> };
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    },
+  );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s list injects only org for resource_scope=org",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, resourceType, "list", {
+        resource_scope: "org",
+        org_id: "platform",
+      });
+
+      const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown> };
+      expect(call.params.orgIdentifier).toBe("platform");
+      expect(call.params.projectIdentifier).toBeUndefined();
+    },
+  );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s list keeps project default when resource_scope is omitted",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, resourceType, "list", {});
+
+      const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown> };
+      expect(call.params.orgIdentifier).toBe("default");
+      expect(call.params.projectIdentifier).toBe("test-project");
+    },
+  );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s throws when resource_scope=org lacks org_id and HARNESS_ORG",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({
+        HARNESS_TOOLSETS: "governance",
+        HARNESS_ORG: undefined,
+        HARNESS_PROJECT: undefined,
+      }));
+      const mockRequest = vi.fn().mockResolvedValue({ data: [] });
+      const client = makeClient(mockRequest);
+
+      await expect(
+        registry.dispatch(client, resourceType, "list", {
+          resource_scope: "org",
+        }),
+      ).rejects.toThrow(/resource_scope "org" requires org_id or HARNESS_ORG/);
+      expect(mockRequest).not.toHaveBeenCalled();
+    },
+  );
 });
