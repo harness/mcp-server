@@ -73,8 +73,14 @@ describe("iacmToolset structure", () => {
     expect(types).toHaveLength(6);
   });
 
-  it("iacm_module is account-scoped", () => {
-    expect(findResource("iacm_module").scope).toBe("account");
+  it("iacm_module defaults to account scope but supports org and project", () => {
+    const resource = findResource("iacm_module");
+    expect(resource.scope).toBe("account");
+    expect(resource.supportedScopes).toEqual(["account", "org", "project"]);
+    // Opt-in scoping: org/project are sent only when explicitly requested, so an
+    // ambient HARNESS_ORG/HARNESS_PROJECT cannot turn an account module into a project one.
+    expect(resource.scopeOptional).toBe(true);
+    expect(resource.scopeParams).toEqual({ org: "scope_org", project: "scope_project" });
   });
 
   it("iacm_module list has pageOneIndexed=true", () => {
@@ -249,6 +255,76 @@ describe("workspaceWriteExtract", () => {
     expect(getOp("iacm_workspace", "update").responseExtractor).toBe(
       getOp("iacm_workspace", "create").responseExtractor,
     );
+  });
+});
+
+// ─── Module write contract ───────────────────────────────────────────────────
+
+describe("iacm_module write contract", () => {
+  it("registers create and update against the module registry paths", () => {
+    const create = getOp("iacm_module", "create");
+    const update = getOp("iacm_module", "update");
+
+    expect(create.method).toBe("POST");
+    expect(create.path).toBe("/iacm/api/modules");
+    // Scope comes from the resource-level scopeParams, not a per-operation remap,
+    // so list/get/create/update all send scope_org/scope_project identically.
+    expect(create.queryParams?.org_id).toBeUndefined();
+    expect(create.queryParams?.project_id).toBeUndefined();
+    expect(create.operationPolicy).toEqual({
+      risk: "medium_write",
+      retryPolicy: "do_not_retry",
+    });
+    expect(create.skipScopeBodyInjection).toBe(true);
+
+    expect(update.method).toBe("PUT");
+    expect(update.path).toBe("/iacm/api/modules/{moduleId}");
+    expect(update.pathParams).toEqual({ id: "moduleId" });
+    expect(update.queryParams?.org_id).toBeUndefined();
+    expect(update.queryParams?.project_id).toBeUndefined();
+    expect(update.operationPolicy).toEqual({
+      risk: "medium_write",
+      retryPolicy: "do_not_retry",
+    });
+    expect(update.skipScopeBodyInjection).toBe(true);
+  });
+
+  it("documents create/update required body fields as name and system", () => {
+    for (const op of ["create", "update"] as const) {
+      const required = getOp("iacm_module", op)
+        .bodySchema!.fields.filter((field) => field.required)
+        .map((field) => field.name);
+      expect(required).toEqual(["name", "system"]);
+    }
+  });
+
+  it("documents Active registry RBAC and module resource responses", () => {
+    const create = getOp("iacm_module", "create");
+    const update = getOp("iacm_module", "update");
+    expect(create.description).toMatch(/module resource/i);
+    expect(create.description).toMatch(/Active/i);
+    expect(create.description).not.toMatch(/Experimental/i);
+    expect(update.description).toMatch(/module resource/i);
+    expect(update.description).toMatch(/Active/i);
+    expect(update.description).toMatch(/get-then-put|harness_get/i);
+    expect(update.bodySchema!.description).toMatch(/get-then-put|omit.*clear/i);
+  });
+
+  it("documents the multi-scope contract on the resource and every operation", () => {
+    expect(findResource("iacm_module").description).toMatch(/account, org, or project scope/i);
+
+    for (const op of ["list", "get", "create", "update"] as const) {
+      expect(
+        getOp("iacm_module", op).description,
+        `iacm_module.${op} description does not mention resource_scope`,
+      ).toMatch(/resource_scope/);
+    }
+
+    // The visibility scope must never be confused with the body's connector location.
+    for (const op of ["create", "update"] as const) {
+      expect(getOp("iacm_module", op).bodySchema!.description).toMatch(/scope_org\/scope_project/);
+      expect(getOp("iacm_module", op).description).toMatch(/never body fields/i);
+    }
   });
 });
 
@@ -1018,6 +1094,73 @@ describe("iacm registry dispatch", () => {
         project_id: "Testim",
       }),
     ).rejects.toThrow("variable_set_id");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("dispatches module create and update with optional scope query params", async () => {
+    const created = { id: "4640", name: "vpc", system: "aws" };
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce(created)
+      .mockResolvedValueOnce({ ...created, description: "updated" });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_module", "create", {
+      org_id: "default",
+      project_id: "Testim",
+      body: {
+        name: "vpc",
+        system: "aws",
+        repository: "terraform-modules",
+        repository_connector: "account.github",
+      },
+    });
+    await registry.dispatch(makeClient(mockRequest), "iacm_module", "update", {
+      id: "4640",
+      org_id: "default",
+      body: {
+        name: "vpc",
+        system: "aws",
+        description: "updated",
+      },
+    });
+
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "POST",
+      path: "/iacm/api/modules",
+      params: {
+        scope_org: "default",
+        scope_project: "Testim",
+      },
+      body: {
+        name: "vpc",
+        system: "aws",
+        repository: "terraform-modules",
+        repository_connector: "account.github",
+      },
+    });
+    expect(mockRequest.mock.calls[1]![0]).toMatchObject({
+      method: "PUT",
+      path: "/iacm/api/modules/4640",
+      params: {
+        scope_org: "default",
+      },
+      body: {
+        name: "vpc",
+        system: "aws",
+        description: "updated",
+      },
+    });
+  });
+
+  it("rejects module create when system is missing", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_module", "create", {
+        body: { name: "vpc" },
+      }),
+    ).rejects.toThrow("system");
     expect(mockRequest).not.toHaveBeenCalled();
   });
 });

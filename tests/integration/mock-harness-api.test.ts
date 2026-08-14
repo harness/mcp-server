@@ -609,4 +609,141 @@ describe("Integration: Registry → HarnessClient → fetch", () => {
       expect(result).toEqual({ identifier: "shared-env", name: "Shared Env Updated" });
     });
   });
+
+  describe("iacm module registry writes", () => {
+    it("create posts JSON body with scope query params and returns the module", async () => {
+      const module = { id: "4640", name: "vpc", system: "aws" };
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(module));
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+      const body = {
+        name: "vpc",
+        system: "aws",
+        repository: "terraform-modules",
+        repository_connector: "account.github",
+      };
+
+      const result = await registry.dispatch(client, "iacm_module", "create", {
+        org_id: "default",
+        project_id: "test-project",
+        body,
+      });
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      const init = options as RequestInit;
+      expect(urlStr).toContain("/iacm/api/modules");
+      expect(urlStr).toContain("scope_org=default");
+      expect(urlStr).toContain("scope_project=test-project");
+      expect((init.method ?? "GET").toUpperCase()).toBe("POST");
+      expect(JSON.parse(init.body as string)).toEqual(body);
+      expect(result).toEqual(module);
+    });
+
+    it("update puts by module id and maps resource_id", async () => {
+      const updated = { id: "4640", name: "vpc", system: "aws", description: "updated" };
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse(updated));
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      const result = await registry.dispatch(client, "iacm_module", "update", {
+        id: "4640",
+        org_id: "default",
+        body: {
+          name: "vpc",
+          system: "aws",
+          description: "updated",
+        },
+      });
+
+      const [url, options] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      expect(urlStr).toContain("/iacm/api/modules/4640");
+      expect(urlStr).toContain("scope_org=default");
+      expect((options as RequestInit).method?.toUpperCase()).toBe("PUT");
+      expect(JSON.parse((options as RequestInit).body as string)).toEqual({
+        name: "vpc",
+        system: "aws",
+        description: "updated",
+      });
+      expect(result).toEqual(updated);
+    });
+
+    it("create omits scope params when org/project come only from config defaults", async () => {
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ id: "4641", name: "vpc", system: "aws" }));
+
+      // HARNESS_ORG=default and HARNESS_PROJECT=test-project are set in makeConfig.
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      await registry.dispatch(client, "iacm_module", "create", {
+        body: { name: "vpc", system: "aws" },
+      });
+
+      const [url] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      expect(urlStr).not.toContain("scope_org");
+      expect(urlStr).not.toContain("scope_project");
+      expect(urlStr).not.toContain("orgIdentifier");
+      expect(urlStr).not.toContain("projectIdentifier");
+    });
+
+    it("create with resource_scope=org sends scope_org only, resolving org from config", async () => {
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ id: "4642", name: "vpc", system: "aws" }));
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      await registry.dispatch(client, "iacm_module", "create", {
+        resource_scope: "org",
+        body: { name: "vpc", system: "aws" },
+      });
+
+      const [url] = fetchSpy.mock.calls[0]!;
+      const urlStr = url instanceof URL ? url.toString() : String(url);
+      expect(urlStr).toContain("scope_org=default");
+      expect(urlStr).not.toContain("scope_project");
+    });
+
+    it("list and get accept the same scope params as create/update", async () => {
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse([{ id: "4640", name: "vpc" }]));
+
+      const config = makeConfig({ HARNESS_TOOLSETS: "iacm" });
+      const client = new HarnessClient(config);
+      const registry = new Registry(config);
+
+      await registry.dispatch(client, "iacm_module", "list", {
+        resource_scope: "project",
+        org_id: "default",
+        project_id: "test-project",
+      });
+
+      const [listUrl] = fetchSpy.mock.calls[0]!;
+      const listUrlStr = listUrl instanceof URL ? listUrl.toString() : String(listUrl);
+      expect(listUrlStr).toContain("/iacm/api/modules");
+      expect(listUrlStr).toContain("scope_org=default");
+      expect(listUrlStr).toContain("scope_project=test-project");
+      expect(listUrlStr).not.toContain("orgIdentifier");
+
+      fetchSpy.mockResolvedValueOnce(mockFetchResponse({ id: "4640", name: "vpc" }));
+      await registry.dispatch(client, "iacm_module", "get", {
+        id: "4640",
+        org_id: "default",
+        project_id: "test-project",
+      });
+
+      const [getUrl] = fetchSpy.mock.calls[1]!;
+      const getUrlStr = getUrl instanceof URL ? getUrl.toString() : String(getUrl);
+      expect(getUrlStr).toContain("/iacm/api/modules/4640");
+      expect(getUrlStr).toContain("scope_org=default");
+      expect(getUrlStr).toContain("scope_project=test-project");
+    });
+  });
 });
