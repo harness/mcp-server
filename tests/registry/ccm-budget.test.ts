@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from "vitest";
 import { ccmToolset } from "../../src/registry/toolsets/ccm.js";
-import { ccmBudgetWriteExtract } from "../../src/registry/extractors.js";
+import { ccmBudgetWriteExtract, ccmBudgetListCompactExtract, ccmBudgetDetailExtract } from "../../src/registry/extractors.js";
 
 const budget = ccmToolset.resources.find((r) => r.resourceType === "cost_budget");
 const variance = ccmToolset.resources.find((r) => r.resourceType === "cost_budget_variance");
@@ -138,6 +138,16 @@ describe("cost_budget_variance resource", () => {
     expect(variance!.operations.get).toMatchObject({ method: "GET", path: "/ccm/api/budgets/{budgetId}" });
     expect(variance!.operations.get!.operationPolicy.risk).toBe("read");
     expect(variance!.operations.get!.pathParams).toEqual({ budget_id: "budgetId" });
+  });
+
+  it("uses ccmBudgetDetailExtract to derive period-by-period variance from budgetHistory", () => {
+    expect(variance!.operations.get!.responseExtractor).toBe(ccmBudgetDetailExtract);
+  });
+});
+
+describe("cost_budget list extractor wiring", () => {
+  it("uses ccmBudgetListCompactExtract to strip PII and noise from list responses", () => {
+    expect(budget!.operations.list!.responseExtractor).toBe(ccmBudgetListCompactExtract);
   });
 });
 

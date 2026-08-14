@@ -109,4 +109,52 @@ describe("assertListScopeResolved", () => {
       ),
     ).not.toThrow();
   });
+
+  it("throws when org scope cannot be resolved", () => {
+    expect(() =>
+      assertListScopeResolved(
+        "template",
+        { ...projectScoped, resourceType: "template", scope: "org" },
+        {},
+        undefined,
+        undefined,
+      ),
+    ).toThrow(/requires org scope \(org_id\)/i);
+  });
+
+  it("passes for org-scoped resources when org_id is on the input", () => {
+    expect(() =>
+      assertListScopeResolved(
+        "template",
+        { ...projectScoped, resourceType: "template", scope: "org" },
+        { org_id: "my-org" },
+        undefined,
+        undefined,
+      ),
+    ).not.toThrow();
+  });
+
+  it("skips validation for scopeOptional resources", () => {
+    expect(() =>
+      assertListScopeResolved(
+        "gitops_cluster",
+        { ...projectScoped, resourceType: "gitops_cluster", scopeOptional: true },
+        {},
+        undefined,
+        undefined,
+      ),
+    ).not.toThrow();
+  });
+
+  it("throws when only org_id is present for project-scoped resources", () => {
+    expect(() =>
+      assertListScopeResolved(
+        "security_exemption",
+        projectScoped,
+        { org_id: "AI_Devops" },
+        undefined,
+        undefined,
+      ),
+    ).toThrow(/requires project scope \(org_id \+ project_id\)/i);
+  });
 });
