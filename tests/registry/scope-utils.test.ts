@@ -79,9 +79,12 @@ describe("resolveFmeDualMode", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     const result = resolveFmeDualMode({ workspace_id: "ws1" }, "fme_feature_flag");
     expect(result).toEqual({ mode: "legacy", workspaceId: "ws1" });
-    expect(spy).toHaveBeenCalledWith(
-      "[DEPRECATION] fme_feature_flag: workspace_id-based FME calls are deprecated — pass org_id+project_id instead.",
-    );
+    expect(spy).toHaveBeenCalledTimes(1);
+    const entry = JSON.parse(String(spy.mock.calls[0]![0]));
+    expect(entry.level).toBe("warn");
+    expect(entry.module).toBe("scope-utils");
+    expect(entry.msg).toContain("workspace_id is deprecated");
+    expect(entry.resourceType).toBe("fme_feature_flag");
     spy.mockRestore();
   });
 
