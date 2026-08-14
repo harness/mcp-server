@@ -24,13 +24,17 @@
 | TC-fme_feature_flag_definition-009 | Get with non-existent environment | `harness_get(resource_type="fme_feature_flag_definition", workspace_id="my_workspace", feature_flag_name="my_flag", environment_id="nonexistent")` | Error: environment not found (404) | ⬜ Pending | | |
 | TC-fme_feature_flag_definition-010 | Attempt list operation (unsupported) | `harness_list(resource_type="fme_feature_flag_definition")` | Error: list operation not supported | ⬜ Pending | | |
 | TC-fme_feature_flag_definition-011 | Get with all three required identifiers | `harness_get(resource_type="fme_feature_flag_definition", workspace_id="ws1", feature_flag_name="flag1", environment_id="env1")` | Returns definition or appropriate error | ⬜ Pending | | |
+| TC-fme_feature_flag_definition-013 | Get via Harness-native scope | `harness_get(resource_type="fme_feature_flag_definition", org_id="my_org", project_id="my_project", feature_flag_name="my_flag", environment_id="production")` | Routes to `/fme/api/v4/feature-flag-definitions/{name}` with `environment_id` as a query param | ✅ Passed | Routing verified correct (`tests/registry/feature-flags.test.ts`); not exercised live | Body shape confirmed from `Harness_Split/Main`'s `FeatureFlagDefinitionResource`, not guessed |
+| TC-fme_feature_flag_definition-014 | Create via Harness-native scope | `harness_create(resource_type="fme_feature_flag_definition", org_id="my_org", project_id="my_project", feature_flag_name="my_flag", environment_id="production", body={"treatments": [{"name": "on"}], "defaultTreatment": "on", "defaultRule": [{"treatment": "on", "size": 100}], "title": "My Definition"})` | Routes to `/fme/api/v4/feature-flag-definitions` (POST); body identical to legacy mode plus optional `title` | ✅ Passed | Routing/body-mapping verified correct (`tests/registry/feature-flags.test.ts`); not exercised live to avoid creating a real definition | Same source as TC-013 |
+| TC-fme_feature_flag_definition-015 | Update via Harness-native scope | `harness_update(resource_type="fme_feature_flag_definition", org_id="my_org", project_id="my_project", feature_flag_name="my_flag", environment_id="production", body={"trafficAllocation": 50})` | Routes to `/fme/api/v4/feature-flag-definitions/{name}` (PUT) | ✅ Passed | Routing/body-mapping verified correct (`tests/registry/feature-flags.test.ts`); not exercised live | Same source as TC-013 |
+| TC-fme_feature_flag_definition-016 | Mixed-mode params rejected | `harness_get(resource_type="fme_feature_flag_definition", workspace_id="my_workspace", org_id="my_org", feature_flag_name="my_flag", environment_id="production")` | Error: "pass either workspace_id (deprecated) OR org_id+project_id, not both" | ✅ Passed | Error thrown as expected (`tests/registry/feature-flags.test.ts`) | |
 
 ## Summary
 
 | Metric | Count |
 |--------|-------|
-| Total Tests | 11 |
-| ✅ Passed | 0 |
+| Total Tests | 15 |
+| ✅ Passed | 4 |
 | ❌ Failed | 1 |
 | ⚠️ Blocked | 0 |
 | ⬜ Not Run | 10 |

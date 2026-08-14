@@ -52,8 +52,12 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
 
         const { params, body, confirm: _confirm, ...rest } = args;
         const coercedBody = typeof body === "string" ? (coerceRecord(body) ?? body) : body;
-        const input = applyUrlDefaults({ ...rest, body: coercedBody } as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
+        // Merge params in before URL defaults so explicit identifiers (e.g. FME's
+        // workspace_id, passed via params) are visible to applyUrlDefaults's
+        // legacy-vs-URL-scope precedence check, not just top-level named args.
+        const argsForUrlDefaults = { ...rest, ...coercedParams, body: coercedBody };
+        const input = applyUrlDefaults(argsForUrlDefaults as Record<string, unknown>, args.url, { includeResourceScope: true });
         if (coercedParams) Object.assign(input, coercedParams);
         const identFields = def.identifierFields;
         const primaryField = identFields.length > 1

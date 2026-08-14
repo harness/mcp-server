@@ -72,14 +72,23 @@ function extractPipelineFragment(yamlOrObj: unknown): Record<string, unknown> {
  */
 function applyExecuteActionTargetRemap(
   input: Record<string, unknown>,
-  def: { identifierFields: readonly string[] },
+  def: { identifierFields: readonly string[]; product?: string },
   actionSpec: { pathParams?: Record<string, string> } | undefined,
   resourceId: string | undefined,
 ): Record<string, unknown> {
   const primaryField = def.identifierFields[0];
   if (!primaryField || !resourceId) return input;
   const actionPathFields = new Set(Object.keys(actionSpec?.pathParams ?? {}));
-  const primaryUsedByAction = actionPathFields.has(primaryField);
+  // FME dual-mode resources declare `workspace_id` as identifierFields[0], but it's
+  // a legacy *scope* selector (alternative to org_id+project_id), not the resource's
+  // identity — unlike every other multi-field resource (e.g. gitops_application's
+  // agent_id), where identifierFields[0] genuinely is what resource_id should fill.
+  // Legacy path templates still reference workspace_id in pathParams, so when the
+  // caller omits it (Harness-native mode), the target search below must not treat
+  // it as "used by this action" or resource_id silently overwrites the scope field
+  // instead of the real identifier (e.g. feature_flag_name).
+  const primaryIsFmeLegacyScope = def.product === "fme" && primaryField === "workspace_id" && input.workspace_id === undefined;
+  const primaryUsedByAction = !primaryIsFmeLegacyScope && actionPathFields.has(primaryField);
   const actionTargetField = primaryUsedByAction
     ? undefined
     : [...def.identifierFields].reverse().find((field) => actionPathFields.has(field));
@@ -172,8 +181,12 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
     async (args, extra) => {
       try {
         const { params, wait, wait_timeout_seconds, wait_poll_interval_seconds, confirm: _confirm, queries: batchQueries, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
+        // Merge params in before URL defaults so explicit identifiers (e.g. FME's
+        // workspace_id, passed via params) are visible to applyUrlDefaults's
+        // legacy-vs-URL-scope precedence check, not just top-level named args.
+        const argsForUrlDefaults = coercedParams ? { ...rest, ...coercedParams } : rest;
+        const input = applyUrlDefaults(argsForUrlDefaults as Record<string, unknown>, args.url, { includeResourceScope: true });
         if (coercedParams) Object.assign(input, coercedParams);
         log.debug("Execute input after params merge", { input: JSON.stringify(input), params: JSON.stringify(params) });
         const resourceType = asString(input.resource_type);
@@ -270,14 +283,6 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
             throw toMcpError(err);
           }
         }
-
-        // Map resource_id to the execute action's target identifier. Most
-        // resources use identifierFields[0], but some execute endpoints omit
-        // the parent identifier used by get/update/delete and target a child
-        // path field directly. The same remap is also applied earlier (before
-        // any auditBlockedAttempt emission) so blocked audit rows record a
-        // resolved http_path rather than a "/...//..." with empty placeholders.
-        applyExecuteActionTargetRemap(input, def, actionSpec, resourceId);
 
         // Pass input_set_ids as string[] so HarnessClient emits repeated `inputSetIdentifiers=` query keys
         // (grpc-gateway array style). Comma-joined single param is ignored by pipeline execute.

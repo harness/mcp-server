@@ -48,11 +48,15 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
     async (args) => {
       try {
         const { params, filters, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url, { includeResourceScope: true });
-        // Spread caller-supplied params (path identifiers) and filters into the input
         // Use coerceRecord to handle LLMs that serialize objects as JSON strings
         const coercedParams = coerceRecord(params);
         const coercedFilters = coerceRecord(filters);
+        // Merge params/filters in before URL defaults so explicit identifiers (e.g. FME's
+        // workspace_id, passed via filters) are visible to applyUrlDefaults's
+        // legacy-vs-URL-scope precedence check, not just top-level named args.
+        const argsForUrlDefaults = { ...rest, ...coercedParams, ...coercedFilters };
+        const input = applyUrlDefaults(argsForUrlDefaults as Record<string, unknown>, args.url, { includeResourceScope: true });
+        // Spread caller-supplied params (path identifiers) and filters into the input
         if (coercedParams) Object.assign(input, coercedParams);
         if (coercedFilters) Object.assign(input, coercedFilters);
         const resourceType = asString(input.resource_type);

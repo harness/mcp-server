@@ -243,6 +243,33 @@ export interface InputExpansionRule {
 export type PathBuilderConfig = { HARNESS_ACCOUNT_ID?: string; HARNESS_ORG?: string; HARNESS_PROJECT?: string };
 
 /**
+ * Output of `EndpointSpec.routeResolver`: fully-resolved path for a specific call,
+ * plus optional product override. When `product` is omitted, the resource-level
+ * `def.product` applies. Enables dual-mode routing (e.g. FME legacy Split.io
+ * vs. Harness-native based on caller-supplied params).
+ */
+export interface ResolvedRoute {
+  path: string;
+  product?: ProductName;
+  /**
+   * Optional override of the resource-level `scopeParams` (query param names for
+   * account/org/project), scoped to this specific resolved route. When omitted,
+   * `def.scopeParams` applies. Use for dual-mode resources whose Harness-native
+   * branch needs different query param names than its legacy branch — the legacy
+   * branch's wire format stays untouched since it simply doesn't set this.
+   */
+  scopeParams?: { account?: string; org?: string; project?: string };
+  /**
+   * Optional override of the resource/operation-level `headers` (e.g. Content-Type), scoped to
+   * this specific resolved route. Use for dual-mode resources whose branches need different
+   * headers on the same operation (e.g. FME Harness-native JSON Merge Patch vs. legacy JSON
+   * Patch on the same `update` operation) — the legacy branch's headers stay untouched since it
+   * simply doesn't set this.
+   */
+  headers?: Record<string, string>;
+}
+
+/**
  * Specifies how a single CRUD operation maps to the Harness API.
  */
 export interface EndpointSpec {
@@ -253,6 +280,15 @@ export interface EndpointSpec {
   path: string;
   /** Optional dynamic path builder. When set, used instead of path + pathParams for account-scoped or multi-endpoint resources. */
   pathBuilder?: (input: Record<string, unknown>, config: PathBuilderConfig) => string;
+  /**
+   * Optional per-call route resolver. When set, its output supersedes BOTH
+   * `path`/`pathParams`/`pathBuilder` on this endpoint AND the resource-level
+   * `product` on the call. Use when a single resourceType has multiple route paths
+   * AND different backend products depending on caller-supplied params
+   * (e.g. FME dual-mode: legacy Split.io vs. Harness-native). Purely additive;
+   * resources that don't set it are completely unaffected.
+   */
+  routeResolver?: (input: Record<string, unknown>, config: PathBuilderConfig) => ResolvedRoute;
   /** Maps tool input field names to path param placeholders */
   pathParams?: Record<string, string>;
   /** Maps tool input field names to query param names */
@@ -271,7 +307,12 @@ export interface EndpointSpec {
   scopeParams?: { account?: string; org?: string; project?: string };
   /** For POST/PUT: how to build the request body from tool input */
   bodyBuilder?: (input: Record<string, unknown>) => unknown;
-  /** Static headers to merge into the request (e.g. Content-Type override) */
+  /**
+   * Static headers to merge into the request (e.g. Content-Type override). For dual-mode
+   * resources whose branches need different headers on the same operation, set the per-route
+   * override on `ResolvedRoute.headers` instead, returned from `routeResolver` — that reuses the
+   * same override mechanism already used for `product`/`scopeParams` per branch.
+   */
   headers?: Record<string, string>;
   /** For GET: extract the useful part from the raw response */
   responseExtractor?: (raw: unknown, input?: Record<string, unknown>) => unknown;
@@ -428,7 +469,11 @@ export interface ResourceDefinition {
   executeActions?: Record<string, EndpointSpec & { actionDescription: string }>;
   /**
    * Product backend for this resource. Defaults to "harness" (uses HARNESS_BASE_URL).
-   * Set to "fme" to use the Split.io API at https://api.split.io.
+   * @deprecated The "fme" value (Split.io API at https://api.split.io) is legacy-only,
+   * used solely by FME resources' deprecated workspace_id-mode calls (see
+   * `routeResolver` on `EndpointSpec` and `resolveFmeDualMode` in scope-utils.ts).
+   * New code should not introduce new "fme"-product resources — FME itself is
+   * migrating to plain Harness-native ("harness") routing per-call.
    */
   product?: ProductName;
   baseUrlOverride?: "fme";

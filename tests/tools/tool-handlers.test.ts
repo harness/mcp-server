@@ -2178,6 +2178,41 @@ pipeline:
     expect(data).toMatchObject({ success: true, result: true });
   });
 
+  it.each([
+    { action: "kill", path: "/fme/api/v4/feature-flag-definitions/my-flag/kill", withEnv: true },
+    { action: "restore", path: "/fme/api/v4/feature-flag-definitions/my-flag/restore", withEnv: true },
+    { action: "reallocate", path: "/fme/api/v4/feature-flag-definitions/my-flag/reallocate", withEnv: true },
+    { action: "archive", path: "/fme/api/v4/feature-flags/my-flag/archive", withEnv: false },
+    { action: "unarchive", path: "/fme/api/v4/feature-flags/my-flag/unarchive", withEnv: false },
+  ])(
+    "maps resource_id to feature_flag_name (not workspace_id) for Harness-native FME $action",
+    async ({ action, path, withEnv }) => {
+      const fmeServer = makeMcpServer("accept");
+      const fmeRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+      const fmeRequest = vi.fn().mockResolvedValue(true);
+      const fmeClient = makeClient(fmeRequest);
+      const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+      registerExecuteTool(fmeServer, fmeRegistry, fmeClient, makeConfig());
+
+      const result = await fmeServer.call("harness_execute", {
+        resource_type: "fme_feature_flag",
+        action,
+        resource_id: "my-flag",
+        org_id: "default",
+        project_id: "puthraya",
+        ...(withEnv ? { params: { environment_id: "env-prod" } } : {}),
+      });
+
+      expect(result.isError).toBeUndefined();
+      expect(fmeRequest).toHaveBeenCalledOnce();
+      const call = fmeRequest.mock.calls[0]![0] as { method?: string; path?: string; params?: Record<string, unknown> };
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe(path);
+      expect(call.params).toMatchObject({ organization_identifier: "default", project_identifier: "puthraya" });
+      expect(call.params).not.toHaveProperty("workspace_id");
+    },
+  );
+
   it("materializes input_set_ids by GETting each input set then POSTing merged pipeline YAML", async () => {
     const inputSetYaml = `inputSet:\n  pipeline:\n    identifier: mat_pipe\n    variables:\n      - name: x\n        type: String\n        value: "1"\n`;
     mockRequest

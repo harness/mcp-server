@@ -46,8 +46,12 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
     async (args) => {
       try {
         const { params, ...rest } = args;
-        const input = applyUrlDefaults(rest as Record<string, unknown>, args.url, { includeResourceScope: true });
         const coercedParams = coerceRecord(params);
+        // Merge params in before URL defaults so explicit identifiers (e.g. FME's
+        // workspace_id, passed via params) are visible to applyUrlDefaults's
+        // legacy-vs-URL-scope precedence check, not just top-level named args.
+        const argsForUrlDefaults = coercedParams ? { ...rest, ...coercedParams } : rest;
+        const input = applyUrlDefaults(argsForUrlDefaults as Record<string, unknown>, args.url, { includeResourceScope: true });
         if (coercedParams) Object.assign(input, coercedParams);
         const resourceType = asString(input.resource_type);
         if (!resourceType) {

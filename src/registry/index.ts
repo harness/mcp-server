@@ -610,6 +610,8 @@ export class Registry {
     const explicitScopeValues = requestedScope ? getExplicitScopeValues(requestedScope, input, this.config) : undefined;
     const pathDefaultScope = requestedScope ?? def.scope;
 
+    const resolvedRoute = spec.routeResolver ? spec.routeResolver(input, resolvedConfig) : undefined;
+
     // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
     if (spec.preflight) {
       await spec.preflight({ client, input, registry: this, signal });
@@ -625,7 +627,9 @@ export class Registry {
 
     // Build path with substitutions (or pathBuilder when present)
     let path: string;
-    if (spec.pathBuilder) {
+    if (resolvedRoute) {
+      path = resolvedRoute.path;
+    } else if (spec.pathBuilder) {
       path = spec.pathBuilder(input, resolvedConfig);
     } else {
       path = spec.path;
@@ -657,11 +661,13 @@ export class Registry {
     // Build query params (values may be string[] for repeated query keys — see HarnessClient.buildUrl)
     const params: Record<string, string | number | boolean | string[] | undefined> = {};
 
-    // Add scope params (allow per-resource override of query param names)
-    // When scopeOptional is true, only add org/project if explicitly provided in input.
-    // Otherwise, fall back to config defaults based on the resource's scope level.
-    const orgParam = def.scopeParams?.org ?? "orgIdentifier";
-    const projectParam = def.scopeParams?.project ?? "projectIdentifier";
+    // Add scope params (allow per-resource, or per-route via routeResolver, override
+    // of query param names). When scopeOptional is true, only add org/project if
+    // explicitly provided in input. Otherwise, fall back to config defaults based on
+    // the resource's scope level.
+    const effectiveScopeParams = resolvedRoute?.scopeParams ?? def.scopeParams;
+    const orgParam = effectiveScopeParams?.org ?? "orgIdentifier";
+    const projectParam = effectiveScopeParams?.project ?? "projectIdentifier";
     if (requestedScope) {
       // Explicit resource scoping: account omits org/project, org injects org only, project injects both.
       if (shouldUseOrg(requestedScope)) {
@@ -672,10 +678,16 @@ export class Registry {
       }
     } else if (def.scopeOptional) {
       // Dynamic scoping: only inject when caller explicitly provides them.
-      if (input.org_id) {
+      // A legacy workspace_id (FME's Split.io identifier) takes precedence over
+      // any org/project incidentally picked up from a UI URL — these are two
+      // mutually exclusive scoping modes for FME resources. The suppression is
+      // keyed on product: "fme" so a future non-FME scopeOptional resource with an
+      // unrelated field literally named `workspace_id` never loses its scope params.
+      const suppressForFmeWorkspace = def.product === "fme" && input.workspace_id !== undefined;
+      if (input.org_id && !suppressForFmeWorkspace) {
         params[orgParam] = input.org_id as string;
       }
-      if (input.project_id) {
+      if (input.project_id && !suppressForFmeWorkspace) {
         params[projectParam] = input.project_id as string;
       }
     } else {
@@ -689,8 +701,8 @@ export class Registry {
     }
     // Inject custom account param when scopeParams.account is set
     // (in addition to the client's default accountIdentifier)
-    if (def.scopeParams?.account) {
-      params[def.scopeParams.account] = resolvedAccountId;
+    if (effectiveScopeParams?.account) {
+      params[effectiveScopeParams.account] = resolvedAccountId;
     }
 
 
@@ -805,9 +817,9 @@ export class Registry {
     }
 
     // Make request — resolve base URL and auth from product backend
-    const product = def.product ?? "harness";
+    const product = resolvedRoute?.product ?? def.product ?? "harness";
     const baseUrl = resolveProductBaseUrl(this.config, product);
-    const productHeaders: Record<string, string> = { ...spec.headers };
+    const productHeaders: Record<string, string> = { ...spec.headers, ...resolvedRoute?.headers };
 
     const requestOpts = {
       method: resolvedMethod,
@@ -820,7 +832,7 @@ export class Registry {
       ...(product !== "harness" ? { product } : {}),
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
-      ...(!spec.pathBuilder ? { tracing: { route: spec.path } } : {}),
+      ...(!spec.pathBuilder && !resolvedRoute ? { tracing: { route: spec.path } } : {}),
       signal,
     };
 

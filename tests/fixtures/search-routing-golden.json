@@ -164,7 +164,7 @@
     "query": "feature flag rollout",
     "mode": "specific",
     "expectedTypes": ["fme_feature_flag"],
-    "acceptableTypes": ["fme_environment", "fme_rule_based_segment", "fme_standard_segment"],
+    "acceptableTypes": ["fme_environment", "fme_rule_based_segment", "fme_standard_segment", "fme_segment"],
     "description": "Feature flag rollout language should route to FME flag resources."
   },
   {
@@ -172,7 +172,7 @@
     "query": "target users with a feature flag",
     "mode": "cross_domain",
     "expectedTypes": ["fme_feature_flag", "fme_rule_based_segment"],
-    "acceptableTypes": ["fme_standard_segment", "fme_environment"],
+    "acceptableTypes": ["fme_standard_segment", "fme_environment", "fme_segment"],
     "description": "Targeting language spans flags and segments."
   },
   {
