@@ -1,4 +1,7 @@
 import type { PathBuilderConfig, ResourceScope } from "./types.js";
+import { createLogger } from "../utils/logger.js";
+
+const log = createLogger("scope-utils");
 
 /** Standard scope guidance (matches gitops, connectors, services toolsets). */
 export const SCOPE_BEHAVIOR_DOC =
@@ -66,9 +69,9 @@ export function resolveFmeDualMode(input: Record<string, unknown>, resourceType:
 
   // Handle legacy workspace_id mode
   if (workspaceId) {
-    console.error(
-      `[DEPRECATION] ${resourceType}: workspace_id-based FME calls are deprecated — pass org_id+project_id instead.`,
-    );
+    log.warn("FME workspace_id is deprecated — pass org_id+project_id instead", {
+      resourceType,
+    });
     return { mode: "legacy", workspaceId };
   }
 
@@ -131,11 +134,10 @@ export function requireHarnessNativeSegmentScope(input: Record<string, unknown>,
 }
 
 /**
- * Toolset files may not call `console.*` directly (see architecture.test.ts —
- * logging belongs in handlers/registry, not toolsets). Route deprecation
- * logging that doesn't go through `resolveFmeDualMode` (e.g. permissive
- * mode-selector resolvers) through here instead.
+ * Route deprecation logging that doesn't go through `resolveFmeDualMode`
+ * (e.g. permissive mode-selector resolvers). Toolset files must not call
+ * `console.*` or `createLogger` directly — use this helper instead.
  */
-export function logFmeDeprecation(message: string): void {
-  console.error(message);
+export function logFmeDeprecation(message: string, data?: Record<string, unknown>): void {
+  log.warn(message, data);
 }
