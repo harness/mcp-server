@@ -69,6 +69,7 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "feature-flags":    { type: "fme_feature_flag",     contextField: "resource_id" },
   "splits":           { type: "fme_feature_flag",     contextField: "resource_id" },
   "experiments":      { type: "chaos_experiment",    contextField: "resource_id" },
+  "load-tests":       { type: "chaos_loadtest",       contextField: "resource_id" },
   "registries":       { type: "registry",            contextField: "registry_id" },
   "artifacts":        { type: "artifact",            contextField: "artifact_id" },
   "repositories":     { type: "repository",          contextField: "repo_id" },

@@ -1,13 +1,12 @@
 /**
- * Verifies chaos_loadtest create/list/get: request shape and response extraction.
+ * Verifies chaos_loadtest list/get/create/update/delete and the run/stop actions:
+ * request shape and response extraction.
  *
- * The load test API now uses a canonical TemplateInput[] array for every
- * recognised tunable (run-params, target URL, worker count, image fields) and
- * carries an optional base64-encoded YAML manifest alongside the JSON body.
- * The three describe-block tests below mirror real verified Harness UI curls:
- *   1. Locust + Kubernetes + inline Python script
- *   2. Locust + Kubernetes + Custom Image
- *   3. Locust + Linux VM + inline Python script
+ * Since the loadTestManager variables migration, all tunables and custom env
+ * vars live under toolConfig.<tool>.tunables / toolConfig.<tool>.variables. The
+ * MCP surface stays ergonomic (snake_case scalars) but the wire body is now a
+ * nested toolConfig map — never top-level `inputs[]` or `scriptContent`. K6 is
+ * Kubernetes-only; JMeter is passthrough via `tool_config`.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import YAML from "yaml";
@@ -42,13 +41,6 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
   } as unknown as HarnessClient;
 }
 
-type LoadtestInput = {
-  name: string;
-  value: number | string;
-  type: "Integer" | "String";
-  required?: true;
-};
-
 const SCRIPT = `from locust import HttpUser, task, between
 
 
@@ -61,34 +53,22 @@ class GoogleUser(HttpUser):
 `;
 
 const K6_SCRIPT = `/**
- * main.js - Sample JavaScript file with an entry function
+ * main.js
  */
-
-function greet(name) {
-  return \`Hello, \${name}!\`;
-}
-
-function add(a, b) {
-  return a + b;
-}
-
-// Entry point
 export default function main() {
-  console.log(greet("World"));
-  console.log("2 + 3 =", add(2, 3));
+  console.log("hi");
 }
-
-main();
 `;
 
-describe("chaos_loadtest create", () => {
+// ── Locust create ────────────────────────────────────────────────────
+describe("chaos_loadtest create (Locust)", () => {
   let registry: Registry;
   beforeEach(() => {
     registry = new Registry(makeConfig());
   });
 
-  it("create (Linux VM, inline script): mirrors verified curl 3 — inputs[], base64 scriptContent, base64 yaml manifest", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({ identity: "locust3", name: "locust-3" });
+  it("Linux VM inline: nests script + tunables under toolConfig.locust, no top-level scriptContent/inputs", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identity: "locust3" });
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "chaos_loadtest", "create", {
@@ -97,591 +77,417 @@ describe("chaos_loadtest create", () => {
       name: "locust-3",
       identity: "locust3",
       environment_id: "env91x",
-      infra_id: "79608c02-f1ed-46c0-8551-483509d68111",
+      infra_id: "infra-1",
       target_url: "http://www.example.com",
       script: SCRIPT,
       target_type: "machine-chaos-linux",
+      users: 50,
+      duration_sec: 300,
+      ramp_up_sec: 30,
+      spawn_rate: 5,
     });
 
-    expect(mockRequest).toHaveBeenCalledOnce();
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/loadTest/manager/api/v1/load-tests");
-
-    // Scope goes in query params as organizationIdentifier (NOT orgIdentifier).
+    // Scope stays in query params as organizationIdentifier (not orgIdentifier).
     expect(call.params.organizationIdentifier).toBe("templatescopetest");
-    expect(call.params.projectIdentifier).toBe("templatescopetest");
     expect(call.params.orgIdentifier).toBeUndefined();
 
-    // Top-level wire shape — NEW canonical form.
-    expect(call.body).toMatchObject({
+    const body = call.body;
+    expect(body).toMatchObject({
       identity: "locust3",
       name: "locust-3",
-      description: "",
-      tags: [],
       environmentIdentifier: "env91x",
-      infraIdentifier: "79608c02-f1ed-46c0-8551-483509d68111",
-      scriptSource: "inline",
+      infraIdentifier: "infra-1",
       targetType: "machine-chaos-linux",
       toolType: "Locust",
     });
-    expect(call.body.scriptContent).toBe(Buffer.from(SCRIPT, "utf8").toString("base64"));
+    // Legacy top-level fields must be gone.
+    expect(body.scriptContent).toBeUndefined();
+    expect(body.scriptSource).toBeUndefined();
+    expect(body.inputs).toBeUndefined();
 
-    // Legacy fields are gone.
-    expect(call.body.defaultUsers).toBeUndefined();
-    expect(call.body.defaultDurationSec).toBeUndefined();
-    expect(call.body.defaultRampUpTimeSec).toBeUndefined();
-    expect(call.body.variables).toBeUndefined();
-    expect(call.body.targetUrl).toBeUndefined(); // moved into inputs[]
+    // toolConfig.locust: script.content is base64, tunables mirrors the request.
+    const tc = body.toolConfig as Record<string, unknown>;
+    expect(Object.keys(tc)).toEqual(["locust"]);
+    const locust = tc.locust as Record<string, unknown>;
+    expect(locust.mode).toBe("script");
+    expect(locust.script).toEqual({
+      content: Buffer.from(SCRIPT, "utf8").toString("base64"),
+    });
+    expect(locust.tunables).toEqual({
+      targetUrl: "http://www.example.com",
+      targetUsers: 50,
+      spawnRate: 5,
+      durationSeconds: 300,
+      rampUpTimeSec: 30,
+    });
 
-    // inputs[] in canonical order (no workerCount on Linux), exact shape per curl 3.
-    expect(call.body.inputs).toEqual([
-      { name: "targetUsers", value: 100, type: "Integer", required: true },
-      { name: "durationSeconds", value: 600, type: "Integer" },
-      { name: "rampUpTimeSec", value: 120, type: "Integer" },
-      { name: "targetUrl", value: "http://www.example.com", type: "String" },
-    ]);
-
-    // yaml field is base64; decode and assert canonical manifest shape.
-    const yamlText = Buffer.from(call.body.yaml as string, "base64").toString("utf8");
-    const manifest = YAML.parse(yamlText);
-    expect(manifest.kind).toBe("LoadTest");
-    expect(manifest.apiVersion).toBe("v1alpha1");
-    expect(manifest.name).toBe("locust-3");
+    // YAML manifest is base64; decoded shape carries plain-text script content.
+    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
     expect(manifest.spec).toMatchObject({
       identity: "locust3",
       toolType: "Locust",
       infraType: "linux",
       targetType: "machine-chaos-linux",
-      scriptSource: "inline",
-      infraId: "79608c02-f1ed-46c0-8551-483509d68111",
       envId: "env91x",
+      infraId: "infra-1",
     });
-    // YAML scriptContent is PLAIN TEXT (not base64).
-    expect(manifest.spec.scriptContent).toBe(SCRIPT);
-    expect(manifest.spec.inputs).toEqual(call.body.inputs);
-
-    // skipScopeBodyInjection: scope must NOT be injected into the JSON body.
-    expect(call.body.orgIdentifier).toBeUndefined();
-    expect(call.body.organizationIdentifier).toBeUndefined();
-    expect(call.body.projectIdentifier).toBeUndefined();
-  });
-
-  it("create (Kubernetes inline): mirrors verified curl 1 — inputs[workerCount=1], no variables map", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({ identity: "locust1" });
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "templatescopetest",
-      project_id: "templatescopetest",
-      name: "locust-1",
-      identity: "locust1",
-      description: "op desc",
-      tags: ["op:1", "op:2"],
-      environment_id: "ashloadtest",
-      infra_id: "deletelater1",
-      target_url: "http://www.example.com",
-      script: SCRIPT,
-      target_type: "kubernetes",
-      worker_count: 1,
-    });
-
-    const body = mockRequest.mock.calls[0][0].body;
-    expect(body.targetType).toBe("kubernetes");
-    expect(body.scriptSource).toBe("inline");
-    expect(body.description).toBe("op desc");
-    expect(body.tags).toEqual(["op:1", "op:2"]);
-    expect(body.variables).toBeUndefined(); // legacy {workerCount: {...}} map is gone
-
-    expect(body.inputs).toEqual([
-      { name: "targetUsers", value: 100, type: "Integer", required: true },
-      { name: "durationSeconds", value: 600, type: "Integer" },
-      { name: "rampUpTimeSec", value: 120, type: "Integer" },
-      { name: "workerCount", value: 1, type: "Integer" },
-      { name: "targetUrl", value: "http://www.example.com", type: "String" },
-    ]);
-
-    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
-    expect(manifest.description).toBe("op desc");
-    expect(manifest.tags).toEqual(["op:1", "op:2"]);
-    expect(manifest.spec.infraType).toBe("kubernetes");
-    expect(manifest.spec.targetType).toBe("kubernetes");
-    expect(manifest.spec.inputs).toEqual(body.inputs);
-  });
-
-  it("create (Kubernetes Custom Image): mirrors verified curl 2 — image inputs[] entries, no scriptContent", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({ identity: "locust2" });
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "templatescopetest",
-      project_id: "templatescopetest",
-      name: "locust-2",
-      identity: "locust2",
-      environment_id: "ashloadtest",
-      infra_id: "expertdatest1",
-      target_url: "http://www.example.com",
-      target_type: "kubernetes",
-      script_source: "image",
-      script_image: "imageregistry",
-      script_entrypoint: "/script/xyz",
-      load_args: "tags=smoke",
-      worker_count: 1,
-    });
-
-    const body = mockRequest.mock.calls[0][0].body;
-    expect(body.scriptSource).toBe("image");
-    expect(body.scriptContent).toBeUndefined();
-    // Legacy top-level image fields gone.
-    expect(body.scriptImage).toBeUndefined();
-    expect(body.scriptEntrypoint).toBeUndefined();
-    expect(body.loadArgs).toBeUndefined();
-
-    expect(body.inputs).toEqual([
-      { name: "targetUsers", value: 100, type: "Integer", required: true },
-      { name: "durationSeconds", value: 600, type: "Integer" },
-      { name: "rampUpTimeSec", value: 120, type: "Integer" },
-      { name: "workerCount", value: 1, type: "Integer" },
-      { name: "targetUrl", value: "http://www.example.com", type: "String" },
-      { name: "scriptImage", value: "imageregistry", type: "String", required: true },
-      { name: "scriptEntrypoint", value: "/script/xyz", type: "String", required: true },
-      { name: "loadArgs", value: "tags=smoke", type: "String" },
-    ]);
-
-    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
-    expect(manifest.spec.scriptSource).toBe("image");
-    // Image mode → no scriptContent in YAML (the script lives in the container image).
     expect(manifest.spec.scriptContent).toBeUndefined();
-    expect(manifest.spec.inputs).toEqual(body.inputs);
+    expect(manifest.spec.inputs).toBeUndefined();
+    expect(manifest.spec.toolConfig.locust.script.content).toBe(SCRIPT);
+    expect(manifest.spec.toolConfig.locust.tunables.targetUsers).toBe(50);
+
+    // skipScopeBodyInjection: no scope in body.
+    expect(body.orgIdentifier).toBeUndefined();
+    expect(body.organizationIdentifier).toBeUndefined();
+    expect(body.projectIdentifier).toBeUndefined();
   });
 
-  it("create: derives identity from name (alphanumeric) when omitted", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({ identity: "testloadone" });
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "o", project_id: "p",
-      name: "test-load-one",
-      environment_id: "env90x",
-      infra_id: "infra-1",
-      target_url: "https://example.com",
-      script: SCRIPT,
-    });
-
-    expect(mockRequest.mock.calls[0][0].body.identity).toBe("testloadone");
-  });
-
-  it("create: applies load-config defaults (100/600/120) in inputs[] when omitted", async () => {
+  it("Kubernetes image (private registry): nests script.{image,entrypoint,loadArgs,imagePullSecret} under toolConfig.locust", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "o", project_id: "p",
-      name: "lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com", script: SCRIPT,
-    });
-
-    const body = mockRequest.mock.calls[0][0].body;
-    const byName = Object.fromEntries(
-      (body.inputs as LoadtestInput[]).map((i) => [i.name, i.value]),
-    );
-    expect(byName.targetUsers).toBe(100);
-    expect(byName.durationSeconds).toBe(600);
-    expect(byName.rampUpTimeSec).toBe(120);
-  });
-
-  it("create: zero-valued load config survives in inputs[] (!= null, not truthiness)", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "o", project_id: "p",
-      name: "lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com", script: SCRIPT,
-      users: 0, duration_sec: 0, ramp_up_sec: 0,
-    });
-
-    const body = mockRequest.mock.calls[0][0].body;
-    const byName = Object.fromEntries(
-      (body.inputs as LoadtestInput[]).map((i) => [i.name, i.value]),
-    );
-    expect(byName.targetUsers).toBe(0);
-    expect(byName.durationSeconds).toBe(0);
-    expect(byName.rampUpTimeSec).toBe(0);
-  });
-
-  it("create (Kubernetes): worker_count emitted as inputs[name=workerCount]", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "o", project_id: "p",
-      name: "k8s-lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com", script: SCRIPT,
-      target_type: "kubernetes", worker_count: 3,
-    });
-
-    const body = mockRequest.mock.calls[0][0].body;
-    expect(body.targetType).toBe("kubernetes");
-    const workerEntry = (body.inputs as LoadtestInput[]).find((i) => i.name === "workerCount");
-    expect(workerEntry).toEqual({ name: "workerCount", value: 3, type: "Integer" });
-    // No legacy variables map.
-    expect(body.variables).toBeUndefined();
-  });
-
-  it("create: Linux VM does NOT emit workerCount in inputs[]", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "o", project_id: "p",
-      name: "lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com", script: SCRIPT,
-      worker_count: 3, // even when explicitly set on Linux, it should NOT show up.
-    });
-
-    const body = mockRequest.mock.calls[0][0].body;
-    const workerEntry = (body.inputs as LoadtestInput[]).find((i) => i.name === "workerCount");
-    expect(workerEntry).toBeUndefined();
-  });
-
-  it("create (Kubernetes): worker_count defaults to 0 in inputs[] when omitted", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "o", project_id: "p",
-      name: "k8s-lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com", script: SCRIPT,
-      target_type: "kubernetes",
-    });
-
-    const body = mockRequest.mock.calls[0][0].body;
-    const workerEntry = (body.inputs as LoadtestInput[]).find((i) => i.name === "workerCount");
-    expect(workerEntry).toEqual({ name: "workerCount", value: 0, type: "Integer" });
-  });
-
-  it("create: rejects when target_url is missing", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "chaos_loadtest", "create", {
-        org_id: "o", project_id: "p",
-        name: "lt", environment_id: "e", infra_id: "i", script: SCRIPT,
-      }),
-    ).rejects.toThrow(/target_url/);
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("create: rejects when the inline script is missing", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "chaos_loadtest", "create", {
-        org_id: "o", project_id: "p",
-        name: "lt", environment_id: "e", infra_id: "i",
-        target_url: "https://example.com",
-      }),
-    ).rejects.toThrow(/script/);
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("create: image mode is inferred from script_image when script_source is omitted", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
     await registry.dispatch(client, "chaos_loadtest", "create", {
       org_id: "o", project_id: "p",
       name: "img-lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com",
+      target_url: "http://www.example.com",
       target_type: "kubernetes",
-      script_image: "my-registry/my-load-test:latest",
+      script_source: "image",
+      script_image: "my-registry/locust:latest",
+      script_entrypoint: "/script/xyz",
+      load_args: "tags=smoke",
+      image_pull_secret: "Some secret name",
+      worker_count: 1,
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.scriptContent).toBeUndefined();
+    expect(body.inputs).toBeUndefined();
+    const locust = (body.toolConfig as Record<string, unknown>).locust as Record<string, unknown>;
+    expect(locust.mode).toBe("image");
+    expect(locust.script).toEqual({
+      image: "my-registry/locust:latest",
+      entrypoint: "/script/xyz",
+      loadArgs: "tags=smoke",
+      imagePullSecret: "Some secret name",
+    });
+    expect(locust.tunables).toEqual({
+      targetUrl: "http://www.example.com",
+      workerCount: 1,
     });
 
-    const body = mockRequest.mock.calls[0][0].body;
-    expect(body.scriptSource).toBe("image");
-    expect(body.scriptContent).toBeUndefined();
-    const imageEntry = (body.inputs as LoadtestInput[]).find((i) => i.name === "scriptImage");
-    expect(imageEntry).toEqual({
-      name: "scriptImage",
-      value: "my-registry/my-load-test:latest",
-      type: "String",
-      required: true,
+    // YAML manifest carries the same script scalars (plain text on the YAML side).
+    const yamlB64 = body.yaml as string;
+    const manifest = YAML.parse(Buffer.from(yamlB64, "base64").toString("utf8"));
+    expect(manifest.spec.toolConfig.locust.script).toEqual({
+      image: "my-registry/locust:latest",
+      entrypoint: "/script/xyz",
+      loadArgs: "tags=smoke",
+      imagePullSecret: "Some secret name",
     });
   });
 
-  it("create: rejects image mode when script_image is missing", async () => {
+  it("Kubernetes image (public registry): omits imagePullSecret and loadArgs when not supplied", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      name: "img-lt-public", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script_source: "image",
+      script_image: "my-registry/locust:latest",
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    const locust = (body.toolConfig as Record<string, unknown>).locust as Record<string, unknown>;
+    expect(locust.mode).toBe("image");
+    expect(locust.script).toEqual({ image: "my-registry/locust:latest" });
+    const script = locust.script as Record<string, unknown>;
+    expect(script.imagePullSecret).toBeUndefined();
+    expect(script.loadArgs).toBeUndefined();
+  });
 
+  it("Kubernetes image: rejects load_args whose keys start with '-'", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
     await expect(
       registry.dispatch(client, "chaos_loadtest", "create", {
         org_id: "o", project_id: "p",
-        name: "lt", environment_id: "e", infra_id: "i",
-        target_url: "https://example.com",
-        target_type: "kubernetes", script_source: "image",
+        name: "img-lt-bad", environment_id: "e", infra_id: "i",
+        target_type: "kubernetes",
+        script_source: "image",
+        script_image: "my-registry/locust:latest",
+        load_args: "--headless",
       }),
-    ).rejects.toThrow(/script_image/);
+    ).rejects.toThrow(/must not start with '-'/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create: display name is permissive; identity is auto-slugged when omitted", async () => {
+  it("passes optional service_references / cleanup_policy / max_duration_sec / resources through", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      name: "lt", environment_id: "e", infra_id: "i",
+      target_url: "https://example.com", script: SCRIPT,
+      service_references: ["svc-1", "svc-2"],
+      cleanup_policy: "retain",
+      max_duration_sec: 900,
+      resources: {
+        requests: { cpu: "100m", memory: "256Mi" },
+        limits: { cpu: "500m", memory: "512Mi" },
+      },
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.serviceReferences).toEqual(["svc-1", "svc-2"]);
+    expect(body.cleanupPolicy).toBe("retain");
+    expect(body.maxDurationSec).toBe(900);
+    expect(body.resources).toMatchObject({
+      requests: { cpu: "100m", memory: "256Mi" },
+    });
 
+    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
+    expect(manifest.spec.cleanupPolicy).toBe("retain");
+    expect(manifest.spec.resources).toEqual({
+      requests: { cpu: "100m", memory: "256Mi" },
+      limits: { cpu: "500m", memory: "512Mi" },
+    });
+  });
+
+  it("stores variables under toolConfig.<tool>.variables", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      name: "lt", environment_id: "e", infra_id: "i",
+      target_url: "https://example.com", script: SCRIPT,
+      variables: [{ name: "API_KEY", type: "String", value: "abc" }],
+    });
+    const locust = (mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>)
+      .locust as Record<string, unknown>;
+    expect(locust.variables).toEqual([{ name: "API_KEY", type: "String", value: "abc" }]);
+  });
+
+  it("derives identity from name when omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
     await registry.dispatch(client, "chaos_loadtest", "create", {
       org_id: "o", project_id: "p",
       name: "My Load Test",
       environment_id: "e", infra_id: "i",
       target_url: "https://example.com", script: SCRIPT,
     });
+    expect(mockRequest.mock.calls[0][0].body.identity).toBe("MyLoadTest");
+  });
 
-    const body = mockRequest.mock.calls[0][0].body;
-    expect(body.name).toBe("My Load Test");
-    expect(body.identity).toBe("MyLoadTest");
+  it("rejects deprecated tool_type='Gatling' / 'Custom'", async () => {
+    const client = makeClient(vi.fn());
+    for (const t of ["Gatling", "Custom"]) {
+      await expect(
+        registry.dispatch(client, "chaos_loadtest", "create", {
+          org_id: "o", project_id: "p",
+          name: "lt", tool_type: t, environment_id: "e", infra_id: "i",
+          target_url: "https://example.com", script: SCRIPT,
+        }),
+      ).rejects.toThrow(/Locust.*K6.*JMeter/);
+    }
   });
 });
 
-describe("chaos_loadtest list/get", () => {
+// ── K6 create ─────────────────────────────────────────────────────────
+describe("chaos_loadtest create (K6)", () => {
   let registry: Registry;
   beforeEach(() => {
     registry = new Registry(makeConfig());
   });
 
-  it("list: extracts { items, total } and projects a stable shape (drops user-details + scriptContent)", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({
-      items: [
-        {
-          identity: "testloadone",
-          name: "test-load-one",
-          environmentIdentifier: "env90x",
-          infraIdentifier: "infra-1",
-          targetType: "machine-chaos-linux",
-          toolType: "Locust",
-          scriptSource: "inline",
-          scriptContent: "BIG_BASE64_BLOB",
-          createdByUserDetails: { name: "someone", email: "a@b.com" },
-          inputs: [
-            { name: "targetUsers", value: 100, type: "Integer", required: true },
-            { name: "targetUrl", value: "http://www.example.com", type: "String" },
-          ],
-          variables: [],
-        },
-      ],
-      pagination: { totalItems: 5 },
-    });
+  it("script mode: nests script.content + tunables under toolConfig.k6, envVars carry literal + secret refs", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
-
-    const result = (await registry.dispatch(client, "chaos_loadtest", "list", {
-      org_id: "templatescopetest",
-      project_id: "templatescopetest",
-    })) as { items: Array<Record<string, unknown>>; total: number };
-
-    const call = mockRequest.mock.calls[0][0];
-    expect(call.method).toBe("GET");
-    expect(call.path).toBe("/loadTest/manager/api/v1/load-tests");
-    expect(call.params.organizationIdentifier).toBe("templatescopetest");
-
-    expect(result.total).toBe(5);
-    expect(result.items).toHaveLength(1);
-    const item = result.items[0];
-    expect(item.loadtestId).toBe("testloadone");
-    expect(item.identity).toBe("testloadone");
-    expect(item.name).toBe("test-load-one");
-    // Large / opaque fields are dropped from the projected shape.
-    expect(item.scriptContent).toBeUndefined();
-    expect(item.createdByUserDetails).toBeUndefined();
-    // Canonical inputs[] passes through; derived target_url + users are surfaced.
-    expect(item.inputs).toHaveLength(2);
-    expect(item.users).toBe(100);
-    expect(item.target_url).toBe("http://www.example.com");
-  });
-
-  it("get: extracts canonical inputs[] AND derives convenience scalars from inputs[]", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({
-      identity: "locust1",
-      name: "locust-1",
-      environmentIdentifier: "ashloadtest",
-      infraIdentifier: "deletelater1",
-      targetType: "kubernetes",
-      toolType: "Locust",
-      scriptSource: "inline",
-      inputs: [
-        { name: "targetUsers", value: 100, type: "Integer", required: true },
-        { name: "durationSeconds", value: 600, type: "Integer" },
-        { name: "rampUpTimeSec", value: 120, type: "Integer" },
-        { name: "workerCount", value: 1, type: "Integer" },
-        { name: "targetUrl", value: "http://www.example.com", type: "String" },
-      ],
-      variables: [],
-      yaml: "BASE64_YAML_BLOB",
-      scriptContent: "BIG_BASE64_BLOB",
-      updatedByUserDetails: { name: "someone" },
-    });
-    const client = makeClient(mockRequest);
-
-    const result = (await registry.dispatch(client, "chaos_loadtest", "get", {
-      loadtest_id: "locust1",
-      org_id: "templatescopetest",
-      project_id: "templatescopetest",
-    })) as Record<string, unknown>;
-
-    const call = mockRequest.mock.calls[0][0];
-    expect(call.path).toBe("/loadTest/manager/api/v1/load-tests/locust1");
-
-    // Canonical arrays preserved.
-    expect(result.inputs).toHaveLength(5);
-    expect(result.variables).toEqual([]);
-    expect(result.yaml).toBe("BASE64_YAML_BLOB");
-
-    // Derived convenience scalars match the create-side LLM surface.
-    expect(result.target_url).toBe("http://www.example.com");
-    expect(result.users).toBe(100);
-    expect(result.duration_sec).toBe(600);
-    expect(result.ramp_up_sec).toBe(120);
-    expect(result.worker_count).toBe(1);
-
-    // Legacy top-level projections are not surfaced anymore.
-    expect((result as Record<string, unknown>).defaultUsers).toBeUndefined();
-    expect((result as Record<string, unknown>).defaultDurationSec).toBeUndefined();
-    expect((result as Record<string, unknown>).defaultRampUpTimeSec).toBeUndefined();
-    expect((result as Record<string, unknown>).defaultWorkerCount).toBeUndefined();
-    expect((result as Record<string, unknown>).targetUrl).toBeUndefined();
-
-    // Large blobs still dropped.
-    expect(result.scriptContent).toBeUndefined();
-    expect(result.updatedByUserDetails).toBeUndefined();
-
-    // Deep link is attached.
-    expect(result.openInHarness).toBe(
-      "https://app.harness.io/ng/account/test-account/module/chaos/orgs/templatescopetest/projects/templatescopetest/load-tests/locust1",
-    );
-  });
-});
-
-describe("chaos_loadtest create — K6", () => {
-  let registry: Registry;
-  beforeEach(() => {
-    registry = new Registry(makeConfig());
-  });
-
-  it("create (K6 Kubernetes, Upload K6 script): mirrors verified curl — inputs[], toolConfig with base64 script, env-var literal + secret reference, base64 yaml manifest", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({ identity: "k61", name: "k6-1" });
-    const client = makeClient(mockRequest);
-
     await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "templatescopetest",
-      project_id: "templatescopetest",
+      org_id: "o", project_id: "p",
       tool_type: "K6",
-      name: "k6-1",
-      identity: "k61",
-      description: "op desc",
-      tags: ["tag:1"],
-      environment_id: "ashloadtest",
-      infra_id: "deletelater1",
+      name: "k6-1", environment_id: "e", infra_id: "i",
       target_url: "http://www.google.com",
       script: K6_SCRIPT,
       target_type: "kubernetes",
       worker_count: 3,
       rps_limit: 98,
+      iterations: 42,
       env_vars: [
-        { key: "var1", value: "staticValue_withoutSecret" },
-        { key: "secretKeyVar2", secret_id: "vcenter-admin-username", secret_scope: "project" },
+        { key: "var1", value: "static" },
+        { key: "SECRET_VAR", secret_id: "vcenter", secret_scope: "project" },
       ],
     });
 
-    const call = mockRequest.mock.calls[0][0];
-    expect(call.method).toBe("POST");
-    expect(call.path).toBe("/loadTest/manager/api/v1/load-tests");
-
-    const body = call.body;
-
-    // Top-level wire shape matches the verified curl exactly.
-    expect(body).toMatchObject({
-      identity: "k61",
-      name: "k6-1",
-      description: "op desc",
-      tags: ["tag:1"],
-      environmentIdentifier: "ashloadtest",
-      infraIdentifier: "deletelater1",
-      scriptSource: "inline",
-      targetType: "kubernetes",
-      toolType: "K6",
-    });
-    // K6 does NOT send top-level scriptContent.
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.toolType).toBe("K6");
     expect(body.scriptContent).toBeUndefined();
+    expect(body.inputs).toBeUndefined();
 
-    // inputs[] in canonical order (mirrors curl exactly).
-    expect(body.inputs).toEqual([
-      { name: "targetUsers", value: 100, type: "Integer", required: true },
-      { name: "durationSeconds", value: 600, type: "Integer" },
-      { name: "rampUpTimeSec", value: 120, type: "Integer" },
-      { name: "workerCount", value: 3, type: "Integer" },
-      { name: "targetUrl", value: "http://www.google.com", type: "String" },
-    ]);
-
-    // toolConfig: K6 wire shape.
-    expect(body.toolConfig).toMatchObject({
-      mode: "script",
+    const k6 = (body.toolConfig as Record<string, unknown>).k6 as Record<string, unknown>;
+    expect(k6.mode).toBe("script");
+    expect(k6.script).toEqual({
+      content: Buffer.from(K6_SCRIPT, "utf8").toString("base64"),
+    });
+    expect(k6.tunables).toMatchObject({
+      targetUrl: "http://www.google.com",
+      workerCount: 3,
       hostUrl: "http://www.google.com",
-      options: { rpsLimit: 98 },
-      envVars: [
-        { key: "var1", value: "staticValue_withoutSecret" },
-        {
-          key: "secretKeyVar2",
-          value: 'secrets.getValue("vcenter-admin-username")',
-          secret: true,
-        },
-      ],
+      iterations: 42,
+      rpsLimit: 98,
     });
-    expect((body.toolConfig as Record<string, unknown>).scriptContent).toBe(
-      Buffer.from(K6_SCRIPT, "utf8").toString("base64"),
-    );
+    expect(k6.options).toBeUndefined();
+    expect(k6.envVars).toEqual([
+      { key: "var1", value: "static" },
+      { key: "SECRET_VAR", value: 'secrets.getValue("vcenter")', secret: true },
+    ]);
+    // Legacy flat keys must NOT appear on the toolConfig.k6 block.
+    expect(k6.scriptContent).toBeUndefined();
+    expect(k6.customImage).toBeUndefined();
+    expect(k6.hostUrl).toBeUndefined();
 
-    // Decoded YAML manifest.
+    // Decoded YAML mirrors the wire toolConfig but with plain-text script content.
     const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
-    expect(manifest.spec).toMatchObject({
-      identity: "k61",
-      toolType: "K6",
-      infraType: "kubernetes",
-      targetType: "kubernetes",
-      scriptSource: "inline",
-      infraId: "deletelater1",
-      envId: "ashloadtest",
-    });
-    // YAML must NOT have spec.scriptContent for K6.
-    expect(manifest.spec.scriptContent).toBeUndefined();
-    // YAML toolConfig.scriptContent is PLAIN TEXT (not base64).
-    expect(manifest.spec.toolConfig.scriptContent).toBe(K6_SCRIPT);
-    expect(manifest.spec.toolConfig.mode).toBe("script");
-    expect(manifest.spec.toolConfig.hostUrl).toBe("http://www.google.com");
-    expect(manifest.spec.toolConfig.options).toEqual({ rpsLimit: 98 });
-    expect(manifest.spec.toolConfig.envVars).toEqual(body.toolConfig.envVars);
-    expect(manifest.spec.inputs).toEqual(body.inputs);
+    expect(manifest.spec.toolConfig.k6.mode).toBe("script");
+    expect(manifest.spec.toolConfig.k6.script.content).toBe(K6_SCRIPT);
+    expect(manifest.spec.toolConfig.k6.tunables.workerCount).toBe(3);
+    expect(manifest.spec.toolConfig.k6.tunables.rpsLimit).toBe(98);
   });
 
-  it("create (K6): rejects target_type='machine-chaos-linux'", async () => {
-    const client = makeClient(vi.fn());
+  it("image mode: nests script.image + entrypoint under toolConfig.k6.script", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "K6",
+      name: "k6-2", environment_id: "e", infra_id: "i",
+      target_url: "http://www.example.com",
+      target_type: "kubernetes",
+      script_source: "image",
+      script_image: "my-image",
+      script_entrypoint: "/entrypoint.sh",
+    });
+    const k6 = (mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>)
+      .k6 as Record<string, unknown>;
+    expect(k6.mode).toBe("image");
+    expect(k6.script).toEqual({ image: "my-image", entrypoint: "/entrypoint.sh" });
+    expect(k6.scriptContent).toBeUndefined();
+    expect(k6.customImage).toBeUndefined();
+  });
+
+  it("image mode (private registry): nests script.{image,entrypoint,loadArgs,imagePullSecret} under toolConfig.k6", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "K6",
+      name: "k6-img-priv", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script_source: "image",
+      script_image: "my-registry/k6:latest",
+      script_entrypoint: "/script.js",
+      load_args: "tags=smoke",
+      image_pull_secret: "Some secret name",
+      worker_count: 1,
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    const k6 = (body.toolConfig as Record<string, unknown>).k6 as Record<string, unknown>;
+    expect(k6.mode).toBe("image");
+    expect(k6.script).toEqual({
+      image: "my-registry/k6:latest",
+      entrypoint: "/script.js",
+      loadArgs: "tags=smoke",
+      imagePullSecret: "Some secret name",
+    });
+
+    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
+    expect(manifest.spec.toolConfig.k6.script).toEqual({
+      image: "my-registry/k6:latest",
+      entrypoint: "/script.js",
+      loadArgs: "tags=smoke",
+      imagePullSecret: "Some secret name",
+    });
+  });
+
+  it("image mode (public registry): omits imagePullSecret and loadArgs when not supplied", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "K6",
+      name: "k6-img-public", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script_source: "image",
+      script_image: "my-registry/k6:latest",
+    });
+    const k6 = (mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>)
+      .k6 as Record<string, unknown>;
+    const script = k6.script as Record<string, unknown>;
+    expect(script.image).toBe("my-registry/k6:latest");
+    expect(script.imagePullSecret).toBeUndefined();
+    expect(script.loadArgs).toBeUndefined();
+  });
+
+  it("image mode: rejects load_args whose keys start with '-'", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
     await expect(
       registry.dispatch(client, "chaos_loadtest", "create", {
         org_id: "o", project_id: "p",
         tool_type: "K6",
+        name: "k6-img-bad", environment_id: "e", infra_id: "i",
+        target_type: "kubernetes",
+        script_source: "image",
+        script_image: "my-registry/k6:latest",
+        load_args: "--headless",
+      }),
+    ).rejects.toThrow(/must not start with '-'/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects target_type='machine-chaos-linux'", async () => {
+    const client = makeClient(vi.fn());
+    await expect(
+      registry.dispatch(client, "chaos_loadtest", "create", {
+        org_id: "o", project_id: "p", tool_type: "K6",
         name: "k6-lt", environment_id: "e", infra_id: "i",
-        target_url: "https://example.com",
-        script: K6_SCRIPT,
+        target_url: "https://example.com", script: K6_SCRIPT,
         target_type: "machine-chaos-linux",
       }),
     ).rejects.toThrow(/K6.*kubernetes/);
   });
 
-  it("create (K6): rejects script missing 'export default'", async () => {
+  it("passes cleanup_policy / resources through and emits them into the built YAML (tool-agnostic)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "K6",
+      name: "k6-resources", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script: K6_SCRIPT,
+      cleanup_policy: "retain",
+      resources: {
+        limits: { cpu: "0.5", memory: "1Gi" },
+        requests: { cpu: "100m", memory: "128Mi" },
+      },
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.cleanupPolicy).toBe("retain");
+    expect(body.resources).toEqual({
+      limits: { cpu: "0.5", memory: "1Gi" },
+      requests: { cpu: "100m", memory: "128Mi" },
+    });
+    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
+    expect(manifest.spec.cleanupPolicy).toBe("retain");
+    expect(manifest.spec.resources).toEqual(body.resources);
+  });
+
+  it("rejects K6 script missing 'export default'", async () => {
     const client = makeClient(vi.fn());
     await expect(
       registry.dispatch(client, "chaos_loadtest", "create", {
-        org_id: "o", project_id: "p",
-        tool_type: "K6",
+        org_id: "o", project_id: "p", tool_type: "K6",
         name: "k6-lt", environment_id: "e", infra_id: "i",
         target_url: "https://example.com",
         script: "function main() { /* no default export */ }",
@@ -689,264 +495,713 @@ describe("chaos_loadtest create — K6", () => {
       }),
     ).rejects.toThrow(/export default function/);
   });
+});
 
-  it.each([
-    { caseLabel: "reserved name", env: [{ key: "PATH", value: "x" }], match: /reserved/ },
-    { caseLabel: "invalid key pattern", env: [{ key: "2foo", value: "x" }], match: /must match/ },
-    { caseLabel: "duplicate keys", env: [{ key: "A", value: "1" }, { key: "A", value: "2" }], match: /duplicated/ },
-    { caseLabel: "both value and secret_id", env: [{ key: "A", value: "x", secret_id: "y" }], match: /exactly one of/ },
-    { caseLabel: "neither value nor secret_id", env: [{ key: "A" }], match: /exactly one of/ },
-    { caseLabel: "invalid secret_scope", env: [{ key: "A", secret_id: "x", secret_scope: "global" }], match: /account.*org.*project/ },
-  ])("create (K6): env_vars validation rejects $caseLabel", async ({ env, match }) => {
-    const client = makeClient(vi.fn());
-    await expect(
-      registry.dispatch(client, "chaos_loadtest", "create", {
-        org_id: "o", project_id: "p",
-        tool_type: "K6",
-        name: "k6-lt", environment_id: "e", infra_id: "i",
-        target_url: "https://example.com",
-        script: K6_SCRIPT,
-        target_type: "kubernetes",
-        env_vars: env,
-      }),
-    ).rejects.toThrow(match);
+// ── JMeter create ─────────────────────────────────────────────────────
+describe("chaos_loadtest create (JMeter)", () => {
+  let registry: Registry;
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
   });
 
-  it.each([
-    { scope: "account", id: "gcp-ca-cert", wire: 'secrets.getValue("account.gcp-ca-cert")' },
-    { scope: "org", id: "org-level-secret", wire: 'secrets.getValue("org.org-level-secret")' },
-    { scope: "project", id: "vcenter-admin-username", wire: 'secrets.getValue("vcenter-admin-username")' },
-  ])("create (K6): secret_scope='$scope' produces $wire", async ({ scope, id, wire }) => {
+  it("passes tool_config through verbatim under toolConfig.jmeter (advanced escape hatch)", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
+    const jmeter = {
+      mode: "script",
+      script: { content: "PD94bWwgdmVyc2lvbj0iMS4wIj8+" },
+      tunables: { targetUsers: 10, durationSeconds: 60 },
+    };
     await registry.dispatch(client, "chaos_loadtest", "create", {
       org_id: "o", project_id: "p",
-      tool_type: "K6",
-      name: "k6-lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com",
-      script: K6_SCRIPT,
+      tool_type: "JMeter",
+      name: "jm-1", environment_id: "e", infra_id: "i",
       target_type: "kubernetes",
-      env_vars: [{ key: "SECRET", secret_id: id, secret_scope: scope }],
-    });
-    const envVars = (mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>)
-      .envVars;
-    expect(envVars).toEqual([{ key: "SECRET", value: wire, secret: true }]);
-  });
-
-  it("create (K6): secret_scope defaults to 'project' when omitted", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "o", project_id: "p",
-      tool_type: "K6",
-      name: "k6-lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com",
-      script: K6_SCRIPT,
-      target_type: "kubernetes",
-      env_vars: [{ key: "SECRET", secret_id: "my-secret" }],
-    });
-    const envVars = (mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>)
-      .envVars;
-    expect(envVars).toEqual([
-      { key: "SECRET", value: 'secrets.getValue("my-secret")', secret: true },
-    ]);
-  });
-
-  it("create (K6): host_url defaults to the origin of target_url when omitted", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "o", project_id: "p",
-      tool_type: "K6",
-      name: "k6-lt", environment_id: "e", infra_id: "i",
-      target_url: "https://api.example.com/foo/bar?q=1",
-      script: K6_SCRIPT,
-      target_type: "kubernetes",
-    });
-    const toolConfig = mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>;
-    expect(toolConfig.hostUrl).toBe("https://api.example.com");
-  });
-
-  it("create (K6): omits options/envVars/iterations from toolConfig when empty", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "o", project_id: "p",
-      tool_type: "K6",
-      name: "k6-lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com",
-      script: K6_SCRIPT,
-      target_type: "kubernetes",
+      tool_config: { jmeter },
     });
     const tc = mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>;
-    expect(Object.keys(tc).sort()).toEqual(["hostUrl", "mode", "scriptContent"]);
+    expect(tc.jmeter).toEqual(jmeter);
   });
 
-  it("create (Locust): existing behaviour unchanged — no toolConfig emitted, top-level scriptContent still set", async () => {
+  it("script mode: base64-encodes plan into toolConfig.jmeter.script.content, wires properties/env_vars/thresholds/worker_count", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
+    const plan = `<?xml version="1.0"?><jmeterTestPlan/>`;
     await registry.dispatch(client, "chaos_loadtest", "create", {
       org_id: "o", project_id: "p",
-      name: "lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com", script: SCRIPT,
+      tool_type: "JMeter",
+      name: "jm-script", environment_id: "e", infra_id: "i",
       target_type: "kubernetes",
-    });
-    const body = mockRequest.mock.calls[0][0].body;
-    expect(body.toolType).toBe("Locust"); // default when tool_type omitted
-    expect(body.toolConfig).toBeUndefined();
-    expect(body.scriptContent).toBe(Buffer.from(SCRIPT, "utf8").toString("base64"));
-  });
-
-  it("create (K6 Kubernetes, Using Custom Image): mirrors verified curl k6-2 — toolConfig.customImage, inputs[] with image fields, base64 yaml manifest", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({ identity: "k62", name: "k6-2" });
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "chaos_loadtest", "create", {
-      org_id: "templatescopetest",
-      project_id: "templatescopetest",
-      tool_type: "K6",
-      name: "k6-2",
-      identity: "k62",
-      description: "optional desc",
-      tags: ["tag:op1"],
-      environment_id: "ashloadtest",
-      infra_id: "discoverytestallsettingsset",
-      target_url: "http://www.example.com",
-      target_type: "kubernetes",
-      script_source: "image",
-      script_image: " my-image", // preserve leading space per the verified curl
-      script_entrypoint: "/script.json",
-      load_args: "tags=smoke,random;headless=true",
-      worker_count: 1,
-      rps_limit: 29,
+      script: plan,
+      worker_count: 2,
+      properties: [
+        { key: "threads1", value: 100, send_to_engines: true },
+        { key: "someProperty", value: "200" },
+      ],
       env_vars: [
-        { key: "var1", value: "val1" },
-        { key: "secretKeyVar2", secret_id: "gcp-ca-cert", secret_scope: "account" },
+        { key: "fixed", value: "somefixed" },
+        { key: "runtime", value: "<+input>" },
+        { key: "somekey", secret_id: "datat-api", secret_scope: "project" },
+      ],
+      thresholds: [
+        { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 },
+        { metric: "error_rate_pct", operator: "<=", value: 50, abort_on_fail: true },
+        { metric: "throughput_rps", stat: "p99", operator: ">", value: 5000 },
       ],
     });
 
     const body = mockRequest.mock.calls[0][0].body;
-
-    // Top-level wire shape matches the verified curl exactly.
-    expect(body).toMatchObject({
-      identity: "k62",
-      name: "k6-2",
-      description: "optional desc",
-      tags: ["tag:op1"],
-      environmentIdentifier: "ashloadtest",
-      infraIdentifier: "discoverytestallsettingsset",
-      scriptSource: "image",
-      targetType: "kubernetes",
-      toolType: "K6",
-    });
-    // K6 (any mode) does NOT send top-level scriptContent.
+    expect(body.toolType).toBe("JMeter");
     expect(body.scriptContent).toBeUndefined();
-
-    // inputs[] order matches the curl (5 standard + 3 image entries).
-    expect(body.inputs).toEqual([
-      { name: "targetUsers", value: 100, type: "Integer", required: true },
-      { name: "durationSeconds", value: 600, type: "Integer" },
-      { name: "rampUpTimeSec", value: 120, type: "Integer" },
-      { name: "workerCount", value: 1, type: "Integer" },
-      { name: "targetUrl", value: "http://www.example.com", type: "String" },
-      { name: "scriptImage", value: " my-image", type: "String", required: true },
-      { name: "scriptEntrypoint", value: "/script.json", type: "String", required: true },
-      { name: "loadArgs", value: "tags=smoke,random;headless=true", type: "String" },
+    const jm = (body.toolConfig as Record<string, unknown>).jmeter as Record<string, unknown>;
+    expect(jm.mode).toBe("script");
+    expect(jm.script).toEqual({
+      content: Buffer.from(plan, "utf8").toString("base64"),
+    });
+    expect(jm.tunables).toEqual({ workerCount: 2 });
+    expect(jm.properties).toEqual([
+      { key: "threads1", value: "100", sendToEngines: true },
+      { key: "someProperty", value: "200" },
+    ]);
+    expect(jm.envVars).toEqual([
+      { key: "fixed", value: "somefixed" },
+      { key: "runtime", value: "<+input>" },
+      { key: "somekey", value: 'secrets.getValue("datat-api")', secret: true },
+    ]);
+    expect(jm.thresholds).toEqual([
+      { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 },
+      { metric: "error_rate_pct", operator: "<=", value: 50, abortOnFail: true },
+      { metric: "throughput_rps", stat: "p99", operator: ">", value: 5000 },
     ]);
 
-    // toolConfig: K6 image-mode wire shape.
-    expect(body.toolConfig).toEqual({
-      mode: "image",
-      customImage: { image: " my-image", entrypoint: "/script.json" },
-      hostUrl: "http://www.example.com",
-      options: { rpsLimit: 29 },
-      envVars: [
-        { key: "var1", value: "val1" },
-        {
-          key: "secretKeyVar2",
-          value: 'secrets.getValue("account.gcp-ca-cert")',
-          secret: true,
-        },
-      ],
-    });
-    // toolConfig.customImage MUST NOT carry loadArgs (load_args rides only in inputs[]).
-    const ci = (body.toolConfig as Record<string, unknown>).customImage as Record<string, unknown>;
-    expect(ci.runArgs).toBeUndefined();
-    expect(ci.loadArgs).toBeUndefined();
-
-    // Decoded YAML manifest.
     const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
-    expect(manifest.spec).toMatchObject({
-      identity: "k62",
-      toolType: "K6",
-      infraType: "kubernetes",
-      targetType: "kubernetes",
-      scriptSource: "image",
-      infraId: "discoverytestallsettingsset",
-      envId: "ashloadtest",
-    });
-    expect(manifest.spec.scriptContent).toBeUndefined();
-    expect(manifest.spec.toolConfig.mode).toBe("image");
-    expect(manifest.spec.toolConfig.customImage).toEqual({
-      image: " my-image",
-      entrypoint: "/script.json",
-    });
-    expect(manifest.spec.toolConfig.scriptContent).toBeUndefined();
-    expect(manifest.spec.inputs).toEqual(body.inputs);
+    expect(manifest.spec.toolConfig.jmeter.mode).toBe("script");
+    expect(manifest.spec.toolConfig.jmeter.script.content).toBe(plan);
+    expect(manifest.spec.toolConfig.jmeter.tunables.workerCount).toBe(2);
   });
 
-  it("create (K6 image): script_entrypoint is optional — customImage carries only image", async () => {
+  it("image mode (private registry): nests script.{image,entrypoint,loadArgs,imagePullSecret} + extras under toolConfig.jmeter", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
     await registry.dispatch(client, "chaos_loadtest", "create", {
       org_id: "o", project_id: "p",
-      tool_type: "K6",
-      name: "k6-lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com",
+      tool_type: "JMeter",
+      name: "jm-update-3", identity: "jmupdate3",
+      environment_id: "env91x", infra_id: "test",
       target_type: "kubernetes",
       script_source: "image",
-      script_image: "my-registry/k6:latest",
+      script_image: "<+input>",
+      script_entrypoint: "<+input>",
+      load_args: "proxyHost=8080",
+      image_pull_secret: "someSecretName",
+      worker_count: 1,
+      properties: [
+        { key: "threads1", value: "100", send_to_engines: true },
+        { key: "someProperty", value: "200" },
+      ],
+      env_vars: [
+        { key: "somekey", secret_id: "datat-api", secret_scope: "project" },
+        { key: "runtime", value: "<+input>" },
+        { key: "fixed", value: "somefixed" },
+      ],
+      thresholds: [
+        { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 },
+        { metric: "error_rate_pct", operator: "<=", value: 50, abort_on_fail: true },
+        { metric: "throughput_rps", stat: "p99", operator: ">", value: 5000 },
+      ],
     });
-    const tc = mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>;
-    expect(tc.mode).toBe("image");
-    expect(tc.customImage).toEqual({ image: "my-registry/k6:latest" });
+
+    const body = mockRequest.mock.calls[0][0].body;
+    const jm = (body.toolConfig as Record<string, unknown>).jmeter as Record<string, unknown>;
+    expect(jm.mode).toBe("image");
+    expect(jm.script).toEqual({
+      image: "<+input>",
+      entrypoint: "<+input>",
+      loadArgs: "proxyHost=8080",
+      imagePullSecret: "someSecretName",
+    });
+    expect(jm.tunables).toEqual({ workerCount: 1 });
+    expect(jm.properties).toEqual([
+      { key: "threads1", value: "100", sendToEngines: true },
+      { key: "someProperty", value: "200" },
+    ]);
+    expect(jm.envVars).toEqual([
+      { key: "somekey", value: 'secrets.getValue("datat-api")', secret: true },
+      { key: "runtime", value: "<+input>" },
+      { key: "fixed", value: "somefixed" },
+    ]);
+    expect(jm.thresholds).toEqual([
+      { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 },
+      { metric: "error_rate_pct", operator: "<=", value: 50, abortOnFail: true },
+      { metric: "throughput_rps", stat: "p99", operator: ">", value: 5000 },
+    ]);
+
+    const manifest = YAML.parse(Buffer.from(body.yaml as string, "base64").toString("utf8"));
+    expect(manifest.spec.toolConfig.jmeter.script).toEqual({
+      image: "<+input>",
+      entrypoint: "<+input>",
+      loadArgs: "proxyHost=8080",
+      imagePullSecret: "someSecretName",
+    });
   });
 
-  it("create (K6 image): rejects when script_image is missing", async () => {
-    const client = makeClient(vi.fn());
+  it("image mode (public registry): omits imagePullSecret / loadArgs / entrypoint when not supplied", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "JMeter",
+      name: "jm-img-public", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script_source: "image",
+      script_image: "my-registry/jmeter:5.6",
+    });
+    const jm = (mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>)
+      .jmeter as Record<string, unknown>;
+    expect(jm.mode).toBe("image");
+    expect(jm.script).toEqual({ image: "my-registry/jmeter:5.6" });
+    const script = jm.script as Record<string, unknown>;
+    expect(script.entrypoint).toBeUndefined();
+    expect(script.loadArgs).toBeUndefined();
+    expect(script.imagePullSecret).toBeUndefined();
+  });
+
+  it("image mode: rejects load_args whose keys start with '-'", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
     await expect(
       registry.dispatch(client, "chaos_loadtest", "create", {
         org_id: "o", project_id: "p",
-        tool_type: "K6",
-        name: "k6-lt", environment_id: "e", infra_id: "i",
-        target_url: "https://example.com",
+        tool_type: "JMeter",
+        name: "jm-img-bad", environment_id: "e", infra_id: "i",
         target_type: "kubernetes",
         script_source: "image",
+        script_image: "my-registry/jmeter:5.6",
+        load_args: "--headless",
       }),
-    ).rejects.toThrow(/script_image/);
+    ).rejects.toThrow(/must not start with '-'/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create (K6 image): load_args rides only in inputs[], not toolConfig.customImage", async () => {
+  it("rejects JMeter without script or script_image (scalar path)", async () => {
+    const client = makeClient(vi.fn());
+    await expect(
+      registry.dispatch(client, "chaos_loadtest", "create", {
+        org_id: "o", project_id: "p",
+        tool_type: "JMeter", name: "jm-1",
+        environment_id: "e", infra_id: "i",
+        target_type: "kubernetes",
+      }),
+    ).rejects.toThrow(/JMeter.*script/);
+  });
+
+  it("rejects JMeter when target_type is not kubernetes", async () => {
+    const client = makeClient(vi.fn());
+    await expect(
+      registry.dispatch(client, "chaos_loadtest", "create", {
+        org_id: "o", project_id: "p",
+        tool_type: "JMeter", name: "jm-1",
+        environment_id: "e", infra_id: "i",
+        target_type: "machine-chaos-linux",
+        tool_config: { jmeter: {} },
+      }),
+    ).rejects.toThrow(/JMeter.*kubernetes/);
+  });
+
+  it("preserves explicit false for send_to_engines / abort_on_fail instead of dropping them", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
+    const plan = `<?xml version="1.0"?><jmeterTestPlan/>`;
     await registry.dispatch(client, "chaos_loadtest", "create", {
       org_id: "o", project_id: "p",
-      tool_type: "K6",
-      name: "k6-lt", environment_id: "e", infra_id: "i",
-      target_url: "https://example.com",
+      tool_type: "JMeter",
+      name: "jm-falsy", environment_id: "e", infra_id: "i",
       target_type: "kubernetes",
-      script_source: "image",
-      script_image: "my-image",
-      load_args: "tags=smoke",
+      script: plan,
+      properties: [
+        { key: "explicitFalse", value: "1", send_to_engines: false },
+        { key: "omitted", value: "2" },
+      ],
+      thresholds: [
+        { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000, abort_on_fail: false },
+      ],
+    });
+    const jm = (mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>)
+      .jmeter as Record<string, unknown>;
+    expect(jm.properties).toEqual([
+      { key: "explicitFalse", value: "1", sendToEngines: false },
+      { key: "omitted", value: "2" },
+    ]);
+    expect(jm.thresholds).toEqual([
+      { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000, abortOnFail: false },
+    ]);
+  });
+
+  it.each(["scriptContent", "customImage", "inputs"])(
+    "fails loudly when legacy field '%s' is passed on create",
+    async (legacyKey) => {
+      const client = makeClient(vi.fn());
+      await expect(
+        registry.dispatch(client, "chaos_loadtest", "create", {
+          org_id: "o", project_id: "p",
+          tool_type: "JMeter", name: "jm-legacy",
+          environment_id: "e", infra_id: "i",
+          target_type: "kubernetes",
+          script: `<?xml version="1.0"?><jmeterTestPlan/>`,
+          [legacyKey]: legacyKey === "inputs" ? [] : "whatever",
+        }),
+      ).rejects.toThrow(new RegExp(`'${legacyKey}' is not a supported chaos_loadtest field`));
+    },
+  );
+});
+
+// ── list ──────────────────────────────────────────────────────────────
+describe("chaos_loadtest list", () => {
+  let registry: Registry;
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("maps the new query params (tool_type, tags, sort_field, sort_ascending)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ items: [], pagination: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "list", {
+      org_id: "o", project_id: "p",
+      tool_type: "K6",
+      tags: ["a", "b"],
+      sort_field: "lastUpdated",
+      sort_ascending: false,
+      environment_id: "env-1",
+      search: "foo",
+      limit: 25,
+      page: 2,
+    });
+    const params = mockRequest.mock.calls[0][0].params;
+    expect(params.toolType).toBe("K6");
+    expect(params.tags).toEqual(["a", "b"]);
+    expect(params.sortField).toBe("lastUpdated");
+    expect(params.sortAscending).toBe(false);
+    expect(params.environmentIdentifier).toBe("env-1");
+    expect(params.search).toBe("foo");
+    expect(params.limit).toBe(25);
+    expect(params.page).toBe(2);
+  });
+
+  it("projects list items via chaosLoadTestExtract (toolConfig-nested tunables → scalar mirrors)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [
+        {
+          uniqueId: "u-1",
+          identity: "k61",
+          name: "k6-1",
+          environmentIdentifier: "env-1",
+          infraIdentifier: "infra-1",
+          infraType: "kubernetes",
+          targetType: "kubernetes",
+          toolType: "K6",
+          scriptSource: "inline",
+          maxDurationSec: 900,
+          cleanupPolicy: "delete",
+          serviceReferences: ["svc-1"],
+          targetUsers: "100",
+          durationSeconds: "600",
+          toolConfig: {
+            k6: {
+              mode: "script",
+              script: { content: "BASE64==" },
+              tunables: {
+                targetUrl: "https://api.example.com",
+                targetUsers: 100,
+                durationSeconds: 600,
+                rampUpTimeSec: 60,
+                hostUrl: "https://api.example.com",
+                rpsLimit: 50,
+              },
+              variables: [{ name: "X" }],
+              envVars: [{ key: "K", value: "V" }],
+            },
+          },
+          createdByUserDetails: { name: "someone" }, // must not surface
+        },
+      ],
+      pagination: { totalItems: 3 },
+    });
+    const client = makeClient(mockRequest);
+    const result = (await registry.dispatch(client, "chaos_loadtest", "list", {
+      org_id: "o", project_id: "p",
+    })) as { items: Array<Record<string, unknown>>; total: number };
+
+    expect(result.total).toBe(3);
+    const item = result.items[0];
+    expect(item.loadtestId).toBe("k61");
+    expect(item.uniqueId).toBe("u-1");
+    expect(item.infraType).toBe("kubernetes");
+    expect(item.maxDurationSec).toBe(900);
+    expect(item.serviceReferences).toEqual(["svc-1"]);
+    // Convenience scalars pulled from toolConfig.k6.tunables.
+    expect(item.target_url).toBe("https://api.example.com");
+    expect(item.users).toBe(100);
+    expect(item.duration_sec).toBe(600);
+    expect(item.ramp_up_sec).toBe(60);
+    expect(item.host_url).toBe("https://api.example.com");
+    expect(item.rps_limit).toBe(50);
+    // Full toolConfig is passed through.
+    expect((item.toolConfig as Record<string, unknown>).k6).toBeDefined();
+    // Variables/envVars surfaced from toolBlock.
+    expect((item.variables as unknown[]).length).toBe(1);
+    expect((item.envVars as unknown[]).length).toBe(1);
+    // Denormalised display strings surface separately from scalar mirrors.
+    expect(item.targetUsersDisplay).toBe("100");
+    expect(item.durationSecondsDisplay).toBe("600");
+    // Legacy fields are gone.
+    expect(item.inputs).toBeUndefined();
+    expect(item.createdByUserDetails).toBeUndefined();
+  });
+
+  it("surfaces rps_limit from toolConfig.k6.options.rpsLimit when tunables.rpsLimit is absent (real QA payload shape)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [
+        {
+          uniqueId: "u-2",
+          identity: "k62",
+          name: "k6-2",
+          toolType: "K6",
+          toolConfig: {
+            k6: {
+              mode: "script",
+              script: { content: "BASE64==" },
+              options: { rpsLimit: 50 },
+              tunables: {
+                targetUsers: 10,
+                durationSeconds: 45,
+              },
+            },
+          },
+        },
+      ],
+      pagination: { totalItems: 1 },
+    });
+    const client = makeClient(mockRequest);
+    const result = (await registry.dispatch(client, "chaos_loadtest", "list", {
+      org_id: "o", project_id: "p",
+    })) as { items: Array<Record<string, unknown>>; total: number };
+
+    const item = result.items[0];
+    expect(item.rps_limit).toBe(50);
+    expect(item.users).toBe(10);
+    expect(item.duration_sec).toBe(45);
+  });
+
+  it("prefers tunables.rpsLimit over options.rpsLimit when both are set (matches backend dispatch precedence)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [
+        {
+          uniqueId: "u-3",
+          identity: "k63",
+          name: "k6-3",
+          toolType: "K6",
+          toolConfig: {
+            k6: {
+              mode: "script",
+              script: { content: "BASE64==" },
+              options: { rpsLimit: 50 },
+              tunables: { rpsLimit: 30 },
+            },
+          },
+        },
+      ],
+      pagination: { totalItems: 1 },
+    });
+    const client = makeClient(mockRequest);
+    const result = (await registry.dispatch(client, "chaos_loadtest", "list", {
+      org_id: "o", project_id: "p",
+    })) as { items: Array<Record<string, unknown>>; total: number };
+
+    expect(result.items[0].rps_limit).toBe(30);
+  });
+
+  it("treats a zero rpsLimit in either location as unset", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [
+        {
+          uniqueId: "u-4",
+          identity: "k64",
+          name: "k6-4",
+          toolType: "K6",
+          toolConfig: {
+            k6: {
+              mode: "script",
+              script: { content: "BASE64==" },
+              options: { rpsLimit: 0 },
+              tunables: { rpsLimit: 0 },
+            },
+          },
+        },
+      ],
+      pagination: { totalItems: 1 },
+    });
+    const client = makeClient(mockRequest);
+    const result = (await registry.dispatch(client, "chaos_loadtest", "list", {
+      org_id: "o", project_id: "p",
+    })) as { items: Array<Record<string, unknown>>; total: number };
+
+    expect(result.items[0].rps_limit).toBeUndefined();
+  });
+});
+
+// ── get / delete ──────────────────────────────────────────────────────
+describe("chaos_loadtest get / delete", () => {
+  let registry: Registry;
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("get: extractor projects toolConfig.locust.tunables → scalars and mirrors identity", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      identity: "locust1",
+      name: "locust-1",
+      environmentIdentifier: "e",
+      infraIdentifier: "i",
+      targetType: "kubernetes",
+      toolType: "Locust",
+      toolConfig: {
+        locust: {
+          mode: "script",
+          script: { content: "BASE64==" },
+          tunables: {
+            targetUrl: "http://www.example.com",
+            targetUsers: 100,
+            durationSeconds: 600,
+            rampUpTimeSec: 120,
+            spawnRate: 5,
+            workerCount: 1,
+          },
+        },
+      },
+      yaml: "BASE64_YAML_BLOB",
+    });
+    const client = makeClient(mockRequest);
+    const result = (await registry.dispatch(client, "chaos_loadtest", "get", {
+      loadtest_id: "locust1",
+      org_id: "templatescopetest",
+      project_id: "templatescopetest",
+    })) as Record<string, unknown>;
+
+    expect(mockRequest.mock.calls[0][0].path).toBe(
+      "/loadTest/manager/api/v1/load-tests/locust1",
+    );
+    expect(result.loadtestId).toBe("locust1");
+    expect(result.target_url).toBe("http://www.example.com");
+    expect(result.users).toBe(100);
+    expect(result.duration_sec).toBe(600);
+    expect(result.ramp_up_sec).toBe(120);
+    expect(result.worker_count).toBe(1);
+    expect(result.spawn_rate).toBe(5);
+    expect(result.yaml).toBe("BASE64_YAML_BLOB");
+    expect(result.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/module/chaos/orgs/templatescopetest/projects/templatescopetest/load-tests/locust1",
+    );
+  });
+
+  it("delete: DELETE /v1/load-tests/{identity}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ success: true, message: "deleted" });
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "delete", {
+      loadtest_id: "locust1",
+      org_id: "o", project_id: "p",
+    });
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/loadTest/manager/api/v1/load-tests/locust1");
+  });
+});
+
+// ── update ────────────────────────────────────────────────────────────
+describe("chaos_loadtest update", () => {
+  let registry: Registry;
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("PUT with only the fields the caller supplied (partial update)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "update", {
+      loadtest_id: "locust1",
+      org_id: "o", project_id: "p",
+      name: "renamed",
+      cleanup_policy: "retain",
+    });
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/loadTest/manager/api/v1/load-tests/locust1");
+    expect(call.body).toEqual({ name: "renamed", cleanupPolicy: "retain" });
+  });
+
+  it("passes tool_config through as a full replacement", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const tool_config = { locust: { mode: "script", script: { content: "AAA=" }, tunables: { targetUsers: 5 } } };
+    await registry.dispatch(client, "chaos_loadtest", "update", {
+      loadtest_id: "lt-1",
+      org_id: "o", project_id: "p",
+      tool_config,
+    });
+    expect(mockRequest.mock.calls[0][0].body.toolConfig).toEqual(tool_config);
+  });
+
+  it("rebuilds toolConfig.jmeter from scalars when tool_type + a scalar field are supplied", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const plan = `<?xml version="1.0"?><jmeterTestPlan/>`;
+    await registry.dispatch(client, "chaos_loadtest", "update", {
+      loadtest_id: "jm-1", org_id: "o", project_id: "p",
+      tool_type: "JMeter",
+      script: plan,
+      worker_count: 3,
+      properties: [{ key: "threads1", value: "100", send_to_engines: true }],
+      thresholds: [{ metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 }],
     });
     const body = mockRequest.mock.calls[0][0].body;
-    // inputs[] has loadArgs.
-    expect(
-      (body.inputs as Array<Record<string, unknown>>).find((i) => i.name === "loadArgs"),
-    ).toEqual({ name: "loadArgs", value: "tags=smoke", type: "String" });
-    // toolConfig.customImage MUST NOT carry it.
-    const ci = (body.toolConfig as Record<string, unknown>).customImage as Record<string, unknown>;
-    expect(ci.loadArgs).toBeUndefined();
-    expect(ci.runArgs).toBeUndefined();
+    expect(body.toolConfig).toEqual({
+      jmeter: {
+        mode: "script",
+        script: { content: Buffer.from(plan, "utf8").toString("base64") },
+        tunables: { workerCount: 3 },
+        properties: [{ key: "threads1", value: "100", sendToEngines: true }],
+        thresholds: [{ metric: "response_time_ms", stat: "p95", operator: "<", value: 5000 }],
+      },
+    });
+    // tool_type is immutable server-side; MCP must not forward it in the body.
+    expect(body.toolType).toBeUndefined();
+  });
+
+  it("rebuilds toolConfig.locust from scalars (image mode)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "update", {
+      loadtest_id: "locust-1", org_id: "o", project_id: "p",
+      tool_type: "Locust",
+      script_image: "my-registry/locust:latest",
+      script_entrypoint: "/scripts/locustfile.py",
+      users: 50,
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.toolConfig).toEqual({
+      locust: {
+        mode: "image",
+        script: { image: "my-registry/locust:latest", entrypoint: "/scripts/locustfile.py" },
+        tunables: { targetUsers: 50 },
+      },
+    });
+  });
+
+  it("throws when a scalar tool field is supplied without tool_type", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "chaos_loadtest", "update", {
+        loadtest_id: "lt-1", org_id: "o", project_id: "p",
+        worker_count: 3,
+      }),
+    ).rejects.toThrow(/tool_type is required/);
+  });
+
+  it("normalizes tool_config + tool_type (wraps a bare inner object)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatch(client, "chaos_loadtest", "update", {
+      loadtest_id: "lt-1", org_id: "o", project_id: "p",
+      tool_type: "Locust",
+      tool_config: { mode: "script", script: { content: "AAA=" }, tunables: { targetUsers: 5 } },
+    });
+    expect(mockRequest.mock.calls[0][0].body.toolConfig).toEqual({
+      locust: { mode: "script", script: { content: "AAA=" }, tunables: { targetUsers: 5 } },
+    });
+  });
+
+  it("normalizes tool_config + tool_type (passes an already-wrapped object through)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const wrapped = { locust: { mode: "script", script: { content: "AAA=" }, tunables: { targetUsers: 5 } } };
+    await registry.dispatch(client, "chaos_loadtest", "update", {
+      loadtest_id: "lt-1", org_id: "o", project_id: "p",
+      tool_type: "Locust",
+      tool_config: wrapped,
+    });
+    expect(mockRequest.mock.calls[0][0].body.toolConfig).toEqual(wrapped);
+  });
+
+  it.each(["scriptContent", "customImage", "inputs"])(
+    "fails loudly when legacy field '%s' is passed on update",
+    async (legacyKey) => {
+      const client = makeClient(vi.fn());
+      await expect(
+        registry.dispatch(client, "chaos_loadtest", "update", {
+          loadtest_id: "lt-1", org_id: "o", project_id: "p",
+          [legacyKey]: legacyKey === "inputs" ? [] : "whatever",
+        }),
+      ).rejects.toThrow(new RegExp(`'${legacyKey}' is not a supported chaos_loadtest field`));
+    },
+  );
+});
+
+// ── run / stop actions ────────────────────────────────────────────────
+describe("chaos_loadtest execute actions", () => {
+  let registry: Registry;
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("run: auto-fills required `identity` with a UUID and hits /v1/load-tests/{id}/runs", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatchExecute(client, "chaos_loadtest", "run", {
+      loadtest_id: "lt-1",
+      org_id: "o", project_id: "p",
+    });
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/loadTest/manager/api/v1/load-tests/lt-1/runs");
+    expect(typeof call.body.identity).toBe("string");
+    expect(call.body.identity.length).toBeGreaterThan(0);
+    expect(call.body.values).toBeUndefined();
+    expect(call.body.runtimeValues).toBeUndefined();
+  });
+
+  it("run: honours caller-supplied run_identity / run_name / values / runtime_values", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatchExecute(client, "chaos_loadtest", "run", {
+      loadtest_id: "lt-1",
+      org_id: "o", project_id: "p",
+      run_identity: "my-run-1",
+      run_name: "Nightly Load",
+      values: [{ name: "TARGET_USERS", value: "500" }],
+      runtime_values: { "toolConfig.locust.tunables.targetUsers": 500 },
+    });
+    const body = mockRequest.mock.calls[0][0].body;
+    expect(body.identity).toBe("my-run-1");
+    expect(body.name).toBe("Nightly Load");
+    expect(body.values).toEqual([{ name: "TARGET_USERS", value: "500" }]);
+    expect(body.runtimeValues).toEqual({
+      "toolConfig.locust.tunables.targetUsers": 500,
+    });
+  });
+
+  it("stop: POSTs to /v1/runs/{run_id}/stop with empty body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    await registry.dispatchExecute(client, "chaos_loadtest", "stop", {
+      run_id: "run-42",
+      org_id: "o", project_id: "p",
+    });
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/loadTest/manager/api/v1/runs/run-42/stop");
+    // Body carries no run-specific fields; scope injection is registry behaviour we don't assert here.
+    expect(call.body.identity).toBeUndefined();
+    expect(call.body.values).toBeUndefined();
+    expect(call.body.runtimeValues).toBeUndefined();
   });
 });

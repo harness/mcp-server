@@ -19,6 +19,7 @@ const README_PATH = join(ROOT, "README.md");
 const README_COVERAGE_TOOLSETS = new Map([
   ["feature-flags", { sectionTitle: "Feature Flags" }],
   ["file_store", { sectionTitle: "File Store" }],
+  ["chaos", { sectionTitle: "Chaos Engineering" }],
 ]);
 const CRUD_OPERATIONS = ["list", "get", "create", "update", "delete"];
 const CRUD_COLUMN_INDEX = { list: 1, get: 2, create: 3, update: 4, delete: 5 };
