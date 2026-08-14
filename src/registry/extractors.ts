@@ -929,6 +929,20 @@ const readScriptField = (
   return script?.[name];
 };
 
+// K6 rpsLimit has two historical storage locations: tunables.rpsLimit (current
+// authoring surface) and options.rpsLimit (legacy/UI-authored path — see
+// loadTestManager k6.go LoadOptions.RPSLimit). Mirror the backend's own
+// dispatch-time fallback precedence (loadtest_handlers.go) so read-side scalars
+// stay truthful regardless of which shape a given record was persisted with.
+const readK6RpsLimit = (tc: Record<string, unknown> | undefined): unknown => {
+  const fromTunables = readTunable(tc, "rpsLimit");
+  if (fromTunables != null && fromTunables !== 0) return fromTunables;
+  const options = tc?.options as Record<string, unknown> | undefined;
+  const fromOptions = options?.rpsLimit;
+  if (fromOptions != null && fromOptions !== 0) return fromOptions;
+  return undefined;
+};
+
 /**
  * Project a single load test (LoadTestResponse) to a stable shape.
  *
@@ -986,7 +1000,7 @@ export const chaosLoadTestExtract = (raw: unknown): unknown => {
     spawn_rate: readTunable(toolBlock, "spawnRate"),
     host_url: readTunable(toolBlock, "hostUrl"),
     iterations: readTunable(toolBlock, "iterations"),
-    rps_limit: readTunable(toolBlock, "rpsLimit"),
+    rps_limit: readK6RpsLimit(toolBlock),
     // Derived convenience scalars from toolConfig.<tool>.script (image mode).
     script_image: readScriptField(toolBlock, "image"),
     script_entrypoint: readScriptField(toolBlock, "entrypoint"),

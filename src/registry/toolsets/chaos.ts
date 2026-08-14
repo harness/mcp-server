@@ -441,11 +441,26 @@ function buildK6ToolConfig(
   return toolConfig;
 }
 
+// Reject known legacy/mistaken field names on chaos_loadtest create/update instead
+// of silently ignoring them (Fail Loudly — see coerceBody above). 'scriptContent' /
+// 'customImage' are old wire-shape names superseded by 'script' / 'script_image';
+// 'inputs' belongs to chaos_probe, not chaos_loadtest.
+const LEGACY_LOADTEST_KEYS = ["scriptContent", "customImage", "inputs"] as const;
+function rejectLegacyLoadtestFields(b: Record<string, unknown>): void {
+  for (const key of LEGACY_LOADTEST_KEYS) {
+    if (b[key] !== undefined) {
+      throw new Error(
+        `'${key}' is not a supported chaos_loadtest field. Use 'script'/'script_image' instead of 'scriptContent'/'customImage'; 'inputs' is a chaos_probe field, not chaos_loadtest.`,
+      );
+    }
+  }
+}
+
 // ── JMeter-specific helpers ──────────────────────────────────────────
 // Matches JMeterSpec in loadTestManager/internal/domain/jmeter.go.
 
-type JMeterProperty = { key: string; value: string; sendToEngines?: true };
-type JMeterThreshold = { metric: string; stat?: string; operator: string; value: number; abortOnFail?: true };
+type JMeterProperty = { key: string; value: string; sendToEngines?: boolean };
+type JMeterThreshold = { metric: string; stat?: string; operator: string; value: number; abortOnFail?: boolean };
 
 const JMETER_THRESHOLD_METRICS = new Set(["response_time_ms", "error_rate_pct", "throughput_rps", "latency_ms"]);
 const JMETER_THRESHOLD_OPERATORS = new Set(["<", "<=", ">", ">=", "==", "!="]);
@@ -464,7 +479,7 @@ function buildJMeterProperties(raw: unknown): JMeterProperty[] {
       throw new Error(`properties[${idx}].key is required.`);
     }
     const out: JMeterProperty = { key, value: String(p.value ?? "") };
-    if (p.send_to_engines === true) out.sendToEngines = true;
+    if (typeof p.send_to_engines === "boolean") out.sendToEngines = p.send_to_engines;
     return out;
   });
 }
@@ -495,7 +510,7 @@ function buildJMeterThresholds(raw: unknown): JMeterThreshold[] {
     }
     const out: JMeterThreshold = { metric, operator, value: t.value as number };
     if (stat) out.stat = stat;
-    if (t.abort_on_fail === true) out.abortOnFail = true;
+    if (typeof t.abort_on_fail === "boolean") out.abortOnFail = t.abort_on_fail;
     return out;
   });
 }
@@ -2004,6 +2019,7 @@ export const chaosToolset: ToolsetDefinition = {
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const b = coerceBody(input);
+            rejectLegacyLoadtestFields(b);
             const name = (b.name as string) ?? "";
             if (!name) {
               throw new Error("name is required.");
@@ -2148,7 +2164,7 @@ export const chaosToolset: ToolsetDefinition = {
               { name: "properties", type: "array", required: false, description: descLoadtestProperties },
               { name: "thresholds", type: "array", required: false, description: descLoadtestThresholds },
               { name: "variables", type: "array", required: false, description: "Custom template.Variable entries stored under toolConfig.<tool>.variables." },
-              { name: "tool_config", type: "object", required: false, description: "Pass-through toolConfig object -- escape hatch for advanced/back-compat use (e.g. JMeter .zip bundles). Not required for Locust/K6/JMeter; prefer the scalar fields (script/script_image/properties/env_vars/thresholds/worker_count)." },
+              { name: "tool_config", type: "object", required: false, description: "JMeter-only pass-through toolConfig.jmeter object -- escape hatch for advanced/back-compat use (e.g. .zip test-plan bundles). Ignored for K6/Locust on create (use the scalar fields for those); not required for JMeter either -- prefer script/script_image/properties/env_vars/thresholds/worker_count unless you need this override." },
               { name: "service_references", type: "array", required: false, description: "chaosService identity strings; required when CHAOS_RISK_SERVICES_ENABLED is on." },
               { name: "cleanup_policy", type: "string", required: false, description: descLoadtestCleanupPolicy },
               { name: "max_duration_sec", type: "number", required: false, description: "Per-load-test hard cap on any run." },
@@ -2164,6 +2180,7 @@ export const chaosToolset: ToolsetDefinition = {
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const b = coerceBody(input);
+            rejectLegacyLoadtestFields(b);
             const body: Record<string, unknown> = {};
             if (b.name != null) body.name = b.name;
             if (b.description != null) body.description = b.description;

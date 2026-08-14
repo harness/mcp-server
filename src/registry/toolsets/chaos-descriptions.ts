@@ -122,7 +122,7 @@ export const descListChaosServiceLoadTests = `List the load tests whose serviceR
 export const descCreateChaosService = `Onboard (create) a chaos service. This is a GUIDED, ORDERED workflow — do NOT skip ahead or invent identifiers; each step depends on the selection made in the previous one. Do NOT advance to the next step until the current step's selection is made, and NEVER call harness_create(chaos_service) until every step below is resolved and the user has confirmed.
 
 STEP 1 — Select a Discovery Agent (REQUIRED FIRST; gate: do not continue without a chosen agent).
-  Call harness_list(resource_type='discovered_agent', org_id, project_id). Show each agent's name, identity, serviceCount, and last-discovery status. Ask the user to pick one.
+  Call harness_list(resource_type='discovered_agent', org_id, project_id). Show each agent's name, identity, serviceCount, and installationType. Ask the user to pick one.
   From the chosen agent capture: agent_id = agent.identity; environment_id = agent.environmentIdentifier. For SD Kubernetes agents set infrastructure_id = agent.identity (BARE, not env-prefixed) and infrastructure_type = "KubernetesV2".
 
 STEP 2 — Select the Service to onboard (REQUIRED, only after STEP 1; gate: do not continue without a chosen service).

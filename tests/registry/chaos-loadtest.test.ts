@@ -707,6 +707,52 @@ describe("chaos_loadtest create (JMeter)", () => {
       }),
     ).rejects.toThrow(/JMeter.*kubernetes/);
   });
+
+  it("preserves explicit false for send_to_engines / abort_on_fail instead of dropping them", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const plan = `<?xml version="1.0"?><jmeterTestPlan/>`;
+    await registry.dispatch(client, "chaos_loadtest", "create", {
+      org_id: "o", project_id: "p",
+      tool_type: "JMeter",
+      name: "jm-falsy", environment_id: "e", infra_id: "i",
+      target_type: "kubernetes",
+      script: plan,
+      properties: [
+        { key: "explicitFalse", value: "1", send_to_engines: false },
+        { key: "omitted", value: "2" },
+      ],
+      thresholds: [
+        { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000, abort_on_fail: false },
+      ],
+    });
+    const jm = (mockRequest.mock.calls[0][0].body.toolConfig as Record<string, unknown>)
+      .jmeter as Record<string, unknown>;
+    expect(jm.properties).toEqual([
+      { key: "explicitFalse", value: "1", sendToEngines: false },
+      { key: "omitted", value: "2" },
+    ]);
+    expect(jm.thresholds).toEqual([
+      { metric: "response_time_ms", stat: "p95", operator: "<", value: 5000, abortOnFail: false },
+    ]);
+  });
+
+  it.each(["scriptContent", "customImage", "inputs"])(
+    "fails loudly when legacy field '%s' is passed on create",
+    async (legacyKey) => {
+      const client = makeClient(vi.fn());
+      await expect(
+        registry.dispatch(client, "chaos_loadtest", "create", {
+          org_id: "o", project_id: "p",
+          tool_type: "JMeter", name: "jm-legacy",
+          environment_id: "e", infra_id: "i",
+          target_type: "kubernetes",
+          script: `<?xml version="1.0"?><jmeterTestPlan/>`,
+          [legacyKey]: legacyKey === "inputs" ? [] : "whatever",
+        }),
+      ).rejects.toThrow(new RegExp(`'${legacyKey}' is not a supported chaos_loadtest field`));
+    },
+  );
 });
 
 // ── list ──────────────────────────────────────────────────────────────
@@ -810,6 +856,96 @@ describe("chaos_loadtest list", () => {
     // Legacy fields are gone.
     expect(item.inputs).toBeUndefined();
     expect(item.createdByUserDetails).toBeUndefined();
+  });
+
+  it("surfaces rps_limit from toolConfig.k6.options.rpsLimit when tunables.rpsLimit is absent (real QA payload shape)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [
+        {
+          uniqueId: "u-2",
+          identity: "k62",
+          name: "k6-2",
+          toolType: "K6",
+          toolConfig: {
+            k6: {
+              mode: "script",
+              script: { content: "BASE64==" },
+              options: { rpsLimit: 50 },
+              tunables: {
+                targetUsers: 10,
+                durationSeconds: 45,
+              },
+            },
+          },
+        },
+      ],
+      pagination: { totalItems: 1 },
+    });
+    const client = makeClient(mockRequest);
+    const result = (await registry.dispatch(client, "chaos_loadtest", "list", {
+      org_id: "o", project_id: "p",
+    })) as { items: Array<Record<string, unknown>>; total: number };
+
+    const item = result.items[0];
+    expect(item.rps_limit).toBe(50);
+    expect(item.users).toBe(10);
+    expect(item.duration_sec).toBe(45);
+  });
+
+  it("prefers tunables.rpsLimit over options.rpsLimit when both are set (matches backend dispatch precedence)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [
+        {
+          uniqueId: "u-3",
+          identity: "k63",
+          name: "k6-3",
+          toolType: "K6",
+          toolConfig: {
+            k6: {
+              mode: "script",
+              script: { content: "BASE64==" },
+              options: { rpsLimit: 50 },
+              tunables: { rpsLimit: 30 },
+            },
+          },
+        },
+      ],
+      pagination: { totalItems: 1 },
+    });
+    const client = makeClient(mockRequest);
+    const result = (await registry.dispatch(client, "chaos_loadtest", "list", {
+      org_id: "o", project_id: "p",
+    })) as { items: Array<Record<string, unknown>>; total: number };
+
+    expect(result.items[0].rps_limit).toBe(30);
+  });
+
+  it("treats a zero rpsLimit in either location as unset", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [
+        {
+          uniqueId: "u-4",
+          identity: "k64",
+          name: "k6-4",
+          toolType: "K6",
+          toolConfig: {
+            k6: {
+              mode: "script",
+              script: { content: "BASE64==" },
+              options: { rpsLimit: 0 },
+              tunables: { rpsLimit: 0 },
+            },
+          },
+        },
+      ],
+      pagination: { totalItems: 1 },
+    });
+    const client = makeClient(mockRequest);
+    const result = (await registry.dispatch(client, "chaos_loadtest", "list", {
+      org_id: "o", project_id: "p",
+    })) as { items: Array<Record<string, unknown>>; total: number };
+
+    expect(result.items[0].rps_limit).toBeUndefined();
   });
 });
 
@@ -995,6 +1131,19 @@ describe("chaos_loadtest update", () => {
     });
     expect(mockRequest.mock.calls[0][0].body.toolConfig).toEqual(wrapped);
   });
+
+  it.each(["scriptContent", "customImage", "inputs"])(
+    "fails loudly when legacy field '%s' is passed on update",
+    async (legacyKey) => {
+      const client = makeClient(vi.fn());
+      await expect(
+        registry.dispatch(client, "chaos_loadtest", "update", {
+          loadtest_id: "lt-1", org_id: "o", project_id: "p",
+          [legacyKey]: legacyKey === "inputs" ? [] : "whatever",
+        }),
+      ).rejects.toThrow(new RegExp(`'${legacyKey}' is not a supported chaos_loadtest field`));
+    },
+  );
 });
 
 // ── run / stop actions ────────────────────────────────────────────────
