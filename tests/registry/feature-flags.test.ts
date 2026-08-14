@@ -270,7 +270,39 @@ describe("fme_feature_flag dual-mode routing", () => {
     });
   });
 
-  it("new mode: create throws not-yet-implemented", async () => {
+  it("new mode: create routes to the Harness-native feature-flags path with the confirmed v4 body shape", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      body: {
+        name: "x",
+        trafficType: "user",
+        description: "desc",
+        tags: ["a", { name: "b" }],
+        owners: [{ type: "USER", id: "u1" }],
+      },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/feature-flags");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(req.body).toEqual({
+      name: "x",
+      trafficType: "user",
+      description: "desc",
+      tags: [{ name: "a" }, { name: "b" }],
+      owners: [{ type: "USER", id: "u1" }],
+    });
+  });
+
+  it("new mode: create requires trafficType in the body", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -278,10 +310,10 @@ describe("fme_feature_flag dual-mode routing", () => {
       registry.dispatch(client, "fme_feature_flag", "create", {
         org_id: "o1",
         project_id: "p1",
-        traffic_type_id: "tt1",
         body: { name: "x" },
       }),
-    ).rejects.toThrow(/not yet implemented/i);
+    ).rejects.toThrow(/trafficType.*required/i);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("mixed params throws the shared error", async () => {
@@ -291,6 +323,124 @@ describe("fme_feature_flag dual-mode routing", () => {
     await expect(
       registry.dispatch(client, "fme_feature_flag", "list", { workspace_id: "ws1", org_id: "o1" }),
     ).rejects.toThrow("fme_feature_flag: pass either workspace_id (deprecated) OR org_id+project_id, not both.");
+  });
+});
+
+describe("fme_feature_flag_definition", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("legacy mode: get routes to the Split.io path with environment_id in the URL", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag_definition", "get", {
+      workspace_id: "ws1",
+      feature_flag_name: "my_flag",
+      environment_id: "e1",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/environments/e1");
+    expect(req.product).toBe("fme");
+  });
+
+  it("new mode: get routes to the Harness-native feature-flag-definitions path with environment_id as a query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag_definition", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+      environment_id: "e1",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/feature-flag-definitions/my_flag");
+    expect(req.product).toBeUndefined();
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+      environment_id: "e1",
+    });
+  });
+
+  it("new mode: create routes to the Harness-native feature-flag-definitions path with the same body shape as legacy, plus optional title", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    const body = {
+      treatments: [{ name: "on" }, { name: "off" }],
+      defaultTreatment: "off",
+      defaultRule: [{ treatment: "off", size: 100 }],
+      title: "My Definition",
+    };
+
+    await registry.dispatch(client, "fme_feature_flag_definition", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+      environment_id: "e1",
+      body,
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/feature-flag-definitions/my_flag");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+      environment_id: "e1",
+    });
+    expect(req.body).toEqual(body);
+  });
+
+  it("new mode: update routes to the Harness-native feature-flag-definitions path via PUT", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    const body = { treatments: [{ name: "on" }], trafficAllocation: 50 };
+
+    await registry.dispatch(client, "fme_feature_flag_definition", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+      environment_id: "e1",
+      body,
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("PUT");
+    expect(req.path).toBe("/fme/api/v4/feature-flag-definitions/my_flag");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+      environment_id: "e1",
+    });
+    expect(req.body).toEqual(body);
+  });
+
+  it("mixed params throws the shared error", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_feature_flag_definition", "get", {
+        workspace_id: "ws1",
+        org_id: "o1",
+        feature_flag_name: "my_flag",
+        environment_id: "e1",
+      }),
+    ).rejects.toThrow(
+      "fme_feature_flag_definition: pass either workspace_id (deprecated) OR org_id+project_id, not both.",
+    );
   });
 });
 
@@ -688,13 +838,43 @@ describe("fme_segment", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create: throws not-yet-implemented", async () => {
+  it("create: routes to the Harness-native segments path with the confirmed v4 body shape", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      body: { name: "x", trafficType: "user", tags: ["a"] },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/segments");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(req.body).toEqual({ name: "x", trafficType: "user", tags: [{ name: "a" }] });
+  });
+
+  it("create: missing trafficType surfaces as a missing-required-field error", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await expect(
       registry.dispatch(client, "fme_segment", "create", { org_id: "o1", project_id: "p1", body: { name: "x" } }),
-    ).rejects.toThrow(/not yet implemented/i);
+    ).rejects.toThrow(/trafficType/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: rejects missing org_id/project_id before making a request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment", "create", { body: { name: "x", trafficType: "user" } }),
+    ).rejects.toThrow(/org_id and project_id are required/i);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 });
@@ -707,22 +887,6 @@ describe("FME new-mode (NYI) resources", () => {
   });
 
   it.each([
-    ["fme_feature_flag_definition", "get", { workspace_id: "ws1", feature_flag_name: "f1", environment_id: "e1" }],
-    [
-      "fme_feature_flag_definition",
-      "create",
-      {
-        workspace_id: "ws1",
-        feature_flag_name: "f1",
-        environment_id: "e1",
-        body: { treatments: [{ name: "on" }], defaultTreatment: "on", defaultRule: [{ treatment: "on", size: 100 }] },
-      },
-    ],
-    [
-      "fme_feature_flag_definition",
-      "update",
-      { workspace_id: "ws1", feature_flag_name: "f1", environment_id: "e1", body: { treatments: [{ name: "on" }] } },
-    ],
     ["fme_rollout_status", "list", { workspace_id: "ws1" }],
     ["fme_traffic_type", "list", { workspace_id: "ws1" }],
   ] as [string, "get" | "create" | "update" | "list", Record<string, unknown>][])(

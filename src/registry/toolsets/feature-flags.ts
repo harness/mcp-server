@@ -18,6 +18,13 @@ const FME_HARNESS_NATIVE_SCOPE_PARAMS = {
   project: "project_identifier",
 };
 
+// Harness-native v4 create bodies (CreateFeatureFlagRequest/CreateSegmentRequest,
+// confirmed against Harness_Split/Main) accept tags as [{name: string}]; callers
+// commonly pass bare strings instead, so normalize the same way update already does.
+function normalizeFmeTags(tags: unknown): unknown {
+  return Array.isArray(tags) ? tags.map((t) => (typeof t === "string" ? { name: t } : t)) : tags;
+}
+
 const fmeFeatureFlagUpdateSchema: BodySchema = {
   description: "Partial update for an FME feature flag's metadata. Provide the fields you want to change — they are converted to JSON Patch (RFC 6902) operations automatically.",
   fields: [
@@ -28,10 +35,13 @@ const fmeFeatureFlagUpdateSchema: BodySchema = {
 };
 
 const fmeFeatureFlagCreateSchema: BodySchema = {
-  description: "Create a new feature flag (split) in a workspace under a specific traffic type. Note: the Split API does not support tags on create — use harness_update to add tags after creation.",
+  description: "Create a new feature flag. Legacy mode (workspace_id + traffic_type_id): name required, description optional — tags/owners not supported on create (the Split API has no create-time support; use harness_update after creation). Harness-native mode (org_id+project_id): name and trafficType required, description/tags/owners optional.",
   fields: [
-    { name: "name", type: "string", required: true, description: "Feature flag name (must be unique within the workspace)" },
+    { name: "name", type: "string", required: true, description: "Feature flag name (must be unique within the workspace/project)" },
     { name: "description", type: "string", required: false, description: "Optional description of the feature flag" },
+    { name: "trafficType", type: "string", required: false, description: "Traffic type name. Required in Harness-native (org_id+project_id) mode; ignored in legacy mode (pass traffic_type_id as a separate param there instead)" },
+    { name: "tags", type: "array", required: false, description: "Harness-native mode only. Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Harness-native mode only. Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
   ],
 };
 
@@ -45,6 +55,7 @@ const fmeFeatureFlagDefinitionCreateSchema: BodySchema = {
     { name: "baselineTreatment", type: "string", required: false, description: "The baseline (control) treatment for experimentation" },
     { name: "trafficAllocation", type: "number", required: false, description: "Percentage of traffic to include (0–100)" },
     { name: "comment", type: "string", required: false, description: "Comment describing the change" },
+    { name: "title", type: "string", required: false, description: "Harness-native mode only. Optional definition title." },
   ],
 };
 
@@ -58,6 +69,7 @@ const fmeFeatureFlagDefinitionUpdateSchema: BodySchema = {
     { name: "defaultRule", type: "array", required: false, description: "Default rule buckets (treatment/size pairs) applied when no targeting rules match", itemType: "object" },
     { name: "trafficAllocation", type: "number", required: false, description: "Percentage of traffic to include (0–100)" },
     { name: "comment", type: "string", required: false, description: "Comment describing the change" },
+    { name: "title", type: "string", required: false, description: "Harness-native mode only. Optional definition title." },
   ],
 };
 
@@ -70,8 +82,14 @@ const fmeRbsCreateSchema: BodySchema = {
 };
 
 const fmeSegmentCreateSchema: BodySchema = {
-  description: "Create a new segment (standard or rule-based). Not yet implemented — actual Harness-native request body shape is unknown.",
-  fields: [],
+  description: "Create a new segment. name and trafficType are required; description/tags/owners are optional.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Segment name (must be unique within the project)" },
+    { name: "description", type: "string", required: false, description: "Optional description of the segment" },
+    { name: "trafficType", type: "string", required: true, description: "Traffic type name" },
+    { name: "tags", type: "array", required: false, description: "Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
+  ],
 };
 
 const fmeSegmentDefinitionCreateSchema: BodySchema = {
@@ -222,7 +240,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       displayName: "FME Feature Flag",
       description:
         "Feature flag. Dual-mode scoping: pass org_id+project_id (Harness-native, preferred — no " +
-        "workspace lookup needed; supports list/get/delete) or the deprecated workspace_id (Split.io " +
+        "workspace lookup needed; supports list/get/create/delete) or the deprecated workspace_id (Split.io " +
         "API; supports list/get/create/delete/update/kill/restore/archive/unarchive). List supports " +
         "filtering (name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50).",
       toolset: "feature-flags",
@@ -282,9 +300,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag");
             if (mode.mode === "harness_native") {
-              throw new Error(
-                "fme_feature_flag.create: Harness-native (org_id/project_id) mode is not yet implemented for this operation — pass workspace_id (deprecated) instead.",
-              );
+              return { path: "/fme/api/v4/feature-flags", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
             }
             return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/trafficTypes/${encodeURIComponent(requireFmeIdentifier(input, "traffic_type_id", "fme_feature_flag"))}` };
           },
@@ -292,6 +308,21 @@ export const featureFlagsToolset: ToolsetDefinition = {
           pathParams: { workspace_id: "wsId", traffic_type_id: "trafficTypeId" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
+            if (isFmeHarnessNativeSelected(input, "fme_feature_flag")) {
+              const trafficType = (body?.trafficType ?? body?.traffic_type) as string | undefined;
+              if (!trafficType) {
+                throw new Error(
+                  "fme_feature_flag.create: \"trafficType\" is required in body for Harness-native (org_id/project_id) mode.",
+                );
+              }
+              return {
+                name: body?.name ?? input.name,
+                trafficType,
+                ...(body?.description !== undefined ? { description: body.description } : {}),
+                ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
+                ...(body?.owners !== undefined ? { owners: body.owners } : {}),
+              };
+            }
             return {
               name: body?.name ?? input.name,
               ...(body?.description || input.description ? { description: body?.description ?? input.description } : {}),
@@ -299,7 +330,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagCreateSchema,
-          description: "Create a feature flag in a workspace. Requires workspace_id and traffic_type_id (get from fme_traffic_type). Body requires name, optional description. Note: tags must be set via a follow-up harness_update call (Split API limitation).",
+          description: "Create a feature flag. Legacy mode (workspace_id): requires workspace_id + traffic_type_id (get from fme_traffic_type); body: name, optional description (no tags/owners — use harness_update after creation). Harness-native mode (org_id+project_id): body requires name + trafficType, optional description/tags/owners.",
         },
         delete: {
           method: "DELETE",
@@ -467,7 +498,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag_definition",
       displayName: "FME Feature Flag Definition",
       description:
-        "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation. Supports create, get, and update. Create requires treatments, defaultTreatment, and defaultRule.",
+        "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation. Supports create, get, and update. Create requires treatments, defaultTreatment, and defaultRule. " +
+        "Dual-mode scoping: pass org_id+project_id (Harness-native) or the deprecated workspace_id (Split.io API) — both modes share the same body shape and all three operations. environment_id is passed as a path segment in legacy mode and as a query param in Harness-native mode.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -479,13 +511,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag_definition");
-            if (mode.mode === "harness_native") {
-              throw new Error(
-                "fme_feature_flag_definition.get: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
-              );
-            }
             const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"));
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition"));
+            if (mode.mode === "harness_native") {
+              return { path: `/fme/api/v4/feature-flag-definitions/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
+            }
             return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}` };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
@@ -494,21 +524,20 @@ export const featureFlagsToolset: ToolsetDefinition = {
             feature_flag_name: "featureFlagName",
             environment_id: "environmentId",
           },
+          queryParams: { environment_id: "environment_id" },
           responseExtractor: passthrough,
-          description: "Get feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation)",
+          description: "Get feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation). Legacy mode: workspace_id, environment_id in path. Harness-native mode: org_id+project_id, environment_id as query param.",
         },
         create: {
           method: "POST",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag_definition");
-            if (mode.mode === "harness_native") {
-              throw new Error(
-                "fme_feature_flag_definition.create: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
-              );
-            }
             const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"));
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition"));
+            if (mode.mode === "harness_native") {
+              return { path: `/fme/api/v4/feature-flag-definitions/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
+            }
             return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
@@ -517,23 +546,22 @@ export const featureFlagsToolset: ToolsetDefinition = {
             feature_flag_name: "featureFlagName",
             environment_id: "environmentId",
           },
+          queryParams: { environment_id: "environment_id" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagDefinitionCreateSchema,
-          description: "Create a feature flag definition in a specific environment. Requires treatments (array of treatment objects), defaultTreatment (string matching a treatment name), and defaultRule (array of bucket objects). Optional: rules, baselineTreatment, trafficAllocation, comment.",
+          description: "Create a feature flag definition in a specific environment. Requires treatments (array of treatment objects), defaultTreatment (string matching a treatment name), and defaultRule (array of bucket objects). Optional: rules, baselineTreatment, trafficAllocation, comment, title (Harness-native only). Legacy mode: workspace_id, environment_id in path. Harness-native mode: org_id+project_id, environment_id as query param.",
         },
         update: {
           method: "PUT",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag_definition");
-            if (mode.mode === "harness_native") {
-              throw new Error(
-                "fme_feature_flag_definition.update: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
-              );
-            }
             const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"));
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition"));
+            if (mode.mode === "harness_native") {
+              return { path: `/fme/api/v4/feature-flag-definitions/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
+            }
             return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
@@ -542,10 +570,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
             feature_flag_name: "featureFlagName",
             environment_id: "environmentId",
           },
+          queryParams: { environment_id: "environment_id" },
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagDefinitionUpdateSchema,
-          description: "Update a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation, baseline treatment)",
+          description: "Update a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation, baseline treatment). Legacy mode: workspace_id, environment_id in path. Harness-native mode: org_id+project_id, environment_id as query param.",
         },
       },
     },
@@ -970,7 +999,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment",
       displayName: "FME Segment",
       description:
-        "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard and rule-based). Supports list, get, delete. create not yet implemented — Harness-native create request body not yet confirmed.",
+        "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard and rule-based). Supports list, get, create, delete.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
@@ -1018,14 +1047,25 @@ export const featureFlagsToolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "",
-          routeResolver: () => {
-            throw new Error("fme_segment.create: Harness-native create not yet implemented.");
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_segment");
+            return { path: "/fme/api/v4/segments" };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: () => ({}),
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            const trafficType = (body?.trafficType ?? body?.traffic_type) as string | undefined;
+            return {
+              name: body?.name,
+              trafficType,
+              ...(body?.description !== undefined ? { description: body.description } : {}),
+              ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
+              ...(body?.owners !== undefined ? { owners: body.owners } : {}),
+            };
+          },
           responseExtractor: passthrough,
           bodySchema: fmeSegmentCreateSchema,
-          description: "Create a new segment. Not yet implemented — Harness-native request body shape not yet confirmed.",
+          description: "Create a new segment. Body requires name + trafficType; optional description/tags/owners.",
         },
       },
     },
