@@ -683,7 +683,9 @@ export class Registry {
       // mutually exclusive scoping modes for FME resources. The suppression is
       // keyed on product: "fme" so a future non-FME scopeOptional resource with an
       // unrelated field literally named `workspace_id` never loses its scope params.
-      const suppressForFmeWorkspace = def.product === "fme" && input.workspace_id !== undefined;
+      // Empty-string workspace_id is treated as absent (matches applyUrlDefaults).
+      const suppressForFmeWorkspace =
+        def.product === "fme" && typeof input.workspace_id === "string" && input.workspace_id !== "";
       if (input.org_id && !suppressForFmeWorkspace) {
         params[orgParam] = input.org_id as string;
       }
