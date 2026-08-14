@@ -57879,6 +57879,27 @@ const schema: Record<string, any> = {
                         "minLength": 1
                       }
                     ]
+                  },
+                  "downsizeOldService": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "downsizeOldServiceDelayInSecs": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
                   }
                 }
               }
@@ -128987,6 +129008,9 @@ const schema: Record<string, any> = {
                 "type": "object",
                 "required": [
                   "title",
+                  "orgIdentifier",
+                  "projectIdentifier",
+                  "incidentType",
                   "severity",
                   "service"
                 ],
@@ -129247,6 +129271,12 @@ const schema: Record<string, any> = {
               },
               {
                 "type": "object",
+                "required": [
+                  "title",
+                  "orgIdentifier",
+                  "projectIdentifier",
+                  "status"
+                ],
                 "properties": {
                   "alertId": {
                     "oneOf": [
@@ -133860,6 +133890,9 @@ const schema: Record<string, any> = {
                         "pattern": "^<\\+.*>$"
                       }
                     ]
+                  },
+                  "insightId": {
+                    "type": "string"
                   }
                 }
               }
@@ -133912,6 +133945,9 @@ const schema: Record<string, any> = {
                     "pattern": "^<\\+.*>$"
                   }
                 ]
+              },
+              "insightId": {
+                "type": "string"
               }
             }
           }
