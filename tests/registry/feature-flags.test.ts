@@ -326,6 +326,165 @@ describe("fme_feature_flag dual-mode routing", () => {
   });
 });
 
+describe("fme_feature_flag kill/restore/reallocate/archive/unarchive dual-mode", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("legacy mode: kill uses PUT against the Split.io path and forwards comment/title", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_feature_flag", "kill", {
+      workspace_id: "ws1",
+      feature_flag_name: "my_flag",
+      environment_id: "e1",
+      body: { comment: "rolling back", title: "Incident 123" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("PUT");
+    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/environments/e1/kill");
+    expect(req.body).toEqual({ comment: "rolling back", title: "Incident 123" });
+  });
+
+  it("new mode: kill routes to the Harness-native feature-flag-definitions path via POST", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_feature_flag", "kill", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+      environment_id: "e1",
+      body: { comment: "rolling back" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/feature-flag-definitions/my_flag/kill");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+      environment_id: "e1",
+    });
+    expect(req.body).toEqual({ comment: "rolling back" });
+  });
+
+  it("new mode: restore routes to the Harness-native feature-flag-definitions path via POST", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_feature_flag", "restore", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+      environment_id: "e1",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/feature-flag-definitions/my_flag/restore");
+    expect(req.body).toEqual({});
+  });
+
+  it("legacy mode: reallocate posts to the Split.io environments path", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_feature_flag", "reallocate", {
+      workspace_id: "ws1",
+      feature_flag_name: "my_flag",
+      environment_id: "e1",
+      body: { comment: "shifting traffic" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/environments/e1/reallocate");
+    expect(req.body).toEqual({ comment: "shifting traffic" });
+  });
+
+  it("new mode: reallocate routes to the Harness-native feature-flag-definitions path", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_feature_flag", "reallocate", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+      environment_id: "e1",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/feature-flag-definitions/my_flag/reallocate");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+      environment_id: "e1",
+    });
+  });
+
+  it("new mode: archive routes to the Harness-native feature-flags path and drops title (unsupported by v4)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_feature_flag", "archive", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+      body: { comment: "no longer needed", title: "ignored" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/feature-flags/my_flag/archive");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(req.body).toEqual({ comment: "no longer needed" });
+  });
+
+  it("new mode: unarchive routes to the Harness-native feature-flags path", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_feature_flag", "unarchive", {
+      org_id: "o1",
+      project_id: "p1",
+      feature_flag_name: "my_flag",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/feature-flags/my_flag/unarchive");
+    expect(req.body).toEqual({});
+  });
+
+  it("legacy mode: archive still posts to the Split.io path and forwards comment (title unsupported)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_feature_flag", "archive", {
+      workspace_id: "ws1",
+      feature_flag_name: "my_flag",
+      body: { comment: "no longer needed", title: "cleanup" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/archive");
+    expect(req.body).toEqual({ comment: "no longer needed" });
+  });
+});
+
 describe("fme_feature_flag_definition", () => {
   let registry: Registry;
 
