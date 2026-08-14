@@ -178,6 +178,51 @@ describe("infrastructure deep links", () => {
     expect(result.openInHarness).toBe(INFRA_DEEP_LINK);
   });
 
+  it("get: openInHarness resolves environmentRef from nested infrastructure object", async () => {
+    const client = makeClient(
+      vi.fn().mockResolvedValue({
+        data: {
+          identifier: "k8s",
+          infrastructure: { environmentRef: "preprod" },
+          orgIdentifier: "default",
+          projectIdentifier: "avi",
+        },
+      }),
+    );
+    const result = (await registry.dispatch(client, "infrastructure", "get", {
+      infrastructure_id: "k8s",
+      org_id: "default",
+      project_id: "avi",
+      environment_id: "preprod",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(INFRA_DEEP_LINK);
+  });
+
+  it("get: preserves explicit environmentIdentifier over environmentRef", async () => {
+    const explicitEnvLink =
+      "https://app.harness.io/ng/account/test-account/all/orgs/default/projects/avi/settings/environments/explicit-env/details?sectionId=INFRASTRUCTURE";
+    const client = makeClient(
+      vi.fn().mockResolvedValue({
+        data: {
+          identifier: "k8s",
+          environmentIdentifier: "explicit-env",
+          environmentRef: "preprod",
+          orgIdentifier: "default",
+          projectIdentifier: "avi",
+        },
+      }),
+    );
+    const result = (await registry.dispatch(client, "infrastructure", "get", {
+      infrastructure_id: "k8s",
+      org_id: "default",
+      project_id: "avi",
+      environment_id: "preprod",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(explicitEnvLink);
+  });
+
   it("create: openInHarness uses environmentRef when environment_id is not a query param", async () => {
     const client = makeClient(
       vi.fn().mockResolvedValue({
