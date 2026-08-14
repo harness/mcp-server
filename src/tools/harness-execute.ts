@@ -72,14 +72,23 @@ function extractPipelineFragment(yamlOrObj: unknown): Record<string, unknown> {
  */
 function applyExecuteActionTargetRemap(
   input: Record<string, unknown>,
-  def: { identifierFields: readonly string[] },
+  def: { identifierFields: readonly string[]; product?: string },
   actionSpec: { pathParams?: Record<string, string> } | undefined,
   resourceId: string | undefined,
 ): Record<string, unknown> {
   const primaryField = def.identifierFields[0];
   if (!primaryField || !resourceId) return input;
   const actionPathFields = new Set(Object.keys(actionSpec?.pathParams ?? {}));
-  const primaryUsedByAction = actionPathFields.has(primaryField);
+  // FME dual-mode resources declare `workspace_id` as identifierFields[0], but it's
+  // a legacy *scope* selector (alternative to org_id+project_id), not the resource's
+  // identity — unlike every other multi-field resource (e.g. gitops_application's
+  // agent_id), where identifierFields[0] genuinely is what resource_id should fill.
+  // Legacy path templates still reference workspace_id in pathParams, so when the
+  // caller omits it (Harness-native mode), the target search below must not treat
+  // it as "used by this action" or resource_id silently overwrites the scope field
+  // instead of the real identifier (e.g. feature_flag_name).
+  const primaryIsFmeLegacyScope = def.product === "fme" && primaryField === "workspace_id" && input.workspace_id === undefined;
+  const primaryUsedByAction = !primaryIsFmeLegacyScope && actionPathFields.has(primaryField);
   const actionTargetField = primaryUsedByAction
     ? undefined
     : [...def.identifierFields].reverse().find((field) => actionPathFields.has(field));
