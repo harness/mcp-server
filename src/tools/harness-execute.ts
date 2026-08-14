@@ -284,14 +284,6 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
           }
         }
 
-        // Map resource_id to the execute action's target identifier. Most
-        // resources use identifierFields[0], but some execute endpoints omit
-        // the parent identifier used by get/update/delete and target a child
-        // path field directly. The same remap is also applied earlier (before
-        // any auditBlockedAttempt emission) so blocked audit rows record a
-        // resolved http_path rather than a "/...//..." with empty placeholders.
-        applyExecuteActionTargetRemap(input, def, actionSpec, resourceId);
-
         // Pass input_set_ids as string[] so HarnessClient emits repeated `inputSetIdentifiers=` query keys
         // (grpc-gateway array style). Comma-joined single param is ignored by pipeline execute.
         if (args.input_set_ids && args.input_set_ids.length > 0) {

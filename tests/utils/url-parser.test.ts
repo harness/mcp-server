@@ -459,6 +459,36 @@ describe("applyUrlDefaults", () => {
     expect(result.project_id).toBe("myProject");
   });
 
+  it("still merges URL org/project when workspace_id is an empty string", () => {
+    const result = applyUrlDefaults(
+      { resource_type: "fme_feature_flag", workspace_id: "" } as Record<string, unknown>,
+      "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/services",
+    );
+
+    expect(result.org_id).toBe("myOrg");
+    expect(result.project_id).toBe("myProject");
+  });
+
+  it("still merges URL org/project when workspace_id is null", () => {
+    const result = applyUrlDefaults(
+      { resource_type: "fme_feature_flag", workspace_id: null } as Record<string, unknown>,
+      "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/services",
+    );
+
+    expect(result.org_id).toBe("myOrg");
+    expect(result.project_id).toBe("myProject");
+  });
+
+  it("still merges URL org/project for Harness-native-only fme_segment even with a stray workspace_id", () => {
+    const result = applyUrlDefaults(
+      { resource_type: "fme_segment", workspace_id: "stale-ws" } as Record<string, unknown>,
+      "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/services",
+    );
+
+    expect(result.org_id).toBe("myOrg");
+    expect(result.project_id).toBe("myProject");
+  });
+
   it("falls back to the URL-parsed resource type when the caller declares none", () => {
     const result = applyUrlDefaults(
       { workspace_id: "ws1" } as Record<string, unknown>,
