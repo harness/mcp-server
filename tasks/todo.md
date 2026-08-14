@@ -11,7 +11,7 @@
 - IaCM APIs own validation, RBAC, persistence, and audit; MCP forwards the caller token.
 - Stacked follow-ups (separate PRs): variable sets → modules → providers.
 
-## IaCM variable set list/get/create/update (#800 — awaiting merge)
+## IaCM variable set list/get/create/update (merged #800)
 - [x] Add `iacm_variable_set` list/get/create/update with multi-scope pathBuilder
 - [x] bodySchema + medium_write policy + skipScopeBodyInjection
 - [x] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
@@ -23,17 +23,28 @@
 - Create/update return the VariableSet resource (not policy_evaluation).
 - Do not claim deny-path RBAC coverage while permissions are Experimental.
 
-## IaCM module registry create/update (#810 — stacked on #800)
-- [x] Add `iacm_module` create/update with name/system body schemas + scope_org/scope_project query mapping
+## IaCM module registry create/update (#810 — rebased onto main)
+- [x] Add `iacm_module` create/update with name/system body schemas
 - [x] Polish tests (wiring, validation, mock-fetch, MCP elicitation) + README
 - [x] Note Active RBAC: `iac_registry_view` / `iac_registry_edit` are enforceable
-- [x] Open PR stacked on variable-set branch (#800) — https://github.com/harness/mcp-server/pull/810
+- [x] Open PR — https://github.com/harness/mcp-server/pull/810
+- [x] Rebase onto `main` after #800 merged so the delta is module-only
+- [x] Review follow-up: make the scope contract symmetric across list/get/create/update
 
 ### Plan
-- Module registry is account-scoped; optional org_id/project_id → scope_org/scope_project query params.
+- Modules are multi-scope (account/org/project). Use resource-level `supportedScopes` +
+  `scopeOptional` + `scopeParams: { org: "scope_org", project: "scope_project" }` so every
+  operation sends the same scope params — no per-operation query remap.
+- Scoping is opt-in: without `resource_scope`, org/project apply only when explicitly passed,
+  so ambient `HARNESS_ORG`/`HARNESS_PROJECT` cannot silently create a non-account module.
+- Body `org`/`project` locate the Git connector and are separate from visibility scope.
 - Create/update return the module resource (includes id for later get/update).
 - Registry RBAC is Active — deny paths are testable via smoke script.
-- After #800 merges, rebase onto `main` so the reviewable delta is module-only.
+
+### Follow-up (not in #810)
+- Module list filters drifted from the API before this PR: `tag` / `version` are not query
+  params on `GET /iacm/api/modules`, and page size is `limit`, not `size`. Replace with
+  `searchTerm` / `sort` / `limit` in a separate read-path PR.
 
 ## Dependency security advisories (2026-08-03)
 - [x] Confirm affected dependency chains and fixed versions for `fast-uri` and `ip-address`

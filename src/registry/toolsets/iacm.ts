@@ -601,7 +601,8 @@ const moduleOptionalFields: BodyFieldSpec[] = [
 const moduleCreateSchema: BodySchema = {
   description:
     "IaCM module registry create definition. Account comes from auth headers. " +
-    "Optional org_id/project_id map to scope_org/scope_project query params (not body fields).",
+    "Module visibility scope is set with resource_scope / org_id / project_id (sent as scope_org/scope_project query params), " +
+    "never as body fields — body.org / body.project only locate the module's Git connector.",
   fields: [
     { name: "name", type: "string", required: true, description: "Module name; unique within the same scope and system" },
     {
@@ -616,7 +617,8 @@ const moduleCreateSchema: BodySchema = {
 
 const moduleUpdateSchema: BodySchema = {
   description:
-    "IaCM module registry update definition (HTTP PUT). Module id comes from the path (id / resource_id). " +
+    "IaCM module registry update definition (HTTP PUT). Module id comes from the path (id / resource_id) and the " +
+    "module's scope from resource_scope / org_id / project_id (scope_org/scope_project query params, not body fields). " +
     "Required body fields: name, system. Optional fields are pointers on the API — omit them only when " +
     "you intend to clear; prefer harness_get then PUT the full desired module (get-then-put).",
   fields: [
@@ -642,7 +644,7 @@ export const iacmToolset: ToolsetDefinition = {
     "the module registry, workspace cost history, and resource-change diffs from plan/apply/destroy. " +
     "Use iacm_workspace to list, get, create, or update workspaces; iacm_variable_set for reusable " +
     "variable sets (account/org/project); iacm_resource for Terraform resources and outputs; " +
-    "iacm_module to list/get/create/update the module registry; iacm_workspace_costs for cost breakdown; " +
+    "iacm_module to list/get/create/update the module registry (account/org/project); iacm_workspace_costs for cost breakdown; " +
     "and iacm_activity_resource_change for activity diffs.",
   optIn: false,
   resources: [
@@ -956,11 +958,21 @@ export const iacmToolset: ToolsetDefinition = {
         "IMPORTANT: page_count is NOT the total module count. " +
         "To find the true total, paginate until has_more=false and sum the page_counts. " +
         "Use harness_get with the numeric/UUID id from list (NOT the module name). " +
-        "Use harness_create with body.name + body.system to register a module; optional org_id/project_id become scope_org/scope_project query params. " +
+        "Use harness_create with body.name + body.system to register a module. " +
         "Use harness_update with id/resource_id plus body.name + body.system (get-then-put for optionals). " +
-        "Create/update return the module resource. Registry RBAC (iac_registry_view / iac_registry_edit) is Active.",
+        "Create/update return the module resource. Registry RBAC (iac_registry_view / iac_registry_edit) is Active.\n" +
+        "SCOPE: modules live at account, org, or project scope. Every operation (list/get/create/update) sends the same " +
+        "scope_org/scope_project query params, so a module is visible where it was created. " +
+        "Set resource_scope='account' (or pass neither org_id nor project_id) for the account registry, " +
+        "resource_scope='org' with org_id for an org module, or resource_scope='project' with org_id + project_id for a project module. " +
+        "When resource_scope is omitted, org_id/project_id are used only if explicitly passed — configured HARNESS_ORG/HARNESS_PROJECT " +
+        "defaults are NOT applied, so an ambient project config cannot silently turn an account module into a project one. " +
+        "NOTE: body.org / body.project (when present) locate the module's Git connector and are independent of this visibility scope.",
       toolset: "iacm",
       scope: "account",
+      supportedScopes: ["account", "org", "project"],
+      scopeOptional: true,
+      scopeParams: { org: "scope_org", project: "scope_project" },
       identifierFields: ["id"],
       listFilterFields: [
         {
@@ -995,6 +1007,8 @@ export const iacmToolset: ToolsetDefinition = {
           responseExtractor: moduleListExtract,
           description:
             "List Terraform modules in the IaCM module registry (30 per page; page >= 1). " +
+            "Scope: defaults to the account registry; pass resource_scope='org' + org_id or resource_scope='project' + org_id/project_id " +
+            "(or the ids alone) to list modules registered at that scope — the same scope accepted by create/update. " +
             "Response fields: items (module objects), page_count (THIS page only), has_more, pagination_note. " +
             "CRITICAL: page_count is the count for this page only — NEVER report it as the total module count. " +
             "If has_more=true, call again with page+1. " +
@@ -1010,15 +1024,12 @@ export const iacmToolset: ToolsetDefinition = {
             "Get full details for a specific IaCM module. " +
             "IMPORTANT: id must be the numeric/UUID id from the list response (e.g. '4640'), " +
             "NOT the module name (e.g. 'buha-module-v2'). " +
-            "Always call harness_list on iacm_module first to get the id, then call harness_get.",
+            "Always call harness_list on iacm_module first to get the id, then call harness_get. " +
+            "For org/project modules pass the same resource_scope (or org_id/project_id) used to list them.",
         },
         create: {
           method: "POST",
           path: "/iacm/api/modules",
-          queryParams: {
-            org_id: "scope_org",
-            project_id: "scope_project",
-          },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: moduleCreateSchema,
@@ -1026,8 +1037,10 @@ export const iacmToolset: ToolsetDefinition = {
           responseExtractor: moduleExtract,
           description:
             "Create a module in the IaCM module registry. Required body fields: name, system. " +
-            "Optional org_id/project_id are sent as scope_org/scope_project query params (not in the body). " +
             "Optional body fields include repository metadata, tags, storage_type, and onboarding pipeline settings. " +
+            "Scope: omit org_id/project_id (or set resource_scope='account') for an account module; pass resource_scope='org' + org_id " +
+            "or resource_scope='project' + org_id/project_id to register it at org/project scope — these become scope_org/scope_project " +
+            "query params, never body fields. List/get accept the same scope, so the module is discoverable where it was created. " +
             "Returns the module resource (includes id for later get/update). " +
             "Registry RBAC is Active (iac_registry_edit). medium_write — requires confirmation.",
         },
@@ -1035,10 +1048,6 @@ export const iacmToolset: ToolsetDefinition = {
           method: "PUT",
           path: "/iacm/api/modules/{moduleId}",
           pathParams: { id: "moduleId" },
-          queryParams: {
-            org_id: "scope_org",
-            project_id: "scope_project",
-          },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
           bodySchema: moduleUpdateSchema,
@@ -1046,7 +1055,9 @@ export const iacmToolset: ToolsetDefinition = {
           responseExtractor: moduleExtract,
           description:
             "Update a module in the IaCM module registry by numeric/UUID id (id / resource_id). " +
-            "Required body fields: name, system. Optional org_id/project_id map to scope_org/scope_project query params. " +
+            "Required body fields: name, system. " +
+            "Pass the same scope you created the module at (resource_scope, or org_id/project_id) so the request targets the right registry — " +
+            "these become scope_org/scope_project query params, never body fields. " +
             "Prefer harness_get then PUT the full desired module — omitting optional fields may clear them. " +
             "Returns the module resource. Registry RBAC is Active (iac_registry_edit). medium_write — requires confirmation.",
         },
