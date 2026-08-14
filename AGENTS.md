@@ -76,6 +76,14 @@ z.string().describe("Org ID").min(1).optional()  // ❌ description lost — eac
 
 Add a declarative toolset file in `src/registry/toolsets/` — no new tool registration, no schema changes, no prompt updates needed. The 11 tools stay fixed; dispatch is data-driven. Do NOT add per-endpoint tool handlers.
 
+When adding **writes** (create/update/delete), also check the agent user flow and the owning service's OpenAPI — not just the write endpoint:
+
+1. **Scope symmetry** — list/get/create/update must send the same scope params. Prefer resource-level `supportedScopes` + `scopeParams` (+ `scopeOptional` when ambient `HARNESS_ORG`/`HARNESS_PROJECT` must not leak) over per-operation `queryParams` remaps.
+2. **Cross-repo contract** — verify every CRUD op on the backend OpenAPI (e.g. `iac-server` for IaCM), not only POST/PUT.
+3. **Sibling pattern** — match an existing multi-scope resource in the same toolset (e.g. `iacm_variable_set`) before inventing a new shape.
+4. **User flow** — an agent that creates at org/project scope must be able to list/get/update at that same scope. Document visibility scope vs body fields that mean something else (e.g. connector location).
+5. **Regressions** — assert shared scope params across ops; for `scopeOptional`, assert config-only org/project produces no scope query params.
+
 ### docs:generate requires a fresh build
 
 `pnpm docs:generate` reads from `build/`. Running it against a stale build produces wrong resource counts and fails `docs:check` in CI.
