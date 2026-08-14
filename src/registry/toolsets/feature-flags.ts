@@ -26,10 +26,11 @@ function normalizeFmeTags(tags: unknown): unknown {
 }
 
 const fmeFeatureFlagUpdateSchema: BodySchema = {
-  description: "Partial update for an FME feature flag's metadata. Provide the fields you want to change — they are converted to JSON Patch (RFC 6902) operations automatically.",
+  description: "Partial update for an FME feature flag's metadata. Provide the fields you want to change. Legacy mode (workspace_id): converted to JSON Patch (RFC 6902) automatically — description/tags/rolloutStatus only. Harness-native mode (org_id+project_id): sent as JSON Merge Patch (RFC 7396) — description/tags/owners/rolloutStatus; set description/tags/owners to null (or [] for tags/owners) to clear them, omit a field to leave it unchanged.",
   fields: [
     { name: "description", type: "string", required: false, description: "Updated description" },
     { name: "tags", type: "array", required: false, description: "Updated tags — provide as [{name: 'tag1'}] or ['tag1', 'tag2'] (strings are auto-wrapped)", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Harness-native mode only. Updated owners — each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
     { name: "rolloutStatus", type: "object", required: false, description: "Rollout status — provide as {id: '<uuid>'} (use fme_rollout_status to discover valid IDs)" },
   ],
 };
@@ -352,18 +353,33 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag");
-            if (mode.mode === "harness_native") {
-              throw new Error(
-                "fme_feature_flag.update: Harness-native (org_id/project_id) mode is not yet implemented for this operation — pass workspace_id (deprecated) instead.",
-              );
-            }
             const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag"));
+            if (mode.mode === "harness_native") {
+              return {
+                path: `/fme/api/v4/feature-flags/${flagName}`,
+                product: "harness",
+                scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+                headers: { "Content-Type": "application/merge-patch+json" },
+              };
+            }
             return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
+            if (isFmeHarnessNativeSelected(input, "fme_feature_flag")) {
+              // JSON Merge Patch (RFC 7396): omit a field to leave it unchanged, set it to update,
+              // or (for description/tags/owners) set it to null/[] to clear it. rolloutStatus is
+              // set-only — the backend rejects an explicit null for it.
+              if (!body) return {};
+              return {
+                ...(body.description !== undefined ? { description: body.description } : {}),
+                ...(body.tags !== undefined ? { tags: body.tags === null ? null : normalizeFmeTags(body.tags) } : {}),
+                ...(body.owners !== undefined ? { owners: body.owners } : {}),
+                ...(body.rolloutStatus !== undefined ? { rolloutStatus: body.rolloutStatus } : {}),
+              };
+            }
             if (!body) return [];
             const ops: Array<{ op: string; path: string; value: unknown }> = [];
             if (body.description !== undefined) {
@@ -385,7 +401,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return ops;
           },
           responseExtractor: passthrough,
-          description: "Update a feature flag's metadata (description, tags, rolloutStatus). Uses JSON Patch (RFC 6902) format — provide fields directly and they are converted to patch operations automatically.",
+          description: "Update a feature flag's metadata. Legacy mode (workspace_id): description/tags/rolloutStatus via JSON Patch (RFC 6902) — provide fields directly, they're converted to patch ops automatically. Harness-native mode (org_id+project_id): description/tags/owners/rolloutStatus via JSON Merge Patch (RFC 7396) — omit a field to leave it unchanged, set it to update, or set description/tags/owners to null (or [] for tags/owners) to clear it; rolloutStatus is set-only (no null).",
           bodySchema: fmeFeatureFlagUpdateSchema,
         },
       },
@@ -554,13 +570,19 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
         update: {
           method: "PUT",
+          methodBuilder: (input) => (isFmeHarnessNativeSelected(input, "fme_feature_flag_definition") ? "PATCH" : "PUT"),
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_feature_flag_definition");
             const flagName = encodeURIComponent(requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"));
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition"));
             if (mode.mode === "harness_native") {
-              return { path: `/fme/api/v4/feature-flag-definitions/${flagName}`, product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
+              return {
+                path: `/fme/api/v4/feature-flag-definitions/${flagName}`,
+                product: "harness",
+                scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+                headers: { "Content-Type": "application/merge-patch+json" },
+              };
             }
             return { path: `/internal/api/v2/splits/ws/${encodeURIComponent(mode.workspaceId)}/${flagName}/environments/${environmentId}` };
           },
@@ -574,7 +596,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagDefinitionUpdateSchema,
-          description: "Update a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation, baseline treatment). Legacy mode: workspace_id, environment_id in path. Harness-native mode: org_id+project_id, environment_id as query param.",
+          description:
+            "Update a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation, baseline treatment). Legacy mode: PUT, workspace_id/environment_id in path (full-replace, per the Split.io API). Harness-native mode: PATCH via JSON Merge Patch (RFC 7396) — omit a field to leave it unchanged; treatments/rules/defaultRule are omit-to-keep but reject explicit null (not clearable); org_id+project_id, environment_id as query param.",
         },
       },
     },

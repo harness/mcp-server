@@ -401,7 +401,7 @@ describe("fme_feature_flag_definition", () => {
     expect(req.body).toEqual(body);
   });
 
-  it("new mode: update routes to the Harness-native feature-flag-definitions path via PUT", async () => {
+  it("new mode: update routes to the Harness-native feature-flag-definitions path via PATCH with merge-patch content type", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -416,8 +416,9 @@ describe("fme_feature_flag_definition", () => {
     });
 
     const req = firstRequest(mockRequest);
-    expect(req.method).toBe("PUT");
+    expect(req.method).toBe("PATCH");
     expect(req.path).toBe("/fme/api/v4/feature-flag-definitions/my_flag");
+    expect(req.headers).toMatchObject({ "Content-Type": "application/merge-patch+json" });
     expect(req.params).toMatchObject({
       account_id: "test-account",
       organization_identifier: "o1",
@@ -425,6 +426,23 @@ describe("fme_feature_flag_definition", () => {
       environment_id: "e1",
     });
     expect(req.body).toEqual(body);
+  });
+
+  it("legacy mode: update still uses PUT (no merge-patch header) against the Split.io API", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag_definition", "update", {
+      workspace_id: "ws1",
+      feature_flag_name: "my_flag",
+      environment_id: "e1",
+      body: { trafficAllocation: 50 },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("PUT");
+    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/environments/e1");
+    expect(req.headers).toBeUndefined();
   });
 
   it("mixed params throws the shared error", async () => {

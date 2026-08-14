@@ -819,7 +819,7 @@ export class Registry {
     // Make request — resolve base URL and auth from product backend
     const product = resolvedRoute?.product ?? def.product ?? "harness";
     const baseUrl = resolveProductBaseUrl(this.config, product);
-    const productHeaders: Record<string, string> = { ...spec.headers };
+    const productHeaders: Record<string, string> = { ...spec.headers, ...resolvedRoute?.headers };
 
     const requestOpts = {
       method: resolvedMethod,

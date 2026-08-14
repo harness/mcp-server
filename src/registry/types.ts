@@ -259,6 +259,14 @@ export interface ResolvedRoute {
    * branch's wire format stays untouched since it simply doesn't set this.
    */
   scopeParams?: { account?: string; org?: string; project?: string };
+  /**
+   * Optional override of the resource/operation-level `headers` (e.g. Content-Type), scoped to
+   * this specific resolved route. Use for dual-mode resources whose branches need different
+   * headers on the same operation (e.g. FME Harness-native JSON Merge Patch vs. legacy JSON
+   * Patch on the same `update` operation) — the legacy branch's headers stay untouched since it
+   * simply doesn't set this.
+   */
+  headers?: Record<string, string>;
 }
 
 /**
@@ -299,7 +307,12 @@ export interface EndpointSpec {
   scopeParams?: { account?: string; org?: string; project?: string };
   /** For POST/PUT: how to build the request body from tool input */
   bodyBuilder?: (input: Record<string, unknown>) => unknown;
-  /** Static headers to merge into the request (e.g. Content-Type override) */
+  /**
+   * Static headers to merge into the request (e.g. Content-Type override). For dual-mode
+   * resources whose branches need different headers on the same operation, set the per-route
+   * override on `ResolvedRoute.headers` instead, returned from `routeResolver` — that reuses the
+   * same override mechanism already used for `product`/`scopeParams` per branch.
+   */
   headers?: Record<string, string>;
   /** For GET: extract the useful part from the raw response */
   responseExtractor?: (raw: unknown, input?: Record<string, unknown>) => unknown;
