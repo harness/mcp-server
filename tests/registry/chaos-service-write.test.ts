@@ -1,10 +1,11 @@
 /**
- * Request-shape coverage for chaos_service create/update body builders and the
- * discovered_agent list — the pieces the earlier chaos-service.test.ts (list +
+ * Request-shape coverage for chaos_service create/update body builders, the
+ * discovered_agent list, and the discovered_namespace / discovered_service /
+ * discovered_network_map list chain — pieces chaos-service.test.ts (list +
  * execute only) did not cover.
  *
  * Backed by hce-saas graphql/server/{handlers,services}/chaosservices/v3 and
- * service-discovery GET /api/v1/agents.
+ * service-discovery GET /api/v1/agents (+ namespaces / discoveredservices / networkmaps).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Registry } from "../../src/registry/index.js";
@@ -229,5 +230,142 @@ describe("discovered_agent list", () => {
     // Verbose/secret fields are dropped.
     expect(slim.token).toBeUndefined();
     expect(slim.config).toBeUndefined();
+  });
+});
+
+// ── Service Discovery list chain (namespace → service → network map) ───────
+describe("discovered_namespace list", () => {
+  let registry: Registry;
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("rejects list when required agent_identity or environment_id filters are missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "discovered_namespace", "list", { org_id: "o", project_id: "p" }),
+    ).rejects.toThrow(/Missing required filter\(s\) for listing discovered_namespace: agent_identity, environment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("GETs namespaces for the agent with environmentIdentifier and maps limit from size", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ items: [], page: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "discovered_namespace", "list", {
+      org_id: "o",
+      project_id: "p",
+      agent_identity: "agent-1",
+      environment_id: "env-1",
+      name: "kube-system",
+      all: true,
+      page: 0,
+      size: 25,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/gateway/servicediscovery/api/v1/agents/agent-1/namespaces");
+    expect(call.params).toMatchObject({
+      environmentIdentifier: "env-1",
+      name: "kube-system",
+      all: true,
+      page: 0,
+      limit: 25,
+    });
+  });
+});
+
+describe("discovered_service list", () => {
+  let registry: Registry;
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("rejects list when required filters are missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "discovered_service", "list", {
+        org_id: "o",
+        project_id: "p",
+        agent_identity: "agent-1",
+      }),
+    ).rejects.toThrow(/Missing required filter\(s\) for listing discovered_service: environment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("GETs discovered services with namespace/search filters and SD limit param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ items: [], page: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "discovered_service", "list", {
+      org_id: "o",
+      project_id: "p",
+      agent_identity: "agent-1",
+      environment_id: "env-1",
+      namespace: "default",
+      search: "frontend",
+      size: 50,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/gateway/servicediscovery/api/v1/agents/agent-1/discoveredservices");
+    expect(call.params).toMatchObject({
+      environmentIdentifier: "env-1",
+      namespace: "default",
+      search: "frontend",
+      limit: 50,
+    });
+  });
+});
+
+describe("discovered_network_map list", () => {
+  let registry: Registry;
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("rejects list when required filters are missing", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "discovered_network_map", "list", {
+        org_id: "o",
+        project_id: "p",
+        environment_id: "env-1",
+      }),
+    ).rejects.toThrow(/Missing required filter\(s\) for listing discovered_network_map: agent_identity/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("GETs network maps for the agent with search and pagination", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ items: [], page: { totalItems: 0 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "discovered_network_map", "list", {
+      org_id: "o",
+      project_id: "p",
+      agent_identity: "agent-1",
+      environment_id: "env-1",
+      search: "map-a",
+      page: 1,
+      size: 10,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/gateway/servicediscovery/api/v1/agents/agent-1/networkmaps");
+    expect(call.params).toMatchObject({
+      environmentIdentifier: "env-1",
+      search: "map-a",
+      page: 1,
+      limit: 10,
+    });
   });
 });
