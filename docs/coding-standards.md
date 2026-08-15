@@ -40,8 +40,11 @@ Do NOT create new `server.registerTool()` calls. Do NOT add new `harness-*.ts` h
 Files in `src/registry/toolsets/*.ts` must export a `ToolsetDefinition` object (helper modules like `chaos-descriptions.ts` and `scopes.ts` are exceptions). They should contain:
 
 - `EndpointSpec` objects with `method`, `path`, `pathParams`, `queryParams`, `responseExtractor`, `operationPolicy`
+- `routeResolver` functions (per-call path selection when a single static `path` is insufficient — see §4)
 - `bodyBuilder` functions (simple input-to-body transformers)
 - `BodySchema` metadata for `harness_describe` output
+
+They may import shared registry helpers such as `../extractors.js` and `../scope-utils.js` (e.g. `resolveFmeDualMode` for FME dual-mode routing).
 
 They must NOT:
 
@@ -66,6 +69,10 @@ Every `ResourceDefinition` declares a `scope`: `"project"`, `"org"`, or `"accoun
 - **Account scope**: no scope params needed (just `accountIdentifier`, which the client injects automatically)
 
 The `Registry.dispatch()` method handles scope injection automatically based on the definition. Do NOT manually inject `accountIdentifier`, `orgIdentifier`, or `projectIdentifier` in toolset specs.
+
+**`scopeOptional` resources** (FME, templates, pull requests, GitOps, etc.): set `scopeOptional: true` on `ResourceDefinition` when callers supply scope via alternative contracts (e.g. FME `workspace_id` **or** `org_id`+`project_id`). The registry skips config-default org/project injection unless the caller explicitly passes those fields. FME resources additionally use `routeResolver` + `resolveFmeDualMode()` in `src/registry/scope-utils.ts` to pick legacy Split.io paths vs Harness-native v4 paths — never mix `workspace_id` with `org_id`/`project_id` on the same call.
+
+**`routeResolver`**: when an endpoint's URL depends on caller input beyond static `path`/`pathBuilder`, attach `routeResolver(input, config) → { path, baseUrl?, queryParams? }` on the `EndpointSpec`. Keep resolvers thin (path selection and query assembly only). When a `routeResolver` builds paths with required identifiers, validate presence in the resolver (or via `requireFmeIdentifier`) — custom paths bypass the registry's `pathParams` presence check.
 
 ### 5. Identifier Fields and Deep Links
 
@@ -297,7 +304,8 @@ Before every commit, verify:
 - [ ] **Toolset files are pure data** — no imports of `HarnessClient`, `McpServer`, `Registry`, or `createLogger`
 - [ ] **All Zod params have `.describe()` after `.optional()`/`.default()`** — Zod 4 chaining order matters for MCP
 - [ ] **Response extractors are from `extractors.ts`** — reuse shared extractors
-- [ ] **Scope is declared correctly** — `"project"`, `"org"`, or `"account"`
+- [ ] **Scope is declared correctly** — `"project"`, `"org"`, or `"account"`; use `scopeOptional` only when an alternative scope contract exists
+- [ ] **`routeResolver` validates required IDs** — custom paths must not silently produce malformed URLs
 - [ ] **`identifierFields` are declared** — required for `harness_get` dispatch
 - [ ] **`operationPolicy` on every endpoint** — risk + retryPolicy set correctly
 - [ ] **Write operations require confirmation** — via client elicitation or `confirm: true` when needed

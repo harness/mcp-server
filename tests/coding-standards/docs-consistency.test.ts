@@ -23,14 +23,25 @@ const REQUIRED_TOOLS = [
   "harness_schema",
 ];
 
+function assertElevenConsolidatedTools(docLabel: string, content: string): void {
+  expect(content, `${docLabel} should document 11 consolidated tools`).toMatch(/11 consolidated/);
+  for (const tool of REQUIRED_TOOLS) {
+    expect(content, `missing ${tool} in ${docLabel}`).toContain(tool);
+  }
+}
+
 describe("Coding standards — documentation consistency", () => {
   const content = readFileSync(STANDARDS_PATH, "utf8");
+  const agentsContent = readFileSync(join(REPO_ROOT, "AGENTS.md"), "utf8");
+  const contributingContent = readFileSync(join(REPO_ROOT, "CONTRIBUTING.md"), "utf8");
 
   it("docs/coding-standards.md documents 11 consolidated MCP tools including harness_schema", () => {
+    assertElevenConsolidatedTools("docs/coding-standards.md", content);
     expect(content).toMatch(/11 consolidated tool handlers/);
-    for (const tool of REQUIRED_TOOLS) {
-      expect(content, `missing ${tool} in docs/coding-standards.md`).toContain(tool);
-    }
+  });
+
+  it("AGENTS.md documents 11 consolidated MCP tools including harness_schema", () => {
+    assertElevenConsolidatedTools("AGENTS.md", agentsContent);
   });
 
   it("docs/coding-standards.md references Zod v4 (not v3)", () => {
@@ -40,6 +51,10 @@ describe("Coding standards — documentation consistency", () => {
 
   it("docs/coding-standards.md documents pnpm standards:check guardrails", () => {
     expect(content).toContain("pnpm standards:check");
+  });
+
+  it("CONTRIBUTING.md documents pnpm standards:check guardrails", () => {
+    expect(contributingContent).toContain("pnpm standards:check");
   });
 
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
