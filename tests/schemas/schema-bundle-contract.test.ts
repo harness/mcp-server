@@ -220,4 +220,58 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream reuse field on DB DevOps step definitions in v0 pipeline and template", () => {
+    const dbOpsStepInfosWithReuse = [
+      "DBApplySchemaStepInfo",
+      "DBRollbackSchemaStepInfo",
+      "LiquibaseCommandStepInfo",
+      "DBOPSTestAndPreviewStepInfo",
+      "DBSchemaUpdateSQLInfo",
+      "DBSchemaRollbackSQLInfo",
+      "FlywayCommandStepInfo",
+    ] as const;
+
+    const stepInfosWithSelectManyFrom = new Set([
+      "DBApplySchemaStepInfo",
+      "DBRollbackSchemaStepInfo",
+      "LiquibaseCommandStepInfo",
+      "FlywayCommandStepInfo",
+    ]);
+
+    for (const key of ["pipeline", "template"] as const) {
+      const common = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>).pipeline
+        .steps.common as Record<
+        string,
+        { allOf?: Array<{ properties?: Record<string, unknown> }> }
+      >;
+
+      for (const stepInfo of dbOpsStepInfosWithReuse) {
+        expect(common).toHaveProperty(stepInfo);
+        const properties = common[stepInfo].allOf?.[1]?.properties;
+        expect(properties).toHaveProperty("reuse");
+
+        const reuse = properties!.reuse as {
+          oneOf: Array<{ type?: string; not?: { pattern: string }; pattern?: string; minLength?: number }>;
+        };
+        expect(reuse.oneOf).toHaveLength(2);
+        expect(reuse.oneOf[0]).toEqual({
+          type: "string",
+          not: { pattern: "^<\\+.*>.*$" },
+        });
+
+        const inputExpr = reuse.oneOf[1];
+        expect(inputExpr.type).toBe("string");
+        expect(inputExpr.minLength).toBe(1);
+        expect(inputExpr.pattern?.startsWith("^<\\+input>")).toBe(true);
+        expect(inputExpr.pattern).toContain("allowedValues");
+        expect(inputExpr.pattern).toContain("selectOneFrom");
+        if (stepInfosWithSelectManyFrom.has(stepInfo)) {
+          expect(inputExpr.pattern).toContain("selectManyFrom");
+        } else {
+          expect(inputExpr.pattern).not.toContain("selectManyFrom");
+        }
+      }
+    }
+  });
 });
