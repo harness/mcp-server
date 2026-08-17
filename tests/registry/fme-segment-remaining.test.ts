@@ -3,6 +3,7 @@ import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { RequestOptions } from "../../src/client/types.js";
 import { Registry } from "../../src/registry/index.js";
+import { featureFlagsToolset } from "../../src/registry/toolsets/feature-flags.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -161,6 +162,10 @@ describe("fme_segment_definition remaining key execute actions", () => {
     expect(request.path).toBe("/fme/api/v4/segment-definitions/seg1/keys");
     expect(request.params).toMatchObject({ environment_id: "env1", replace: true });
     expect(request.body).toEqual({ keys: ["a", "b"], comment: "c", title: "t" });
+    const addKeys = featureFlagsToolset.resources
+      .find((r) => r.resourceType === "fme_segment_definition")
+      ?.executeActions?.add_keys;
+    expect(addKeys?.skipScopeBodyInjection).toBe(true);
   });
 
   it("removes keys via POST keys/remove", async () => {
