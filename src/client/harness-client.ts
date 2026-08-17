@@ -65,12 +65,33 @@ function isHtmlBody(body: string): boolean {
   return /^\s*</.test(body) || /<!doctype/i.test(body.slice(0, 100));
 }
 
+/**
+ * Paths ingress-routed to CG Manager (harness-manager), not NG Manager.
+ * CG accepts only x-api-key / Bearer — not inter-service JWTs NG Manager allows.
+ */
+export function isCgManagerPath(path: string): boolean {
+  return (
+    path.includes("/ng/api/delegate-setup") ||
+    path.includes("/ng/api/delegate-token-ng")
+  );
+}
+
+const CG_MANAGER_401_HINT =
+  "Delegate APIs are served by CG Manager and require x-api-key or Authorization: Bearer (PAT/SAT). " +
+  "Inter-service JWTs accepted by NG Manager are rejected here.";
+
 /** Produce a clean, actionable error message for non-JSON HTTP error responses. */
-function humanizeHttpError(status: number, rawBody: string): string {
+function humanizeHttpError(status: number, rawBody: string, path = ""): string {
   const html = isHtmlBody(rawBody);
 
   switch (status) {
     case 401:
+      if (isCgManagerPath(path)) {
+        return (
+          `HTTP 401 Unauthorized — ${CG_MANAGER_401_HINT} ` +
+          "Verify HARNESS_API_KEY is a valid PAT or Service Account token."
+        );
+      }
       return "HTTP 401 Unauthorized — API key is invalid or expired. Verify HARNESS_API_KEY is a valid PAT or Service Account token.";
     case 403:
       return "HTTP 403 Forbidden — access denied. Possible causes: wrong HARNESS_ACCOUNT_ID, IP restrictions, missing RBAC permissions, or corporate proxy/WAF blocking the request.";
@@ -120,6 +141,14 @@ function enrichErrorMessage(
     }
   }
   return message;
+}
+
+/** Append CG Manager auth guidance to 401s on delegate routes when not already present. */
+function withCgManager401Hint(message: string, status: number, path: string): string {
+  if (status !== 401 || !isCgManagerPath(path) || message.includes("CG Manager")) {
+    return message;
+  }
+  return `${message} — ${CG_MANAGER_401_HINT}`;
 }
 
 /**
@@ -192,11 +221,11 @@ export class HarnessClient {
     ) {
       headers["x-tenant-id"] = accountId;
     }
-    this.applyDefaultAuth(headers, isFme);
+    this.applyDefaultAuth(headers, isFme, options.path);
     return headers;
   }
 
-  private applyDefaultAuth(headers: Record<string, string>, isFme: boolean): void {
+  private applyDefaultAuth(headers: Record<string, string>, isFme: boolean, path = ""): void {
     if (isFme) {
       // FME/Split Admin APIs expect Bearer auth. Drop x-api-key here so
       // placeholder credentials are never forwarded to api.split.io.
@@ -231,12 +260,22 @@ export class HarnessClient {
       return;
     }
 
-    // Preserve caller-provided auth instead of layering fallback credentials on top.
-    if (getHeaderValue(headers, "authorization")) return;
-
-    // Non-FME Harness services continue to use the standard API-key header.
+    // Always ensure x-api-key is present for Harness APIs — even when Authorization
+    // is already set. Skipping the key left CG Manager (delegate-setup / delegate-token-ng)
+    // with only an inter-service JWT that NG Manager accepts but CG rejects → 401.
     if (!getHeaderValue(headers, "x-api-key")) {
       headers["x-api-key"] = this.token;
+    }
+
+    // CG Manager accepts x-api-key and Bearer. Replace incompatible Authorization
+    // schemes (e.g. "genaiservice <jwt>") with Bearer from the configured API key
+    // so CG does not fail closed on the first auth header it tries.
+    if (isCgManagerPath(path) && this.token && !isPlaceholderCredential(this.token)) {
+      const auth = getHeaderValue(headers, "authorization");
+      if (!auth || !/^Bearer\s+\S+/i.test(auth.trim())) {
+        deleteHeaderValues(headers, "authorization");
+        headers["Authorization"] = `Bearer ${this.token}`;
+      }
     }
   }
 
@@ -349,9 +388,13 @@ export class HarnessClient {
           }
 
           const rawMessage = isGarbageMessage(parsed.message)
-              ? humanizeHttpError(response.status, body)
+              ? humanizeHttpError(response.status, body, options.path)
               : parsed.message!;
-          const message = enrichErrorMessage(rawMessage, parsed, options.path);
+          const message = withCgManager401Hint(
+            enrichErrorMessage(rawMessage, parsed, options.path),
+            response.status,
+            options.path,
+          );
           log.debug(`HTTP ${response.status} error`, {
             body: this.logUnsafeBodies ? body.slice(0, 1000) : redactJsonString(body),
           });
@@ -493,9 +536,13 @@ export class HarnessClient {
           try { parsed = JSON.parse(body); } catch { /* non-JSON */ }
 
           const rawMessage = isGarbageMessage(parsed.message)
-              ? humanizeHttpError(response.status, body)
+              ? humanizeHttpError(response.status, body, options.path)
               : parsed.message!;
-          const message = enrichErrorMessage(rawMessage, parsed, options.path);
+          const message = withCgManager401Hint(
+            enrichErrorMessage(rawMessage, parsed, options.path),
+            response.status,
+            options.path,
+          );
           const error = new HarnessApiError(message, response.status, parsed.code, parsed.correlationId);
 
           if (
