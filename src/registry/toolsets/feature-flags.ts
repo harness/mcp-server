@@ -103,7 +103,7 @@ const fmeSegmentCreateSchema: BodySchema = {
   description: "Create a new segment. name, trafficType, and type are required; description/tags/owners are optional.",
   fields: [
     { name: "name", type: "string", required: true, description: "Segment name (must be unique within the project)" },
-    { name: "type", type: "string", required: true, description: "Segment kind. Must be one of: \"standard\" | \"rule_based\" | \"large\"." },
+    { name: "type", type: "string", required: false, description: "Segment kind for MCP callers (\"standard\" | \"rule_based\" | \"large\"). Not sent on the v4 create wire — CreateSegmentRequest has no type field." },
     { name: "description", type: "string", required: false, description: "Optional description of the segment" },
     { name: "trafficType", type: "string", required: true, description: "Traffic type name" },
     { name: "tags", type: "array", required: false, description: "Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
@@ -1212,7 +1212,6 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return {
               name: body?.name,
               trafficType,
-              type: body?.type,
               ...(body?.description !== undefined ? { description: body.description } : {}),
               ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
               ...(body?.owners !== undefined ? { owners: body.owners } : {}),
@@ -1220,7 +1219,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           bodySchema: fmeSegmentCreateSchema,
-          description: "Create a new segment. Body requires name + trafficType + type (\"standard\" | \"rule_based\" | \"large\"); optional description, tags, owners.",
+          description: "Create a new segment. Body requires name + trafficType; optional description, tags, owners. If type is passed (\"standard\" | \"rule_based\" | \"large\"), it is validated locally and omitted from the v4 wire body.",
         },
         update: {
           method: "PATCH",
