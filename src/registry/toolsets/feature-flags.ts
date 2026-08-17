@@ -42,7 +42,7 @@ const fmeFeatureFlagCreateSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: true, description: "Feature flag name (must be unique within the workspace/project)" },
     { name: "description", type: "string", required: false, description: "Optional description of the feature flag" },
-    { name: "trafficType", type: "string", required: false, description: "Traffic type name. Required in Harness-native (org_id+project_id) mode; ignored in legacy mode (pass traffic_type_id as a separate param there instead)" },
+    { name: "trafficType", type: "string", required: false, description: "Traffic type name. Required in Harness-native (org_id+project_id) mode; also accepted as top-level traffic_type_id or traffic_type. Ignored in legacy mode (pass traffic_type_id as a path param there instead)" },
     { name: "tags", type: "array", required: false, description: "Harness-native mode only. Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Harness-native mode only. Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
   ],
@@ -328,14 +328,20 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             if (isFmeHarnessNativeSelected(input, "fme_feature_flag")) {
-              const trafficType = (body?.trafficType ?? body?.traffic_type) as string | undefined;
+              const trafficType = (body?.trafficType ?? input.traffic_type_id ?? input.traffic_type ?? body?.traffic_type) as string | undefined;
               if (!trafficType) {
                 throw new Error(
-                  "fme_feature_flag.create: \"trafficType\" is required in body for Harness-native (org_id/project_id) mode.",
+                  'fme_feature_flag.create: "trafficType" is required in Harness-native mode — pass body.trafficType, traffic_type_id, or traffic_type.',
+                );
+              }
+              const name = body?.name ?? input.name;
+              if (!name) {
+                throw new Error(
+                  'fme_feature_flag.create: "name" is required in Harness-native mode — pass body.name.',
                 );
               }
               return {
-                name: body?.name ?? input.name,
+                name,
                 trafficType,
                 ...(body?.description !== undefined ? { description: body.description } : {}),
                 ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
@@ -349,7 +355,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagCreateSchema,
-          description: "Create a feature flag. Legacy mode (workspace_id): requires workspace_id + traffic_type_id (get from fme_traffic_type); body: name, optional description (no tags/owners — use harness_update after creation). Harness-native mode (org_id+project_id): body requires name + trafficType, optional description/tags/owners.",
+          description: "Create a feature flag. Legacy mode (workspace_id): requires workspace_id + traffic_type_id (get from fme_traffic_type); body: name, optional description (no tags/owners — use harness_update after creation). Harness-native mode (org_id+project_id): body requires name + trafficType (or pass traffic_type_id / traffic_type at top level), optional description/tags/owners.",
         },
         delete: {
           method: "DELETE",

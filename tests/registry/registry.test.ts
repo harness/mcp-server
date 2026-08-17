@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
+import type { RequestOptions } from "../../src/client/types.js";
+import type { ToolsetDefinition } from "../../src/registry/types.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import { registerAllTools } from "../../src/tools/index.js";
 
@@ -2071,6 +2073,91 @@ describe("Registry", () => {
       expect(call.params?.costCategory).toBe("Teams");
       expect(result).toEqual({
         values: ["Product Management", "Security Engineering", "Software Development"],
+      });
+    });
+  });
+
+  describe("ResolvedRoute header merge", () => {
+    const headerMergeFixtureToolset: ToolsetDefinition = {
+      name: "header-merge-fixture",
+      displayName: "Header Merge Fixture",
+      description: "Test-only toolset for ResolvedRoute.headers dispatch merge.",
+      optIn: false,
+      resources: [
+        {
+          resourceType: "header_merge_fixture",
+          displayName: "Header Merge Fixture",
+          description: "Test-only resource for routeResolver header merge.",
+          toolset: "feature-flags",
+          scope: "account",
+          identifierFields: ["fixture_id"],
+          operations: {
+            update: {
+              method: "PATCH",
+              path: "/fixture/legacy-default",
+              operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+              headers: {
+                "Content-Type": "application/json",
+                "X-Spec": "spec",
+              },
+              routeResolver: (input) =>
+                input.native === true
+                  ? {
+                      path: "/fixture/native",
+                      product: "harness",
+                      headers: {
+                        "Content-Type": "application/merge-patch+json",
+                        "X-Resolved": "resolved",
+                      },
+                    }
+                  : { path: "/fixture/legacy" },
+              bodyBuilder: () => ({}),
+            },
+          },
+        },
+      ],
+    };
+
+    const fixtureRegistry = new Registry(makeConfig(), {
+      additionalToolsets: [headerMergeFixtureToolset],
+    });
+
+    it("merges resolvedRoute.headers over spec.headers on native branch", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { ok: true } });
+      const client = makeClient(mockRequest);
+
+      await fixtureRegistry.dispatch(client, "header_merge_fixture", "update", {
+        native: true,
+        body: {},
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0]?.[0] as RequestOptions | undefined;
+      expect(call).toBeDefined();
+      expect(call?.path).toBe("/fixture/native");
+      expect(call?.headers).toEqual({
+        "Content-Type": "application/merge-patch+json",
+        "X-Spec": "spec",
+        "X-Resolved": "resolved",
+      });
+    });
+
+    it("uses spec.headers only when routeResolver omits headers", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { ok: true } });
+      const client = makeClient(mockRequest);
+
+      await fixtureRegistry.dispatch(client, "header_merge_fixture", "update", {
+        native: false,
+        body: {},
+      });
+
+      expect(mockRequest).toHaveBeenCalledOnce();
+      const call = mockRequest.mock.calls[0]?.[0] as RequestOptions | undefined;
+      expect(call).toBeDefined();
+      expect(call?.path).toBe("/fixture/legacy");
+      expect(call?.headers).toEqual({
+        "Content-Type": "application/json",
+        "X-Spec": "spec",
       });
     });
   });

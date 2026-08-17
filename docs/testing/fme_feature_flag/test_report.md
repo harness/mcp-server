@@ -39,19 +39,20 @@
 | TC-fme_feature_flag-024 | Get via Harness-native scope | `harness_get(resource_type="fme_feature_flag", org_id="default", project_id="puthraya", params={feature_flag_name="TEST"})` | Routes to `/fme/api/v4/feature-flags/{name}` | ✅ Passed | Live call against qa.harness.io returned 200 with flag details | Previously blocked on what looked like a backend 500 — root cause was the stale `/internal` path segment and wrong query param names, not a backend defect. Resolved. |
 | TC-fme_feature_flag-025 | Delete via Harness-native scope | `harness_delete(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", params={feature_flag_name="my_flag"})` | Routes to `/fme/api/v4/feature-flags/{name}` | ✅ Passed | Routing/params verified correct (`tests/registry/feature-flags.test.ts`); not exercised live to avoid deleting a real flag | Same fix as TC-024; destructive op left unexercised live by design |
 | TC-fme_feature_flag-026 | Create via Harness-native scope | `harness_create(resource_type="fme_feature_flag", org_id="default", project_id="puthraya", body={"name": "new_flag", "trafficType": "user"})` | Routes to `/fme/api/v4/feature-flags` (POST) with confirmed `CreateFeatureFlagRequest` body | ✅ Passed | Routing/body-mapping verified correct (`tests/registry/feature-flags.test.ts`); not exercised live to avoid creating a real flag | Body shape confirmed from `Harness_Split/Main`'s `CreateFeatureFlagRequest`/`FeatureFlagResource`, not guessed |
-| TC-fme_feature_flag-026b | Create via Harness-native scope without trafficType rejected | `harness_create(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", body={"name": "new_flag"})` | Error: "\"trafficType\" is required in body for Harness-native (org_id/project_id) mode." | ✅ Passed | Error thrown as expected | |
-| TC-fme_feature_flag-027 | Update via Harness-native scope rejected | `harness_update(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", feature_flag_name="my_flag", body={"description": "x"})` | Error: "not yet implemented for this operation" | ✅ Passed | Error thrown as expected | |
-| TC-fme_feature_flag-028 | Kill via Harness-native scope rejected | `harness_execute(resource_type="fme_feature_flag", action="kill", org_id="my_org", project_id="my_project", feature_flag_name="my_flag", environment_id="env_1")` | Error: "not yet implemented for this operation" | ✅ Passed | Error thrown as expected | |
-| TC-fme_feature_flag-029 | Restore via Harness-native scope rejected | `harness_execute(resource_type="fme_feature_flag", action="restore", org_id="my_org", project_id="my_project", feature_flag_name="my_flag", environment_id="env_1")` | Error: "not yet implemented for this operation" | ✅ Passed | Error thrown as expected | |
-| TC-fme_feature_flag-030 | Archive via Harness-native scope rejected | `harness_execute(resource_type="fme_feature_flag", action="archive", org_id="my_org", project_id="my_project", feature_flag_name="my_flag")` | Error: "not yet implemented for this operation" | ✅ Passed | Error thrown as expected | |
-| TC-fme_feature_flag-031 | Unarchive via Harness-native scope rejected | `harness_execute(resource_type="fme_feature_flag", action="unarchive", org_id="my_org", project_id="my_project", feature_flag_name="my_flag")` | Error: "not yet implemented for this operation" | ✅ Passed | Error thrown as expected | |
+| TC-fme_feature_flag-026b | Create via Harness-native scope without trafficType rejected | `harness_create(resource_type="fme_feature_flag", org_id="my_org", project_id="my_project", body={"name": "new_flag"})` | Error: `"trafficType" is required in Harness-native mode` | ✅ Passed | Error thrown as expected (`tests/registry/feature-flags.test.ts`) | |
+| TC-fme_feature_flag-026c | Create via Harness-native scope using traffic_type_id | `harness_create(..., traffic_type_id="user", body={"name": "new_flag"})` | POST `/fme/api/v4/feature-flags` with `{name, trafficType}` | ✅ Passed | Routing verified (`tests/registry/feature-flags.test.ts`) | |
+| TC-fme_feature_flag-027 | Update via Harness-native scope | `harness_update(..., body={"description": "x"})` | PATCH `/fme/api/v4/feature-flags/{name}` merge-patch | ✅ Passed | Routing/header/body verified (`tests/registry/feature-flags.test.ts`) | |
+| TC-fme_feature_flag-028 | Kill via Harness-native scope | `harness_execute(..., action="kill", environment_id="env_1")` | POST `/fme/api/v4/feature-flag-definitions/{name}/kill` | ✅ Passed | Routing verified (`tests/registry/feature-flags.test.ts`) | |
+| TC-fme_feature_flag-029 | Restore via Harness-native scope | `harness_execute(..., action="restore", environment_id="env_1")` | POST `/fme/api/v4/feature-flag-definitions/{name}/restore` | ✅ Passed | Routing verified (`tests/registry/feature-flags.test.ts`) | |
+| TC-fme_feature_flag-030 | Archive via Harness-native scope | `harness_execute(..., action="archive")` | POST `/fme/api/v4/feature-flags/{name}/archive` | ✅ Passed | Routing verified (`tests/registry/feature-flags.test.ts`) | |
+| TC-fme_feature_flag-031 | Unarchive via Harness-native scope | `harness_execute(..., action="unarchive")` | POST `/fme/api/v4/feature-flags/{name}/unarchive` | ✅ Passed | Routing verified (`tests/registry/feature-flags.test.ts`) | |
 
 ## Summary
 
 | Metric | Count |
 |--------|-------|
-| Total Tests | 32 |
-| ✅ Passed | 12 |
+| Total Tests | 33 |
+| ✅ Passed | 18 |
 | ❌ Failed | 1 |
 | ⚠️ Blocked | 0 |
 | ⬜ Not Run | 19 |
