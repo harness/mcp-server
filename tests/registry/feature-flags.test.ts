@@ -1497,7 +1497,7 @@ describe("fme_segment_keys permissive mode-selector", () => {
     expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/env-prod/beta_users/keys");
   });
 
-  it("org_id+project_id throws not-yet-implemented for list", async () => {
+  it("org_id+project_id points list at fme_segment_definition execute actions", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1508,7 +1508,7 @@ describe("fme_segment_keys permissive mode-selector", () => {
         org_id: "o1",
         project_id: "p1",
       }),
-    ).rejects.toThrow(/not yet implemented/i);
+    ).rejects.toThrow("fme_segment_definition execute actions list_keys, add_keys, and remove_keys");
   });
 
   it("legacy mode still works for update", async () => {
@@ -1525,7 +1525,7 @@ describe("fme_segment_keys permissive mode-selector", () => {
     expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/env-prod/beta_users/upload");
   });
 
-  it("org_id+project_id throws not-yet-implemented for update", async () => {
+  it("org_id+project_id points update at fme_segment_definition execute actions", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1537,7 +1537,7 @@ describe("fme_segment_keys permissive mode-selector", () => {
         project_id: "p1",
         body: { add: ["user-1"] },
       }),
-    ).rejects.toThrow(/not yet implemented/i);
+    ).rejects.toThrow("fme_segment_definition execute actions list_keys, add_keys, and remove_keys");
   });
 });
 
@@ -1839,6 +1839,11 @@ describe("fme_segment_definition", () => {
 
   it("has no enable/disable/change_request execute actions", () => {
     const resource = findResource("fme_segment_definition");
-    expect(resource.executeActions).toBeUndefined();
+    expect(resource.executeActions).not.toHaveProperty("enable");
+    expect(resource.executeActions).not.toHaveProperty("disable");
+    expect(resource.executeActions).not.toHaveProperty("change_request");
+    expect(resource.executeActions).toHaveProperty("list_keys");
+    expect(resource.executeActions).toHaveProperty("add_keys");
+    expect(resource.executeActions).toHaveProperty("remove_keys");
   });
 });

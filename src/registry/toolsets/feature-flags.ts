@@ -166,6 +166,56 @@ const fmeSegmentCreateSchema: BodySchema = {
   ],
 };
 
+const fmeSegmentUpdateSchema: BodySchema = {
+  description: "Partial update for a Harness-native segment via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged; set description/tags/owners to null (or [] for tags/owners) to clear.",
+  fields: [
+    { name: "description", type: "string", required: false, description: "Updated description; null clears it" },
+    { name: "tags", type: "array", required: false, description: "Updated tags — [{name: 'tag1'}] or ['tag1']; null or [] clears", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Updated owners — {type: \"USER\", id or email} or {type: \"GROUP\", identifier}; null or [] clears", itemType: "object" },
+  ],
+};
+
+const fmeSegmentDefinitionKeysAddSchema: BodySchema = {
+  description: "Add or replace membership keys on a segment definition. Body.keys is required (empty allowed only with replace=true). Optional comment/title.",
+  fields: [
+    { name: "keys", type: "array", required: true, description: "Identity keys to add (or the full set when replace=true). Max 10000.", itemType: "string" },
+    { name: "comment", type: "string", required: false, description: "Optional comment recorded with the change" },
+    { name: "title", type: "string", required: false, description: "Optional short title for the change" },
+  ],
+};
+
+const fmeSegmentDefinitionKeysRemoveSchema: BodySchema = {
+  description: "Remove membership keys from a segment definition. Body.keys must contain at least one key. Optional comment/title.",
+  fields: [
+    { name: "keys", type: "array", required: true, description: "Identity keys to remove (min 1, max 10000)", itemType: "string" },
+    { name: "comment", type: "string", required: false, description: "Optional comment recorded with the change" },
+    { name: "title", type: "string", required: false, description: "Optional short title for the change" },
+  ],
+};
+
+function fmeSegmentKeysNativePointer(operation: string): never {
+  throw new Error(
+    `fme_segment_keys.${operation}: Harness-native membership uses fme_segment_definition execute actions list_keys, add_keys, and remove_keys — do not pass org_id+project_id on fme_segment_keys.`,
+  );
+}
+
+function fmeSegmentDefinitionKeysBody(input: Record<string, unknown>, opts: { requireNonEmpty: boolean }): Record<string, unknown> {
+  const body = input.body as Record<string, unknown> | undefined;
+  const keys = body?.keys;
+  if (!Array.isArray(keys) || (opts.requireNonEmpty && keys.length === 0)) {
+    throw new Error(
+      opts.requireNonEmpty
+        ? "fme_segment_definition.remove_keys requires body.keys with at least one key."
+        : "fme_segment_definition.add_keys requires body.keys (array; empty only when replace=true).",
+    );
+  }
+  return {
+    keys,
+    ...(body?.comment !== undefined ? { comment: body.comment } : {}),
+    ...(body?.title !== undefined ? { title: body.title } : {}),
+  };
+}
+
 const fmeSegmentDefinitionCreateSchema: BodySchema = {
   description: "Create a segment definition in an environment. Omit the body (or send {}) to create an empty/default shell.",
   fields: [{ name: "description", type: "string", required: false, description: "Optional description for the definition" }],
@@ -1333,7 +1383,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment",
       displayName: "FME Segment",
       description:
-        "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard, rule-based, and large). Supports list, get, create, delete. create requires body.type (\"standard\" | \"rule_based\" | \"large\").",
+        "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard, rule-based, and large). Supports list, get, create, update (JSON Merge Patch on description/tags/owners), and delete. create requires body.type (\"standard\" | \"rule_based\" | \"large\").",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
@@ -1407,6 +1457,32 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodySchema: fmeSegmentCreateSchema,
           description: "Create a new segment. Body requires name + trafficType + type (\"standard\" | \"rule_based\" | \"large\"); optional description, tags, owners.",
         },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_segment");
+            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment"));
+            return {
+              path: `/fme/api/v4/segments/${segmentName}`,
+              headers: { "Content-Type": "application/merge-patch+json" },
+            };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body) return {};
+            return {
+              ...(body.description !== undefined ? { description: body.description } : {}),
+              ...(body.tags !== undefined ? { tags: body.tags === null ? null : normalizeFmeTags(body.tags) } : {}),
+              ...(body.owners !== undefined ? { owners: body.owners } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeSegmentUpdateSchema,
+          description:
+            "Update a segment's description, tags, and/or owners via JSON Merge Patch (RFC 7396). Harness-native only (org_id+project_id). Omit a field to leave it unchanged; set description/tags/owners to null (or [] for tags/owners) to clear.",
+        },
       },
     },
     // ── FME Segment Definition (Harness-native, unified — Harness_Split/Main PR #12644) ──
@@ -1414,7 +1490,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment_definition",
       displayName: "FME Segment Definition",
       description:
-        "Environment-specific definition of a segment (standard or rule-based) — description and lifecycle. Replaces fme_rule_based_segment_definition's role in Harness-native calls, generalized for all segment types. Harness-native only (org_id+project_id; no legacy workspace_id support). Supports list, get, create, update (description only, via JSON Merge Patch), and delete. Wired against Harness_Split/Main PR #12644, which was open (not yet merged) as of this writing — paths may still change before merge. There is no enable/disable/change_request action: the backend has no such endpoints for this unified resource; governance checks are surfaced inline in the create/update/delete responses instead.",
+        "Environment-specific definition of a segment (standard or rule-based) — description, lifecycle, and membership keys. Replaces fme_rule_based_segment_definition's role in Harness-native calls, generalized for all segment types. Harness-native only (org_id+project_id; no legacy workspace_id support). Supports list, get, create, update (description only, via JSON Merge Patch), delete, and execute list_keys/add_keys/remove_keys. There is no enable/disable/change_request action: the backend has no such endpoints for this unified resource; governance checks are surfaced inline in the create/update/delete responses instead.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
@@ -1503,12 +1579,63 @@ export const featureFlagsToolset: ToolsetDefinition = {
           description: "Delete a segment definition from an environment.",
         },
       },
+      executeActions: {
+        list_keys: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_segment_definition");
+            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            requireFmeIdentifier(input, "environment_id", "fme_segment_definition");
+            return { path: `/fme/api/v4/segment-definitions/${segmentName}/keys` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { environment_id: "environment_id", offset: "offset", limit: "limit" },
+          responseExtractor: passthrough,
+          actionDescription:
+            "List membership keys for a segment definition in an environment (Harness-native). Requires org_id, project_id, segment_name, and environment_id. Pagination: offset and limit (default 100, max 100).",
+        },
+        add_keys: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_segment_definition");
+            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            requireFmeIdentifier(input, "environment_id", "fme_segment_definition");
+            return { path: `/fme/api/v4/segment-definitions/${segmentName}/keys` };
+          },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id", replace: "replace" },
+          bodyBuilder: (input) => fmeSegmentDefinitionKeysBody(input, { requireNonEmpty: false }),
+          responseExtractor: passthrough,
+          bodySchema: fmeSegmentDefinitionKeysAddSchema,
+          actionDescription:
+            "Add membership keys to a segment definition (Harness-native). Requires org_id, project_id, segment_name, environment_id, and body.keys. Pass replace=true to replace the full key set (empty keys allowed only then). Optional body comment/title.",
+        },
+        remove_keys: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_segment_definition");
+            const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_definition"));
+            requireFmeIdentifier(input, "environment_id", "fme_segment_definition");
+            return { path: `/fme/api/v4/segment-definitions/${segmentName}/keys/remove` };
+          },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          bodyBuilder: (input) => fmeSegmentDefinitionKeysBody(input, { requireNonEmpty: true }),
+          responseExtractor: passthrough,
+          bodySchema: fmeSegmentDefinitionKeysRemoveSchema,
+          actionDescription:
+            "Remove membership keys from a segment definition (Harness-native). Requires org_id, project_id, segment_name, environment_id, and body.keys with at least one key. Optional body comment/title.",
+        },
+      },
     },
     {
       resourceType: "fme_segment_keys",
       displayName: "FME Segment Keys",
       description:
-        "Membership keys (members) of a standard segment. List keys with pagination, or update to add members. Removal is not supported by this endpoint. Limit: 10,000 keys per request, 100,000 per segment total.",
+        "Membership keys (members) of a standard segment. List keys with pagination, or update to add members. Removal is not supported by this endpoint. Limit: 10,000 keys per request, 100,000 per segment total. Legacy workspace-style calls use environment_id+segment_name without org_id/project_id. Harness-native membership is not on this resource — use fme_segment_definition execute actions list_keys, add_keys, and remove_keys.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -1518,8 +1645,6 @@ export const featureFlagsToolset: ToolsetDefinition = {
         { name: "environment_id", description: "Environment ID (get from fme_environment)", required: true },
         { name: "segment_name", description: "Segment name", required: true },
         { name: "offset", description: "Pagination offset", type: "number" },
-        { name: "org_id", description: "Optional — pass together with project_id to select the (not yet implemented) Harness-native mode instead of the current contract." },
-        { name: "project_id", description: "Optional — pass together with org_id to select the (not yet implemented) Harness-native mode instead of the current contract." },
       ],
       operations: {
         list: {
@@ -1527,9 +1652,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/segments/{environmentId}/{segmentName}/keys",
           routeResolver: (input) => {
             if (isFmeHarnessNativeSelected(input, "fme_segment_keys.list")) {
-              throw new Error(
-                "fme_segment_keys.list: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass environment_id/segment_name (current contract) instead.",
-              );
+              fmeSegmentKeysNativePointer("list");
             }
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_segment_keys"));
             const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_keys"));
@@ -1549,9 +1672,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/segments/{environmentId}/{segmentName}/upload",
           routeResolver: (input) => {
             if (isFmeHarnessNativeSelected(input, "fme_segment_keys.update")) {
-              throw new Error(
-                "fme_segment_keys.update: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass environment_id/segment_name (current contract) instead.",
-              );
+              fmeSegmentKeysNativePointer("update");
             }
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_segment_keys"));
             const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_keys"));
