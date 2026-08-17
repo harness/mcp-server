@@ -1436,6 +1436,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: "/fme/api/v4/segments" };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             const trafficType = (body?.trafficType ?? body?.traffic_type) as string | undefined;
@@ -1536,6 +1537,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: `/fme/api/v4/segment-definitions/${segmentName}` };
           },
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           queryParams: { environment_id: "environment_id" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
@@ -1605,6 +1607,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: `/fme/api/v4/segment-definitions/${segmentName}/keys` };
           },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           queryParams: { environment_id: "environment_id", replace: "replace" },
           bodyBuilder: (input) => fmeSegmentDefinitionKeysBody(input, { requireNonEmpty: false }),
           responseExtractor: passthrough,
@@ -1622,6 +1625,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: `/fme/api/v4/segment-definitions/${segmentName}/keys/remove` };
           },
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           queryParams: { environment_id: "environment_id" },
           bodyBuilder: (input) => fmeSegmentDefinitionKeysBody(input, { requireNonEmpty: true }),
           responseExtractor: passthrough,
