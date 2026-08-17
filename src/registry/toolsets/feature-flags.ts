@@ -167,6 +167,38 @@ const fmeRbsChangeRequestSchema: BodySchema = {
   ],
 };
 
+function resolveNativeOnlyDefinitionRoute(
+  input: Record<string, unknown>,
+  operation: string,
+  opts: { collection?: boolean; suffix?: string } = {},
+) {
+  const mode = resolveFmeDualMode(input, "fme_feature_flag_definition");
+  if (mode.mode === "legacy") {
+    throw new Error(
+      `fme_feature_flag_definition.${operation}: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.`,
+    );
+  }
+
+  if (opts.collection) {
+    requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition");
+    return {
+      path: "/fme/api/v4/feature-flag-definitions",
+      product: "harness" as const,
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+    };
+  }
+
+  const flagName = encodeURIComponent(
+    requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"),
+  );
+  requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition");
+  return {
+    path: `/fme/api/v4/feature-flag-definitions/${flagName}${opts.suffix ?? ""}`,
+    product: "harness" as const,
+    scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+  };
+}
+
 export const featureFlagsToolset: ToolsetDefinition = {
   name: "feature-flags",
   displayName: "Feature Management & Experimentation",
@@ -589,14 +621,29 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag_definition",
       displayName: "FME Feature Flag Definition",
       description:
-        "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation. Supports create, get, and update. Create requires treatments, defaultTreatment, and defaultRule. " +
-        "Dual-mode scoping: pass org_id+project_id (Harness-native) or the deprecated workspace_id (Split.io API) — both modes share the same body shape and all three operations. environment_id is passed as a path segment in legacy mode and as a query param in Harness-native mode.",
+        "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation. Supports list, get, create, update, delete, and kill/restore/reallocate. Create requires treatments, defaultTreatment, and defaultRule. " +
+        "Get/create/update are dual-mode: pass org_id+project_id (Harness-native) or the deprecated workspace_id (Split.io API). List/delete/kill/restore/reallocate are Harness-native only and require org_id+project_id. environment_id is passed as a path segment in legacy mode and as a query param in Harness-native mode.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id", "environment_id", "feature_flag_name"],
       product: "fme",
+      listFilterFields: [
+        { name: "feature_flag_name", description: "Feature flag name whose definitions to list. Required.", required: true },
+        { name: "offset", description: "Pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Page size (default 100, max 100)", type: "number" },
+      ],
       operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "list", { collection: true }),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { feature_flag_name: "feature_flag_name", offset: "offset", limit: "limit" },
+          responseExtractor: passthrough,
+          description:
+            "List feature flag definitions for a flag across environments (Harness-native only). Requires feature_flag_name. Pagination uses offset and limit (default 100, max 100). No environment_id.",
+        },
         get: {
           method: "GET",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
@@ -673,6 +720,72 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodySchema: fmeFeatureFlagDefinitionUpdateSchema,
           description:
             "Update a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation, baseline treatment). Legacy mode: PUT, workspace_id/environment_id in path (full-replace, per the Split.io API). Harness-native mode: PATCH via JSON Merge Patch (RFC 7396) — omit a field to leave it unchanged; treatments/rules/defaultRule are omit-to-keep but reject explicit null (not clearable); org_id+project_id, environment_id as query param.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "delete"),
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          responseExtractor: passthrough,
+          description:
+            "Delete a feature flag definition in an environment (Harness-native only). Requires org_id, project_id, feature_flag_name, and environment_id as a query parameter.",
+        },
+      },
+      executeActions: {
+        kill: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "kill", { suffix: "/kill" }),
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
+          },
+          responseExtractor: fmeActionExtract,
+          actionDescription:
+            "Kill (turn off) a feature flag definition in an environment (Harness-native only). Requires org_id, project_id, feature_flag_name, and environment_id. Optional body comment/title.",
+          bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
+        },
+        restore: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "restore", { suffix: "/restore" }),
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
+          },
+          responseExtractor: fmeActionExtract,
+          actionDescription:
+            "Restore a killed feature flag definition in an environment (Harness-native only). Requires org_id, project_id, feature_flag_name, and environment_id. Optional body comment/title.",
+          bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
+        },
+        reallocate: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "reallocate", { suffix: "/reallocate" }),
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
+          },
+          responseExtractor: fmeActionExtract,
+          actionDescription:
+            "Reallocate traffic across treatments for a feature flag definition in an environment (Harness-native only). Requires org_id, project_id, feature_flag_name, and environment_id. Optional body comment/title.",
+          bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
         },
       },
     },
