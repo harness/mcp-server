@@ -186,6 +186,35 @@ describe("fme_segment_definition remaining key execute actions", () => {
     expect(request.body).toEqual({ keys: ["a"], comment: "c", title: "t" });
   });
 
+  it("rejects empty add_keys unless replace is true", async () => {
+    const client = makeClient();
+
+    await expect(
+      registry.dispatchExecute(client, "fme_segment_definition", "add_keys", {
+        ...nativeScope,
+        segment_name: "seg1",
+        environment_id: "env1",
+        body: { keys: [] },
+      }),
+    ).rejects.toThrow(/empty only when replace=true/);
+  });
+
+  it("allows empty add_keys when replace is true", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_segment_definition", "add_keys", {
+      ...nativeScope,
+      segment_name: "seg1",
+      environment_id: "env1",
+      replace: true,
+      body: { keys: [] },
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({ replace: true });
+    expect(firstRequest(mockRequest).body).toEqual({ keys: [] });
+  });
+
   it("requires keys array on remove_keys", async () => {
     const client = makeClient();
 
