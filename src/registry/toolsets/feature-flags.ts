@@ -100,7 +100,7 @@ const fmeRbsCreateSchema: BodySchema = {
 };
 
 const fmeSegmentCreateSchema: BodySchema = {
-  description: "Create a new segment. name, trafficType, and type are required; description/tags/owners are optional.",
+  description: "Create a new segment. name and trafficType are required; description/tags/owners are optional. type is optional MCP-only validation and is not sent on the v4 wire.",
   fields: [
     { name: "name", type: "string", required: true, description: "Segment name (must be unique within the project)" },
     { name: "type", type: "string", required: false, description: "Segment kind for MCP callers (\"standard\" | \"rule_based\" | \"large\"). Not sent on the v4 create wire — CreateSegmentRequest has no type field." },
@@ -147,12 +147,16 @@ function fmeSegmentKeysNativePointer(operation: string): never {
 function fmeSegmentDefinitionKeysBody(input: Record<string, unknown>, opts: { requireNonEmpty: boolean }): Record<string, unknown> {
   const body = input.body as Record<string, unknown> | undefined;
   const keys = body?.keys;
+  const replace = input.replace === true || input.replace === "true";
   if (!Array.isArray(keys) || (opts.requireNonEmpty && keys.length === 0)) {
     throw new Error(
       opts.requireNonEmpty
         ? "fme_segment_definition.remove_keys requires body.keys with at least one key."
         : "fme_segment_definition.add_keys requires body.keys (array; empty only when replace=true).",
     );
+  }
+  if (!opts.requireNonEmpty && keys.length === 0 && !replace) {
+    throw new Error("fme_segment_definition.add_keys requires body.keys (array; empty only when replace=true).");
   }
   return {
     keys,
@@ -1147,7 +1151,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment",
       displayName: "FME Segment",
       description:
-        "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard, rule-based, and large). Supports list, get, create, update (JSON Merge Patch on description/tags/owners), and delete. create requires body.type (\"standard\" | \"rule_based\" | \"large\").",
+        "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard, rule-based, and large). Supports list, get, create, update (JSON Merge Patch on description/tags/owners), and delete. create requires name + trafficType; optional type is validated locally if passed and omitted from the v4 wire body. Delete returns 400 hasDependents while environment definitions or flag targeting still reference the segment.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
@@ -1190,7 +1194,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
-          description: "Delete a segment by name.",
+          description:
+            "Delete a segment by name. Returns 400 hasDependents if any environment definition or flag still references it — delete definitions (after clearing keys) first.",
         },
         create: {
           method: "POST",
@@ -1254,7 +1259,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment_definition",
       displayName: "FME Segment Definition",
       description:
-        "Environment-specific definition of a segment (standard or rule-based) — description, lifecycle, and membership keys. Replaces fme_rule_based_segment_definition's role in Harness-native calls, generalized for all segment types. Harness-native only (org_id+project_id; no legacy workspace_id support). Supports list, get, create, update (description only, via JSON Merge Patch), delete, and execute list_keys/add_keys/remove_keys. There is no enable/disable/change_request action: the backend has no such endpoints for this unified resource; governance checks are surfaced inline in the create/update/delete responses instead.",
+        "Environment-specific definition of a segment (standard or rule-based) — description, lifecycle, and membership keys. Replaces fme_rule_based_segment_definition's role in Harness-native calls, generalized for all segment types. Harness-native only (org_id+project_id; no legacy workspace_id support). Supports list, get, create, update (description only, via JSON Merge Patch), delete, and execute list_keys/add_keys/remove_keys. Delete returns 400 hasDependents while keys remain. There is no enable/disable/change_request action: the backend has no such endpoints for this unified resource; governance checks are surfaced inline in the create/update/delete responses instead.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
@@ -1341,7 +1346,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           queryParams: { environment_id: "environment_id" },
           responseExtractor: passthrough,
-          description: "Delete a segment definition from an environment.",
+          description:
+            "Delete a segment definition from an environment. Returns 400 hasDependents while membership keys remain — remove_keys (or add_keys with replace=true and empty keys) first.",
         },
       },
       executeActions: {
