@@ -6,10 +6,16 @@
 - [x] Reproduce: `harness_list(delegate)` → 401 while project/org/secret/connector/user succeed on same MCP session
 - [x] Trace root cause via DEL-2489 / AIPLAT-601 / CG Manager auth notes
 - [x] Draft fix plan (below)
-- [ ] Implement client auth fix + focused regressions
-- [ ] Improve 401 messaging for CG-backed paths
+- [x] Implement client auth fix + focused regressions
+- [x] Improve 401 messaging for CG-backed paths
 - [ ] Smoke-verify `delegate` + `delegate_token` with a real PAT against `app.harness.io`
 - [ ] Note AskAI/mcpServerInternal follow-up if still 401 after OSS dual-auth
+
+### Implemented
+- `applyDefaultAuth` always injects `x-api-key` for non-FME (dual-send with existing Authorization).
+- CG Manager paths replace non-Bearer Authorization with `Bearer <apiKey>` when the configured key is not a placeholder.
+- 401 humanization + JSON message enrichment mention CG Manager auth requirements for delegate routes.
+- Focused client regressions cover dual-send, CG Bearer rewrite, placeholder non-rewrite, and 401 copy.
 
 ### Why it fails
 `/ng/api/delegate-setup/*` and `/ng/api/delegate-token-ng/*` are **not NG Manager**. Ingress maps them to **CG Manager (harness-manager)**.
