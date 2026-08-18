@@ -63,6 +63,33 @@ const fmeFeatureFlagArchiveSchema: BodySchema = {
   ],
 };
 
+const fmeEnvironmentCreateSchema: BodySchema = {
+  description:
+    "Create an FME environment. name is required. Native v4 uses isProduction (optional, default false). Legacy v2 uses production.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Environment name (unique in the workspace/project; max 15 characters)" },
+    { name: "isProduction", type: "boolean", required: false, description: "Harness-native v4 wire field. Optional; defaults to false on the backend if omitted." },
+    { name: "production", type: "boolean", required: false, description: "Legacy v2 wire field. Also accepted as an alias for isProduction in Harness-native mode." },
+  ],
+};
+
+const fmeEnvironmentUpdateSchema: BodySchema = {
+  description:
+    "Partial environment update. Native: JSON Merge Patch on name and isProduction (not clearable — omit to leave unchanged). Legacy: converted to JSON Patch replace ops on /name and /production.",
+  fields: [
+    { name: "name", type: "string", required: false, description: "Updated name; omit to leave unchanged. Blank names are rejected. Not clearable." },
+    { name: "isProduction", type: "boolean", required: false, description: "Harness-native v4 field. Omit to leave unchanged; not clearable." },
+    { name: "production", type: "boolean", required: false, description: "Legacy v2 field; accepted as an alias for isProduction in Harness-native mode." },
+  ],
+};
+
+function fmeEnvironmentProduction(body: Record<string, unknown> | undefined): boolean | undefined {
+  if (!body) return undefined;
+  if (body.isProduction !== undefined && body.isProduction !== null) return Boolean(body.isProduction);
+  if (body.production !== undefined && body.production !== null) return Boolean(body.production);
+  return undefined;
+}
+
 const fmeFeatureFlagDefinitionCreateSchema: BodySchema = {
   description: "Create a feature flag definition in a specific environment (initial treatments, rules, and default rule required)",
   fields: [
@@ -227,8 +254,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_environment",
       displayName: "FME Environment",
       description:
-        "Feature Management environment. Supports list. Dual-mode scoping: pass either org_id+project_id " +
-        "(Harness-native, preferred — no workspace lookup needed) or the deprecated workspace_id.",
+        "Feature Management environment. Dual-mode scoping: pass org_id+project_id (Harness-native, preferred) or the deprecated workspace_id. Supports list/create/update/delete in both modes. Item get is Harness-native only (v2 has no GET-by-id). Native create/update use isProduction; legacy uses production. Native PATCH is JSON Merge Patch; name and isProduction are not clearable. Name max 15 characters. Delete returns 400 hasDependents while SDK API keys (always created with a new env), flags, or segments remain.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -250,7 +276,123 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
-          description: "List FME environments for a workspace",
+          description: "List FME environments for a workspace (legacy) or org_id+project_id project (Harness-native).",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_environment");
+            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_environment"));
+            if (mode.mode === "legacy") {
+              throw new Error(
+                "fme_environment.get: item get is Harness-native only (org_id+project_id). Legacy workspace_id mode has no GET-by-id — use list, or pass org_id+project_id.",
+              );
+            }
+            return {
+              path: `/fme/api/v4/environments/${environmentId}`,
+              product: "harness",
+              scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+            };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get a single environment by environment_id (UUID from list). Harness-native only — Split v2 has no item GET.",
+        },
+        create: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_environment");
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/environments/ws/${encodeURIComponent(mode.workspaceId)}` };
+            }
+            return { path: "/fme/api/v4/environments", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            const name = body?.name;
+            const production = fmeEnvironmentProduction(body);
+            if (isFmeHarnessNativeSelected(input, "fme_environment")) {
+              return {
+                name,
+                ...(production !== undefined ? { isProduction: production } : {}),
+              };
+            }
+            return {
+              name,
+              ...(production !== undefined ? { production } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeEnvironmentCreateSchema,
+          description:
+            "Create an environment. Body requires name (max 15 characters). Harness-native: POST /fme/api/v4/environments with optional isProduction (CreateEnvironmentRequest; NG scope is not injected into the JSON). Legacy: POST /internal/api/v2/environments/ws/{workspace_id} with optional production.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_environment");
+            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_environment"));
+            if (mode.mode === "harness_native") {
+              return {
+                path: `/fme/api/v4/environments/${environmentId}`,
+                product: "harness",
+                scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+                headers: { "Content-Type": "application/merge-patch+json" },
+              };
+            }
+            return { path: `/internal/api/v2/environments/ws/${encodeURIComponent(mode.workspaceId)}/${environmentId}` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            const production = fmeEnvironmentProduction(body);
+            if (isFmeHarnessNativeSelected(input, "fme_environment")) {
+              if (!body) return {};
+              return {
+                ...(typeof body.name === "string" ? { name: body.name } : {}),
+                ...(production !== undefined ? { isProduction: production } : {}),
+              };
+            }
+            const ops: Array<{ op: string; path: string; value: unknown }> = [];
+            if (body?.name !== undefined) {
+              ops.push({ op: "replace", path: "/name", value: body.name });
+            }
+            if (production !== undefined) {
+              ops.push({ op: "replace", path: "/production", value: production });
+            }
+            return ops;
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeEnvironmentUpdateSchema,
+          description:
+            "Update an environment by environment_id. Harness-native: JSON Merge Patch on name and isProduction (not clearable). Legacy: JSON Patch replace on /name and /production.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => {
+            const mode = resolveFmeDualMode(input, "fme_environment");
+            const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_environment"));
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/environments/ws/${encodeURIComponent(mode.workspaceId)}/${environmentId}` };
+            }
+            return {
+              path: `/fme/api/v4/environments/${environmentId}`,
+              product: "harness",
+              scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+            };
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description:
+            "Delete (archive) an environment by environment_id. Returns 400 hasDependents while SDK API keys, flags, or segments still target it. Create via EnvironmentStarterKit always provisions client/server API keys, so a brand-new environment cannot be deleted until those keys are removed.",
         },
       },
     },
