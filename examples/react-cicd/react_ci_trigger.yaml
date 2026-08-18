@@ -1,0 +1,74 @@
+trigger:
+  name: React CI on Push and PR
+  identifier: react_ci_push_pr
+  enabled: true
+  description: Runs React CI on pushes to main/releases and on pull requests
+  tags: {}
+  orgIdentifier: <+input>
+  projectIdentifier: <+input>
+  pipelineIdentifier: react_ci
+  source:
+    type: Webhook
+    spec:
+      type: Github
+      spec:
+        type: Push
+        spec:
+          connectorRef: <+input>
+          autoAbortPreviousExecutions: true
+          payloadConditions:
+            - key: targetBranch
+              operator: In
+              value: main, releases/.*
+          headerConditions: []
+          jexlCondition: ""
+          repoName: react/react
+          actions: []
+  inputYaml: |
+    pipeline:
+      identifier: react_ci
+      properties:
+        ci:
+          codebase:
+            build:
+              type: branch
+              spec:
+                branch: <+trigger.branch>
+---
+# Second trigger definition for pull requests (import separately or merge in UI)
+trigger:
+  name: React CI on Pull Request
+  identifier: react_ci_pull_request
+  enabled: true
+  description: Runs React CI when a PR is opened or updated
+  tags: {}
+  orgIdentifier: <+input>
+  projectIdentifier: <+input>
+  pipelineIdentifier: react_ci
+  source:
+    type: Webhook
+    spec:
+      type: Github
+      spec:
+        type: PullRequest
+        spec:
+          connectorRef: <+input>
+          autoAbortPreviousExecutions: true
+          payloadConditions: []
+          headerConditions: []
+          jexlCondition: ""
+          repoName: react/react
+          actions:
+            - Open
+            - Reopen
+            - Synchronize
+  inputYaml: |
+    pipeline:
+      identifier: react_ci
+      properties:
+        ci:
+          codebase:
+            build:
+              type: PR
+              spec:
+                number: <+trigger.prNumber>

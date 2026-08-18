@@ -1,0 +1,378 @@
+pipeline:
+  name: React CI
+  identifier: react_ci
+  projectIdentifier: <+input>
+  orgIdentifier: <+input>
+  tags:
+    framework: react
+    language: javascript
+    package_manager: yarn
+  description: >-
+    CI pipeline for https://github.com/react/react — mirrors upstream lint,
+    test matrix, and build jobs from runtime_build_and_test / shared_lint.
+  properties:
+    ci:
+      codebase:
+        connectorRef: <+input>
+        repoName: react/react
+        build: <+input>
+  variables:
+    - name: NODE_VERSION
+      type: String
+      value: "20.19.0"
+    - name: TZ
+      type: String
+      value: America/Los_Angeles
+  stages:
+    - stage:
+        name: Lint
+        identifier: lint
+        description: Prettier, ESLint, and license checks (shared_lint.yml)
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            paths:
+              - node_modules
+              - "**/node_modules"
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Install Dependencies
+                  identifier: install_deps
+                  timeout: 20m
+                  spec:
+                    shell: Sh
+                    envVariables:
+                      TZ: <+pipeline.variables.TZ>
+                    command: |-
+                      node --version
+                      corepack enable || true
+                      yarn --version
+                      yarn install --frozen-lockfile
+              - parallel:
+                  - step:
+                      type: Run
+                      name: Prettier Check
+                      identifier: prettier_check
+                      timeout: 15m
+                      spec:
+                        shell: Sh
+                        envVariables:
+                          TZ: <+pipeline.variables.TZ>
+                        command: yarn prettier-check
+                  - step:
+                      type: Run
+                      name: ESLint
+                      identifier: eslint
+                      timeout: 20m
+                      spec:
+                        shell: Sh
+                        envVariables:
+                          TZ: <+pipeline.variables.TZ>
+                        command: node ./scripts/tasks/eslint
+                  - step:
+                      type: Run
+                      name: License Check
+                      identifier: license_check
+                      timeout: 10m
+                      spec:
+                        shell: Sh
+                        envVariables:
+                          TZ: <+pipeline.variables.TZ>
+                        command: ./scripts/ci/check_license.sh
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
+
+    - stage:
+        name: Test
+        identifier: test
+        description: >-
+          Jest unit tests across stable/experimental release channels
+          (subset of runtime_build_and_test.yml test matrix)
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            paths:
+              - node_modules
+              - "**/node_modules"
+              - compiler/node_modules
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Install Runtime and Compiler
+                  identifier: install_runtime_compiler
+                  timeout: 25m
+                  spec:
+                    shell: Sh
+                    envVariables:
+                      TZ: <+pipeline.variables.TZ>
+                    command: |-
+                      yarn install --frozen-lockfile
+                      yarn --cwd compiler install --frozen-lockfile
+              - step:
+                  type: Run
+                  name: Jest Tests
+                  identifier: jest_tests
+                  timeout: 45m
+                  spec:
+                    shell: Sh
+                    envVariables:
+                      TZ: <+pipeline.variables.TZ>
+                      CI: "true"
+                    command: |-
+                      yarn test -r=<+stage.matrix.release_channel> --env=<+stage.matrix.env> --ci --shard=1/1
+        strategy:
+          matrix:
+            release_channel:
+              - stable
+              - experimental
+            env:
+              - development
+              - production
+          maxConcurrency: 2
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
+
+    - stage:
+        name: Build
+        identifier: build
+        description: Rollup release build for stable and experimental channels
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            paths:
+              - node_modules
+              - "**/node_modules"
+              - compiler/node_modules
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Install Build Toolchain
+                  identifier: install_build_toolchain
+                  timeout: 25m
+                  spec:
+                    shell: Sh
+                    envVariables:
+                      TZ: <+pipeline.variables.TZ>
+                    command: |-
+                      yarn install --frozen-lockfile
+                      yarn --cwd compiler install --frozen-lockfile
+              - step:
+                  type: Run
+                  name: Build Release Channel
+                  identifier: build_release_channel
+                  timeout: 60m
+                  spec:
+                    shell: Sh
+                    envVariables:
+                      TZ: <+pipeline.variables.TZ>
+                      CI: harness
+                      RELEASE_CHANNEL: <+stage.matrix.release_channel>
+                    command: |-
+                      rm -rf build
+                      yarn build --r=<+stage.matrix.release_channel> --ci
+                      yarn lint-build
+                      ls -la build || true
+        strategy:
+          matrix:
+            release_channel:
+              - stable
+              - experimental
+          maxConcurrency: 2
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
+
+    - stage:
+        name: Validate
+        identifier: validate
+        description: Feature-flag and generated Fizz runtime consistency checks
+        type: CI
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            paths:
+              - node_modules
+              - "**/node_modules"
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Install Dependencies
+                  identifier: install_validate_deps
+                  timeout: 20m
+                  spec:
+                    shell: Sh
+                    envVariables:
+                      TZ: <+pipeline.variables.TZ>
+                    command: yarn install --frozen-lockfile
+              - parallel:
+                  - step:
+                      type: Run
+                      name: Feature Flags Check
+                      identifier: flags_check
+                      timeout: 15m
+                      spec:
+                        shell: Sh
+                        envVariables:
+                          TZ: <+pipeline.variables.TZ>
+                        command: yarn flags
+                  - step:
+                      type: Run
+                      name: Inline Fizz Runtime Check
+                      identifier: fizz_runtime_check
+                      timeout: 15m
+                      spec:
+                        shell: Sh
+                        envVariables:
+                          TZ: <+pipeline.variables.TZ>
+                        command: |-
+                          yarn generate-inline-fizz-runtime
+                          git diff --exit-code || (
+                            echo "Fizz runtime is out of date. Run yarn generate-inline-fizz-runtime and commit."
+                            exit 1
+                          )
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
+
+    - stage:
+        name: Publish Approval
+        identifier: publish_approval
+        description: Manual gate before npm publish (main / release branches only)
+        type: Approval
+        when:
+          pipelineStatus: Success
+          condition: <+pipeline.properties.ci.codebase.build.spec.branch> == "main" || <+pipeline.properties.ci.codebase.build.spec.branch> =~ "releases/.*"
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: HarnessApproval
+                  name: Approve npm Publish
+                  identifier: approve_npm_publish
+                  timeout: 1d
+                  spec:
+                    approvalMessage: >-
+                      Approve publishing React packages built by this pipeline?
+                      Confirm release channel and version before continuing.
+                    includePipelineExecutionHistory: true
+                    approvers:
+                      userGroups:
+                        - <+input>
+                      minimumCount: 1
+                      disallowPipelineExecutor: true
+                    isAutoRejectEnabled: false
+                    approverInputs: []
+
+    - stage:
+        name: Publish
+        identifier: publish
+        description: Optional prerelease publish (requires NPM_TOKEN secret)
+        type: CI
+        when:
+          pipelineStatus: Success
+          condition: <+pipeline.properties.ci.codebase.build.spec.branch> == "main" || <+pipeline.properties.ci.codebase.build.spec.branch> =~ "releases/.*"
+        spec:
+          cloneCodebase: true
+          caching:
+            enabled: true
+            paths:
+              - node_modules
+              - "**/node_modules"
+              - compiler/node_modules
+          platform:
+            os: Linux
+            arch: Amd64
+          runtime:
+            type: Cloud
+            spec: {}
+          execution:
+            steps:
+              - step:
+                  type: Run
+                  name: Install and Build Stable
+                  identifier: install_and_build_stable
+                  timeout: 60m
+                  spec:
+                    shell: Sh
+                    envVariables:
+                      TZ: <+pipeline.variables.TZ>
+                      CI: harness
+                      RELEASE_CHANNEL: stable
+                    command: |-
+                      yarn install --frozen-lockfile
+                      yarn --cwd compiler install --frozen-lockfile
+                      rm -rf build
+                      yarn build --r=stable --ci
+              - step:
+                  type: Run
+                  name: Publish Prereleases
+                  identifier: publish_prereleases
+                  timeout: 30m
+                  spec:
+                    shell: Sh
+                    envVariables:
+                      TZ: <+pipeline.variables.TZ>
+                      NPM_TOKEN: <+secrets.getValue("NPM_TOKEN")>
+                    command: |-
+                      if [ -z "${NPM_TOKEN}" ]; then
+                        echo "NPM_TOKEN secret is not set; skipping publish."
+                        exit 1
+                      fi
+                      echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+                      yarn publish-prereleases
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: MarkAsFailure
