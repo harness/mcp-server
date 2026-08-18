@@ -39,7 +39,7 @@ ${executionRoleArn ? `AWS execution role ARN: ${executionRoleArn}` : ""}
 IMPORTANT: Follow the phases IN ORDER. Present the full plan and every generated YAML for review BEFORE creating anything with an MCP tool. Do NOT create resources without explicit user confirmation. Reuse existing connectors / services / environments — never duplicate them.
 
 KEY FACTS ABOUT AI AGENT DEPLOYMENT (do not deviate):
-- The agent runs from a pre-built CONTAINER IMAGE. A build step is MANDATORY — there is no build-from-source path.
+- The agent runs from a pre-built CONTAINER IMAGE. A build step is MANDATORY — there is no build-from-source path. The source discriminator value is the lowercase string \`container\` (not \`Container\`).
 - The AiAgent service references the image by URI STRING at \`platform.spec.source.spec.image\` — NOT via an artifact-source connector. Do not add an artifact source.
 - Chain the built image into the service with a shared tag expression: tag the image \`<+pipeline.sequenceId>\` in the build step, and set the service image to \`<registry-path>:<+pipeline.sequenceId>\`.
 - AwsAgentCore additionally REQUIRES \`executionRoleArn\` on the platform spec.
@@ -143,7 +143,7 @@ service:
         type: GoogleAgentRuntime
         spec:
           source:
-            type: Container
+            type: container
             spec:
               image: <host>/<projectID>/<imageName>:<+pipeline.sequenceId>
 \`\`\`
@@ -161,7 +161,7 @@ service:
         spec:
           executionRoleArn: ${executionRoleArn ? executionRoleArn : "<+input>"}
           source:
-            type: Container
+            type: container
             spec:
               image: <account>.dkr.ecr.<region>.amazonaws.com/<imageName>:<+pipeline.sequenceId>
 \`\`\`

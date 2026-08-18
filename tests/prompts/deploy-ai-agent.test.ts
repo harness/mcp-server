@@ -129,6 +129,9 @@ describe("deploy-ai-agent prompt", () => {
     expect(text).toContain("executionRoleArn");
     // build is mandatory
     expect(text).toContain("A build step is MANDATORY");
+    // source discriminator is lowercase "container" (verified against live NG yaml-schema)
+    expect(text).toContain("type: container");
+    expect(text).not.toContain("type: Container");
   });
 
   it("references correct MCP tools and confirmation/retry behavior", async () => {
