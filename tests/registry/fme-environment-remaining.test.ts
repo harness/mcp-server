@@ -52,8 +52,9 @@ function firstRequest(mockRequest: ReturnType<typeof vi.fn>): RequestOptions {
 
 const nativeScope = { org_id: "o1", project_id: "p1" };
 const ENV_ID = "a4cb7d40-67ef-11f1-9ff8-96e3734caedf";
+const NATIVE_ONLY = /Harness-native \(org_id\/project_id\) only/;
 
-describe("fme_environment remaining dual-mode ops", () => {
+describe("fme_environment remaining native-only ops", () => {
   let registry: Registry;
 
   beforeEach(() => {
@@ -72,7 +73,6 @@ describe("fme_environment remaining dual-mode ops", () => {
     const request = firstRequest(mockRequest);
     expect(request.method).toBe("GET");
     expect(request.path).toBe(`/fme/api/v4/environments/${ENV_ID}`);
-    expect(request.path).not.toContain("/environments/ws/");
     expect(request.params).toMatchObject({
       account_id: "test-account",
       organization_identifier: "o1",
@@ -80,18 +80,19 @@ describe("fme_environment remaining dual-mode ops", () => {
     });
   });
 
-  it("get: legacy workspace_id is rejected because v2 has no item GET", async () => {
-    const client = makeClient();
+  it.each(["get", "create", "update", "delete"] as const)(
+    "%s: rejects workspace_id because MCP never had a legacy contract for this op",
+    async (operation) => {
+      const client = makeClient();
+      const input: Record<string, unknown> = { workspace_id: "ws1", environment_id: ENV_ID };
+      if (operation === "create" || operation === "update") {
+        input.body = { name: "x" };
+      }
+      await expect(registry.dispatch(client, "fme_environment", operation, input)).rejects.toThrow(NATIVE_ONLY);
+    },
+  );
 
-    await expect(
-      registry.dispatch(client, "fme_environment", "get", {
-        workspace_id: "ws1",
-        environment_id: ENV_ID,
-      }),
-    ).rejects.toThrow(/Harness-native only/i);
-  });
-
-  it("create: native POST omits type and uses isProduction", async () => {
+  it("create: native POST uses isProduction and skips NG body injection", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -108,18 +109,16 @@ describe("fme_environment remaining dual-mode ops", () => {
     expect(create?.skipScopeBodyInjection).toBe(true);
   });
 
-  it("create: legacy POST uses production on the v2 workspace path", async () => {
+  it("create: maps production alias to isProduction", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "fme_environment", "create", {
-      workspace_id: "ws1",
-      body: { name: "legacy-env", production: true },
+      ...nativeScope,
+      body: { name: "aliasenv", production: true },
     });
 
-    const request = firstRequest(mockRequest);
-    expect(request.path).toBe("/internal/api/v2/environments/ws/ws1");
-    expect(request.body).toEqual({ name: "legacy-env", production: true });
+    expect(firstRequest(mockRequest).body).toEqual({ name: "aliasenv", isProduction: true });
   });
 
   it("update: native merge-patch maps production to isProduction", async () => {
@@ -139,25 +138,7 @@ describe("fme_environment remaining dual-mode ops", () => {
     expect(request.body).toEqual({ name: "renamed", isProduction: false });
   });
 
-  it("update: legacy sends JSON Patch replace ops", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_environment", "update", {
-      workspace_id: "ws1",
-      environment_id: ENV_ID,
-      body: { name: "renamed", production: true },
-    });
-
-    const request = firstRequest(mockRequest);
-    expect(request.path).toBe(`/internal/api/v2/environments/ws/ws1/${ENV_ID}`);
-    expect(request.body).toEqual([
-      { op: "replace", path: "/name", value: "renamed" },
-      { op: "replace", path: "/production", value: true },
-    ]);
-  });
-
-  it("delete: native and legacy route by environment_id", async () => {
+  it("delete: native routes by environment_id", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -168,12 +149,5 @@ describe("fme_environment remaining dual-mode ops", () => {
 
     expect(firstRequest(mockRequest).method).toBe("DELETE");
     expect(firstRequest(mockRequest).path).toBe(`/fme/api/v4/environments/${ENV_ID}`);
-
-    mockRequest.mockClear();
-    await registry.dispatch(client, "fme_environment", "delete", {
-      workspace_id: "ws1",
-      environment_id: ENV_ID,
-    });
-    expect(firstRequest(mockRequest).path).toBe(`/internal/api/v2/environments/ws/ws1/${ENV_ID}`);
   });
 });
