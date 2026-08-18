@@ -4,6 +4,7 @@
 - [x] Clone https://github.com/react/react
 - [x] Analyze Yarn/Node scripts and GitHub Actions CI
 - [x] Generate Harness v0 CI pipeline + trigger stubs under `examples/react-cicd/`
+- [x] Commit example under `examples/react-cicd/` and open PR
 - [ ] Create pipeline in a Harness account (needs MCP auth + org/project)
 
 ### Plan
