@@ -1396,7 +1396,7 @@ describe("fme_segment_keys permissive mode-selector", () => {
     expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/env-prod/beta_users/keys");
   });
 
-  it("org_id+project_id points list at fme_segment_definition execute actions", async () => {
+  it("org_id+project_id throws not-yet-implemented for list", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1407,7 +1407,8 @@ describe("fme_segment_keys permissive mode-selector", () => {
         org_id: "o1",
         project_id: "p1",
       }),
-    ).rejects.toThrow("fme_segment_definition execute actions list_keys, add_keys, and remove_keys");
+    ).rejects.toThrow(/not yet implemented/i);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("legacy mode still works for update", async () => {
@@ -1424,7 +1425,7 @@ describe("fme_segment_keys permissive mode-selector", () => {
     expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/env-prod/beta_users/upload");
   });
 
-  it("org_id+project_id points update at fme_segment_definition execute actions", async () => {
+  it("org_id+project_id throws not-yet-implemented for update", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1436,7 +1437,8 @@ describe("fme_segment_keys permissive mode-selector", () => {
         project_id: "p1",
         body: { add: ["user-1"] },
       }),
-    ).rejects.toThrow("fme_segment_definition execute actions list_keys, add_keys, and remove_keys");
+    ).rejects.toThrow(/not yet implemented/i);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
 

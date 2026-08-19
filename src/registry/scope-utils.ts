@@ -119,12 +119,18 @@ export function isFmeHarnessNativeSelected(input: Record<string, unknown>, resou
 }
 
 /**
- * Guards Harness-native-only resources (e.g. fme_segment) that have no legacy
- * Split.io fallback. Unlike `resolveFmeDualMode`, missing org_id/project_id here
- * must throw rather than silently falling back to config.HARNESS_ORG/HARNESS_PROJECT —
- * a stray global default must never leak into an FME-adjacent call.
+ * Guards Harness-native-only operations that have no legacy Split.io fallback.
+ * Rejects workspace_id (including mixed with org/project) so new ops cannot
+ * dual-route. Unlike `resolveFmeDualMode`, missing org_id/project_id must throw
+ * rather than falling back to config.HARNESS_ORG/HARNESS_PROJECT, and the error
+ * must not offer workspace_id as an alternative.
  */
 export function requireHarnessNativeSegmentScope(input: Record<string, unknown>, resourceType: string): void {
+  if (input.workspace_id) {
+    throw new Error(
+      `${resourceType}: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.`,
+    );
+  }
   if (!input.org_id || !input.project_id) {
     throw new Error(`${resourceType}: org_id and project_id are required (account is taken from config).`);
   }
