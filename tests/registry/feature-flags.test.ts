@@ -828,6 +828,7 @@ describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
 
     const req = firstRequest(mockRequest);
     expect(req.path).toBe(nativePath);
+    expect(req.product).toBeUndefined();
     expect(req.params).toMatchObject({
       account_id: "test-account",
       organization_identifier: "o1",
@@ -863,6 +864,54 @@ describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
     });
 
     expect(firstRequest(mockRequest).params).toMatchObject({ offset: 10, limit: 25 });
+  });
+
+  it("native list maps harness_list size onto Java limit", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_rollout_status", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      size: 20,
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({ limit: 20 });
+  });
+
+  it("native list prefers explicit limit over size", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_traffic_type", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      size: 20,
+      limit: 5,
+    });
+
+    expect(firstRequest(mockRequest).params?.limit).toBe(5);
+  });
+
+  it("native list promotes totalCount to total and data to items", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [{ type: "TRAFFIC_TYPE", id: "tt1", name: "user" }],
+      limit: 100,
+      offset: 0,
+      totalCount: 3,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_traffic_type", "list", {
+      org_id: "o1",
+      project_id: "p1",
+    });
+
+    expect(result).toMatchObject({
+      items: [{ type: "TRAFFIC_TYPE", id: "tt1", name: "user" }],
+      total: 3,
+      totalCount: 3,
+    });
   });
 
   it("rejects mixed workspace_id and org/project", async () => {

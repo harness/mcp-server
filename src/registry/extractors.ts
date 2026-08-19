@@ -1115,6 +1115,19 @@ export function flattenTrafficType(item: Record<string, unknown>): void {
   }
 }
 
+/**
+ * Public v4 paginated lists (`TrafficTypeListResponse` / `RolloutStatusListResponse`):
+ * `{ data, limit, offset, totalCount }`. Promote `data`→`items` and `totalCount`→`total`
+ * so harness_list compact/output schema see a full total, not the current page length.
+ */
+export const fmeV4PaginatedListExtract = (raw: unknown): unknown => {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const r = raw as Record<string, unknown>;
+  if (!Array.isArray(r.data)) return raw;
+  const total = typeof r.totalCount === "number" ? r.totalCount : r.data.length;
+  return { ...r, items: r.data, total };
+};
+
 /** Extract FME feature flag list — passthrough with trafficType.id flattened on each item. */
 export const fmeListExtract = (raw: unknown): unknown => {
   if (raw && typeof raw === "object") {

@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough, fmeListExtract, fmeGetExtract } from "../extractors.js";
+import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract } from "../extractors.js";
 import { isFmeHarnessNativeSelected, logFmeDeprecation, requireFmeIdentifier, requireHarnessNativeSegmentScope, resolveFmeDualMode } from "../scope-utils.js";
 
 const fmeActionExtract = (raw: unknown) => {
@@ -703,9 +703,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: "/fme/api/v4/rollout-statuses", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { offset: "offset", limit: "limit" },
-          responseExtractor: passthrough,
-          description: "List rollout statuses. Legacy: workspace_id → Split Admin. Harness-native: org_id+project_id, optional offset/limit. Envelope {data, limit, offset, totalCount}.",
+          queryParams: { offset: "offset", size: "limit", limit: "limit" },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description: "List rollout statuses. Legacy: workspace_id → Split Admin. Harness-native: org_id+project_id, optional offset/limit (harness_list size maps to limit). Envelope {data, limit, offset, totalCount} promoted to items/total.",
         },
       },
     },
@@ -954,9 +954,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: "/fme/api/v4/traffic-types", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { offset: "offset", limit: "limit" },
-          responseExtractor: passthrough,
-          description: "List traffic types. Legacy: workspace_id → Split Admin (may include displayAttributeId). Harness-native: org_id+project_id, optional offset/limit; envelope {data, limit, offset, totalCount} with id and name only.",
+          queryParams: { offset: "offset", size: "limit", limit: "limit" },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description: "List traffic types. Legacy: workspace_id → Split Admin (may include displayAttributeId). Harness-native: org_id+project_id, optional offset/limit (harness_list size maps to limit); envelope {data, limit, offset, totalCount} with id and name only, promoted to items/total.",
         },
       },
     },
