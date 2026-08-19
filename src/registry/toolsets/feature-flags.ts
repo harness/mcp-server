@@ -680,7 +680,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_rollout_status",
       displayName: "FME Rollout Status",
       description:
-        "Rollout status definitions for a workspace (e.g. Killed, Permanent, Ramping). Use to discover valid rollout_status_id UUIDs for filtering fme_feature_flag lists. Note: this endpoint may not be available on all account types — rollout status IDs are also returned inline with fme_feature_flag list results.",
+        "Rollout status definitions (e.g. Killed, Permanent, Ramping). Dual-mode list: org_id+project_id (Harness-native GET /fme/api/v4/rollout-statuses) or deprecated workspace_id (Split Admin). Use to discover rollout_status_id UUIDs for filtering fme_feature_flag lists. Native response is {data, limit, offset, totalCount}; each item is {type: \"ROLLOUT_STATUS\", id, name, description?}. List-only — no get/create/update/delete.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -688,24 +688,24 @@ export const featureFlagsToolset: ToolsetDefinition = {
       product: "fme",
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "offset", description: "Harness-native pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Harness-native page size (default 100, max 100)", type: "number" },
       ],
       operations: {
         list: {
           method: "GET",
-          path: "/internal/api/v2/rolloutStatuses/ws/{wsId}",
+          path: "",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_rollout_status");
-            if (mode.mode === "harness_native") {
-              throw new Error(
-                "fme_rollout_status.list: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
-              );
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/rolloutStatuses/ws/${encodeURIComponent(mode.workspaceId)}` };
             }
-            return { path: `/internal/api/v2/rolloutStatuses/ws/${encodeURIComponent(mode.workspaceId)}` };
+            return { path: "/fme/api/v4/rollout-statuses", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { workspace_id: "wsId" },
+          queryParams: { offset: "offset", limit: "limit" },
           responseExtractor: passthrough,
-          description: "List rollout status definitions for a workspace (Killed, Permanent, Ramping, etc.). If this returns 404, use rolloutStatus fields from fme_feature_flag list results instead.",
+          description: "List rollout statuses. Legacy: workspace_id → Split Admin. Harness-native: org_id+project_id, optional offset/limit. Envelope {data, limit, offset, totalCount}.",
         },
       },
     },
@@ -931,7 +931,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_traffic_type",
       displayName: "FME Traffic Type",
       description:
-        "Traffic type in a workspace (e.g. 'user', 'account'). List traffic types to discover traffic_type_id values needed for identity queries and flag/segment creation.",
+        "Traffic type (e.g. 'user', 'account'). Dual-mode list: org_id+project_id (Harness-native GET /fme/api/v4/traffic-types) or deprecated workspace_id (Split Admin). Use to discover traffic_type_id / name values for flag and segment create. Native items are {type: \"TRAFFIC_TYPE\", id, name} — no displayAttributeId. List-only — no get/create/update/delete.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -939,24 +939,24 @@ export const featureFlagsToolset: ToolsetDefinition = {
       product: "fme",
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "offset", description: "Harness-native pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Harness-native page size (default 100, max 100)", type: "number" },
       ],
       operations: {
         list: {
           method: "GET",
-          path: "/internal/api/v2/trafficTypes/ws/{wsId}",
+          path: "",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_traffic_type");
-            if (mode.mode === "harness_native") {
-              throw new Error(
-                "fme_traffic_type.list: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
-              );
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/trafficTypes/ws/${encodeURIComponent(mode.workspaceId)}` };
             }
-            return { path: `/internal/api/v2/trafficTypes/ws/${encodeURIComponent(mode.workspaceId)}` };
+            return { path: "/fme/api/v4/traffic-types", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { workspace_id: "wsId" },
+          queryParams: { offset: "offset", limit: "limit" },
           responseExtractor: passthrough,
-          description: "List traffic types for a workspace. Returns id, name, and displayAttributeId for each traffic type.",
+          description: "List traffic types. Legacy: workspace_id → Split Admin (may include displayAttributeId). Harness-native: org_id+project_id, optional offset/limit; envelope {data, limit, offset, totalCount} with id and name only.",
         },
       },
     },
