@@ -25,45 +25,7 @@ function normalizeFmeTags(tags: unknown): unknown {
   return Array.isArray(tags) ? tags.map((t) => (typeof t === "string" ? { name: t } : t)) : tags;
 }
 
-const FME_SEGMENT_KINDS = ["STANDARD", "LARGE", "RULE_BASED"] as const;
-type FmeSegmentKind = (typeof FME_SEGMENT_KINDS)[number];
-
-/** One-release MCP-only alias: old lowercase `type` → wire `segmentType`. Never sent as JSON `type`. */
-const FME_SEGMENT_TYPE_ALIASES: Record<string, FmeSegmentKind> = {
-  standard: "STANDARD",
-  large: "LARGE",
-  rule_based: "RULE_BASED",
-};
-
-function canonicalizeFmeSegmentKind(raw: unknown): FmeSegmentKind | undefined {
-  if (typeof raw !== "string") return undefined;
-  const trimmed = raw.trim();
-  if (!trimmed) return undefined;
-  const byLower = new Map<string, FmeSegmentKind>([
-    ...FME_SEGMENT_KINDS.map((kind) => [kind.toLowerCase(), kind] as const),
-    ...Object.entries(FME_SEGMENT_TYPE_ALIASES),
-  ]);
-  return byLower.get(trimmed.toLowerCase());
-}
-
-function resolveCreateSegmentKind(body: Record<string, unknown> | undefined): FmeSegmentKind | undefined {
-  const fromWire = canonicalizeFmeSegmentKind(body?.segmentType);
-  const fromAlias = canonicalizeFmeSegmentKind(body?.type);
-  if (fromWire && fromAlias && fromWire !== fromAlias) {
-    throw new Error(
-      `fme_segment.create: type '${String(body?.type)}' and segmentType '${String(body?.segmentType)}' must agree.`,
-    );
-  }
-  const kind = fromWire ?? fromAlias;
-  if (kind) return kind;
-  const raw = body?.segmentType ?? body?.type;
-  if (raw !== undefined) {
-    throw new Error(
-      `fme_segment.create: invalid segmentType '${String(raw)}'. Must be one of: ${FME_SEGMENT_KINDS.join(", ")} (alias type: standard | large | rule_based).`,
-    );
-  }
-  return undefined;
-}
+const FME_SEGMENT_TYPES = ["standard", "rule_based", "large"] as const;
 
 const fmeFeatureFlagUpdateSchema: BodySchema = {
   description: "Partial update for an FME feature flag's metadata. Provide the fields you want to change. Legacy mode (workspace_id): converted to JSON Patch (RFC 6902) automatically — description/tags/rolloutStatus only. Harness-native mode (org_id+project_id): sent as JSON Merge Patch (RFC 7396) — description/tags/owners/rolloutStatus; set description/tags/owners to null (or [] for tags/owners) to clear them, omit a field to leave it unchanged.",
@@ -138,12 +100,10 @@ const fmeRbsCreateSchema: BodySchema = {
 };
 
 const fmeSegmentCreateSchema: BodySchema = {
-  description:
-    "Create a new segment. name, trafficType, and segmentType are required; description/tags/owners are optional. type is an optional one-release MCP alias for segmentType and is never sent on the v4 wire.",
+  description: "Create a new segment. name, trafficType, and type are required; description/tags/owners are optional.",
   fields: [
     { name: "name", type: "string", required: true, description: "Segment name (must be unique within the project)" },
-    { name: "segmentType", type: "string", required: true, description: "Required wire kind: STANDARD | LARGE | RULE_BASED. Do not lowercase. If omitted, alias type (standard | large | rule_based) is mapped to this field." },
-    { name: "type", type: "string", required: false, description: "Optional one-release MCP alias only (standard | large | rule_based). Mapped to segmentType; never sent as JSON type. If both are present they must agree." },
+    { name: "type", type: "string", required: true, description: "Segment kind. Must be one of: \"standard\" | \"rule_based\" | \"large\"." },
     { name: "description", type: "string", required: false, description: "Optional description of the segment" },
     { name: "trafficType", type: "string", required: true, description: "Traffic type name" },
     { name: "tags", type: "array", required: false, description: "Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
@@ -267,9 +227,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_environment",
       displayName: "FME Environment",
       description:
-        "Feature Management environment. Dual-mode list: workspace_id (legacy Split Admin) or org_id+project_id " +
-        "(Harness-native GET /fme/api/v4/environments). Native envelope is {data, limit, offset, totalCount}; " +
-        "optional offset/limit (default 100, max 100). Get/create/update/delete are not wired on this resource yet.",
+        "Feature Management environment. Supports list. Dual-mode scoping: pass either org_id+project_id " +
+        "(Harness-native, preferred — no workspace lookup needed) or the deprecated workspace_id.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -277,8 +236,6 @@ export const featureFlagsToolset: ToolsetDefinition = {
       product: "fme",
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
-        { name: "offset", description: "Harness-native pagination offset (default 0)", type: "number" },
-        { name: "limit", description: "Harness-native page size (default 100, max 100)", type: "number" },
       ],
       operations: {
         list: {
@@ -292,10 +249,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: "/fme/api/v4/environments", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { offset: "offset", size: "limit", limit: "limit" },
-          responseExtractor: fmeV4PaginatedListExtract,
-          description:
-            "List FME environments for a workspace (legacy) or org_id+project_id project (Harness-native). Native envelope {data, limit, offset, totalCount} is promoted to items/total; harness_list size maps to limit.",
+          responseExtractor: passthrough,
+          description: "List FME environments for a workspace",
         },
       },
     },
@@ -1142,19 +1097,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment",
       displayName: "FME Segment",
       description:
-        "FME (Harness-native, org_id+project_id scoped). Unified segment (STANDARD, LARGE, RULE_BASED). Supports list, get, create, delete. List requires segment_type. Create requires body.segmentType (STANDARD | LARGE | RULE_BASED); optional one-release alias type (standard | large | rule_based) maps to segmentType and is never sent on the wire.",
+        "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard, rule-based, and large). Supports list, get, create, delete. create requires body.type (\"standard\" | \"rule_based\" | \"large\").",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
       identifierFields: ["segment_name"],
-      listFilterFields: [
-        {
-          name: "segment_type",
-          description: "Required. One kind per list call: STANDARD | LARGE | RULE_BASED (case is canonicalized; unmatched values pass through to the API).",
-          enum: [...FME_SEGMENT_KINDS],
-          required: true,
-        },
-      ],
       operations: {
         list: {
           method: "GET",
@@ -1164,9 +1111,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: "/fme/api/v4/segments" };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { segment_type: "segment_type" },
           responseExtractor: passthrough,
-          description: "List segments of one kind in the project. segment_type is required (STANDARD | LARGE | RULE_BASED).",
+          description: "List all segments (standard and rule-based) in project.",
         },
         get: {
           method: "GET",
@@ -1207,11 +1153,15 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             const trafficType = (body?.trafficType ?? body?.traffic_type) as string | undefined;
-            const segmentType = resolveCreateSegmentKind(body);
+            if (body?.type !== undefined && !FME_SEGMENT_TYPES.includes(body.type as (typeof FME_SEGMENT_TYPES)[number])) {
+              throw new Error(
+                `fme_segment.create: invalid type '${body.type}'. Must be one of: ${FME_SEGMENT_TYPES.join(", ")}.`,
+              );
+            }
             return {
               name: body?.name,
               trafficType,
-              ...(segmentType !== undefined ? { segmentType } : {}),
+              type: body?.type,
               ...(body?.description !== undefined ? { description: body.description } : {}),
               ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
               ...(body?.owners !== undefined ? { owners: body.owners } : {}),
@@ -1219,8 +1169,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           bodySchema: fmeSegmentCreateSchema,
-          description:
-            "Create a new segment. Body requires name + trafficType + segmentType (STANDARD | LARGE | RULE_BASED). Optional description, tags, owners. Alias type (standard | large | rule_based) maps to segmentType for one release and is never sent on the wire.",
+          description: "Create a new segment. Body requires name + trafficType + type (\"standard\" | \"rule_based\" | \"large\"); optional description, tags, owners.",
         },
       },
     },

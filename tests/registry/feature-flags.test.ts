@@ -808,73 +808,6 @@ describe("fme_environment dual-mode routing", () => {
 
     expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/environments/ws/ws1");
   });
-
-  it("native list forwards offset and limit as query params", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_environment", "list", {
-      org_id: "o1",
-      project_id: "p1",
-      offset: 10,
-      limit: 25,
-    });
-
-    expect(firstRequest(mockRequest).params).toMatchObject({ offset: 10, limit: 25 });
-  });
-
-  it("native list maps harness_list size onto Java limit", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_environment", "list", {
-      org_id: "o1",
-      project_id: "p1",
-      size: 20,
-    });
-
-    expect(firstRequest(mockRequest).params).toMatchObject({ limit: 20 });
-  });
-
-  it("native list promotes totalCount to total and data to items", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({
-      data: [{ id: "env1", name: "prod" }],
-      limit: 100,
-      offset: 0,
-      totalCount: 3,
-    });
-    const client = makeClient(mockRequest);
-
-    const result = await registry.dispatch(client, "fme_environment", "list", {
-      org_id: "o1",
-      project_id: "p1",
-    });
-
-    expect(result).toMatchObject({
-      items: [{ id: "env1", name: "prod" }],
-      total: 3,
-      totalCount: 3,
-    });
-  });
-
-  it("legacy list leaves objects envelopes unchanged", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({
-      objects: [{ id: "env1", name: "prod" }],
-      offset: 0,
-      limit: 20,
-    });
-    const client = makeClient(mockRequest);
-
-    const result = await registry.dispatch(client, "fme_environment", "list", {
-      workspace_id: "ws1",
-    });
-
-    expect(result).toEqual({
-      objects: [{ id: "env1", name: "prod" }],
-      offset: 0,
-      limit: 20,
-    });
-  });
 });
 
 describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
@@ -1114,7 +1047,6 @@ describe("fme_segment", () => {
     await registry.dispatch(client, "fme_segment", "list", {
       org_id: "o1",
       project_id: "p1",
-      segment_type: "STANDARD",
     });
 
     const req = firstRequest(mockRequest);
@@ -1124,43 +1056,9 @@ describe("fme_segment", () => {
       account_id: "test-account",
       organization_identifier: "o1",
       project_identifier: "p1",
-      segment_type: "STANDARD",
     });
     expect(req.params?.orgIdentifier).toBeUndefined();
     expect(req.params?.projectIdentifier).toBeUndefined();
-  });
-
-  it("list: requires segment_type", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_segment", "list", {
-        org_id: "o1",
-        project_id: "p1",
-      }),
-    ).rejects.toThrow(/Missing required filter\(s\).*segment_type/);
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("list: canonicalizes lowercase segment_type to Java SegmentKind", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_segment", "list", {
-      org_id: "o1",
-      project_id: "p1",
-      segment_type: "standard",
-    });
-
-    expect(firstRequest(mockRequest).params).toMatchObject({ segment_type: "STANDARD" });
-  });
-
-  it("listFilterFields.enum reuses STANDARD|LARGE|RULE_BASED", () => {
-    const resource = findResource("fme_segment");
-    const field = resource.listFilterFields?.find((f) => f.name === "segment_type");
-    expect(field?.enum).toEqual(["STANDARD", "LARGE", "RULE_BASED"]);
-    expect(field?.required).toBe(true);
   });
 
   it("list: throws when org_id missing", async () => {
@@ -1170,7 +1068,6 @@ describe("fme_segment", () => {
     await expect(
       registry.dispatch(client, "fme_segment", "list", {
         project_id: "p1",
-        segment_type: "STANDARD",
       }),
     ).rejects.toThrow("fme_segment: org_id and project_id are required (account is taken from config).");
     expect(mockRequest).not.toHaveBeenCalled();
@@ -1244,7 +1141,7 @@ describe("fme_segment", () => {
     await registry.dispatch(client, "fme_segment", "create", {
       org_id: "o1",
       project_id: "p1",
-      body: { name: "x", segmentType: "STANDARD", trafficType: "user", tags: ["a"] },
+      body: { name: "x", type: "standard", trafficType: "user", tags: ["a"] },
     });
 
     const req = firstRequest(mockRequest);
@@ -1254,54 +1151,10 @@ describe("fme_segment", () => {
       organization_identifier: "o1",
       project_identifier: "p1",
     });
-    expect(req.body).toEqual({ name: "x", segmentType: "STANDARD", trafficType: "user", tags: [{ name: "a" }] });
+    expect(req.body).toEqual({ name: "x", type: "standard", trafficType: "user", tags: [{ name: "a" }] });
   });
 
-  it("create: maps one-release type alias to wire segmentType", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_segment", "create", {
-      org_id: "o1",
-      project_id: "p1",
-      body: { name: "x", type: "standard", trafficType: "user" },
-    });
-
-    expect(firstRequest(mockRequest).body).toEqual({
-      name: "x",
-      segmentType: "STANDARD",
-      trafficType: "user",
-    });
-  });
-
-  it("create: case-canonicalizes lowercase segmentType", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_segment", "create", {
-      org_id: "o1",
-      project_id: "p1",
-      body: { name: "x", segmentType: "rule_based", trafficType: "user" },
-    });
-
-    expect(firstRequest(mockRequest).body).toMatchObject({ segmentType: "RULE_BASED" });
-  });
-
-  it("create: rejects type and segmentType that disagree", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_segment", "create", {
-        org_id: "o1",
-        project_id: "p1",
-        body: { name: "x", type: "standard", segmentType: "LARGE", trafficType: "user" },
-      }),
-    ).rejects.toThrow(/must agree/i);
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("create: rejects an invalid segmentType value", async () => {
+  it("create: rejects an invalid type value", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1311,11 +1164,11 @@ describe("fme_segment", () => {
         project_id: "p1",
         body: { name: "x", type: "bogus", trafficType: "user" },
       }),
-    ).rejects.toThrow(/invalid segmentType 'bogus'/i);
+    ).rejects.toThrow(/invalid type 'bogus'/i);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create: missing segmentType surfaces as a missing-required-field error", async () => {
+  it("create: missing type surfaces as a missing-required-field error", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1325,7 +1178,7 @@ describe("fme_segment", () => {
         project_id: "p1",
         body: { name: "x", trafficType: "user" },
       }),
-    ).rejects.toThrow(/segmentType/i);
+    ).rejects.toThrow(/type/i);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
