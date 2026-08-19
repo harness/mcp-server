@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough, fmeListExtract, fmeGetExtract } from "../extractors.js";
+import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract } from "../extractors.js";
 import { isFmeHarnessNativeSelected, logFmeDeprecation, requireFmeIdentifier, requireHarnessNativeSegmentScope, resolveFmeDualMode } from "../scope-utils.js";
 
 const fmeActionExtract = (raw: unknown) => {
@@ -282,7 +282,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_environment",
       displayName: "FME Environment",
       description:
-        "Feature Management environment. Dual-mode list only (workspace_id or org_id+project_id), matching #806. get/create/update/delete are Harness-native only — MCP never had a workspace_id contract for those ops. Native create/update use isProduction (production accepted as an alias). Native PATCH is JSON Merge Patch; name and isProduction are not clearable. Name max 15 characters. Delete returns 400 hasDependents while SDK API keys (always created with a new env), flags, or segments remain.",
+        "Feature Management environment. Dual-mode list (workspace_id or org_id+project_id). get/create/update/delete are Harness-native only — MCP never had a workspace_id contract for those ops. Native create/update use isProduction (production accepted as an alias). Native PATCH is JSON Merge Patch; name and isProduction are not clearable. Name max 15 characters. Delete returns 400 hasDependents while SDK API keys (always created with a new env), flags, or segments remain.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -290,6 +290,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
       product: "fme",
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "offset", description: "Harness-native pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Harness-native page size (default 100, max 100)", type: "number" },
       ],
       operations: {
         list: {
@@ -303,8 +305,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: "/fme/api/v4/environments", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
-          description: "List FME environments for a workspace (legacy) or org_id+project_id project (Harness-native).",
+          queryParams: { offset: "offset", size: "limit", limit: "limit" },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description: "List FME environments for a workspace (legacy) or org_id+project_id project (Harness-native). Native envelope {data, limit, offset, totalCount} is promoted to items/total; harness_list size maps to limit.",
         },
         get: {
           method: "GET",

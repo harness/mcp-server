@@ -808,6 +808,73 @@ describe("fme_environment dual-mode routing", () => {
 
     expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/environments/ws/ws1");
   });
+
+  it("native list forwards offset and limit as query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_environment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      offset: 10,
+      limit: 25,
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({ offset: 10, limit: 25 });
+  });
+
+  it("native list maps harness_list size onto Java limit", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_environment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      size: 20,
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({ limit: 20 });
+  });
+
+  it("native list promotes totalCount to total and data to items", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [{ id: "env1", name: "prod" }],
+      limit: 100,
+      offset: 0,
+      totalCount: 3,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_environment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+    });
+
+    expect(result).toMatchObject({
+      items: [{ id: "env1", name: "prod" }],
+      total: 3,
+      totalCount: 3,
+    });
+  });
+
+  it("legacy list leaves objects envelopes unchanged", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      objects: [{ id: "env1", name: "prod" }],
+      offset: 0,
+      limit: 20,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_environment", "list", {
+      workspace_id: "ws1",
+    });
+
+    expect(result).toEqual({
+      objects: [{ id: "env1", name: "prod" }],
+      offset: 0,
+      limit: 20,
+    });
+  });
 });
 
 describe("fme_standard_segment — legacy only, Harness-native rejected in favor of fme_segment", () => {
