@@ -1118,6 +1118,19 @@ describe("fme_segment", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("create: case-canonicalizes lowercase segmentType to STANDARD", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      body: { name: "x", trafficType: "user", segmentType: "standard" },
+    });
+
+    expect(firstRequest(mockRequest).body).toMatchObject({ segmentType: "STANDARD" });
+  });
+
   it("create: rejects an invalid segmentType value without HTTP", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
@@ -1126,9 +1139,9 @@ describe("fme_segment", () => {
       registry.dispatch(client, "fme_segment", "create", {
         org_id: "o1",
         project_id: "p1",
-        body: { name: "x", trafficType: "user", segmentType: "standard" },
+        body: { name: "x", trafficType: "user", segmentType: "bogus" },
       }),
-    ).rejects.toThrow(/invalid segmentType 'standard'/i);
+    ).rejects.toThrow(/invalid segmentType 'bogus'/i);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 

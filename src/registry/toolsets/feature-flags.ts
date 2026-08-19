@@ -35,8 +35,15 @@ const FME_SEGMENT_TYPE_ALIASES: Record<string, FmeSegmentKind> = {
   rule_based: "RULE_BASED",
 };
 
-function isFmeSegmentKind(value: unknown): value is FmeSegmentKind {
-  return typeof value === "string" && (FME_SEGMENT_KINDS as readonly string[]).includes(value);
+function canonicalizeFmeSegmentKind(raw: unknown): FmeSegmentKind | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  const byLower = new Map<string, FmeSegmentKind>([
+    ...FME_SEGMENT_KINDS.map((kind) => [kind.toLowerCase(), kind] as const),
+    ...Object.entries(FME_SEGMENT_TYPE_ALIASES),
+  ]);
+  return byLower.get(trimmed.toLowerCase());
 }
 
 function resolveFmeCreateSegmentType(body: Record<string, unknown> | undefined): FmeSegmentKind {
@@ -45,23 +52,22 @@ function resolveFmeCreateSegmentType(body: Record<string, unknown> | undefined):
 
   let fromPrimary: FmeSegmentKind | undefined;
   if (primary !== undefined) {
-    if (!isFmeSegmentKind(primary)) {
+    fromPrimary = canonicalizeFmeSegmentKind(primary);
+    if (fromPrimary === undefined) {
       throw new Error(
         `fme_segment.create: invalid segmentType '${String(primary)}'. Must be one of: ${FME_SEGMENT_KINDS.join(", ")}.`,
       );
     }
-    fromPrimary = primary;
   }
 
   let fromAlias: FmeSegmentKind | undefined;
   if (alias !== undefined) {
-    const mapped = typeof alias === "string" ? FME_SEGMENT_TYPE_ALIASES[alias] : undefined;
-    if (mapped === undefined) {
+    fromAlias = canonicalizeFmeSegmentKind(alias);
+    if (fromAlias === undefined) {
       throw new Error(
         `fme_segment.create: invalid type '${String(alias)}'. Must be one of: ${Object.keys(FME_SEGMENT_TYPE_ALIASES).join(", ")}.`,
       );
     }
-    fromAlias = mapped;
   }
 
   if (fromPrimary !== undefined && fromAlias !== undefined && fromPrimary !== fromAlias) {
@@ -1204,7 +1210,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
       identifierFields: ["segment_name"],
       listFilterFields: [
-        { name: "segment_type", description: "Required. One kind per list call: STANDARD | LARGE | RULE_BASED (case is canonicalized; unmatched values pass through to the API).", enum: ["STANDARD", "LARGE", "RULE_BASED"], required: true },
+        { name: "segment_type", description: "Required. One kind per list call: STANDARD | LARGE | RULE_BASED (case is canonicalized; unmatched values pass through to the API).", enum: [...FME_SEGMENT_KINDS], required: true },
         { name: "status", description: "Optional. Filter by segment status (omit for Java default ACTIVE). One value only.", enum: ["ACTIVE", "ARCHIVED"] },
         { name: "offset", description: "Pagination offset", type: "number" },
         { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
