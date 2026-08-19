@@ -246,12 +246,6 @@ const fmeSegmentDefinitionKeysRemoveSchema: BodySchema = {
   ],
 };
 
-function fmeSegmentKeysNativePointer(operation: string): never {
-  throw new Error(
-    `fme_segment_keys.${operation}: Harness-native membership uses fme_segment_definition execute actions list_keys, add_keys, and remove_keys — do not pass org_id+project_id on fme_segment_keys.`,
-  );
-}
-
 function fmeSegmentDefinitionKeysBody(input: Record<string, unknown>, opts: { requireNonEmpty: boolean }): Record<string, unknown> {
   const body = input.body as Record<string, unknown> | undefined;
   const keys = body?.keys;
@@ -1106,7 +1100,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             const mode = resolveFmeDualMode(input, "fme_rule_based_segment");
             if (mode.mode === "harness_native") {
               throw new Error(
-                "fme_rule_based_segment.create: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead (create is not yet implemented there either).",
+                "fme_rule_based_segment.create: Harness-native (org_id/project_id) mode is not supported on this deprecated resource — use fme_segment instead.",
               );
             }
             return { path: `/internal/api/v2/rule-based-segments/ws/${encodeURIComponent(mode.workspaceId)}/trafficTypes/${encodeURIComponent(requireFmeIdentifier(input, "traffic_type_id", "fme_rule_based_segment"))}` };
@@ -1701,7 +1695,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment_keys",
       displayName: "FME Segment Keys",
       description:
-        "Membership keys (members) of a standard segment. List keys with pagination, or update to add members. Removal is not supported by this endpoint. Limit: 10,000 keys per request, 100,000 per segment total. Legacy workspace-style calls use environment_id+segment_name without org_id/project_id. Harness-native membership is not on this resource — use fme_segment_definition execute actions list_keys, add_keys, and remove_keys.",
+        "Membership keys (members) of a standard segment. List keys with pagination, or update to add members. Removal is not supported by this endpoint. Limit: 10,000 keys per request, 100,000 per segment total. For Harness-native key management use fme_segment_definition execute list_keys/add_keys/remove_keys.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -1711,6 +1705,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
         { name: "environment_id", description: "Environment ID (get from fme_environment)", required: true },
         { name: "segment_name", description: "Segment name", required: true },
         { name: "offset", description: "Pagination offset", type: "number" },
+        { name: "org_id", description: "Optional — pass together with project_id to select the (not yet implemented) Harness-native mode instead of the current contract." },
+        { name: "project_id", description: "Optional — pass together with org_id to select the (not yet implemented) Harness-native mode instead of the current contract." },
       ],
       operations: {
         list: {
@@ -1718,7 +1714,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/segments/{environmentId}/{segmentName}/keys",
           routeResolver: (input) => {
             if (isFmeHarnessNativeSelected(input, "fme_segment_keys.list")) {
-              fmeSegmentKeysNativePointer("list");
+              throw new Error(
+                "fme_segment_keys.list: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass environment_id/segment_name (current contract) instead.",
+              );
             }
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_segment_keys"));
             const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_keys"));
@@ -1738,7 +1736,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "/internal/api/v2/segments/{environmentId}/{segmentName}/upload",
           routeResolver: (input) => {
             if (isFmeHarnessNativeSelected(input, "fme_segment_keys.update")) {
-              fmeSegmentKeysNativePointer("update");
+              throw new Error(
+                "fme_segment_keys.update: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass environment_id/segment_name (current contract) instead.",
+              );
             }
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_segment_keys"));
             const segmentName = encodeURIComponent(requireFmeIdentifier(input, "segment_name", "fme_segment_keys"));
