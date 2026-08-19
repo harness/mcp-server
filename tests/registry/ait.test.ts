@@ -80,6 +80,24 @@ describe("aitToolset structure", () => {
     expect(res.executeActions?.run).toBeDefined();
   });
 
+  it("guides clients to report crawl progress and estimate time remaining", () => {
+    const crawl = findResource("kb_crawl");
+    const guidance = crawl.executeHint ?? "";
+    expect(guidance).toContain("pages_discovered");
+    expect(guidance).toContain("started_at");
+    expect(guidance).toContain("pages_discovered >= 5");
+    expect(guidance).toContain(
+      "elapsed_ms * (max_pages - pages_discovered) / pages_discovered",
+    );
+    expect(guidance).toContain("finish before max_pages");
+    expect(crawl.operations.get?.description).toContain(
+      "elapsed_ms * (max_pages - pages_discovered) / pages_discovered",
+    );
+    expect(crawl.executeActions?.latest_status?.actionDescription).toContain(
+      "estimate remaining time",
+    );
+  });
+
   it("all resources are account-scoped", () => {
     for (const resource of aitToolset.resources) {
       expect(resource.scope, `${resource.resourceType} should be account-scoped`).toBe("account");

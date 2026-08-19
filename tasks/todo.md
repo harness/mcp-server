@@ -1,5 +1,30 @@
 # Harness MCP Server — Task Tracking
 
+## AIT Crawl ETA Client Guidance (2026-08-18)
+- [x] Confirm the native Harness MCP crawl resource and polling response shape
+- [x] Add ETA guidance to `kb_crawl` metadata and the KB workflow prompt
+- [x] Add focused regression coverage
+- [x] Run focused tests, typecheck, and diff checks
+
+### Plan
+- Keep ETA client-computed; do not add an API-computed ETA field.
+- Use `pages_discovered`, `started_at`, and `max_pages` retained from the
+  create/recrawl request.
+- Start showing ETA after five pages using
+  `elapsed_ms * (max_pages - pages_discovered) / pages_discovered`.
+- State that a crawl may finish before `max_pages` when its frontier empties.
+
+### Review
+- Added client-computed ETA guidance to `kb_crawl` describe metadata for direct
+  run polling and latest-status polling.
+- Updated the shipped `explore-knowledge-base` prompt to retain request-time
+  `max_pages`, report page count and elapsed time, and calculate approximate
+  remaining time after five pages.
+- Kept the MCP response contract unchanged; QA remains accessed directly through
+  Harness MCP's `/ait/api/v1/kb/...` routes.
+- Verification passed: focused Vitest (2 files, 48 tests), `pnpm typecheck`, and
+  `git diff --check`.
+
 ## Issue #119 — Full Registry Structural Invariants (2026-07-21)
 - [x] Confirm Issue #119 is unassigned, unclaimed by another contributor, has no Development branch/PR, and remains unresolved on current main
 - [x] Audit every invariant in `tests/registry/structural-validation.test.ts` against default, opt-in, and both pipeline resource types

@@ -1,5 +1,16 @@
 # Lessons Learned
 
+## Make Native Harness MCP Changes in `mcp-server`
+- **Issue**: Client guidance for a native Harness MCP feature was initially
+  edited in the standalone AIT-NL repository, even though the delivery target
+  is the opt-in AIT toolset in `harness/mcp-server`.
+- **Fix**: Locate the native resource first (`kb_crawl` in
+  `src/registry/toolsets/ait.ts`) and use its actual response contract and
+  guidance surfaces.
+- **Rule**: When the end goal is a Harness MCP contribution, implement client
+  guidance in `mcp-server` registry metadata and prompts. The local AIT-NL
+  repository must not be a client runtime dependency.
+
 ## Historical Test Helpers Must Be Revalidated Against Current Runtime Architecture
 - **Issue**: Issue #119 and its original `fullRegistryV0` / `fullRegistryV1` helpers were created when `HARNESS_PIPELINE_VERSION` filtered one pipeline type out of the Registry. A later change made `pipeline` and `pipeline_v1` simultaneously available and reduced the config to a default preference, but the first implementation treated the stale helpers as two real variants, duplicated every invariant over identical objects, inferred opt-in resources from default/full set differences, and used a hand-built array instead of an end-to-end Registry fixture.
 - **Fix**: Trace current constructor behavior and relevant history before preserving an old helper. Use one full Registry for the current architecture, derive opt-in coverage from `ToolsetDefinition.optIn`, and inject malformed regression definitions through `RegistryOptions.additionalToolsets` so fixtures traverse the same Registry and validator path as production definitions.

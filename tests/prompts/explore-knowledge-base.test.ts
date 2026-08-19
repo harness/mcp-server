@@ -27,5 +27,11 @@ describe("explore-knowledge-base prompt", () => {
     expect(text).toContain("Do not");
     expect(text).toContain("harness_list");
     expect(text).toContain("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    expect(text).toContain("pages_discovered");
+    expect(text).toContain("started_at");
+    expect(text).toContain(
+      "elapsed_ms * (max_pages - pages_discovered) / pages_discovered",
+    );
+    expect(text).toContain("finish early");
   });
 });

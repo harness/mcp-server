@@ -153,6 +153,12 @@ const aitTestRunExtract = (raw: unknown): unknown => {
 
 const KB = "/ait/api/v1/kb";
 
+const KB_CRAWL_PROGRESS_GUIDANCE =
+  "While polling a running crawl, report pages_discovered and elapsed time since started_at. " +
+  "When max_pages is known from the create/recrawl request and pages_discovered >= 5, estimate " +
+  "remaining time as elapsed_ms * (max_pages - pages_discovered) / pages_discovered. " +
+  "Label the ETA approximate: the crawl can finish before max_pages when its frontier empties.";
+
 function kbIsoTimestamp(value: unknown): string | undefined {
   if (typeof value === "string") return value;
   if (value instanceof Date) return value.toISOString();
@@ -649,7 +655,9 @@ export const aitToolset: ToolsetDefinition = {
             },
           ],
           executeHint:
-            "Poll a run with harness_get(resource_type='kb_crawl', resource_id=<crawl_run_id>) until status is completed or failed. Use the recrawl action to refresh an environment; it cancels any crawl still running for that environment first.",
+            "Poll a run with harness_get(resource_type='kb_crawl', resource_id=<crawl_run_id>) until status is completed or failed. " +
+            KB_CRAWL_PROGRESS_GUIDANCE +
+            " Use the recrawl action to refresh an environment; it cancels any crawl still running for that environment first.",
           operations: {
             list: {
               method: "GET",
@@ -672,7 +680,9 @@ export const aitToolset: ToolsetDefinition = {
               operationPolicy: { risk: "read", retryPolicy: "safe" },
               pathParams: { crawl_run_id: "crawlRunId" },
               responseExtractor: kbCrawlRunExtract,
-              description: "Get a crawl run's status, page count, and error message",
+              description:
+                "Get a crawl run's status, page count, and error message. " +
+                KB_CRAWL_PROGRESS_GUIDANCE,
             },
             create: {
               method: "POST",
@@ -704,7 +714,9 @@ export const aitToolset: ToolsetDefinition = {
               operationPolicy: { risk: "read", retryPolicy: "safe" },
               pathParams: { test_environment_id: "testEnvironmentId" },
               responseExtractor: kbCrawlRunExtract,
-              actionDescription: "Get the most recent crawl run for a test environment without knowing its crawlRunId.",
+              actionDescription:
+                "Get the most recent crawl run for a test environment without knowing its crawlRunId. " +
+                KB_CRAWL_PROGRESS_GUIDANCE,
             },
           },
         },

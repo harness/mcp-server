@@ -56,7 +56,8 @@ ${page_id ? `- page_id=${page_id}` : "- page_id: discover from kb_crawl_page lis
 3. **Pages** — \`harness_list(resource_type="kb_crawl_page", params={ crawl_run_id, query?: "<url or title>", size: 20 })\`.
 4. **Page + screenshot** — \`harness_get(resource_type="kb_crawl_page", resource_id=<page_id>, params={ crawl_run_id, include: "screenshot" })\`.
 5. **Single artifact** — \`harness_get(resource_type="kb_page_artifact", resource_id="screenshot"|..., params={ crawl_run_id, page_id })\`.
-6. **Start a crawl** — \`harness_create(resource_type="kb_crawl", body={ app_id, test_environment_id, max_pages?, ... })\` then poll \`harness_get\` on \`kb_crawl\`.
+6. **Start a crawl** — \`harness_create(resource_type="kb_crawl", body={ app_id, test_environment_id, config: { max_pages? } })\` then poll \`harness_get\` on \`kb_crawl\`. Retain the requested \`max_pages\` for progress reporting.
+7. **Report progress** — while status is running, report \`pages_discovered\` and elapsed time since \`started_at\`. Once at least 5 pages are discovered and \`max_pages\` is known, show an approximate remaining time: \`elapsed_ms * (max_pages - pages_discovered) / pages_discovered\`. The crawl can finish early when its frontier empties.
 
 ## Notes
 - Enable the opt-in toolset: \`HARNESS_TOOLSETS=+ait\`.
