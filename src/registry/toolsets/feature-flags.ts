@@ -25,7 +25,59 @@ function normalizeFmeTags(tags: unknown): unknown {
   return Array.isArray(tags) ? tags.map((t) => (typeof t === "string" ? { name: t } : t)) : tags;
 }
 
-const FME_SEGMENT_TYPES = ["standard", "rule_based", "large"] as const;
+const FME_SEGMENT_KINDS = ["STANDARD", "LARGE", "RULE_BASED"] as const;
+type FmeSegmentKind = (typeof FME_SEGMENT_KINDS)[number];
+
+/** One-release MCP-only alias: old lowercase `type` → wire `segmentType`. Never sent as JSON `type`. */
+const FME_SEGMENT_TYPE_ALIASES: Record<string, FmeSegmentKind> = {
+  standard: "STANDARD",
+  large: "LARGE",
+  rule_based: "RULE_BASED",
+};
+
+function isFmeSegmentKind(value: unknown): value is FmeSegmentKind {
+  return typeof value === "string" && (FME_SEGMENT_KINDS as readonly string[]).includes(value);
+}
+
+function resolveFmeCreateSegmentType(body: Record<string, unknown> | undefined): FmeSegmentKind {
+  const primary = body?.segmentType;
+  const alias = body?.type;
+
+  let fromPrimary: FmeSegmentKind | undefined;
+  if (primary !== undefined) {
+    if (!isFmeSegmentKind(primary)) {
+      throw new Error(
+        `fme_segment.create: invalid segmentType '${String(primary)}'. Must be one of: ${FME_SEGMENT_KINDS.join(", ")}.`,
+      );
+    }
+    fromPrimary = primary;
+  }
+
+  let fromAlias: FmeSegmentKind | undefined;
+  if (alias !== undefined) {
+    const mapped = typeof alias === "string" ? FME_SEGMENT_TYPE_ALIASES[alias] : undefined;
+    if (mapped === undefined) {
+      throw new Error(
+        `fme_segment.create: invalid type '${String(alias)}'. Must be one of: ${Object.keys(FME_SEGMENT_TYPE_ALIASES).join(", ")}.`,
+      );
+    }
+    fromAlias = mapped;
+  }
+
+  if (fromPrimary !== undefined && fromAlias !== undefined && fromPrimary !== fromAlias) {
+    throw new Error(
+      `fme_segment.create: segmentType '${fromPrimary}' conflicts with type '${String(alias)}'.`,
+    );
+  }
+
+  const kind = fromPrimary ?? fromAlias;
+  if (kind === undefined) {
+    throw new Error(
+      "fme_segment.create: segmentType is required (STANDARD | LARGE | RULE_BASED), or pass alias type: standard | large | rule_based.",
+    );
+  }
+  return kind;
+}
 
 const fmeFeatureFlagUpdateSchema: BodySchema = {
   description: "Partial update for an FME feature flag's metadata. Provide the fields you want to change. Legacy mode (workspace_id): converted to JSON Patch (RFC 6902) automatically — description/tags/rolloutStatus only. Harness-native mode (org_id+project_id): sent as JSON Merge Patch (RFC 7396) — description/tags/owners/rolloutStatus; set description/tags/owners to null (or [] for tags/owners) to clear them, omit a field to leave it unchanged.",
@@ -100,10 +152,11 @@ const fmeRbsCreateSchema: BodySchema = {
 };
 
 const fmeSegmentCreateSchema: BodySchema = {
-  description: "Create a new segment. name and trafficType are required; description/tags/owners are optional. type is optional MCP-only validation and is not sent on the v4 wire.",
+  description: "Create a new segment. name, trafficType, and segmentType are required; description/tags/owners are optional. type is an optional one-release MCP alias for segmentType and is never sent on the v4 wire.",
   fields: [
     { name: "name", type: "string", required: true, description: "Segment name (must be unique within the project)" },
-    { name: "type", type: "string", required: false, description: "Segment kind for MCP callers (\"standard\" | \"rule_based\" | \"large\"). Not sent on the v4 create wire — CreateSegmentRequest has no type field." },
+    { name: "segmentType", type: "string", required: true, description: "Required wire kind: STANDARD | LARGE | RULE_BASED. Do not lowercase. If omitted, alias type (standard | large | rule_based) is mapped to this field." },
+    { name: "type", type: "string", required: false, description: "Optional one-release MCP alias only (standard | large | rule_based). Mapped to segmentType; never sent as JSON type. If both are present they must agree." },
     { name: "description", type: "string", required: false, description: "Optional description of the segment" },
     { name: "trafficType", type: "string", required: true, description: "Traffic type name" },
     { name: "tags", type: "array", required: false, description: "Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
@@ -1151,11 +1204,17 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment",
       displayName: "FME Segment",
       description:
-        "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard, rule-based, and large). Supports list, get, create, update (JSON Merge Patch on description/tags/owners), and delete. create requires name + trafficType; optional type is validated locally if passed and omitted from the v4 wire body. Delete returns 400 hasDependents while environment definitions or flag targeting still reference the segment.",
+        "FME (Harness-native, org_id+project_id scoped). Unified segment resource (STANDARD, LARGE, RULE_BASED). Supports list (required segment_type filter — one kind per call), get, create (required JSON segmentType), update (JSON Merge Patch on description/tags/owners), and delete. GET/PATCH/DELETE have no MCP kind gate; the backend looks up STANDARD store names only, so LARGE/RULE_BASED names 404. Delete returns 400 hasDependents while environment definitions or flag targeting still reference the segment.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
       identifierFields: ["segment_name"],
+      listFilterFields: [
+        { name: "segment_type", description: "Required. One kind per list call: STANDARD | LARGE | RULE_BASED (case is canonicalized; unmatched values pass through to the API).", enum: ["STANDARD", "LARGE", "RULE_BASED"], required: true },
+        { name: "status", description: "Optional. Filter by segment status (omit for Java default ACTIVE). One value only.", enum: ["ACTIVE", "ARCHIVED"] },
+        { name: "offset", description: "Pagination offset", type: "number" },
+        { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -1165,8 +1224,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: "/fme/api/v4/segments" };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { segment_type: "segment_type", status: "status", offset: "offset", limit: "limit" },
           responseExtractor: passthrough,
-          description: "List all segments (standard and rule-based) in project.",
+          description: "List segments of one required kind (filters.segment_type = STANDARD | LARGE | RULE_BASED). Optional status (ACTIVE | ARCHIVED), offset, and limit. Does not list mixed kinds in one call.",
         },
         get: {
           method: "GET",
@@ -1180,7 +1240,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
-          description: "Get single segment by name.",
+          description: "Get a segment by name. MCP does not gate on kind; the backend STANDARD-store lookup 404s for LARGE/RULE_BASED names.",
         },
         delete: {
           method: "DELETE",
@@ -1195,7 +1255,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description:
-            "Delete a segment by name. Returns 400 hasDependents if any environment definition or flag still references it — delete definitions (after clearing keys) first.",
+            "Delete a segment by name. MCP does not gate on kind; the backend STANDARD-store lookup 404s for LARGE/RULE_BASED names. Returns 400 hasDependents if any environment definition or flag still references it — delete definitions (after clearing keys) first.",
         },
         create: {
           method: "POST",
@@ -1209,14 +1269,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             const trafficType = (body?.trafficType ?? body?.traffic_type) as string | undefined;
-            if (body?.type !== undefined && !FME_SEGMENT_TYPES.includes(body.type as (typeof FME_SEGMENT_TYPES)[number])) {
-              throw new Error(
-                `fme_segment.create: invalid type '${body.type}'. Must be one of: ${FME_SEGMENT_TYPES.join(", ")}.`,
-              );
-            }
+            const segmentType = resolveFmeCreateSegmentType(body);
             return {
               name: body?.name,
               trafficType,
+              segmentType,
               ...(body?.description !== undefined ? { description: body.description } : {}),
               ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
               ...(body?.owners !== undefined ? { owners: body.owners } : {}),
@@ -1224,7 +1281,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           bodySchema: fmeSegmentCreateSchema,
-          description: "Create a new segment. Body requires name + trafficType; optional description, tags, owners. If type is passed (\"standard\" | \"rule_based\" | \"large\"), it is validated locally and omitted from the v4 wire body.",
+          description: "Create a new segment. Body requires name + trafficType + segmentType (STANDARD | LARGE | RULE_BASED). Optional description, tags, owners. Alias type (standard | large | rule_based) maps to segmentType for one release and is never sent on the wire.",
         },
         update: {
           method: "PATCH",
@@ -1250,7 +1307,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           bodySchema: fmeSegmentUpdateSchema,
           description:
-            "Update a segment's description, tags, and/or owners via JSON Merge Patch (RFC 7396). Harness-native only (org_id+project_id). Omit a field to leave it unchanged; set description/tags/owners to null (or [] for tags/owners) to clear.",
+            "Update a segment's description, tags, and/or owners via JSON Merge Patch (RFC 7396). Harness-native only (org_id+project_id). MCP does not gate on kind; the backend STANDARD-store lookup 404s for LARGE/RULE_BASED names. Omit a field to leave it unchanged; set description/tags/owners to null (or [] for tags/owners) to clear.",
         },
       },
     },
