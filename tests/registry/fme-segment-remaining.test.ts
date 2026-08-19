@@ -51,8 +51,6 @@ function firstRequest(mockRequest: ReturnType<typeof vi.fn>): RequestOptions {
 }
 
 const nativeScope = { org_id: "o1", project_id: "p1" };
-const KEYS_POINTER =
-  "fme_segment_definition execute actions list_keys, add_keys, and remove_keys";
 
 describe("fme_segment remaining native update", () => {
   let registry: Registry;
@@ -109,7 +107,9 @@ describe("fme_segment remaining native update", () => {
         segment_name: "seg1",
         body: { description: "x" },
       }),
-    ).rejects.toThrow("fme_segment: org_id and project_id are required (account is taken from config).");
+    ).rejects.toThrow(
+      "fme_segment: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.",
+    );
   });
 });
 
@@ -229,15 +229,16 @@ describe("fme_segment_definition remaining key execute actions", () => {
   });
 });
 
-describe("fme_segment_keys native pointer", () => {
+describe("fme_segment_keys native is not yet implemented", () => {
   let registry: Registry;
 
   beforeEach(() => {
     registry = new Registry(makeConfig());
   });
 
-  it("points native list at segment definition execute actions", async () => {
-    const client = makeClient();
+  it("list throws not-yet-implemented", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
 
     await expect(
       registry.dispatch(client, "fme_segment_keys", "list", {
@@ -245,11 +246,13 @@ describe("fme_segment_keys native pointer", () => {
         environment_id: "env1",
         segment_name: "seg1",
       }),
-    ).rejects.toThrow(KEYS_POINTER);
+    ).rejects.toThrow(/not yet implemented/i);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("points native update at segment definition execute actions", async () => {
-    const client = makeClient();
+  it("update throws not-yet-implemented", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
 
     await expect(
       registry.dispatch(client, "fme_segment_keys", "update", {
@@ -258,6 +261,7 @@ describe("fme_segment_keys native pointer", () => {
         segment_name: "seg1",
         body: { add: ["a"] },
       }),
-    ).rejects.toThrow(KEYS_POINTER);
+    ).rejects.toThrow(/not yet implemented/i);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
