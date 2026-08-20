@@ -106,7 +106,7 @@ describe("feature-flag-rollout prompt", () => {
     expect(text).toContain('action="restore"');
   });
 
-  it("Harness-native mode: interpolates org_id/project_id and surfaces NYI caveat", async () => {
+  it("Harness-native mode: interpolates org_id/project_id and includes native rollout workflow steps", async () => {
     const text = await getPromptText({
       featureFlagName: "checkout_v2",
       orgId: "default",
@@ -115,9 +115,19 @@ describe("feature-flag-rollout prompt", () => {
 
     expect(text).toContain('org_id="default", project_id="payments"');
     expect(text).not.toContain('workspace_id=');
-    expect(text).toContain("Harness-native mode (org_id/project_id)");
     expect(text).toContain("fme_feature_flag_definition");
-    expect(text).toContain("fme_rollout_status");
-    expect(text).toContain("steps 3, 4, and 7");
+    expect(text).toContain('resource_type="fme_rollout_status"');
+    expect(text).not.toMatch(/not yet implemented/i);
+    expect(text).not.toMatch(/step 4 only works today with workspace_id/i);
+  });
+
+  it("legacy mode: omits Harness-native rollout-status NYI caveat", async () => {
+    const text = await getPromptText({
+      featureFlagName: "checkout_v2",
+      workspaceId: "ws-legacy-1",
+    });
+
+    expect(text).not.toMatch(/not yet implemented/i);
+    expect(text).not.toMatch(/step 4 only works today with workspace_id/i);
   });
 });
