@@ -282,7 +282,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_environment",
       displayName: "FME Environment",
       description:
-        "Feature Management environment scoped to a project. list supports dual-mode scoping (workspace_id or org_id+project_id). get/create/update/delete require org_id+project_id and call /fme/api/v4/environments. Create/update accept isProduction (production is an alias). Update uses JSON Merge Patch; name and isProduction are not clearable. Name max 15 characters. Delete returns 400 hasDependents while SDK API keys, flags, or segments still reference the environment.",
+        "Feature Management environment. Supports list, get, create, update, and delete. Dual-mode list scoping: pass org_id+project_id (Harness-native, preferred) or the deprecated workspace_id. get/create/update/delete require Harness-native org_id+project_id scoping.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
