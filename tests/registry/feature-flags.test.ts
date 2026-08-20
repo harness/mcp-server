@@ -842,6 +842,145 @@ describe("fme_environment dual-mode routing", () => {
   });
 });
 
+describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it.each(["fme_traffic_type", "fme_rollout_status"] as const)(
+    "%s descriptions stay tool-facing (no HTTP paths or list-only restatement)",
+    (resourceType) => {
+      const resource = findResource(resourceType);
+      const listDescription = resource.operations.list?.description ?? "";
+
+      expect(resource.description).not.toMatch(/\/fme\/api\//);
+      expect(resource.description).not.toMatch(/\/internal\/api\//);
+      expect(resource.description).not.toMatch(/List-only/i);
+      expect(resource.description).not.toMatch(/Native items/i);
+      expect(resource.description).not.toMatch(/Native results/i);
+      expect(resource.description).not.toMatch(/displayAttributeId/);
+      expect(listDescription).not.toMatch(/\/fme\/api\//);
+      expect(listDescription).not.toMatch(/\/internal\/api\//);
+      expect(listDescription).not.toMatch(/Native results/i);
+      expect(resource.description).toMatch(/org_id\+project_id/);
+      expect(resource.description).toMatch(/workspace_id/);
+    },
+  );
+
+  it.each([
+    ["fme_traffic_type", "/fme/api/v4/traffic-types", "/internal/api/v2/trafficTypes/ws/ws1"],
+    ["fme_rollout_status", "/fme/api/v4/rollout-statuses", "/internal/api/v2/rolloutStatuses/ws/ws1"],
+  ] as const)("%s: native list uses v4 path and FME scope params", async (resourceType, nativePath, _legacyPath) => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, resourceType, "list", { org_id: "o1", project_id: "p1" });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe(nativePath);
+    expect(req.product).toBeUndefined();
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(req.params?.orgIdentifier).toBeUndefined();
+    expect(req.params?.projectIdentifier).toBeUndefined();
+  });
+
+  it.each([
+    ["fme_traffic_type", "/internal/api/v2/trafficTypes/ws/ws1"],
+    ["fme_rollout_status", "/internal/api/v2/rolloutStatuses/ws/ws1"],
+  ] as const)("%s: legacy list keeps Split Admin path", async (resourceType, legacyPath) => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, resourceType, "list", { workspace_id: "ws1" });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe(legacyPath);
+    expect(req.product).toBe("fme");
+  });
+
+  it("native list forwards offset and limit as query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_traffic_type", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      offset: 10,
+      limit: 25,
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({ offset: 10, limit: 25 });
+  });
+
+  it("native list maps harness_list size onto Java limit", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_rollout_status", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      size: 20,
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({ limit: 20 });
+  });
+
+  it("native list prefers explicit limit over size", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_traffic_type", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      size: 20,
+      limit: 5,
+    });
+
+    expect(firstRequest(mockRequest).params?.limit).toBe(5);
+  });
+
+  it("native list promotes totalCount to total and data to items", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [{ type: "TRAFFIC_TYPE", id: "tt1", name: "user" }],
+      limit: 100,
+      offset: 0,
+      totalCount: 3,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_traffic_type", "list", {
+      org_id: "o1",
+      project_id: "p1",
+    });
+
+    expect(result).toMatchObject({
+      items: [{ type: "TRAFFIC_TYPE", id: "tt1", name: "user" }],
+      total: 3,
+      totalCount: 3,
+    });
+  });
+
+  it("rejects mixed workspace_id and org/project", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_rollout_status", "list", {
+        workspace_id: "ws1",
+        org_id: "o1",
+        project_id: "p1",
+      }),
+    ).rejects.toThrow("fme_rollout_status: pass either workspace_id (deprecated) OR org_id+project_id, not both.");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
 describe("fme_standard_segment — legacy only, Harness-native rejected in favor of fme_segment", () => {
   let registry: Registry;
 
@@ -1122,25 +1261,6 @@ describe("FME new-mode (NYI) resources", () => {
   beforeEach(() => {
     registry = new Registry(makeConfig());
   });
-
-  it.each([
-    ["fme_rollout_status", "list", { workspace_id: "ws1" }],
-    ["fme_traffic_type", "list", { workspace_id: "ws1" }],
-  ] as [string, "get" | "create" | "update" | "list", Record<string, unknown>][])(
-    "%s.%s: legacy mode still works, new mode throws not-yet-implemented",
-    async (resourceType, operation, legacyInput) => {
-      const mockRequest = vi.fn().mockResolvedValue({});
-      const client = makeClient(mockRequest);
-
-      await registry.dispatch(client, resourceType, operation, legacyInput);
-      expect(mockRequest).toHaveBeenCalledTimes(1);
-
-      const newModeInput = { ...legacyInput, workspace_id: undefined, org_id: "o1", project_id: "p1" };
-      await expect(registry.dispatch(client, resourceType, operation, newModeInput)).rejects.toThrow(
-        /not yet implemented/i,
-      );
-    },
-  );
 
   it.each([
     ["list", { workspace_id: "ws1", environment_id: "e1" }],

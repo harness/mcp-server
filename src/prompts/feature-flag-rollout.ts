@@ -46,7 +46,7 @@ Steps:
 6. **Safety gates**: Identify metrics or health checks between each phase
 7. **Rollback plan**: Use kill action to immediately turn off the flag if issues arise
 
-Present the rollout plan for review. Use harness_execute with resource_type="fme_feature_flag", action="kill" or action="restore", ${scopeArgs}, feature_flag_name="${featureFlagName}", environment_id=<env_id> to execute each phase after user approval.${nativeModeCaveat}`,
+Present the rollout plan for review. Use harness_execute with resource_type="fme_feature_flag", action="kill" or action="restore", ${scopeArgs}, feature_flag_name="${featureFlagName}", environment_id=<env_id> to execute each phase after user approval.`,
           },
         }],
       };
