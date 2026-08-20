@@ -24,7 +24,7 @@ export function registerFeatureFlagRolloutPrompt(server: McpServer): void {
 
       const nativeModeCaveat = workspaceId
         ? ""
-        : "\n\nNote: in Harness-native mode (org_id/project_id), fme_feature_flag_definition, fme_rollout_status, and the kill/restore execute action are not yet implemented server-side and will error — steps 3, 4, and 7 below only work today with workspace_id (legacy mode).";
+        : "\n\nNote: in Harness-native mode (org_id/project_id), fme_rollout_status is not yet implemented server-side and will error — step 4 only works today with workspace_id (legacy mode). Steps 3 and 7 work with org_id+project_id.";
 
       return {
         messages: [{

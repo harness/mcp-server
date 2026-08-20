@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 228 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 239 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,8 +10,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 228 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 38 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
+- **11 tools, 239 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 39 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **34 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -661,19 +661,19 @@ Current multi-scope resources include `connector`, `service`, `environment`, `in
 **Structured output:** Every tool declares an MCP `outputSchema`. `harness_list` normalizes list-like Harness responses into object-shaped structured content so strict clients can validate it: top-level arrays become `{ "items": [...], "total": <count>, "page": <page> }`, and common wrapper keys such as `content`, `data`, `body`, `objects`, or `features` are hoisted to `items` when needed. The text response still contains the compact JSON payload returned to all clients.
 
 
-| Tool               | Description                                                                                                                                                                                                                                                                                                           |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `harness_describe` | Discover available resource types, operations, and fields. No API call — returns local registry metadata.                                                                                                                                                                                                             |
-| `harness_schema`   | Fetch exact YAML/JSON Schema definitions and examples for creating/updating resources. Pipeline/template schemas are bundled; connector, environment, service, secret, and infrastructure schemas are scope-aware entity schemas fetched from bundled snapshots or NG `/yaml-schema`. Supports deep drilling via `path`. |
-| `harness_list`     | List resources of a given type with filtering, search, and pagination.                                                                                                                                                                                                                                                |
-| `harness_get`      | Get a single resource by its identifier.                                                                                                                                                                                                                                                                              |
-| `harness_create`   | Create a new resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation).                                                                                                                                                                              |
-| `harness_update`   | Update an existing resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation).                                                                                                                                                                        |
-| `harness_delete`   | Delete a resource. Prompts for user confirmation via [elicitation](#elicitation). Destructive.                                                                                                                                                                                                                        |
-| `harness_execute`  | Execute an action on a resource (run/retry pipeline, import pipeline from Git, toggle flag, sync app). Prompts for user confirmation via [elicitation](#elicitation). For pipeline runs, use the runtime-input workflow below (supports `branch`/`tag`/`pr_number`/`commit_sha` shorthand expansion).                 |
+| Tool               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| --------------------| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `harness_describe` | Discover available resource types, operations, and fields. No API call — returns local registry metadata.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `harness_schema`   | Fetch exact YAML/JSON Schema definitions and examples for creating/updating resources. Pipeline/template schemas are bundled; connector, environment, service, secret, and infrastructure schemas are scope-aware entity schemas fetched from bundled snapshots or NG `/yaml-schema`; `release_process` and `release_activity` schemas are fetched live from RMG `/api/yamlSchema`. Supports deep drilling via `path`.                                                                                                          |
+| `harness_list`     | List resources of a given type with filtering, search, and pagination.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `harness_get`      | Get a single resource by its identifier.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `harness_create`   | Create a new resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation).                                                                                                                                                                                                                                                                                                                                                                                        |
+| `harness_update`   | Update an existing resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation).                                                                                                                                                                                                                                                                                                                                                                                  |
+| `harness_delete`   | Delete a resource. Prompts for user confirmation via [elicitation](#elicitation). Destructive.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `harness_execute`  | Execute an action on a resource (run/retry pipeline, import pipeline from Git, toggle flag, sync app). Prompts for user confirmation via [elicitation](#elicitation). For pipeline runs, use the runtime-input workflow below (supports `branch`/`tag`/`pr_number`/`commit_sha` shorthand expansion).                                                                                                                                                                                                                           |
 | `harness_search`   | Search across Harness resource types with a single query. Uses semantic routing (local `all-MiniLM-L6-v2` ONNX embeddings, 384-dim) to predict relevant resource types from a `knowledge` corpus indexed at startup — typically narrowing from ~163 types to 1–8 before scatter-gather. Falls back to full keyword scatter-gather when semantic confidence is low. Response includes `semantic_routed` and `types_skipped` when routing fires. See `docs/search-guidelines.md` for how to make new resource types discoverable. |
-| `harness_diagnose` | Diagnose `pipeline`, `connector`, `delegate`, and `gitops_application` resources (aliases: `execution` -> `pipeline`, `gitops_app` -> `gitops_application`). For pipelines, returns stage/step timing and failure details; for connectors/delegates/GitOps apps, returns targeted health and troubleshooting signals. |
-| `harness_status`   | Get a real-time project health dashboard — recent executions, failure rates, and deep links.                                                                                                                                                                                                                          |
+| `harness_diagnose` | Diagnose `pipeline`, `connector`, `delegate`, and `gitops_application` resources (aliases: `execution` -> `pipeline`, `gitops_app` -> `gitops_application`). For pipelines, returns stage/step timing and failure details; for connectors/delegates/GitOps apps, returns targeted health and troubleshooting signals.                                                                                                                                                                                                           |
+| `harness_status`   | Get a real-time project health dashboard — recent executions, failure rates, and deep links.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 
 ### Schema Lookup Workflow
@@ -682,6 +682,7 @@ Use `harness_schema` before creating or updating YAML-backed resources so agents
 
 - Bundled schemas include `pipeline`, `template`, `trigger`, `pipeline_v1`, `template_v1`, `inputSet_v1`, `overlayInputSet_v1`, and `agent-pipeline`.
 - Entity schemas include `connector`, `environment`, `service`, `secret`, and `infrastructure`. They are scope-aware (`account`, `org`, or `project`) and require `org_id`/`project_id` when the selected scope requires them.
+- Release Management definitions (`release_process`, `release_activity`) fetch live JSON Schema from RMG `/api/yamlSchema` (not bundled). Pass `scope`, `org_id`, and `project_id` when scoping to org or project.
 - Vendored entity snapshots are used first when they match the runtime account; otherwise the tool falls back to the Harness NG `/yaml-schema` API and caches the result.
 - Omit `path` for a field/section summary, then pass a dot-separated `path` to inspect a nested definition.
 
@@ -1202,7 +1203,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-228 resource types organized across 38 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+239 resource types organized across 39 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1481,6 +1482,36 @@ IaCM list responses expose `page_count` as the count for the current page only (
 Use `harness_execute(resource_type="pull_request", action="close", ...)` for an explicit close operation. `harness_update` also accepts `body.state` (`open` or `closed`) and routes state changes to the dedicated Harness Code PR state endpoint; send title/description edits in a separate update call.
 
 
+### Release Management
+
+Release Management (RMG) resources are default-enabled. Definition resources (`release_process`, `release_activity`) support list/get/create/update/delete with `body.yaml`; call `harness_schema(resource_type="release_process"|"release_activity")` before create/update. Execution resources monitor running releases — most list operations require `release_id` (UUID from `harness_list resource_type=release`, or the UI URL slug such as `identifier-1.0.0-abc`). Paste an RMG release URL into `harness_list` to auto-fill `release_id`.
+
+RMG calls use `${HARNESS_BASE_URL}/gateway/rmg` with account scoping via the `Harness-Account` header. Org/project scope uses header-based scoping when `org_id`/`project_id` are provided. `release_execution_phase` is list-only — use each phase item's `identifier` field as `params.phase_identifier` when calling `harness_get` on phase input/output resources (do not call `harness_get` on `release_execution_phase` itself). Release list `status` filtering is applied client-side on the current page only; keep paging with the same filters when results may span pages.
+
+| Resource Type                         | List | Get | Create | Update | Delete | Execute Actions |
+| ------------------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `release_process`                     | x    | x   | x      | x      | x      |                 |
+| `release_activity`                    | x    | x   | x      | x      | x      |                 |
+| `release`                             | x    | x   |        |        |        |                 |
+| `release_execution_phase`             | x    |     |        |        |        |                 |
+| `release_execution_task`              | x    |     |        |        |        |                 |
+| `release_execution_activity`          | x    |     |        |        |        |                 |
+| `release_input`                       |      | x   |        |        |        |                 |
+| `release_execution_phase_input`       |      | x   |        |        |        |                 |
+| `release_execution_phase_output`      |      | x   |        |        |        |                 |
+| `release_execution_activity_input`    |      | x   |        |        |        |                 |
+| `release_execution_activity_output`   |      | x   |        |        |        |                 |
+
+Typical workflow:
+
+1. `harness_list(resource_type="release_process", org_id="...", project_id="...")` to discover orchestration process definitions.
+2. `harness_schema(resource_type="release_process")` (or `release_activity`) before create/update; then `harness_create` / `harness_update` with `body.yaml`.
+3. `harness_list(resource_type="release", org_id="...", project_id="...")` to find active or recent releases (default 30-day look-back; optional `filters.status`, `filters.search_term`, `filters.days_back`).
+4. `harness_get(resource_type="release", release_id="...")` for release details.
+5. `harness_list(resource_type="release_execution_phase", filters={ release_id: "..." })` for phase status; same `release_id` for `release_execution_task` and `release_execution_activity`.
+6. `harness_get` on `release_input`, `release_execution_phase_input`, `release_execution_phase_output`, `release_execution_activity_output`, or `release_execution_activity_input` using `release_id` plus `params.phase_identifier` / `params.activity_identifier` / `activity_execution_id` as documented on each resource.
+
+
 ### Feature Flags
 
 
@@ -1489,7 +1520,7 @@ Use `harness_execute(resource_type="pull_request", action="close", ...)` for an 
 | `fme_workspace`                     | x    |     |        |        |        |                                           |
 | `fme_environment`                   | x    |     |        |        |        |                                           |
 | `fme_feature_flag`                  | x    | x   | x      | x      | x      | `kill`, `restore`, `reallocate`, `archive`, `unarchive` |
-| `fme_feature_flag_definition`       |      | x   | x      | x      |        |                                           |
+| `fme_feature_flag_definition`       | x    | x   | x      | x      | x      | `kill`, `restore`, `reallocate`           |
 | `fme_rollout_status`                | x    |     |        |        |        |                                           |
 | `fme_rule_based_segment`            | x    | x   | x      |        | x      |                                           |
 | `fme_rule_based_segment_definition` | x    |     |        | x      |        | `enable`, `disable`, `change_request`     |
@@ -1506,7 +1537,7 @@ Use `harness_execute(resource_type="pull_request", action="close", ...)` for an 
 - **`fme_workspace`** — no Harness-native equivalent; legacy-only (used to discover `workspace_id` values).
 - **`fme_environment`** — `list` wired to the real endpoint.
 - **`fme_feature_flag`** — dual-mode, both branches fully wired. Harness-native (`org_id`+`project_id`): `list`/`get`/`create`/`delete` hit `/fme/api/v4/feature-flags` (body for `create`: `name`, `trafficType`, optional `description`/`tags`/`owners`, per `CreateFeatureFlagRequest`); `update` sends a merge-patch to `/fme/api/v4/feature-flags/{name}`; `archive`/`unarchive` hit `/fme/api/v4/feature-flags/{name}/archive|unarchive` (optional `comment` only — no `title`, per `ArchiveUnarchiveRequest`); `kill`/`restore`/`reallocate` hit `/fme/api/v4/feature-flag-definitions/{name}/kill|restore|reallocate` with `environment_id` as a query param (optional `comment`/`title`, per `FeatureFlagDefinitionActionRequest`).
-- **`fme_feature_flag_definition`** — `get`/`create`/`update` are wired to the real `/fme/api/v4/feature-flag-definitions` endpoint. Body shape is identical to legacy mode (`treatments`, `defaultTreatment`, `defaultRule`, optional `rules`/`baselineTreatment`/`trafficAllocation`/`comment`), plus an optional `title` field available only in Harness-native mode. `environment_id` is passed as a query param (not a path segment, unlike legacy mode).
+- **`fme_feature_flag_definition`** — `get`/`create`/`update` remain dual-mode (`workspace_id` or `org_id`+`project_id`). `list`/`delete`/`kill`/`restore`/`reallocate` are Harness-native only (`org_id`+`project_id`) — MCP never had a `workspace_id` contract for those ops. Native list requires `feature_flag_name` and uses `offset`/`limit` (default 100, max 100); it does not take `environment_id`. Delete and execute require `environment_id`. Kill/restore/reallocate are the same actions as on `fme_feature_flag`. Get/create/update body matches legacy (`treatments`, `defaultTreatment`, `defaultRule`, optional `rules`/`baselineTreatment`/`trafficAllocation`/`comment`), plus optional `title` in Harness-native mode. Native update is JSON Merge Patch.
 - **`fme_rollout_status`** — dual-mode `list`. Legacy `workspace_id` still hits Split Admin `/internal/api/v2/rolloutStatuses/ws/{wsId}`. Harness-native (`org_id`+`project_id`) hits `GET /fme/api/v4/rollout-statuses` with optional `offset`/`limit` (max 100; `harness_list` `size` maps to `limit`). Envelope `{data, limit, offset, totalCount}` is promoted to `items`/`total`. Items `{type: "ROLLOUT_STATUS", id, name, description?}`. List-only.
 - **`fme_rule_based_segment`** — (Deprecated — see `fme_segment`.) Harness-native mode is rejected on every operation (`list`/`get`/`create`/`delete`) — use `fme_segment` instead; this resource supports only the legacy `workspace_id` contract.
 - **`fme_rule_based_segment_definition`** — (Deprecated — see `fme_segment_definition`.) Harness-native mode is rejected on every operation/action (`list`/`update`/`enable`/`disable`/`change_request`) — use `fme_segment_definition` instead (no `enable`/`disable`/`change_request` equivalent there); this resource supports only the legacy `workspace_id`/`environment_id` contract.
@@ -1791,7 +1822,7 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 38 of 39 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
+By default, 39 of 40 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 
@@ -1871,6 +1902,7 @@ Available toolset names:
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item, eval_git_registration, online_eval |
 | `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                                              |
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
+| `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
 
 
 ## Architecture
@@ -1888,8 +1920,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  38 Toolsets      |      (data files, not code)
-                |  228 Resource Types|
+                |  39 Toolsets      |      (data files, not code)
+                |  239 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
