@@ -931,7 +931,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_traffic_type",
       displayName: "FME Traffic Type",
       description:
-        "Traffic type (e.g. 'user', 'account'). Dual-mode list: org_id+project_id (Harness-native GET /fme/api/v4/traffic-types) or deprecated workspace_id (Split Admin). Use to discover traffic_type_id / name values for flag and segment create. Native items are {type: \"TRAFFIC_TYPE\", id, name} — no displayAttributeId. List-only — no get/create/update/delete.",
+        "Traffic type in Feature Management (e.g. 'user', 'account'). List-only — harness_list only; no get/create/update/delete. Dual-mode scoping: org_id+project_id (Harness-native, preferred) or deprecated workspace_id. Discover traffic_type_id and name values for flag/segment create and identity queries. Pagination: offset/limit (harness_list size maps to limit).",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
