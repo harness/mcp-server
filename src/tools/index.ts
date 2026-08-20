@@ -30,5 +30,5 @@ export function registerAllTools(server: McpServer, registry: Registry, client: 
   registerSearchTool(server, registry, client, searchManager);
   registerDescribeTool(server, registry);
   registerStatusTool(server, registry, client, config);
-  registerSchemaTool(server, registry, client, additionalSchemas);
+  registerSchemaTool(server, registry, client, config, additionalSchemas);
 }
