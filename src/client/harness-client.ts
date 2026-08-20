@@ -107,12 +107,40 @@ const ERROR_FIELD_ENRICHMENTS: Array<{ pathPrefix: string; field: string }> = [
   { pathPrefix: "/loadTest/", field: "description" },
 ];
 
+const MAX_ERROR_DETAIL_CHARS = 400;
+
+/** Extra NG fields (`details`, `detailedMessage`, `responseMessages`) not already in `message`. */
+function collectErrorDetail(parsed: Record<string, unknown>, message: string): string | undefined {
+  const seen = new Set([message.trim()]);
+  const extras: string[] = [];
+  const add = (value: unknown): void => {
+    if (typeof value !== "string") return;
+    const text = value.trim();
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    extras.push(text);
+  };
+
+  add(parsed.details);
+  add(parsed.detailedMessage);
+  for (const entry of Array.isArray(parsed.responseMessages) ? parsed.responseMessages : []) {
+    if (entry && typeof entry === "object") add((entry as Record<string, unknown>).message);
+  }
+
+  if (extras.length === 0) return undefined;
+  const detail = extras.join("; ");
+  return detail.length > MAX_ERROR_DETAIL_CHARS
+    ? `${detail.slice(0, MAX_ERROR_DETAIL_CHARS)}…`
+    : detail;
+}
+
 function enrichErrorMessage(
   rawMessage: string,
   parsed: Record<string, unknown>,
   path: string,
 ): string {
-  let message = rawMessage;
+  const detail = collectErrorDetail(parsed, rawMessage);
+  let message = detail ? `${rawMessage} — ${detail}` : rawMessage;
   for (const { pathPrefix, field } of ERROR_FIELD_ENRICHMENTS) {
     const value = parsed[field];
     if (path.startsWith(pathPrefix) && typeof value === "string" && value) {

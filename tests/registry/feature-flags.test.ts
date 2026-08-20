@@ -316,6 +316,38 @@ describe("fme_feature_flag dual-mode routing", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("new mode: create accepts traffic_type_id at top level when body.trafficType is omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      traffic_type_id: "tt1",
+      body: { name: "my_flag" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/feature-flags");
+    expect(req.path).not.toContain("trafficTypes");
+    expect(req.body).toMatchObject({ name: "my_flag", trafficType: "tt1" });
+  });
+
+  it("new mode: create without name throws a clear error", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_feature_flag", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: { trafficType: "user" },
+      }),
+    ).rejects.toThrow(/"name" is required/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("mixed params throws the shared error", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);

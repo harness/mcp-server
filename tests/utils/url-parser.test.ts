@@ -499,6 +499,30 @@ describe("applyUrlDefaults", () => {
     expect(result.project_id).toBeUndefined();
   });
 
+  it("parses RMG release phases URL into release_execution_phase + release_id slug", () => {
+    const result = parseHarnessUrl(
+      "https://qa.harness.io/ng/account/OgiB4-xETamKNVAz-wQRjw/module/rmg/orgs/Ng_Pipelines_K8s_Organisations/projects/DoNotDelete_Brooke2/release-management/releases/gfgfgffg-1.0.0-27d6a/execution/phases",
+    );
+    expect(result.account_id).toBe("OgiB4-xETamKNVAz-wQRjw");
+    expect(result.org_id).toBe("Ng_Pipelines_K8s_Organisations");
+    expect(result.project_id).toBe("DoNotDelete_Brooke2");
+    expect(result.resource_scope).toBe("project");
+    expect(result.resource_type).toBe("release_execution_phase");
+    expect(result.release_id).toBe("gfgfgffg-1.0.0-27d6a");
+    expect(result.resource_id).toBe("gfgfgffg-1.0.0-27d6a");
+  });
+
+  it("applyUrlDefaults merges RMG release_id for harness_list", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://qa.harness.io/ng/account/acc/module/rmg/orgs/myOrg/projects/myProj/release-management/releases/myrel-1.0.0-abc/execution/phases",
+    );
+    expect(result.resource_type).toBe("release_execution_phase");
+    expect(result.release_id).toBe("myrel-1.0.0-abc");
+    expect(result.org_id).toBe("myOrg");
+    expect(result.project_id).toBe("myProj");
+  });
+
   it("does not mutate the original args object", () => {
     const args = { resource_type: "pipeline" };
     const result = applyUrlDefaults(

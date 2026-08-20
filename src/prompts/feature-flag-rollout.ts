@@ -22,6 +22,10 @@ export function registerFeatureFlagRolloutPrompt(server: McpServer): void {
         ? `workspace_id="${workspaceId}"`
         : `org_id="${orgId}", project_id="${projectId}"`;
 
+      const nativeModeCaveat = workspaceId
+        ? ""
+        : "\n\nNote: in Harness-native mode (org_id/project_id), fme_rollout_status is not yet implemented server-side and will error — step 4 only works today with workspace_id (legacy mode). Steps 3 and 7 work with org_id+project_id.";
+
       return {
         messages: [{
           role: "user" as const,
