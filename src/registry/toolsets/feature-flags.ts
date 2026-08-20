@@ -680,7 +680,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_rollout_status",
       displayName: "FME Rollout Status",
       description:
-        "Rollout status definitions (e.g. Killed, Permanent, Ramping). Dual-mode list: org_id+project_id (Harness-native GET /fme/api/v4/rollout-statuses) or deprecated workspace_id (Split Admin). Use to discover rollout_status_id UUIDs for filtering fme_feature_flag lists. Native response is {data, limit, offset, totalCount}; each item is {type: \"ROLLOUT_STATUS\", id, name, description?}. List-only — no get/create/update/delete.",
+        "Rollout status definitions (e.g. Killed, Permanent, Ramping). Use to discover rollout_status_id UUIDs for filtering fme_feature_flag lists. Dual-mode scoping: pass org_id+project_id (Harness-native) or deprecated workspace_id (Split Admin). Rollout status IDs are also returned inline with fme_feature_flag list results. List-only — no get/create/update/delete.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
