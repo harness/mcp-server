@@ -1465,7 +1465,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment_keys",
       displayName: "FME Segment Keys",
       description:
-        "Membership keys (members) of a standard segment. List keys with pagination, or update to add members. Removal is not supported by this endpoint. Limit: 10,000 keys per request, 100,000 per segment total. For Harness-native key management use fme_segment_definition execute list_keys/add_keys/remove_keys.",
+        "Membership keys (members) of a standard segment. List keys with pagination, or update to add members. Removal is not supported by this endpoint. Limit: 10,000 keys per request, 100,000 per segment total.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
