@@ -8,10 +8,12 @@ import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
 import { createLogger } from "../utils/logger.js";
 import { schemaOutputSchema } from "./output-schemas.js";
+import type { Config } from "../config.js";
 import {
   createLiveSchemaFetcher,
   getDefinitionSections,
   getEntitySchemaSummary,
+  LIVE_ENTITY_SCHEMAS,
   navigateEntitySchemaPath,
   LIVE_ENTITY_RESOURCE_TYPES,
   type HarnessYamlScope,
@@ -24,8 +26,8 @@ const scopeSchema = z
   .enum(["account", "org", "project"])
   .optional()
   .describe(
-    "Harness YAML scope for live entity schemas (connector, environment, service, secret, infrastructure). " +
-      "Defaults to account. Org/project scoped entities require org_id and/or project_id.",
+    "Harness YAML scope for live entity schemas (connector, environment, service, secret, infrastructure, " +
+      "release_process, release_activity). Defaults to account. Org/project scoped entities require org_id and/or project_id.",
   );
 
 function resolveRef(schema: Record<string, unknown>, ref: string): unknown {
@@ -217,6 +219,7 @@ export function registerSchemaTool(
   server: McpServer,
   _registry: Registry | undefined,
   client: HarnessClient | undefined,
+  config: Config | undefined,
   additionalSchemas?: Record<string, SchemaEntry>,
 ): void {
   if (additionalSchemas) {
@@ -234,7 +237,7 @@ export function registerSchemaTool(
       }
     : { ...SCHEMAS };
 
-  const liveFetcher = client ? createLiveSchemaFetcher(client) : undefined;
+  const liveFetcher = client ? createLiveSchemaFetcher(client, config) : undefined;
   const availableSchemas = listAvailableSchemaNames(Object.keys(allSchemas), liveFetcher);
   const hasLiveEntities = liveFetcher !== undefined;
 
@@ -245,6 +248,7 @@ export function registerSchemaTool(
         "Fetch Harness YAML schema or examples for a resource type. " +
         "Pipeline/template schemas are bundled from harness-schema; connector, environment, service, " +
         "secret, and infrastructure schemas are fetched live from NG /yaml-schema (pass scope, org_id, project_id). " +
+        "release_process and release_activity schemas are fetched live from RMG /api/yamlSchema. " +
         "Use without path for a summary of fields and available sections. " +
         "Use with path to drill into a specific section. " +
         "Use with example to fetch a named example YAML snippet. " +
@@ -372,14 +376,15 @@ export function registerSchemaTool(
           }
 
           const { schema, source } = fetched;
+          const rootProperty = LIVE_ENTITY_SCHEMAS[args.resource_type]?.rootProperty;
 
           if (!args.path) {
-            return jsonResult(getEntitySchemaSummary(schema, args.resource_type, source));
+            return jsonResult(getEntitySchemaSummary(schema, args.resource_type, source, rootProperty));
           }
 
-          const node = navigateEntitySchemaPath(schema, args.resource_type, args.path);
+          const node = navigateEntitySchemaPath(schema, args.resource_type, args.path, rootProperty);
           if (!node) {
-            const available = getDefinitionSections(schema, args.resource_type);
+            const available = getDefinitionSections(schema, args.resource_type, rootProperty);
             return errorResult(
               `Path '${args.path}' not found in ${args.resource_type} schema. ` +
                 `Available sections: ${available.join(", ")}`,

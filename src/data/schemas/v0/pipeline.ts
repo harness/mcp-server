@@ -35940,6 +35940,21 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
+                  "reuse": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "not": {
+                          "pattern": "^<\\+.*>.*$"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "markNextChangeSetRun": {
                     "type": "boolean"
                   },
@@ -36175,6 +36190,21 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
+                  "reuse": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "not": {
+                          "pattern": "^<\\+.*>.*$"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "resources": {
                     "$ref": "#/definitions/pipeline/common/ContainerResource"
                   },
@@ -36391,6 +36421,21 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
+                  "reuse": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "not": {
+                          "pattern": "^<\\+.*>.*$"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "excludeChangeLogFile": {
                     "type": "boolean"
                   },
@@ -36498,6 +36543,21 @@ const schema: Record<string, any> = {
                   {
                     "type": "string",
                     "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "reuse": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "not": {
+                      "pattern": "^<\\+.*>.*$"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\))*$",
                     "minLength": 1
                   }
                 ]
@@ -37003,6 +37063,21 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
+                  "reuse": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "not": {
+                          "pattern": "^<\\+.*>.*$"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "resources": {
                     "$ref": "#/definitions/pipeline/common/ContainerResource"
                   },
@@ -37109,6 +37184,21 @@ const schema: Record<string, any> = {
                   {
                     "type": "string",
                     "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "reuse": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "not": {
+                      "pattern": "^<\\+.*>.*$"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
                     "minLength": 1
                   }
                 ]
@@ -37328,6 +37418,21 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
+                  "reuse": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "not": {
+                          "pattern": "^<\\+.*>.*$"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "resources": {
                     "$ref": "#/definitions/pipeline/common/ContainerResource"
                   },
@@ -37428,6 +37533,21 @@ const schema: Record<string, any> = {
                   {
                     "type": "string",
                     "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "reuse": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "not": {
+                      "pattern": "^<\\+.*>.*$"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
                     "minLength": 1
                   }
                 ]
@@ -37677,6 +37797,21 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
+                  "reuse": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "not": {
+                          "pattern": "^<\\+.*>.*$"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "resources": {
                     "$ref": "#/definitions/pipeline/common/ContainerResource"
                   },
@@ -37807,6 +37942,21 @@ const schema: Record<string, any> = {
                   {
                     "type": "string",
                     "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "reuse": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "not": {
+                      "pattern": "^<\\+.*>.*$"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
                     "minLength": 1
                   }
                 ]
@@ -38026,6 +38176,21 @@ const schema: Record<string, any> = {
                       {
                         "type": "string",
                         "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "reuse": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "not": {
+                          "pattern": "^<\\+.*>.*$"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\))*$",
                         "minLength": 1
                       }
                     ]
@@ -107733,6 +107898,12 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SnykScanNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/GitleaksScanNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SonarqubeScanNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/iacm/IACMModuleTestPluginStepNode"

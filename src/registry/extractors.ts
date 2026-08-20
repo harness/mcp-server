@@ -4,6 +4,7 @@
  */
 import { isRecord } from "../utils/type-guards.js";
 import { parseZipCsv } from "../utils/zip-csv.js";
+import type { PreflightContext } from "./types.js";
 
 /** Extract `data` from standard NG API responses: `{ status, data, ... }` */
 export const ngExtract = (raw: unknown): unknown => {
@@ -42,6 +43,18 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
   return {
     items: r.data?.content ?? [],
     total: r.data?.totalElements ?? r.data?.totalItems ?? 0,
+  };
+};
+
+/**
+ * Spring Data page at the response root (no NG `{ data }` envelope):
+ * `{ content, totalElements }`. Used by Release Management (RMG) list APIs.
+ */
+export const springPageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { content?: unknown[]; totalElements?: number };
+  return {
+    items: Array.isArray(r.content) ? r.content : [],
+    total: typeof r.totalElements === "number" ? r.totalElements : 0,
   };
 };
 
@@ -1116,7 +1129,7 @@ export function flattenTrafficType(item: Record<string, unknown>): void {
 }
 
 /**
- * Public v4 paginated lists (`EnvironmentListResponse` and siblings):
+ * Public v4 paginated lists (`EnvironmentListResponse`, `TrafficTypeListResponse` / `RolloutStatusListResponse`):
  * `{ data, limit, offset, totalCount }`. Promote `data`→`items` and `totalCount`→`total`
  * so harness_list compact/output schema see a full total, not the current page length.
  */
@@ -1151,3 +1164,356 @@ export const fmeGetExtract = (raw: unknown): unknown => {
   }
   return raw;
 };
+
+// ── Release Management (RMG) ──────────────────────────────────────────────
+
+const RMG_API_PREFIX = "/api";
+export const RMG_DEFAULT_DAYS_BACK = 30;
+export const RMG_MAX_DAYS_BACK = 365;
+/** Days of look-ahead included in the window so scheduled releases stay visible. */
+export const RMG_DAYS_FORWARD = 7;
+const RMG_DAY_MS = 86_400_000;
+export const RMG_DEFAULT_TASK_LIMIT = 50;
+export const RMG_MAX_TASK_LIMIT = 100;
+
+function rmgClampInt(value: unknown, min: number, max: number, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(max, Math.max(min, Math.trunc(n)));
+}
+
+function rmgAsRecord(value: unknown): Record<string, unknown> {
+  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+/** First key holding an array — RMG list payloads vary by gateway version. */
+function rmgFirstArrayAt(
+  source: Record<string, unknown>,
+  keys: readonly string[],
+): Array<Record<string, unknown>> | undefined {
+  for (const key of keys) {
+    const value = source[key];
+    if (Array.isArray(value)) return value as Array<Record<string, unknown>>;
+  }
+  return undefined;
+}
+
+/**
+ * Copy HARNESS_ORG / HARNESS_PROJECT into input when scopeOptional resources
+ * omit explicit org_id/project_id (same pattern as release list preflight).
+ */
+export async function releaseFillScopeFromConfig({ input, registry }: PreflightContext): Promise<void> {
+  if (!input.org_id && registry.orgId) input.org_id = registry.orgId;
+  if (!input.project_id && registry.projectId) input.project_id = registry.projectId;
+}
+
+/**
+ * Resolve the effective scope and time window before the body/query are built.
+ * The registry only merges HARNESS_ORG/HARNESS_PROJECT into `input` when the
+ * caller passes `resource_scope`, but the body always needs them.
+ */
+export async function releaseListPreflight(ctx: PreflightContext): Promise<void> {
+  await releaseFillScopeFromConfig(ctx);
+  const { input } = ctx;
+  const now = Date.now();
+  const daysBack = rmgClampInt(input.days_back, 1, RMG_MAX_DAYS_BACK, RMG_DEFAULT_DAYS_BACK);
+  if (input.start_ts === undefined || input.start_ts === "") {
+    input.start_ts = now - daysBack * RMG_DAY_MS;
+  }
+  if (input.end_ts === undefined || input.end_ts === "") {
+    input.end_ts = now + RMG_DAYS_FORWARD * RMG_DAY_MS;
+  }
+}
+
+/** POST /api/release/list — scope travels in the body as `scopes`, not as query params. */
+export function releaseListBody(input: Record<string, unknown>): Record<string, unknown> {
+  const scope: Record<string, string> = {};
+  if (typeof input.org_id === "string" && input.org_id) scope.orgIdentifier = input.org_id;
+  if (typeof input.project_id === "string" && input.project_id) {
+    scope.projectIdentifier = input.project_id;
+  }
+  return { scopes: Object.keys(scope).length > 0 ? [scope] : [] };
+}
+
+/**
+ * Normalize the list payload and apply the optional status filter client-side
+ * (the endpoint takes no status param). Status matching is case-insensitive
+ * because RMG returns both `Running` and `RUNNING` depending on the field.
+ */
+export function releaseListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const root = rmgAsRecord(raw);
+  const payload = Array.isArray(raw)
+    ? { content: raw }
+    : rmgFirstArrayAt(root, ["content", "releases", "items"])
+      ? root
+      : rmgAsRecord(root.data);
+
+  let items = rmgFirstArrayAt(payload, ["content", "releases", "items"]) ?? [];
+  const pageItemCount = items.length;
+
+  const requestedStatus = typeof input?.status === "string" ? input.status.trim() : "";
+  if (requestedStatus) {
+    const wanted = requestedStatus.toLowerCase();
+    items = items.filter((rel) => {
+      const status = rel.status ?? rel.releaseStatus;
+      return typeof status === "string" && status.toLowerCase() === wanted;
+    });
+  }
+
+  const total = ["totalElements", "totalItems", "totalCount", "total"]
+    .map((key) => payload[key])
+    .find((value): value is number => typeof value === "number");
+
+  return {
+    items,
+    total: requestedStatus ? items.length : (total ?? items.length),
+    ...(requestedStatus
+      ? {
+          status_filter: requestedStatus,
+          _hint:
+            "status is filtered client-side on this page only; total is the filtered count for this page, " +
+            `not the account (${pageItemCount} unfiltered items on this page). ` +
+            "Increment page (keep size and other filters) if matches may exist on later pages.",
+        }
+      : {}),
+  };
+}
+
+/** Flatten GET /api/release/{id} → { release: releaseInfo, ... }. */
+export function releaseGetExtract(raw: unknown): unknown {
+  const r = raw as { releaseInfo?: Record<string, unknown> };
+  if (r.releaseInfo && typeof r.releaseInfo === "object") {
+    return { release: r.releaseInfo };
+  }
+  return raw;
+}
+
+function rmgSplitCsvFilter(value: unknown): string[] | undefined {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const parts = value.split(",").map((s) => s.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : undefined;
+}
+
+/** Normalize sort/status/type filters before query param mapping (GET list). */
+export function normalizeReleaseActivityExecutionInput(input: Record<string, unknown>): void {
+  const sortField =
+    typeof input.sort_field === "string" && input.sort_field.length > 0
+      ? input.sort_field
+      : "start_ts";
+  const sortDirection = input.sort_direction === "asc" ? "asc" : "desc";
+  input.sort = [sortField, sortDirection];
+
+  const statusParts = rmgSplitCsvFilter(input.status);
+  if (statusParts) input.status = statusParts;
+
+  const typeParts = rmgSplitCsvFilter(input.activity_type);
+  if (typeParts) input.activity_type = typeParts;
+}
+
+export function normalizeReleaseTaskLimit(input: Record<string, unknown>): void {
+  if (input.limit === undefined && input.size !== undefined) {
+    input.limit = input.size;
+  }
+  input.limit = rmgClampInt(input.limit, 1, RMG_MAX_TASK_LIMIT, RMG_DEFAULT_TASK_LIMIT);
+}
+
+/** GET /api/release/{id}/tasks → standard list envelope with cursor pagination. */
+export function releaseTaskListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  const r = raw as {
+    tasks?: unknown[];
+    nextRequest?: { cursor?: string };
+    last?: boolean;
+  };
+  const items = Array.isArray(r.tasks) ? r.tasks : [];
+  const limit = rmgClampInt(input?.limit ?? input?.size, 1, RMG_MAX_TASK_LIMIT, RMG_DEFAULT_TASK_LIMIT);
+  return {
+    items,
+    total: items.length,
+    limit_applied: limit,
+    status_filter: typeof input?.status === "string" && input.status ? input.status : "all",
+    pagination: {
+      cursor: typeof input?.cursor === "string" ? input.cursor : undefined,
+      next_cursor: r.nextRequest?.cursor,
+      last: r.last,
+    },
+  };
+}
+
+/** GET /api/release/{id}/execution/activities — Spring page at root. */
+export function releaseActivityExecutionListExtract(raw: unknown): unknown {
+  const r = raw as {
+    content?: unknown[];
+    totalElements?: number;
+    totalPages?: number;
+    size?: number;
+    number?: number;
+    numberOfElements?: number;
+    first?: boolean;
+    last?: boolean;
+  };
+  const items = Array.isArray(r.content) ? r.content : [];
+  return {
+    items,
+    total: typeof r.totalElements === "number" ? r.totalElements : items.length,
+    pagination: {
+      page: r.number,
+      size: r.size,
+      total_pages: r.totalPages,
+      total_elements: r.totalElements,
+      number_of_elements: r.numberOfElements,
+      first: r.first,
+      last: r.last,
+    },
+  };
+}
+
+function requireReleaseAndPhase(input: Record<string, unknown>): { releaseId: string; phaseId: string } {
+  const releaseId = input.release_id;
+  const phaseId = input.phase_identifier;
+  if (typeof releaseId !== "string" || !releaseId) {
+    throw new Error("release_id is required");
+  }
+  if (typeof phaseId !== "string" || !phaseId) {
+    throw new Error(
+      "phase_identifier is required — pass via params on harness_get (from harness_list release_execution_phase)",
+    );
+  }
+  return { releaseId, phaseId };
+}
+
+export function releaseExecutionPhaseOutputPath(input: Record<string, unknown>): string {
+  const { releaseId, phaseId } = requireReleaseAndPhase(input);
+  const enc = encodeURIComponent;
+  return `${RMG_API_PREFIX}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/output`;
+}
+
+export function releaseExecutionPhaseInputPath(input: Record<string, unknown>): string {
+  const { releaseId, phaseId } = requireReleaseAndPhase(input);
+  const enc = encodeURIComponent;
+  return `${RMG_API_PREFIX}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/input`;
+}
+
+export function releaseExecutionActivityOutputPath(input: Record<string, unknown>): string {
+  const { releaseId, phaseId } = requireReleaseAndPhase(input);
+  const activityId = input.activity_identifier;
+  if (typeof activityId !== "string" || !activityId) {
+    throw new Error(
+      "activity_identifier is required — pass via params on harness_get (from harness_list release_execution_activity)",
+    );
+  }
+  const enc = encodeURIComponent;
+  return `${RMG_API_PREFIX}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/activity/${enc(activityId)}/output`;
+}
+
+function releasePhaseIoGetExtract(
+  raw: unknown,
+  input: Record<string, unknown> | undefined,
+  field: "inputs" | "outputs",
+): unknown {
+  const r = raw as { inputs?: unknown[]; outputs?: unknown[] };
+  const items = Array.isArray(r[field]) ? r[field] : [];
+  return {
+    [field]: items,
+    phase_identifier: input?.phase_identifier,
+    [`total_${field}`]: items.length,
+  };
+}
+
+export function releasePhaseOutputGetExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  return releasePhaseIoGetExtract(raw, input, "outputs");
+}
+
+export function releasePhaseInputGetExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  return releasePhaseIoGetExtract(raw, input, "inputs");
+}
+
+export function releaseActivityOutputGetExtract(
+  raw: unknown,
+  input: Record<string, unknown> | undefined,
+): unknown {
+  const r = raw as { outputs?: unknown[] };
+  const items = Array.isArray(r.outputs) ? r.outputs : [];
+  return {
+    outputs: items,
+    phase_identifier: input?.phase_identifier,
+    activity_identifier: input?.activity_identifier,
+    total_outputs: items.length,
+  };
+}
+
+export function releaseActivityInputGetExtract(raw: unknown): unknown {
+  const r = raw as { inputs?: unknown[] };
+  const items = Array.isArray(r.inputs) ? r.inputs : [];
+  return {
+    inputs: items,
+    total_inputs: items.length,
+  };
+}
+
+export function releaseInputGetExtract(raw: unknown): unknown {
+  const r = raw as { release_id?: string; process_execution_id?: string; yaml?: string };
+  return {
+    release_id: r.release_id,
+    process_execution_id: r.process_execution_id,
+    yaml: r.yaml,
+  };
+}
+
+/** GET /api/orchestration/execution/{id}/phases → standard list envelope. */
+export function releasePhaseListExtract(raw: unknown): {
+  items: unknown[];
+  total: number;
+  release_id?: string;
+  total_running_phases?: number;
+} {
+  const r = raw as {
+    phases?: unknown[];
+    release_id?: string;
+    total_running_phases?: number;
+  };
+  const items = Array.isArray(r.phases) ? r.phases : [];
+  return {
+    items,
+    total: items.length,
+    ...(r.release_id ? { release_id: r.release_id } : {}),
+    ...(typeof r.total_running_phases === "number" ? { total_running_phases: r.total_running_phases } : {}),
+  };
+}
+
+/** Project RMG process/activity YAML entity responses to a stable agent shape. */
+export function rmgYamlEntityExtract(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+  const gitDetails = raw.git_details ?? raw.gitDetails;
+  const out: Record<string, unknown> = {};
+  if (typeof raw.identifier === "string") out.identifier = raw.identifier;
+  if (typeof raw.name === "string") out.name = raw.name;
+  if (typeof raw.yaml === "string") out.yaml = raw.yaml;
+  if (typeof raw.orgIdentifier === "string") out.orgIdentifier = raw.orgIdentifier;
+  if (typeof raw.projectIdentifier === "string") out.projectIdentifier = raw.projectIdentifier;
+  if (gitDetails !== undefined) out.git_details = gitDetails;
+  if (Object.keys(out).length > 0) return out;
+  return raw;
+}
+
+/** Normalize RMG delete responses to a stable confirmation shape. */
+export function rmgYamlEntityDeleteExtract(raw: unknown): unknown {
+  if (raw === null || raw === undefined) return { deleted: true };
+  if (!isRecord(raw)) return { deleted: true };
+  const out: Record<string, unknown> = { deleted: true };
+  if (typeof raw.identifier === "string") out.identifier = raw.identifier;
+  if (raw.status !== undefined) out.status = raw.status;
+  return out;
+}
+
+export function yamlWriteBody(input: Record<string, unknown>): Record<string, unknown> {
+  const b = input.body as Record<string, unknown> | undefined;
+  if (!b || typeof b !== "object") {
+    throw new Error("body is required and must be an object with yaml (and optional git_details)");
+  }
+  if (typeof b.yaml !== "string" || b.yaml.length === 0) {
+    throw new Error("body.yaml is required (non-empty YAML string)");
+  }
+  const out: Record<string, unknown> = { yaml: b.yaml };
+  if (b.git_details !== undefined) out.git_details = b.git_details;
+  return out;
+}

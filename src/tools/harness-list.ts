@@ -66,6 +66,17 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         if (resourceType === "template" && input.template_list_type === undefined) {
           input.template_list_type = "All";
         }
+        // Map URL-derived resource_id onto required parent list filters (e.g. RMG release_id).
+        if (!input.release_id && input.resource_id) {
+          try {
+            const def = registry.getResource(resourceType);
+            if (def.listFilterFields?.some((f) => f.name === "release_id" && f.required)) {
+              input.release_id = input.resource_id;
+            }
+          } catch {
+            /* resource_type validated below */
+          }
+        }
         const rawResult = await registry.dispatch(client, resourceType, "list", input);
         const page = typeof args.page === "number" ? args.page : 0;
         const result = normalizeHarnessListPayload(rawResult, { page });
