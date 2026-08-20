@@ -13,8 +13,9 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_API_TIMEOUT_MS: 30000,
     HARNESS_MAX_RETRIES: 3,
     LOG_LEVEL: "info",
+    HARNESS_AUTO_APPROVE_RISK: "none",
     ...overrides,
-  };
+  } as Config;
 }
 
 function resource(type: string) {
@@ -169,11 +170,14 @@ describe("release-management execution resources", () => {
 
   it("release list extractor matches an explicit status case-insensitively", () => {
     const out = extractReleaseList(
-      { content: [{ id: "r1", status: "RUNNING" }, { id: "r2", status: "Failed" }] },
+      { content: [{ id: "r1", status: "RUNNING" }, { id: "r2", status: "Failed" }], totalElements: 40 },
       { status: "Running" },
-    ) as { items: Array<{ id: string }>; status_filter: string };
+    ) as { items: Array<{ id: string }>; status_filter: string; total: number; _hint: string };
     expect(out.items.map((r) => r.id)).toEqual(["r1"]);
     expect(out.status_filter).toBe("Running");
+    expect(out.total).toBe(1);
+    expect(out._hint).toContain("client-side on this page only");
+    expect(out._hint).toContain("2 unfiltered items");
   });
 
   it("release_execution_phase list extractor maps phases to items", () => {
@@ -212,10 +216,13 @@ describe("release-management execution resources", () => {
   });
 
   it("phase input pathBuilder hits /input endpoint", () => {
-    const path = buildPhaseInputPath({
-      release_id: "rel-slug",
-      phase_identifier: "deploy",
-    });
+    const path = buildPhaseInputPath(
+      {
+        release_id: "rel-slug",
+        phase_identifier: "deploy",
+      },
+      {},
+    );
     expect(path).toBe("/api/orchestration/execution/release/rel-slug/phase/deploy/input");
   });
 
@@ -238,19 +245,25 @@ describe("release-management execution resources", () => {
   });
 
   it("phase output pathBuilder hits /output endpoint", () => {
-    const path = buildPhaseOutputPath({
-      release_id: "rel-slug",
-      phase_identifier: "deploy",
-    });
+    const path = buildPhaseOutputPath(
+      {
+        release_id: "rel-slug",
+        phase_identifier: "deploy",
+      },
+      {},
+    );
     expect(path).toBe("/api/orchestration/execution/release/rel-slug/phase/deploy/output");
   });
 
   it("activity output pathBuilder hits activity /output endpoint", () => {
-    const path = buildActivityOutputPath({
-      release_id: "rel-slug",
-      phase_identifier: "deploy",
-      activity_identifier: "run-pipeline",
-    });
+    const path = buildActivityOutputPath(
+      {
+        release_id: "rel-slug",
+        phase_identifier: "deploy",
+        activity_identifier: "run-pipeline",
+      },
+      {},
+    );
     expect(path).toBe(
       "/api/orchestration/execution/release/rel-slug/phase/deploy/activity/run-pipeline/output",
     );

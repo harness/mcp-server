@@ -89,6 +89,7 @@ function releaseListExtract(raw: unknown, input?: Record<string, unknown>): unkn
       : asRecord(root.data);
 
   let items = firstArrayAt(payload, ["content", "releases", "items"]) ?? [];
+  const pageItemCount = items.length;
 
   const requestedStatus = typeof input?.status === "string" ? input.status.trim() : "";
   if (requestedStatus) {
@@ -106,7 +107,15 @@ function releaseListExtract(raw: unknown, input?: Record<string, unknown>): unkn
   return {
     items,
     total: requestedStatus ? items.length : (total ?? items.length),
-    ...(requestedStatus ? { status_filter: requestedStatus } : {}),
+    ...(requestedStatus
+      ? {
+          status_filter: requestedStatus,
+          _hint:
+            "status is filtered client-side on this page only; total is the filtered count for this page, " +
+            `not the account (${pageItemCount} unfiltered items on this page). ` +
+            "Increment page (keep size and other filters) if matches may exist on later pages.",
+        }
+      : {}),
   };
 }
 
@@ -691,7 +700,9 @@ export const releaseManagementToolset: ToolsetDefinition = {
         },
         {
           name: "status",
-          description: "Filter by release status (applied client-side; the endpoint has no status param)",
+          description:
+            "Filter by release status (applied client-side on the current page only; the endpoint has no status param). " +
+            "Empty results can still exist on other pages — keep paging with the same size.",
           enum: [...RELEASE_STATUSES],
         },
         {
@@ -773,7 +784,8 @@ export const releaseManagementToolset: ToolsetDefinition = {
           responseExtractor: releaseListExtract,
           description:
             "List releases for the current scope within an expected-start time window, " +
-            "optionally filtered by search_term and status.",
+            "optionally filtered by search_term and status. Status matching is client-side on the current page; " +
+            "when status is set the response includes _hint and a page-local total.",
         },
         get: {
           method: "GET",
