@@ -56,7 +56,7 @@ const nativeIdentifiers = {
   environment_id: "env1",
 };
 
-describe("fme_feature_flag_definition remaining native operations", () => {
+describe("fme_feature_flag_definition native-only operations", () => {
   let registry: Registry;
 
   beforeEach(() => {
@@ -174,5 +174,65 @@ describe("fme_feature_flag_definition remaining native operations", () => {
     ).rejects.toThrow(
       "fme_feature_flag_definition.kill: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.",
     );
+  });
+
+  it("list rejects a missing feature_flag_name before any request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_feature_flag_definition", "list", nativeScope),
+    ).rejects.toThrow(
+      'Missing required filter(s) for listing fme_feature_flag_definition: feature_flag_name. Pass them via filters (e.g. filters: { feature_flag_name: "..." }).',
+    );
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("delete rejects a missing environment_id before any request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_feature_flag_definition", "delete", {
+        ...nativeScope,
+        feature_flag_name: "my_flag",
+      }),
+    ).rejects.toThrow('fme_feature_flag_definition: "environment_id" is required.');
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("kill rejects a missing environment_id before any request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "fme_feature_flag_definition", "kill", {
+        ...nativeScope,
+        feature_flag_name: "my_flag",
+      }),
+    ).rejects.toThrow('fme_feature_flag_definition: "environment_id" is required.');
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("keeps tool-facing descriptions off HTTP paths", () => {
+    const resource = registry.getResource("fme_feature_flag_definition");
+    const texts = [
+      resource.description,
+      resource.operations.list?.description,
+      resource.operations.get?.description,
+      resource.operations.create?.description,
+      resource.operations.update?.description,
+      resource.operations.delete?.description,
+      resource.executeActions?.kill?.actionDescription,
+      resource.executeActions?.restore?.actionDescription,
+      resource.executeActions?.reallocate?.actionDescription,
+    ];
+
+    for (const text of texts) {
+      expect(text).toBeTruthy();
+      expect(text).not.toMatch(/\/fme\/api\//);
+      expect(text).not.toMatch(/\/internal\/api\//);
+    }
+    expect(resource.description).not.toMatch(/share endpoints/i);
   });
 });

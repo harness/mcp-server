@@ -621,8 +621,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag_definition",
       displayName: "FME Feature Flag Definition",
       description:
-        "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation. Supports list, get, create, update, delete, and kill/restore/reallocate. Create requires treatments, defaultTreatment, and defaultRule. " +
-        "Get/create/update are dual-mode: pass org_id+project_id (Harness-native) or the deprecated workspace_id (Split.io API). List/delete/kill/restore/reallocate are Harness-native only and require org_id+project_id. environment_id is passed as a path segment in legacy mode and as a query param in Harness-native mode.",
+        "Detailed definition of a feature flag in a specific environment: treatments, rules, targeting, and traffic allocation. Create requires treatments, defaultTreatment, and defaultRule. Get/create/update: pass org_id+project_id (preferred) or the deprecated workspace_id. List/delete/kill/restore/reallocate: org_id+project_id only. Native list requires feature_flag_name and uses offset/limit (max 100); it does not take environment_id. Other ops require environment_id. Kill/restore/reallocate are the same actions as on fme_feature_flag; either resource works.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -642,7 +641,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           queryParams: { feature_flag_name: "feature_flag_name", offset: "offset", limit: "limit" },
           responseExtractor: passthrough,
           description:
-            "List feature flag definitions for a flag across environments (Harness-native only). Requires feature_flag_name. Pagination uses offset and limit (default 100, max 100). No environment_id.",
+            "List feature flag definitions for a flag across environments (org_id+project_id only). Requires feature_flag_name. Pagination uses offset and limit (default 100, max 100). Do not pass environment_id.",
         },
         get: {
           method: "GET",
@@ -664,7 +663,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           queryParams: { environment_id: "environment_id" },
           responseExtractor: passthrough,
-          description: "Get feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation). Legacy mode: workspace_id, environment_id in path. Harness-native mode: org_id+project_id, environment_id as query param.",
+          description:
+            "Get a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation). Requires feature_flag_name and environment_id. Pass org_id+project_id (preferred) or deprecated workspace_id.",
         },
         create: {
           method: "POST",
@@ -688,7 +688,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagDefinitionCreateSchema,
-          description: "Create a feature flag definition in a specific environment. Requires treatments (array of treatment objects), defaultTreatment (string matching a treatment name), and defaultRule (array of bucket objects). Optional: rules, baselineTreatment, trafficAllocation, comment, title (Harness-native only). Legacy mode: workspace_id, environment_id in path. Harness-native mode: org_id+project_id, environment_id as query param.",
+          description:
+            "Create a feature flag definition in a specific environment. Requires treatments (array of treatment objects), defaultTreatment (string matching a treatment name), and defaultRule (array of bucket objects). Optional: rules, baselineTreatment, trafficAllocation, comment, title (Harness-native only). Requires feature_flag_name and environment_id. Pass org_id+project_id (preferred) or deprecated workspace_id.",
         },
         update: {
           method: "PUT",
@@ -719,7 +720,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagDefinitionUpdateSchema,
           description:
-            "Update a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation, baseline treatment). Legacy mode: PUT, workspace_id/environment_id in path (full-replace, per the Split.io API). Harness-native mode: PATCH via JSON Merge Patch (RFC 7396) — omit a field to leave it unchanged; treatments/rules/defaultRule are omit-to-keep but reject explicit null (not clearable); org_id+project_id, environment_id as query param.",
+            "Update a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation, baseline treatment). Requires feature_flag_name and environment_id. Pass org_id+project_id (preferred) or deprecated workspace_id. Native update is JSON Merge Patch: omit a field to leave it unchanged; treatments/rules/defaultRule are omit-to-keep but reject explicit null (not clearable). Legacy update is a full replace.",
         },
         delete: {
           method: "DELETE",
@@ -729,7 +730,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           queryParams: { environment_id: "environment_id" },
           responseExtractor: passthrough,
           description:
-            "Delete a feature flag definition in an environment (Harness-native only). Requires org_id, project_id, feature_flag_name, and environment_id as a query parameter.",
+            "Delete a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id.",
         },
       },
       executeActions: {
@@ -748,7 +749,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: fmeActionExtract,
           actionDescription:
-            "Kill (turn off) a feature flag definition in an environment (Harness-native only). Requires org_id, project_id, feature_flag_name, and environment_id. Optional body comment/title.",
+            "Kill (turn off) a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as fme_feature_flag kill.",
           bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
         },
         restore: {
@@ -766,7 +767,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: fmeActionExtract,
           actionDescription:
-            "Restore a killed feature flag definition in an environment (Harness-native only). Requires org_id, project_id, feature_flag_name, and environment_id. Optional body comment/title.",
+            "Restore a killed feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as fme_feature_flag restore.",
           bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
         },
         reallocate: {
@@ -784,7 +785,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: fmeActionExtract,
           actionDescription:
-            "Reallocate traffic across treatments for a feature flag definition in an environment (Harness-native only). Requires org_id, project_id, feature_flag_name, and environment_id. Optional body comment/title.",
+            "Reallocate traffic across treatments for a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as fme_feature_flag reallocate.",
           bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
         },
       },
