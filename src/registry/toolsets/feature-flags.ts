@@ -65,29 +65,25 @@ const fmeFeatureFlagArchiveSchema: BodySchema = {
 
 const fmeEnvironmentCreateSchema: BodySchema = {
   description:
-    "Create an FME environment in a project. Requires org_id+project_id. name is required (max 15 characters). isProduction is optional (default false). production is accepted as an alias for isProduction.",
+    "Create an FME environment in a project. Requires org_id+project_id. name is required (max 15 characters). isProduction is optional (default false).",
   fields: [
     { name: "name", type: "string", required: true, description: "Environment name (unique in the project; max 15 characters)" },
     { name: "isProduction", type: "boolean", required: false, description: "Whether this is a production environment. Optional; defaults to false on the backend if omitted." },
-    { name: "production", type: "boolean", required: false, description: "Alias for isProduction." },
   ],
 };
 
 const fmeEnvironmentUpdateSchema: BodySchema = {
   description:
-    "Partial environment update via JSON Merge Patch (RFC 7396). Requires org_id+project_id. name and isProduction are not clearable — omit to leave unchanged. production is accepted as an alias for isProduction.",
+    "Partial environment update via JSON Merge Patch (RFC 7396). Requires org_id+project_id. name and isProduction are not clearable — omit to leave unchanged.",
   fields: [
     { name: "name", type: "string", required: false, description: "Updated name; omit to leave unchanged. Blank names are rejected. Not clearable." },
     { name: "isProduction", type: "boolean", required: false, description: "Updated production flag. Omit to leave unchanged; not clearable." },
-    { name: "production", type: "boolean", required: false, description: "Alias for isProduction." },
   ],
 };
 
-function fmeEnvironmentProduction(body: Record<string, unknown> | undefined): boolean | undefined {
-  if (!body) return undefined;
-  if (body.isProduction !== undefined && body.isProduction !== null) return Boolean(body.isProduction);
-  if (body.production !== undefined && body.production !== null) return Boolean(body.production);
-  return undefined;
+function fmeEnvironmentIsProduction(body: Record<string, unknown> | undefined): boolean | undefined {
+  if (!body || body.isProduction === undefined || body.isProduction === null) return undefined;
+  return Boolean(body.isProduction);
 }
 
 /** get/create/update/delete use Harness-native v4 routes; list remains dual-mode. */
@@ -327,10 +323,10 @@ export const featureFlagsToolset: ToolsetDefinition = {
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
-            const production = fmeEnvironmentProduction(body);
+            const isProduction = fmeEnvironmentIsProduction(body);
             return {
               name: body?.name,
-              ...(production !== undefined ? { isProduction: production } : {}),
+              ...(isProduction !== undefined ? { isProduction } : {}),
             };
           },
           responseExtractor: passthrough,
@@ -347,10 +343,10 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             if (!body) return {};
-            const production = fmeEnvironmentProduction(body);
+            const isProduction = fmeEnvironmentIsProduction(body);
             return {
               ...(typeof body.name === "string" ? { name: body.name } : {}),
-              ...(production !== undefined ? { isProduction: production } : {}),
+              ...(isProduction !== undefined ? { isProduction } : {}),
             };
           },
           responseExtractor: passthrough,
