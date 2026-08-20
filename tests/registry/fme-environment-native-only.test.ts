@@ -52,7 +52,7 @@ function firstRequest(mockRequest: ReturnType<typeof vi.fn>): RequestOptions {
 
 const nativeScope = { org_id: "o1", project_id: "p1" };
 const ENV_ID = "a4cb7d40-67ef-11f1-9ff8-96e3734caedf";
-const NATIVE_ONLY = /Harness-native \(org_id\/project_id\) only/;
+const NATIVE_ONLY = /requires org_id and project_id/;
 
 describe("fme_environment remaining native-only ops", () => {
   let registry: Registry;
@@ -81,7 +81,7 @@ describe("fme_environment remaining native-only ops", () => {
   });
 
   it.each(["get", "create", "update", "delete"] as const)(
-    "%s: rejects workspace_id because MCP never had a legacy contract for this op",
+    "%s: rejects workspace_id because operation requires org_id and project_id",
     async (operation) => {
       const client = makeClient();
       const input: Record<string, unknown> = { workspace_id: "ws1", environment_id: ENV_ID };
