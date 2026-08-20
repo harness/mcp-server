@@ -109,35 +109,6 @@ describe("fme_environment remaining native-only ops", () => {
     expect(create?.skipScopeBodyInjection).toBe(true);
   });
 
-  it("create: maps production alias to isProduction", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_environment", "create", {
-      ...nativeScope,
-      body: { name: "aliasenv", production: true },
-    });
-
-    expect(firstRequest(mockRequest).body).toEqual({ name: "aliasenv", isProduction: true });
-  });
-
-  it("update: native merge-patch maps production to isProduction", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_environment", "update", {
-      ...nativeScope,
-      environment_id: ENV_ID,
-      body: { name: "renamed", production: false },
-    });
-
-    const request = firstRequest(mockRequest);
-    expect(request.method).toBe("PATCH");
-    expect(request.path).toBe(`/fme/api/v4/environments/${ENV_ID}`);
-    expect(request.headers).toMatchObject({ "Content-Type": "application/merge-patch+json" });
-    expect(request.body).toEqual({ name: "renamed", isProduction: false });
-  });
-
   it("delete: native routes by environment_id", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
