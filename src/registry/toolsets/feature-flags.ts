@@ -1491,7 +1491,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description:
-            "Delete a segment by name. MCP does not gate on kind; the backend STANDARD-store lookup 404s for LARGE/RULE_BASED names. Returns 400 hasDependents if any environment definition or flag still references it — delete definitions (after clearing keys) first.",
+            "Delete a segment by name. The backend STANDARD-store lookup 404s for LARGE/RULE_BASED names. Returns 400 hasDependents if any environment definition or flag still references it — delete definitions (after clearing keys) first.",
         },
         create: {
           method: "POST",
