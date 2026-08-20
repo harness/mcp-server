@@ -817,6 +817,22 @@ describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
     registry = new Registry(makeConfig());
   });
 
+  it.each(["fme_traffic_type", "fme_rollout_status"] as const)(
+    "%s descriptions stay tool-facing (no HTTP paths or list-only restatement)",
+    (resourceType) => {
+      const resource = findResource(resourceType);
+      const listDescription = resource.operations.list?.description ?? "";
+
+      expect(resource.description).not.toMatch(/\/fme\/api\//);
+      expect(resource.description).not.toMatch(/\/internal\/api\//);
+      expect(resource.description).not.toMatch(/List-only/i);
+      expect(listDescription).not.toMatch(/\/fme\/api\//);
+      expect(listDescription).not.toMatch(/\/internal\/api\//);
+      expect(resource.description).toMatch(/org_id\+project_id/);
+      expect(resource.description).toMatch(/workspace_id/);
+    },
+  );
+
   it.each([
     ["fme_traffic_type", "/fme/api/v4/traffic-types", "/internal/api/v2/trafficTypes/ws/ws1"],
     ["fme_rollout_status", "/fme/api/v4/rollout-statuses", "/internal/api/v2/rolloutStatuses/ws/ws1"],

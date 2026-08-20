@@ -680,7 +680,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_rollout_status",
       displayName: "FME Rollout Status",
       description:
-        "Rollout status definitions (e.g. Killed, Permanent, Ramping). Use to discover rollout_status_id UUIDs for filtering fme_feature_flag lists. Dual-mode scoping: pass org_id+project_id (Harness-native) or deprecated workspace_id (Split Admin). Rollout status IDs are also returned inline with fme_feature_flag list results. List-only — no get/create/update/delete.",
+        "Rollout status definitions (e.g. Killed, Permanent, Ramping). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover rollout_status_id UUIDs for filtering fme_feature_flag lists. Native items include id, name, and optional description. Pagination uses offset/limit (max 100; harness_list size maps to limit).",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -705,7 +705,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { offset: "offset", size: "limit", limit: "limit" },
           responseExtractor: fmeV4PaginatedListExtract,
-          description: "List rollout statuses. Legacy: workspace_id → Split Admin. Harness-native: org_id+project_id, optional offset/limit (harness_list size maps to limit). Envelope {data, limit, offset, totalCount} promoted to items/total.",
+          description:
+            "List rollout statuses. Pass org_id+project_id (preferred) or deprecated workspace_id. Optional offset/limit (harness_list size maps to limit).",
         },
       },
     },
@@ -931,7 +932,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_traffic_type",
       displayName: "FME Traffic Type",
       description:
-        "Traffic type in Feature Management (e.g. 'user', 'account'). List-only — harness_list only; no get/create/update/delete. Dual-mode scoping: org_id+project_id (Harness-native, preferred) or deprecated workspace_id. Discover traffic_type_id and name values for flag/segment create and identity queries. Pagination: offset/limit (harness_list size maps to limit).",
+        "Traffic type (e.g. 'user', 'account'). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover traffic_type_id / name values for flag and segment create. Native items include id and name (no displayAttributeId). Pagination uses offset/limit (max 100; harness_list size maps to limit).",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -956,7 +957,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { offset: "offset", size: "limit", limit: "limit" },
           responseExtractor: fmeV4PaginatedListExtract,
-          description: "List traffic types. Legacy: workspace_id → Split Admin (may include displayAttributeId). Harness-native: org_id+project_id, optional offset/limit (harness_list size maps to limit); envelope {data, limit, offset, totalCount} with id and name only, promoted to items/total.",
+          description:
+            "List traffic types. Pass org_id+project_id (preferred) or deprecated workspace_id. Optional offset/limit (harness_list size maps to limit). Native results have id and name only.",
         },
       },
     },
