@@ -826,8 +826,12 @@ describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
       expect(resource.description).not.toMatch(/\/fme\/api\//);
       expect(resource.description).not.toMatch(/\/internal\/api\//);
       expect(resource.description).not.toMatch(/List-only/i);
+      expect(resource.description).not.toMatch(/Native items/i);
+      expect(resource.description).not.toMatch(/Native results/i);
+      expect(resource.description).not.toMatch(/displayAttributeId/);
       expect(listDescription).not.toMatch(/\/fme\/api\//);
       expect(listDescription).not.toMatch(/\/internal\/api\//);
+      expect(listDescription).not.toMatch(/Native results/i);
       expect(resource.description).toMatch(/org_id\+project_id/);
       expect(resource.description).toMatch(/workspace_id/);
     },

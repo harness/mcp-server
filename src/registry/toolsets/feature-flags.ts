@@ -680,7 +680,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_rollout_status",
       displayName: "FME Rollout Status",
       description:
-        "Rollout status definitions (e.g. Killed, Permanent, Ramping). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover rollout_status_id UUIDs for filtering fme_feature_flag lists. Native items include id, name, and optional description. Pagination uses offset/limit (max 100; harness_list size maps to limit).",
+        "Rollout status definitions (e.g. Killed, Permanent, Ramping). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover rollout_status_id UUIDs for filtering fme_feature_flag lists. Pagination uses offset/limit (max 100; harness_list size maps to limit).",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -932,7 +932,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_traffic_type",
       displayName: "FME Traffic Type",
       description:
-        "Traffic type (e.g. 'user', 'account'). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover traffic_type_id / name values for flag and segment create. Native items include id and name (no displayAttributeId). Pagination uses offset/limit (max 100; harness_list size maps to limit).",
+        "Traffic type (e.g. 'user', 'account'). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover traffic_type_id / name values for flag and segment create. Pagination uses offset/limit (max 100; harness_list size maps to limit).",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -958,7 +958,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           queryParams: { offset: "offset", size: "limit", limit: "limit" },
           responseExtractor: fmeV4PaginatedListExtract,
           description:
-            "List traffic types. Pass org_id+project_id (preferred) or deprecated workspace_id. Optional offset/limit (harness_list size maps to limit). Native results have id and name only.",
+            "List traffic types. Pass org_id+project_id (preferred) or deprecated workspace_id. Optional offset/limit (harness_list size maps to limit).",
         },
       },
     },
