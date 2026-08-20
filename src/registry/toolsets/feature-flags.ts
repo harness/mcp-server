@@ -316,7 +316,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description:
-            "Get a single environment by environment_id (UUID from list). Harness-native only (org_id+project_id). MCP never supported workspace_id get.",
+            "Get a single environment by environment_id (UUID from list). Harness-native only (org_id+project_id).",
         },
         create: {
           method: "POST",
