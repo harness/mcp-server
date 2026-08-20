@@ -45,6 +45,18 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
   };
 };
 
+/**
+ * Spring Data page at the response root (no NG `{ data }` envelope):
+ * `{ content, totalElements }`. Used by Release Management (RMG) list APIs.
+ */
+export const springPageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const r = raw as { content?: unknown[]; totalElements?: number };
+  return {
+    items: Array.isArray(r.content) ? r.content : [],
+    total: typeof r.totalElements === "number" ? r.totalElements : 0,
+  };
+};
+
 /** Extract `data` from NG API and wrap primitive values in an object for structuredContent compatibility. */
 export const countExtract = (raw: unknown): { count: number; _error?: string } => {
   const r = raw as { data?: unknown };

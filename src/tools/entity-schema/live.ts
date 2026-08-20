@@ -1,4 +1,5 @@
 import type { HarnessClient } from "../../client/harness-client.js";
+import { resolveRmgBaseUrl, type Config } from "../../config.js";
 import { createLogger } from "../../utils/logger.js";
 import {
   normalizeEntitySchema,
@@ -46,6 +47,18 @@ export const LIVE_ENTITY_SCHEMAS: Record<string, LiveEntitySchemaDefinition> = {
   infrastructure: {
     entityType: "Infrastructure",
     description: "Infrastructure entity schema from NG yaml-schema API",
+  },
+  release_process: {
+    entityType: "PROCESS",
+    api: "rmg",
+    rootProperty: "process",
+    description: "Release orchestration process YAML schema from RMG /api/yamlSchema",
+  },
+  release_activity: {
+    entityType: "ACTIVITY",
+    api: "rmg",
+    rootProperty: "activity",
+    description: "Release orchestration activity YAML schema from RMG /api/yamlSchema",
   },
 };
 
@@ -179,6 +192,40 @@ function buildYamlSchemaParams(
   return query;
 }
 
+/** Build RMG /api/yamlSchema query params (org/project only — account via Harness-Account header). */
+function buildRmgYamlSchemaParams(params: LiveSchemaFetchParams): Record<string, string> {
+  const scope = resolveScope(params.scope);
+  const query: Record<string, string> = {};
+
+  if (scope === "org" || scope === "project") {
+    if (!params.orgId) {
+      throw new Error(`org_id is required when scope is '${scope}'`);
+    }
+    query.orgIdentifier = params.orgId;
+  }
+
+  if (scope === "project") {
+    if (!params.projectId) {
+      throw new Error("project_id is required when scope is 'project'");
+    }
+    query.projectIdentifier = params.projectId;
+  }
+
+  return query;
+}
+
+function validateLiveSchemaParams(
+  resourceType: string,
+  definition: LiveEntitySchemaDefinition,
+  params: LiveSchemaFetchParams,
+): void {
+  if ((definition.api ?? "ng") === "rmg") {
+    buildRmgYamlSchemaParams(params);
+    return;
+  }
+  buildYamlSchemaParams(resourceType, definition, params);
+}
+
 function getNestedSchemaRoot(value: unknown, preferredKey: string): JsonObject | undefined {
   if (!isRecord(value)) return undefined;
   if (looksLikeJsonSchema(value) && "properties" in value) return value;
@@ -219,7 +266,16 @@ export function getResourceDefinitions(
   return undefined;
 }
 
-export function getRootDefinition(schema: JsonObject, resourceType: string): JsonObject | undefined {
+export function getRootDefinition(
+  schema: JsonObject,
+  resourceType: string,
+  rootProperty?: string,
+): JsonObject | undefined {
+  if (rootProperty) {
+    const wrapper = (schema.properties as JsonObject | undefined)?.[rootProperty];
+    if (looksLikeJsonSchema(wrapper)) return wrapper as JsonObject;
+  }
+
   const resourceDefs = getResourceDefinitions(schema, resourceType);
   const exactHarnessRoot = resourceDefs?.[resourceType];
   if (looksLikeJsonSchema(exactHarnessRoot)) return exactHarnessRoot;
@@ -239,7 +295,16 @@ export function getRootDefinition(schema: JsonObject, resourceType: string): Jso
   return undefined;
 }
 
-export function getDefinitionSections(schema: JsonObject, resourceType: string): string[] {
+export function getDefinitionSections(
+  schema: JsonObject,
+  resourceType: string,
+  rootProperty?: string,
+): string[] {
+  const rootDef = getRootDefinition(schema, resourceType, rootProperty);
+  if (rootProperty && rootDef?.properties) {
+    return Object.keys(rootDef.properties as Record<string, unknown>);
+  }
+
   const resourceDefs = getResourceDefinitions(schema, resourceType);
   if (resourceDefs) return Object.keys(resourceDefs);
 
@@ -251,9 +316,10 @@ export function getEntitySchemaSummary(
   schema: JsonObject,
   resourceType: string,
   source: EntitySchemaSource,
+  rootProperty?: string,
 ): Record<string, unknown> {
-  const sections = getDefinitionSections(schema, resourceType);
-  const rootDef = getRootDefinition(schema, resourceType);
+  const sections = getDefinitionSections(schema, resourceType, rootProperty);
+  const rootDef = getRootDefinition(schema, resourceType, rootProperty);
   const properties = rootDef?.properties as Record<string, unknown> | undefined;
   const required = rootDef?.required as string[] | undefined;
 
@@ -273,13 +339,16 @@ export function getEntitySchemaSummary(
   const hint =
     source === "bundled"
       ? "Schema from vendored snapshot (pnpm sync-entity-schemas). Use scope, org_id, and project_id for org/project entities."
-      : "Schema from live NG /ng/api/yaml-schema. Pass scope, org_id, and project_id for org/project scoped entities.";
+      : source === "rmg-yaml-schema"
+        ? "Schema from live RMG /api/yamlSchema. Pass scope, org_id, and project_id when scoping to org or project."
+        : "Schema from live NG /ng/api/yaml-schema. Pass scope, org_id, and project_id for org/project scoped entities.";
 
   return {
     resource_type: resourceType,
     source,
     fields,
     available_sections: sections,
+    ...(rootProperty ? { yaml_root: rootProperty } : {}),
     hint: `Use path to drill into a section. ${hint}`,
   };
 }
@@ -288,7 +357,36 @@ export function navigateEntitySchemaPath(
   schema: JsonObject,
   resourceType: string,
   path: string,
+  rootProperty?: string,
 ): unknown {
+  if (rootProperty) {
+    const rootDef = getRootDefinition(schema, resourceType, rootProperty);
+    if (!rootDef) return undefined;
+
+    if (path === rootProperty) return rootDef;
+
+    const normalizedPath = path.startsWith(`${rootProperty}.`)
+      ? path.slice(rootProperty.length + 1)
+      : path;
+    const parts = normalizedPath.split(".").filter(Boolean);
+    let current: unknown = rootDef;
+    for (const part of parts) {
+      if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
+      const obj = current as JsonObject;
+      const props = obj.properties as JsonObject | undefined;
+      if (props && part in props) {
+        current = props[part];
+        continue;
+      }
+      if (part in obj) {
+        current = obj[part];
+        continue;
+      }
+      return undefined;
+    }
+    return current;
+  }
+
   const resourceDefs = getResourceDefinitions(schema, resourceType);
   if (resourceDefs) {
     if (resourceDefs[path]) return resourceDefs[path];
@@ -341,7 +439,7 @@ function logBundledServe(
   });
 }
 
-export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetcher {
+export function createLiveSchemaFetcher(client: HarnessClient, config?: Config): LiveSchemaFetcher {
   const cache = new Map<string, EntitySchemaCacheEntry>();
   preloadBundledEntitySchemas(cache, client.account);
 
@@ -363,8 +461,8 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
 
       const accountId = client.account;
       const scope = resolveScope(params.scope);
-      // Validate scope/org/project before cache or bundled paths (same rules as live NG fetch).
-      buildYamlSchemaParams(resourceType, definition, params);
+      const api = definition.api ?? "ng";
+      validateLiveSchemaParams(resourceType, definition, params);
 
       const cacheKey = buildLiveSchemaCacheKey(resourceType, accountId, scope, {
         orgId: params.orgId,
@@ -378,6 +476,36 @@ export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetche
           logBundledServe(resourceType, scope, accountId, true);
         }
         return cached;
+      }
+
+      if (api === "rmg") {
+        if (!config) {
+          throw new Error("RMG YAML schema fetch requires server configuration.");
+        }
+
+        const scopeParams = buildRmgYamlSchemaParams(params);
+        log.debug("Fetching RMG YAML schema", {
+          resource_type: resourceType,
+          entity_type: definition.entityType,
+          scope,
+          account_id: accountId,
+        });
+
+        const response = await client.request<unknown>({
+          method: "GET",
+          path: "/api/yamlSchema",
+          baseUrl: resolveRmgBaseUrl(config),
+          headerBasedScoping: true,
+          params: {
+            entityType: definition.entityType,
+            ...scopeParams,
+          },
+        });
+
+        const raw = extractLiveSchema(response);
+        const entry: EntitySchemaCacheEntry = { schema: raw, source: "rmg-yaml-schema" };
+        cache.set(cacheKey, entry);
+        return entry;
       }
 
       // Explicit identifier requests entity-specific schema — bundled snapshots are type-level only.
