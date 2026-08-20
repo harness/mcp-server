@@ -91,6 +91,17 @@ describe("feature-flag-rollout prompt", () => {
     ).rejects.toThrow(/Provide either workspaceId.*or orgId \+ projectId/);
   });
 
+  it("rejects partial Harness-native scope (projectId only)", async () => {
+    const client = await createTestClient();
+
+    await expect(
+      client.getPrompt({
+        name: "feature-flag-rollout",
+        arguments: { featureFlagName: "my_flag", projectId: "payments" },
+      }),
+    ).rejects.toThrow(/Provide either workspaceId.*or orgId \+ projectId/);
+  });
+
   it("legacy mode: interpolates workspace_id scope args and omits Harness-native caveat", async () => {
     const text = await getPromptText({
       featureFlagName: "checkout_v2",

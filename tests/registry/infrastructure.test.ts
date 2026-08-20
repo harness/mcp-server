@@ -249,4 +249,30 @@ describe("infrastructure deep links", () => {
 
     expect(result.items[0]!.openInHarness).toBe(INFRA_DEEP_LINK);
   });
+
+  it("update: openInHarness aliases nested infrastructure.environmentRef onto environmentIdentifier", async () => {
+    const client = makeClient(
+      vi.fn().mockResolvedValue({
+        data: {
+          identifier: "k8s",
+          name: "k8s",
+          infrastructure: { environmentRef: "preprod" },
+          orgIdentifier: "default",
+          projectIdentifier: "avi",
+        },
+      }),
+    );
+    const result = (await registry.dispatch(client, "infrastructure", "update", {
+      infrastructure_id: "k8s",
+      org_id: "default",
+      project_id: "avi",
+      body: {
+        name: "k8s",
+        type: "KubernetesDirect",
+        environmentRef: "preprod",
+      },
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(INFRA_DEEP_LINK);
+  });
 });
