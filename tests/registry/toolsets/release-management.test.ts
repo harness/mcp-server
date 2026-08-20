@@ -2,6 +2,12 @@ import { describe, expect, it } from "vitest";
 import { releaseManagementToolset } from "../../../src/registry/toolsets/release-management.js";
 import { Registry } from "../../../src/registry/index.js";
 import type { Config } from "../../../src/config.js";
+import {
+  releaseGetExtract,
+  rmgYamlEntityExtract,
+  rmgYamlEntityDeleteExtract,
+  yamlWriteBody,
+} from "../../../src/registry/extractors.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -99,6 +105,28 @@ describe("release-management execution resources", () => {
     expect(releaseProcessResource.headerBasedScoping).toBe(true);
     expect(releaseDefinitionActivityResource.baseUrlOverride).toBe("rmg");
     expect(releaseDefinitionActivityResource.headerBasedScoping).toBe(true);
+  });
+
+  it("release_process has no execute action", () => {
+    expect(releaseProcessResource.executeActions).toBeUndefined();
+    expect(releaseProcessResource.executeHint).toBeUndefined();
+  });
+
+  it("definition resources use rmgYamlEntityExtract instead of passthrough", () => {
+    for (const op of ["get", "create", "update"] as const) {
+      expect(releaseProcessResource.operations[op]?.responseExtractor).toBe(rmgYamlEntityExtract);
+      expect(releaseDefinitionActivityResource.operations[op]?.responseExtractor).toBe(rmgYamlEntityExtract);
+    }
+    expect(releaseProcessResource.operations.delete?.responseExtractor).toBe(rmgYamlEntityDeleteExtract);
+    expect(releaseDefinitionActivityResource.operations.delete?.responseExtractor).toBe(rmgYamlEntityDeleteExtract);
+  });
+
+  it("release_execution_phase is list-only with empty identifierFields", () => {
+    expect(releasePhaseResource.operations.get).toBeUndefined();
+    expect(releasePhaseResource.identifierFields).toEqual([]);
+    expect(releasePhaseResource.listFilterFields).toContainEqual(
+      expect.objectContaining({ name: "release_id", required: true }),
+    );
   });
 
   it("release_execution_phase list hits GET /api/orchestration/execution/{releaseId}/phases", () => {
@@ -315,5 +343,56 @@ describe("release-management execution resources", () => {
       { phase_identifier: "deploy", activity_identifier: "run-pipeline" },
     ) as { activity_identifier: string };
     expect(out.activity_identifier).toBe("run-pipeline");
+  });
+});
+
+describe("release-management extractors", () => {
+  it("releaseGetExtract flattens releaseInfo envelope", () => {
+    expect(releaseGetExtract({ releaseInfo: { id: "rel-1", status: "Running" } })).toEqual({
+      release: { id: "rel-1", status: "Running" },
+    });
+    expect(releaseGetExtract({ id: "rel-2", status: "Failed" })).toEqual({
+      id: "rel-2",
+      status: "Failed",
+    });
+  });
+
+  it("rmgYamlEntityExtract projects stable YAML entity fields", () => {
+    expect(
+      rmgYamlEntityExtract({
+        identifier: "deploy-proc",
+        name: "Deploy",
+        yaml: "process:\n  identifier: deploy-proc",
+        orgIdentifier: "org1",
+        projectIdentifier: "proj1",
+        gitDetails: { branch: "main" },
+        extraInternalField: "ignored",
+      }),
+    ).toEqual({
+      identifier: "deploy-proc",
+      name: "Deploy",
+      yaml: "process:\n  identifier: deploy-proc",
+      orgIdentifier: "org1",
+      projectIdentifier: "proj1",
+      git_details: { branch: "main" },
+    });
+  });
+
+  it("yamlWriteBody validates required body and yaml", () => {
+    expect(yamlWriteBody({ body: { yaml: "process:\n  identifier: p1" } })).toEqual({
+      yaml: "process:\n  identifier: p1",
+    });
+    expect(
+      yamlWriteBody({
+        body: { yaml: "activity:\n  identifier: a1", git_details: { branch: "main" } },
+      }),
+    ).toEqual({
+      yaml: "activity:\n  identifier: a1",
+      git_details: { branch: "main" },
+    });
+    expect(() => yamlWriteBody({})).toThrow("body is required");
+    expect(() => yamlWriteBody({ body: { yaml: "" } })).toThrow("body.yaml is required");
+    expect(() => yamlWriteBody({ body: { yaml: 0 } })).toThrow("body.yaml is required");
+    expect(() => yamlWriteBody({ body: null })).toThrow("body is required");
   });
 });

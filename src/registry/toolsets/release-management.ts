@@ -3,133 +3,40 @@
  * Paths are service-native `/api/...`. Base URL is `${HARNESS_BASE_URL}/gateway/rmg`.
  * Account via Harness-Account header (headerBasedScoping).
  */
-import type { BodySchema, ParamsSchema, PreflightContext, ToolsetDefinition } from "../types.js";
-import { passthrough, springPageExtract } from "../extractors.js";
+import type { BodySchema, ParamsSchema, ToolsetDefinition } from "../types.js";
+import {
+  normalizeReleaseActivityExecutionInput,
+  normalizeReleaseTaskLimit,
+  releaseActivityExecutionListExtract,
+  releaseActivityInputGetExtract,
+  releaseActivityOutputGetExtract,
+  releaseExecutionActivityOutputPath,
+  releaseExecutionPhaseInputPath,
+  releaseExecutionPhaseOutputPath,
+  releaseFillScopeFromConfig,
+  releaseGetExtract,
+  releaseInputGetExtract,
+  releaseListBody,
+  releaseListExtract,
+  releaseListPreflight,
+  releasePhaseInputGetExtract,
+  releasePhaseListExtract,
+  releasePhaseOutputGetExtract,
+  releaseTaskListExtract,
+  rmgYamlEntityDeleteExtract,
+  rmgYamlEntityExtract,
+  RMG_DEFAULT_DAYS_BACK,
+  RMG_DAYS_FORWARD,
+  RMG_DEFAULT_TASK_LIMIT,
+  RMG_MAX_DAYS_BACK,
+  RMG_MAX_TASK_LIMIT,
+  springPageExtract,
+  yamlWriteBody,
+} from "../extractors.js";
 
 const RMG = "/api";
 
 const RELEASE_STATUSES = ["Running", "Success", "Failed", "Scheduled", "Paused", "Aborted"] as const;
-
-const DEFAULT_DAYS_BACK = 30;
-const MAX_DAYS_BACK = 365;
-/** Days of look-ahead included in the window so scheduled releases stay visible. */
-const DAYS_FORWARD = 7;
-const DAY_MS = 86_400_000;
-
-function clampInt(value: unknown, min: number, max: number, fallback: number): number {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(max, Math.max(min, Math.trunc(n)));
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return value !== null && typeof value === "object" ? (value as Record<string, unknown>) : {};
-}
-
-/** First key holding an array — RMG list payloads vary by gateway version. */
-function firstArrayAt(
-  source: Record<string, unknown>,
-  keys: readonly string[],
-): Array<Record<string, unknown>> | undefined {
-  for (const key of keys) {
-    const value = source[key];
-    if (Array.isArray(value)) return value as Array<Record<string, unknown>>;
-  }
-  return undefined;
-}
-
-/**
- * Copy HARNESS_ORG / HARNESS_PROJECT into input when scopeOptional resources
- * omit explicit org_id/project_id (same pattern as release list preflight).
- */
-async function fillScopeFromConfig({ input, registry }: PreflightContext): Promise<void> {
-  if (!input.org_id && registry.orgId) input.org_id = registry.orgId;
-  if (!input.project_id && registry.projectId) input.project_id = registry.projectId;
-}
-
-/**
- * Resolve the effective scope and time window before the body/query are built.
- * The registry only merges HARNESS_ORG/HARNESS_PROJECT into `input` when the
- * caller passes `resource_scope`, but the body always needs them.
- */
-async function releaseListPreflight(ctx: PreflightContext): Promise<void> {
-  await fillScopeFromConfig(ctx);
-  const { input } = ctx;
-  const now = Date.now();
-  const daysBack = clampInt(input.days_back, 1, MAX_DAYS_BACK, DEFAULT_DAYS_BACK);
-  if (input.start_ts === undefined || input.start_ts === "") {
-    input.start_ts = now - daysBack * DAY_MS;
-  }
-  if (input.end_ts === undefined || input.end_ts === "") {
-    input.end_ts = now + DAYS_FORWARD * DAY_MS;
-  }
-}
-
-/** POST /api/release/list — scope travels in the body as `scopes`, not as query params. */
-function releaseListBody(input: Record<string, unknown>): Record<string, unknown> {
-  const scope: Record<string, string> = {};
-  if (typeof input.org_id === "string" && input.org_id) scope.orgIdentifier = input.org_id;
-  if (typeof input.project_id === "string" && input.project_id) {
-    scope.projectIdentifier = input.project_id;
-  }
-  return { scopes: Object.keys(scope).length > 0 ? [scope] : [] };
-}
-
-/**
- * Normalize the list payload and apply the optional status filter client-side
- * (the endpoint takes no status param). Status matching is case-insensitive
- * because RMG returns both `Running` and `RUNNING` depending on the field.
- */
-function releaseListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
-  const root = asRecord(raw);
-  const payload = Array.isArray(raw)
-    ? { content: raw }
-    : firstArrayAt(root, ["content", "releases", "items"])
-      ? root
-      : asRecord(root.data);
-
-  let items = firstArrayAt(payload, ["content", "releases", "items"]) ?? [];
-  const pageItemCount = items.length;
-
-  const requestedStatus = typeof input?.status === "string" ? input.status.trim() : "";
-  if (requestedStatus) {
-    const wanted = requestedStatus.toLowerCase();
-    items = items.filter((rel) => {
-      const status = rel.status ?? rel.releaseStatus;
-      return typeof status === "string" && status.toLowerCase() === wanted;
-    });
-  }
-
-  const total = ["totalElements", "totalItems", "totalCount", "total"]
-    .map((key) => payload[key])
-    .find((value): value is number => typeof value === "number");
-
-  return {
-    items,
-    total: requestedStatus ? items.length : (total ?? items.length),
-    ...(requestedStatus
-      ? {
-          status_filter: requestedStatus,
-          _hint:
-            "status is filtered client-side on this page only; total is the filtered count for this page, " +
-            `not the account (${pageItemCount} unfiltered items on this page). ` +
-            "Increment page (keep size and other filters) if matches may exist on later pages.",
-        }
-      : {}),
-  };
-}
-
-/** Flatten GET /api/release/{id} → { release: releaseInfo, ... }. */
-function releaseGetExtract(raw: unknown): unknown {
-  const r = raw as { releaseInfo?: Record<string, unknown> };
-  if (r.releaseInfo && typeof r.releaseInfo === "object") {
-    return { release: r.releaseInfo };
-  }
-  return raw;
-}
-
-const DEFAULT_TASK_LIMIT = 50;
-const MAX_TASK_LIMIT = 100;
 
 const TASK_STATUSES = ["TODO", "IN_PROGRESS", "SUCCEEDED", "FAILED", "BLOCKED"] as const;
 
@@ -159,176 +66,6 @@ const ACTIVITY_SORT_FIELDS = [
   "status",
   "type",
 ] as const;
-
-function splitCsvFilter(value: unknown): string[] | undefined {
-  if (typeof value !== "string" || !value.trim()) return undefined;
-  const parts = value.split(",").map((s) => s.trim()).filter(Boolean);
-  return parts.length > 0 ? parts : undefined;
-}
-
-/** Normalize sort/status/type filters before query param mapping (GET list). */
-function normalizeReleaseActivityExecutionInput(input: Record<string, unknown>): void {
-  const sortField =
-    typeof input.sort_field === "string" && input.sort_field.length > 0
-      ? input.sort_field
-      : "start_ts";
-  const sortDirection = input.sort_direction === "asc" ? "asc" : "desc";
-  input.sort = [sortField, sortDirection];
-
-  const statusParts = splitCsvFilter(input.status);
-  if (statusParts) input.status = statusParts;
-
-  const typeParts = splitCsvFilter(input.activity_type);
-  if (typeParts) input.activity_type = typeParts;
-}
-
-function normalizeReleaseTaskLimit(input: Record<string, unknown>): void {
-  if (input.limit === undefined && input.size !== undefined) {
-    input.limit = input.size;
-  }
-  input.limit = clampInt(input.limit, 1, MAX_TASK_LIMIT, DEFAULT_TASK_LIMIT);
-}
-
-/** GET /api/release/{id}/tasks → standard list envelope with cursor pagination. */
-function releaseTaskListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
-  const r = raw as {
-    tasks?: unknown[];
-    nextRequest?: { cursor?: string };
-    last?: boolean;
-  };
-  const items = Array.isArray(r.tasks) ? r.tasks : [];
-  const limit = clampInt(input?.limit ?? input?.size, 1, MAX_TASK_LIMIT, DEFAULT_TASK_LIMIT);
-  return {
-    items,
-    total: items.length,
-    limit_applied: limit,
-    status_filter: typeof input?.status === "string" && input.status ? input.status : "all",
-    pagination: {
-      cursor: typeof input?.cursor === "string" ? input.cursor : undefined,
-      next_cursor: r.nextRequest?.cursor,
-      last: r.last,
-    },
-  };
-}
-
-/** GET /api/release/{id}/execution/activities — Spring page at root. */
-function releaseActivityExecutionListExtract(raw: unknown): unknown {
-  const r = raw as {
-    content?: unknown[];
-    totalElements?: number;
-    totalPages?: number;
-    size?: number;
-    number?: number;
-    numberOfElements?: number;
-    first?: boolean;
-    last?: boolean;
-  };
-  const items = Array.isArray(r.content) ? r.content : [];
-  return {
-    items,
-    total: typeof r.totalElements === "number" ? r.totalElements : items.length,
-    pagination: {
-      page: r.number,
-      size: r.size,
-      total_pages: r.totalPages,
-      total_elements: r.totalElements,
-      number_of_elements: r.numberOfElements,
-      first: r.first,
-      last: r.last,
-    },
-  };
-}
-
-function requireReleaseAndPhase(input: Record<string, unknown>): { releaseId: string; phaseId: string } {
-  const releaseId = input.release_id;
-  const phaseId = input.phase_identifier;
-  if (typeof releaseId !== "string" || !releaseId) {
-    throw new Error("release_id is required");
-  }
-  if (typeof phaseId !== "string" || !phaseId) {
-    throw new Error(
-      "phase_identifier is required — pass via params on harness_get (from harness_list release_execution_phase)",
-    );
-  }
-  return { releaseId, phaseId };
-}
-
-function releaseExecutionPhaseOutputPath(input: Record<string, unknown>): string {
-  const { releaseId, phaseId } = requireReleaseAndPhase(input);
-  const enc = encodeURIComponent;
-  return `${RMG}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/output`;
-}
-
-function releaseExecutionPhaseInputPath(input: Record<string, unknown>): string {
-  const { releaseId, phaseId } = requireReleaseAndPhase(input);
-  const enc = encodeURIComponent;
-  return `${RMG}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/input`;
-}
-
-function releaseExecutionActivityOutputPath(input: Record<string, unknown>): string {
-  const { releaseId, phaseId } = requireReleaseAndPhase(input);
-  const activityId = input.activity_identifier;
-  if (typeof activityId !== "string" || !activityId) {
-    throw new Error(
-      "activity_identifier is required — pass via params on harness_get (from harness_list release_execution_activity)",
-    );
-  }
-  const enc = encodeURIComponent;
-  return `${RMG}/orchestration/execution/release/${enc(releaseId)}/phase/${enc(phaseId)}/activity/${enc(activityId)}/output`;
-}
-
-function releasePhaseIoGetExtract(
-  raw: unknown,
-  input: Record<string, unknown> | undefined,
-  field: "inputs" | "outputs",
-): unknown {
-  const r = raw as { inputs?: unknown[]; outputs?: unknown[] };
-  const items = Array.isArray(r[field]) ? r[field] : [];
-  return {
-    [field]: items,
-    phase_identifier: input?.phase_identifier,
-    [`total_${field}`]: items.length,
-  };
-}
-
-function releasePhaseOutputGetExtract(raw: unknown, input?: Record<string, unknown>): unknown {
-  return releasePhaseIoGetExtract(raw, input, "outputs");
-}
-
-function releasePhaseInputGetExtract(raw: unknown, input?: Record<string, unknown>): unknown {
-  return releasePhaseIoGetExtract(raw, input, "inputs");
-}
-
-function releaseActivityOutputGetExtract(
-  raw: unknown,
-  input: Record<string, unknown> | undefined,
-): unknown {
-  const r = raw as { outputs?: unknown[] };
-  const items = Array.isArray(r.outputs) ? r.outputs : [];
-  return {
-    outputs: items,
-    phase_identifier: input?.phase_identifier,
-    activity_identifier: input?.activity_identifier,
-    total_outputs: items.length,
-  };
-}
-function releaseActivityInputGetExtract(raw: unknown): unknown {
-  const r = raw as { inputs?: unknown[] };
-  const items = Array.isArray(r.inputs) ? r.inputs : [];
-  return {
-    inputs: items,
-    total_inputs: items.length,
-  };
-}
-
-function releaseInputGetExtract(raw: unknown): unknown {
-  const r = raw as { release_id?: string; process_execution_id?: string; yaml?: string };
-  return {
-    release_id: r.release_id,
-    process_execution_id: r.process_execution_id,
-    yaml: r.yaml,
-  };
-}
 
 const releaseExecutionPhaseOutputParamsSchema: ParamsSchema = {
   fields: [
@@ -367,27 +104,6 @@ const releaseExecutionActivityOutputParamsSchema: ParamsSchema = {
   ],
 };
 
-/** GET /api/orchestration/execution/{id}/phases → standard list envelope. */
-function releasePhaseListExtract(raw: unknown): {
-  items: unknown[];
-  total: number;
-  release_id?: string;
-  total_running_phases?: number;
-} {
-  const r = raw as {
-    phases?: unknown[];
-    release_id?: string;
-    total_running_phases?: number;
-  };
-  const items = Array.isArray(r.phases) ? r.phases : [];
-  return {
-    items,
-    total: items.length,
-    ...(r.release_id ? { release_id: r.release_id } : {}),
-    ...(typeof r.total_running_phases === "number" ? { total_running_phases: r.total_running_phases } : {}),
-  };
-}
-
 const yamlBodySchema: BodySchema = {
   description:
     "YAML definition for create/update. Pass body.yaml (required). Optional body.git_details for remote/git-backed entities. " +
@@ -409,31 +125,6 @@ const yamlBodySchema: BodySchema = {
   ],
 };
 
-const executeProcessSchema: BodySchema = {
-  description:
-    "On-the-go process execution (does not create a release). Requires inputIdentifier and inputYaml.",
-  fields: [
-    {
-      name: "inputIdentifier",
-      type: "string",
-      required: true,
-      description: "Process input identifier to use for this execution",
-    },
-    {
-      name: "inputYaml",
-      type: "yaml",
-      required: true,
-      description: "Input YAML configuring global and phase inputs for this execution",
-    },
-    {
-      name: "gitBranch",
-      type: "string",
-      required: false,
-      description: "Optional branch for remote process/activity YAMLs (default branch if omitted)",
-    },
-  ],
-};
-
 const gitBranchGetParams: ParamsSchema = {
   fields: [
     {
@@ -445,42 +136,13 @@ const gitBranchGetParams: ParamsSchema = {
   ],
 };
 
-function yamlWriteBody(input: Record<string, unknown>): Record<string, unknown> {
-  const b = input.body as Record<string, unknown> | undefined;
-  if (!b || typeof b !== "object") {
-    throw new Error("body is required and must be an object with yaml (and optional git_details)");
-  }
-  if (typeof b.yaml !== "string" || b.yaml.length === 0) {
-    throw new Error("body.yaml is required (non-empty YAML string)");
-  }
-  const out: Record<string, unknown> = { yaml: b.yaml };
-  if (b.git_details !== undefined) out.git_details = b.git_details;
-  return out;
-}
-
-function executeProcessBody(input: Record<string, unknown>): Record<string, unknown> {
-  const b = (input.body as Record<string, unknown> | undefined) ?? input;
-  const inputIdentifier = b.inputIdentifier ?? b.input_identifier;
-  const inputYaml = b.inputYaml ?? b.input_yaml;
-  if (typeof inputIdentifier !== "string" || !inputIdentifier) {
-    throw new Error("body.inputIdentifier is required");
-  }
-  if (typeof inputYaml !== "string" || !inputYaml) {
-    throw new Error("body.inputYaml is required (YAML string)");
-  }
-  const out: Record<string, unknown> = { inputIdentifier, inputYaml };
-  const gitBranch = b.gitBranch ?? b.git_branch;
-  if (typeof gitBranch === "string" && gitBranch) out.gitBranch = gitBranch;
-  return out;
-}
-
 export const releaseManagementToolset: ToolsetDefinition = {
   name: "release-management",
   displayName: "Release Management",
   description:
     "Harness Release Management (RMG) — orchestration definitions (process/activity YAML) and release execution " +
     "monitoring (search releases, get release details, list phases/tasks/activity executions, get outputs). " +
-    "Definitions: list/get/create/update/delete; execute a process on-the-go via harness_execute action run. " +
+    "Definitions: list/get/create/update/delete. " +
     "Execution: harness_list resource_type=release (org/project scoped), harness_get release by id/slug, " +
     "harness_list release_execution_phase/release_execution_task/release_execution_activity (release_id required), " +
     "harness_get release_input|release_execution_phase_input|release_execution_phase_output|release_execution_activity_output|release_execution_activity_input. " +
@@ -492,8 +154,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
       displayName: "Release Process",
       description:
         "Orchestration process definition (RMG). A process is a multi-phase release plan composed of activities. " +
-        "Use harness_list to discover processes, harness_get for YAML, harness_create/update with body.yaml, " +
-        "and harness_execute action=run to start an on-the-go execution (inputIdentifier + inputYaml). " +
+        "Use harness_list to discover processes, harness_get for YAML, harness_create/update with body.yaml. " +
         "Search aliases: orchestration process, RMG process, release plan.",
       toolset: "release-management",
       scope: "project",
@@ -514,16 +175,12 @@ export const releaseManagementToolset: ToolsetDefinition = {
           description: "Processes reference activities as phase steps",
         },
       ],
-      executeHint:
-        "To run a process without creating a release: harness_execute resource_type=release_process action=run " +
-        "process_id=<identifier> body={ inputIdentifier, inputYaml, gitBranch? }. " +
-        "Fetch YAML schema via harness_schema(resource_type='release_process') or GET {rmgBase}/api/yamlSchema?entityType=PROCESS.",
       operations: {
         list: {
           method: "GET",
           path: `${RMG}/orchestration/process/summary`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          preflight: fillScopeFromConfig,
+          preflight: releaseFillScopeFromConfig,
           queryParams: {
             search_term: "searchTerm",
             sort: "sort",
@@ -537,57 +194,42 @@ export const releaseManagementToolset: ToolsetDefinition = {
           method: "GET",
           path: `${RMG}/orchestration/process/{identifier}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          preflight: fillScopeFromConfig,
+          preflight: releaseFillScopeFromConfig,
           pathParams: { process_id: "identifier" },
           queryParams: { git_branch: "git_branch" },
           paramsSchema: gitBranchGetParams,
-          responseExtractor: passthrough,
+          responseExtractor: rmgYamlEntityExtract,
           description: "Get orchestration process YAML and identifier by process_id",
         },
         create: {
           method: "POST",
           path: `${RMG}/orchestration/process`,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          preflight: fillScopeFromConfig,
+          preflight: releaseFillScopeFromConfig,
           bodyBuilder: yamlWriteBody,
           bodySchema: yamlBodySchema,
-          responseExtractor: passthrough,
+          responseExtractor: rmgYamlEntityExtract,
           description: "Create an orchestration process from YAML",
         },
         update: {
           method: "PUT",
           path: `${RMG}/orchestration/process/{identifier}`,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          preflight: fillScopeFromConfig,
+          preflight: releaseFillScopeFromConfig,
           pathParams: { process_id: "identifier" },
           bodyBuilder: yamlWriteBody,
           bodySchema: yamlBodySchema,
-          responseExtractor: passthrough,
+          responseExtractor: rmgYamlEntityExtract,
           description: "Update an orchestration process YAML (full replacement)",
         },
         delete: {
           method: "DELETE",
           path: `${RMG}/orchestration/process/{identifier}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          preflight: fillScopeFromConfig,
+          preflight: releaseFillScopeFromConfig,
           pathParams: { process_id: "identifier" },
-          responseExtractor: passthrough,
+          responseExtractor: rmgYamlEntityDeleteExtract,
           description: "Delete an orchestration process by process_id",
-        },
-      },
-      executeActions: {
-        run: {
-          method: "POST",
-          path: `${RMG}/orchestration/process/{identifier}/execute`,
-          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
-          preflight: fillScopeFromConfig,
-          pathParams: { process_id: "identifier" },
-          bodyBuilder: executeProcessBody,
-          bodySchema: executeProcessSchema,
-          responseExtractor: passthrough,
-          actionDescription:
-            "Execute an orchestration process on-the-go (no release created). " +
-            "Pass process_id and body with inputIdentifier + inputYaml (optional gitBranch).",
         },
       },
     },
@@ -623,7 +265,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
           method: "GET",
           path: `${RMG}/orchestration/activity/summary`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          preflight: fillScopeFromConfig,
+          preflight: releaseFillScopeFromConfig,
           queryParams: {
             search_term: "searchTerm",
             sort: "sort",
@@ -637,41 +279,41 @@ export const releaseManagementToolset: ToolsetDefinition = {
           method: "GET",
           path: `${RMG}/orchestration/activity/{identifier}`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          preflight: fillScopeFromConfig,
+          preflight: releaseFillScopeFromConfig,
           pathParams: { activity_id: "identifier" },
           queryParams: { git_branch: "git_branch" },
           paramsSchema: gitBranchGetParams,
-          responseExtractor: passthrough,
+          responseExtractor: rmgYamlEntityExtract,
           description: "Get orchestration activity YAML and identifier by activity_id",
         },
         create: {
           method: "POST",
           path: `${RMG}/orchestration/activity`,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          preflight: fillScopeFromConfig,
+          preflight: releaseFillScopeFromConfig,
           bodyBuilder: yamlWriteBody,
           bodySchema: yamlBodySchema,
-          responseExtractor: passthrough,
+          responseExtractor: rmgYamlEntityExtract,
           description: "Create an orchestration activity from YAML",
         },
         update: {
           method: "PUT",
           path: `${RMG}/orchestration/activity/{identifier}`,
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          preflight: fillScopeFromConfig,
+          preflight: releaseFillScopeFromConfig,
           pathParams: { activity_id: "identifier" },
           bodyBuilder: yamlWriteBody,
           bodySchema: yamlBodySchema,
-          responseExtractor: passthrough,
+          responseExtractor: rmgYamlEntityExtract,
           description: "Update an orchestration activity YAML (full replacement)",
         },
         delete: {
           method: "DELETE",
           path: `${RMG}/orchestration/activity/{identifier}`,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          preflight: fillScopeFromConfig,
+          preflight: releaseFillScopeFromConfig,
           pathParams: { activity_id: "identifier" },
-          responseExtractor: passthrough,
+          responseExtractor: rmgYamlEntityDeleteExtract,
           description: "Delete an orchestration activity by activity_id",
         },
       },
@@ -681,7 +323,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
       displayName: "Release Execution",
       description:
         "A running or completed release instance (orchestration execution). harness_list returns releases in the " +
-        `current org/project whose expected start falls in the last ${DEFAULT_DAYS_BACK} days (override with days_back, ` +
+        `current org/project whose expected start falls in the last ${RMG_DEFAULT_DAYS_BACK} days (override with days_back, ` +
         "or start_ts/end_ts); narrow further with search_term and status. " +
         "The list item `id` field or UI URL slug (e.g. identifier-1.0.0-abc) can be used as release_id. " +
         "Search aliases: active release, release execution, RMG release.",
@@ -708,7 +350,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
         {
           name: "days_back",
           type: "number",
-          description: `Days of history to search (default ${DEFAULT_DAYS_BACK}, max ${MAX_DAYS_BACK}; includes ${DAYS_FORWARD} days forward). Ignored when start_ts/end_ts are set.`,
+          description: `Days of history to search (default ${RMG_DEFAULT_DAYS_BACK}, max ${RMG_MAX_DAYS_BACK}; includes ${RMG_DAYS_FORWARD} days forward). Ignored when start_ts/end_ts are set.`,
         },
         {
           name: "start_ts",
@@ -810,7 +452,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
       scopeOptional: true,
       headerBasedScoping: true,
       baseUrlOverride: "rmg",
-      identifierFields: ["release_id", "phase_identifier"],
+      identifierFields: [],
       searchAliases: ["release phase", "execution phase", "rmg phase"],
       listFilterFields: [
         {
@@ -880,7 +522,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
         {
           name: "limit",
           type: "number",
-          description: `Max tasks to return (default ${DEFAULT_TASK_LIMIT}, max ${MAX_TASK_LIMIT}; harness_list size also accepted)`,
+          description: `Max tasks to return (default ${RMG_DEFAULT_TASK_LIMIT}, max ${RMG_MAX_TASK_LIMIT}; harness_list size also accepted)`,
         },
         {
           name: "cursor",
