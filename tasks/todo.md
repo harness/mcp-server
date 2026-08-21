@@ -68,6 +68,9 @@
 - [x] Open PR — https://github.com/harness/mcp-server/pull/811
 - [x] Rebase onto `main` after #810 merged so the delta is provider-only
 - [x] Cross-repo audit: confirm account-only (no scope_*); create returns `{ id }` only; version writes empty 201
+- [x] Rebase Rohan's latest-main merge onto current `main` and keep the delta provider-only
+- [x] Diagnose CI: tests/standards/typecheck passed; `docs:check` failed on stale generated counts
+- [x] Rebuild before docs generation and refresh README from 239 to 240 resources
 
 ### Plan
 - Provider registry is account-scoped by API design (no scope_org/scope_project) — do not
