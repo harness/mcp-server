@@ -107,12 +107,40 @@ const ERROR_FIELD_ENRICHMENTS: Array<{ pathPrefix: string; field: string }> = [
   { pathPrefix: "/loadTest/", field: "description" },
 ];
 
+const MAX_ERROR_DETAIL_CHARS = 400;
+
+/** Extra NG fields (`details`, `detailedMessage`, `responseMessages`) not already in `message`. */
+function collectErrorDetail(parsed: Record<string, unknown>, message: string): string | undefined {
+  const seen = new Set([message.trim()]);
+  const extras: string[] = [];
+  const add = (value: unknown): void => {
+    if (typeof value !== "string") return;
+    const text = value.trim();
+    if (!text || seen.has(text)) return;
+    seen.add(text);
+    extras.push(text);
+  };
+
+  add(parsed.details);
+  add(parsed.detailedMessage);
+  for (const entry of Array.isArray(parsed.responseMessages) ? parsed.responseMessages : []) {
+    if (entry && typeof entry === "object") add((entry as Record<string, unknown>).message);
+  }
+
+  if (extras.length === 0) return undefined;
+  const detail = extras.join("; ");
+  return detail.length > MAX_ERROR_DETAIL_CHARS
+    ? `${detail.slice(0, MAX_ERROR_DETAIL_CHARS)}…`
+    : detail;
+}
+
 function enrichErrorMessage(
   rawMessage: string,
   parsed: Record<string, unknown>,
   path: string,
 ): string {
-  let message = rawMessage;
+  const detail = collectErrorDetail(parsed, rawMessage);
+  let message = detail ? `${rawMessage} — ${detail}` : rawMessage;
   for (const { pathPrefix, field } of ERROR_FIELD_ENRICHMENTS) {
     const value = parsed[field];
     if (path.startsWith(pathPrefix) && typeof value === "string" && value) {
@@ -374,11 +402,6 @@ export class HarnessClient {
           throw error;
         }
 
-        // 204 No Content — valid success response (e.g. PATCH/DELETE on PM API)
-        if (response.status === 204) {
-          return { status: "SUCCESS", message: "No content" } as T;
-        }
-
         // Binary response mode — return raw ArrayBuffer (used for ZIP downloads)
         if (options.responseType === "buffer") {
           const buffer = await response.arrayBuffer();
@@ -387,11 +410,10 @@ export class HarnessClient {
         }
 
         const text = await response.text();
+        // Empty body on 2xx is a valid success (204 No Content; also 201 from
+        // IaCM provider-registry create/update version, which returns no JSON).
         if (!text) {
-          throw new HarnessApiError(
-            `Empty response body from ${method} ${options.path}`,
-            502,
-          );
+          return { status: "SUCCESS", message: "No content" } as T;
         }
         let data: unknown;
         try {

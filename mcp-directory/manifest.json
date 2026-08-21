@@ -33,11 +33,11 @@
   "prompts_generated": true,
   "server": {
     "type": "node",
-    "entry_point": "build/index.js",
+    "entry_point": "server/index.js",
     "mcp_config": {
       "command": "node",
       "args": [
-        "${__dirname}/build/index.js",
+        "${__dirname}/server/index.js",
         "stdio"
       ],
       "env": {

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type Config, resolveProductBaseUrl } from "../config.js";
+import { type Config, resolveProductBaseUrl, resolveResourceBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { HarnessApiError } from "../utils/errors.js";
 import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec, ResourceScope } from "./types.js";
@@ -53,6 +53,7 @@ import { ansibleToolset } from "./toolsets/ansible.js";
 import { incidentsToolset } from "./toolsets/incidents.js";
 import { alertsToolset } from "./toolsets/alerts.js";
 import { deploysToolset } from "./toolsets/deploys.js";
+import { releaseManagementToolset } from "./toolsets/release-management.js";
 
 const log = createLogger("registry");
 
@@ -169,6 +170,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   incidentsToolset,
   alertsToolset,
   deploysToolset,
+  releaseManagementToolset,
 ];
 
 /** All available toolset names — used by docs generation to discover opt-in toolsets. */
@@ -820,7 +822,9 @@ export class Registry {
 
     // Make request — resolve base URL and auth from product backend
     const product = resolvedRoute?.product ?? def.product ?? "harness";
-    const baseUrl = resolveProductBaseUrl(this.config, product);
+    const baseUrl = def.baseUrlOverride
+      ? resolveResourceBaseUrl(this.config, def)
+      : resolveProductBaseUrl(this.config, product);
     const productHeaders: Record<string, string> = { ...spec.headers, ...resolvedRoute?.headers };
 
     const requestOpts = {

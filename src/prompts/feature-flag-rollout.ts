@@ -24,7 +24,7 @@ export function registerFeatureFlagRolloutPrompt(server: McpServer): void {
 
       const nativeModeCaveat = workspaceId
         ? ""
-        : "\n\nNote: in Harness-native mode (org_id/project_id), fme_feature_flag_definition, fme_rollout_status, and the kill/restore execute action are not yet implemented server-side and will error — steps 3, 4, and 7 below only work today with workspace_id (legacy mode).";
+        : "\n\nNote: in Harness-native mode (org_id/project_id), fme_rollout_status is not yet implemented server-side and will error — step 4 only works today with workspace_id (legacy mode). Steps 3 and 7 work with org_id+project_id.";
 
       return {
         messages: [{
@@ -46,7 +46,7 @@ Steps:
 6. **Safety gates**: Identify metrics or health checks between each phase
 7. **Rollback plan**: Use kill action to immediately turn off the flag if issues arise
 
-Present the rollout plan for review. Use harness_execute with resource_type="fme_feature_flag", action="kill" or action="restore", ${scopeArgs}, feature_flag_name="${featureFlagName}", environment_id=<env_id> to execute each phase after user approval.${nativeModeCaveat}`,
+Present the rollout plan for review. Use harness_execute with resource_type="fme_feature_flag", action="kill" or action="restore", ${scopeArgs}, feature_flag_name="${featureFlagName}", environment_id=<env_id> to execute each phase after user approval.`,
           },
         }],
       };

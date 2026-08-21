@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Production Shrinkwraps Need a Production Staging Manifest
+- **Issue**: `npm-shrinkwrap.json` intentionally captures the production dependency tree and npm-native mirrors of the repository's pnpm security overrides. Running `npm ci --omit=dev` against that shrinkwrap and the full development `package.json` still makes npm validate missing dev dependencies and ignore `pnpm.overrides`, so MCPB staging fails even though the release shrinkwrap check is healthy.
+- **Fix**: Generate a minimal staging `package.json` with runtime dependencies, optional dependencies, and transitive pnpm overrides mirrored into npm's `overrides`, then run `npm ci` against the checked-in shrinkwrap.
+- **Rule**: When consuming a production-only shrinkwrap outside npm publish, pair it with the same production manifest shape used to generate it; `--omit=dev` changes installation, not lockfile validation.
+
 ## List-Filter Enums Must Be Canonicalized at Dispatch
 - **Issue**: `listFilterFields.enum` is only visible via `harness_describe`. The global `harness_list` schema cannot encode per-resource enums, so agents often send lowercase (`pending`) while APIs require PascalCase/UPPERCASE. Those 400s count as `tool_error` and can page on-call.
 - **Fix**: `canonicalizeListFilterEnums` in `Registry.dispatch` rewrites case-insensitive matches to declared enum values (including comma-separated tokens). Also clarify that some resources have a lower `size` max than the global 1–100 tool schema.

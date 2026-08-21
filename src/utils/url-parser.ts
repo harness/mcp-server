@@ -27,6 +27,8 @@ export interface ParsedHarnessUrl {
   store_type?: string;
   connector_ref?: string;
   repo_name?: string;
+  /** RMG release id — UUID from search or UI URL slug (identifier-version hash). */
+  release_id?: string;
 }
 
 /** Union of ParsedHarnessUrl fields that RESOURCE_SEGMENTS can write to. */
@@ -218,6 +220,37 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     }
   }
 
+  // 7. RMG release-management URLs:
+  // .../release-management/releases/{slug}/execution/phases|tasks|activities
+  const rmgRootIdx = segments.indexOf("release-management");
+  if (rmgRootIdx >= 0) {
+    const releasesIdx = segments.indexOf("releases", rmgRootIdx);
+    if (releasesIdx >= 0 && releasesIdx + 1 < segments.length) {
+      const releaseSlug = decodeURIComponent(segments[releasesIdx + 1]!);
+      if (releaseSlug && !STRUCTURAL.has(releaseSlug) && releaseSlug !== "execution") {
+        result.release_id = releaseSlug;
+        result.resource_id = releaseSlug;
+
+        const suffix = segments.slice(releasesIdx + 2);
+        if (suffix.includes("phases")) {
+          result.resource_type = "release_execution_phase";
+        } else if (suffix.includes("tasks")) {
+          result.resource_type = "release_execution_task";
+        } else if (suffix.includes("activities")) {
+          result.resource_type = "release_execution_activity";
+        } else {
+          result.resource_type = "release";
+        }
+
+        if (result.project_id) {
+          result.resource_scope = "project";
+        } else if (result.org_id) {
+          result.resource_scope = "org";
+        }
+      }
+    }
+  }
+
   const stepId = url.searchParams.get("step") ?? url.searchParams.get("stepId");
   if (stepId) result.step_id = stepId;
 
@@ -268,6 +301,7 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "store_type",
   "connector_ref",
   "repo_name",
+  "release_id",
 ];
 
 export interface ApplyUrlDefaultsOptions {

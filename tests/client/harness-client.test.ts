@@ -561,6 +561,114 @@ describe("HarnessClient", () => {
       });
     });
 
+    it("surfaces `details` when NG collapses the cause into the JSON-processing error", async () => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({
+          code: 400,
+          message: "Unable to process JSON",
+          details: "No spec should be provided with the inherit from delegate type",
+        }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path: "/ng/api/connectors" })).rejects.toMatchObject({
+        message:
+          "Unable to process JSON — No spec should be provided with the inherit from delegate type",
+        statusCode: 400,
+      });
+    });
+
+    it("leaves the message alone when responseMessages only repeat it", async () => {
+      const message =
+        "Invalid request: Delegate Selector cannot be null for inherit from delegate credential type";
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({
+          status: "ERROR",
+          code: "INVALID_REQUEST",
+          message,
+          correlationId: "df70c78c-0d47-422a-bd96-faeb9825bc3c",
+          detailedMessage: null,
+          responseMessages: [
+            {
+              code: "INVALID_REQUEST",
+              level: "ERROR",
+              message,
+              exception: null,
+              failureTypes: [],
+              failureSubTypes: [],
+              additionalInfo: {},
+            },
+          ],
+          metadata: null,
+        }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path: "/ng/api/connectors" })).rejects.toMatchObject({
+        message,
+        harnessCode: "INVALID_REQUEST",
+        correlationId: "df70c78c-0d47-422a-bd96-faeb9825bc3c",
+      });
+    });
+
+    it("surfaces detailedMessage and responseMessages that add new information", async () => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({
+          message: "Invalid request",
+          detailedMessage: "Field 'spec.credential' is required",
+          responseMessages: [
+            { message: "Invalid request" },
+            { message: "Connector type K8sCluster requires a credential block" },
+          ],
+        }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path: "/ng/api/connectors" })).rejects.toMatchObject({
+        message:
+          "Invalid request — Field 'spec.credential' is required; " +
+          "Connector type K8sCluster requires a credential block",
+      });
+    });
+
+    it("truncates oversized upstream detail", async () => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({ message: "Unable to process JSON", details: "x".repeat(900) }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      try {
+        await client.request({ path: "/ng/api/connectors" });
+        expect.fail("should have thrown");
+      } catch (err) {
+        const { message } = err as HarnessApiError;
+        expect(message).toBe(`Unable to process JSON — ${"x".repeat(400)}…`);
+      }
+    });
+
+    it("surfaces `details` on requestStream errors", async () => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({
+          code: 400,
+          message: "Unable to process JSON",
+          details: "No spec should be provided with the inherit from delegate type",
+        }),
+        { status: 400 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(
+        client.requestStream({ method: "POST", path: "/ng/api/connectors" }),
+      ).rejects.toMatchObject({
+        message:
+          "Unable to process JSON — No spec should be provided with the inherit from delegate type",
+      });
+    });
+
     it("appends chaos description on requestStream errors", async () => {
       fetchSpy.mockResolvedValue(new Response(
         JSON.stringify({
@@ -859,18 +967,12 @@ describe("HarnessClient", () => {
       }
     });
 
-    it("throws clear error for empty response body", async () => {
-      fetchSpy.mockResolvedValue(new Response("", { status: 200 }));
+    it("treats empty 2xx body as success (204 / IaCM provider version 201)", async () => {
+      fetchSpy.mockResolvedValue(new Response("", { status: 201 }));
       const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
 
-      try {
-        await client.request({ path: "/test" });
-        expect.fail("should have thrown");
-      } catch (err) {
-        expect(err).toBeInstanceOf(HarnessApiError);
-        expect((err as HarnessApiError).statusCode).toBe(502);
-        expect((err as HarnessApiError).message).toContain("Empty response body");
-      }
+      const result = await client.request({ path: "/test" });
+      expect(result).toEqual({ status: "SUCCESS", message: "No content" });
     });
 
     it("parses valid JSON response normally", async () => {
