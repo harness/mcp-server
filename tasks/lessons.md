@@ -1,5 +1,11 @@
 # Lessons Learned
 
+## Delegate APIs Are CG Manager — Auth Scheme Matters
+- **Issue**: `harness_list(resource_type="delegate")` returns HTTP 401 while other NG resources succeed with the same MCP session. Agents/users are told the API key is invalid even when the key works elsewhere.
+- **Root cause**: `/ng/api/delegate-setup` and `/ng/api/delegate-token-ng` are ingress-routed to CG Manager (harness-manager), which accepts only `x-api-key` / Bearer (and unused IdentityService+`X-Identity-User`). Inter-service JWTs that NG Manager accepts are rejected. Separately, `applyDefaultAuth` skips injecting `x-api-key` whenever any `Authorization` header is already present.
+- **Fix direction**: Dual-send `x-api-key` even when `Authorization` exists (non-FME); optionally Bearer for CG path prefixes; clarify 401 copy for those paths. AskAI/internal still needs a CG-valid credential if it only has a genaiservice JWT.
+- **Rule**: Before treating a delegate/token 401 as a bad PAT, check whether the request reached CG Manager with `x-api-key` or Bearer. Do not assume all `/ng/api/*` paths share NG Manager auth.
+
 ## List-Filter Enums Must Be Canonicalized at Dispatch
 - **Issue**: `listFilterFields.enum` is only visible via `harness_describe`. The global `harness_list` schema cannot encode per-resource enums, so agents often send lowercase (`pending`) while APIs require PascalCase/UPPERCASE. Those 400s count as `tool_error` and can page on-call.
 - **Fix**: `canonicalizeListFilterEnums` in `Registry.dispatch` rewrites case-insensitive matches to declared enum values (including comma-separated tokens). Also clarify that some resources have a lower `size` max than the global 1–100 tool schema.

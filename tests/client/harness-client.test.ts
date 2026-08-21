@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { HarnessClient } from "../../src/client/harness-client.js";
+import { HarnessClient, isCgManagerPath } from "../../src/client/harness-client.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import type { Config } from "../../src/config.js";
 
@@ -22,6 +22,16 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     ...overrides,
   };
 }
+
+describe("isCgManagerPath", () => {
+  it("matches delegate-setup and delegate-token-ng paths", () => {
+    expect(isCgManagerPath("/ng/api/delegate-setup/listDelegates")).toBe(true);
+    expect(isCgManagerPath("/ng/api/delegate-token-ng")).toBe(true);
+    expect(isCgManagerPath("/ng/api/delegate-token-ng/my-token")).toBe(true);
+    expect(isCgManagerPath("/ng/api/projects")).toBe(false);
+    expect(isCgManagerPath("/ng/api/connectors/listV2")).toBe(false);
+  });
+});
 
 describe("HarnessClient", () => {
   let fetchSpy: ReturnType<typeof vi.spyOn>;
@@ -367,7 +377,7 @@ describe("HarnessClient", () => {
       expect(headers["Harness-Account"]).toBe("test-account");
     });
 
-    it("preserves caller-provided non-FME auth regardless of header casing", async () => {
+    it("dual-sends x-api-key when caller already provided Authorization", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());
 
@@ -379,7 +389,93 @@ describe("HarnessClient", () => {
       const init = fetchSpy.mock.calls[0][1] as RequestInit;
       const headers = new Headers(init.headers);
       expect(headers.get("Authorization")).toBe("Bearer session-token");
-      expect(headers.has("x-api-key")).toBe(false);
+      expect(headers.get("x-api-key")).toBe("pat.test-account.token.secret");
+    });
+
+    it("replaces non-Bearer Authorization with Bearer+x-api-key on CG Manager delegate paths", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ resource: [] }), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        method: "POST",
+        path: "/ng/api/delegate-setup/listDelegates",
+        headers: { Authorization: "genaiservice service-jwt" },
+        body: { filterType: "Delegate" },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("Bearer pat.test-account.token.secret");
+      expect(headers.get("x-api-key")).toBe("pat.test-account.token.secret");
+    });
+
+    it("preserves existing Bearer Authorization on CG Manager paths while still sending x-api-key", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ resource: [] }), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        method: "GET",
+        path: "/ng/api/delegate-token-ng",
+        headers: { Authorization: "Bearer session-pat" },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("Bearer session-pat");
+      expect(headers.get("x-api-key")).toBe("pat.test-account.token.secret");
+    });
+
+    it("adds Bearer from API key on CG Manager paths when Authorization is missing", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ resource: [] }), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        method: "POST",
+        path: "/ng/api/delegate-setup/listDelegates",
+        body: { filterType: "Delegate" },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("Bearer pat.test-account.token.secret");
+      expect(headers.get("x-api-key")).toBe("pat.test-account.token.secret");
+    });
+
+    it("does not replace non-Bearer Authorization on CG paths when API key is a placeholder", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ resource: [] }), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_API_KEY: "pat.internal.internal.dummy" }));
+
+      await client.request({
+        method: "POST",
+        path: "/ng/api/delegate-setup/listDelegates",
+        headers: { Authorization: "genaiservice service-jwt" },
+        body: { filterType: "Delegate" },
+      });
+
+      const init = fetchSpy.mock.calls[0][1] as RequestInit;
+      const headers = new Headers(init.headers);
+      expect(headers.get("Authorization")).toBe("genaiservice service-jwt");
+      expect(headers.get("x-api-key")).toBe("pat.internal.internal.dummy");
+    });
+
+    it("humanizes CG Manager 401s with delegate auth guidance", async () => {
+      fetchSpy.mockResolvedValue(new Response("<html>unauthorized</html>", { status: 401 }));
+      const client = new HarnessClient(makeConfig());
+
+      await expect(
+        client.request({ method: "POST", path: "/ng/api/delegate-setup/listDelegates" }),
+      ).rejects.toThrow(/CG Manager/);
+    });
+
+    it("appends CG Manager hint to JSON 401 messages on delegate paths", async () => {
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify({ message: "Invalid credentials" }), { status: 401 }),
+      );
+      const client = new HarnessClient(makeConfig());
+
+      await expect(
+        client.request({ method: "GET", path: "/ng/api/delegate-token-ng" }),
+      ).rejects.toThrow(/Invalid credentials.*CG Manager/);
     });
 
     it("does not inject x-api-key when caller already provided it with alternate casing", async () => {

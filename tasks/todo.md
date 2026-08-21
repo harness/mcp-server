@@ -1,5 +1,69 @@
 # Harness MCP Server — Task Tracking
 
+## Delegate list 401 / auth not taking API key (this session)
+
+### Status
+- [x] Reproduce: `harness_list(delegate)` → 401 while project/org/secret/connector/user succeed on same MCP session
+- [x] Trace root cause via DEL-2489 / AIPLAT-601 / CG Manager auth notes
+- [x] Draft fix plan (below)
+- [x] Implement client auth fix + focused regressions
+- [x] Improve 401 messaging for CG-backed paths
+- [ ] Smoke-verify `delegate` + `delegate_token` with a real PAT against `app.harness.io`
+- [ ] Note AskAI/mcpServerInternal follow-up if still 401 after OSS dual-auth
+
+### Implemented
+- `applyDefaultAuth` always injects `x-api-key` for non-FME (dual-send with existing Authorization).
+- CG Manager paths replace non-Bearer Authorization with `Bearer <apiKey>` when the configured key is not a placeholder.
+- 401 humanization + JSON message enrichment mention CG Manager auth requirements for delegate routes.
+- Focused client regressions cover dual-send, CG Bearer rewrite, placeholder non-rewrite, and 401 copy.
+
+### Why it fails
+`/ng/api/delegate-setup/*` and `/ng/api/delegate-token-ng/*` are **not NG Manager**. Ingress maps them to **CG Manager (harness-manager)**.
+
+CG Manager only accepts:
+- `x-api-key` (NG or CG API key / PAT / SAT)
+- `Authorization: Bearer <token>`
+- IdentityService token + `X-Identity-User` (unused in practice)
+
+It **rejects** inter-service JWTs such as `Authorization: genaiservice <jwt>` that NG Manager accepts. That is why other NG resources work and delegates alone return 401 — the API key/session credential is effectively not applied in a form CG accepts.
+
+Related: [AIPLAT-601](https://harness.atlassian.net/browse/AIPLAT-601) (Blocked), [DEL-2489](https://harness.atlassian.net/browse/DEL-2489), Slack `#sme-harness-ai` 2026-08-16 customer report.
+
+### Amplifying bug in this repo
+`HarnessClient.applyDefaultAuth` (non-FME path):
+
+```ts
+if (getHeaderValue(headers, "authorization")) return; // skips x-api-key entirely
+if (!getHeaderValue(headers, "x-api-key")) {
+  headers["x-api-key"] = this.token;
+}
+```
+
+Whenever any `Authorization` header is already present, configured `HARNESS_API_KEY` is never sent as `x-api-key`. NG Manager may still authorize the request; CG Manager returns 401. Error copy then misleadingly says the API key is invalid/expired.
+
+### Plan
+1. **Client dual-auth for non-FME (preferred minimal fix)**  
+   In `applyDefaultAuth`, still inject `x-api-key` from `this.token` when missing, even if `Authorization` is already set. Preserve caller `Authorization`; do not overwrite it. Keep FME Bearer behavior unchanged.
+2. **Optional CG hardening for delegate paths**  
+   For `/ng/api/delegate-setup` and `/ng/api/delegate-token-ng`, if only a PAT/SAT is available and no Bearer is set, also send `Authorization: Bearer <apiKey>` (CG accepts both). Gate behind path prefix or a small `authStyle: "cg_manager"` on those EndpointSpecs — avoid global Bearer injection.
+3. **Clearer 401s**  
+   When path matches delegate CG prefixes, enrich the humanized 401 to mention CG Manager requires `x-api-key` or Bearer (not inter-service JWT), so AskAI stops telling customers to “set HARNESS_API_KEY” when the real issue is auth scheme.
+4. **Regressions**  
+   - `harness-client.test.ts`: Authorization present + configured token → both `Authorization` and `x-api-key` sent  
+   - Delegate dispatch mock: list request headers include `x-api-key`  
+   - Preserve existing “caller-provided x-api-key casing” and FME tests
+5. **Out of scope / platform follow-up**  
+   AskAI `mcpServerInternal` direct-to-CG calls with only `genaiservice` JWT still need a platform credential that CG accepts (real PAT/SAT as x-api-key/Bearer, or CG inter-service support). OSS dual-auth fixes the “Authorization present → drop API key” hole; it cannot invent a CG-valid credential if none exists.
+6. **Secondary check while in toolset**  
+   `delegate_token` create OpenAPI wants `tokenName` as a **query** param; current bodyBuilder sends `{ name }`. Verify and fix in the same PR only if it fails independently of auth.
+
+### Non-goals
+- Do not change the public 11-tool contract
+- Do not invent a new NG-only delegate list API (none documented)
+- Do not weaken fail-open / multi-user credential isolation
+
+---
+
 ## OPA policy multi-scope (this session)
 - [x] Add `supportedScopes: ["account", "org", "project"]` + description hints for `policy` and `policy_set`
 - [x] Extend governance tests for supportedScopes and `resource_scope` query-param dispatch
