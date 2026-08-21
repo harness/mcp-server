@@ -62,7 +62,7 @@ describe("iacmToolset structure", () => {
     expect(iacmToolset.optIn).toBe(false);
   });
 
-  it("registers all 6 resource types", () => {
+  it("registers all 7 resource types", () => {
     const types = iacmToolset.resources.map((r) => r.resourceType);
     expect(types).toContain("iacm_workspace");
     expect(types).toContain("iacm_resource");
@@ -70,7 +70,8 @@ describe("iacmToolset structure", () => {
     expect(types).toContain("iacm_workspace_costs");
     expect(types).toContain("iacm_activity_resource_change");
     expect(types).toContain("iacm_variable_set");
-    expect(types).toHaveLength(6);
+    expect(types).toContain("iacm_provider");
+    expect(types).toHaveLength(7);
   });
 
   it("iacm_module defaults to account scope but supports org and project", () => {
@@ -81,6 +82,16 @@ describe("iacmToolset structure", () => {
     // ambient HARNESS_ORG/HARNESS_PROJECT cannot turn an account module into a project one.
     expect(resource.scopeOptional).toBe(true);
     expect(resource.scopeParams).toEqual({ org: "scope_org", project: "scope_project" });
+  });
+
+  it("iacm_provider is account-scoped only (no multi-scope like modules)", () => {
+    const resource = findResource("iacm_provider");
+    expect(resource.scope).toBe("account");
+    expect(resource.supportedScopes).toBeUndefined();
+    expect(resource.scopeOptional).toBeUndefined();
+    expect(resource.scopeParams).toBeUndefined();
+    expect(resource.description).toMatch(/account-only|account-scoped/i);
+    expect(resource.description).toMatch(/\{ id \} only|response\.id/i);
   });
 
   it("iacm_module list has pageOneIndexed=true", () => {
@@ -328,6 +339,91 @@ describe("iacm_module write contract", () => {
   });
 });
 
+// ─── Provider registry contract ──────────────────────────────────────────────
+
+describe("iacm_provider contract", () => {
+  it("registers list/get/create and version-oriented update", () => {
+    const list = getOp("iacm_provider", "list");
+    const get = getOp("iacm_provider", "get");
+    const create = getOp("iacm_provider", "create");
+    const update = getOp("iacm_provider", "update");
+
+    expect(list.path).toBe("/iacm/api/providers");
+    expect(list.pageOneIndexed).toBe(true);
+    expect(list.queryParams).toMatchObject({
+      page: "page",
+      size: "limit",
+      search_term: "searchTerm",
+      sort: "sort",
+    });
+
+    expect(get.path).toBe("/iacm/api/providers/{providerId}");
+    expect(get.pathParams).toEqual({ id: "providerId" });
+
+    expect(create.method).toBe("POST");
+    expect(create.pathBuilder).toBeTypeOf("function");
+    expect(create.operationPolicy).toEqual({
+      risk: "medium_write",
+      retryPolicy: "do_not_retry",
+    });
+
+    expect(update.methodBuilder).toBeTypeOf("function");
+    expect(update.pathBuilder).toBeTypeOf("function");
+    expect(update.operationPolicy).toEqual({
+      risk: "medium_write",
+      retryPolicy: "do_not_retry",
+    });
+  });
+
+  it("documents create provider and version update body requirements", () => {
+    // type is call-layer required but schema-optional: bodyBuilder strips it before
+    // bodySchema validation (same pattern as STO exemption scope).
+    const createRequired = getOp("iacm_provider", "create")
+      .bodySchema!.fields.filter((field) => field.required)
+      .map((field) => field.name);
+    const createFields = getOp("iacm_provider", "create")
+      .bodySchema!.fields.map((field) => field.name);
+    const updateRequired = getOp("iacm_provider", "update")
+      .bodySchema!.fields.filter((field) => field.required)
+      .map((field) => field.name);
+
+    expect(createFields).toEqual(["type", "description"]);
+    expect(createRequired).toEqual([]);
+    expect(updateRequired).toEqual(["protocol", "gpg_key_id"]);
+  });
+
+  it("normalizes provider list arrays like other IaCM registries", () => {
+    const extract = getOp("iacm_provider", "list").responseExtractor!;
+    const result = extract([{ id: "1", type: "aws" }]) as Record<string, unknown>;
+    expect(result.items).toEqual([{ id: "1", type: "aws" }]);
+    expect(result.page_count).toBe(1);
+    expect(result.has_more).toBe(false);
+  });
+
+  it("documents Experimental provider-registry RBAC and version-oriented update", () => {
+    const create = getOp("iacm_provider", "create");
+    const update = getOp("iacm_provider", "update");
+    expect(create.description).toMatch(/\{ id \} only/i);
+    expect(create.description).toMatch(/harness_get/i);
+    expect(create.description).toMatch(/Experimental/i);
+    expect(create.description).not.toMatch(/Active.*iac_registry/i);
+    expect(create.bodySchema!.description).toMatch(/\{ id \} only/i);
+    expect(update.description).toMatch(/version-oriented|NOT a metadata PATCH/i);
+    expect(update.description).toMatch(/Experimental/i);
+    expect(update.description).toMatch(/empty|No content/i);
+    expect(update.bodySchema!.description).toMatch(/no metadata PUT|POST a new version/i);
+  });
+
+  it("supports only account scope (org/project resource_scope is rejected)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+    const client = makeClient();
+    expect(registry.getSupportedScopes("iacm_provider")).toEqual(["account"]);
+    await expect(
+      registry.dispatch(client, "iacm_provider", "list", { resource_scope: "org", org_id: "default" }),
+    ).rejects.toThrow(/does not support org scope/i);
+  });
+});
+
 // ─── Variable set contract ───────────────────────────────────────────────────
 
 describe("iacm_variable_set contract", () => {
@@ -437,6 +533,7 @@ describe("iacm default-on with Registry", () => {
     expect(registry.getAllResourceTypes()).toContain("iacm_workspace_costs");
     expect(registry.getAllResourceTypes()).toContain("iacm_activity_resource_change");
     expect(registry.getAllResourceTypes()).toContain("iacm_variable_set");
+    expect(registry.getAllResourceTypes()).toContain("iacm_provider");
   });
 
   it("IS present when enabled with +iacm modifier", () => {
@@ -1162,5 +1259,59 @@ describe("iacm registry dispatch", () => {
       }),
     ).rejects.toThrow("system");
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("dispatches provider list/get/create and version create/update", async () => {
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce([{ id: "1", type: "aws" }])
+      .mockResolvedValueOnce({ id: "1", type: "aws" })
+      .mockResolvedValueOnce({ id: "1" })
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({});
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_provider", "list", {
+      page: 0,
+      size: 20,
+      search_term: "aws",
+    });
+    await registry.dispatch(makeClient(mockRequest), "iacm_provider", "get", { id: "1" });
+    await registry.dispatch(makeClient(mockRequest), "iacm_provider", "create", {
+      body: { type: "aws", description: "AWS provider" },
+    });
+    await registry.dispatch(makeClient(mockRequest), "iacm_provider", "update", {
+      id: "1",
+      body: { version: "1.0.0", protocol: ["5.0"], gpg_key_id: "key-1" },
+    });
+    await registry.dispatch(makeClient(mockRequest), "iacm_provider", "update", {
+      id: "1",
+      version: "1.0.0",
+      body: { protocol: ["5.0"], gpg_key_id: "key-1" },
+    });
+
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "GET",
+      path: "/iacm/api/providers",
+      params: { page: 1, limit: 20, searchTerm: "aws" },
+    });
+    expect(mockRequest.mock.calls[1]![0]).toMatchObject({
+      method: "GET",
+      path: "/iacm/api/providers/1",
+    });
+    expect(mockRequest.mock.calls[2]![0]).toMatchObject({
+      method: "POST",
+      path: "/iacm/api/providers/aws",
+      body: { description: "AWS provider" },
+    });
+    expect(mockRequest.mock.calls[3]![0]).toMatchObject({
+      method: "POST",
+      path: "/iacm/api/providers/1/version",
+      body: { version: "1.0.0", protocol: ["5.0"], gpg_key_id: "key-1" },
+    });
+    expect(mockRequest.mock.calls[4]![0]).toMatchObject({
+      method: "PUT",
+      path: "/iacm/api/providers/1/version/1.0.0",
+      body: { protocol: ["5.0"], gpg_key_id: "key-1" },
+    });
   });
 });

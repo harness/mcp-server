@@ -402,11 +402,6 @@ export class HarnessClient {
           throw error;
         }
 
-        // 204 No Content — valid success response (e.g. PATCH/DELETE on PM API)
-        if (response.status === 204) {
-          return { status: "SUCCESS", message: "No content" } as T;
-        }
-
         // Binary response mode — return raw ArrayBuffer (used for ZIP downloads)
         if (options.responseType === "buffer") {
           const buffer = await response.arrayBuffer();
@@ -415,11 +410,10 @@ export class HarnessClient {
         }
 
         const text = await response.text();
+        // Empty body on 2xx is a valid success (204 No Content; also 201 from
+        // IaCM provider-registry create/update version, which returns no JSON).
         if (!text) {
-          throw new HarnessApiError(
-            `Empty response body from ${method} ${options.path}`,
-            502,
-          );
+          return { status: "SUCCESS", message: "No content" } as T;
         }
         let data: unknown;
         try {

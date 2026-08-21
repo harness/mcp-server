@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 239 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 240 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,7 +10,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 239 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 240 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 39 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **34 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -1205,7 +1205,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-239 resource types organized across 39 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+240 resource types organized across 39 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1425,13 +1425,15 @@ Template operations use the Harness Template service paths (`/template/api/templ
 
 ### Infrastructure as Code Management (IaCM)
 
-IaCM resources are default-enabled and mostly project-scoped. Start with `iacm_workspace` to find workspace identifiers, then use that `workspace_id` for workspace resources, costs, and activity diffs. Use `iacm_variable_set` for reusable variable sets at account, org, or project scope.
+IaCM resources are default-enabled and mostly project-scoped. Start with `iacm_workspace` to find workspace identifiers, then use that `workspace_id` for workspace resources, costs, and activity diffs. Use `iacm_variable_set` for reusable variable sets at account, org, or project scope. The provider registry is account-scoped.
 
-`iacm_module` also spans account, org, and project scope. It defaults to the account registry; every operation (list, get, create, update) sends the same `scope_org` / `scope_project` query params, so a module you create is discoverable at the scope you created it. Select the scope with `resource_scope="account" | "org" | "project"` plus `org_id`/`project_id`. Scoping is opt-in: when `resource_scope` is omitted, `org_id`/`project_id` apply only if you pass them explicitly — configured `HARNESS_ORG`/`HARNESS_PROJECT` defaults are not applied, so an ambient project config cannot silently register an account module under a project. A module body's own `org`/`project` fields locate its Git connector and are unrelated to this visibility scope.
+`iacm_module` spans account, org, and project scope. It defaults to the account registry; every operation (list, get, create, update) sends the same `scope_org` / `scope_project` query params, so a module you create is discoverable at the scope you created it. Select the scope with `resource_scope="account" | "org" | "project"` plus `org_id`/`project_id`. Scoping is opt-in: when `resource_scope` is omitted, `org_id`/`project_id` apply only if you pass them explicitly — configured `HARNESS_ORG`/`HARNESS_PROJECT` defaults are not applied, so an ambient project config cannot silently register an account module under a project. A module body's own `org`/`project` fields locate its Git connector and are unrelated to this visibility scope.
 
-`iacm_workspace` create/update return `{ policy_evaluation }` only — follow up with `harness_get` to fetch the workspace. `iacm_variable_set` and `iacm_module` create/update return the resource itself. Variable-set **update is HTTP PUT with full-replacement collections** — always `harness_get` first, then PUT the full desired body (`terraform_variables` / `environment_variables` are required on update; omit/empty clears connectors and variable files). Module update is also PUT — prefer get-then-put for optional fields. Writes are `medium_write` and require confirmation (elicitation or `confirm: true`).
+`iacm_workspace` create/update return `{ policy_evaluation }` only — follow up with `harness_get` to fetch the workspace. `iacm_variable_set` and `iacm_module` create/update return the resource itself. `iacm_provider` create returns `{ id }` only — follow up with `harness_get`; **update is version-oriented only** (POST/PUT `/providers/{id}/version`) — there is no metadata PUT. Version writes may return an empty body; HarnessClient normalizes that to `{ status: "SUCCESS", message: "No content" }`.
 
-Variable-set RBAC (`iac_variableset_*`) is currently Experimental in Harness — access checks always allow until iac-server activates enforcement. Module registry RBAC (`iac_registry_view` / `iac_registry_edit`) is Active and enforceable. MCP always forwards the caller PAT/SAT unchanged.
+Variable-set **update is HTTP PUT with full-replacement collections** — always `harness_get` first, then PUT the full desired body (`terraform_variables` / `environment_variables` are required on update; omit/empty clears connectors and variable files). Module update is also PUT — prefer get-then-put for optional fields. Writes are `medium_write` and require confirmation (elicitation or `confirm: true`).
+
+Variable-set and provider-registry RBAC (`iac_variableset_*`, `iac_providerregistry_*`) are currently Experimental in Harness — access checks always allow until iac-server activates enforcement. Module registry RBAC (`iac_registry_view` / `iac_registry_edit`) is Active and enforceable. MCP always forwards the caller PAT/SAT unchanged.
 
 | Resource Type                   | List | Get | Create | Update | Delete | Execute Actions |
 | ------------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
@@ -1439,6 +1441,7 @@ Variable-set RBAC (`iac_variableset_*`) is currently Experimental in Harness —
 | `iacm_variable_set`             | x    | x   | x      | x      |        |                 |
 | `iacm_resource`                 | x    |     |        |        |        |                 |
 | `iacm_module`                   | x    | x   | x      | x      |        |                 |
+| `iacm_provider`                 | x    | x   | x      | x      |        |                 |
 | `iacm_workspace_costs`          | x    |     |        |        |        |                 |
 | `iacm_activity_resource_change` | x    |     |        |        |        |                 |
 
@@ -1449,9 +1452,10 @@ Typical workflow:
 3. `harness_get(resource_type="iacm_workspace", workspace_id="...")` to fetch the created/updated workspace.
 4. `harness_list` / `harness_create` / `harness_update` on `iacm_variable_set` (optionally with `resource_scope`) for reusable Terraform/env variable sets — response is the VariableSet resource.
 5. `harness_list` / `harness_create` / `harness_update` on `iacm_module` for the module registry (`name` + `system` required; add `resource_scope` with `org_id`/`project_id` for an org- or project-scoped module) — response is the module resource.
-6. `harness_list(resource_type="iacm_resource", org_id="...", project_id="...", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
-7. `harness_list(resource_type="iacm_workspace_costs", org_id="...", project_id="...", workspace_id="...")` to review per-execution cost entries.
-8. `harness_list(resource_type="iacm_activity_resource_change", org_id="...", project_id="...", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
+6. `harness_list` / `harness_create` / `harness_update` on `iacm_provider` for the account provider registry (`body.type` required for create; create returns `{ id }` only — then `harness_get`; update creates/updates **versions** only) — version update may return empty success.
+7. `harness_list(resource_type="iacm_resource", org_id="...", project_id="...", workspace_id="...")` to inspect Terraform resources, outputs, and data sources.
+8. `harness_list(resource_type="iacm_workspace_costs", org_id="...", project_id="...", workspace_id="...")` to review per-execution cost entries.
+9. `harness_list(resource_type="iacm_activity_resource_change", org_id="...", project_id="...", activity_id="...", workspace_id="...")` to inspect before/after resource diffs for a plan, apply, or destroy activity.
 
 IaCM list responses expose `page_count` as the count for the current page only (except `iacm_variable_set`, which is not paginated). When `has_more` is true, keep requesting the next 1-based page and sum page counts if you need a total.
 
@@ -1903,7 +1907,7 @@ Available toolset names:
 | `knowledge-graph`       | kg_queryable_type_summary, kg_grammar, hql_query                                                                                                                                                                                                                                                |
 | `semantic-layer`        | kg_type, kg_related_type                                                                                                                                                                                                                                                                        |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item, eval_git_registration, online_eval |
-| `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                                              |
+| `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_provider, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                               |
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
 | `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
 
@@ -1924,7 +1928,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  39 Toolsets      |      (data files, not code)
-                |  239 Resource Types|
+                |  240 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
