@@ -229,14 +229,14 @@ describe("fme_segment_definition remaining key execute actions", () => {
   });
 });
 
-describe("fme_segment_keys native is not yet implemented", () => {
+describe("fme_segment_keys native mode rejection", () => {
   let registry: Registry;
 
   beforeEach(() => {
     registry = new Registry(makeConfig());
   });
 
-  it("list throws not-yet-implemented", async () => {
+  it("list throws error pointing to fme_segment_definition", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -246,11 +246,11 @@ describe("fme_segment_keys native is not yet implemented", () => {
         environment_id: "env1",
         segment_name: "seg1",
       }),
-    ).rejects.toThrow(/not yet implemented/i);
+    ).rejects.toThrow(/not supported.*fme_segment_definition.*list_keys/i);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("update throws not-yet-implemented", async () => {
+  it("update throws error pointing to fme_segment_definition", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -261,7 +261,7 @@ describe("fme_segment_keys native is not yet implemented", () => {
         segment_name: "seg1",
         body: { add: ["a"] },
       }),
-    ).rejects.toThrow(/not yet implemented/i);
+    ).rejects.toThrow(/not supported.*fme_segment_definition.*add_keys.*remove_keys/i);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 });

@@ -1711,8 +1711,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
         { name: "environment_id", description: "Environment ID (get from fme_environment)", required: true },
         { name: "segment_name", description: "Segment name", required: true },
         { name: "offset", description: "Pagination offset", type: "number" },
-        { name: "org_id", description: "Optional — pass together with project_id to select the (not yet implemented) Harness-native mode instead of the current contract." },
-        { name: "project_id", description: "Optional — pass together with org_id to select the (not yet implemented) Harness-native mode instead of the current contract." },
+        { name: "org_id", description: "Optional — not supported; use fme_segment_definition execute actions for Harness-native segment key operations." },
+        { name: "project_id", description: "Optional — not supported; use fme_segment_definition execute actions for Harness-native segment key operations." },
       ],
       operations: {
         list: {
@@ -1721,7 +1721,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             if (isFmeHarnessNativeSelected(input, "fme_segment_keys.list")) {
               throw new Error(
-                "fme_segment_keys.list: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass environment_id/segment_name (current contract) instead.",
+                "fme_segment_keys.list: Harness-native (org_id/project_id) mode not supported — use fme_segment_definition execute list_keys instead.",
               );
             }
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_segment_keys"));
@@ -1743,7 +1743,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           routeResolver: (input) => {
             if (isFmeHarnessNativeSelected(input, "fme_segment_keys.update")) {
               throw new Error(
-                "fme_segment_keys.update: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass environment_id/segment_name (current contract) instead.",
+                "fme_segment_keys.update: Harness-native (org_id/project_id) mode not supported — use fme_segment_definition execute add_keys/remove_keys instead.",
               );
             }
             const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_segment_keys"));
