@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough, fmeListExtract, fmeGetExtract } from "../extractors.js";
+import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract } from "../extractors.js";
 import { isFmeHarnessNativeSelected, logFmeDeprecation, requireFmeIdentifier, requireHarnessNativeSegmentScope, resolveFmeDualMode } from "../scope-utils.js";
 
 const fmeActionExtract = (raw: unknown) => {
@@ -100,7 +100,7 @@ const fmeFeatureFlagCreateSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: true, description: "Feature flag name (must be unique within the workspace/project)" },
     { name: "description", type: "string", required: false, description: "Optional description of the feature flag" },
-    { name: "trafficType", type: "string", required: false, description: "Traffic type name. Required in Harness-native (org_id+project_id) mode; ignored in legacy mode (pass traffic_type_id as a separate param there instead)" },
+    { name: "trafficType", type: "string", required: false, description: "Traffic type name. Required in Harness-native (org_id+project_id) mode; also accepted as top-level traffic_type_id or traffic_type. Ignored in legacy mode (pass traffic_type_id as a path param there instead)" },
     { name: "tags", type: "array", required: false, description: "Harness-native mode only. Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Harness-native mode only. Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
   ],
@@ -120,6 +120,61 @@ const fmeFeatureFlagArchiveSchema: BodySchema = {
     { name: "comment", type: "string", required: false, description: "Optional comment explaining the change" },
   ],
 };
+
+const fmeEnvironmentCreateSchema: BodySchema = {
+  description:
+    "Create an FME environment (Harness-native org_id+project_id only). name is required (max 15 characters). isProduction is optional (default false). production is accepted as an alias for isProduction.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Environment name (unique in the project; max 15 characters)" },
+    { name: "isProduction", type: "boolean", required: false, description: "Whether this is a production environment. Optional; defaults to false on the backend if omitted." },
+    { name: "production", type: "boolean", required: false, description: "Alias for isProduction." },
+  ],
+};
+
+const fmeEnvironmentUpdateSchema: BodySchema = {
+  description:
+    "Partial environment update via JSON Merge Patch (RFC 7396), Harness-native only. name and isProduction are not clearable — omit to leave unchanged. production is accepted as an alias for isProduction.",
+  fields: [
+    { name: "name", type: "string", required: false, description: "Updated name; omit to leave unchanged. Blank names are rejected. Not clearable." },
+    { name: "isProduction", type: "boolean", required: false, description: "Updated production flag. Omit to leave unchanged; not clearable." },
+    { name: "production", type: "boolean", required: false, description: "Alias for isProduction." },
+  ],
+};
+
+function fmeEnvironmentProduction(body: Record<string, unknown> | undefined): boolean | undefined {
+  if (!body) return undefined;
+  if (body.isProduction !== undefined && body.isProduction !== null) return Boolean(body.isProduction);
+  if (body.production !== undefined && body.production !== null) return Boolean(body.production);
+  return undefined;
+}
+
+/** MCP never had workspace_id get/create/update/delete for environments (#806 list-only). */
+function resolveNativeOnlyEnvironmentRoute(
+  input: Record<string, unknown>,
+  operation: string,
+  opts: { collection?: boolean; mergePatch?: boolean } = {},
+) {
+  const mode = resolveFmeDualMode(input, "fme_environment");
+  if (mode.mode === "legacy") {
+    throw new Error(
+      `fme_environment.${operation}: Harness-native (org_id/project_id) only — MCP never supported workspace_id for this operation (list remains dual-mode).`,
+    );
+  }
+  if (opts.collection) {
+    return {
+      path: "/fme/api/v4/environments",
+      product: "harness" as const,
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+    };
+  }
+  const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_environment"));
+  return {
+    path: `/fme/api/v4/environments/${environmentId}`,
+    product: "harness" as const,
+    scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+    ...(opts.mergePatch ? { headers: { "Content-Type": "application/merge-patch+json" } } : {}),
+  };
+}
 
 const fmeFeatureFlagDefinitionCreateSchema: BodySchema = {
   description: "Create a feature flag definition in a specific environment (initial treatments, rules, and default rule required)",
@@ -274,6 +329,38 @@ const fmeRbsChangeRequestSchema: BodySchema = {
   ],
 };
 
+function resolveNativeOnlyDefinitionRoute(
+  input: Record<string, unknown>,
+  operation: string,
+  opts: { collection?: boolean; suffix?: string } = {},
+) {
+  const mode = resolveFmeDualMode(input, "fme_feature_flag_definition");
+  if (mode.mode === "legacy") {
+    throw new Error(
+      `fme_feature_flag_definition.${operation}: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.`,
+    );
+  }
+
+  if (opts.collection) {
+    requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition");
+    return {
+      path: "/fme/api/v4/feature-flag-definitions",
+      product: "harness" as const,
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+    };
+  }
+
+  const flagName = encodeURIComponent(
+    requireFmeIdentifier(input, "feature_flag_name", "fme_feature_flag_definition"),
+  );
+  requireFmeIdentifier(input, "environment_id", "fme_feature_flag_definition");
+  return {
+    path: `/fme/api/v4/feature-flag-definitions/${flagName}${opts.suffix ?? ""}`,
+    product: "harness" as const,
+    scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+  };
+}
+
 export const featureFlagsToolset: ToolsetDefinition = {
   name: "feature-flags",
   displayName: "Feature Management & Experimentation",
@@ -334,8 +421,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_environment",
       displayName: "FME Environment",
       description:
-        "Feature Management environment. Supports list. Dual-mode scoping: pass either org_id+project_id " +
-        "(Harness-native, preferred — no workspace lookup needed) or the deprecated workspace_id.",
+        "Feature Management environment. Dual-mode list (workspace_id or org_id+project_id). get/create/update/delete are Harness-native only. Native create/update use isProduction (production accepted as an alias). Native PATCH is JSON Merge Patch; name and isProduction are not clearable. Name max 15 characters. Delete returns 400 hasDependents while SDK API keys (always created with a new env), flags, or segments remain.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -343,6 +429,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
       product: "fme",
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "offset", description: "Harness-native pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Harness-native page size (default 100, max 100)", type: "number" },
       ],
       operations: {
         list: {
@@ -356,8 +444,66 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: "/fme/api/v4/environments", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { offset: "offset", size: "limit", limit: "limit" },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description: "List FME environments for a workspace (legacy) or org_id+project_id project (Harness-native). Native envelope {data, limit, offset, totalCount} is promoted to items/total; harness_list size maps to limit.",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyEnvironmentRoute(input, "get"),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
-          description: "List FME environments for a workspace",
+          description:
+            "Get a single environment by environment_id (UUID from list). Harness-native only (org_id+project_id). MCP never supported workspace_id get.",
+        },
+        create: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyEnvironmentRoute(input, "create", { collection: true }),
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            const production = fmeEnvironmentProduction(body);
+            return {
+              name: body?.name,
+              ...(production !== undefined ? { isProduction: production } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeEnvironmentCreateSchema,
+          description:
+            "Create an environment (Harness-native only). Body requires name (max 15 characters). Optional isProduction (CreateEnvironmentRequest). NG scope is not injected into the JSON.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyEnvironmentRoute(input, "update", { mergePatch: true }),
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body) return {};
+            const production = fmeEnvironmentProduction(body);
+            return {
+              ...(typeof body.name === "string" ? { name: body.name } : {}),
+              ...(production !== undefined ? { isProduction: production } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeEnvironmentUpdateSchema,
+          description:
+            "Update an environment by environment_id (Harness-native only). JSON Merge Patch on name and isProduction (not clearable).",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyEnvironmentRoute(input, "delete"),
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description:
+            "Delete (archive) an environment by environment_id (Harness-native only). Returns 400 hasDependents while SDK API keys, flags, or segments still target it. Create via EnvironmentStarterKit always provisions client/server API keys, so a brand-new environment cannot be deleted until those keys are removed.",
         },
       },
     },
@@ -435,14 +581,20 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
             if (isFmeHarnessNativeSelected(input, "fme_feature_flag")) {
-              const trafficType = (body?.trafficType ?? body?.traffic_type) as string | undefined;
+              const trafficType = (body?.trafficType ?? input.traffic_type_id ?? input.traffic_type ?? body?.traffic_type) as string | undefined;
               if (!trafficType) {
                 throw new Error(
-                  "fme_feature_flag.create: \"trafficType\" is required in body for Harness-native (org_id/project_id) mode.",
+                  'fme_feature_flag.create: "trafficType" is required in Harness-native mode — pass body.trafficType, traffic_type_id, or traffic_type.',
+                );
+              }
+              const name = body?.name ?? input.name;
+              if (!name) {
+                throw new Error(
+                  'fme_feature_flag.create: "name" is required in Harness-native mode — pass body.name.',
                 );
               }
               return {
-                name: body?.name ?? input.name,
+                name,
                 trafficType,
                 ...(body?.description !== undefined ? { description: body.description } : {}),
                 ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
@@ -456,7 +608,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagCreateSchema,
-          description: "Create a feature flag. Legacy mode (workspace_id): requires workspace_id + traffic_type_id (get from fme_traffic_type); body: name, optional description (no tags/owners — use harness_update after creation). Harness-native mode (org_id+project_id): body requires name + trafficType, optional description/tags/owners.",
+          description: "Create a feature flag. Legacy mode (workspace_id): requires workspace_id + traffic_type_id (get from fme_traffic_type); body: name, optional description (no tags/owners — use harness_update after creation). Harness-native mode (org_id+project_id): body requires name + trafficType (or pass traffic_type_id / traffic_type at top level), optional description/tags/owners.",
         },
         delete: {
           method: "DELETE",
@@ -696,14 +848,28 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_feature_flag_definition",
       displayName: "FME Feature Flag Definition",
       description:
-        "Detailed definition of a feature flag in a specific environment, including treatments, rules, targeting, and traffic allocation. Supports create, get, and update. Create requires treatments, defaultTreatment, and defaultRule. " +
-        "Dual-mode scoping: pass org_id+project_id (Harness-native) or the deprecated workspace_id (Split.io API) — both modes share the same body shape and all three operations. environment_id is passed as a path segment in legacy mode and as a query param in Harness-native mode.",
+        "Detailed definition of a feature flag in a specific environment: treatments, rules, targeting, and traffic allocation. Create requires treatments, defaultTreatment, and defaultRule. Get/create/update: pass org_id+project_id (preferred) or the deprecated workspace_id. List/delete/kill/restore/reallocate: org_id+project_id only. Native list requires feature_flag_name and uses offset/limit (max 100); it does not take environment_id. Other ops require environment_id. Kill/restore/reallocate are the same actions as on fme_feature_flag; either resource works.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id", "environment_id", "feature_flag_name"],
       product: "fme",
+      listFilterFields: [
+        { name: "feature_flag_name", description: "Feature flag name whose definitions to list. Required.", required: true },
+        { name: "offset", description: "Pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Page size (default 100, max 100)", type: "number" },
+      ],
       operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "list", { collection: true }),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { feature_flag_name: "feature_flag_name", offset: "offset", limit: "limit" },
+          responseExtractor: passthrough,
+          description:
+            "List feature flag definitions for a flag across environments (org_id+project_id only). Requires feature_flag_name. Pagination uses offset and limit (default 100, max 100). Do not pass environment_id.",
+        },
         get: {
           method: "GET",
           path: "/internal/api/v2/splits/ws/{wsId}/{featureFlagName}/environments/{environmentId}",
@@ -724,7 +890,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           queryParams: { environment_id: "environment_id" },
           responseExtractor: passthrough,
-          description: "Get feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation). Legacy mode: workspace_id, environment_id in path. Harness-native mode: org_id+project_id, environment_id as query param.",
+          description:
+            "Get a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation). Requires feature_flag_name and environment_id. Pass org_id+project_id (preferred) or deprecated workspace_id.",
         },
         create: {
           method: "POST",
@@ -748,7 +915,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagDefinitionCreateSchema,
-          description: "Create a feature flag definition in a specific environment. Requires treatments (array of treatment objects), defaultTreatment (string matching a treatment name), and defaultRule (array of bucket objects). Optional: rules, baselineTreatment, trafficAllocation, comment, title (Harness-native only). Legacy mode: workspace_id, environment_id in path. Harness-native mode: org_id+project_id, environment_id as query param.",
+          description:
+            "Create a feature flag definition in a specific environment. Requires treatments (array of treatment objects), defaultTreatment (string matching a treatment name), and defaultRule (array of bucket objects). Optional: rules, baselineTreatment, trafficAllocation, comment, title (Harness-native only). Requires feature_flag_name and environment_id. Pass org_id+project_id (preferred) or deprecated workspace_id.",
         },
         update: {
           method: "PUT",
@@ -779,7 +947,73 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagDefinitionUpdateSchema,
           description:
-            "Update a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation, baseline treatment). Legacy mode: PUT, workspace_id/environment_id in path (full-replace, per the Split.io API). Harness-native mode: PATCH via JSON Merge Patch (RFC 7396) — omit a field to leave it unchanged; treatments/rules/defaultRule are omit-to-keep but reject explicit null (not clearable); org_id+project_id, environment_id as query param.",
+            "Update a feature flag definition in a specific environment (treatments, rules, default rule, traffic allocation, baseline treatment). Requires feature_flag_name and environment_id. Pass org_id+project_id (preferred) or deprecated workspace_id. Native update is JSON Merge Patch: omit a field to leave it unchanged; treatments/rules/defaultRule are omit-to-keep but reject explicit null (not clearable). Legacy update is a full replace.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "delete"),
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          responseExtractor: passthrough,
+          description:
+            "Delete a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id.",
+        },
+      },
+      executeActions: {
+        kill: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "kill", { suffix: "/kill" }),
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
+          },
+          responseExtractor: fmeActionExtract,
+          actionDescription:
+            "Kill (turn off) a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as fme_feature_flag kill.",
+          bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
+        },
+        restore: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "restore", { suffix: "/restore" }),
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
+          },
+          responseExtractor: fmeActionExtract,
+          actionDescription:
+            "Restore a killed feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as fme_feature_flag restore.",
+          bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
+        },
+        reallocate: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyDefinitionRoute(input, "reallocate", { suffix: "/reallocate" }),
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
+          },
+          responseExtractor: fmeActionExtract,
+          actionDescription:
+            "Reallocate traffic across treatments for a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as fme_feature_flag reallocate.",
+          bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
         },
       },
     },
@@ -787,7 +1021,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_rollout_status",
       displayName: "FME Rollout Status",
       description:
-        "Rollout status definitions for a workspace (e.g. Killed, Permanent, Ramping). Use to discover valid rollout_status_id UUIDs for filtering fme_feature_flag lists. Note: this endpoint may not be available on all account types — rollout status IDs are also returned inline with fme_feature_flag list results.",
+        "Rollout status definitions (e.g. Killed, Permanent, Ramping). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover rollout_status_id UUIDs for filtering fme_feature_flag lists. Pagination uses offset/limit (max 100; harness_list size maps to limit).",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -795,24 +1029,25 @@ export const featureFlagsToolset: ToolsetDefinition = {
       product: "fme",
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "offset", description: "Harness-native pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Harness-native page size (default 100, max 100)", type: "number" },
       ],
       operations: {
         list: {
           method: "GET",
-          path: "/internal/api/v2/rolloutStatuses/ws/{wsId}",
+          path: "",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_rollout_status");
-            if (mode.mode === "harness_native") {
-              throw new Error(
-                "fme_rollout_status.list: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
-              );
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/rolloutStatuses/ws/${encodeURIComponent(mode.workspaceId)}` };
             }
-            return { path: `/internal/api/v2/rolloutStatuses/ws/${encodeURIComponent(mode.workspaceId)}` };
+            return { path: "/fme/api/v4/rollout-statuses", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { workspace_id: "wsId" },
-          responseExtractor: passthrough,
-          description: "List rollout status definitions for a workspace (Killed, Permanent, Ramping, etc.). If this returns 404, use rolloutStatus fields from fme_feature_flag list results instead.",
+          queryParams: { offset: "offset", size: "limit", limit: "limit" },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description:
+            "List rollout statuses. Pass org_id+project_id (preferred) or deprecated workspace_id. Optional offset/limit (harness_list size maps to limit).",
         },
       },
     },
@@ -1038,7 +1273,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_traffic_type",
       displayName: "FME Traffic Type",
       description:
-        "Traffic type in a workspace (e.g. 'user', 'account'). List traffic types to discover traffic_type_id values needed for identity queries and flag/segment creation.",
+        "Traffic type (e.g. 'user', 'account'). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover traffic_type_id / name values for flag and segment create. Pagination uses offset/limit (max 100; harness_list size maps to limit).",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -1046,24 +1281,25 @@ export const featureFlagsToolset: ToolsetDefinition = {
       product: "fme",
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "offset", description: "Harness-native pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Harness-native page size (default 100, max 100)", type: "number" },
       ],
       operations: {
         list: {
           method: "GET",
-          path: "/internal/api/v2/trafficTypes/ws/{wsId}",
+          path: "",
           routeResolver: (input) => {
             const mode = resolveFmeDualMode(input, "fme_traffic_type");
-            if (mode.mode === "harness_native") {
-              throw new Error(
-                "fme_traffic_type.list: Harness-native (org_id/project_id) mode not yet implemented for this operation — pass workspace_id (deprecated) instead.",
-              );
+            if (mode.mode === "legacy") {
+              return { path: `/internal/api/v2/trafficTypes/ws/${encodeURIComponent(mode.workspaceId)}` };
             }
-            return { path: `/internal/api/v2/trafficTypes/ws/${encodeURIComponent(mode.workspaceId)}` };
+            return { path: "/fme/api/v4/traffic-types", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: { workspace_id: "wsId" },
-          responseExtractor: passthrough,
-          description: "List traffic types for a workspace. Returns id, name, and displayAttributeId for each traffic type.",
+          queryParams: { offset: "offset", size: "limit", limit: "limit" },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description:
+            "List traffic types. Pass org_id+project_id (preferred) or deprecated workspace_id. Optional offset/limit (harness_list size maps to limit).",
         },
       },
     },

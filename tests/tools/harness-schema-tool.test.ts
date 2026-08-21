@@ -71,7 +71,7 @@ describe("harness_schema live entities", () => {
       account: "acct-123",
       request: requestMock,
     } as unknown as HarnessClient;
-    registerSchemaTool(server, undefined, client);
+    registerSchemaTool(server, undefined, client, undefined);
   });
 
   it("includes live entity types in registration", () => {
@@ -242,10 +242,100 @@ describe("harness_schema live entities", () => {
   });
 });
 
+const RMG_TEST_CONFIG = {
+  HARNESS_BASE_URL: "https://app.harness.io",
+  HARNESS_API_KEY: "pat.test.test.secret",
+  HARNESS_ACCOUNT_ID: "acct-123",
+} as const;
+
+const PROCESS_LIVE_SCHEMA = {
+  $schema: "http://json-schema.org/draft-07/schema#",
+  type: "object",
+  required: ["process"],
+  properties: {
+    process: {
+      type: "object",
+      required: ["id", "name", "phases"],
+      properties: {
+        id: { type: "string" },
+        name: { type: "string" },
+        phases: { type: "array" },
+      },
+    },
+  },
+};
+
+describe("harness_schema RMG release definitions", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let requestMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    server = makeMcpServer();
+    requestMock = vi.fn().mockResolvedValue(PROCESS_LIVE_SCHEMA);
+    const client = {
+      account: "acct-123",
+      request: requestMock,
+    } as unknown as HarnessClient;
+    registerSchemaTool(server, undefined, client, RMG_TEST_CONFIG as never);
+  });
+
+  it("includes release_process and release_activity in registration", () => {
+    const call = server.registerTool.mock.calls.find((c: unknown[]) => c[0] === "harness_schema");
+    const description = (call![1] as { description: string }).description;
+    expect(description).toContain("release_process");
+    expect(description).toContain("release_activity");
+  });
+
+  it("fetches release_process schema from RMG /api/yamlSchema", async () => {
+    const result = await server.call("harness_schema", { resource_type: "release_process" });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/api/yamlSchema",
+        baseUrl: "https://app.harness.io/gateway/rmg",
+        headerBasedScoping: true,
+        params: expect.objectContaining({ entityType: "PROCESS" }),
+      }),
+    );
+    expect(parsed.source).toBe("rmg-yaml-schema");
+    expect(parsed.yaml_root).toBe("process");
+    expect(parsed.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "id", required: true }),
+        expect.objectContaining({ name: "phases", required: true }),
+      ]),
+    );
+  });
+
+  it("fetches release_activity schema with entityType ACTIVITY", async () => {
+    await server.call("harness_schema", { resource_type: "release_activity" });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ entityType: "ACTIVITY" }),
+      }),
+    );
+  });
+
+  it("drills into RMG schema paths under the yaml root", async () => {
+    const result = await server.call("harness_schema", {
+      resource_type: "release_process",
+      path: "phases",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(parsed.source).toBe("rmg-yaml-schema");
+    expect(parsed.path).toBe("phases");
+    expect((parsed.schema as Record<string, unknown>).type).toBe("array");
+  });
+});
+
 describe("harness_schema static enum", () => {
   it("lists both legacy and v1 bundled pipeline schemas (no version preference)", () => {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined);
+    registerSchemaTool(server, undefined, undefined, undefined);
 
     const call = server.registerTool.mock.calls.find((c: unknown[]) => c[0] === "harness_schema");
     const description = (call![1] as { description: string }).description;
@@ -257,7 +347,7 @@ describe("harness_schema static enum", () => {
 
   it("does not expose v1 schemas removed from harness-schema upstream", () => {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined);
+    registerSchemaTool(server, undefined, undefined, undefined);
 
     const call = server.registerTool.mock.calls.find((c: unknown[]) => c[0] === "harness_schema");
     const description = (call![1] as { description: string }).description;
@@ -298,7 +388,7 @@ const NESTED_STATIC_SCHEMA = {
 describe("harness_schema nested static definition lookup", () => {
   function makeServerWithNestedSchema() {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined, {
+    registerSchemaTool(server, undefined, undefined, undefined, {
       nested_demo: {
         schema: NESTED_STATIC_SCHEMA,
         description: "Nested lookup test schema",
@@ -363,7 +453,7 @@ describe("harness_schema nested static definition lookup", () => {
 
   it("resolves a bundled pipeline_v1 nested definition by bare name", async () => {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined);
+    registerSchemaTool(server, undefined, undefined, undefined);
     const result = await server.call("harness_schema", {
       resource_type: "pipeline_v1",
       path: "EnvironmentV1",
@@ -377,7 +467,7 @@ describe("harness_schema nested static definition lookup", () => {
 
   it("resolves newly synced K8sProgressiveCanaryRollback step definition from v0 pipeline", async () => {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined);
+    registerSchemaTool(server, undefined, undefined, undefined);
     const result = await server.call("harness_schema", {
       resource_type: "pipeline",
       path: "K8sProgressiveCanaryRollbackStepNode",
@@ -393,7 +483,7 @@ describe("harness_schema nested static definition lookup", () => {
 
   it("resolves newly synced DeployGoogleAgentRuntimeRevision step definition from v0 pipeline", async () => {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined);
+    registerSchemaTool(server, undefined, undefined, undefined);
     const result = await server.call("harness_schema", {
       resource_type: "pipeline",
       path: "DeployGoogleAgentRuntimeRevisionStepNode",
@@ -409,7 +499,7 @@ describe("harness_schema nested static definition lookup", () => {
 
   it("resolves v1 Clone definition with upstream user field", async () => {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined);
+    registerSchemaTool(server, undefined, undefined, undefined);
     const result = await server.call("harness_schema", {
       resource_type: "pipeline_v1",
       path: "Clone",
@@ -423,7 +513,7 @@ describe("harness_schema nested static definition lookup", () => {
 
   it("resolves newly synced DeployAwsAgentCoreRevision step definition from v0 pipeline", async () => {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined);
+    registerSchemaTool(server, undefined, undefined, undefined);
     const result = await server.call("harness_schema", {
       resource_type: "pipeline",
       path: "DeployAwsAgentCoreRevisionStepNode",
@@ -439,7 +529,7 @@ describe("harness_schema nested static definition lookup", () => {
 
   it("resolves IdentitiesConfig from v0 pipeline common definitions", async () => {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined);
+    registerSchemaTool(server, undefined, undefined, undefined);
     const result = await server.call("harness_schema", {
       resource_type: "pipeline",
       path: "IdentitiesConfig",
@@ -455,7 +545,7 @@ describe("harness_schema nested static definition lookup", () => {
 
   it("resolves DynamicStageNodeV1 from v1 pipeline unified stages", async () => {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined);
+    registerSchemaTool(server, undefined, undefined, undefined);
     const result = await server.call("harness_schema", {
       resource_type: "pipeline_v1",
       path: "DynamicStageNodeV1",
@@ -514,7 +604,7 @@ const WRAPPER_VS_SCHEMA_SCHEMA = {
 describe("harness_schema wrapper definition fallback", () => {
   it("resolves a bare wrapper definition when it is not a schema node", async () => {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined, {
+    registerSchemaTool(server, undefined, undefined, undefined, {
       wrapper_demo: {
         schema: WRAPPER_FALLBACK_SCHEMA,
         description: "Wrapper fallback test schema",
@@ -538,7 +628,7 @@ describe("harness_schema wrapper definition fallback", () => {
 
   it("prefers a nested schema-node match over a shallow wrapper with the same name", async () => {
     const server = makeMcpServer();
-    registerSchemaTool(server, undefined, undefined, {
+    registerSchemaTool(server, undefined, undefined, undefined, {
       prefer_schema: {
         schema: WRAPPER_VS_SCHEMA_SCHEMA,
         description: "Wrapper vs schema node preference test",
