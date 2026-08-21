@@ -51,6 +51,7 @@ import { knowledgeGraphToolset } from "./toolsets/knowledge-graph.js";
 import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
 import { ansibleToolset } from "./toolsets/ansible.js";
 import { incidentsToolset } from "./toolsets/incidents.js";
+import { alertsToolset } from "./toolsets/alerts.js";
 import { deploysToolset } from "./toolsets/deploys.js";
 
 const log = createLogger("registry");
@@ -166,6 +167,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   semanticLayerToolset,
   ansibleToolset,
   incidentsToolset,
+  alertsToolset,
   deploysToolset,
 ];
 

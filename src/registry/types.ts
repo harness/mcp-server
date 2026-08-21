@@ -152,6 +152,7 @@ export type ToolsetName =
   | "ansible"
   | "ai-evals"
   | "incidents"
+  | "alerts"
   | "deploys"
   | "knowledge-graph"
   | "semantic-layer";
