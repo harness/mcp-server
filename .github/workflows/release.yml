@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing v<semver> GitHub Release to backfill with an MCPB asset"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -11,6 +17,7 @@ permissions:
 
 jobs:
   release:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -64,3 +71,68 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes
           fi
+
+  mcpb:
+    needs: release
+    if: >-
+      always() &&
+      (github.event_name == 'workflow_dispatch' || needs.release.result == 'success')
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+    steps:
+      - name: Check out packaging tooling
+        uses: actions/checkout@v4
+        with:
+          path: .packaging-tools
+
+      - name: Verify release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "Release tag must match v<major>.<minor>.<patch>: $RELEASE_TAG"
+            exit 1
+          }
+          gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null
+
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          path: release-source
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.18.2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: release-source/pnpm-lock.yaml
+
+      - name: Verify package version
+        run: |
+          TAG_VERSION="${RELEASE_TAG#v}"
+          PACKAGE_VERSION=$(node -p "require('./release-source/package.json').version")
+          test "$PACKAGE_VERSION" = "$TAG_VERSION" || {
+            echo "package.json version $PACKAGE_VERSION does not match tag $RELEASE_TAG"
+            exit 1
+          }
+
+      - name: Install release dependencies
+        working-directory: release-source
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and validate MCPB
+        run: |
+          node .packaging-tools/scripts/prepare-mcpb.js \
+            --source-dir release-source \
+            --output-dir artifacts
+          echo "MCPB_ASSET=artifacts/harness-mcp-server-${RELEASE_TAG#v}.mcpb" >> "$GITHUB_ENV"
+
+      - name: Upload MCPB to GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_TAG" "$MCPB_ASSET" --repo "$GITHUB_REPOSITORY" --clobber
