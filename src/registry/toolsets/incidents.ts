@@ -110,7 +110,12 @@ const incidentCreateSchema: BodySchema = {
     { name: "templateShortId", type: "string", required: true, description: "Short ID of the incident template to instantiate from" },
     { name: "title", type: "string", required: true, description: "Incident title" },
     { name: "summary", type: "string", required: false, description: "Free-text summary of the incident" },
-    { name: "severity", type: "string", required: false, description: "Severity identifier" },
+    {
+      name: "severity",
+      type: "string",
+      required: false,
+      description: "Severity option id: 0 (SEV0: Critical), 1 (SEV1: Major), 2 (SEV2: Moderate), 3 (SEV3: Minor), 4 (SEV4: Cosmetic)",
+    },
     { name: "impactedServices", type: "array", required: false, description: "Identifiers of impacted services", itemType: "string" },
     { name: "environments", type: "array", required: false, description: "Affected environments", itemType: "string" },
     { name: "commanderHarnessUserId", type: "string", required: false, description: "Harness user ID of the incident commander" },
@@ -126,7 +131,12 @@ const incidentUpdateSchema: BodySchema = {
   fields: [
     { name: "title", type: "string", required: false, description: "Incident title" },
     { name: "summary", type: "string", required: false, description: "Free-text summary of the incident" },
-    { name: "severity", type: "string", required: false, description: "Severity identifier" },
+    {
+      name: "severity",
+      type: "string",
+      required: false,
+      description: "Severity option id: 0 (SEV0: Critical), 1 (SEV1: Major), 2 (SEV2: Moderate), 3 (SEV3: Minor), 4 (SEV4: Cosmetic)",
+    },
     { name: "status", type: "string", required: false, description: "Incident status (new, investigating, fixing, monitoring, closed)" },
     { name: "impactedServices", type: "array", required: false, description: "Identifiers of impacted services", itemType: "string" },
     { name: "environments", type: "array", required: false, description: "Affected environments", itemType: "string" },
@@ -152,7 +162,7 @@ export const incidentsToolset: ToolsetDefinition = {
       compactItem: compactIncident,
       listFilterFields: [
         { name: "status", description: "Filter by incident status (multi-value)", enum: ["new", "investigating", "fixing", "monitoring", "closed"] },
-        { name: "severity", description: "Filter by severity (multi-value)" },
+        { name: "severity", description: "Filter by severity option id (multi-value)", enum: ["0", "1", "2", "3", "4"] },
         { name: "impacted_service", description: "Filter by impacted service (multi-value)" },
         { name: "environment", description: "Filter by environment (multi-value)" },
         { name: "commander", description: "Filter by incident commander (multi-value)" },

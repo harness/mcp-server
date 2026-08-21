@@ -59,6 +59,26 @@ function parseResult(result: ToolResult): unknown {
   return JSON.parse(item.text);
 }
 
+describe("incident resource definition", () => {
+  it("constrains the severity filter to the known option ids", () => {
+    const registry = new Registry(makeConfig());
+    const def = registry.getResource("incident");
+    const severityFilter = def.listFilterFields?.find((f) => f.name === "severity");
+    expect(severityFilter?.enum).toEqual(["0", "1", "2", "3", "4"]);
+  });
+
+  it.each(["create", "update"] as const)("names the severity option ids in the %s body schema", (op) => {
+    const registry = new Registry(makeConfig());
+    const def = registry.getResource("incident");
+    const severityField = def.operations[op]?.bodySchema?.fields.find((f) => f.name === "severity");
+    // BodyFieldSpec has no enum support, so the values must live in the description.
+    // SEV0 is Critical, not the lowest severity — spelled out to prevent the off-by-one read.
+    for (const label of ["0 (SEV0: Critical)", "1 (SEV1: Major)", "2 (SEV2: Moderate)", "3 (SEV3: Minor)", "4 (SEV4: Cosmetic)"]) {
+      expect(severityField?.description).toContain(label);
+    }
+  });
+});
+
 describe("incident — harness_list", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;
