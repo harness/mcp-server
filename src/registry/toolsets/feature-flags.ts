@@ -1440,7 +1440,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_segment",
       displayName: "FME Segment",
       description:
-        "FME (Harness-native, org_id+project_id scoped). Unified segment resource (STANDARD, LARGE, RULE_BASED). Supports list (required segment_type filter — one kind per call), get, create (required JSON segmentType), update (JSON Merge Patch on description/tags/owners), and delete. GET/PATCH/DELETE have no MCP kind gate; the backend looks up STANDARD store names only, so LARGE/RULE_BASED names 404. Delete returns 400 hasDependents while environment definitions or flag targeting still reference the segment.",
+        "FME (Harness-native, org_id+project_id scoped). Unified segment resource (STANDARD, LARGE, RULE_BASED). Supports list (required segment_type filter — one kind per call), get, create (required JSON segmentType), update (JSON Merge Patch on description/tags/owners), and delete.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
