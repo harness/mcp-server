@@ -496,4 +496,145 @@ describe("policy and policy_set multi-scope support", () => {
       expect(mockRequest).not.toHaveBeenCalled();
     },
   );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s get injects only org for resource_scope=org",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "org-policy" });
+      const client = makeClient(mockRequest);
+      const idField = resourceType === "policy" ? "policy_id" : "policy_set_id";
+
+      await registry.dispatch(client, resourceType, "get", {
+        resource_scope: "org",
+        org_id: "platform",
+        [idField]: "org-policy",
+      });
+
+      const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown>; path: string };
+      expect(call.params.orgIdentifier).toBe("platform");
+      expect(call.params.projectIdentifier).toBeUndefined();
+      expect(call.path).toContain("org-policy");
+    },
+  );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s create injects only org for resource_scope=org",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "new-org-policy" });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, resourceType, "create", {
+        resource_scope: "org",
+        org_id: "platform",
+        body: {
+          identifier: "new-org-policy",
+          name: "New Org Policy",
+          ...(resourceType === "policy"
+            ? { rego: "package harness\n\ndefault allow = true" }
+            : {
+                action: "onstep",
+                type: "sbom",
+                enabled: true,
+              }),
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown>; method: string };
+      expect(call.method).toBe("POST");
+      expect(call.params.orgIdentifier).toBe("platform");
+      expect(call.params.projectIdentifier).toBeUndefined();
+    },
+  );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s get omits org/project for resource_scope=account",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "acct-policy" });
+      const client = makeClient(mockRequest);
+      const idField = resourceType === "policy" ? "policy_id" : "policy_set_id";
+
+      await registry.dispatch(client, resourceType, "get", {
+        resource_scope: "account",
+        [idField]: "acct-policy",
+      });
+
+      const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown>; path: string };
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+      expect(call.path).toContain("acct-policy");
+    },
+  );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s create omits org/project for resource_scope=account",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "new-policy" });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, resourceType, "create", {
+        resource_scope: "account",
+        body: {
+          identifier: "new-policy",
+          name: "New Policy",
+          ...(resourceType === "policy"
+            ? { rego: "package harness\n\ndefault allow = true" }
+            : {
+                action: "onstep",
+                type: "sbom",
+                enabled: true,
+              }),
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown>; method: string };
+      expect(call.method).toBe("POST");
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    },
+  );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s update injects only org for resource_scope=org",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({ identifier: "org-policy" });
+      const client = makeClient(mockRequest);
+      const idField = resourceType === "policy" ? "policy_id" : "policy_set_id";
+
+      await registry.dispatch(client, resourceType, "update", {
+        resource_scope: "org",
+        org_id: "platform",
+        [idField]: "org-policy",
+        body: { name: "Updated" },
+      });
+
+      const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown>; method: string };
+      expect(call.method).toBe("PATCH");
+      expect(call.params.orgIdentifier).toBe("platform");
+      expect(call.params.projectIdentifier).toBeUndefined();
+    },
+  );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s delete keeps project default when resource_scope is omitted",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+      const idField = resourceType === "policy" ? "policy_id" : "policy_set_id";
+
+      await registry.dispatch(client, resourceType, "delete", {
+        [idField]: "proj-policy",
+      });
+
+      const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown>; method: string };
+      expect(call.method).toBe("DELETE");
+      expect(call.params.orgIdentifier).toBe("default");
+      expect(call.params.projectIdentifier).toBe("test-project");
+    },
+  );
 });
