@@ -1129,7 +1129,7 @@ export function flattenTrafficType(item: Record<string, unknown>): void {
 }
 
 /**
- * Public v4 paginated lists (`TrafficTypeListResponse` / `RolloutStatusListResponse`):
+ * Public v4 paginated lists (`EnvironmentListResponse`, `TrafficTypeListResponse` / `RolloutStatusListResponse`):
  * `{ data, limit, offset, totalCount }`. Promote `data`→`items` and `totalCount`→`total`
  * so harness_list compact/output schema see a full total, not the current page length.
  */

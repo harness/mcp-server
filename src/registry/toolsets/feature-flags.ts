@@ -63,6 +63,61 @@ const fmeFeatureFlagArchiveSchema: BodySchema = {
   ],
 };
 
+const fmeEnvironmentCreateSchema: BodySchema = {
+  description:
+    "Create an FME environment (Harness-native org_id+project_id only). name is required (max 15 characters). isProduction is optional (default false). production is accepted as an alias for isProduction.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Environment name (unique in the project; max 15 characters)" },
+    { name: "isProduction", type: "boolean", required: false, description: "Whether this is a production environment. Optional; defaults to false on the backend if omitted." },
+    { name: "production", type: "boolean", required: false, description: "Alias for isProduction." },
+  ],
+};
+
+const fmeEnvironmentUpdateSchema: BodySchema = {
+  description:
+    "Partial environment update via JSON Merge Patch (RFC 7396), Harness-native only. name and isProduction are not clearable — omit to leave unchanged. production is accepted as an alias for isProduction.",
+  fields: [
+    { name: "name", type: "string", required: false, description: "Updated name; omit to leave unchanged. Blank names are rejected. Not clearable." },
+    { name: "isProduction", type: "boolean", required: false, description: "Updated production flag. Omit to leave unchanged; not clearable." },
+    { name: "production", type: "boolean", required: false, description: "Alias for isProduction." },
+  ],
+};
+
+function fmeEnvironmentProduction(body: Record<string, unknown> | undefined): boolean | undefined {
+  if (!body) return undefined;
+  if (body.isProduction !== undefined && body.isProduction !== null) return Boolean(body.isProduction);
+  if (body.production !== undefined && body.production !== null) return Boolean(body.production);
+  return undefined;
+}
+
+/** MCP never had workspace_id get/create/update/delete for environments (#806 list-only). */
+function resolveNativeOnlyEnvironmentRoute(
+  input: Record<string, unknown>,
+  operation: string,
+  opts: { collection?: boolean; mergePatch?: boolean } = {},
+) {
+  const mode = resolveFmeDualMode(input, "fme_environment");
+  if (mode.mode === "legacy") {
+    throw new Error(
+      `fme_environment.${operation}: Harness-native (org_id/project_id) only — MCP never supported workspace_id for this operation (list remains dual-mode).`,
+    );
+  }
+  if (opts.collection) {
+    return {
+      path: "/fme/api/v4/environments",
+      product: "harness" as const,
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+    };
+  }
+  const environmentId = encodeURIComponent(requireFmeIdentifier(input, "environment_id", "fme_environment"));
+  return {
+    path: `/fme/api/v4/environments/${environmentId}`,
+    product: "harness" as const,
+    scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+    ...(opts.mergePatch ? { headers: { "Content-Type": "application/merge-patch+json" } } : {}),
+  };
+}
+
 const fmeFeatureFlagDefinitionCreateSchema: BodySchema = {
   description: "Create a feature flag definition in a specific environment (initial treatments, rules, and default rule required)",
   fields: [
@@ -259,8 +314,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_environment",
       displayName: "FME Environment",
       description:
-        "Feature Management environment. Supports list. Dual-mode scoping: pass either org_id+project_id " +
-        "(Harness-native, preferred — no workspace lookup needed) or the deprecated workspace_id.",
+        "Feature Management environment. Dual-mode list (workspace_id or org_id+project_id). get/create/update/delete are Harness-native only. Native create/update use isProduction (production accepted as an alias). Native PATCH is JSON Merge Patch; name and isProduction are not clearable. Name max 15 characters. Delete returns 400 hasDependents while SDK API keys (always created with a new env), flags, or segments remain.",
       toolset: "feature-flags",
       scope: "account",
       scopeOptional: true,
@@ -268,6 +322,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
       product: "fme",
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "offset", description: "Harness-native pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Harness-native page size (default 100, max 100)", type: "number" },
       ],
       operations: {
         list: {
@@ -281,8 +337,66 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: "/fme/api/v4/environments", product: "harness", scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { offset: "offset", size: "limit", limit: "limit" },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description: "List FME environments for a workspace (legacy) or org_id+project_id project (Harness-native). Native envelope {data, limit, offset, totalCount} is promoted to items/total; harness_list size maps to limit.",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyEnvironmentRoute(input, "get"),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
-          description: "List FME environments for a workspace",
+          description:
+            "Get a single environment by environment_id (UUID from list). Harness-native only (org_id+project_id). MCP never supported workspace_id get.",
+        },
+        create: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyEnvironmentRoute(input, "create", { collection: true }),
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            const production = fmeEnvironmentProduction(body);
+            return {
+              name: body?.name,
+              ...(production !== undefined ? { isProduction: production } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeEnvironmentCreateSchema,
+          description:
+            "Create an environment (Harness-native only). Body requires name (max 15 characters). Optional isProduction (CreateEnvironmentRequest). NG scope is not injected into the JSON.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyEnvironmentRoute(input, "update", { mergePatch: true }),
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body) return {};
+            const production = fmeEnvironmentProduction(body);
+            return {
+              ...(typeof body.name === "string" ? { name: body.name } : {}),
+              ...(production !== undefined ? { isProduction: production } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeEnvironmentUpdateSchema,
+          description:
+            "Update an environment by environment_id (Harness-native only). JSON Merge Patch on name and isProduction (not clearable).",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => resolveNativeOnlyEnvironmentRoute(input, "delete"),
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description:
+            "Delete (archive) an environment by environment_id (Harness-native only). Returns 400 hasDependents while SDK API keys, flags, or segments still target it. Create via EnvironmentStarterKit always provisions client/server API keys, so a brand-new environment cannot be deleted until those keys are removed.",
         },
       },
     },
