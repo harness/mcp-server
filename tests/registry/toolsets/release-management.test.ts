@@ -1,12 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { releaseManagementToolset } from "../../../src/registry/toolsets/release-management.js";
 import { Registry } from "../../../src/registry/index.js";
 import type { Config } from "../../../src/config.js";
+import type { HarnessClient } from "../../../src/client/harness-client.js";
+import type { RequestOptions } from "../../../src/client/types.js";
 import {
   releaseGetExtract,
   rmgYamlEntityExtract,
   rmgYamlEntityDeleteExtract,
   yamlWriteBody,
+  releaseListBody,
+  releaseListExtract,
+  releaseExecutionPhaseOutputPath,
+  releaseExecutionPhaseInputPath,
+  releaseExecutionActivityOutputPath,
+  normalizeReleaseActivityExecutionInput,
+  normalizeReleaseTaskLimit,
+  releaseActivityExecutionListExtract,
+  RMG_MAX_TASK_LIMIT,
 } from "../../../src/registry/extractors.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
@@ -22,6 +33,17 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_AUTO_APPROVE_RISK: "none",
     ...overrides,
   } as Config;
+}
+
+function makeClient(requestFn?: (options: RequestOptions) => Promise<unknown>): HarnessClient {
+  return {
+    request: requestFn ?? vi.fn().mockResolvedValue({}),
+    account: "test-account",
+  } as unknown as HarnessClient;
+}
+
+function firstRequest(mockRequest: ReturnType<typeof vi.fn>): RequestOptions {
+  return mockRequest.mock.calls[0][0] as RequestOptions;
 }
 
 function resource(type: string) {
@@ -208,6 +230,23 @@ describe("release-management execution resources", () => {
     expect(out._hint).toContain("2 unfiltered items");
   });
 
+  it("release list extractor matches releaseStatus field alias", () => {
+    const out = releaseListExtract(
+      { content: [{ id: "r1", releaseStatus: "Running" }, { id: "r2", releaseStatus: "Failed" }] },
+      { status: "running" },
+    ) as { items: Array<{ id: string }> };
+    expect(out.items.map((r) => r.id)).toEqual(["r1"]);
+  });
+
+  it("release list extractor handles raw array payloads", () => {
+    const out = releaseListExtract([{ id: "r1" }, { id: "r2" }]) as { items: unknown[] };
+    expect(out.items).toHaveLength(2);
+  });
+
+  it("release list body returns empty scopes when org/project absent", () => {
+    expect(releaseListBody({})).toEqual({ scopes: [] });
+  });
+
   it("release_execution_phase list extractor maps phases to items", () => {
     const out = extractPhases({
       release_id: "slug-1",
@@ -241,6 +280,46 @@ describe("release-management execution resources", () => {
     await normalizeActivityPreflight({ client: {} as never, input, registry: {} as never });
     expect(input.sort).toEqual(["name", "asc"]);
     expect(input.status).toEqual(["RUNNING", "FAILED"]);
+  });
+
+  it("release_execution_activity preflight defaults sort to start_ts desc", () => {
+    const input: Record<string, unknown> = { release_id: "rel-1" };
+    normalizeReleaseActivityExecutionInput(input);
+    expect(input.sort).toEqual(["start_ts", "desc"]);
+  });
+
+  it("release_execution_activity preflight splits activity_type CSV", () => {
+    const input: Record<string, unknown> = {
+      release_id: "rel-1",
+      activity_type: "Pipeline, Manual",
+    };
+    normalizeReleaseActivityExecutionInput(input);
+    expect(input.activity_type).toEqual(["Pipeline", "Manual"]);
+  });
+
+  it("release_execution_task preflight clamps limit to RMG_MAX_TASK_LIMIT", () => {
+    const input: Record<string, unknown> = { release_id: "rel-1", limit: 9999 };
+    normalizeReleaseTaskLimit(input);
+    expect(input.limit).toBe(RMG_MAX_TASK_LIMIT);
+  });
+
+  it("release_execution_activity list extractor forwards Spring pagination metadata", () => {
+    const out = releaseActivityExecutionListExtract({
+      content: [{ identifier: "act-1" }],
+      totalElements: 42,
+      totalPages: 5,
+      size: 10,
+      number: 2,
+      numberOfElements: 1,
+      first: false,
+      last: true,
+    }) as {
+      items: unknown[];
+      pagination: { total_elements?: number; last?: boolean };
+    };
+    expect(out.items).toHaveLength(1);
+    expect(out.pagination.total_elements).toBe(42);
+    expect(out.pagination.last).toBe(true);
   });
 
   it("phase input pathBuilder hits /input endpoint", () => {
@@ -295,6 +374,22 @@ describe("release-management execution resources", () => {
     expect(path).toBe(
       "/api/orchestration/execution/release/rel-slug/phase/deploy/activity/run-pipeline/output",
     );
+  });
+
+  it("phase output pathBuilder rejects missing release_id", () => {
+    expect(() => releaseExecutionPhaseOutputPath({ phase_identifier: "deploy" }))
+      .toThrow("release_id is required");
+  });
+
+  it("phase input pathBuilder rejects missing phase_identifier", () => {
+    expect(() => releaseExecutionPhaseInputPath({ release_id: "rel-1" }))
+      .toThrow("phase_identifier is required");
+  });
+
+  it("activity output pathBuilder rejects missing activity_identifier", () => {
+    expect(() =>
+      releaseExecutionActivityOutputPath({ release_id: "rel-1", phase_identifier: "deploy" }),
+    ).toThrow("activity_identifier is required");
   });
 
   it("release_input get hits releaseInput endpoint", () => {
@@ -394,5 +489,70 @@ describe("release-management extractors", () => {
     expect(() => yamlWriteBody({ body: { yaml: "" } })).toThrow("body.yaml is required");
     expect(() => yamlWriteBody({ body: { yaml: 0 } })).toThrow("body.yaml is required");
     expect(() => yamlWriteBody({ body: null })).toThrow("body is required");
+  });
+});
+
+describe("release-management registry dispatch", () => {
+  it("release list uses RMG gateway, header scoping, and scopes in POST body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ content: [] });
+    const registry = new Registry(makeConfig());
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "release", "list", {
+      org_id: "org1",
+      project_id: "proj1",
+      start_ts: 1000,
+      end_ts: 2000,
+    });
+
+    const request = firstRequest(mockRequest);
+    expect(request.method).toBe("POST");
+    expect(request.path).toBe("/api/release/list");
+    expect(request.baseUrl).toBe("https://app.harness.io/gateway/rmg");
+    expect(request.headerBasedScoping).toBe(true);
+    expect(request.params?.accountIdentifier).toBeUndefined();
+    expect(request.body).toEqual({
+      scopes: [{ orgIdentifier: "org1", projectIdentifier: "proj1" }],
+    });
+    expect(request.params).toMatchObject({
+      type: "Orchestration",
+      expectedStartTs: 1000,
+      expectedEndTs: 2000,
+    });
+  });
+
+  it("release_process create does not inject orgIdentifier into YAML body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "proc-1" });
+    const registry = new Registry(makeConfig());
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "release_process", "create", {
+      org_id: "org1",
+      project_id: "proj1",
+      body: { yaml: "process:\n  identifier: proc-1" },
+    });
+
+    const request = firstRequest(mockRequest);
+    expect(request.baseUrl).toBe("https://app.harness.io/gateway/rmg");
+    expect(request.headerBasedScoping).toBe(true);
+    expect(request.body).toEqual({ yaml: "process:\n  identifier: proc-1" });
+    expect(request.body).not.toHaveProperty("orgIdentifier");
+  });
+
+  it("release_execution_phase list uses header scoping without accountIdentifier", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ phases: [] });
+    const registry = new Registry(makeConfig());
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "release_execution_phase", "list", {
+      release_id: "rel-slug-1.0.0-abc",
+    });
+
+    const request = firstRequest(mockRequest);
+    expect(request.method).toBe("GET");
+    expect(request.baseUrl).toBe("https://app.harness.io/gateway/rmg");
+    expect(request.headerBasedScoping).toBe(true);
+    expect(request.params?.accountIdentifier).toBeUndefined();
+    expect(request.path).toContain("rel-slug-1.0.0-abc");
   });
 });

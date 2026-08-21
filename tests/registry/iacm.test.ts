@@ -1314,4 +1314,44 @@ describe("iacm registry dispatch", () => {
       body: { protocol: ["5.0"], gpg_key_id: "key-1" },
     });
   });
+
+  it("rejects create when body.type is missing before API call", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_provider", "create", {
+        body: { description: "AWS provider without type" },
+      }),
+    ).rejects.toThrow('Missing required field "type"');
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects version update when provider id is missing", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_provider", "update", {
+        body: { version: "1.0.0", protocol: ["5.0"], gpg_key_id: "key-1" },
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for iacm_provider\.update: id/);
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects version create when body.version is missing", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_provider", "update", {
+        id: "provider-1",
+        body: { protocol: ["5.0"], gpg_key_id: "key-1" },
+      }),
+    ).rejects.toThrow('Missing required field "version"');
+
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
