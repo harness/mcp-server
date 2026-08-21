@@ -1,5 +1,21 @@
 # Harness MCP Server — Task Tracking
 
+## React CI/CD pipeline example (this session)
+- [x] Clone https://github.com/react/react
+- [x] Analyze Yarn/Node scripts and GitHub Actions CI
+- [x] Generate Harness v0 CI pipeline + trigger stubs under `examples/react-cicd/`
+- [x] Commit example under `examples/react-cicd/` and open PR
+- [ ] Create pipeline in a Harness account (needs MCP auth + org/project)
+
+### Plan
+- Deliver importable Harness YAML based on upstream `shared_lint` / `runtime_build_and_test`.
+- Keep CD as optional npm publish behind approval (library has no container deploy target).
+
+### Review
+- Files: `examples/react-cicd/react_ci_pipeline.yaml`, `react_ci_trigger.yaml`, `README.md`.
+- Stages: Lint → Test (matrix) → Build (matrix) → Validate → Approve → Publish.
+
+
 ## OPA policy multi-scope (this session)
 - [x] Add `supportedScopes: ["account", "org", "project"]` + description hints for `policy` and `policy_set`
 - [x] Extend governance tests for supportedScopes and `resource_scope` query-param dispatch
