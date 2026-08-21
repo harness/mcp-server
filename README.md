@@ -2003,6 +2003,9 @@ pnpm typecheck
 # Run tests
 pnpm test
 
+# Architecture guardrails (registry model, logging, toolset purity)
+pnpm standards:check
+
 # Watch tests
 pnpm test:watch
 

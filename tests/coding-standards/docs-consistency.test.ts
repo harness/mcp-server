@@ -45,4 +45,17 @@ describe("Coding standards — documentation consistency", () => {
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
+
+  it("docs/coding-standards.md documents registerTool() (not deprecated server.tool())", () => {
+    expect(content).toMatch(/registerTool\(\)/);
+    expect(content).not.toMatch(/Do NOT create new `server\.tool\(\)` calls/);
+    expect(content).not.toMatch(/No new `server\.tool\(\)` calls/);
+  });
+
+  it("CONTRIBUTING.md references coding standards and standards:check", () => {
+    const contributing = readFileSync(join(REPO_ROOT, "CONTRIBUTING.md"), "utf8");
+    expect(contributing).toContain("docs/coding-standards.md");
+    expect(contributing).toContain("pnpm standards:check");
+    expect(contributing).toMatch(/11 generic MCP tools/);
+  });
 });
