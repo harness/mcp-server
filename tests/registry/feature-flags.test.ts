@@ -1628,7 +1628,7 @@ describe("fme_segment_keys permissive mode-selector", () => {
     expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/env-prod/beta_users/keys");
   });
 
-  it("org_id+project_id throws not-yet-implemented for list", async () => {
+  it("org_id+project_id throws error pointing to fme_segment_definition for list", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1639,7 +1639,7 @@ describe("fme_segment_keys permissive mode-selector", () => {
         org_id: "o1",
         project_id: "p1",
       }),
-    ).rejects.toThrow(/not yet implemented/i);
+    ).rejects.toThrow(/not supported.*fme_segment_definition.*list_keys/i);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
@@ -1657,7 +1657,7 @@ describe("fme_segment_keys permissive mode-selector", () => {
     expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/env-prod/beta_users/upload");
   });
 
-  it("org_id+project_id throws not-yet-implemented for update", async () => {
+  it("org_id+project_id throws error pointing to fme_segment_definition for update", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1669,7 +1669,7 @@ describe("fme_segment_keys permissive mode-selector", () => {
         project_id: "p1",
         body: { add: ["user-1"] },
       }),
-    ).rejects.toThrow(/not yet implemented/i);
+    ).rejects.toThrow(/not supported.*fme_segment_definition.*add_keys.*remove_keys/i);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 });
