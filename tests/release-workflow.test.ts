@@ -8,6 +8,7 @@ type WorkflowStep = {
   run?: string;
   uses?: string;
   with?: Record<string, string>;
+  "working-directory"?: string;
 };
 
 type ReleaseWorkflow = {
@@ -72,6 +73,12 @@ describe("release workflow", () => {
     const verifyVersion = runScriptForStep(workflow, "mcpb", "Verify package version");
     const build = runScriptForStep(workflow, "mcpb", "Build and validate MCPB");
     const upload = runScriptForStep(workflow, "mcpb", "Upload MCPB to GitHub Release");
+    const installDeps = workflow.jobs.mcpb.steps.find(
+      (step) => step.name === "Install release dependencies",
+    );
+    const packagingCheckout = workflow.jobs.mcpb.steps.find(
+      (step) => step.name === "Check out packaging tooling",
+    );
     const sourceCheckout = workflow.jobs.mcpb.steps.find(
       (step) => step.name === "Check out release source",
     );
@@ -83,14 +90,31 @@ describe("release workflow", () => {
     });
     expect(workflow.jobs.release.if).toBe("github.event_name == 'push'");
     expect(workflow.jobs.mcpb.needs).toBe("release");
+    expect(workflow.jobs.mcpb.if).toContain("always()");
     expect(workflow.jobs.mcpb.if).toContain("github.event_name == 'workflow_dispatch'");
+    expect(workflow.jobs.mcpb.if).toContain("needs.release.result == 'success'");
     expect(verifyTag).toContain("^v[0-9]+");
     expect(verifyTag).toContain('gh release view "$RELEASE_TAG"');
+    expect(packagingCheckout?.with?.path).toBe(".packaging-tools");
     expect(sourceCheckout?.with?.ref).toBe("${{ env.RELEASE_TAG }}");
+    expect(sourceCheckout?.with?.path).toBe("release-source");
+    expect(installDeps?.["working-directory"]).toBe("release-source");
     expect(verifyVersion).toContain('PACKAGE_VERSION=$(node -p');
+    expect(verifyVersion).toContain('TAG_VERSION="${RELEASE_TAG#v}"');
     expect(build).toContain("--source-dir release-source");
+    expect(build).toContain("--output-dir artifacts");
     expect(build).toContain("harness-mcp-server-${RELEASE_TAG#v}.mcpb");
     expect(upload).toContain('gh release upload "$RELEASE_TAG" "$MCPB_ASSET"');
     expect(upload).toContain("--clobber");
+  });
+
+  it("derives RELEASE_TAG from dispatch input or pushed tag", () => {
+    const workflow = readReleaseWorkflow();
+    const workflowYaml = readFileSync(join(root, ".github/workflows/release.yml"), "utf8");
+
+    expect(workflowYaml).toContain(
+      "RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}",
+    );
+    expect(workflow.jobs.mcpb.if).toContain("workflow_dispatch");
   });
 });

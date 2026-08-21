@@ -72,6 +72,21 @@ describe("release metadata", () => {
     expect(bundled.overrides).not.toHaveProperty("hono");
   });
 
+  it("ships npm-shrinkwrap metadata aligned with the runtime package manifest", () => {
+    const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+    const shrinkwrap = JSON.parse(readFileSync(join(root, "npm-shrinkwrap.json"), "utf8"));
+    const rootPackage = shrinkwrap.packages?.[""];
+
+    expect(rootPackage?.name).toBe(packageJson.name);
+    expect(rootPackage?.version).toBe(packageJson.version);
+    expect(Object.keys(rootPackage?.dependencies ?? {}).sort()).toEqual(
+      Object.keys(packageJson.dependencies ?? {}).sort(),
+    );
+    expect(Object.keys(rootPackage?.optionalDependencies ?? {}).sort()).toEqual(
+      Object.keys(packageJson.optionalDependencies ?? {}).sort(),
+    );
+  });
+
   it("ships matching 512×512 directory icons", () => {
     const icons = [readFileSync(join(root, "icon.png")), readFileSync(join(root, "mcp-directory/icon.png"))];
 
