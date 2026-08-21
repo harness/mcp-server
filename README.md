@@ -86,7 +86,7 @@ pnpm inspect            # Test with MCP Inspector
 
 ### Anthropic MCP Directory bundle
 
-The MCPB bundle manifest lives in `[mcp-directory/](mcp-directory/)`, and the bundle icon is tracked at `[icon.png](icon.png)` in the repository root. Copy `mcp-directory/manifest.json` to the bundle root after `pnpm build` so the generated archive contains root-level `manifest.json`, `icon.png`, `build/`, `package.json`, and production `node_modules/`.
+The MCPB bundle manifest lives in `[mcp-directory/](mcp-directory/)`, and the 512×512 bundle icon is tracked at `[icon.png](icon.png)` in the repository root. The packaged archive contains root-level `manifest.json`, `icon.png`, `server/`, `package.json`, `npm-shrinkwrap.json`, and production `node_modules/`.
 
 To keep the archive small, build MCPB packages from a staging directory:
 
@@ -94,7 +94,9 @@ To keep the archive small, build MCPB packages from a staging directory:
 pnpm prepare:mcpb
 ```
 
-The staged package is written to `dist/mcpb/` with production dependencies installed using npm's flat layout.
+The staging directory is written to `dist/mcpb/` with production dependencies installed from `npm-shrinkwrap.json` using npm's flat layout. The pinned official MCPB CLI validates it and creates `dist/harness-mcp-server-<version>.mcpb`.
+
+Version tags matching `v*.*.*` publish that bundle to the corresponding GitHub Release automatically. To backfill an existing release without republishing npm, run the `Release` workflow manually with its `release_tag` input (for example, `v3.2.20`). The workflow checks out and builds that exact tag before replacing only its versioned MCPB asset.
 
 ### CLI Usage
 
