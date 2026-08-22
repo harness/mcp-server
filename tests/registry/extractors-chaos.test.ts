@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { chaosActionExtract, chaosDRTestListExtract, chaosExperimentListExtract, chaosInputSetListExtract } from "../../src/registry/extractors.js";
+import {
+  chaosActionExtract,
+  chaosDRTestListExtract,
+  chaosExperimentListExtract,
+  chaosInputSetListExtract,
+  sdPageExtract,
+} from "../../src/registry/extractors.js";
 
 describe("chaosInputSetListExtract", () => {
   it("injects experimentId from input into each item", () => {
@@ -115,5 +121,47 @@ describe("chaosActionExtract", () => {
     expect(out).not.toHaveProperty("audit");
     expect(out).not.toHaveProperty("isRemoved");
     expect(out).not.toHaveProperty("recentExecutions");
+  });
+});
+
+describe("sdPageExtract", () => {
+  it("returns items and total from the SD page envelope", () => {
+    const raw = {
+      items: [{ identity: "ns-1" }, { identity: "ns-2" }],
+      page: { totalItems: 10 },
+    };
+    expect(sdPageExtract(raw)).toEqual({
+      items: [{ identity: "ns-1" }, { identity: "ns-2" }],
+      total: 10,
+    });
+  });
+
+  it("uses items.length when page.totalItems under-reports (pagination drift)", () => {
+    const raw = {
+      items: [{ identity: "a" }, { identity: "b" }, { identity: "c" }],
+      page: { totalItems: 1 },
+    };
+    expect(sdPageExtract(raw)).toEqual({
+      items: [{ identity: "a" }, { identity: "b" }, { identity: "c" }],
+      total: 3,
+    });
+  });
+
+  it("handles an empty envelope", () => {
+    expect(sdPageExtract({})).toEqual({
+      items: [],
+      total: 0,
+      _hint: expect.stringContaining("Empty result"),
+    });
+  });
+
+  it("attaches troubleshooting _hint only when items are empty", () => {
+    const empty = sdPageExtract({ items: [], page: { totalItems: 0 } });
+    expect(empty._hint).toMatch(/agent_identity is not a Service Discovery agent/);
+    expect(empty._hint).toMatch(/discovered_namespace/);
+    expect(empty._hint).toMatch(/discovered_service/);
+
+    const nonEmpty = sdPageExtract({ items: [{ identity: "svc-1" }], page: { totalItems: 1 } });
+    expect(nonEmpty._hint).toBeUndefined();
   });
 });
