@@ -1260,6 +1260,55 @@ describe("harness_update", () => {
     });
   });
 
+  it("rejects template update without version_label instead of inventing a default", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, templateRegistry, client, makeConfig());
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "my_tpl",
+      org_id: "default",
+      project_id: "proj",
+      body: {
+        template_yaml:
+          "template:\n  identifier: my_tpl\n  name: My\n  versionLabel: v2\n  type: Step\n  spec: {}\n",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringMatching(/version_label/),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("lifts version_label from body when callers omit params.version_label", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "my_tpl" } });
+    client = makeClient(mockRequest);
+    const templateServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, templateRegistry, client, makeConfig());
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "my_tpl",
+      org_id: "default",
+      project_id: "proj",
+      body: {
+        version_label: "v2",
+        template_yaml:
+          "template:\n  identifier: my_tpl\n  name: My\n  versionLabel: v2\n  type: Step\n  spec: {}\n",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string };
+    expect(callArgs.path).toBe("/template/api/templates/update/my_tpl/v2");
+  });
+
   it("updates IDP entities at the configured project scope when only resource_id and kind are provided", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "idp" }));
     mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
@@ -3260,6 +3309,39 @@ describe("harness_describe", () => {
     expect(bodyFieldNames).not.toContain("file_store_id");
     expect(bodyFieldNames).not.toContain("folder_identifier");
     expect(bodyFieldNames).not.toContain("folder_name");
+  });
+
+  it("exposes template paramsSchema so version_label and global are discoverable via describe", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer();
+    const { registerDescribeTool } = await import("../../src/tools/harness-describe.js");
+    registerDescribeTool(templateServer, templateRegistry);
+
+    const v1Result = await templateServer.call("harness_describe", { resource_type: "template_v1" });
+    expect(v1Result.isError).toBeUndefined();
+    const v1Data = parseResult(v1Result) as {
+      operations: Array<{ operation: string; paramsSchema?: { fields: Array<{ name: string; required?: boolean }> } }>;
+    };
+    const v1Update = v1Data.operations.find((op) => op.operation === "update");
+    expect(v1Update?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "version_label", required: true }),
+      ]),
+    );
+
+    const v0Result = await templateServer.call("harness_describe", { resource_type: "template" });
+    expect(v0Result.isError).toBeUndefined();
+    const v0Data = parseResult(v0Result) as {
+      operations: Array<{ operation: string; paramsSchema?: { fields: Array<{ name: string; required?: boolean }> } }>;
+    };
+    const v0Get = v0Data.operations.find((op) => op.operation === "get");
+    expect(v0Get?.paramsSchema?.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "global", required: false }),
+        expect.objectContaining({ name: "version_label", required: false }),
+        expect.objectContaining({ name: "branch", required: false }),
+      ]),
+    );
   });
 
   it("returns error hint for unknown resource_type", async () => {
