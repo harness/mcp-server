@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HarnessClient } from "../../src/client/harness-client.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
+import { setLogLevel } from "../../src/utils/logger.js";
 import type { Config } from "../../src/config.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
@@ -1095,6 +1096,71 @@ describe("HarnessClient", () => {
 
       expect(uuid).toBe("retry-uuid");
       expect(fetchSpy).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("request body logging — HARNESS_LOG_UNSAFE_BODIES", () => {
+    const secret = "super-secret-token-value";
+
+    afterEach(() => {
+      setLogLevel("info");
+      vi.restoreAllMocks();
+    });
+
+    it("redacts sensitive request bodies in debug logs by default", async () => {
+      setLogLevel("debug");
+      const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ status: "SUCCESS" }), { status: 200 }));
+      const client = new HarnessClient(makeConfig({ LOG_LEVEL: "debug" }));
+
+      await client.request({
+        method: "POST",
+        path: "/ng/api/connectors",
+        body: { name: "git-conn", spec: { password: secret } },
+      });
+
+      const logged = stderrSpy.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(logged).toContain("[REDACTED]");
+      expect(logged).not.toContain(secret);
+    });
+
+    it("logs raw request bodies when HARNESS_LOG_UNSAFE_BODIES is true", async () => {
+      setLogLevel("debug");
+      const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ status: "SUCCESS" }), { status: 200 }));
+      const client = new HarnessClient(
+        makeConfig({ LOG_LEVEL: "debug", HARNESS_LOG_UNSAFE_BODIES: true }),
+      );
+
+      await client.request({
+        method: "POST",
+        path: "/ng/api/connectors",
+        body: { name: "git-conn", spec: { password: secret } },
+      });
+
+      const logged = stderrSpy.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(logged).toContain(secret);
+      expect(logged).not.toContain("[REDACTED]");
+    });
+
+    it("redacts error response bodies in debug logs by default", async () => {
+      setLogLevel("debug");
+      const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      fetchSpy.mockResolvedValue(
+        new Response(JSON.stringify({ message: "bad request", token: secret }), {
+          status: 400,
+          statusText: "Bad Request",
+        }),
+      );
+      const client = new HarnessClient(makeConfig({ LOG_LEVEL: "debug", HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(
+        client.request({ method: "POST", path: "/ng/api/connectors", body: { name: "x" } }),
+      ).rejects.toThrow(HarnessApiError);
+
+      const logged = stderrSpy.mock.calls.map((call) => String(call[0])).join("\n");
+      expect(logged).toContain("[REDACTED]");
+      expect(logged).not.toContain(secret);
     });
   });
 });
