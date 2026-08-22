@@ -220,4 +220,47 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream ai-eval step template alias in v1 UnifiedTemplate", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const unifiedTemplate = defs[key].common.UnifiedTemplate as {
+        properties: Record<string, { description?: string; $ref?: string }>;
+      };
+
+      expect(unifiedTemplate.properties).toHaveProperty("ai-eval");
+      expect(unifiedTemplate.properties["ai-eval"].description).toContain("AI evaluation");
+      expect(unifiedTemplate.properties["ai-eval"].$ref).toContain("TemplateRef");
+    }
+  });
+
+  it("uses stage inputs (not variables) on UnifiedStageNodeV1 in v1 pipeline and template", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const stage = defs[key].stages.unified.UnifiedStageNodeV1 as {
+        properties: Record<string, { description?: string }>;
+      };
+
+      expect(stage.properties).toHaveProperty("inputs");
+      expect(stage.properties.inputs.description).toContain("input variables");
+      expect(stage.properties).not.toHaveProperty("variables");
+    }
+  });
+
+  it("includes Change Advisor advisory gating fields on UnifiedChangeAdvisorStepNode", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const changeAdvisor = defs[key].steps.unified.UnifiedChangeAdvisorStepNode as {
+        allOf: Array<{ properties?: { "change-advisor"?: { properties: Record<string, unknown> } } }>;
+      };
+      const config = changeAdvisor.allOf
+        .map((part) => part.properties?.["change-advisor"]?.properties)
+        .find((props) => props != null);
+
+      expect(config).toBeDefined();
+      for (const field of ["user-groups", "service-accounts", "approvers-min-count", "block-executor"] as const) {
+        expect(config).toHaveProperty(field);
+      }
+    }
+  });
 });

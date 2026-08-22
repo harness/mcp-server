@@ -203,4 +203,25 @@ describe("infrastructure deep links", () => {
 
     expect(result.openInHarness).toBe(INFRA_DEEP_LINK);
   });
+
+  it("get: openInHarness falls back to environment_id query param when response omits environmentRef", async () => {
+    const client = makeClient(
+      vi.fn().mockResolvedValue({
+        data: {
+          identifier: "k8s",
+          name: "k8s",
+          orgIdentifier: "default",
+          projectIdentifier: "avi",
+        },
+      }),
+    );
+    const result = (await registry.dispatch(client, "infrastructure", "get", {
+      infrastructure_id: "k8s",
+      org_id: "default",
+      project_id: "avi",
+      environment_id: "preprod",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(INFRA_DEEP_LINK);
+  });
 });
