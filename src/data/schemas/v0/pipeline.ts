@@ -29702,6 +29702,196 @@ const schema: Record<string, any> = {
               }
             ]
           },
+          "GitleaksScanNode": {
+            "title": "GitleaksScanNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for GitleaksScanNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Gitleaks"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Gitleaks"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/GitleaksStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "SonarqubeScanNode": {
+            "title": "SonarqubeScanNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for SonarqubeScanNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Sonarqube"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Sonarqube"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/SonarqubeStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
           "CIVolume": {
             "title": "CIVolume",
             "type": "object",
@@ -40310,101 +40500,6 @@ const schema: Record<string, any> = {
               }
             ]
           },
-          "GitleaksScanNode": {
-            "title": "GitleaksScanNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "spec",
-              "type"
-            ],
-            "properties": {
-              "description": {
-                "type": "string",
-                "desc": "This is the description for GitleaksScanNode"
-              },
-              "enforce": {
-                "$ref": "#/definitions/pipeline/common/PolicyConfig"
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "timeout": {
-                "type": "string",
-                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Gitleaks"
-                ]
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Gitleaks"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/steps/common/GitleaksStepInfo"
-                    }
-                  }
-                }
-              }
-            ]
-          },
           "GrypeScanNode": {
             "title": "GrypeScanNode",
             "type": "object",
@@ -42109,101 +42204,6 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/steps/common/SniperStepInfo"
-                    }
-                  }
-                }
-              }
-            ]
-          },
-          "SonarqubeScanNode": {
-            "title": "SonarqubeScanNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "spec",
-              "type"
-            ],
-            "properties": {
-              "description": {
-                "type": "string",
-                "desc": "This is the description for SonarqubeScanNode"
-              },
-              "enforce": {
-                "$ref": "#/definitions/pipeline/common/PolicyConfig"
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "timeout": {
-                "type": "string",
-                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Sonarqube"
-                ]
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Sonarqube"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/steps/common/SonarqubeStepInfo"
                     }
                   }
                 }
@@ -108230,7 +108230,9 @@ const schema: Record<string, any> = {
                   "AzureContainerApps",
                   "Salesforce",
                   "GoogleManagedInstanceGroup",
-                  "AiAgent"
+                  "AiAgent",
+                  "AwsAgentCore",
+                  "GoogleAgentRuntime"
                 ]
               },
               "environment": {
@@ -112759,7 +112761,9 @@ const schema: Record<string, any> = {
                   "AzureContainerApps",
                   "Salesforce",
                   "GoogleManagedInstanceGroup",
-                  "AiAgent"
+                  "AiAgent",
+                  "AwsAgentCore",
+                  "GoogleAgentRuntime"
                 ]
               },
               "description": {
@@ -113084,6 +113088,38 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/stages/cd/AiAgentServiceSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "AwsAgentCore"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/AwsAgentCoreServiceSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "GoogleAgentRuntime"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/GoogleAgentRuntimeServiceSpec"
                     }
                   }
                 }
@@ -117604,6 +117640,72 @@ const schema: Record<string, any> = {
                 }
               }
             ]
+          },
+          "AwsAgentCoreServiceSpec": {
+            "title": "AwsAgentCoreServiceSpec",
+            "type": "object",
+            "required": [
+              "source",
+              "executionRoleArn"
+            ],
+            "properties": {
+              "configVariables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "source": {
+                "$ref": "#/definitions/pipeline/stages/cd/AwsCoreAgentSource"
+              },
+              "executionRoleArn": {
+                "type": "string"
+              },
+              "manifests": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/steps/cd/ManifestConfigWrapper"
+                }
+              },
+              "description": {
+                "desc": "This is the description for AwsAgentCoreServiceSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "GoogleAgentRuntimeServiceSpec": {
+            "title": "GoogleAgentRuntimeServiceSpec",
+            "type": "object",
+            "required": [
+              "source"
+            ],
+            "properties": {
+              "configVariables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "source": {
+                "$ref": "#/definitions/pipeline/stages/cd/GoogleAgentSource"
+              },
+              "description": {
+                "desc": "This is the description for GoogleAgentRuntimeServiceSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "StageOverridesConfig": {
             "title": "StageOverridesConfig",
