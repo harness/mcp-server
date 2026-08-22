@@ -201,6 +201,23 @@ describe("remediation_diff preflight", () => {
     expect(input.only_true_positive_issue_types).toEqual(["SAST"]);
   });
 
+  it("normalizes exclude_repo_patterns when provided (preserves glob case)", async () => {
+    const spec = getListSpec();
+    const input: Record<string, unknown> = {
+      scan_id: "scan-1",
+      validation_execution_id: "exec-1",
+      exclude_repo_patterns: " foo/* , BAR/* ",
+    };
+    await expect(
+      spec.preflight!({
+        client: { account: "test-account" },
+        input,
+        registry: { dispatch: async () => undefined, getResource },
+      }),
+    ).resolves.toBeUndefined();
+    expect(input.exclude_repo_patterns).toEqual(["foo/*", "BAR/*"]);
+  });
+
   it("normalizes severity_codes when provided", async () => {
     const spec = getListSpec();
     const input: Record<string, unknown> = {
@@ -288,6 +305,20 @@ describe("remediation_diff responseExtractor", () => {
 });
 
 describe("remediation_diff — registry dispatch", () => {
+  it("fails loud when project scope cannot be resolved", async () => {
+    const client = makeClient();
+    const registry = new Registry(
+      makeConfig({ HARNESS_ORG: "", HARNESS_PROJECT: "", HARNESS_TOOLSETS: "sto" }),
+    );
+
+    await expect(
+      registry.dispatch(client, "remediation_diff", "list", {
+        scan_id: "orig-scan",
+        validation_execution_id: "val-exec",
+      }),
+    ).rejects.toThrow(/requires project scope \(org_id \+ project_id\)/i);
+  });
+
   it("passes required query params through to the Harness client", async () => {
     const request = vi.fn().mockResolvedValue({
       validationScanId: "val-scan-1",
@@ -358,6 +389,30 @@ describe("remediation_diff — registry dispatch", () => {
     };
     expect(call.params.issueTypes).toEqual(["SAST"]);
     expect(call.params.onlyTruePositiveIssueTypes).toEqual(["SAST", "SECRET"]);
+  });
+
+  it("forwards exclude_repo_patterns as repeated-param string[]", async () => {
+    const request = vi.fn().mockResolvedValue({
+      validationScanId: "val-scan-1",
+      existingOccurrences: [],
+      newOccurrences: [],
+      existingCount: 0,
+      newCount: 0,
+      matchedCount: 0,
+    });
+    const client = makeClient(request);
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+
+    await registry.dispatch(client, "remediation_diff", "list", {
+      scan_id: "orig-scan",
+      validation_execution_id: "val-exec",
+      exclude_repo_patterns: "legacy/*, vendor/*",
+    });
+
+    const call = request.mock.calls[0]![0] as {
+      params: Record<string, unknown>;
+    };
+    expect(call.params.excludeRepoPatterns).toEqual(["legacy/*", "vendor/*"]);
   });
 
   it("normalizes legacy execution_id filter to validationExecutionId", async () => {
