@@ -63,6 +63,32 @@ describe("trigger list deep links", () => {
     expect(link).not.toContain("/pipelines/mcp_yaml_verify_cron/");
   });
 
+  it("falls back to request pipeline_id when item.pipelineIdentifier is empty", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: {
+        content: [
+          {
+            identifier: "mcp_yaml_verify_cron",
+            name: "mcp_yaml_verify_cron",
+            pipelineIdentifier: "",
+          },
+        ],
+        totalElements: 1,
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "trigger", "list", {
+      org_id: "default",
+      project_id: "test-project",
+      pipeline_id: "test",
+    })) as { items: Array<Record<string, unknown>> };
+
+    const link = result.items[0]!.openInHarness as string;
+    expect(link).toContain("/pipelines/test/triggers");
+    expect(link).not.toContain("/pipelines/mcp_yaml_verify_cron/");
+  });
+
   it("prefers item.pipelineIdentifier over request pipeline_id when present", async () => {
     const mockRequest = vi.fn().mockResolvedValue({
       data: {
