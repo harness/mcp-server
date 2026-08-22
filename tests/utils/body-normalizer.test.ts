@@ -179,6 +179,33 @@ connector:
       }),
     ).toThrow(/Conflicting identifiers/);
   });
+
+  it("rejects invalid YAML string bodies with a parse error message", () => {
+    expect(() =>
+      connectorUpdateBuilder({
+        connector_id: "dev_connector",
+        body: "connector:\n  name: [unclosed",
+      }),
+    ).toThrow(/Failed to parse YAML body/);
+  });
+
+  it("rejects array YAML bodies", () => {
+    expect(() =>
+      connectorUpdateBuilder({
+        connector_id: "dev_connector",
+        body: "- item1\n- item2",
+      }),
+    ).toThrow(/body must be a JSON object or YAML object/);
+  });
+
+  it("rejects non-object top-level bodies after YAML parse", () => {
+    expect(() =>
+      connectorUpdateBuilder({
+        connector_id: "dev_connector",
+        body: "just a scalar",
+      }),
+    ).toThrow(/body must be a JSON object or YAML object/);
+  });
 });
 
 describe("ensureYamlField", () => {
