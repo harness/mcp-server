@@ -178,6 +178,26 @@ describe("buildAttestationListBody", () => {
     const scopes = { myOrg: ["projA"] };
     expect(buildAttestationListBody({ scopes })).toEqual({ scopes });
   });
+
+  it("parses string epoch times for start_time and end_time", () => {
+    expect(buildAttestationListBody({ start_time: "1700000000000", end_time: "1700003600000" })).toEqual({
+      start_time: 1700000000000,
+      end_time: 1700003600000,
+    });
+  });
+
+  it("deletes whitespace-only search_term from input", () => {
+    const input: Record<string, unknown> = { search_term: "   " };
+    expect(buildAttestationListBody(input)).toEqual({});
+    expect(input).not.toHaveProperty("search_term");
+  });
+
+  it("wraps scalar types and sources into arrays", () => {
+    expect(buildAttestationListBody({ types: "Build", sources: "Harness" })).toEqual({
+      types: ["Build"],
+      sources: ["Harness"],
+    });
+  });
 });
 
 describe("attestationListExtract", () => {
@@ -407,6 +427,29 @@ describe("attestationDownloadExtract", () => {
     });
     expect(result).not.toHaveProperty("extra");
   });
+
+  it("returns empty object for non-record input", () => {
+    expect(attestationDownloadExtract(null)).toEqual({});
+    expect(attestationDownloadExtract("bad")).toEqual({});
+  });
+
+  it("always includes _display_hint even when download_url is missing", () => {
+    const result = attestationDownloadExtract({ expires_at: 1700003600000 });
+    expect(result).toEqual({
+      expires_at: 1700003600000,
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+    expect(result).not.toHaveProperty("download_url");
+  });
+
+  it("omits empty download_url but keeps display hint", () => {
+    const result = attestationDownloadExtract({ download_url: "", expires_at: 1700003600000 });
+    expect(result).toEqual({
+      expires_at: 1700003600000,
+      _display_hint: expect.stringMatching(/download_url/),
+    });
+    expect(result).not.toHaveProperty("download_url");
+  });
 });
 
 describe("attestation download dispatch", () => {
@@ -443,6 +486,16 @@ describe("attestation download dispatch", () => {
     await expect(
       registry.dispatchExecute(makeClient(), "attestation", "download", { gitoid_sha256: "gid123" }),
     ).rejects.toThrow(/org_id/);
+  });
+
+  it("rejects download when gitoid_sha256 is missing", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "evidence-vault" }));
+    await expect(
+      registry.dispatchExecute(makeClient(), "attestation", "download", {
+        org_id: "SSCA",
+        project_id: "Sanity",
+      }),
+    ).rejects.toThrow(/gitoid_sha256/);
   });
 
   it("allows download under HARNESS_READ_ONLY (risk read)", async () => {
