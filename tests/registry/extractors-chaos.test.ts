@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { chaosActionExtract, chaosDRTestListExtract, chaosExperimentListExtract, chaosInputSetListExtract } from "../../src/registry/extractors.js";
+import {
+  chaosActionExtract,
+  chaosDRTestListExtract,
+  chaosExperimentListExtract,
+  chaosHeatmapExtract,
+  chaosInputSetListExtract,
+  chaosScannedRiskGetExtract,
+} from "../../src/registry/extractors.js";
 
 describe("chaosInputSetListExtract", () => {
   it("injects experimentId from input into each item", () => {
@@ -115,5 +122,60 @@ describe("chaosActionExtract", () => {
     expect(out).not.toHaveProperty("audit");
     expect(out).not.toHaveProperty("isRemoved");
     expect(out).not.toHaveProperty("recentExecutions");
+  });
+});
+
+describe("chaosScannedRiskGetExtract", () => {
+  it("unwraps scannedRisk envelope from v3 get responses", () => {
+    const entity = { identity: "sr-1", severity: "HIGH" };
+    expect(chaosScannedRiskGetExtract({ scannedRisk: entity })).toEqual(entity);
+  });
+
+  it("passes through already-unwrapped entities", () => {
+    const entity = { identity: "sr-2", severity: "MEDIUM" };
+    expect(chaosScannedRiskGetExtract(entity)).toEqual(entity);
+  });
+
+  it("returns non-object responses unchanged", () => {
+    expect(chaosScannedRiskGetExtract(null)).toBeNull();
+    expect(chaosScannedRiskGetExtract("bad")).toBe("bad");
+  });
+});
+
+describe("chaosHeatmapExtract", () => {
+  it("maps rows to items and preserves summary and riskRules metadata", () => {
+    const raw = {
+      summary: { score: 333 },
+      riskRules: [{ identity: "r1" }],
+      rows: [{ serviceIdentity: "svc-1", cells: [] }],
+      pagination: { totalItems: 5 },
+    };
+    expect(chaosHeatmapExtract(raw)).toEqual({
+      summary: { score: 333 },
+      riskRules: [{ identity: "r1" }],
+      items: [{ serviceIdentity: "svc-1", cells: [] }],
+      total: 5,
+    });
+  });
+
+  it("falls back to rows.length when pagination.totalItems is missing", () => {
+    const raw = {
+      rows: [{ serviceIdentity: "svc-1" }, { serviceIdentity: "svc-2" }],
+    };
+    expect(chaosHeatmapExtract(raw)).toEqual({
+      summary: undefined,
+      riskRules: [],
+      items: raw.rows,
+      total: 2,
+    });
+  });
+
+  it("returns empty items and total=0 for malformed envelopes", () => {
+    expect(chaosHeatmapExtract({})).toEqual({
+      summary: undefined,
+      riskRules: [],
+      items: [],
+      total: 0,
+    });
   });
 });
