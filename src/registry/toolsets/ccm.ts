@@ -1336,10 +1336,7 @@ All the separate anomaly tools from the official server (list, list_all, list_ig
           bodyBuilder: () => ({}),
           bodySchema: {
             description: "No body required. Feedback is set via anomaly_id and feedback query parameters.",
-            fields: [
-              { name: "anomaly_id", type: "string", required: true, description: "Anomaly ID to report feedback on" },
-              { name: "feedback", type: "string", required: true, description: "Feedback type: TRUE_ANOMALY, TRUE_EXPECTED_ANOMALY, FALSE_ANOMALY, or NOT_RESPONDED" },
-            ],
+            fields: [],
           },
           responseExtractor: ngExtract,
         },
