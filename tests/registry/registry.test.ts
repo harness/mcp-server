@@ -1488,6 +1488,64 @@ describe("Registry", () => {
       ).rejects.toThrow(/body must be a JSON object or YAML object for trigger/);
     });
 
+    it("update: YAML string body parses, extracts pipelineIdentifier, and PUTs trigger path", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+      const yamlBody = [
+        "trigger:",
+        "  name: my-trigger",
+        "  identifier: myTrigger",
+        "  pipelineIdentifier: myPipeline",
+        "  source:",
+        "    type: Scheduled",
+      ].join("\n");
+      await registry.dispatch(client, "trigger", "update", {
+        trigger_id: "myTrigger",
+        pipeline_id: undefined,
+        body: yamlBody,
+      });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/pipeline/api/triggers/myTrigger");
+      expect(call.params.targetIdentifier).toBe("myPipeline");
+      const outYaml = call.body as string;
+      expect(outYaml).toContain("pipelineIdentifier: myPipeline");
+      expect(outYaml).not.toContain("trigger: |\n  trigger:");
+    });
+
+    it("update: flat YAML string auto-wraps and preserves trigger_id in path", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+      const yamlBody = [
+        "name: flat-trigger",
+        "identifier: flatTrigger",
+        "pipelineIdentifier: flatPipeline",
+        "source:",
+        "  type: Scheduled",
+      ].join("\n");
+      await registry.dispatch(client, "trigger", "update", {
+        trigger_id: "flatTrigger",
+        body: yamlBody,
+      });
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/pipeline/api/triggers/flatTrigger");
+      expect(call.params.targetIdentifier).toBe("flatPipeline");
+      const outYaml = call.body as string;
+      expect(outYaml).toContain("trigger:");
+      expect(outYaml).toContain("pipelineIdentifier: flatPipeline");
+    });
+
+    it("update: invalid YAML string body throws a clear error", async () => {
+      const client = makeClient();
+      await expect(
+        registry.dispatch(client, "trigger", "update", {
+          trigger_id: "myTrigger",
+          body: "trigger:\n  name: [unclosed",
+        }),
+      ).rejects.toThrow(/body must be a JSON object or YAML object for trigger/);
+    });
+
     it("list without pipeline_id throws a clear error", async () => {
       const client = makeClient();
       await expect(

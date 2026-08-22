@@ -807,6 +807,44 @@ describe("database_snapshot_object get", () => {
   });
 });
 
+describe("database_changeset_existence bodyBuilder", () => {
+  const bodyBuilder = getOp("database_changeset_existence", "get").bodyBuilder!;
+
+  it("rejects missing changeset_ids", () => {
+    expect(() => bodyBuilder({})).toThrow(/changeset_ids is required/);
+  });
+
+  it("rejects empty changeset_ids array", () => {
+    expect(() => bodyBuilder({ changeset_ids: [] })).toThrow(/non-empty array/);
+  });
+
+  it("rejects more than 100 ids", () => {
+    const ids = Array.from({ length: 101 }, (_, i) => `changeset-${i}`);
+    expect(() => bodyBuilder({ changeset_ids: ids })).toThrow(/at most 100 ids/);
+  });
+
+  it("rejects blank or non-string entries", () => {
+    expect(() => bodyBuilder({ changeset_ids: ["valid", "  "] })).toThrow(
+      /each changeset_ids entry must be a non-empty string/,
+    );
+    expect(() => bodyBuilder({ changeset_ids: ["valid", 42] })).toThrow(
+      /each changeset_ids entry must be a non-empty string/,
+    );
+  });
+
+  it("accepts changeSetIds alias and trims whitespace", () => {
+    expect(bodyBuilder({ changeSetIds: ["  foo  ", "bar"] })).toEqual({
+      changeSets: [{ id: "foo" }, { id: "bar" }],
+    });
+  });
+
+  it("accepts change_set_ids alias", () => {
+    expect(bodyBuilder({ change_set_ids: ["alpha"] })).toEqual({
+      changeSets: [{ id: "alpha" }],
+    });
+  });
+});
+
 describe("database_changeset_existence get", () => {
   it("passes changeset id body without scope injection", async () => {
     const registry = new Registry(makeConfig());
