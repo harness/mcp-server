@@ -220,4 +220,93 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream Gitleaks and Sonarqube security scan step nodes in v0 pipeline", () => {
+    const commonSteps = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>).pipeline
+      .steps.common as Record<string, unknown>;
+
+    expect(commonSteps).toHaveProperty("GitleaksScanNode");
+    expect(commonSteps).toHaveProperty("SonarqubeScanNode");
+
+    const gitleaks = commonSteps.GitleaksScanNode as {
+      properties: { type: { enum: string[] } };
+    };
+    const sonarqube = commonSteps.SonarqubeScanNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(gitleaks.properties.type.enum).toContain("Gitleaks");
+    expect(sonarqube.properties.type.enum).toContain("Sonarqube");
+  });
+
+  it("includes upstream Gitleaks and Sonarqube security scan step nodes in v0 template", () => {
+    const commonSteps = (SCHEMAS.template.definitions as Record<string, Record<string, unknown>>).pipeline
+      .steps.common as Record<string, unknown>;
+
+    expect(commonSteps).toHaveProperty("GitleaksScanNode");
+    expect(commonSteps).toHaveProperty("SonarqubeScanNode");
+    expect(commonSteps).toHaveProperty("GitleaksScanNode_template");
+    expect(commonSteps).toHaveProperty("SonarqubeScanNode_template");
+  });
+
+  it("includes AwsAgentCore and GoogleAgentRuntime service types in v0 pipeline ServiceDefinition", () => {
+    const serviceDef = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>).pipeline.stages
+      .cd.ServiceDefinition as {
+      properties: { type: { enum: string[] } };
+      allOf: Array<{ if: { properties: { type: { const: string } } }; then: { properties: { spec: { $ref: string } } } }>;
+    };
+
+    expect(serviceDef.properties.type.enum).toContain("AwsAgentCore");
+    expect(serviceDef.properties.type.enum).toContain("GoogleAgentRuntime");
+
+    const awsBranch = serviceDef.allOf.find((branch) => branch.if?.properties?.type?.const === "AwsAgentCore");
+    const googleBranch = serviceDef.allOf.find(
+      (branch) => branch.if?.properties?.type?.const === "GoogleAgentRuntime",
+    );
+    expect(awsBranch?.then.properties.spec.$ref).toContain("AwsAgentCoreServiceSpec");
+    expect(googleBranch?.then.properties.spec.$ref).toContain("GoogleAgentRuntimeServiceSpec");
+  });
+
+  it("includes AwsAgentCore and GoogleAgentRuntime service specs in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const cdStages = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>).pipeline.stages
+        .cd as Record<string, unknown>;
+
+      expect(cdStages).toHaveProperty("AwsAgentCoreServiceSpec");
+      expect(cdStages).toHaveProperty("GoogleAgentRuntimeServiceSpec");
+
+      const awsSpec = cdStages.AwsAgentCoreServiceSpec as { required: string[]; properties: Record<string, unknown> };
+      const googleSpec = cdStages.GoogleAgentRuntimeServiceSpec as {
+        required: string[];
+        properties: Record<string, unknown>;
+      };
+      expect(awsSpec.required).toEqual(expect.arrayContaining(["source", "executionRoleArn"]));
+      expect(awsSpec.properties).toHaveProperty("source");
+      expect(googleSpec.required).toEqual(expect.arrayContaining(["source"]));
+      expect(googleSpec.properties).toHaveProperty("source");
+    }
+  });
+
+  it("includes upstream EnvironmentGroup parallel/items/filters shape in v1 pipeline and template", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const envGroup = defs[key].stages.unified.EnvironmentGroup as {
+        description: string;
+        oneOf: Array<{
+          type?: string;
+          required?: string[];
+          properties?: Record<string, { description?: string; $ref?: string }>;
+        }>;
+      };
+
+      expect(envGroup.description).toContain("expression");
+      expect(envGroup.oneOf).toHaveLength(2);
+
+      const objectBranch = envGroup.oneOf.find((branch) => branch.type === "object");
+      expect(objectBranch?.required).toContain("id");
+      expect(objectBranch?.properties?.parallel?.description).toContain("parallel");
+      expect(objectBranch?.properties?.items?.$ref).toContain("EnvironmentItems");
+      expect(objectBranch?.properties?.filters?.$ref).toContain("Filters");
+      expect(envGroup.oneOf[1]).toHaveProperty("$ref");
+    }
+  });
 });

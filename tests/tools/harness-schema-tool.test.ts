@@ -558,6 +558,74 @@ describe("harness_schema nested static definition lookup", () => {
     const schema = parsed.schema as { required?: string[] };
     expect(schema.required).toContain("dynamic");
   });
+
+  it("resolves newly synced GitleaksScanNode step definition from v0 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "GitleaksScanNode",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("steps.common.GitleaksScanNode");
+    expect(parsed.requested_path).toBe("GitleaksScanNode");
+    const schema = parsed.schema as { properties?: { type?: { enum?: string[] } } };
+    expect(schema.properties?.type?.enum).toContain("Gitleaks");
+  });
+
+  it("resolves newly synced SonarqubeScanNode step definition from v0 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "SonarqubeScanNode",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("steps.common.SonarqubeScanNode");
+    expect(parsed.requested_path).toBe("SonarqubeScanNode");
+    const schema = parsed.schema as { properties?: { type?: { enum?: string[] } } };
+    expect(schema.properties?.type?.enum).toContain("Sonarqube");
+  });
+
+  it("resolves newly synced AwsAgentCoreServiceSpec from v0 pipeline CD stages", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "AwsAgentCoreServiceSpec",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("stages.cd.AwsAgentCoreServiceSpec");
+    expect(parsed.requested_path).toBe("AwsAgentCoreServiceSpec");
+    const schema = parsed.schema as { required?: string[] };
+    expect(schema.required).toEqual(expect.arrayContaining(["source", "executionRoleArn"]));
+  });
+
+  it("resolves v1 EnvironmentGroup with parallel execution and filters", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline_v1",
+      path: "EnvironmentGroup",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("stages.unified.EnvironmentGroup");
+    expect(parsed.requested_path).toBe("EnvironmentGroup");
+    const schema = parsed.schema as {
+      oneOf?: Array<{ properties?: Record<string, { description?: string }> }>;
+    };
+    const objectBranch = schema.oneOf?.find((branch) => branch.properties?.parallel);
+    expect(objectBranch?.properties?.parallel?.description).toContain("parallel");
+    expect(objectBranch?.properties?.filters?.description).toContain("Filters");
+  });
 });
 
 // Wrapper definitions that are grouping objects (not schema nodes) must still
