@@ -60,6 +60,13 @@ describe("release metadata", () => {
     });
   });
 
+  it("rejects invalid MCPB versions and manifest/package mismatches", () => {
+    const manifest = readJson("mcp-directory/manifest.json");
+
+    expect(() => assetNameForVersion("not-a-version")).toThrow(/Invalid MCPB version/);
+    expect(() => normalizeBundleManifest(manifest, "0.0.0")).toThrow(/does not match package version/);
+  });
+
   it("creates an npm-ci-compatible production package manifest", () => {
     const packageJson = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
     const bundled = bundlePackageJson(packageJson);
