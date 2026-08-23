@@ -204,6 +204,20 @@ describe("schema bundle contract", () => {
     expect(identitySpec.properties.scope?.enum).toContain("STEP");
   });
 
+  it("includes upstream reuse field on DB schema apply step info in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const stepInfo = defs.pipeline.steps.common.DBApplySchemaStepInfo as {
+        allOf: Array<{ properties?: Record<string, { oneOf?: unknown[] }> }>;
+      };
+
+      const properties = stepInfo.allOf.find((part) => part.properties)?.properties;
+      expect(properties).toBeDefined();
+      expect(properties).toHaveProperty("reuse");
+      expect(properties!.reuse.oneOf).toHaveLength(2);
+    }
+  });
+
   it("includes upstream DynamicStageNodeV1 in v1 pipeline and template unified stages", () => {
     for (const key of ["pipeline_v1", "template_v1"] as const) {
       const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
