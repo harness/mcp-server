@@ -513,6 +513,25 @@ Feature is **opt-in** (`include_visual` defaults to false) and the `visual_*` re
 - Ninth follow-up review fix: URL-only `harness_update`/`harness_delete` calls now resolve the primary ID from the parsed URL, edited optional Zod fields keep `.describe()` last, and File Store `file_usage` rejects values outside `MANIFEST_FILE`, `CONFIG`, or `SCRIPT` before dispatch.
 - Ninth follow-up verification passed: `pnpm typecheck`, `pnpm exec vitest run tests/registry/file-store-multipart.test.ts tests/tools/tool-handlers.test.ts tests/utils/url-parser.test.ts`, `pnpm build`, `pnpm docs:check`, `git diff --check`, and `pnpm test`.
 
+## Version Bump 3.2.21 (2026-08-24)
+
+- [x] Update package and MCPB manifest versions to 3.2.21.
+- [x] Update npm shrinkwrap root metadata and release metadata expectations.
+- [x] Run focused release checks, typecheck, build, and diff validation.
+- [x] Commit, push, and open a new PR against main.
+
+### Plan
+
+- Keep this a metadata-only patch release bump from current `origin/main`.
+- Synchronize `package.json`, both root version fields in `npm-shrinkwrap.json`, `manifest.json`, `mcp-directory/manifest.json`, and the pinned expectations in `tests/release-metadata.test.ts`.
+- Stage and publish only the version-bump files plus this task record.
+
+### Review
+
+- Updated all six release metadata surfaces from 3.2.20 to 3.2.21 without dependency or runtime changes.
+- Verification passed: 10 focused release tests, typecheck, build, sequential docs check, shrinkwrap check, standards (77 tests), and the isolated full suite (137 files / 3,143 tests).
+- An initial concurrent full-suite run had one semantic-search timeout; the isolated rerun passed, confirming local test-pool contention rather than a version-bump regression.
+
 ## PR 172 Conflict Resolution (2026-06-04)
 - [x] Inspect PR status and identify conflicted documentation files
 - [x] Merge current `origin/main` into PR branch
