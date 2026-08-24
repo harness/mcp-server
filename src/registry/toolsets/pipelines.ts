@@ -1,5 +1,6 @@
 import type { ToolsetDefinition, BodySchema, ParamsSchema, PreflightContext } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
+import { asRecord } from "../../utils/type-guards.js";
 import YAML from "yaml";
 
 function coerceTriggerBodyRecord(body: unknown): Record<string, unknown> {
@@ -172,12 +173,6 @@ function firstGitBoolean(...values: unknown[]): boolean | undefined {
   return undefined;
 }
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : undefined;
-}
-
 function inputGitDetails(input: Record<string, unknown>): Record<string, unknown> {
   return asRecord(asRecord(input.body)?.git_details) ?? {};
 }
@@ -242,7 +237,10 @@ function remotePipelineUpdatePreflight(resourceType: "pipeline" | "pipeline_v1")
     const getInput: Record<string, unknown> = {
       pipeline_id: input.pipeline_id,
     };
-    for (const key of ["org_id", "project_id", "branch", "branch_name", "repo_name", "connector_ref", "store_type"]) {
+    // store_type is deliberately not forwarded: the v0 GET echoes it back onto
+    // the response when the API omits one, which would let the caller's own
+    // assertion masquerade as the stored store type we read below.
+    for (const key of ["org_id", "project_id", "branch", "branch_name", "repo_name", "connector_ref"]) {
       if (input[key] !== undefined) getInput[key] = input[key];
     }
     setIfMissing(getInput, "branch", firstGitString(currentGit.branch_name));

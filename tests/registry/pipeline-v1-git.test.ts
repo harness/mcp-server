@@ -383,6 +383,32 @@ describe("pipeline_v1 Git Experience mapping", () => {
     expect(call.body.git_details.is_harness_code_repo).toBe(true);
   });
 
+  it("does not echo the caller's store_type into the preflight GET", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({ data: { identifier: "ci_build", storeType: "INLINE" } })
+      .mockResolvedValueOnce({ data: { identifier: "ci_build" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pipeline", "update", {
+      pipeline_id: "ci_build",
+      org_id: "PROD",
+      project_id: "Traceable",
+      store_type: "REMOTE",
+      body: "pipeline:\n  identifier: ci_build\n  name: CI Build\n",
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    const getCall = mockRequest.mock.calls[0]![0] as { method: string; params?: Record<string, unknown> };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.params?.storeType).toBeUndefined();
+    // The stored INLINE wins over the caller's assertion, so no Git context is
+    // hydrated and the update is not blocked.
+    const putCall = mockRequest.mock.calls[1]![0] as { params?: Record<string, unknown> };
+    expect(putCall.params?.lastObjectId).toBeUndefined();
+    expect(putCall.params?.lastCommitId).toBeUndefined();
+  });
+
   it("does not add git_details on inline create/update", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "ci_build" });
