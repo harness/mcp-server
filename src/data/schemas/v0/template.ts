@@ -136380,7 +136380,9 @@ const schema: Record<string, any> = {
                   "AzureContainerApps",
                   "Salesforce",
                   "GoogleManagedInstanceGroup",
-                  "AiAgent"
+                  "AiAgent",
+                  "AwsAgentCore",
+                  "GoogleAgentRuntime"
                 ]
               },
               "environment": {
@@ -140625,7 +140627,9 @@ const schema: Record<string, any> = {
                   "AzureContainerApps",
                   "Salesforce",
                   "GoogleManagedInstanceGroup",
-                  "AiAgent"
+                  "AiAgent",
+                  "AwsAgentCore",
+                  "GoogleAgentRuntime"
                 ]
               },
               "description": {
@@ -140950,6 +140954,38 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/stages/cd/AiAgentServiceSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "AwsAgentCore"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/AwsAgentCoreServiceSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "GoogleAgentRuntime"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/GoogleAgentRuntimeServiceSpec"
                     }
                   }
                 }
@@ -145470,6 +145506,72 @@ const schema: Record<string, any> = {
                 }
               }
             ]
+          },
+          "AwsAgentCoreServiceSpec": {
+            "title": "AwsAgentCoreServiceSpec",
+            "type": "object",
+            "required": [
+              "source",
+              "executionRoleArn"
+            ],
+            "properties": {
+              "configVariables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "source": {
+                "$ref": "#/definitions/pipeline/stages/cd/AwsCoreAgentSource"
+              },
+              "executionRoleArn": {
+                "type": "string"
+              },
+              "manifests": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/steps/cd/ManifestConfigWrapper"
+                }
+              },
+              "description": {
+                "desc": "This is the description for AwsAgentCoreServiceSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "GoogleAgentRuntimeServiceSpec": {
+            "title": "GoogleAgentRuntimeServiceSpec",
+            "type": "object",
+            "required": [
+              "source"
+            ],
+            "properties": {
+              "configVariables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "source": {
+                "$ref": "#/definitions/pipeline/stages/cd/GoogleAgentSource"
+              },
+              "description": {
+                "desc": "This is the description for GoogleAgentRuntimeServiceSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "StageOverridesConfig": {
             "title": "StageOverridesConfig",
