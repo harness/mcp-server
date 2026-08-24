@@ -400,6 +400,14 @@ describe("iacm_provider contract", () => {
     expect(result.has_more).toBe(false);
   });
 
+  it("has_more=true when provider list page is full (30 items)", () => {
+    const extract = getOp("iacm_provider", "list").responseExtractor!;
+    const items = Array.from({ length: 30 }, (_, i) => ({ id: String(i), type: "aws" }));
+    const result = extract(items) as Record<string, unknown>;
+    expect(result.page_count).toBe(30);
+    expect(result.has_more).toBe(true);
+  });
+
   it("documents Experimental provider-registry RBAC and version-oriented update", () => {
     const create = getOp("iacm_provider", "create");
     const update = getOp("iacm_provider", "update");
@@ -1258,6 +1266,59 @@ describe("iacm registry dispatch", () => {
         body: { name: "vpc" },
       }),
     ).rejects.toThrow("system");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects provider create when type is missing", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_provider", "create", {
+        body: { description: "AWS provider" },
+      }),
+    ).rejects.toThrow(/Missing required field "type"/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("accepts provider type at top-level input.type", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "1" });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await registry.dispatch(makeClient(mockRequest), "iacm_provider", "create", {
+      type: "aws",
+      body: { description: "AWS provider" },
+    });
+
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "POST",
+      path: "/iacm/api/providers/aws",
+      body: { description: "AWS provider" },
+    });
+  });
+
+  it("rejects provider version create when id is missing", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_provider", "update", {
+        body: { version: "1.0.0", protocol: ["5.0"], gpg_key_id: "key-1" },
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for iacm_provider\.update: id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects provider version create when body.version is missing", async () => {
+    const mockRequest = vi.fn();
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "iacm" }));
+
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "iacm_provider", "update", {
+        id: "1",
+        body: { protocol: ["5.0"], gpg_key_id: "key-1" },
+      }),
+    ).rejects.toThrow(/Missing required field "version"/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 

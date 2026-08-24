@@ -150,4 +150,53 @@ describe("fme_environment remaining native-only ops", () => {
     expect(firstRequest(mockRequest).method).toBe("DELETE");
     expect(firstRequest(mockRequest).path).toBe(`/fme/api/v4/environments/${ENV_ID}`);
   });
+
+  it.each(["get", "update", "delete"] as const)(
+    "%s: rejects missing environment_id before any request",
+    async (operation) => {
+      const mockRequest = vi.fn();
+      const input: Record<string, unknown> = { ...nativeScope };
+      if (operation === "update") {
+        input.body = { name: "renamed" };
+      }
+      await expect(registry.dispatch(makeClient(mockRequest), "fme_environment", operation, input)).rejects.toThrow(
+        'fme_environment: "environment_id" is required.',
+      );
+      expect(mockRequest).not.toHaveBeenCalled();
+    },
+  );
+
+  it("create: rejects missing org_id/project_id before any request", async () => {
+    const mockRequest = vi.fn();
+    await expect(
+      registry.dispatch(makeClient(mockRequest), "fme_environment", "create", {
+        body: { name: "x" },
+      }),
+    ).rejects.toThrow(/org_id and project_id are required/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: prefers isProduction over production alias when both are set", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_environment", "create", {
+      ...nativeScope,
+      body: { name: "conflict", isProduction: false, production: true },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ name: "conflict", isProduction: false });
+  });
+
+  it("create: omits isProduction when neither alias is provided", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_environment", "create", {
+      ...nativeScope,
+      body: { name: "plain" },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ name: "plain" });
+  });
 });
