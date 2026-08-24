@@ -42,6 +42,7 @@ import { registerPendingApprovalsPrompt } from "./pending-approvals.js";
 
 // Deployment workflow prompts
 import { registerBuildDeployAppPrompt } from "./build-deploy-app.js";
+import { registerDeployAiAgentPrompt } from "./deploy-ai-agent.js";
 
 // Pipeline summarizer
 import { registerSummarizePipelinePrompt } from "./summarize-pipeline.js";
@@ -95,6 +96,7 @@ export function registerAllPrompts(server: McpServer): void {
 
   // Deployment workflows
   registerBuildDeployAppPrompt(server);
+  registerDeployAiAgentPrompt(server);
 
   // Pipeline summarizer
   registerSummarizePipelinePrompt(server);
