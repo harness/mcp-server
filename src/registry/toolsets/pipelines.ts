@@ -1,4 +1,4 @@
-import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
+import type { ToolsetDefinition, BodySchema, ParamsSchema, PreflightContext } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
 import YAML from "yaml";
 
@@ -70,7 +70,7 @@ function normalizeTriggerBody(
 // ---------------------------------------------------------------------------
 
 const pipelineV1CreateSchema: BodySchema = {
-  description: "V1 pipeline definition. Pass pipeline_yaml (YAML string of the v1 pipeline definition), identifier, and name. The version field defaults to '1'. Alternatively, pass a raw YAML string as body — identifier (from pipeline.identifier or v1 pipeline.id) and name will be extracted from the YAML. You can also pass {pipeline: {...}} as a JSON object which will be serialized to YAML automatically.",
+  description: "V1 pipeline definition. Pass pipeline_yaml (YAML string of the v1 pipeline definition), identifier, and name. The version field defaults to '1'. Alternatively, pass a raw YAML string as body — identifier (from pipeline.identifier or v1 pipeline.id) and name will be extracted from the YAML. You can also pass {pipeline: {...}} as a JSON object which will be serialized to YAML automatically. For remote/Git-backed pipelines, pass Git Experience fields via params (store_type, repo_name, branch, file_path, connector_ref) or body.git_details — they are sent in the JSON body, not as query params.",
   fields: [
     { name: "pipeline_yaml", type: "string", required: true, description: "Pipeline YAML string (the v1 pipeline definition including 'pipeline:' root key)" },
     { name: "identifier", type: "string", required: true, description: "Unique pipeline identifier" },
@@ -78,11 +78,12 @@ const pipelineV1CreateSchema: BodySchema = {
     { name: "version", type: "string", required: false, description: "Pipeline version. Defaults to '1' for v1 pipelines" },
     { name: "description", type: "string", required: false, description: "Pipeline description" },
     { name: "tags", type: "object", required: false, description: "Pipeline tags as key:value pairs" },
+    { name: "git_details", type: "object", required: false, description: "Git Experience create fields (branch_name, file_path, repo_name, connector_ref, is_harness_code_repo, store_type, commit_message, base_branch). Prefer params: store_type, repo_name, branch, file_path, connector_ref, is_harness_code_repo, commit_msg." },
   ],
 };
 
 const pipelineV1UpdateSchema: BodySchema = {
-  description: "V1 pipeline definition (full replacement). Same fields as create: pipeline_yaml, identifier, name, version. Pass a raw YAML string as body, or {pipeline_yaml, identifier, name} as JSON. Raw v1 YAML can provide the identifier as pipeline.id.",
+  description: "V1 pipeline definition (full replacement). Same fields as create: pipeline_yaml, identifier, name, version. Pass a raw YAML string as body, or {pipeline_yaml, identifier, name} as JSON. Raw v1 YAML can provide the identifier as pipeline.id. For remote pipelines, include git_details (or params last_object_id/last_commit_id from GET git_details.object_id/commit_id) so Git conflict detection succeeds.",
   fields: [
     { name: "pipeline_yaml", type: "string", required: true, description: "Pipeline YAML string (full replacement)" },
     { name: "identifier", type: "string", required: true, description: "Pipeline identifier" },
@@ -90,8 +91,219 @@ const pipelineV1UpdateSchema: BodySchema = {
     { name: "version", type: "string", required: false, description: "Pipeline version. Defaults to '1'" },
     { name: "description", type: "string", required: false, description: "Pipeline description" },
     { name: "tags", type: "object", required: false, description: "Pipeline tags as key:value pairs" },
+    { name: "git_details", type: "object", required: false, description: "Git Experience update fields. Include last_object_id and last_commit_id from GET git_details.object_id/commit_id (or pass last_object_id/last_commit_id via params)." },
   ],
 };
+
+const PIPELINE_V1_GET_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "branch", required: false, description: "Git branch alias — maps to branch_name on the wire. Pass via params." },
+    { name: "branch_name", required: false, description: "Git branch — sent as branch_name. Alias of branch. Pass via params." },
+    { name: "repo_name", required: false, description: "Git repository name for Git Experience. Pass via params." },
+    { name: "connector_ref", required: false, description: "Git connector for remote pipelines. Pass via params." },
+    { name: "load_from_fallback_branch", required: false, description: "When true, load from the created non-default branch if the requested branch is empty. Pass via params." },
+    { name: "template_applied", required: false, description: "When true, return YAML with templates applied. Pass via params." },
+    { name: "validate_async", required: false, description: "When true, validate the pipeline asynchronously. Pass via params." },
+  ],
+};
+
+const PIPELINE_V1_CREATE_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "store_type", required: false, description: "INLINE (default) or REMOTE. Pass via params; mapped into body.git_details." },
+    { name: "branch", required: false, description: "Git branch (body.git_details.branch_name). Pass via params." },
+    { name: "repo_name", required: false, description: "Git repo name. Pass via params." },
+    { name: "file_path", required: false, description: "Path of the pipeline YAML in the repo. Pass via params." },
+    { name: "connector_ref", required: false, description: "Git connector ref for external Git. Pass via params." },
+    { name: "is_harness_code_repo", required: false, description: "Set true for Harness Code repositories (body.git_details.is_harness_code_repo). Pass via params." },
+    { name: "commit_msg", required: false, description: "Commit message (body.git_details.commit_message). Pass via params." },
+    { name: "base_branch", required: false, description: "Base branch when creating a new branch. Pass via params." },
+  ],
+};
+
+const PIPELINE_V1_UPDATE_PARAMS: ParamsSchema = {
+  fields: [
+    ...PIPELINE_V1_CREATE_PARAMS.fields,
+    { name: "last_object_id", required: false, description: "Git blob/object id from GET git_details.object_id — required for remote updates. Pass via params." },
+    { name: "last_commit_id", required: false, description: "Git commit id from GET git_details.commit_id — required for remote updates. Pass via params." },
+  ],
+};
+
+const PIPELINE_V0_GET_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "branch", required: false, description: "Git branch for a remote pipeline. Pass via params." },
+    { name: "store_type", required: false, description: "INLINE or REMOTE. Pass via params." },
+    { name: "connector_ref", required: false, description: "Git connector ref for external Git. Pass via params." },
+    { name: "repo_name", required: false, description: "Git repository name. Pass via params." },
+  ],
+};
+
+const PIPELINE_V0_UPDATE_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "store_type", required: false, description: "INLINE or REMOTE. Pass via params." },
+    { name: "branch", required: false, description: "Git branch for a remote pipeline. Pass via params." },
+    { name: "repo_name", required: false, description: "Git repository name. Pass via params." },
+    { name: "file_path", required: false, description: "Path of the pipeline YAML in the repository. Pass via params." },
+    { name: "connector_ref", required: false, description: "Git connector ref for external Git. Pass via params." },
+    { name: "is_harness_code_repo", required: false, description: "Set true for Harness Code repositories. Pass via params." },
+    { name: "commit_msg", required: false, description: "Git commit message. Pass via params." },
+    { name: "last_object_id", required: false, description: "Git blob/object id from GET gitDetails.objectId. Pass via params." },
+    { name: "last_commit_id", required: false, description: "Git commit id from GET gitDetails.commitId. Pass via params." },
+  ],
+};
+
+function firstGitString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value !== "") return value;
+  }
+  return undefined;
+}
+
+function firstGitBoolean(...values: unknown[]): boolean | undefined {
+  for (const value of values) {
+    if (typeof value === "boolean") return value;
+    // `params` values are untyped JSON and agents routinely quote booleans.
+    // v0 forwards the string as a query param; v1 must not drop it.
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (normalized === "true") return true;
+      if (normalized === "false") return false;
+    }
+  }
+  return undefined;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : undefined;
+}
+
+function inputGitDetails(input: Record<string, unknown>): Record<string, unknown> {
+  return asRecord(asRecord(input.body)?.git_details) ?? {};
+}
+
+/**
+ * V1 create/update send Git Experience fields in JSON `git_details`, not query params.
+ * Accept params used by v0 agents (branch, commit_msg, last_object_id) and GET response
+ * names (object_id, commit_id) so agents can copy git_details forward.
+ */
+function collectV1GitDetails(input: Record<string, unknown>): Record<string, string | boolean> | undefined {
+  const git = inputGitDetails(input);
+  const details: Record<string, string | boolean> = {};
+  const assign = (key: string, value: string | undefined) => {
+    if (value) details[key] = value;
+  };
+
+  assign("branch_name", firstGitString(input.branch_name, input.branch, git.branch_name));
+  assign("file_path", firstGitString(input.file_path, git.file_path));
+  assign("commit_message", firstGitString(input.commit_message, input.commit_msg, git.commit_message));
+  assign("base_branch", firstGitString(input.base_branch, git.base_branch));
+  assign("connector_ref", firstGitString(input.connector_ref, git.connector_ref));
+  assign("store_type", firstGitString(input.store_type, git.store_type));
+  assign("repo_name", firstGitString(input.repo_name, git.repo_name));
+  const isHarnessCodeRepo = firstGitBoolean(input.is_harness_code_repo, git.is_harness_code_repo);
+  if (isHarnessCodeRepo !== undefined) details.is_harness_code_repo = isHarnessCodeRepo;
+  assign("last_object_id", firstGitString(input.last_object_id, git.last_object_id, git.object_id));
+  assign("last_commit_id", firstGitString(input.last_commit_id, git.last_commit_id, git.commit_id));
+
+  return Object.keys(details).length > 0 ? details : undefined;
+}
+
+function hasRemoteUpdateLockContext(input: Record<string, unknown>): boolean {
+  const git = inputGitDetails(input);
+  return !!firstGitString(input.branch_name, input.branch, git.branch_name)
+    && !!firstGitString(input.repo_name, git.repo_name)
+    && !!firstGitString(input.file_path, git.file_path)
+    && !!firstGitString(input.last_object_id, git.last_object_id, git.object_id)
+    && !!firstGitString(input.last_commit_id, git.last_commit_id, git.commit_id);
+}
+
+function isExplicitlyInline(input: Record<string, unknown>): boolean {
+  const storeType = firstGitString(input.store_type, inputGitDetails(input).store_type);
+  return storeType?.toUpperCase() === "INLINE";
+}
+
+function setIfMissing(input: Record<string, unknown>, key: string, value: unknown): void {
+  if ((input[key] === undefined || input[key] === "") && value !== undefined && value !== "") {
+    input[key] = value;
+  }
+}
+
+/**
+ * Remote updates require Git location plus optimistic-lock SHAs. Agents commonly
+ * send only the updated YAML, so hydrate missing Git context from the current
+ * pipeline before the body/query builders run.
+ */
+function remotePipelineUpdatePreflight(resourceType: "pipeline" | "pipeline_v1") {
+  return async ({ client, input, registry, signal }: PreflightContext): Promise<void> => {
+    if (isExplicitlyInline(input) || hasRemoteUpdateLockContext(input)) return;
+
+    const currentGit = inputGitDetails(input);
+    const getInput: Record<string, unknown> = {
+      pipeline_id: input.pipeline_id,
+    };
+    for (const key of ["org_id", "project_id", "branch", "branch_name", "repo_name", "connector_ref", "store_type"]) {
+      if (input[key] !== undefined) getInput[key] = input[key];
+    }
+    setIfMissing(getInput, "branch", firstGitString(currentGit.branch_name));
+    setIfMissing(getInput, "repo_name", firstGitString(currentGit.repo_name));
+    setIfMissing(getInput, "connector_ref", firstGitString(currentGit.connector_ref));
+    if (resourceType === "pipeline_v1") getInput.load_from_fallback_branch = true;
+
+    // Hydration is best-effort. Aborting on a failed lookup would break inline
+    // updates, which need no Git context at all and previously never read the
+    // pipeline first. A genuinely remote pipeline still fails loudly on the PUT
+    // with the GitX branch/SHA error. Toolsets may not log (pure data), so the
+    // swallow is silent by design.
+    let current: Record<string, unknown> | undefined;
+    try {
+      current = asRecord(await registry.dispatch(client, resourceType, "get", getInput, signal));
+    } catch {
+      return;
+    }
+    const git = asRecord(current?.git_details ?? current?.gitDetails);
+    const currentStoreType = firstGitString(
+      current?.store_type,
+      current?.storeType,
+      git?.store_type,
+      git?.storeType,
+    );
+    const hasRemoteMetadata = !!git && Object.keys(git).length > 0;
+    if (currentStoreType?.toUpperCase() === "INLINE") return;
+    if (currentStoreType?.toUpperCase() !== "REMOTE" && !hasRemoteMetadata) return;
+
+    setIfMissing(input, "store_type", currentStoreType ?? "REMOTE");
+    setIfMissing(input, "branch", firstGitString(git?.branch_name, git?.branchName, git?.branch));
+    setIfMissing(input, "repo_name", firstGitString(git?.repo_name, git?.repoName));
+    setIfMissing(input, "file_path", firstGitString(git?.file_path, git?.filePath));
+    setIfMissing(input, "connector_ref", firstGitString(git?.connector_ref, git?.connectorRef));
+    setIfMissing(input, "last_object_id", firstGitString(
+      git?.last_object_id,
+      git?.object_id,
+      git?.lastObjectId,
+      git?.objectId,
+    ));
+    setIfMissing(input, "last_commit_id", firstGitString(
+      git?.last_commit_id,
+      git?.commit_id,
+      git?.lastCommitId,
+      git?.commitId,
+    ));
+    setIfMissing(input, "is_harness_code_repo", firstGitBoolean(
+      git?.is_harness_code_repo,
+      git?.isHarnessCodeRepo,
+    ));
+    // v1 requires `name` in the body; YAML-only updates often omit it.
+    setIfMissing(input, "pipeline_name", firstGitString(current?.name));
+
+    if (!hasRemoteUpdateLockContext(input)) {
+      throw new Error(
+        `Unable to resolve Git branch and current object/commit IDs for remote ${resourceType} update. `
+        + "Call harness_get with the repository/branch context and pass branch, last_object_id, and last_commit_id via params.",
+      );
+    }
+  };
+}
 
 /**
  * Build the v1 JSON body for pipeline create/update.
@@ -144,6 +356,11 @@ function buildV1PipelineBody(input: Record<string, unknown>): Record<string, unk
     } catch { /* non-critical — caller can provide identifier/name explicitly */ }
   }
 
+  // Fall back to the identifiers the caller addressed the pipeline with, and to
+  // the name hydrated by the remote update preflight.
+  identifier = identifier ?? firstGitString(input.pipeline_id);
+  name = name ?? firstGitString(input.pipeline_name);
+
   const result: Record<string, unknown> = {
     pipeline_yaml: pipelineYaml,
     identifier,
@@ -152,6 +369,8 @@ function buildV1PipelineBody(input: Record<string, unknown>): Record<string, unk
   };
   if (description) result.description = description;
   if (tags) result.tags = tags;
+  const gitDetails = collectV1GitDetails(input);
+  if (gitDetails) result.git_details = gitDetails;
   return result;
 }
 
@@ -248,6 +467,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             repo_name: "repoName",
           },
           responseExtractor: ngExtract,
+          paramsSchema: PIPELINE_V0_GET_PARAMS,
           description: "Get pipeline details including YAML definition. For remote/git-backed pipelines, pass branch to specify which branch to read from.",
         },
         create: {
@@ -287,6 +507,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/pipeline/api/pipelines/v2/{pipelineIdentifier}",
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
+          preflight: remotePipelineUpdatePreflight("pipeline"),
           headers: { "Content-Type": "application/yaml" },
           queryParams: {
             store_type: "storeType",
@@ -314,6 +535,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             throw new Error("body must be a YAML string, or an object with yamlPipeline (YAML string) or pipeline (JSON object)");
           },
           responseExtractor: ngExtract,
+          paramsSchema: PIPELINE_V0_UPDATE_PARAMS,
           description: "Update an existing pipeline YAML. For remote pipelines, pass store_type='REMOTE' with git details and last_object_id/last_commit_id from the GET response. For Harness Code: add is_harness_code_repo=true (no connector_ref needed).",
           bodySchema: pipelineUpdateSchema,
         },
@@ -465,9 +687,16 @@ export const pipelinesToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
           queryParams: {
             branch: "branch_name",
+            branch_name: "branch_name",
+            connector_ref: "connector_ref",
+            repo_name: "repo_name",
+            load_from_fallback_branch: "load_from_fallback_branch",
+            template_applied: "template_applied",
+            validate_async: "validate_async",
           },
           responseExtractor: passthrough,
-          description: "Get v1 pipeline details including YAML definition",
+          paramsSchema: PIPELINE_V1_GET_PARAMS,
+          description: "Get v1 pipeline details including YAML. For Git-backed pipelines, pass branch (or branch_name), repo_name, and optionally load_from_fallback_branch. The response git_details.object_id and git_details.commit_id are needed as last_object_id/last_commit_id when updating a remote v1 pipeline.",
         },
         create: {
           method: "POST",
@@ -476,7 +705,8 @@ export const pipelinesToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project" },
           bodyBuilder: buildV1PipelineBody,
           responseExtractor: passthrough,
-          description: "Create a new v1 pipeline. Pass pipeline_yaml (YAML string), identifier, name. Version defaults to '1'. Alternatively pass a raw YAML string as body; identifier is extracted from pipeline.identifier or v1 pipeline.id.",
+          paramsSchema: PIPELINE_V1_CREATE_PARAMS,
+          description: "Create a new v1 pipeline. Pass pipeline_yaml (YAML string), identifier, name. Version defaults to '1'. Alternatively pass a raw YAML string as body; identifier is extracted from pipeline.identifier or v1 pipeline.id. For remote/Git-backed pipelines, pass store_type='REMOTE' with repo_name, branch, file_path (and connector_ref for external Git) via params — they become body.git_details.",
           bodySchema: pipelineV1CreateSchema,
         },
         update: {
@@ -484,9 +714,11 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}",
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
+          preflight: remotePipelineUpdatePreflight("pipeline_v1"),
           bodyBuilder: buildV1PipelineBody,
           responseExtractor: passthrough,
-          description: "Update a v1 pipeline (full replacement). Same body format as create.",
+          paramsSchema: PIPELINE_V1_UPDATE_PARAMS,
+          description: "Update a v1 pipeline (full replacement). Same body format as create. For remote pipelines, pass store_type='REMOTE' with git location fields and last_object_id/last_commit_id from GET git_details.object_id/commit_id — v1 sends these in body.git_details, not as query params.",
           bodySchema: pipelineV1UpdateSchema,
         },
         delete: {

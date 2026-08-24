@@ -75,6 +75,7 @@ describe("pipeline_v1 deep links", () => {
       org_id: "avitest",
       project_id: "avi",
       pipeline_id: "hello_harness",
+      store_type: "INLINE",
       body: {
         identifier: "hello_harness",
         pipeline_yaml: "pipeline:\n  name: Hello Harness\n",
