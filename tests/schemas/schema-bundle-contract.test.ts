@@ -220,4 +220,102 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream Gitleaks and Sonarqube security scan step nodes in v0 pipeline", () => {
+    const commonSteps = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>)
+      .pipeline.steps.common as Record<string, unknown>;
+
+    expect(commonSteps).toHaveProperty("GitleaksScanNode");
+    expect(commonSteps).toHaveProperty("SonarqubeScanNode");
+
+    const gitleaks = commonSteps.GitleaksScanNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(gitleaks.properties.type.enum).toContain("Gitleaks");
+
+    const sonarqube = commonSteps.SonarqubeScanNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(sonarqube.properties.type.enum).toContain("Sonarqube");
+  });
+
+  it("includes upstream Gitleaks and Sonarqube scan template step nodes in v0 template", () => {
+    const commonSteps = (SCHEMAS.template.definitions as Record<string, Record<string, unknown>>)
+      .pipeline.steps.common as Record<string, unknown>;
+
+    expect(commonSteps).toHaveProperty("GitleaksScanNode_template");
+    expect(commonSteps).toHaveProperty("SonarqubeScanNode_template");
+  });
+
+  it("includes AI agent CD service specs with lowercase container source discriminator", () => {
+    const cdStages = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>)
+      .pipeline.stages.cd as Record<string, unknown>;
+
+    expect(cdStages).toHaveProperty("AwsAgentCoreServiceSpec");
+    expect(cdStages).toHaveProperty("GoogleAgentRuntimeServiceSpec");
+
+    const awsSpec = cdStages.AwsAgentCoreServiceSpec as {
+      required: string[];
+      properties: { source: { $ref: string } };
+    };
+    expect(awsSpec.required).toEqual(expect.arrayContaining(["source", "executionRoleArn"]));
+    expect(awsSpec.properties.source.$ref).toContain("AwsCoreAgentSource");
+
+    const googleSpec = cdStages.GoogleAgentRuntimeServiceSpec as {
+      required: string[];
+      properties: { source: { $ref: string } };
+    };
+    expect(googleSpec.required).toContain("source");
+    expect(googleSpec.properties.source.$ref).toContain("GoogleAgentSource");
+
+    const awsSource = cdStages.AwsCoreAgentSource as {
+      properties: { type: { enum: string[] } };
+      allOf: Array<{ if?: { properties: { type: { const: string } } } }>;
+    };
+    expect(awsSource.properties.type.enum).toEqual(["container"]);
+    expect(awsSource.allOf.some((branch) => branch.if?.properties?.type?.const === "container")).toBe(true);
+
+    const googleSource = cdStages.GoogleAgentSource as {
+      properties: { type: { enum: string[] } };
+      allOf: Array<{ if?: { properties: { type: { const: string } } } }>;
+    };
+    expect(googleSource.properties.type.enum).toEqual(["container"]);
+    expect(googleSource.allOf.some((branch) => branch.if?.properties?.type?.const === "container")).toBe(true);
+  });
+
+  it("allows EnvironmentGroup expressions in v1 pipeline and template unified stages", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const unified = defs[key].stages.unified as Record<string, unknown>;
+      const envGroup = unified.EnvironmentGroup as {
+        oneOf: Array<{ $ref?: string; type?: string; required?: string[] }>;
+      };
+
+      expect(envGroup.oneOf).toHaveLength(2);
+      expect(envGroup.oneOf[0]?.required).toContain("id");
+      expect(envGroup.oneOf[1]?.$ref).toContain("Expression");
+    }
+  });
+
+  it("includes download entrypoint on v1 Run step download config", () => {
+    const unifiedSteps = (SCHEMAS.pipeline_v1.definitions as Record<string, Record<string, unknown>>)
+      .pipeline_v1.steps.unified as Record<string, unknown>;
+    const runStep = unifiedSteps.RunStepInfoV1 as {
+      properties: {
+        download: {
+          oneOf: Array<{
+            properties?: { entrypoint?: { type: string; items: { type: string } } };
+            $ref?: string;
+          }>;
+        };
+      };
+    };
+
+    const downloadBranches = runStep.properties.download.oneOf;
+    const objectBranch = downloadBranches.find((branch) => branch.properties?.entrypoint != null);
+    expect(objectBranch).toBeDefined();
+    expect(objectBranch!.properties!.entrypoint!.type).toBe("array");
+    expect(objectBranch!.properties!.entrypoint!.items.type).toBe("string");
+    expect(downloadBranches.some((branch) => branch.$ref?.includes("Expression"))).toBe(true);
+  });
 });
