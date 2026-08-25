@@ -220,4 +220,91 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream aws-agent-core and google-agent-runtime ServiceType values in v1 pipeline and template", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const serviceType = (defs[key].stages.unified as Record<string, unknown>).ServiceType as {
+        enum: string[];
+      };
+
+      expect(serviceType.enum).toContain("aws-agent-core");
+      expect(serviceType.enum).toContain("google-agent-runtime");
+    }
+  });
+
+  it("includes upstream ProdListenerRuleConfig on ECS blue/green create service in v0 pipeline", () => {
+    const cdSteps = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>).pipeline
+      .steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("ProdListenerRuleConfig");
+
+    const config = cdSteps.ProdListenerRuleConfig as {
+      required: string[];
+      properties: Record<string, unknown>;
+    };
+    expect(config.required).toContain("prodListenerRuleArn");
+    expect(config.properties).toHaveProperty("stageTargetGroupArn");
+
+    const stepInfo = cdSteps.EcsBlueGreenCreateServiceStepInfo as {
+      properties: Record<string, { oneOf?: Array<{ items?: { $ref?: string } }> }>;
+    };
+    expect(stepInfo.properties).toHaveProperty("prodListenerRuleConfigs");
+    expect(stepInfo.properties.prodListenerRuleConfigs.oneOf?.[0]?.items?.$ref).toContain(
+      "ProdListenerRuleConfig",
+    );
+  });
+
+  it("includes upstream ProdListenerRuleConfig on ECS blue/green create service in v0 template", () => {
+    const cdSteps = (SCHEMAS.template.definitions as Record<string, Record<string, unknown>>).pipeline
+      .steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("ProdListenerRuleConfig");
+
+    const stepInfo = cdSteps.EcsBlueGreenCreateServiceStepInfo as {
+      properties: Record<string, { oneOf?: Array<{ items?: { $ref?: string } }> }>;
+    };
+    expect(stepInfo.properties).toHaveProperty("prodListenerRuleConfigs");
+    expect(stepInfo.properties.prodListenerRuleConfigs.oneOf?.[0]?.items?.$ref).toContain(
+      "ProdListenerRuleConfig",
+    );
+  });
+
+  it("includes upstream InheritRuleOverride and ruleOverrides on InheritEcsTrafficShiftSpec in v0 pipeline", () => {
+    const cdSteps = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>).pipeline
+      .steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("InheritRuleOverride");
+
+    const ruleOverride = cdSteps.InheritRuleOverride as {
+      required: string[];
+      properties: Record<string, { oneOf?: Array<{ minimum?: number; maximum?: number }> }>;
+    };
+    expect(ruleOverride.required).toContain("listenerRuleArn");
+    expect(ruleOverride.properties.weightPercentage.oneOf?.[0]).toMatchObject({
+      minimum: 0,
+      maximum: 100,
+    });
+
+    const inheritSpec = cdSteps.InheritEcsTrafficShiftSpec as {
+      allOf: Array<{ properties?: Record<string, { oneOf?: Array<{ items?: { $ref?: string } }> }> }>;
+    };
+    const extension = inheritSpec.allOf[1]!;
+    expect(extension.properties).toHaveProperty("ruleOverrides");
+    expect(extension.properties!.ruleOverrides!.oneOf?.[0]?.items?.$ref).toContain(
+      "InheritRuleOverride",
+    );
+  });
+
+  it("includes upstream InheritRuleOverride and ruleOverrides on InheritEcsTrafficShiftSpec in v0 template", () => {
+    const cdSteps = (SCHEMAS.template.definitions as Record<string, Record<string, unknown>>).pipeline
+      .steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("InheritRuleOverride");
+
+    const inheritSpec = cdSteps.InheritEcsTrafficShiftSpec as {
+      allOf: Array<{ properties?: Record<string, unknown> }>;
+    };
+    expect(inheritSpec.allOf[1]?.properties).toHaveProperty("ruleOverrides");
+  });
 });
