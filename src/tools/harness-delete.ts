@@ -8,7 +8,7 @@ import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord, asString } from "../utils/type-guards.js";
-import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { deleteOutputSchema } from "./output-schemas.js";
 
 export function registerDeleteTool(server: McpServer, registry: Registry, client: HarnessClient, config: Config): void {
@@ -23,8 +23,8 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         resource_id: z.string().optional().describe("The identifier of the resource to delete. Optional when url contains the resource ID."),
         url: z.string().optional().describe("A Harness UI URL — org, project, resource type, ID, and supported resource_scope are extracted automatically"),
         resource_scope: resourceScopeSchema,
-        org_id: z.string().optional().describe("Organization identifier (overrides default)"),
-        project_id: z.string().optional().describe("Project identifier (overrides default)"),
+        org_id: orgIdField(registry.orgId),
+        project_id: projectIdField(registry.projectId),
         confirm: z.boolean().optional().describe("Set to true to confirm the destructive operation. Required when the client cannot surface a confirmation prompt — e.g. managed MCP that does not advertise elicitation, or an elicitation that fails at runtime. Does NOT override an explicit decline from a client that completed an elicitation prompt — a user's decline is authoritative."),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources (e.g. pipeline_id for triggers/input sets, environment_id for infrastructure)."),
       },

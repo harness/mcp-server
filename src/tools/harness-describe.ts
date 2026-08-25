@@ -5,6 +5,7 @@ import type { InputExpansionRule } from "../registry/types.js";
 import { jsonResult } from "../utils/response-formatter.js";
 import { getExamplesForResource } from "../data/examples/index.js";
 import { describeOutputSchema } from "./output-schemas.js";
+import { describeScopeHint } from "./input-schemas.js";
 
 export function registerDescribeTool(server: McpServer, registry: Registry): void {
   const allTypes = registry.getAllResourceTypes() as [string, ...string[]];
@@ -42,9 +43,11 @@ export function registerDescribeTool(server: McpServer, registry: Registry): voi
             scope: def.scope,
             supportedScopes,
             scopeHint: supportedScopes && supportedScopes.length > 1
-              ? def.scopeOptional
-                ? "Set resource_scope='account' for account-level data, resource_scope='org' for org-level data, or resource_scope='project' for project-level data. If resource_scope is omitted, org/project are only included when explicitly passed (no fallback to configured defaults)."
-                : "Set resource_scope='account' for account-level data, resource_scope='org' for org-level data, or resource_scope='project' for project-level data. If resource_scope is omitted, the resource uses its default scope and configured defaults."
+              ? describeScopeHint({
+                  scopeOptional: def.scopeOptional,
+                  hasOrgDefault: Boolean(registry.orgId?.trim()),
+                  hasProjectDefault: Boolean(registry.projectId?.trim()),
+                })
               : undefined,
             identifierFields: def.identifierFields,
             listFilterFields: def.listFilterFields,

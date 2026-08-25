@@ -11,7 +11,7 @@ import { buildLogPrefixFromExecution } from "../utils/log-prefix.js";
 import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
-import { resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { getOutputSchema } from "./output-schemas.js";
 
 function isTrue(value: unknown): boolean {
@@ -29,9 +29,9 @@ export function registerGetTool(server: McpServer, registry: Registry, client: H
         resource_type: resourceTypeSchema(gettableTypes).optional().describe("Resource type to retrieve. Auto-detected from url."),
         resource_id: z.string().optional().describe("Primary resource identifier. Auto-detected from url."),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
-        resource_scope: z.enum(["account", "org", "project"]).optional().describe("Scope to query. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url."),
-        org_id: z.string().optional().describe("Organization identifier (overrides default)"),
-        project_id: z.string().optional().describe("Project identifier (overrides default)"),
+        resource_scope: resourceScopeSchema,
+        org_id: orgIdField(registry.orgId),
+        project_id: projectIdField(registry.projectId),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources. Call harness_describe for fields per resource_type."),
         return_download_url: z.union([z.boolean(), z.enum(["true", "false"])]).optional().describe("For execution_log only: return a directly fetchable log download URL instead of buffering log content."),
       },

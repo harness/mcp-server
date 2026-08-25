@@ -31,7 +31,7 @@ export const servicesToolset: ToolsetDefinition = {
     {
       resourceType: "service",
       displayName: "Service",
-      description: "Deployable service/workload definition. Supports full CRUD. Use resource_scope='account' to list or get account-level services.",
+      description: "Deployable service/workload definition. Supports full CRUD. Default list/get scope is project — pass org_id and project_id (or a project URL) on the first call. Use resource_scope='account' only when the user asked for account-level services.",
       toolset: "services",
       scope: "project",
       supportedScopes: ["account", "org", "project"],

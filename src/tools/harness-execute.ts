@@ -13,7 +13,7 @@ import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, resolveRuntimeInputsWithBaseYaml, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml, mergeRuntimePipelineFragments } from "../utils/materialize-input-sets.js";
-import { resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
 import { executeOutputSchema } from "./output-schemas.js";
@@ -150,8 +150,8 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, type, and ID"),
         action: z.string().describe("Action to execute (e.g. run, retry, interrupt, toggle, test_connection, sync)"),
         resource_id: z.string().optional().describe("Primary resource identifier"),
-        org_id: z.string().optional().describe("Organization identifier (overrides default)"),
-        project_id: z.string().optional().describe("Project identifier (overrides default)"),
+        org_id: orgIdField(registry.orgId),
+        project_id: projectIdField(registry.projectId),
         resource_scope: resourceScopeSchema,
         inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe("Pipeline runtime inputs: key-value pairs like {branch: 'main'} (auto-resolved), or full YAML string. Check runtime_input_template first via harness_get."),
         input_set_ids: z.array(z.string()).optional().describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})."),

@@ -31,10 +31,13 @@ const LOCAL_ONLY_HANDLERS = [
 ];
 
 function hasOptionalScopeParam(content: string, param: "org_id" | "project_id"): boolean {
-  const re = new RegExp(
+  const inline = new RegExp(
     `${param}:\\s*z\\.string\\(\\)\\.optional\\(\\)\\.describe\\(`,
   );
-  return re.test(content);
+  const helper = param === "org_id"
+    ? /org_id:\s*orgIdField\s*\(/
+    : /project_id:\s*projectIdField\s*\(/;
+  return inline.test(content) || helper.test(content);
 }
 
 describe("Coding standards — scope params on dispatch handlers", () => {

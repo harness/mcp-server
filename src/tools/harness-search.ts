@@ -9,6 +9,7 @@ import { createLogger } from "../utils/logger.js";
 import { sendProgress } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import type { ResourceScope } from "../registry/types.js";
+import { orgIdField, projectIdField, resourceScopeSchema } from "./input-schemas.js";
 import { searchOutputSchema } from "./output-schemas.js";
 import type { SearchManager } from "../search/index.js";
 import type { SearchResult } from "../search/types.js";
@@ -109,9 +110,9 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         query: z.string().describe("Search term"),
         resource_types: z.array(z.enum(listableTypes)).optional().describe("Types to search (defaults to all listable)"),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org and project"),
-        resource_scope: z.enum(["account", "org", "project"]).optional().describe("Scope to search. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url."),
-        org_id: z.string().optional().describe("Organization identifier (overrides default)"),
-        project_id: z.string().optional().describe("Project identifier (overrides default)"),
+        resource_scope: resourceScopeSchema,
+        org_id: orgIdField(registry.orgId),
+        project_id: projectIdField(registry.projectId),
         max_per_type: z.number().default(5).optional().describe("Max results per type"),
         compact: z.boolean().default(true).optional().describe("Strip verbose metadata (default true)"),
       },

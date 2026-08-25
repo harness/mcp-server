@@ -10,7 +10,7 @@ import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import type { SearchManager } from "../search/index.js";
 import { buildResourceIndexContent } from "../search/embedding-content.js";
 import { buildEntityDocumentId, buildEntityMetadata, resolveEntityScope } from "../search/entity-index.js";
-import { resourceTypeSchema } from "./input-schemas.js";
+import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { listOutputSchema } from "./output-schemas.js";
 
 export function registerListTool(server: McpServer, registry: Registry, client: HarnessClient, searchManager?: SearchManager): void {
@@ -23,13 +23,13 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
   server.registerTool(
     "harness_list",
     {
-      description: "List Harness resources with filtering and pagination. Accepts a Harness URL to auto-extract scope.",
+      description: "List Harness resources with filtering and pagination. Accepts a Harness URL to auto-extract scope. For project-scoped types, pass org_id and project_id on the first call unless the field descriptions name a configured default.",
       inputSchema: {
         resource_type: resourceTypeSchema(listableTypes).optional().describe("Resource type to list. Auto-detected from url."),
         url: z.string().optional().describe("Harness UI URL — auto-extracts org, project, and type"),
-        resource_scope: z.enum(["account", "org", "project"]).optional().describe("Scope to query. Use account for account-level resources and to omit org/project defaults; org injects only org; project injects org+project. Auto-detected from url."),
-        org_id: z.string().optional().describe("Organization identifier (overrides default)"),
-        project_id: z.string().optional().describe("Project identifier (overrides default)"),
+        resource_scope: resourceScopeSchema,
+        org_id: orgIdField(registry.orgId),
+        project_id: projectIdField(registry.projectId),
         page: z.number().default(0).optional().describe("Page number, 0-indexed"),
         size: z.number().min(1).max(100).default(20).optional().describe("Page size (1–100). Some resource types enforce a lower max (e.g. security_exemption max 50) — call harness_describe for per-resource limits."),
         search_term: z.string().optional().describe("Filter results by name or keyword"),

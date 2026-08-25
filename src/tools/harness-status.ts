@@ -10,6 +10,7 @@ import { createLogger } from "../utils/logger.js";
 import { sendProgress } from "../utils/progress.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString } from "../utils/type-guards.js";
+import { orgIdField, projectIdField } from "./input-schemas.js";
 import { statusOutputSchema } from "./output-schemas.js";
 
 const log = createLogger("status");
@@ -74,8 +75,8 @@ export function registerStatusTool(
     {
       description: "Get a live project health overview: recent failed executions, currently running executions, and recent deployment activity. You can pass a Harness URL to auto-extract org and project. Ideal first question: 'what's happening in my project right now?'",
       inputSchema: {
-        org_id: z.string().optional().describe("Organization identifier (overrides default)"),
-        project_id: z.string().optional().describe("Project identifier (overrides default)"),
+        org_id: orgIdField(registry.orgId),
+        project_id: projectIdField(registry.projectId),
         url: z.string().optional().describe("A Harness UI URL — org and project are extracted automatically"),
         limit: z.number().default(5).optional().describe("Max items per section (default 5, max 20)"),
       },
