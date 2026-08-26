@@ -29003,6 +29003,17 @@ const schema: Record<string, any> = {
                   "connectorRef": {
                     "type": "string"
                   },
+                  "llmConnectorRef": {
+                    "description": "Harness LLM connector reference for Codex authentication (OpenAI or Anthropic)",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
                   "imageTag": {
                     "type": "string"
                   },
@@ -29095,6 +29106,9 @@ const schema: Record<string, any> = {
                   },
                   "target": {
                     "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
+                  },
+                  "tool": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlOpenAiToolData"
                   }
                 }
               }
@@ -29135,6 +29149,17 @@ const schema: Record<string, any> = {
               },
               "connectorRef": {
                 "type": "string"
+              },
+              "llmConnectorRef": {
+                "description": "Harness LLM connector reference for Codex authentication (OpenAI or Anthropic)",
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
               },
               "imageTag": {
                 "type": "string"
@@ -29229,10 +29254,26 @@ const schema: Record<string, any> = {
               "target": {
                 "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
               },
+              "tool": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlOpenAiToolData"
+              },
               "description": {
                 "desc": "This is the description for OpenAiStepInfo"
               }
             }
+          },
+          "STOYamlOpenAiToolData": {
+            "title": "STOYamlOpenAiToolData",
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for STOYamlOpenAiToolData"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "MythosAgentStepInfo": {
             "title": "MythosAgentStepInfo",
@@ -29267,6 +29308,17 @@ const schema: Record<string, any> = {
                   },
                   "connectorRef": {
                     "type": "string"
+                  },
+                  "llmConnectorRef": {
+                    "description": "Harness LLM connector reference for Mythos Agent authentication (OpenAI or Anthropic)",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
                   },
                   "imageTag": {
                     "type": "string"
@@ -29394,6 +29446,17 @@ const schema: Record<string, any> = {
               },
               "connectorRef": {
                 "type": "string"
+              },
+              "llmConnectorRef": {
+                "description": "Harness LLM connector reference for Mythos Agent authentication (OpenAI or Anthropic)",
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
               },
               "imageTag": {
                 "type": "string"
@@ -66849,6 +66912,21 @@ const schema: Record<string, any> = {
                   "prodListenerRuleArn": {
                     "type": "string"
                   },
+                  "prodListenerRuleConfigs": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/pipeline/steps/cd/ProdListenerRuleConfig"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "sameAsAlreadyRunningInstances": {
                     "oneOf": [
                       {
@@ -66932,6 +67010,21 @@ const schema: Record<string, any> = {
               "prodListenerRuleArn": {
                 "type": "string"
               },
+              "prodListenerRuleConfigs": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/cd/ProdListenerRuleConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
               "sameAsAlreadyRunningInstances": {
                 "oneOf": [
                   {
@@ -66972,6 +67065,27 @@ const schema: Record<string, any> = {
                 "desc": "This is the description for EcsBlueGreenCreateServiceStepInfo"
               }
             }
+          },
+          "ProdListenerRuleConfig": {
+            "title": "ProdListenerRuleConfig",
+            "type": "object",
+            "required": [
+              "prodListenerRuleArn"
+            ],
+            "properties": {
+              "prodListenerRuleArn": {
+                "type": "string",
+                "pattern": "^(?=\\s*\\S).*$"
+              },
+              "stageTargetGroupArn": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string",
+                "desc": "This is the description for ProdListenerRuleConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "EcsUpgradeContainerStepNode": {
             "title": "EcsUpgradeContainerStepNode",
@@ -100250,6 +100364,21 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
+                  "ruleOverrides": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/pipeline/steps/cd/InheritRuleOverride"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "downsizeOldService": {
                     "oneOf": [
                       {
@@ -100280,6 +100409,39 @@ const schema: Record<string, any> = {
                 "desc": "This is the description for InheritEcsTrafficShiftSpec"
               }
             }
+          },
+          "InheritRuleOverride": {
+            "title": "InheritRuleOverride",
+            "type": "object",
+            "required": [
+              "listenerRuleArn"
+            ],
+            "properties": {
+              "listenerRuleArn": {
+                "type": "string",
+                "pattern": "^(?=\\s*\\S).*$"
+              },
+              "weightPercentage": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "type": "string",
+                "desc": "This is the description for InheritRuleOverride"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "StandAloneTrafficShiftRollbackStepNode": {
             "title": "StandAloneTrafficShiftRollbackStepNode",

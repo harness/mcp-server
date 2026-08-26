@@ -3547,7 +3547,9 @@ const schema: Record<string, any> = {
               "ecs",
               "asg",
               "aws-lambda",
-              "azure-container-apps"
+              "azure-container-apps",
+              "aws-agent-core",
+              "google-agent-runtime"
             ],
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
