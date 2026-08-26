@@ -383,6 +383,165 @@ describe("pipeline_v1 Git Experience mapping", () => {
     expect(call.body.git_details.is_harness_code_repo).toBe(true);
   });
 
+  it("throws when preflight finds REMOTE but git metadata is incomplete", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn().mockResolvedValueOnce({
+      identifier: "ci_build",
+      store_type: "REMOTE",
+      git_details: { branch_name: "main" },
+    });
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "pipeline_v1", "update", {
+        pipeline_id: "ci_build",
+        org_id: "PROD",
+        project_id: "Traceable",
+        body: yaml,
+      }),
+    ).rejects.toThrow(/Unable to resolve Git branch and current object\/commit IDs for remote pipeline_v1 update/);
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toEqual(expect.objectContaining({ method: "GET" }));
+  });
+
+  it("hydrates connector_ref from preflight GET for v1 remote updates", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        identifier: "ci_build",
+        git_details: {
+          branch_name: "main",
+          repo_name: "Pipelines",
+          file_path: ".harness/ci.yaml",
+          connector_ref: "account.git_conn",
+          object_id: "3576b403c93d5727a12d99fe055b29be41622a32",
+          commit_id: "c25a833a358bfabcf56c6fedf93ff08718f45d90",
+        },
+      })
+      .mockResolvedValueOnce({ identifier: "ci_build" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pipeline_v1", "update", {
+      pipeline_id: "ci_build",
+      org_id: "PROD",
+      project_id: "Traceable",
+      body: yaml,
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    const putCall = mockRequest.mock.calls[1]![0] as { body: { git_details: Record<string, string> } };
+    expect(putCall.body.git_details.connector_ref).toBe("account.git_conn");
+  });
+
+  it("preflights v1 updates using camelCase gitDetails from the GET response", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        identifier: "ci_build",
+        storeType: "REMOTE",
+        gitDetails: {
+          branchName: "main",
+          repoName: "Pipelines",
+          filePath: ".harness/ci.yaml",
+          objectId: "3576b403c93d5727a12d99fe055b29be41622a32",
+          commitId: "c25a833a358bfabcf56c6fedf93ff08718f45d90",
+        },
+      })
+      .mockResolvedValueOnce({ identifier: "ci_build" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pipeline_v1", "update", {
+      pipeline_id: "ci_build",
+      org_id: "PROD",
+      project_id: "Traceable",
+      body: yaml,
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    const putCall = mockRequest.mock.calls[1]![0] as { body: { git_details: Record<string, string> } };
+    expect(putCall.body.git_details).toEqual({
+      branch_name: "main",
+      file_path: ".harness/ci.yaml",
+      store_type: "REMOTE",
+      repo_name: "Pipelines",
+      last_object_id: "3576b403c93d5727a12d99fe055b29be41622a32",
+      last_commit_id: "c25a833a358bfabcf56c6fedf93ff08718f45d90",
+    });
+  });
+
+  it("maps base_branch into create body.git_details", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "ci_build" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pipeline_v1", "create", {
+      org_id: "PROD",
+      project_id: "Traceable",
+      store_type: "REMOTE",
+      repo_name: "Pipelines",
+      branch: "feature/ci",
+      base_branch: "main",
+      file_path: ".harness/ci.yaml",
+      body: { pipeline_yaml: yaml, identifier: "ci_build", name: "CI Build" },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { git_details: Record<string, string> } };
+    expect(call.body.git_details.base_branch).toBe("main");
+    expect(call.body.git_details.branch_name).toBe("feature/ci");
+  });
+
+  it("accepts quoted false for is_harness_code_repo", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "ci_build" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pipeline_v1", "update", {
+      pipeline_id: "ci_build",
+      org_id: "PROD",
+      project_id: "Traceable",
+      store_type: "REMOTE",
+      is_harness_code_repo: "false",
+      repo_name: "ext-repo",
+      branch: "main",
+      file_path: ".harness/ci.yaml",
+      last_object_id: "3576b403c93d5727a12d99fe055b29be41622a32",
+      last_commit_id: "c25a833a358bfabcf56c6fedf93ff08718f45d90",
+      body: yaml,
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { git_details: Record<string, unknown> } };
+    expect(call.body.git_details.is_harness_code_repo).toBe(false);
+  });
+
+  it("forwards connector_ref from update input into the preflight GET", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        identifier: "ci_build",
+        git_details: {
+          branch_name: "main",
+          repo_name: "Pipelines",
+          file_path: ".harness/ci.yaml",
+          object_id: "3576b403c93d5727a12d99fe055b29be41622a32",
+          commit_id: "c25a833a358bfabcf56c6fedf93ff08718f45d90",
+        },
+      })
+      .mockResolvedValueOnce({ identifier: "ci_build" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pipeline_v1", "update", {
+      pipeline_id: "ci_build",
+      org_id: "PROD",
+      project_id: "Traceable",
+      connector_ref: "account.explicit_conn",
+      body: yaml,
+    });
+
+    const getCall = mockRequest.mock.calls[0]![0] as { params?: Record<string, unknown> };
+    expect(getCall.params?.connector_ref).toBe("account.explicit_conn");
+  });
+
   it("does not echo the caller's store_type into the preflight GET", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
     const mockRequest = vi.fn()
