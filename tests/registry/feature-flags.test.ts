@@ -1209,6 +1209,20 @@ describe("fme_segment", () => {
     expect(firstRequest(mockRequest).params).toMatchObject({ status: "ACTIVE" });
   });
 
+  it("list: passes unmatched segment_type through without a local throw", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_segment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      segment_type: "not_a_kind",
+    });
+
+    expect(mockRequest).toHaveBeenCalled();
+    expect(firstRequest(mockRequest).params).toMatchObject({ segment_type: "not_a_kind" });
+  });
+
   it("list: rejects an invalid status without HTTP", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
@@ -1221,20 +1235,6 @@ describe("fme_segment", () => {
         status: "not_a_status",
       }),
     ).rejects.toThrow(/invalid status 'not_a_status'/i);
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("list: rejects an invalid segment_type without HTTP", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_segment", "list", {
-        org_id: "o1",
-        project_id: "p1",
-        segment_type: "not_a_kind",
-      }),
-    ).rejects.toThrow(/invalid segment_type 'not_a_kind'/i);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 

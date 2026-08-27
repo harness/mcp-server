@@ -46,6 +46,7 @@ const fmeSegmentTypeParamsSchema = {
   ],
 };
 
+/** List-query lifecycle filter (ACTIVE | ARCHIVED) — not a segment kind; kinds are FME_SEGMENT_KINDS. */
 const FME_SEGMENT_STATUSES = ["ACTIVE", "ARCHIVED"] as const;
 type FmeSegmentStatus = (typeof FME_SEGMENT_STATUSES)[number];
 
@@ -1460,8 +1461,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
       identifierFields: ["segment_name"],
       listFilterFields: [
-        { name: "segment_type", description: "Required. One kind per list call: STANDARD | LARGE | RULE_BASED.", enum: [...FME_SEGMENT_KINDS], required: true },
-        { name: "status", description: "Optional list filter: ACTIVE | ARCHIVED. Omit for the default.", enum: [...FME_SEGMENT_STATUSES] },
+        { name: "segment_type", description: "Required. One kind per list call: STANDARD | LARGE | RULE_BASED (case is canonicalized; unmatched values pass through to the API).", enum: [...FME_SEGMENT_KINDS], required: true },
+        { name: "status", description: "Optional lifecycle filter: ACTIVE | ARCHIVED (not a segment kind). Omit for the Java default.", enum: [...FME_SEGMENT_STATUSES] },
         { name: "offset", description: "Pagination offset", type: "number" },
         { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
       ],
@@ -1471,14 +1472,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_segment");
-            applyFmeSegmentTypeQuery(input, "list");
             applyFmeOptionalStatusQuery(input, "fme_segment", "list");
             return { path: "/fme/api/v4/segments" };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { segment_type: "segment_type", status: "status", offset: "offset", limit: "limit" },
           responseExtractor: passthrough,
-          description: "List segments of one kind. Requires filters.segment_type (STANDARD | LARGE | RULE_BASED). Optional filters.status (ACTIVE | ARCHIVED), offset, and limit.",
+          description: "List segments of one kind. Requires filters.segment_type (STANDARD | LARGE | RULE_BASED). Optional filters.status lifecycle (ACTIVE | ARCHIVED), offset, and limit.",
         },
         get: {
           method: "GET",
