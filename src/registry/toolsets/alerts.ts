@@ -128,11 +128,19 @@ export const alertsToolset: ToolsetDefinition = {
       scopeParams: MC_SCOPE,
       identifierFields: ["alert_id"],
       compactItem: compactAlert,
+      deepLinkTemplate:
+        "/ng/account/{accountId}/module/ir/orgs/{orgId}/projects/{projectId}/alerts/{prettyId}",
+      diagnosticHint:
+        "Alerts are created by external writers such as webhooks, not harness_create. "
+        + "Use harness_list(resource_type='alert', filters={status:['triggered']}) to triage, "
+        + "then harness_execute acknowledge/resolve/dismiss for lifecycle transitions rather than PATCH status. "
+        + "Impacted service, environment, and template filters are validated against the project registry; "
+        + "unrecognized values return an error rather than an empty list.",
       executeHint:
         "Use harness_execute(resource_type='alert', action='acknowledge'|'resolve'|'dismiss', resource_id='ALERT-123') "
         + "for lifecycle transitions. Do not PATCH status for acknowledge/resolve/dismiss.",
       listFilterFields: [
-        { name: "status", description: "Filter by alert status (multi-value, OR-combined)", enum: ["triggered", "acknowledged", "resolved", "dismissed"] },
+        { name: "status", description: "Filter by alert status (multi-value, OR-combined). Matching is case-insensitive, but responses return status uppercase (e.g. TRIGGERED) — compare case-insensitively when post-filtering results", enum: ["triggered", "acknowledged", "resolved", "dismissed"] },
         { name: "priority", description: "Filter by priority option id (multi-value, OR-combined)", enum: ["p1_critical", "p2_error", "p3_warning", "p4_info"] },
         { name: "impacted_service", description: "Filter by impacted Harness service identifier (multi-value, OR-combined). Validated against the project's registered services — an unrecognized value returns an error, not an empty list" },
         { name: "environment", description: "Filter by environment (multi-value, OR-combined). Validated against the project's registered environments, so it is not free text — an unrecognized value returns an error, not an empty list" },

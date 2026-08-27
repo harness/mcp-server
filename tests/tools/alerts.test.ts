@@ -84,6 +84,16 @@ describe("alert resource definition", () => {
       expect(priorityField?.description).toContain(id);
     }
   });
+
+  it("surfaces alert troubleshooting guidance and status response casing", () => {
+    const registry = new Registry(makeConfig());
+    const def = registry.getResource("alert");
+    const statusFilter = def.listFilterFields?.find((f) => f.name === "status");
+    expect(def.diagnosticHint).toContain("external writers");
+    expect(def.diagnosticHint).toContain("harness_execute");
+    expect(statusFilter?.description).toContain("responses return status uppercase");
+    expect(statusFilter?.description).toContain("case-insensitively");
+  });
 });
 
 describe("alert — harness_list", () => {
@@ -238,6 +248,14 @@ describe("alert — harness_get", () => {
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { path: string };
     expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/alerts/ALERT-42");
+  });
+
+  it("returns an openInHarness link for the alert", async () => {
+    const result = await server.call("harness_get", { resource_type: "alert", resource_id: "ALERT-42" });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/module/ir/orgs/default/projects/test-project/alerts/ALERT-42",
+    );
   });
 
   it("projects a stable shape and drops backend envelope/meta fields", async () => {
