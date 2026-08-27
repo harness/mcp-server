@@ -16060,6 +16060,22 @@ const schema: Record<string, any> = {
                     }
                   }
                 }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "ClaudeCodeSecurity"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/ClaudeCodeSecurityStepInfo"
+                    }
+                  }
+                }
               }
             ]
           },
@@ -29003,6 +29019,17 @@ const schema: Record<string, any> = {
                   "connectorRef": {
                     "type": "string"
                   },
+                  "llmConnectorRef": {
+                    "description": "Harness LLM connector reference for Codex authentication (OpenAI or Anthropic)",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
                   "imageTag": {
                     "type": "string"
                   },
@@ -29095,6 +29122,9 @@ const schema: Record<string, any> = {
                   },
                   "target": {
                     "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
+                  },
+                  "tool": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlOpenAiToolData"
                   }
                 }
               }
@@ -29135,6 +29165,17 @@ const schema: Record<string, any> = {
               },
               "connectorRef": {
                 "type": "string"
+              },
+              "llmConnectorRef": {
+                "description": "Harness LLM connector reference for Codex authentication (OpenAI or Anthropic)",
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
               },
               "imageTag": {
                 "type": "string"
@@ -29229,10 +29270,26 @@ const schema: Record<string, any> = {
               "target": {
                 "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
               },
+              "tool": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlOpenAiToolData"
+              },
               "description": {
                 "desc": "This is the description for OpenAiStepInfo"
               }
             }
+          },
+          "STOYamlOpenAiToolData": {
+            "title": "STOYamlOpenAiToolData",
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for STOYamlOpenAiToolData"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "MythosAgentStepInfo": {
             "title": "MythosAgentStepInfo",
@@ -29267,6 +29324,17 @@ const schema: Record<string, any> = {
                   },
                   "connectorRef": {
                     "type": "string"
+                  },
+                  "llmConnectorRef": {
+                    "description": "Harness LLM connector reference for Mythos Agent authentication (OpenAI or Anthropic)",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
                   },
                   "imageTag": {
                     "type": "string"
@@ -29395,6 +29463,17 @@ const schema: Record<string, any> = {
               "connectorRef": {
                 "type": "string"
               },
+              "llmConnectorRef": {
+                "description": "Harness LLM connector reference for Mythos Agent authentication (OpenAI or Anthropic)",
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
               "imageTag": {
                 "type": "string"
               },
@@ -29508,6 +29587,317 @@ const schema: Record<string, any> = {
               },
               "description": {
                 "desc": "This is the description for STOYamlMythosAgentToolData"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ClaudeCodeSecurityStepInfo": {
+            "title": "ClaudeCodeSecurityStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "config",
+                  "mode",
+                  "target"
+                ],
+                "properties": {
+                  "advanced": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlAdvancedSettings"
+                  },
+                  "auth": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlAuth"
+                  },
+                  "baseImageConnectorRefs": {
+                    "$ref": "#/definitions/pipeline/steps/ci/ParameterFieldListString"
+                  },
+                  "config": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "pr_scan"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "connectorRef": {
+                    "type": "string"
+                  },
+                  "llmConnectorRef": {
+                    "description": "Harness LLM connector reference for Claude Code Security authentication (Anthropic)",
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "imageTag": {
+                    "type": "string"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "ingestion": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlIngestion"
+                  },
+                  "mode": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "ingestion",
+                          "orchestration"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "outputVariables": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/pipeline/common/OutputNGVariable"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "privileged": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "runAsUser": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "settings": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "target": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
+                  },
+                  "tool": {
+                    "$ref": "#/definitions/pipeline/steps/common/STOYamlClaudeCodeSecurityToolData"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "config",
+              "mode",
+              "target"
+            ],
+            "properties": {
+              "advanced": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlAdvancedSettings"
+              },
+              "auth": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlAuth"
+              },
+              "baseImageConnectorRefs": {
+                "$ref": "#/definitions/pipeline/steps/ci/ParameterFieldListString"
+              },
+              "config": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "pr_scan"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "connectorRef": {
+                "type": "string"
+              },
+              "llmConnectorRef": {
+                "description": "Harness LLM connector reference for Claude Code Security authentication (Anthropic)",
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "imageTag": {
+                "type": "string"
+              },
+              "imagePullPolicy": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Always",
+                      "Never",
+                      "IfNotPresent"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "ingestion": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlIngestion"
+              },
+              "mode": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "ingestion",
+                      "orchestration"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "outputVariables": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/OutputNGVariable"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "privileged": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "runAsUser": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "settings": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "target": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlTarget"
+              },
+              "tool": {
+                "$ref": "#/definitions/pipeline/steps/common/STOYamlClaudeCodeSecurityToolData"
+              },
+              "description": {
+                "desc": "This is the description for ClaudeCodeSecurityStepInfo"
+              }
+            }
+          },
+          "STOYamlClaudeCodeSecurityToolData": {
+            "title": "STOYamlClaudeCodeSecurityToolData",
+            "type": "object",
+            "properties": {
+              "model": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for STOYamlClaudeCodeSecurityToolData"
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
@@ -29696,6 +30086,196 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/steps/common/SnykStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "GitleaksScanNode": {
+            "title": "GitleaksScanNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for GitleaksScanNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Gitleaks"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Gitleaks"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/GitleaksStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "SonarqubeScanNode": {
+            "title": "SonarqubeScanNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for SonarqubeScanNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "Sonarqube"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "Sonarqube"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/SonarqubeStepInfo"
                     }
                   }
                 }
@@ -40310,101 +40890,6 @@ const schema: Record<string, any> = {
               }
             ]
           },
-          "GitleaksScanNode": {
-            "title": "GitleaksScanNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "spec",
-              "type"
-            ],
-            "properties": {
-              "description": {
-                "type": "string",
-                "desc": "This is the description for GitleaksScanNode"
-              },
-              "enforce": {
-                "$ref": "#/definitions/pipeline/common/PolicyConfig"
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "timeout": {
-                "type": "string",
-                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Gitleaks"
-                ]
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Gitleaks"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/steps/common/GitleaksStepInfo"
-                    }
-                  }
-                }
-              }
-            ]
-          },
           "GrypeScanNode": {
             "title": "GrypeScanNode",
             "type": "object",
@@ -42115,101 +42600,6 @@ const schema: Record<string, any> = {
               }
             ]
           },
-          "SonarqubeScanNode": {
-            "title": "SonarqubeScanNode",
-            "type": "object",
-            "required": [
-              "identifier",
-              "name",
-              "spec",
-              "type"
-            ],
-            "properties": {
-              "description": {
-                "type": "string",
-                "desc": "This is the description for SonarqubeScanNode"
-              },
-              "enforce": {
-                "$ref": "#/definitions/pipeline/common/PolicyConfig"
-              },
-              "failureStrategies": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "identifier": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-              },
-              "name": {
-                "type": "string",
-                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-              },
-              "strategy": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "timeout": {
-                "type": "string",
-                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "Sonarqube"
-                ]
-              },
-              "when": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>$",
-                    "minLength": 1
-                  }
-                ]
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "type": {
-                      "const": "Sonarqube"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/steps/common/SonarqubeStepInfo"
-                    }
-                  }
-                }
-              }
-            ]
-          },
           "SysdigScanNode": {
             "title": "SysdigScanNode",
             "type": "object",
@@ -43341,6 +43731,101 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/steps/common/MythosAgentStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "ClaudeCodeSecurityNode": {
+            "title": "ClaudeCodeSecurityNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for ClaudeCodeSecurityNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "ClaudeCodeSecurity"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "ClaudeCodeSecurity"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/ClaudeCodeSecurityStepInfo"
                     }
                   }
                 }
@@ -66849,6 +67334,21 @@ const schema: Record<string, any> = {
                   "prodListenerRuleArn": {
                     "type": "string"
                   },
+                  "prodListenerRuleConfigs": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/pipeline/steps/cd/ProdListenerRuleConfig"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "sameAsAlreadyRunningInstances": {
                     "oneOf": [
                       {
@@ -66932,6 +67432,21 @@ const schema: Record<string, any> = {
               "prodListenerRuleArn": {
                 "type": "string"
               },
+              "prodListenerRuleConfigs": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/cd/ProdListenerRuleConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
               "sameAsAlreadyRunningInstances": {
                 "oneOf": [
                   {
@@ -66972,6 +67487,27 @@ const schema: Record<string, any> = {
                 "desc": "This is the description for EcsBlueGreenCreateServiceStepInfo"
               }
             }
+          },
+          "ProdListenerRuleConfig": {
+            "title": "ProdListenerRuleConfig",
+            "type": "object",
+            "required": [
+              "prodListenerRuleArn"
+            ],
+            "properties": {
+              "prodListenerRuleArn": {
+                "type": "string",
+                "pattern": "^(?=\\s*\\S).*$"
+              },
+              "stageTargetGroupArn": {
+                "type": "string"
+              },
+              "description": {
+                "type": "string",
+                "desc": "This is the description for ProdListenerRuleConfig"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "EcsUpgradeContainerStepNode": {
             "title": "EcsUpgradeContainerStepNode",
@@ -100250,6 +100786,21 @@ const schema: Record<string, any> = {
                       }
                     ]
                   },
+                  "ruleOverrides": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/pipeline/steps/cd/InheritRuleOverride"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "downsizeOldService": {
                     "oneOf": [
                       {
@@ -100280,6 +100831,39 @@ const schema: Record<string, any> = {
                 "desc": "This is the description for InheritEcsTrafficShiftSpec"
               }
             }
+          },
+          "InheritRuleOverride": {
+            "title": "InheritRuleOverride",
+            "type": "object",
+            "required": [
+              "listenerRuleArn"
+            ],
+            "properties": {
+              "listenerRuleArn": {
+                "type": "string",
+                "pattern": "^(?=\\s*\\S).*$"
+              },
+              "weightPercentage": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "type": "string",
+                "desc": "This is the description for InheritRuleOverride"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "StandAloneTrafficShiftRollbackStepNode": {
             "title": "StandAloneTrafficShiftRollbackStepNode",
@@ -108230,7 +108814,9 @@ const schema: Record<string, any> = {
                   "AzureContainerApps",
                   "Salesforce",
                   "GoogleManagedInstanceGroup",
-                  "AiAgent"
+                  "AiAgent",
+                  "AwsAgentCore",
+                  "GoogleAgentRuntime"
                 ]
               },
               "environment": {
@@ -112759,7 +113345,9 @@ const schema: Record<string, any> = {
                   "AzureContainerApps",
                   "Salesforce",
                   "GoogleManagedInstanceGroup",
-                  "AiAgent"
+                  "AiAgent",
+                  "AwsAgentCore",
+                  "GoogleAgentRuntime"
                 ]
               },
               "description": {
@@ -113084,6 +113672,38 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/stages/cd/AiAgentServiceSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "AwsAgentCore"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/AwsAgentCoreServiceSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "GoogleAgentRuntime"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/GoogleAgentRuntimeServiceSpec"
                     }
                   }
                 }
@@ -117605,6 +118225,72 @@ const schema: Record<string, any> = {
               }
             ]
           },
+          "AwsAgentCoreServiceSpec": {
+            "title": "AwsAgentCoreServiceSpec",
+            "type": "object",
+            "required": [
+              "source",
+              "executionRoleArn"
+            ],
+            "properties": {
+              "configVariables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "source": {
+                "$ref": "#/definitions/pipeline/stages/cd/AwsCoreAgentSource"
+              },
+              "executionRoleArn": {
+                "type": "string"
+              },
+              "manifests": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/steps/cd/ManifestConfigWrapper"
+                }
+              },
+              "description": {
+                "desc": "This is the description for AwsAgentCoreServiceSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "GoogleAgentRuntimeServiceSpec": {
+            "title": "GoogleAgentRuntimeServiceSpec",
+            "type": "object",
+            "required": [
+              "source"
+            ],
+            "properties": {
+              "configVariables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "variables": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/definitions/pipeline/common/NGVariable"
+                }
+              },
+              "source": {
+                "$ref": "#/definitions/pipeline/stages/cd/GoogleAgentSource"
+              },
+              "description": {
+                "desc": "This is the description for GoogleAgentRuntimeServiceSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "StageOverridesConfig": {
             "title": "StageOverridesConfig",
             "type": "object",
@@ -118583,6 +119269,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/MythosAgentNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/ClaudeCodeSecurityNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
                   },
                   {
@@ -119359,6 +120048,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/MythosAgentNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/ClaudeCodeSecurityNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaComplianceStepNode"

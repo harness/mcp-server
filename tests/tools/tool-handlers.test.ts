@@ -1224,6 +1224,7 @@ describe("harness_update", () => {
       resource_type: "pipeline",
       resource_id: "my-pipe",
       body: { yamlPipeline: "pipeline:\n  name: Updated" },
+      params: { store_type: "INLINE" },
     });
     expect(result.isError).toBeUndefined();
   });
@@ -1233,6 +1234,7 @@ describe("harness_update", () => {
       resource_type: "pipeline",
       resource_id: "my-pipe",
       body: { yamlPipeline: "pipeline:\n  name: Updated" },
+      params: { store_type: "INLINE" },
     });
     expect(result.isError).toBeUndefined();
     expect(mockRequest).toHaveBeenCalledOnce();

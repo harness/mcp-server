@@ -2536,6 +2536,11 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
+              },
+              "permissions": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "scoped permissions definition at stage"
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
@@ -3350,7 +3355,9 @@ const schema: Record<string, any> = {
               "ecs",
               "asg",
               "aws-lambda",
-              "azure-container-apps"
+              "azure-container-apps",
+              "aws-agent-core",
+              "google-agent-runtime"
             ],
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
@@ -3447,7 +3454,7 @@ const schema: Record<string, any> = {
                 ],
                 "properties": {
                   "group": {
-                    "description": "Environment group configuration.",
+                    "description": "Environment group configuration, or an expression (e.g. <+input>).",
                     "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentGroup"
                   },
                   "parallel": {
@@ -3724,38 +3731,45 @@ const schema: Record<string, any> = {
           },
           "EnvironmentGroup": {
             "title": "EnvironmentGroup",
-            "description": "Environment group configuration.",
-            "type": "object",
-            "required": [
-              "id"
-            ],
-            "properties": {
-              "id": {
-                "description": "Environment group identifier.",
-                "type": "string"
-              },
-              "parallel": {
-                "description": "Execute environments in parallel (all at once). Defaults to false, so environments run one at a time (serially) unless set to true.",
-                "oneOf": [
-                  {
-                    "type": "boolean",
-                    "default": false
+            "description": "Environment group configuration, or an expression.",
+            "oneOf": [
+              {
+                "type": "object",
+                "required": [
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "description": "Environment group identifier.",
+                    "type": "string"
                   },
-                  {
-                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  "parallel": {
+                    "description": "Execute environments in parallel (all at once). Defaults to false, so environments run one at a time (serially) unless set to true.",
+                    "oneOf": [
+                      {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline_v1/common/Expression"
+                      }
+                    ]
+                  },
+                  "items": {
+                    "description": "List of environments from the group.",
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentItems"
+                  },
+                  "filters": {
+                    "description": "Filters for selecting environments and infrastructures.",
+                    "$ref": "#/definitions/pipeline_v1/stages/unified/Filters"
                   }
-                ]
+                },
+                "additionalProperties": false
               },
-              "items": {
-                "description": "List of environments from the group.",
-                "$ref": "#/definitions/pipeline_v1/stages/unified/EnvironmentItems"
-              },
-              "filters": {
-                "description": "Filters for selecting environments and infrastructures.",
-                "$ref": "#/definitions/pipeline_v1/stages/unified/Filters"
+              {
+                "$ref": "#/definitions/pipeline_v1/common/Expression"
               }
-            },
-            "additionalProperties": false,
+            ],
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "CachingV1": {
@@ -4673,6 +4687,13 @@ const schema: Record<string, any> = {
                       "fallback": {
                         "description": "Fallback URL if primary source fails.",
                         "type": "string"
+                      },
+                      "entrypoint": {
+                        "description": "Entrypoint command and arguments for the downloaded binary.",
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
                       }
                     }
                   },

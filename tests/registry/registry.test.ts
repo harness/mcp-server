@@ -1068,6 +1068,7 @@ describe("Registry", () => {
         pipeline_id: "test_pipeline",
         project_id: "my-project",
         org_id: "default",
+        store_type: "INLINE",
         body: { yamlPipeline: yaml },
       })) as Record<string, unknown>;
 
@@ -1092,6 +1093,7 @@ describe("Registry", () => {
         pipeline_id: "x",
         project_id: "p",
         org_id: "default",
+        store_type: "INLINE",
         body,
       });
 

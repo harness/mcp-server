@@ -1,5 +1,15 @@
 # Lessons Learned
 
+## Generated Docs Checks Must Run After Build Completes
+- **Issue**: Running `pnpm build` and `pnpm docs:check` concurrently lets the docs checker read a partially rewritten `build/`, producing false resource-count and operation-table drift even when README is current.
+- **Fix**: Complete `pnpm build` first, then run `pnpm docs:check` or `pnpm docs:generate` sequentially. A sequential regenerate after the false failure reported README already up to date.
+- **Rule**: Never parallelize build with commands that consume `build/`; fresh-build ordering is a correctness requirement, not only a CI convention.
+
+## Full Vitest Runs Should Not Compete With Overlapping Suites
+- **Issue**: Running `pnpm test` concurrently with `pnpm standards:check` caused the timing-sensitive semantic-search manager test to exceed its 5-second timeout even though the same full suite passed immediately when run alone.
+- **Fix**: Run the full Vitest suite by itself; use parallelism for independent non-Vitest checks instead of launching overlapping test pools.
+- **Rule**: Treat a timeout under concurrent local test load as resource contention until an isolated rerun reproduces it, and report both results.
+
 ## Production Shrinkwraps Need a Production Staging Manifest
 - **Issue**: `npm-shrinkwrap.json` intentionally captures the production dependency tree and npm-native mirrors of the repository's pnpm security overrides. Running `npm ci --omit=dev` against that shrinkwrap and the full development `package.json` still makes npm validate missing dev dependencies and ignore `pnpm.overrides`, so MCPB staging fails even though the release shrinkwrap check is healthy.
 - **Fix**: Generate a minimal staging `package.json` with runtime dependencies, optional dependencies, and transitive pnpm overrides mirrored into npm's `overrides`, then run `npm ci` against the checked-in shrinkwrap.
