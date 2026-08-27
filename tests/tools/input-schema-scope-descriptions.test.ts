@@ -89,6 +89,32 @@ describe("scope field descriptions", () => {
       describeScopeHint({ scopeOptional: false, hasOrgDefault: true, hasProjectDefault: true }),
     ).toContain("configured org/project defaults");
   });
+
+  it("harness_describe scopeHint for scopeOptional resources forbids default fallback", () => {
+    const hint = describeScopeHint({
+      scopeOptional: true,
+      hasOrgDefault: true,
+      hasProjectDefault: true,
+    });
+    expect(hint).toContain("no fallback to configured defaults");
+    expect(hint).not.toContain("configured org/project defaults");
+  });
+
+  it("harness_describe scopeHint requires explicit ids when only one default is configured", () => {
+    for (const partial of [
+      { hasOrgDefault: true, hasProjectDefault: false },
+      { hasOrgDefault: false, hasProjectDefault: true },
+    ]) {
+      expect(
+        describeScopeHint({ scopeOptional: false, ...partial }),
+      ).toContain("no configured org/project default");
+    }
+  });
+
+  it("trims whitespace before treating env defaults as configured", () => {
+    expect(orgIdDescription("  my-org  ")).toContain("overrides configured default 'my-org'");
+    expect(projectIdDescription("  my-project  ")).toContain("overrides configured default 'my-project'");
+  });
 });
 
 describe("registered tool schemas reflect session defaults", () => {
@@ -136,5 +162,69 @@ describe("registered tool schemas reflect session defaults", () => {
     const data = JSON.parse(result.content[0]!.text) as { scopeHint?: string; description?: string };
     expect(data.scopeHint).toContain("no configured org/project default");
     expect(data.description).toContain("Default list/get/execute scope is project");
+  });
+
+  const NO_DEFAULT_CONFIG = makeConfig({ HARNESS_ORG: undefined, HARNESS_PROJECT: undefined });
+
+  const scopeAwareTools = [
+    {
+      name: "harness_get",
+      register: async (server: ReturnType<typeof makeMcpServer>, registry: Registry, client: HarnessClient) => {
+        const { registerGetTool } = await import("../../src/tools/harness-get.js");
+        registerGetTool(server as never, registry, client);
+      },
+    },
+    {
+      name: "harness_create",
+      register: async (server: ReturnType<typeof makeMcpServer>, registry: Registry, client: HarnessClient) => {
+        const { registerCreateTool } = await import("../../src/tools/harness-create.js");
+        registerCreateTool(server as never, registry, client, NO_DEFAULT_CONFIG);
+      },
+    },
+    {
+      name: "harness_update",
+      register: async (server: ReturnType<typeof makeMcpServer>, registry: Registry, client: HarnessClient) => {
+        const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+        registerUpdateTool(server as never, registry, client, NO_DEFAULT_CONFIG);
+      },
+    },
+    {
+      name: "harness_delete",
+      register: async (server: ReturnType<typeof makeMcpServer>, registry: Registry, client: HarnessClient) => {
+        const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+        registerDeleteTool(server as never, registry, client, NO_DEFAULT_CONFIG);
+      },
+    },
+    {
+      name: "harness_search",
+      register: async (server: ReturnType<typeof makeMcpServer>, registry: Registry, client: HarnessClient) => {
+        const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+        registerSearchTool(server as never, registry, client);
+      },
+    },
+    {
+      name: "harness_status",
+      register: async (server: ReturnType<typeof makeMcpServer>, registry: Registry, client: HarnessClient) => {
+        const { registerStatusTool } = await import("../../src/tools/harness-status.js");
+        registerStatusTool(server as never, registry, client, NO_DEFAULT_CONFIG);
+      },
+    },
+    {
+      name: "harness_diagnose",
+      register: async (server: ReturnType<typeof makeMcpServer>, registry: Registry, client: HarnessClient) => {
+        const { registerDiagnoseTool } = await import("../../src/tools/harness-diagnose.js");
+        registerDiagnoseTool(server as never, registry, client, NO_DEFAULT_CONFIG);
+      },
+    },
+  ] as const;
+
+  it.each(scopeAwareTools)("$name warns when org/project defaults are unset", async ({ name, register }) => {
+    const registry = new Registry(NO_DEFAULT_CONFIG);
+    const server = makeMcpServer();
+    await register(server, registry, client);
+
+    const schema = server.schema(name).inputSchema;
+    expect(schema.org_id?.description).toContain("no configured default");
+    expect(schema.project_id?.description).toContain("no configured default");
   });
 });
