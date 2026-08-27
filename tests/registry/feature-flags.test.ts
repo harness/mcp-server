@@ -1195,18 +1195,47 @@ describe("fme_segment", () => {
     expect(firstRequest(mockRequest).params).toMatchObject({ segment_type: "STANDARD" });
   });
 
-  it("list: passes unmatched segment_type through without a local throw", async () => {
+  it("list: canonicalizes lowercase status to ACTIVE", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "fme_segment", "list", {
       org_id: "o1",
       project_id: "p1",
-      segment_type: "not_a_kind",
+      segment_type: "STANDARD",
+      status: "active",
     });
 
-    expect(mockRequest).toHaveBeenCalled();
-    expect(firstRequest(mockRequest).params).toMatchObject({ segment_type: "not_a_kind" });
+    expect(firstRequest(mockRequest).params).toMatchObject({ status: "ACTIVE" });
+  });
+
+  it("list: rejects an invalid status without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment", "list", {
+        org_id: "o1",
+        project_id: "p1",
+        segment_type: "STANDARD",
+        status: "not_a_status",
+      }),
+    ).rejects.toThrow(/invalid status 'not_a_status'/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: rejects an invalid segment_type without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment", "list", {
+        org_id: "o1",
+        project_id: "p1",
+        segment_type: "not_a_kind",
+      }),
+    ).rejects.toThrow(/invalid segment_type 'not_a_kind'/i);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("list: throws when segment_type is missing and does not call the API", async () => {
@@ -1235,7 +1264,7 @@ describe("fme_segment", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("get: routes to /fme/api/v4/segments/{segment_name}", async () => {
+  it("get: routes to /fme/api/v4/segments/{segment_name} with segment_type", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1243,6 +1272,7 @@ describe("fme_segment", () => {
       org_id: "o1",
       project_id: "p1",
       segment_name: "seg1",
+      segment_type: "STANDARD",
     });
 
     const req = firstRequest(mockRequest);
@@ -1251,7 +1281,41 @@ describe("fme_segment", () => {
       account_id: "test-account",
       organization_identifier: "o1",
       project_identifier: "p1",
+      segment_type: "STANDARD",
     });
+  });
+
+  it.each(["get", "update", "delete"] as const)(
+    "%s: rejects an invalid segment_type without HTTP",
+    async (operation) => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await expect(
+        registry.dispatch(client, "fme_segment", operation, {
+          org_id: "o1",
+          project_id: "p1",
+          segment_name: "seg1",
+          segment_type: "not_a_kind",
+          body: operation === "update" ? { description: "x" } : undefined,
+        }),
+      ).rejects.toThrow(/invalid segment_type 'not_a_kind'/i);
+      expect(mockRequest).not.toHaveBeenCalled();
+    },
+  );
+
+  it("get: throws when segment_type is missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment", "get", {
+        org_id: "o1",
+        project_id: "p1",
+        segment_name: "seg1",
+      }),
+    ).rejects.toThrow(/segment_type/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("get: throws when segment_name missing", async () => {
@@ -1262,12 +1326,13 @@ describe("fme_segment", () => {
       registry.dispatch(client, "fme_segment", "get", {
         org_id: "o1",
         project_id: "p1",
+        segment_type: "STANDARD",
       }),
     ).rejects.toThrow(/segment_name/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("delete: routes to /fme/api/v4/segments/{segment_name}", async () => {
+  it("delete: routes to /fme/api/v4/segments/{segment_name} with segment_type", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1275,6 +1340,7 @@ describe("fme_segment", () => {
       org_id: "o1",
       project_id: "p1",
       segment_name: "seg1",
+      segment_type: "STANDARD",
     });
 
     const req = firstRequest(mockRequest);
@@ -1283,7 +1349,22 @@ describe("fme_segment", () => {
       account_id: "test-account",
       organization_identifier: "o1",
       project_identifier: "p1",
+      segment_type: "STANDARD",
     });
+  });
+
+  it("delete: throws when segment_type is missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment", "delete", {
+        org_id: "o1",
+        project_id: "p1",
+        segment_name: "seg1",
+      }),
+    ).rejects.toThrow(/segment_type/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("delete: throws when segment_name missing", async () => {
@@ -1291,7 +1372,11 @@ describe("fme_segment", () => {
     const client = makeClient(mockRequest);
 
     await expect(
-      registry.dispatch(client, "fme_segment", "delete", { org_id: "o1", project_id: "p1" }),
+      registry.dispatch(client, "fme_segment", "delete", {
+        org_id: "o1",
+        project_id: "p1",
+        segment_type: "STANDARD",
+      }),
     ).rejects.toThrow(/segment_name/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
@@ -1303,7 +1388,7 @@ describe("fme_segment", () => {
     await registry.dispatch(client, "fme_segment", "create", {
       org_id: "o1",
       project_id: "p1",
-      body: { name: "x", type: "standard", trafficType: "user", tags: ["a"] },
+      body: { name: "x", segmentType: "STANDARD", trafficType: "user", tags: ["a"] },
     });
 
     const req = firstRequest(mockRequest);
@@ -1342,7 +1427,7 @@ describe("fme_segment", () => {
     expect(body).not.toHaveProperty("type");
   });
 
-  it("create: rejects an invalid type value", async () => {
+  it("create: body.type alone is not accepted — segmentType is required", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1352,7 +1437,7 @@ describe("fme_segment", () => {
         project_id: "p1",
         body: { name: "x", type: "bogus", trafficType: "user" },
       }),
-    ).rejects.toThrow(/invalid type 'bogus'/i);
+    ).rejects.toThrow(/segmentType is required/i);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
@@ -1383,7 +1468,7 @@ describe("fme_segment", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create: missing both segmentType and type throws before HTTP", async () => {
+  it("create: missing segmentType throws before HTTP", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1397,7 +1482,21 @@ describe("fme_segment", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create: both present with the same kind is allowed", async () => {
+  it("create: body.traffic_type alone is not accepted — trafficType is required", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: { name: "x", traffic_type: "user", segmentType: "STANDARD" },
+      }),
+    ).rejects.toThrow(/trafficType/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: extra body.type is omitted from the wire body", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -1410,20 +1509,6 @@ describe("fme_segment", () => {
     const body = firstRequest(mockRequest).body as Record<string, unknown>;
     expect(body).toEqual({ name: "x", trafficType: "user", segmentType: "STANDARD" });
     expect(body).not.toHaveProperty("type");
-  });
-
-  it("create: both present with conflicting kinds throws without HTTP", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_segment", "create", {
-        org_id: "o1",
-        project_id: "p1",
-        body: { name: "x", trafficType: "user", segmentType: "LARGE", type: "standard" },
-      }),
-    ).rejects.toThrow(/conflict/i);
-    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("create: missing trafficType surfaces as a missing-required-field error", async () => {
@@ -1881,6 +1966,21 @@ describe("fme_segment_definition", () => {
       project_identifier: "p1",
       environment_id: "e1",
     });
+  });
+
+  it("list: rejects an invalid status without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_segment_definition", "list", {
+        org_id: "o1",
+        project_id: "p1",
+        environment_id: "e1",
+        status: "bogus",
+      }),
+    ).rejects.toThrow(/invalid status 'bogus'/i);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("list: throws when org_id/project_id missing", async () => {

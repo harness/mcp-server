@@ -66,6 +66,7 @@ describe("fme_segment remaining native update", () => {
     await registry.dispatch(client, "fme_segment", "update", {
       ...nativeScope,
       segment_name: "seg1",
+      segment_type: "STANDARD",
       body: { description: "updated", tags: ["beta"], owners: [{ type: "USER", email: "a@b.c" }] },
     });
 
@@ -77,6 +78,7 @@ describe("fme_segment remaining native update", () => {
       account_id: "test-account",
       organization_identifier: "o1",
       project_identifier: "p1",
+      segment_type: "STANDARD",
     });
     expect(request.body).toEqual({
       description: "updated",
@@ -92,24 +94,47 @@ describe("fme_segment remaining native update", () => {
     await registry.dispatch(client, "fme_segment", "update", {
       ...nativeScope,
       segment_name: "seg1",
+      segment_type: "standard",
       body: { description: null, tags: [] },
     });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({ segment_type: "STANDARD" });
 
     expect(firstRequest(mockRequest).body).toEqual({ description: null, tags: [] });
   });
 
-  it("rejects workspace_id because fme_segment is Harness-native only", async () => {
+  it.each(["list", "get", "create", "update", "delete"] as const)(
+    "rejects workspace_id on %s because fme_segment is Harness-native only",
+    async (operation) => {
+      const client = makeClient();
+      const input: Record<string, unknown> = {
+        workspace_id: "ws1",
+        segment_name: "seg1",
+        segment_type: "STANDARD",
+      };
+      if (operation === "create") {
+        input.body = { name: "x", trafficType: "user", segmentType: "STANDARD" };
+      }
+      if (operation === "update") {
+        input.body = { description: "x" };
+      }
+
+      await expect(registry.dispatch(client, "fme_segment", operation, input)).rejects.toThrow(
+        "fme_segment: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.",
+      );
+    },
+  );
+
+  it("rejects update when segment_type is missing", async () => {
     const client = makeClient();
 
     await expect(
       registry.dispatch(client, "fme_segment", "update", {
-        workspace_id: "ws1",
+        ...nativeScope,
         segment_name: "seg1",
         body: { description: "x" },
       }),
-    ).rejects.toThrow(
-      "fme_segment: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.",
-    );
+    ).rejects.toThrow(/segment_type/);
   });
 });
 
