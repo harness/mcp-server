@@ -1476,7 +1476,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
-          description: "Get a segment by name. The backend STANDARD-store lookup 404s for LARGE/RULE_BASED names.",
+          description: "Get a segment by name.",
         },
         delete: {
           method: "DELETE",
@@ -1491,7 +1491,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description:
-            "Delete a segment by name. The backend STANDARD-store lookup 404s for LARGE/RULE_BASED names. Returns 400 hasDependents if any environment definition or flag still references it — delete definitions (after clearing keys) first.",
+            "Delete a segment by name. Returns 400 hasDependents if any environment definition or flag still references it — delete definitions (after clearing keys) first.",
         },
         create: {
           method: "POST",
@@ -1543,7 +1543,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           bodySchema: fmeSegmentUpdateSchema,
           description:
-            "Update a segment's description, tags, and/or owners via JSON Merge Patch (RFC 7396). Harness-native only (org_id+project_id). The backend STANDARD-store lookup 404s for LARGE/RULE_BASED names. Omit a field to leave it unchanged; set description/tags/owners to null (or [] for tags/owners) to clear.",
+            "Update a segment's description, tags, and/or owners via JSON Merge Patch (RFC 7396). Harness-native only (org_id+project_id). Omit a field to leave it unchanged; set description/tags/owners to null (or [] for tags/owners) to clear.",
         },
       },
     },
