@@ -1,21 +1,5 @@
 # Harness MCP Server — Task Tracking
 
-## PR #868 review follow-up
-- [x] Add alert deep-link and diagnostic guidance metadata
-- [x] Align alert status filter documentation with response casing
-- [x] Add focused metadata and deep-link regressions
-- [x] Run focused tests, typecheck, and standards checks
-- [x] Commit and push the review follow-up
-
-### Plan
-- Keep `priority` and `commsLinks` pass-through behavior unchanged, honoring the author’s explicit rejection of nested projection and matching the incident resource.
-- Add only the actionable resource metadata requested by review, with handler-level assertions that `openInHarness` is emitted.
-
-### Review
-- Added an alert `deepLinkTemplate` using Mission Control’s `orgId` / `projectId` scope keys, plus a handler-level `openInHarness` regression.
-- Added `diagnosticHint` guidance and clarified that status matching is case-insensitive while response values are uppercase.
-- Focused alert/URL tests (72), typecheck, standards checks (77), and diff validation pass.
-
 ## OPA policy multi-scope (this session)
 - [x] Add `supportedScopes: ["account", "org", "project"]` + description hints for `policy` and `policy_set`
 - [x] Extend governance tests for supportedScopes and `resource_scope` query-param dispatch
