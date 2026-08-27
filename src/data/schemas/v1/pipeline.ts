@@ -2536,6 +2536,11 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline_v1/common/Expression"
                   }
                 ]
+              },
+              "permissions": {
+                "type": "object",
+                "additionalProperties": true,
+                "description": "scoped permissions definition at stage"
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
