@@ -138,6 +138,25 @@ describe("alert — harness_list", () => {
     expect(callArgs.params.sortField).toBe("CREATED_AT");
   });
 
+  // harness_search dispatches list with search_term set to the query. Without a
+  // mapping the term was dropped and the caller got an unfiltered page back,
+  // which reads as "these are your matches".
+  it("maps the top-level search_term to the text query param", async () => {
+    await server.call("harness_list", { resource_type: "alert", search_term: "kafka lag" });
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.text).toBe("kafka lag");
+  });
+
+  it("lets an explicit text filter win over search_term", async () => {
+    await server.call("harness_list", {
+      resource_type: "alert",
+      search_term: "from-search",
+      filters: { text: "from-filter" },
+    });
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.text).toBe("from-filter");
+  });
+
   it("compacts list items: keeps prettyId/priority, replaces keyEvents with count", async () => {
     mockRequest.mockResolvedValueOnce({
       entities: [{
@@ -162,6 +181,32 @@ describe("alert — harness_list", () => {
     expect(item.impactedServices).toEqual(["svc-a"]);
     expect(item.keyEvents).toBe(2);
     expect(item).not.toHaveProperty("__internalMeta");
+  });
+
+  it("keeps a short description verbatim in list view", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{ prettyId: "ALERT-1", description: "short" }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "alert" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]!.description).toBe("short");
+  });
+
+  // Ingested alerts carry ~1-2KB of webhook boilerplate here, which dominates the
+  // payload once multiplied by the page size.
+  it("truncates a long description in list view and points at harness_get", async () => {
+    const long = "x".repeat(1500);
+    mockRequest.mockResolvedValueOnce({
+      entities: [{ prettyId: "ALERT-1", description: long }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "alert" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    const description = data.items[0]!.description as string;
+    expect(description.length).toBeLessThan(long.length);
+    expect(description).toContain("harness_get");
+    expect(description.startsWith("x".repeat(400))).toBe(true);
   });
 });
 
@@ -205,6 +250,14 @@ describe("alert — harness_get", () => {
     expect(data.keyEvents).toEqual([{ timestamp: 1, status: "TRIGGERED", details: "looking" }]);
     expect(data).not.toHaveProperty("__internalMeta");
     expect(data).not.toHaveProperty("correlationId");
+  });
+
+  it("keeps the full description in the detail view", async () => {
+    const long = "x".repeat(1500);
+    mockRequest.mockResolvedValueOnce({ prettyId: "ALERT-42", description: long });
+    const result = await server.call("harness_get", { resource_type: "alert", resource_id: "ALERT-42" });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.description).toBe(long);
   });
 });
 

@@ -31,10 +31,18 @@ function projectKeyEvent(e: unknown): unknown {
 }
 
 /**
+ * Max summary length kept in list view. Incident summaries are multi-paragraph
+ * narratives (often ~1KB), which dominate a list payload once multiplied by the
+ * page size. The full text stays available via harness_get.
+ */
+const LIST_SUMMARY_MAX = 400;
+
+/**
  * Project the common incident fields shared by the detail view and the list
  * compactor. Emits a stable, documented shape and drops backend
  * envelope/debug/meta. `verbose` controls whether the heavy event/theory
- * arrays are projected in full (detail view) or replaced with counts (list).
+ * arrays are projected in full (detail view) or replaced with counts (list),
+ * and whether summary is kept in full or truncated.
  */
 function projectIncident(raw: Record<string, unknown>, verbose: boolean): Record<string, unknown> {
   const slim: Record<string, unknown> = {};
@@ -45,7 +53,11 @@ function projectIncident(raw: Record<string, unknown>, verbose: boolean): Record
   if (typeof raw.status === "string") slim.status = raw.status;
   // severity is an object { id, label } in the response (not a bare string)
   if (raw.severity !== undefined) slim.severity = raw.severity;
-  if (typeof raw.summary === "string") slim.summary = raw.summary;
+  if (typeof raw.summary === "string") {
+    slim.summary = verbose || raw.summary.length <= LIST_SUMMARY_MAX
+      ? raw.summary
+      : `${raw.summary.slice(0, LIST_SUMMARY_MAX)}… [truncated — use harness_get for the full summary]`;
+  }
   if (Array.isArray(raw.impactedServices)) slim.impactedServices = raw.impactedServices;
   if (Array.isArray(raw.environments)) slim.environments = raw.environments;
   // reporter/commander are user objects (or null)
@@ -89,11 +101,11 @@ function incidentGetExtract(raw: unknown): unknown {
 
 /**
  * Compact an incident list item. The list response carries the same multi-KB
- * keyEvents / rootCauseTheories arrays as the detail view; the generic key
- * whitelist would also drop the identifying `prettyId` (not an *Id/Identifier
- * suffix) and the `severity`/`impactedServices` fields an agent needs. This
- * keeps the identity and replaces the heavy timelines with counts. Full
- * timelines remain available via harness_get.
+ * keyEvents / rootCauseTheories arrays and narrative summary as the detail view;
+ * the generic key whitelist would also drop the identifying `prettyId` (not an
+ * *Id/Identifier suffix) and the `severity`/`impactedServices` fields an agent
+ * needs. This keeps the identity and replaces the heavy timelines with counts.
+ * Full timelines and summaries remain available via harness_get.
  */
 function compactIncident(item: Record<string, unknown>): Record<string, unknown> {
   return projectIncident(item, false);
@@ -161,11 +173,11 @@ export const incidentsToolset: ToolsetDefinition = {
       identifierFields: ["incident_id"],
       compactItem: compactIncident,
       listFilterFields: [
-        { name: "status", description: "Filter by incident status (multi-value)", enum: ["new", "investigating", "fixing", "monitoring", "closed"] },
-        { name: "severity", description: "Filter by severity option id (multi-value)", enum: ["0", "1", "2", "3", "4"] },
-        { name: "impacted_service", description: "Filter by impacted service (multi-value)" },
-        { name: "environment", description: "Filter by environment (multi-value)" },
-        { name: "commander", description: "Filter by incident commander (multi-value)" },
+        { name: "status", description: "Filter by incident status (multi-value). Matching is case-insensitive, but responses return status uppercase (e.g. CLOSED) — compare case-insensitively when post-filtering results", enum: ["new", "investigating", "fixing", "monitoring", "closed"] },
+        { name: "severity", description: "Filter by severity option id (multi-value). 0 is the most severe (SEV0: Critical) through 4 (SEV4: Cosmetic)", enum: ["0", "1", "2", "3", "4"] },
+        { name: "impacted_service", description: "Filter by impacted service (multi-value). Validated against the project's registered services — an unrecognized value returns an error, not an empty list" },
+        { name: "environment", description: "Filter by environment (multi-value). Validated against the project's registered environments, so it is not free text — an unrecognized value returns an error, not an empty list" },
+        { name: "commander", description: "Filter by incident commander (multi-value). Validated against the project's users — an unrecognized value returns an error, not an empty list" },
         { name: "text", description: "Free-text search across incident fields" },
         { name: "reported_after", description: "Only incidents reported after this time (ISO-8601)" },
         { name: "reported_before", description: "Only incidents reported before this time (ISO-8601)" },
@@ -183,6 +195,11 @@ export const incidentsToolset: ToolsetDefinition = {
             impacted_service: "impactedService",
             environment: "environment",
             commander: "commander",
+            // harness_search and harness_list's top-level search_term both arrive as
+            // `search_term`; without this mapping they were silently dropped and the
+            // backend returned an unfiltered page that the caller read as matches.
+            // Listed before `text` so an explicit text filter wins if both are set.
+            search_term: "text",
             text: "text",
             reported_after: "reportedAfter",
             reported_before: "reportedBefore",

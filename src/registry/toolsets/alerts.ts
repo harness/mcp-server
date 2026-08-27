@@ -17,17 +17,29 @@ function projectKeyEvent(e: unknown): unknown {
 }
 
 /**
+ * Max description length kept in list view. Ingested alerts (PagerDuty webhooks
+ * and similar) carry ~1-2KB of boilerplate here, which dominates a list payload
+ * once multiplied by the page size. The full text stays available via harness_get.
+ */
+const LIST_DESCRIPTION_MAX = 400;
+
+/**
  * Project the common alert fields shared by the detail view and the list
  * compactor. Emits a stable, documented shape and drops backend
  * envelope/debug/meta. `verbose` controls whether the heavy keyEvents array
- * is projected in full (detail view) or replaced with a count (list).
+ * is projected in full (detail view) or replaced with a count (list), and
+ * whether description is kept in full or truncated.
  */
 function projectAlert(raw: Record<string, unknown>, verbose: boolean): Record<string, unknown> {
   const slim: Record<string, unknown> = {};
   if (typeof raw.prettyId === "string") slim.prettyId = raw.prettyId;
   if (typeof raw.projectId === "string") slim.projectId = raw.projectId;
   if (typeof raw.title === "string") slim.title = raw.title;
-  if (typeof raw.description === "string") slim.description = raw.description;
+  if (typeof raw.description === "string") {
+    slim.description = verbose || raw.description.length <= LIST_DESCRIPTION_MAX
+      ? raw.description
+      : `${raw.description.slice(0, LIST_DESCRIPTION_MAX)}… [truncated — use harness_get for the full description]`;
+  }
   if (typeof raw.status === "string") slim.status = raw.status;
   // priority is an object { id, label } in the response (not a bare string)
   if (raw.priority !== undefined) slim.priority = raw.priority;
@@ -61,10 +73,10 @@ function alertGetExtract(raw: unknown): unknown {
 
 /**
  * Compact an alert list item. The list response carries the same multi-KB
- * keyEvents array as the detail view; the generic key whitelist would also drop
- * the identifying `prettyId` (not an *Id/Identifier suffix) and the
- * `priority`/`impactedServices` fields an agent needs. Full timelines remain
- * available via harness_get.
+ * keyEvents array and description as the detail view; the generic key whitelist
+ * would also drop the identifying `prettyId` (not an *Id/Identifier suffix) and
+ * the `priority`/`impactedServices` fields an agent needs. Full timelines and
+ * descriptions remain available via harness_get.
  */
 function compactAlert(item: Record<string, unknown>): Record<string, unknown> {
   return projectAlert(item, false);
@@ -122,14 +134,14 @@ export const alertsToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "status", description: "Filter by alert status (multi-value, OR-combined)", enum: ["triggered", "acknowledged", "resolved", "dismissed"] },
         { name: "priority", description: "Filter by priority option id (multi-value, OR-combined)", enum: ["p1_critical", "p2_error", "p3_warning", "p4_info"] },
-        { name: "impacted_service", description: "Filter by impacted Harness service identifier (multi-value, OR-combined)" },
-        { name: "environment", description: "Filter by environment label (multi-value, OR-combined)" },
-        { name: "template_short_id", description: "Filter by alert template short id (multi-value, OR-combined), e.g. PALERTAED1EE" },
+        { name: "impacted_service", description: "Filter by impacted Harness service identifier (multi-value, OR-combined). Validated against the project's registered services — an unrecognized value returns an error, not an empty list" },
+        { name: "environment", description: "Filter by environment (multi-value, OR-combined). Validated against the project's registered environments, so it is not free text — an unrecognized value returns an error, not an empty list" },
+        { name: "template_short_id", description: "Filter by alert template short id (multi-value, OR-combined). Template ids are per-project — an unrecognized value returns an error, not an empty list" },
         { name: "text", description: "Free-text search across title and description" },
         { name: "created_after", description: "Only alerts created at or after this time (ISO-8601, e.g. 2026-05-01T00:00:00Z)" },
         { name: "created_before", description: "Only alerts created at or before this time (ISO-8601)" },
         { name: "sort_field", description: "Field to sort by", enum: ["CREATED_AT", "PRIORITY", "STATUS"] },
-        { name: "sort_direction", description: "Sort direction", enum: ["ASC", "DESC"] },
+        { name: "sort_direction", description: "Sort direction. Alerts with no priority sort ahead of the priority values in ASC, so filter priority to the four option ids to keep them off the first page", enum: ["ASC", "DESC"] },
       ],
       operations: {
         list: {
@@ -142,6 +154,11 @@ export const alertsToolset: ToolsetDefinition = {
             impacted_service: "impactedService",
             environment: "environment",
             template_short_id: "templateShortId",
+            // harness_search and harness_list's top-level search_term both arrive as
+            // `search_term`; without this mapping they were silently dropped and the
+            // backend returned an unfiltered page that the caller read as matches.
+            // Listed before `text` so an explicit text filter wins if both are set.
+            search_term: "text",
             text: "text",
             created_after: "createdAfter",
             created_before: "createdBefore",

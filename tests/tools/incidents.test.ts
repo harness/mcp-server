@@ -125,6 +125,25 @@ describe("incident — harness_list", () => {
     expect(callArgs.params.sortField).toBe("REPORTED_AT");
   });
 
+  // harness_search dispatches list with search_term set to the query. Without a
+  // mapping the term was dropped and the caller got an unfiltered page back,
+  // which reads as "these are your matches".
+  it("maps the top-level search_term to the text query param", async () => {
+    await server.call("harness_list", { resource_type: "incident", search_term: "iacm rollback" });
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.text).toBe("iacm rollback");
+  });
+
+  it("lets an explicit text filter win over search_term", async () => {
+    await server.call("harness_list", {
+      resource_type: "incident",
+      search_term: "from-search",
+      filters: { text: "from-filter" },
+    });
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(callArgs.params.text).toBe("from-filter");
+  });
+
   it("compacts list items: keeps prettyId/severity, replaces heavy timelines with counts", async () => {
     mockRequest.mockResolvedValueOnce({
       entities: [{
@@ -150,6 +169,24 @@ describe("incident — harness_list", () => {
     expect(item.rootCauseTheories).toBe(1);
     // Internal/meta fields are dropped
     expect(item).not.toHaveProperty("__internalMeta");
+    // Short summaries survive verbatim
+    expect(item.summary).toBe("short");
+  });
+
+  // Incident summaries are multi-paragraph narratives (~1KB), which dominate the
+  // payload once multiplied by the page size.
+  it("truncates a long summary in list view and points at harness_get", async () => {
+    const long = "x".repeat(1500);
+    mockRequest.mockResolvedValueOnce({
+      entities: [{ prettyId: "INC-1", summary: long }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "incident" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    const summary = data.items[0]!.summary as string;
+    expect(summary.length).toBeLessThan(long.length);
+    expect(summary).toContain("harness_get");
+    expect(summary.startsWith("x".repeat(400))).toBe(true);
   });
 });
 
@@ -201,6 +238,14 @@ describe("incident — harness_get", () => {
     // Backend envelope/meta must not leak across the tool boundary
     expect(data).not.toHaveProperty("__internalMeta");
     expect(data).not.toHaveProperty("correlationId");
+  });
+
+  it("keeps the full summary in the detail view", async () => {
+    const long = "x".repeat(1500);
+    mockRequest.mockResolvedValueOnce({ prettyId: "INC-42", summary: long });
+    const result = await server.call("harness_get", { resource_type: "incident", resource_id: "INC-42" });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.summary).toBe(long);
   });
 });
 
