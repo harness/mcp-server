@@ -385,6 +385,35 @@ export const harListExtract = (arrayKey: string) => (raw: unknown): unknown => {
 };
 
 /**
+ * Factory for HAR v3 list responses. Shape: `{ page, size, hasMore, items[], meta? }`.
+ * Unlike v1, responses are not wrapped in a `data` envelope.
+ */
+export const harV3ListExtract = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  // Some v3 list endpoints (notably /scans) still return the v1 envelope
+  // { data, itemCount, pageIndex, pageSize, pageCount }. Normalize to the v3
+  // shape so downstream consumers can rely on `items`.
+  if (Array.isArray(raw.data) && !("items" in raw)) {
+    return {
+      items: raw.data,
+      page: raw.pageIndex,
+      size: raw.pageSize,
+      hasMore: typeof raw.pageIndex === "number" && typeof raw.pageCount === "number"
+        ? raw.pageIndex + 1 < raw.pageCount
+        : undefined,
+      meta: raw.meta,
+    };
+  }
+  return {
+    items: (raw.items as unknown[]) ?? [],
+    page: raw.page,
+    size: raw.size,
+    hasMore: raw.hasMore,
+    meta: raw.meta,
+  };
+};
+
+/**
  * Factory for v1 list responses (bare arrays).
  * If `wrapperKey` is provided, each item is unwrapped: `{ project: {...} }` → `{...}`.
  * Total is derived from array length since response headers aren't accessible.
