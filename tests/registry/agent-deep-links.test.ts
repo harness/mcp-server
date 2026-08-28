@@ -72,8 +72,13 @@ describe("agent deep links", () => {
     expect(String(result.openInHarness)).not.toContain("{agentIdentifier}");
   });
 
-  it("resolves {agentIdentifier} from body.uid when the response has no id", async () => {
-    fetchSpy.mockResolvedValueOnce(mockFetchResponse({ name: "Pipeline Lister Agent" }));
+  it("resolves {agentIdentifier} from a create response that only returns `uid`", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockFetchResponse({
+        uid: "pipeline_lister_agent",
+        name: "Pipeline Lister Agent",
+      }),
+    );
 
     const registry = new Registry(makeConfig());
     const result = (await registry.dispatch(new HarnessClient(makeConfig()), "agent", "create", {

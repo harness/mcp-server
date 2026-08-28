@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough } from "../extractors.js";
+import { isRecord } from "../../utils/type-guards.js";
 
 /**
  * Generate a UID from an agent name by converting to lowercase and replacing
@@ -10,6 +10,36 @@ function generateAgentUid(name: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, ""); // trim leading/trailing underscores
+}
+
+/** Agent APIs return `id` (the UID), not `identifier`. Alias so deep links can resolve {agentIdentifier}. */
+function aliasAgentIdentifier(record: Record<string, unknown>): void {
+  if (record.identifier != null && record.identifier !== "") return;
+  const id = record.id ?? record.uid;
+  if (id != null && id !== "") {
+    record.identifier = id;
+  }
+}
+
+function agentExtract(raw: unknown): unknown {
+  if (raw === null || raw === undefined) return raw;
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (isRecord(item)) aliasAgentIdentifier(item);
+    }
+    return raw;
+  }
+  if (!isRecord(raw)) return raw;
+  aliasAgentIdentifier(raw);
+  for (const key of ["items", "data", "content"] as const) {
+    const arr = raw[key];
+    if (Array.isArray(arr)) {
+      for (const item of arr) {
+        if (isRecord(item)) aliasAgentIdentifier(item);
+      }
+    }
+  }
+  return raw;
 }
 
 const agentCreateSchema: BodySchema = {
@@ -54,7 +84,7 @@ export const agentsToolset: ToolsetDefinition = {
           method: "GET",
           path: "/gateway/agents/api/v1/agents",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: agentExtract,
           description: "List all agents (system and custom) scoped to the account/org/project context",
         },
         get: {
@@ -62,7 +92,7 @@ export const agentsToolset: ToolsetDefinition = {
           path: "/gateway/agents/api/v1/agents/{agentIdentifier}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { agent_id: "agentIdentifier" },
-          responseExtractor: passthrough,
+          responseExtractor: agentExtract,
           description: "Get agent details including YAML spec, role, status, timestamps, wiki, and logo",
         },
         create: {
@@ -84,7 +114,7 @@ export const agentsToolset: ToolsetDefinition = {
 
             return body;
           },
-          responseExtractor: passthrough,
+          responseExtractor: agentExtract,
           description: "Create a new custom agent with YAML specification. System agents cannot be created via API. The uid field is required and must be unique within the scope.",
           bodySchema: agentCreateSchema,
         },
@@ -98,7 +128,7 @@ export const agentsToolset: ToolsetDefinition = {
             if (!body) throw new Error("body is required for agent update");
             return body;
           },
-          responseExtractor: passthrough,
+          responseExtractor: agentExtract,
           description: "Update a custom agent. All fields are optional. Only custom agents can be updated (role='custom').",
           bodySchema: agentUpdateSchema,
         },
@@ -107,7 +137,7 @@ export const agentsToolset: ToolsetDefinition = {
           path: "/gateway/agents/api/v1/agents/{agentIdentifier}",
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { agent_id: "agentIdentifier" },
-          responseExtractor: passthrough,
+          responseExtractor: agentExtract,
           description: "Delete a custom agent (soft delete - sets status to 'deleted'). Only custom agents can be deleted.",
         },
       },
