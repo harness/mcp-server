@@ -7,7 +7,7 @@ import type { AuditManager } from "../audit/manager.js";
 import type { AuditContext, AuditEvent, AuditOutcome } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
-import { isFormDataBody } from "../utils/type-guards.js";
+import { isFormDataBody, isRecord } from "../utils/type-guards.js";
 import { canonicalizeListFilterEnums } from "./enum-utils.js";
 import { assertListScopeResolved } from "./list-filter-utils.js";
 
@@ -947,9 +947,13 @@ export class Registry {
       for (const field of def.identifierFields) {
         const pathParamName = spec.pathParams?.[field] ?? getPathParam?.[field] ?? field;
         let value = input[field];
+        // Create bodies often carry the id as uid/identifier rather than agent_id.
+        if (!value && isRecord(input.body)) {
+          value = input.body[field] ?? input.body[pathParamName] ?? input.body.uid ?? input.body.identifier ?? input.body.id;
+        }
         if (!value && resultRecord) {
-          // Check top-level first
-          value = resultRecord[pathParamName] ?? resultRecord.identifier;
+          // Check top-level first. Agent create/get return `id` (the UID), not `identifier`.
+          value = resultRecord[pathParamName] ?? resultRecord.identifier ?? resultRecord.id ?? resultRecord.uid;
           if (!value) {
             // Look for identifier in any nested object that has an 'identifier' field
             // This handles wrapped responses like {service: {identifier: "..."}}, {environment: {...}}, etc.
@@ -1039,6 +1043,10 @@ export class Registry {
                 itemLinkParams[pathParamName] = String(rawValue);
               } else if (itemRecord.identifier !== undefined && typeof itemRecord.identifier !== "object") {
                 itemLinkParams[pathParamName] = String(itemRecord.identifier);
+              } else if (itemRecord.id !== undefined && typeof itemRecord.id !== "object") {
+                itemLinkParams[pathParamName] = String(itemRecord.id);
+              } else if (itemRecord.uid !== undefined && typeof itemRecord.uid !== "object") {
+                itemLinkParams[pathParamName] = String(itemRecord.uid);
               } else if (itemRecord.name !== undefined && typeof itemRecord.name !== "object") {
                 itemLinkParams[pathParamName] = String(itemRecord.name);
               } else {
