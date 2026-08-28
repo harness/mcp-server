@@ -71,6 +71,56 @@ export const countExtract = (raw: unknown): { count: number; _error?: string } =
 /** Pass-through extractor — returns raw response unchanged. Used for APIs that don't wrap in `data`. */
 export const passthrough = (raw: unknown): unknown => raw;
 
+/**
+ * Agent APIs return `id` (the UID), not `identifier`. Alias so deep links can
+ * resolve `{agentIdentifier}`. Handles:
+ * - create/get entity `{ id }`
+ * - NG/gateway envelope `{ data: { id } }`
+ * - list as a raw array or `{ data: [...] }` (normalized to `{ items, total }`)
+ */
+export const agentExtract = (raw: unknown): unknown => {
+  if (raw === null || raw === undefined) return raw;
+  const unwrapped = unwrapAgentPayload(raw);
+  if (Array.isArray(unwrapped)) {
+    const items = unwrapped.map(aliasAgentItem);
+    return { items, total: items.length };
+  }
+  if (!isRecord(unwrapped)) return unwrapped;
+  aliasAgentIdentifier(unwrapped);
+  for (const key of ["items", "data", "content"] as const) {
+    const arr = unwrapped[key];
+    if (Array.isArray(arr)) {
+      unwrapped[key] = arr.map(aliasAgentItem);
+    }
+  }
+  return unwrapped;
+};
+
+function unwrapAgentPayload(raw: unknown): unknown {
+  if (!isRecord(raw) || !("data" in raw)) return raw;
+  const data = raw.data;
+  if (Array.isArray(data)) return data;
+  if (isRecord(data) && looksLikeAgent(data)) return data;
+  return raw;
+}
+
+function looksLikeAgent(record: Record<string, unknown>): boolean {
+  return record.id != null || record.uid != null || record.identifier != null || typeof record.name === "string";
+}
+
+function aliasAgentIdentifier(record: Record<string, unknown>): void {
+  if (record.identifier != null && record.identifier !== "") return;
+  const id = record.id ?? record.uid;
+  if (id != null && id !== "") {
+    record.identifier = id;
+  }
+}
+
+function aliasAgentItem(item: unknown): unknown {
+  if (isRecord(item)) aliasAgentIdentifier(item);
+  return item;
+}
+
 /** Offset-paginated list (OffsetPaginatedResult): { entities, totalCount } */
 export const offsetListExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as { entities?: unknown[]; totalCount?: number };

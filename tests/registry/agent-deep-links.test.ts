@@ -111,4 +111,44 @@ describe("agent deep links", () => {
 
     expect(result.openInHarness).toBe(EXPECTED_LINK);
   });
+
+  it("resolves {agentIdentifier} from a { data: { id } } create envelope", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockFetchResponse({
+        status: "SUCCESS",
+        data: { id: "pipeline_lister_agent", name: "Pipeline Lister Agent" },
+      }),
+    );
+
+    const registry = new Registry(makeConfig());
+    const result = (await registry.dispatch(new HarnessClient(makeConfig()), "agent", "create", {
+      org_id: "default",
+      project_id: "aiTeam",
+      body: {
+        uid: "pipeline_lister_agent",
+        name: "Pipeline Lister Agent",
+        spec: "agent:\n  name: Pipeline Lister Agent\n",
+      },
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(EXPECTED_LINK);
+    expect(result.identifier).toBe("pipeline_lister_agent");
+  });
+
+  it("attaches per-item openInHarness on list arrays", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockFetchResponse([
+        { id: "pipeline_lister_agent", name: "Pipeline Lister Agent" },
+      ]),
+    );
+
+    const registry = new Registry(makeConfig());
+    const result = (await registry.dispatch(new HarnessClient(makeConfig()), "agent", "list", {
+      org_id: "default",
+      project_id: "aiTeam",
+    })) as { items: Array<Record<string, unknown>> };
+
+    expect(result.items[0]!.openInHarness).toBe(EXPECTED_LINK);
+    expect(result.items[0]!.identifier).toBe("pipeline_lister_agent");
+  });
 });
