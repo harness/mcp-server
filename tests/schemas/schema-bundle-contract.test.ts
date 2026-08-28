@@ -220,4 +220,51 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream HttpStepInfo authentication in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const httpStepInfo = defs.pipeline.steps.custom.HttpStepInfo as {
+        properties: {
+          authentication: {
+            properties: {
+              type: { enum: string[]; default: string };
+              spec: { properties: Record<string, unknown> };
+            };
+            allOf: Array<{
+              if: { properties: { type: { const: string } } };
+              then: { properties: { spec: { required: string[] } } };
+            }>;
+          };
+        };
+      };
+
+      const auth = httpStepInfo.properties.authentication;
+      expect(auth.properties.type.enum).toEqual(
+        expect.arrayContaining(["None", "Basic", "BearerToken", "ApiKey"]),
+      );
+      expect(auth.properties.type.default).toBe("None");
+      expect(auth.properties.spec.properties).toHaveProperty("username");
+      expect(auth.properties.spec.properties).toHaveProperty("password");
+      expect(auth.properties.spec.properties).toHaveProperty("token");
+      expect(auth.properties.spec.properties).toHaveProperty("keyName");
+      expect(auth.properties.spec.properties).toHaveProperty("keyValue");
+      expect(auth.properties.spec.properties.addTo).toMatchObject({
+        enum: expect.arrayContaining(["Header", "QueryParameter"]),
+        default: "Header",
+      });
+
+      const basicRule = auth.allOf.find((rule) => rule.if.properties.type.const === "Basic");
+      const bearerRule = auth.allOf.find((rule) => rule.if.properties.type.const === "BearerToken");
+      const apiKeyRule = auth.allOf.find((rule) => rule.if.properties.type.const === "ApiKey");
+
+      expect(basicRule?.then.properties.spec.required).toEqual(
+        expect.arrayContaining(["username", "password"]),
+      );
+      expect(bearerRule?.then.properties.spec.required).toEqual(expect.arrayContaining(["token"]));
+      expect(apiKeyRule?.then.properties.spec.required).toEqual(
+        expect.arrayContaining(["keyName", "keyValue"]),
+      );
+    }
+  });
 });
