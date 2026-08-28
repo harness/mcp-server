@@ -1821,6 +1821,125 @@ const schema: Record<string, any> = {
                   "assertion": {
                     "type": "string"
                   },
+                  "authentication": {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "None",
+                          "Basic",
+                          "BearerToken",
+                          "ApiKey"
+                        ],
+                        "default": "None"
+                      },
+                      "spec": {
+                        "type": "object",
+                        "properties": {
+                          "username": {
+                            "type": "string"
+                          },
+                          "password": {
+                            "type": "string"
+                          },
+                          "token": {
+                            "type": "string"
+                          },
+                          "keyName": {
+                            "type": "string"
+                          },
+                          "keyValue": {
+                            "type": "string"
+                          },
+                          "addTo": {
+                            "type": "string",
+                            "enum": [
+                              "Header",
+                              "QueryParameter"
+                            ],
+                            "default": "Header"
+                          }
+                        }
+                      }
+                    },
+                    "allOf": [
+                      {
+                        "if": {
+                          "properties": {
+                            "type": {
+                              "const": "Basic"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ]
+                        },
+                        "then": {
+                          "required": [
+                            "spec"
+                          ],
+                          "properties": {
+                            "spec": {
+                              "required": [
+                                "username",
+                                "password"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "type": {
+                              "const": "BearerToken"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ]
+                        },
+                        "then": {
+                          "required": [
+                            "spec"
+                          ],
+                          "properties": {
+                            "spec": {
+                              "required": [
+                                "token"
+                              ]
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "if": {
+                          "properties": {
+                            "type": {
+                              "const": "ApiKey"
+                            }
+                          },
+                          "required": [
+                            "type"
+                          ]
+                        },
+                        "then": {
+                          "required": [
+                            "spec"
+                          ],
+                          "properties": {
+                            "spec": {
+                              "required": [
+                                "keyName",
+                                "keyValue"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  },
                   "delegateSelectors": {
                     "oneOf": [
                       {
@@ -1897,6 +2016,125 @@ const schema: Record<string, any> = {
             "properties": {
               "assertion": {
                 "type": "string"
+              },
+              "authentication": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "None",
+                      "Basic",
+                      "BearerToken",
+                      "ApiKey"
+                    ],
+                    "default": "None"
+                  },
+                  "spec": {
+                    "type": "object",
+                    "properties": {
+                      "username": {
+                        "type": "string"
+                      },
+                      "password": {
+                        "type": "string"
+                      },
+                      "token": {
+                        "type": "string"
+                      },
+                      "keyName": {
+                        "type": "string"
+                      },
+                      "keyValue": {
+                        "type": "string"
+                      },
+                      "addTo": {
+                        "type": "string",
+                        "enum": [
+                          "Header",
+                          "QueryParameter"
+                        ],
+                        "default": "Header"
+                      }
+                    }
+                  }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "Basic"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "spec"
+                      ],
+                      "properties": {
+                        "spec": {
+                          "required": [
+                            "username",
+                            "password"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "BearerToken"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "spec"
+                      ],
+                      "properties": {
+                        "spec": {
+                          "required": [
+                            "token"
+                          ]
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "if": {
+                      "properties": {
+                        "type": {
+                          "const": "ApiKey"
+                        }
+                      },
+                      "required": [
+                        "type"
+                      ]
+                    },
+                    "then": {
+                      "required": [
+                        "spec"
+                      ],
+                      "properties": {
+                        "spec": {
+                          "required": [
+                            "keyName",
+                            "keyValue"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                ]
               },
               "delegateSelectors": {
                 "oneOf": [
