@@ -119,6 +119,9 @@ describe("pipeline_v1 Git Experience mapping", () => {
       body: { pipeline_yaml: yaml, identifier: "CI_Build_and_Test", name: "CI Build" },
     });
 
+    // Full lock context means preflight is unnecessary — only the PUT should fire.
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+
     expect(mockRequest).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "PUT",
@@ -173,6 +176,54 @@ describe("pipeline_v1 Git Experience mapping", () => {
     });
     expect(call.body.git_details).not.toHaveProperty("object_id");
     expect(call.body.git_details).not.toHaveProperty("commit_id");
+  });
+
+  it("skips update preflight GET when body.git_details already carries full lock context", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "ci_build" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pipeline_v1", "update", {
+      pipeline_id: "CI_Build_and_Test",
+      org_id: "PROD",
+      project_id: "Traceable",
+      body: {
+        pipeline_yaml: yaml,
+        identifier: "CI_Build_and_Test",
+        name: "CI Build",
+        git_details: {
+          store_type: "REMOTE",
+          repo_name: "Pipelines",
+          branch_name: "main",
+          file_path: ".harness/ci.yaml",
+          object_id: "3576b403c93d5727a12d99fe055b29be41622a32",
+          commit_id: "c25a833a358bfabcf56c6fedf93ff08718f45d90",
+        },
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toEqual(expect.objectContaining({ method: "PUT" }));
+  });
+
+  it("throws when preflight cannot hydrate complete Git lock context for a remote pipeline", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn().mockResolvedValueOnce({
+      identifier: "ci_build",
+      store_type: "REMOTE",
+      git_details: { branch_name: "main" },
+    });
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "pipeline_v1", "update", {
+      pipeline_id: "ci_build",
+      org_id: "PROD",
+      project_id: "Traceable",
+      body: yaml,
+    })).rejects.toThrow(/Unable to resolve Git branch and current object\/commit IDs/);
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toEqual(expect.objectContaining({ method: "GET" }));
   });
 
   it("preflights a YAML-only remote update and injects Git location and lock ids", async () => {
