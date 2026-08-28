@@ -523,6 +523,61 @@ describe("applyUrlDefaults", () => {
     expect(result.project_id).toBe("myProj");
   });
 
+  // The alerts API returns this exact URL shape in each alert's commsLinks[].url,
+  // so pasting a link back in from Slack or comms is a first-class flow.
+  it("parses a Mission Control alert URL into alert + prettyId", () => {
+    const result = parseHarnessUrl(
+      "https://harness0.harness.io/ng/account/l7B_kbSEQD2wjrM7PShm5w/module/ir/orgs/PROD/projects/AI_SRE/alerts/ALRTPPS-560239",
+    );
+    expect(result.account_id).toBe("l7B_kbSEQD2wjrM7PShm5w");
+    expect(result.module).toBe("ir");
+    expect(result.org_id).toBe("PROD");
+    expect(result.project_id).toBe("AI_SRE");
+    expect(result.resource_type).toBe("alert");
+    expect(result.resource_id).toBe("ALRTPPS-560239");
+  });
+
+  it("parses an alerts list URL with no id", () => {
+    const result = parseHarnessUrl(
+      "https://harness0.harness.io/ng/account/acc/module/ir/orgs/PROD/projects/AI_SRE/alerts",
+    );
+    expect(result.resource_type).toBe("alert");
+    expect(result.resource_id).toBeUndefined();
+    expect(result.project_id).toBe("AI_SRE");
+  });
+
+  it("parses a Mission Control incident URL into incident + prettyId", () => {
+    const result = parseHarnessUrl(
+      "https://harness0.harness.io/ng/account/acc/module/ir/orgs/PROD/projects/AI_SRE/incidents/INC-1924",
+    );
+    expect(result.module).toBe("ir");
+    expect(result.org_id).toBe("PROD");
+    expect(result.project_id).toBe("AI_SRE");
+    expect(result.resource_type).toBe("incident");
+    expect(result.resource_id).toBe("INC-1924");
+  });
+
+  it("applyUrlDefaults merges incident identifiers for harness_get", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://harness0.harness.io/ng/account/acc/module/ir/orgs/PROD/projects/AI_SRE/incidents/FH-116",
+    );
+    expect(result.resource_type).toBe("incident");
+    expect(result.resource_id).toBe("FH-116");
+    expect(result.project_id).toBe("AI_SRE");
+  });
+
+  it("applyUrlDefaults merges alert identifiers for harness_get", () => {
+    const result = applyUrlDefaults(
+      {},
+      "https://harness0.harness.io/ng/account/acc/module/ir/orgs/PROD/projects/AI_SRE/alerts/ALRTD0F-1",
+    );
+    expect(result.resource_type).toBe("alert");
+    expect(result.resource_id).toBe("ALRTD0F-1");
+    expect(result.org_id).toBe("PROD");
+    expect(result.project_id).toBe("AI_SRE");
+  });
+
   it("does not mutate the original args object", () => {
     const args = { resource_type: "pipeline" };
     const result = applyUrlDefaults(

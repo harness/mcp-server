@@ -1,8 +1,8 @@
 /**
- * Tests for the `incident` resource type (incidents toolset).
+ * Tests for the `alert` resource type (alerts toolset).
  *
  * Verifies the offset-paginated list extractor, path-param substitution,
- * required-field validation on create, and the close execute action — all
+ * update PATCH body, lifecycle execute actions, and absence of create — all
  * with a mocked client.request so no real API is hit.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -22,7 +22,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_MAX_RETRIES: 3,
     LOG_LEVEL: "info",
     HARNESS_AUTO_APPROVE_RISK: "none",
-    HARNESS_TOOLSETS: "incidents",
+    HARNESS_TOOLSETS: "alerts",
     ...overrides,
   } as Config;
 }
@@ -59,27 +59,44 @@ function parseResult(result: ToolResult): unknown {
   return JSON.parse(item.text);
 }
 
-describe("incident resource definition", () => {
-  it("constrains the severity filter to the known option ids", () => {
+describe("alert resource definition", () => {
+  it("does not expose create", () => {
     const registry = new Registry(makeConfig());
-    const def = registry.getResource("incident");
-    const severityFilter = def.listFilterFields?.find((f) => f.name === "severity");
-    expect(severityFilter?.enum).toEqual(["0", "1", "2", "3", "4"]);
+    const def = registry.getResource("alert");
+    expect(def.operations.create).toBeUndefined();
+    expect(Object.keys(def.operations)).toEqual(["list", "get", "update"]);
+    expect(Object.keys(def.executeActions ?? {})).toEqual(["acknowledge", "resolve", "dismiss"]);
   });
 
-  it.each(["create", "update"] as const)("names the severity option ids in the %s body schema", (op) => {
+  it("constrains the priority filter to the known option ids", () => {
     const registry = new Registry(makeConfig());
-    const def = registry.getResource("incident");
-    const severityField = def.operations[op]?.bodySchema?.fields.find((f) => f.name === "severity");
+    const def = registry.getResource("alert");
+    const priorityFilter = def.listFilterFields?.find((f) => f.name === "priority");
+    expect(priorityFilter?.enum).toEqual(["p1_critical", "p2_error", "p3_warning", "p4_info"]);
+  });
+
+  it("names the priority option ids in the update body schema", () => {
+    const registry = new Registry(makeConfig());
+    const def = registry.getResource("alert");
+    const priorityField = def.operations.update?.bodySchema?.fields.find((f) => f.name === "priority");
     // BodyFieldSpec has no enum support, so the values must live in the description.
-    // SEV0 is Critical, not the lowest severity — spelled out to prevent the off-by-one read.
-    for (const label of ["0 (SEV0: Critical)", "1 (SEV1: Major)", "2 (SEV2: Moderate)", "3 (SEV3: Minor)", "4 (SEV4: Cosmetic)"]) {
-      expect(severityField?.description).toContain(label);
+    for (const id of ["p1_critical", "p2_error", "p3_warning", "p4_info"]) {
+      expect(priorityField?.description).toContain(id);
     }
+  });
+
+  it("surfaces alert troubleshooting guidance and status response casing", () => {
+    const registry = new Registry(makeConfig());
+    const def = registry.getResource("alert");
+    const statusFilter = def.listFilterFields?.find((f) => f.name === "status");
+    expect(def.diagnosticHint).toContain("external writers");
+    expect(def.diagnosticHint).toContain("harness_execute");
+    expect(statusFilter?.description).toContain("responses return status uppercase");
+    expect(statusFilter?.description).toContain("case-insensitively");
   });
 });
 
-describe("incident — harness_list", () => {
+describe("alert — harness_list", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;
   let client: HarnessClient;
@@ -89,7 +106,7 @@ describe("incident — harness_list", () => {
     server = makeMcpServer();
     registry = new Registry(makeConfig());
     mockRequest = vi.fn().mockResolvedValue({
-      entities: [{ prettyId: "INC-1" }, { prettyId: "INC-2" }],
+      entities: [{ prettyId: "ALERT-1" }, { prettyId: "ALERT-2" }],
       totalCount: 2,
     });
     client = makeClient(mockRequest);
@@ -98,17 +115,17 @@ describe("incident — harness_list", () => {
   });
 
   it("maps entities/totalCount to items/total via offsetListExtract", async () => {
-    const result = await server.call("harness_list", { resource_type: "incident" });
+    const result = await server.call("harness_list", { resource_type: "alert" });
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { items: unknown[]; total: number };
     expect(data.items).toHaveLength(2);
     expect(data.total).toBe(2);
   });
 
-  it("hits the incidents list path with scope params", async () => {
-    await server.call("harness_list", { resource_type: "incident" });
+  it("hits the alerts list path with MC scope params", async () => {
+    await server.call("harness_list", { resource_type: "alert" });
     const callArgs = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
-    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/alerts");
     expect(callArgs.params.accountId).toBe("test-account");
     expect(callArgs.params.orgId).toBe("default");
     expect(callArgs.params.projectId).toBe("test-project");
@@ -116,27 +133,33 @@ describe("incident — harness_list", () => {
 
   it("maps snake_case filters to API query param names", async () => {
     await server.call("harness_list", {
-      resource_type: "incident",
-      filters: { status: ["new"], impacted_service: ["svc-a"], sort_field: "REPORTED_AT" },
+      resource_type: "alert",
+      filters: {
+        status: ["triggered"],
+        impacted_service: ["svc-a"],
+        template_short_id: ["PALERTAED1EE"],
+        sort_field: "CREATED_AT",
+      },
     });
     const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
-    expect(callArgs.params.status).toEqual(["new"]);
+    expect(callArgs.params.status).toEqual(["triggered"]);
     expect(callArgs.params.impactedService).toEqual(["svc-a"]);
-    expect(callArgs.params.sortField).toBe("REPORTED_AT");
+    expect(callArgs.params.templateShortId).toEqual(["PALERTAED1EE"]);
+    expect(callArgs.params.sortField).toBe("CREATED_AT");
   });
 
   // harness_search dispatches list with search_term set to the query. Without a
   // mapping the term was dropped and the caller got an unfiltered page back,
   // which reads as "these are your matches".
   it("maps the top-level search_term to the text query param", async () => {
-    await server.call("harness_list", { resource_type: "incident", search_term: "iacm rollback" });
+    await server.call("harness_list", { resource_type: "alert", search_term: "kafka lag" });
     const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
-    expect(callArgs.params.text).toBe("iacm rollback");
+    expect(callArgs.params.text).toBe("kafka lag");
   });
 
   it("lets an explicit text filter win over search_term", async () => {
     await server.call("harness_list", {
-      resource_type: "incident",
+      resource_type: "alert",
       search_term: "from-search",
       filters: { text: "from-filter" },
     });
@@ -144,53 +167,60 @@ describe("incident — harness_list", () => {
     expect(callArgs.params.text).toBe("from-filter");
   });
 
-  it("compacts list items: keeps prettyId/severity, replaces heavy timelines with counts", async () => {
+  it("compacts list items: keeps prettyId/priority, replaces keyEvents with count", async () => {
     mockRequest.mockResolvedValueOnce({
       entities: [{
-        prettyId: "INC-1",
-        title: "Outage",
-        severity: { id: "1", label: "SEV1" },
+        prettyId: "ALERT-1",
+        title: "CPU spike",
+        priority: { id: "p1_critical", label: "P1 Critical" },
         impactedServices: ["svc-a"],
-        summary: "short",
-        keyEvents: [{ timestamp: 1, status: "FIXING", details: "x" }, { timestamp: 2, status: "FIXING", details: "y" }],
-        rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true }],
+        description: "short",
+        keyEvents: [
+          { timestamp: 1, status: "TRIGGERED", details: "x" },
+          { timestamp: 2, status: "ACKNOWLEDGED", details: "y" },
+        ],
         __internalMeta: { trace: "abc" },
       }],
       totalCount: 1,
     });
-    const result = await server.call("harness_list", { resource_type: "incident" });
+    const result = await server.call("harness_list", { resource_type: "alert" });
     const data = parseResult(result) as { items: Array<Record<string, unknown>> };
     const item = data.items[0]!;
-    expect(item.prettyId).toBe("INC-1");
-    expect(item.severity).toEqual({ id: "1", label: "SEV1" });
+    expect(item.prettyId).toBe("ALERT-1");
+    expect(item.priority).toEqual({ id: "p1_critical", label: "P1 Critical" });
     expect(item.impactedServices).toEqual(["svc-a"]);
-    // Heavy timelines become counts in the list view
     expect(item.keyEvents).toBe(2);
-    expect(item.rootCauseTheories).toBe(1);
-    // Internal/meta fields are dropped
     expect(item).not.toHaveProperty("__internalMeta");
-    // Short summaries survive verbatim
-    expect(item.summary).toBe("short");
   });
 
-  // Incident summaries are multi-paragraph narratives (~1KB), which dominate the
-  // payload once multiplied by the page size.
-  it("truncates a long summary in list view and points at harness_get", async () => {
-    const long = "x".repeat(1500);
+  it("keeps a short description verbatim in list view", async () => {
     mockRequest.mockResolvedValueOnce({
-      entities: [{ prettyId: "INC-1", summary: long }],
+      entities: [{ prettyId: "ALERT-1", description: "short" }],
       totalCount: 1,
     });
-    const result = await server.call("harness_list", { resource_type: "incident" });
+    const result = await server.call("harness_list", { resource_type: "alert" });
     const data = parseResult(result) as { items: Array<Record<string, unknown>> };
-    const summary = data.items[0]!.summary as string;
-    expect(summary.length).toBeLessThan(long.length);
-    expect(summary).toContain("harness_get");
-    expect(summary.startsWith("x".repeat(400))).toBe(true);
+    expect(data.items[0]!.description).toBe("short");
+  });
+
+  // Ingested alerts carry ~1-2KB of webhook boilerplate here, which dominates the
+  // payload once multiplied by the page size.
+  it("truncates a long description in list view and points at harness_get", async () => {
+    const long = "x".repeat(1500);
+    mockRequest.mockResolvedValueOnce({
+      entities: [{ prettyId: "ALERT-1", description: long }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "alert" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    const description = data.items[0]!.description as string;
+    expect(description.length).toBeLessThan(long.length);
+    expect(description).toContain("harness_get");
+    expect(description.startsWith("x".repeat(400))).toBe(true);
   });
 });
 
-describe("incident — harness_get", () => {
+describe("alert — harness_get", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;
   let client: HarnessClient;
@@ -200,13 +230,11 @@ describe("incident — harness_get", () => {
     server = makeMcpServer();
     registry = new Registry(makeConfig());
     mockRequest = vi.fn().mockResolvedValue({
-      prettyId: "INC-42",
-      title: "Outage",
-      severity: { id: "1", label: "SEV1" },
-      reportedAtTimestamp: 1781776808000,
-      keyEvents: [{ timestamp: 1, status: "INVESTIGATING", details: "looking" }],
-      rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true }],
-      // Backend envelope/internal fields that must NOT cross the tool boundary
+      prettyId: "ALERT-42",
+      title: "CPU spike",
+      priority: { id: "p2_error", label: "P2 Error" },
+      createdAtTimestamp: 1781776808000,
+      keyEvents: [{ timestamp: 1, status: "TRIGGERED", details: "looking" }],
       __internalMeta: { trace: "abc" },
       correlationId: "xyz",
     });
@@ -215,80 +243,62 @@ describe("incident — harness_get", () => {
     registerGetTool(server, registry, client);
   });
 
-  it("substitutes incident_id into the path", async () => {
-    const result = await server.call("harness_get", { resource_type: "incident", resource_id: "INC-42" });
+  it("substitutes alert_id into the path", async () => {
+    const result = await server.call("harness_get", { resource_type: "alert", resource_id: "ALERT-42" });
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { path: string };
-    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/alerts/ALERT-42");
+  });
+
+  it("returns an openInHarness link for the alert", async () => {
+    const result = await server.call("harness_get", { resource_type: "alert", resource_id: "ALERT-42" });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/module/ir/orgs/default/projects/test-project/alerts/ALERT-42",
+    );
   });
 
   it("projects a stable shape and drops backend envelope/meta fields", async () => {
-    const result = await server.call("harness_get", { resource_type: "incident", resource_id: "INC-42" });
+    const result = await server.call("harness_get", { resource_type: "alert", resource_id: "ALERT-42" });
     const data = parseResult(result) as Record<string, unknown>;
-    // Documented fields survive, with severity kept as the {id,label} object
-    expect(data.prettyId).toBe("INC-42");
-    expect(data.title).toBe("Outage");
-    expect(data.severity).toEqual({ id: "1", label: "SEV1" });
-    expect(data.reportedAtTimestamp).toBe(1781776808000);
-    // Detail view keeps the full timelines (projected to their stable fields)
-    expect(data.keyEvents).toEqual([{ timestamp: 1, status: "INVESTIGATING", details: "looking" }]);
-    expect(data.rootCauseTheories).toEqual([
-      { message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true },
-    ]);
-    // Backend envelope/meta must not leak across the tool boundary
+    expect(data.prettyId).toBe("ALERT-42");
+    expect(data.title).toBe("CPU spike");
+    expect(data.priority).toEqual({ id: "p2_error", label: "P2 Error" });
+    expect(data.createdAtTimestamp).toBe(1781776808000);
+    expect(data.keyEvents).toEqual([{ timestamp: 1, status: "TRIGGERED", details: "looking" }]);
     expect(data).not.toHaveProperty("__internalMeta");
     expect(data).not.toHaveProperty("correlationId");
   });
 
-  it("keeps the full summary in the detail view", async () => {
+  it("keeps the full description in the detail view", async () => {
     const long = "x".repeat(1500);
-    mockRequest.mockResolvedValueOnce({ prettyId: "INC-42", summary: long });
-    const result = await server.call("harness_get", { resource_type: "incident", resource_id: "INC-42" });
+    mockRequest.mockResolvedValueOnce({ prettyId: "ALERT-42", description: long });
+    const result = await server.call("harness_get", { resource_type: "alert", resource_id: "ALERT-42" });
     const data = parseResult(result) as Record<string, unknown>;
-    expect(data.summary).toBe(long);
+    expect(data.description).toBe(long);
   });
 });
 
-describe("incident — harness_create", () => {
+describe("alert — harness_create", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;
   let client: HarnessClient;
-  let mockRequest: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     server = makeMcpServer("accept");
     registry = new Registry(makeConfig());
-    mockRequest = vi.fn().mockResolvedValue({ prettyId: "INC-99" });
-    client = makeClient(mockRequest);
+    client = makeClient();
     const { registerCreateTool } = await import("../../src/tools/harness-create.js");
     registerCreateTool(server, registry, client, makeConfig());
   });
 
-  it("errors when required fields (templateShortId/title) are missing", async () => {
-    const result = await server.call("harness_create", {
-      resource_type: "incident",
-      body: { summary: "no template or title" },
-    });
-    expect(result.isError).toBe(true);
-    const data = parseResult(result) as { error: string };
-    expect(data.error).toContain("templateShortId");
-    expect(data.error).toContain("title");
-  });
-
-  it("creates an incident when required fields are present", async () => {
-    const result = await server.call("harness_create", {
-      resource_type: "incident",
-      body: { templateShortId: "tmpl-1", title: "DB down", impactedServices: ["svc-a"] },
-    });
-    expect(result.isError).toBeUndefined();
-    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: Record<string, unknown> };
-    expect(callArgs.method).toBe("POST");
-    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents");
-    expect(callArgs.body).toMatchObject({ templateShortId: "tmpl-1", title: "DB down" });
+  it("is not a creatable resource type", () => {
+    const creatableTypes = registry.getTypesForOperation("create");
+    expect(creatableTypes).not.toContain("alert");
   });
 });
 
-describe("incident — harness_update", () => {
+describe("alert — harness_update", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;
   let client: HarnessClient;
@@ -297,27 +307,27 @@ describe("incident — harness_update", () => {
   beforeEach(async () => {
     server = makeMcpServer("accept");
     registry = new Registry(makeConfig());
-    mockRequest = vi.fn().mockResolvedValue({ prettyId: "INC-42" });
+    mockRequest = vi.fn().mockResolvedValue({ prettyId: "ALERT-42" });
     client = makeClient(mockRequest);
     const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
     registerUpdateTool(server, registry, client, makeConfig());
   });
 
-  it("issues a PATCH to the incident path with the merge-patch body", async () => {
+  it("issues a PATCH to the alert path with the merge-patch body", async () => {
     const result = await server.call("harness_update", {
-      resource_type: "incident",
-      resource_id: "INC-42",
-      body: { status: "monitoring" },
+      resource_type: "alert",
+      resource_id: "ALERT-42",
+      body: { priority: "p3_warning", quietMode: true },
     });
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: Record<string, unknown> };
     expect(callArgs.method).toBe("PATCH");
-    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42");
-    expect(callArgs.body).toMatchObject({ status: "monitoring" });
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/alerts/ALERT-42");
+    expect(callArgs.body).toMatchObject({ priority: "p3_warning", quietMode: true });
   });
 });
 
-describe("incident — harness_execute (close)", () => {
+describe("alert — harness_execute (lifecycle)", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;
   let client: HarnessClient;
@@ -326,50 +336,32 @@ describe("incident — harness_execute (close)", () => {
   beforeEach(async () => {
     server = makeMcpServer("accept");
     registry = new Registry(makeConfig());
-    mockRequest = vi.fn().mockResolvedValue({ prettyId: "INC-42", status: "CLOSED" });
+    mockRequest = vi.fn().mockResolvedValue({ prettyId: "ALERT-42", status: "acknowledged" });
     client = makeClient(mockRequest);
     const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
     registerExecuteTool(server, registry, client, makeConfig());
   });
 
-  it("posts to the /close path with no body", async () => {
+  it.each([
+    ["acknowledge", "/gateway/ir/tp/api/v1/mc/alerts/ALERT-42/acknowledge", "acknowledged"],
+    ["resolve", "/gateway/ir/tp/api/v1/mc/alerts/ALERT-42/resolve", "resolved"],
+    ["dismiss", "/gateway/ir/tp/api/v1/mc/alerts/ALERT-42/dismiss", "dismissed"],
+  ] as const)("posts to the %s path with no body", async (action, expectedPath, status) => {
+    mockRequest.mockResolvedValueOnce({ prettyId: "ALERT-42", status });
+
     const result = await server.call("harness_execute", {
-      resource_type: "incident",
-      action: "close",
-      resource_id: "INC-42",
+      resource_type: "alert",
+      action,
+      resource_id: "ALERT-42",
     });
     expect(result.isError).toBeUndefined();
     const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
     expect(callArgs.method).toBe("POST");
-    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42/close");
+    expect(callArgs.path).toBe(expectedPath);
     expect(callArgs.body).toBeUndefined();
-  });
-
-  it("projects a stable close response and drops backend envelope/meta fields", async () => {
-    mockRequest.mockResolvedValueOnce({
-      prettyId: "INC-42",
-      status: "CLOSED",
-      keyEvents: [{ timestamp: 1, status: "CLOSED", details: "resolved" }],
-      rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true }],
-      __internalMeta: { trace: "abc" },
-      correlationId: "xyz",
-    });
-
-    const result = await server.call("harness_execute", {
-      resource_type: "incident",
-      action: "close",
-      resource_id: "INC-42",
-    });
-    expect(result.isError).toBeUndefined();
 
     const data = parseResult(result) as Record<string, unknown>;
-    expect(data.prettyId).toBe("INC-42");
-    expect(data.status).toBe("CLOSED");
-    expect(data.keyEvents).toEqual([{ timestamp: 1, status: "CLOSED", details: "resolved" }]);
-    expect(data.rootCauseTheories).toEqual([
-      { message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true },
-    ]);
-    expect(data).not.toHaveProperty("__internalMeta");
-    expect(data).not.toHaveProperty("correlationId");
+    expect(data.prettyId).toBe("ALERT-42");
+    expect(data.status).toBe(status);
   });
 });
