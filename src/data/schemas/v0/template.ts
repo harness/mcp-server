@@ -1342,7 +1342,8 @@ const schema: Record<string, any> = {
                   "PipelineTimeout",
                   "AllowStageExecutions",
                   "FixedInputsOnRerun",
-                  "DelegateSelectors"
+                  "DelegateSelectors",
+                  "NotificationRules"
                 ]
               }
             },
@@ -20100,7 +20101,6 @@ const schema: Record<string, any> = {
               "provider": {
                 "type": "string",
                 "enum": [
-                  "smi",
                   "istio"
                 ]
               },
@@ -20109,22 +20109,6 @@ const schema: Record<string, any> = {
               }
             },
             "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "provider": {
-                      "const": "smi"
-                    }
-                  }
-                },
-                "then": {
-                  "properties": {
-                    "spec": {
-                      "$ref": "#/definitions/pipeline/steps/cd/SMIProviderSpec"
-                    }
-                  }
-                }
-              },
               {
                 "if": {
                   "properties": {
@@ -20143,8 +20127,8 @@ const schema: Record<string, any> = {
               }
             ]
           },
-          "SMIProviderSpec": {
-            "title": "SMIProviderSpec",
+          "IstioProviderSpec": {
+            "title": "IstioProviderSpec",
             "allOf": [
               {
                 "$ref": "#/definitions/pipeline/steps/cd/K8sTrafficRoutingProviderBaseSpec"
@@ -20152,8 +20136,51 @@ const schema: Record<string, any> = {
               {
                 "type": "object",
                 "properties": {
-                  "rootService": {
-                    "type": "string"
+                  "gateways": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "hosts": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "delegateService": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
                   }
                 }
               }
@@ -20654,66 +20681,6 @@ const schema: Record<string, any> = {
                 "$schema": "http://json-schema.org/draft-07/schema#"
               }
             ]
-          },
-          "IstioProviderSpec": {
-            "title": "IstioProviderSpec",
-            "allOf": [
-              {
-                "$ref": "#/definitions/pipeline/steps/cd/K8sTrafficRoutingProviderBaseSpec"
-              },
-              {
-                "type": "object",
-                "properties": {
-                  "gateways": {
-                    "oneOf": [
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "minItems": 1
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                        "minLength": 1
-                      }
-                    ]
-                  },
-                  "hosts": {
-                    "oneOf": [
-                      {
-                        "type": "array",
-                        "items": {
-                          "type": "string",
-                          "minLength": 1
-                        },
-                        "minItems": 1
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "(<\\+.+>.*)",
-                        "minLength": 1
-                      }
-                    ]
-                  },
-                  "delegateService": {
-                    "oneOf": [
-                      {
-                        "type": "boolean"
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "(<\\+.+>.*)",
-                        "minLength": 1
-                      }
-                    ]
-                  }
-                }
-              }
-            ],
-            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "K8sCanaryDeleteStepNode_template": {
             "title": "K8sCanaryDeleteStepNode_template",
