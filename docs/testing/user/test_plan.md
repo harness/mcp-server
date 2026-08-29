@@ -35,6 +35,7 @@
 ## Notes
 - User resource is account-scoped — no org/project required for list/get
 - List endpoint is POST-based at `/ng/api/user/aggregate` with body containing searchTerm
+- Get endpoint is GET `/ng/api/user/aggregate/{userId}` (not `/ng/api/user/{userId}`, which returns 405)
 - Invite endpoint at `/ng/api/user/users` accepts emails as array or comma-separated string
 - Invite body supports `emails` (or `email_ids`), `user_groups` (or `user_group_ids`), and `role_bindings`
 - role_bindings is an array of objects with: roleIdentifier, resourceGroupIdentifier, roleScopeLevel, roleName, resourceGroupName, managedRole
