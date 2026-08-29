@@ -65,6 +65,28 @@ describe("incident resource definition", () => {
     const def = registry.getResource("incident");
     const severityFilter = def.listFilterFields?.find((f) => f.name === "severity");
     expect(severityFilter?.enum).toEqual(["0", "1", "2", "3", "4"]);
+    expect(severityFilter?.description).toContain("0 is the most severe");
+    expect(severityFilter?.description).toContain("SEV0: Critical");
+  });
+
+  it("surfaces status response casing guidance on the status filter", () => {
+    const registry = new Registry(makeConfig());
+    const def = registry.getResource("incident");
+    const statusFilter = def.listFilterFields?.find((f) => f.name === "status");
+    expect(statusFilter?.description).toContain("responses return status uppercase");
+    expect(statusFilter?.description).toContain("case-insensitively");
+  });
+
+  it.each([
+    ["impacted_service", "registered services"],
+    ["environment", "registered environments"],
+    ["commander", "project's users"],
+  ] as const)("documents validated registry lookup for the %s filter", (filterName, hint) => {
+    const registry = new Registry(makeConfig());
+    const def = registry.getResource("incident");
+    const filter = def.listFilterFields?.find((f) => f.name === filterName);
+    expect(filter?.description).toContain(hint);
+    expect(filter?.description).toContain("returns an error, not an empty list");
   });
 
   it.each(["create", "update"] as const)("names the severity option ids in the %s body schema", (op) => {
@@ -153,7 +175,7 @@ describe("incident — harness_list", () => {
         impactedServices: ["svc-a"],
         summary: "short",
         keyEvents: [{ timestamp: 1, status: "FIXING", details: "x" }, { timestamp: 2, status: "FIXING", details: "y" }],
-        rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true }],
+        rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true, internalTraceId: "trace-1" }],
         __internalMeta: { trace: "abc" },
       }],
       totalCount: 1,
@@ -175,6 +197,16 @@ describe("incident — harness_list", () => {
 
   // Incident summaries are multi-paragraph narratives (~1KB), which dominate the
   // payload once multiplied by the page size.
+  it("omits relatedActivities from list items when the array is empty", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{ prettyId: "INC-1", relatedActivities: [] }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "incident" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]!).not.toHaveProperty("relatedActivities");
+  });
+
   it("truncates a long summary in list view and points at harness_get", async () => {
     const long = "x".repeat(1500);
     mockRequest.mockResolvedValueOnce({
@@ -205,7 +237,7 @@ describe("incident — harness_get", () => {
       severity: { id: "1", label: "SEV1" },
       reportedAtTimestamp: 1781776808000,
       keyEvents: [{ timestamp: 1, status: "INVESTIGATING", details: "looking" }],
-      rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true }],
+      rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true, internalTraceId: "trace-1" }],
       // Backend envelope/internal fields that must NOT cross the tool boundary
       __internalMeta: { trace: "abc" },
       correlationId: "xyz",
@@ -235,6 +267,7 @@ describe("incident — harness_get", () => {
     expect(data.rootCauseTheories).toEqual([
       { message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true },
     ]);
+    expect(data).not.toHaveProperty("internalTraceId");
     // Backend envelope/meta must not leak across the tool boundary
     expect(data).not.toHaveProperty("__internalMeta");
     expect(data).not.toHaveProperty("correlationId");
@@ -350,7 +383,7 @@ describe("incident — harness_execute (close)", () => {
       prettyId: "INC-42",
       status: "CLOSED",
       keyEvents: [{ timestamp: 1, status: "CLOSED", details: "resolved" }],
-      rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true }],
+      rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true, internalTraceId: "trace-1" }],
       __internalMeta: { trace: "abc" },
       correlationId: "xyz",
     });
