@@ -94,6 +94,34 @@ describe("alert resource definition", () => {
     expect(statusFilter?.description).toContain("responses return status uppercase");
     expect(statusFilter?.description).toContain("case-insensitively");
   });
+
+  it("surfaces executeHint for lifecycle actions instead of PATCH status", () => {
+    const registry = new Registry(makeConfig());
+    const def = registry.getResource("alert");
+    expect(def.executeHint).toContain("harness_execute");
+    expect(def.executeHint).toContain("acknowledge");
+    expect(def.executeHint).toContain("resolve");
+    expect(def.executeHint).toContain("dismiss");
+    expect(def.executeHint).toContain("Do not PATCH status");
+  });
+
+  it("documents validated registry filters that error instead of returning empty lists", () => {
+    const registry = new Registry(makeConfig());
+    const def = registry.getResource("alert");
+    for (const name of ["impacted_service", "environment", "template_short_id"] as const) {
+      const filter = def.listFilterFields?.find((f) => f.name === name);
+      expect(filter?.description).toContain("error");
+      expect(filter?.description).toContain("not an empty list");
+    }
+  });
+
+  it("documents sort_direction priority quirk for ASC ordering", () => {
+    const registry = new Registry(makeConfig());
+    const def = registry.getResource("alert");
+    const sortDirection = def.listFilterFields?.find((f) => f.name === "sort_direction");
+    expect(sortDirection?.description).toContain("no priority");
+    expect(sortDirection?.enum).toEqual(["ASC", "DESC"]);
+  });
 });
 
 describe("alert — harness_list", () => {

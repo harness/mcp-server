@@ -220,4 +220,66 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream UnifiedStageNodeV1 permissions in v1 pipeline and template", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const unified = defs[key].stages.unified as Record<string, unknown>;
+      const stage = unified.UnifiedStageNodeV1 as {
+        properties: Record<string, { type?: string; additionalProperties?: boolean; description?: string }>;
+      };
+
+      expect(stage.properties).toHaveProperty("permissions");
+      expect(stage.properties.permissions.type).toBe("object");
+      expect(stage.properties.permissions.additionalProperties).toBe(true);
+      expect(stage.properties.permissions.description).toContain("scoped permissions");
+    }
+  });
+
+  it("includes upstream HttpStepInfo authentication with conditional required fields in v0 pipeline and template", () => {
+    type HttpStepAuth = {
+      properties: {
+        type: { enum: string[]; default?: string };
+        spec: { properties: Record<string, unknown> };
+      };
+      allOf: Array<{
+        if: { properties: { type: { const: string } } };
+        then: { properties: { spec: { required: string[] } } };
+      }>;
+    };
+
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const custom = defs.pipeline.steps.custom as Record<string, unknown>;
+      const httpStepInfo = custom.HttpStepInfo as {
+        allOf: Array<{ properties?: { authentication?: HttpStepAuth } }>;
+      };
+      const authPart = httpStepInfo.allOf.find((part) => part.properties?.authentication);
+      expect(authPart?.properties?.authentication, `${key} HttpStepInfo.authentication`).toBeDefined();
+
+      const auth = authPart!.properties!.authentication!;
+      expect(auth.properties.type.enum).toEqual(["None", "Basic", "BearerToken", "ApiKey"]);
+      expect(auth.properties.type.default).toBe("None");
+      expect(auth.properties.spec.properties).toMatchObject({
+        username: {},
+        password: {},
+        token: {},
+        keyName: {},
+        keyValue: {},
+        addTo: { enum: ["Header", "QueryParameter"], default: "Header" },
+      });
+
+      const requiredByType = Object.fromEntries(
+        auth.allOf.map((rule) => [
+          rule.if.properties.type.const,
+          rule.then.properties.spec.required,
+        ]),
+      );
+      expect(requiredByType).toEqual({
+        Basic: ["username", "password"],
+        BearerToken: ["token"],
+        ApiKey: ["keyName", "keyValue"],
+      });
+    }
+  });
 });
