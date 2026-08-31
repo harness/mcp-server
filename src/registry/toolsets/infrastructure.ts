@@ -62,7 +62,7 @@ export const infrastructureToolset: ToolsetDefinition = {
     {
       resourceType: "infrastructure",
       displayName: "Infrastructure Definition",
-      description: "Infrastructure definition within an environment. Supports full CRUD. Use resource_scope='account' to list or get account-level infrastructure definitions.",
+      description: "Infrastructure definition within an environment. Supports full CRUD. Default list/get scope is project — pass org_id and project_id (or a project URL) on the first call. Use resource_scope='account' only when the user asked for account-level infrastructure definitions.",
       toolset: "infrastructure",
       scope: "project",
       supportedScopes: ["account", "org", "project"],

@@ -34,7 +34,7 @@ export const connectorsToolset: ToolsetDefinition = {
     {
       resourceType: "connector",
       displayName: "Connector",
-      description: "External integration connector. Supports full CRUD and test_connection. Use resource_scope='account' to list or get account-level connectors.",
+      description: "External integration connector. Supports full CRUD and test_connection. Default list/get/execute scope is project — pass org_id and project_id (or a project URL) on the first call. Use resource_scope='account' only when the user asked for account-level connectors.",
       toolset: "connectors",
       scope: "project",
       supportedScopes: ["account", "org", "project"],

@@ -151,7 +151,7 @@ describe("harness_list", () => {
     const schema = server.schema("harness_list") as {
       inputSchema: { resource_scope?: { description?: string | null } };
     };
-    expect(schema.inputSchema.resource_scope?.description).toContain("Scope to query");
+    expect(schema.inputSchema.resource_scope?.description).toContain("do not use account to skip a known org/project");
   });
 
   it("uses account scope from account-level connector URLs instead of config defaults", async () => {
@@ -221,7 +221,7 @@ describe("harness_get", () => {
     const schema = server.schema("harness_get") as {
       inputSchema: { resource_scope?: { description?: string | null } };
     };
-    expect(schema.inputSchema.resource_scope?.description).toContain("Scope to query");
+    expect(schema.inputSchema.resource_scope?.description).toContain("do not use account to skip a known org/project");
   });
 
   it("propagates 404 as errorResult", async () => {
@@ -3330,7 +3330,7 @@ describe("harness_search", () => {
     const schema = server.schema("harness_search") as {
       inputSchema: { resource_scope?: { description?: string | null } };
     };
-    expect(schema.inputSchema.resource_scope?.description).toContain("Scope to search");
+    expect(schema.inputSchema.resource_scope?.description).toContain("do not use account to skip a known org/project");
   });
 
   it("passes explicit account resource_scope through to searched resources", async () => {
