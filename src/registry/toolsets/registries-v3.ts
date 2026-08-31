@@ -36,6 +36,9 @@ export const registriesV3Toolset: ToolsetDefinition = {
   displayName: "Artifact Registries (v3)",
   description:
     "Harness Artifact Registry v3 — packages, versions, files, metadata, scans, firewall exceptions (reads).",
+  // Opt-in until v3 writes and a v3 registry list land, so agents don't have to
+  // disambiguate between v1 registries/artifacts and v3 packages/versions.
+  optIn: true,
   resources: [
     {
       resourceType: "package_v3",
@@ -57,6 +60,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
         },
         { name: "metadata", description: "Filter by metadata using key:value format" },
         { name: "include_meta", description: "Include the `meta` block in the response", type: "boolean" },
+        { name: "sort", description: "Sort spec, e.g. `name,ASC`" },
       ],
       operations: {
         list: {
@@ -97,6 +101,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
         { name: "metadata", description: "Filter by metadata using key:value format" },
         { name: "uploaded_by", description: "Filter by uploader user ID" },
         { name: "include_meta", description: "Include the `meta` block in the response", type: "boolean" },
+        { name: "sort", description: "Sort spec, e.g. `name,ASC`" },
       ],
       operations: {
         list: {
@@ -134,6 +139,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
         { name: "registry_id", description: "Registry ID to scope the file search" },
         { name: "package_id", description: "Package ID to scope the file search" },
         { name: "version_id", description: "Version ID to scope the file search" },
+        { name: "sort", description: "Sort spec, e.g. `name,ASC`" },
       ],
       operations: {
         list: {
@@ -305,6 +311,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
           description: "Registry scope",
           enum: ["none", "ancestors", "descendants"],
         },
+        { name: "sort", description: "Sort spec, e.g. `name,ASC`" },
       ],
       operations: {
         list: {
@@ -373,6 +380,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
         { name: "package_types", description: "Package types filter", enum: V3_PACKAGE_TYPES },
         { name: "registry_ids", description: "Comma-separated registry IDs" },
         { name: "exception_id", description: "Filter by exception ID" },
+        { name: "sort", description: "Sort spec, e.g. `name,ASC`" },
       ],
       operations: {
         list: {
@@ -400,6 +408,8 @@ export const registriesV3Toolset: ToolsetDefinition = {
       resourceType: "firewall_exception_version_v3",
       displayName: "Firewall Exception Version (v3)",
       description: "Version listing used when authoring a firewall exception for a specific package.",
+      // Account-scoped: v3 spec's ListFirewallExceptionVersionsV3 takes only
+      // AccountIdentifierV3 (no org / project). Confirmed against api.yaml.
       toolset: "registries-v3",
       scope: "account",
       scopeParams: V3_SCOPE_PARAMS,
