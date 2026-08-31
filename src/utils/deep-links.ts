@@ -37,3 +37,16 @@ export function appendStoreType(link: string, record: Record<string, unknown>): 
   }
   return link;
 }
+
+/**
+ * Agent details URLs use ?type=custom|system. List/get include both roles;
+ * only append when the extracted record has a known role.
+ */
+export function appendAgentTypeQuery(link: string, record: Record<string, unknown>): string {
+  const role = record.role;
+  if (role !== "custom" && role !== "system") {
+    return link;
+  }
+  const separator = link.includes("?") ? "&" : "?";
+  return `${link}${separator}type=${encodeURIComponent(role)}`;
+}

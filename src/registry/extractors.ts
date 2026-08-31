@@ -71,6 +71,67 @@ export const countExtract = (raw: unknown): { count: number; _error?: string } =
 /** Pass-through extractor — returns raw response unchanged. Used for APIs that don't wrap in `data`. */
 export const passthrough = (raw: unknown): unknown => raw;
 
+/**
+ * Agent APIs return `id` (the UID), not `identifier`. Alias so deep links can
+ * resolve `{agentIdentifier}`. Handles:
+ * - create/get entity `{ id }`
+ * - NG/gateway envelope `{ data: { id } }`
+ * - list as a raw array or `{ data: [...] }` (normalized to `{ items, total }`)
+ */
+export const agentExtract = (raw: unknown): unknown => {
+  if (raw === null || raw === undefined) return raw;
+  const unwrapped = unwrapAgentPayload(raw);
+  if (Array.isArray(unwrapped)) {
+    const items = unwrapped.map(aliasAgentItem);
+    return { items, total: items.length };
+  }
+  if (!isRecord(unwrapped)) return unwrapped;
+  aliasAgentRecord(unwrapped);
+  return unwrapped;
+};
+
+function unwrapAgentPayload(raw: unknown): unknown {
+  if (!isRecord(raw) || !("data" in raw)) return raw;
+  const data = raw.data;
+  if (Array.isArray(data)) return data;
+  if (isRecord(data) && looksLikeAgent(data)) return data;
+  return raw;
+}
+
+function looksLikeAgent(record: Record<string, unknown>): boolean {
+  return isScalarId(record.id) || isScalarId(record.uid) || isScalarId(record.identifier) || typeof record.name === "string";
+}
+
+function isScalarId(value: unknown): value is string | number {
+  return (typeof value === "string" && value !== "") || typeof value === "number";
+}
+
+/** Alias id/uid onto identifier. Walk nested data/items/content objects, not only arrays. */
+function aliasAgentRecord(record: Record<string, unknown>): void {
+  aliasAgentIdentifier(record);
+  for (const key of ["items", "data", "content"] as const) {
+    const val = record[key];
+    if (Array.isArray(val)) {
+      record[key] = val.map(aliasAgentItem);
+    } else if (isRecord(val)) {
+      aliasAgentRecord(val);
+    }
+  }
+}
+
+function aliasAgentIdentifier(record: Record<string, unknown>): void {
+  if (typeof record.identifier === "string" && record.identifier !== "") return;
+  const id = record.id ?? record.uid;
+  if (isScalarId(id)) {
+    record.identifier = String(id);
+  }
+}
+
+function aliasAgentItem(item: unknown): unknown {
+  if (isRecord(item)) aliasAgentIdentifier(item);
+  return item;
+}
+
 /** Offset-paginated list (OffsetPaginatedResult): { entities, totalCount } */
 export const offsetListExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as { entities?: unknown[]; totalCount?: number };

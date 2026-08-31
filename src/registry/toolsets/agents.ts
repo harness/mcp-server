@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough } from "../extractors.js";
+import { agentExtract, passthrough } from "../extractors.js";
 
 /**
  * Generate a UID from an agent name by converting to lowercase and replacing
@@ -48,13 +48,13 @@ export const agentsToolset: ToolsetDefinition = {
       scope: "project",
       scopeOptional: false,
       identifierFields: ["agent_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/agents/{agentIdentifier}/details",
+      deepLinkTemplate: "/ng/account/{accountId}/all/ai-agents/orgs/{orgIdentifier}/projects/{projectIdentifier}/agents/{agentIdentifier}",
       operations: {
         list: {
           method: "GET",
           path: "/gateway/agents/api/v1/agents",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: agentExtract,
           description: "List all agents (system and custom) scoped to the account/org/project context",
         },
         get: {
@@ -62,7 +62,7 @@ export const agentsToolset: ToolsetDefinition = {
           path: "/gateway/agents/api/v1/agents/{agentIdentifier}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { agent_id: "agentIdentifier" },
-          responseExtractor: passthrough,
+          responseExtractor: agentExtract,
           description: "Get agent details including YAML spec, role, status, timestamps, wiki, and logo",
         },
         create: {
@@ -84,7 +84,7 @@ export const agentsToolset: ToolsetDefinition = {
 
             return body;
           },
-          responseExtractor: passthrough,
+          responseExtractor: agentExtract,
           description: "Create a new custom agent with YAML specification. System agents cannot be created via API. The uid field is required and must be unique within the scope.",
           bodySchema: agentCreateSchema,
         },
@@ -98,7 +98,7 @@ export const agentsToolset: ToolsetDefinition = {
             if (!body) throw new Error("body is required for agent update");
             return body;
           },
-          responseExtractor: passthrough,
+          responseExtractor: agentExtract,
           description: "Update a custom agent. All fields are optional. Only custom agents can be updated (role='custom').",
           bodySchema: agentUpdateSchema,
         },
