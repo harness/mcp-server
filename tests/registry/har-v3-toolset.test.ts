@@ -6,6 +6,7 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
+import { registriesV3Toolset } from "../../src/registry/toolsets/registries-v3.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 
@@ -212,5 +213,52 @@ describe("HAR v3 toolset", () => {
 
     const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(call.path).toBe("/har/api/v3/scans/bulk-evaluate/eval-abc");
+  });
+});
+
+// ─── Registry opt-in behaviour ────────────────────────────────────────────────
+// The registries-v3 toolset ships opt-in (like ansible) — its resource types
+// must not appear in a default Registry.
+
+describe("registries-v3 opt-in with Registry", () => {
+  const V3_TYPES = [
+    "package_v3",
+    "version_v3",
+    "file_v3",
+    "registry_metadata_v3",
+    "package_metadata_v3",
+    "version_metadata_v3",
+    "file_metadata_v3",
+    "metadata_key_v3",
+    "metadata_value_v3",
+    "artifact_scan_v3",
+    "bulk_scan_evaluation_v3",
+    "firewall_exception_v3",
+    "firewall_exception_version_v3",
+  ];
+
+  it("toolset is marked optIn: true", () => {
+    expect(registriesV3Toolset.optIn).toBe(true);
+  });
+
+  it("is NOT present when HARNESS_TOOLSETS is unset (all defaults)", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: undefined }));
+    const types = registry.getAllResourceTypes();
+    for (const t of V3_TYPES) {
+      expect(types).not.toContain(t);
+    }
+  });
+
+  it("IS present when explicitly enabled with HARNESS_TOOLSETS=registries-v3", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+    const types = registry.getAllResourceTypes();
+    for (const t of V3_TYPES) {
+      expect(types).toContain(t);
+    }
+  });
+
+  it("IS present when added to defaults with HARNESS_TOOLSETS=+registries-v3", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "+registries-v3" }));
+    expect(registry.getAllResourceTypes()).toContain("package_v3");
   });
 });
