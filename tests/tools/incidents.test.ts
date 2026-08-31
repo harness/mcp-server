@@ -188,6 +188,61 @@ describe("incident — harness_list", () => {
     expect(summary).toContain("harness_get");
     expect(summary.startsWith("x".repeat(400))).toBe(true);
   });
+
+  it("keeps the linked type and relationship verb in list view, dropping globalId", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{
+        prettyId: "INC-1",
+        relatedActivities: [{
+          name: "relates to",
+          templateTypeName: "ALERT",
+          prettyId: "ALERT-9",
+          globalId: "global-abc",
+          title: "CPU spike",
+        }],
+      }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "incident" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]!.relatedActivities).toEqual([
+      { prettyId: "ALERT-9", templateTypeName: "ALERT", title: "CPU spike", name: "relates to" },
+    ]);
+  });
+
+  // A null templateTypeName must not surface as `templateTypeName: null` — the
+  // field is the caller's routing key, so an unclassified edge should read as
+  // absent rather than as a type that is explicitly nothing.
+  it("omits templateTypeName when the backend leaves it null", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{
+        prettyId: "INC-1",
+        relatedActivities: [{
+          name: "is caused by",
+          templateTypeName: null,
+          prettyId: "DEPLIR1-56",
+          globalId: "global-abc",
+          title: "",
+        }],
+      }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "incident" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]!.relatedActivities).toEqual([
+      { prettyId: "DEPLIR1-56", title: "", name: "is caused by" },
+    ]);
+  });
+
+  it("omits relatedActivities when the incident has none", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{ prettyId: "INC-1", relatedActivities: [] }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "incident" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]!).not.toHaveProperty("relatedActivities");
+  });
 });
 
 describe("incident — harness_get", () => {
@@ -238,6 +293,28 @@ describe("incident — harness_get", () => {
     // Backend envelope/meta must not leak across the tool boundary
     expect(data).not.toHaveProperty("__internalMeta");
     expect(data).not.toHaveProperty("correlationId");
+  });
+
+  it("projects related activities the same way as the list view", async () => {
+    mockRequest.mockResolvedValueOnce({
+      prettyId: "INC-42",
+      relatedActivities: [{
+        name: "relates to",
+        templateTypeName: "ALERT",
+        prettyId: "ALERT-9",
+        globalId: "global-abc",
+        title: "CPU spike",
+        __internalMeta: { trace: "abc" },
+      }],
+    });
+    const result = await server.call("harness_get", { resource_type: "incident", resource_id: "INC-42" });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.relatedActivities).toEqual([{
+      prettyId: "ALERT-9",
+      templateTypeName: "ALERT",
+      title: "CPU spike",
+      name: "relates to",
+    }]);
   });
 
   it("keeps the full summary in the detail view", async () => {

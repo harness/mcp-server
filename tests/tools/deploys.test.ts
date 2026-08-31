@@ -138,6 +138,47 @@ describe("deploy — harness_list", () => {
     expect(item).not.toHaveProperty("buildVersions");
   });
 
+  it("keeps the linked type and relationship verb in list view, dropping globalId", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{
+        id: "DEPL-1",
+        relatedActivities: [{
+          name: "relates to",
+          templateTypeName: "INCIDENT",
+          prettyId: "INC-7",
+          globalId: "global-abc",
+          title: "Checkout latency",
+        }],
+      }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "deploy" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]!.relatedActivities).toEqual([
+      { prettyId: "INC-7", templateTypeName: "INCIDENT", title: "Checkout latency", name: "relates to" },
+    ]);
+  });
+
+  it("keeps status in compact output when the API supplies one", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{ id: "DEPL-1", status: "SUCCESS" }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "deploy" });
+    const data = parseResult(result) as { items: Record<string, unknown>[] };
+    expect(data.items[0]!.status).toBe("SUCCESS");
+  });
+
+  it("omits relatedActivities when the deploy has none", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{ id: "DEPL-1", relatedActivities: [] }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "deploy" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]!).not.toHaveProperty("relatedActivities");
+  });
+
   it("compact:false leaves raw fields intact", async () => {
     mockRequest.mockResolvedValueOnce({
       entities: [{ id: "DEPL-1", status: null, buildVersions: [{ service: "x", version: "1" }] }],
@@ -230,5 +271,27 @@ describe("deploy — harness_get", () => {
     expect(data.webLink).toContain("DEPLU65-8065");
     // Backend debug field stripped
     expect(data).not.toHaveProperty("someBackendDebugField");
+  });
+
+  it("projects related activities the same way as the list view", async () => {
+    mockRequest.mockResolvedValueOnce({
+      id: "DEPL-24",
+      relatedActivities: [{
+        name: "relates to",
+        templateTypeName: "INCIDENT",
+        prettyId: "INC-7",
+        globalId: "global-abc",
+        title: "Checkout latency",
+        __internalMeta: { trace: "abc" },
+      }],
+    });
+    const result = await server.call("harness_get", { resource_type: "deploy", resource_id: "DEPL-24" });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.relatedActivities).toEqual([{
+      prettyId: "INC-7",
+      templateTypeName: "INCIDENT",
+      title: "Checkout latency",
+      name: "relates to",
+    }]);
   });
 });

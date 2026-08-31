@@ -1,16 +1,20 @@
 import type { ToolsetDefinition } from "../types.js";
 import { offsetListExtract } from "../extractors.js";
 import { MC_SCOPE } from "./scopes.js";
+import { projectRelatedActivity } from "./related-activities.js";
 import { isRecord } from "../../utils/type-guards.js";
 
 /**
- * Compact a deploy list item. The deploy API returns an always-empty `title`,
- * an always-null `status`, and a multi-KB `summary` changelog — the generic
- * key whitelist would keep the first two (useless) and drop the genuinely
- * identifying fields (`id`, `buildVersions`, `deployTimestamp`). This keeps the
- * identity an agent actually needs while dropping the noise:
+ * Compact a deploy list item. The deploy API returns an always-empty `title`
+ * and a multi-KB `summary` changelog — the generic key whitelist would keep the
+ * empty title (useless) and drop the genuinely identifying fields (`id`,
+ * `buildVersions`, `deployTimestamp`). This keeps the identity an agent
+ * actually needs while dropping the noise:
  *   - `summary` truncated to its first line (the "### Change Log for X" header)
  *   - `services` derived from buildVersions (service + version only)
+ *   - related activities projected the same way as in the detail view
+ * `status` is kept when the API supplies one: correlating a deploy to an
+ * incident hinges on whether it succeeded, so it must survive compaction.
  * Full summary/buildVersions remain available via compact:false or harness_get.
  */
 function compactDeploy(item: Record<string, unknown>): Record<string, unknown> {
@@ -20,6 +24,7 @@ function compactDeploy(item: Record<string, unknown>): Record<string, unknown> {
   if (typeof item.summary === "string" && item.summary.length > 0) {
     slim.summary = item.summary.split("\n", 1)[0];
   }
+  if (item.status !== null && item.status !== undefined) slim.status = item.status;
   if (Array.isArray(item.environments)) slim.environments = item.environments;
   if (Array.isArray(item.buildVersions)) {
     slim.services = item.buildVersions.map((bv) => {
@@ -29,15 +34,19 @@ function compactDeploy(item: Record<string, unknown>): Record<string, unknown> {
   }
   if (typeof item.deployTimestamp === "number") slim.deployTimestamp = item.deployTimestamp;
   if (typeof item.webLink === "string") slim.webLink = item.webLink;
+  if (Array.isArray(item.relatedActivities) && item.relatedActivities.length > 0) {
+    slim.relatedActivities = item.relatedActivities.map(projectRelatedActivity);
+  }
   return slim;
 }
 
 /**
  * Extract deploy detail response for GET /deploys/{deployId}.
  * Projects a stable, documented shape (id, projectId, title, summary, status,
- * environments, buildVersions, deployTimestamp, webLink) and strips backend
- * envelope/debug/meta fields. Unlike the list compactor, this keeps the full
- * summary and all buildVersions subfields since this is the detail view.
+ * environments, buildVersions, deployTimestamp, webLink, relatedActivities)
+ * and strips backend envelope/debug/meta fields. Unlike the list compactor,
+ * this keeps the full summary and all buildVersions subfields since this is the
+ * detail view.
  */
 function deployGetExtract(raw: unknown): unknown {
   if (!isRecord(raw)) return raw;
@@ -63,6 +72,9 @@ function deployGetExtract(raw: unknown): unknown {
   }
   if (typeof raw.deployTimestamp === "number") slim.deployTimestamp = raw.deployTimestamp;
   if (typeof raw.webLink === "string") slim.webLink = raw.webLink;
+  if (Array.isArray(raw.relatedActivities) && raw.relatedActivities.length > 0) {
+    slim.relatedActivities = raw.relatedActivities.map(projectRelatedActivity);
+  }
   return slim;
 }
 
