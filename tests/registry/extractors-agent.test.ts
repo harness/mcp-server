@@ -75,4 +75,25 @@ describe("agentExtract", () => {
   it("leaves delete-style { data: true } alone", () => {
     expect(agentExtract({ data: true })).toEqual({ data: true });
   });
+
+  it("aliases nested object envelopes (items/data/content as objects, not arrays)", () => {
+    expect(agentExtract({ items: { id: "nested" } })).toEqual({
+      items: { id: "nested", identifier: "nested" },
+    });
+    expect(agentExtract({ content: { uid: "from-uid" } })).toEqual({
+      content: { uid: "from-uid", identifier: "from-uid" },
+    });
+  });
+
+  it("aliases numeric id onto identifier as a string", () => {
+    expect(agentExtract({ id: 42 })).toEqual({ id: 42, identifier: "42" });
+  });
+
+  it("does not alias object id or uid onto identifier", () => {
+    const objectId = { oid: "pipeline_lister_agent" };
+    expect(agentExtract({ id: objectId, name: "New" })).toEqual({
+      id: objectId,
+      name: "New",
+    });
+  });
 });

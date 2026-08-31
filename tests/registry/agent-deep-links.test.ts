@@ -38,8 +38,10 @@ function mockFetchResponse(body: unknown, status = 200): Response {
   });
 }
 
-const EXPECTED_LINK =
-  "https://app.harness.io/ng/account/testaccount/all/ai-agents/orgs/default/projects/aiTeam/agents/pipeline_lister_agent?type=custom";
+const EXPECTED_PATH =
+  "https://app.harness.io/ng/account/testaccount/all/ai-agents/orgs/default/projects/aiTeam/agents/pipeline_lister_agent";
+const EXPECTED_CUSTOM_LINK = `${EXPECTED_PATH}?type=custom`;
+const EXPECTED_SYSTEM_LINK = `${EXPECTED_PATH}?type=system`;
 
 const createBody = {
   uid: "pipeline_lister_agent",
@@ -68,7 +70,7 @@ describe("agent deep links", () => {
       body: createBody,
     })) as Record<string, unknown>;
 
-    expect(result.openInHarness).toBe(EXPECTED_LINK);
+    expect(result.openInHarness).toBe(EXPECTED_PATH);
     expect(String(result.openInHarness)).not.toContain("{agentIdentifier}");
   });
 
@@ -82,7 +84,7 @@ describe("agent deep links", () => {
       body: createBody,
     })) as Record<string, unknown>;
 
-    expect(result.openInHarness).toBe(EXPECTED_LINK);
+    expect(result.openInHarness).toBe(EXPECTED_PATH);
   });
 
   it("resolves {agentIdentifier} from a { data: { id } } create envelope", async () => {
@@ -100,7 +102,7 @@ describe("agent deep links", () => {
       body: createBody,
     })) as Record<string, unknown>;
 
-    expect(result.openInHarness).toBe(EXPECTED_LINK);
+    expect(result.openInHarness).toBe(EXPECTED_PATH);
     expect(result.identifier).toBe("pipeline_lister_agent");
   });
 
@@ -113,7 +115,7 @@ describe("agent deep links", () => {
       project_id: "aiTeam",
     })) as { items: Array<Record<string, unknown>> };
 
-    expect(result.items[0]!.openInHarness).toBe(EXPECTED_LINK);
+    expect(result.items[0]!.openInHarness).toBe(EXPECTED_PATH);
     expect(result.items[0]!.identifier).toBe("pipeline_lister_agent");
     expect(String(result.items[0]!.openInHarness)).not.toContain("{agentIdentifier}");
   });
@@ -132,7 +134,7 @@ describe("agent deep links", () => {
       project_id: "aiTeam",
     })) as { items: Array<Record<string, unknown>> };
 
-    expect(result.items[0]!.openInHarness).toBe(EXPECTED_LINK);
+    expect(result.items[0]!.openInHarness).toBe(EXPECTED_PATH);
     expect(result.items[0]!.identifier).toBe("pipeline_lister_agent");
   });
 
@@ -146,6 +148,54 @@ describe("agent deep links", () => {
       agent_id: "pipeline_lister_agent",
     })) as Record<string, unknown>;
 
-    expect(result.openInHarness).toBe(EXPECTED_LINK);
+    expect(result.openInHarness).toBe(EXPECTED_PATH);
+  });
+
+  it("appends ?type=custom when create/get role is custom", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockFetchResponse({ id: "pipeline_lister_agent", role: "custom" }),
+    );
+
+    const registry = new Registry(makeConfig());
+    const result = (await registry.dispatch(new HarnessClient(makeConfig()), "agent", "create", {
+      org_id: "default",
+      project_id: "aiTeam",
+      body: createBody,
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(EXPECTED_CUSTOM_LINK);
+  });
+
+  it("appends ?type=system for list items with role system", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockFetchResponse([{ id: "pipeline_lister_agent", role: "system" }]),
+    );
+
+    const registry = new Registry(makeConfig());
+    const result = (await registry.dispatch(new HarnessClient(makeConfig()), "agent", "list", {
+      org_id: "default",
+      project_id: "aiTeam",
+    })) as { items: Array<Record<string, unknown>> };
+
+    expect(result.items[0]!.openInHarness).toBe(EXPECTED_SYSTEM_LINK);
+  });
+
+  it("resolves {agentIdentifier} from a { data: { id } } get envelope", async () => {
+    fetchSpy.mockResolvedValueOnce(
+      mockFetchResponse({
+        status: "SUCCESS",
+        data: { id: "pipeline_lister_agent", role: "custom" },
+      }),
+    );
+
+    const registry = new Registry(makeConfig());
+    const result = (await registry.dispatch(new HarnessClient(makeConfig()), "agent", "get", {
+      org_id: "default",
+      project_id: "aiTeam",
+      agent_id: "pipeline_lister_agent",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(EXPECTED_CUSTOM_LINK);
+    expect(result.identifier).toBe("pipeline_lister_agent");
   });
 });

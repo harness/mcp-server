@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildDeepLink } from "../../src/utils/deep-links.js";
+import { appendAgentTypeQuery, buildDeepLink } from "../../src/utils/deep-links.js";
 
 describe("buildDeepLink", () => {
   const baseUrl = "https://app.harness.io";
@@ -42,5 +42,19 @@ describe("buildDeepLink", () => {
   it("handles empty params", () => {
     const url = buildDeepLink(baseUrl, accountId, "/ng/account/{accountId}/home", {});
     expect(url).toBe("https://app.harness.io/ng/account/abc123/home");
+  });
+});
+
+describe("appendAgentTypeQuery", () => {
+  const link = "https://app.harness.io/ng/account/a/all/ai-agents/orgs/o/projects/p/agents/x";
+
+  it("appends type=custom or type=system from role", () => {
+    expect(appendAgentTypeQuery(link, { role: "custom" })).toBe(`${link}?type=custom`);
+    expect(appendAgentTypeQuery(link, { role: "system" })).toBe(`${link}?type=system`);
+  });
+
+  it("does not append type when role is missing or unknown", () => {
+    expect(appendAgentTypeQuery(link, {})).toBe(link);
+    expect(appendAgentTypeQuery(link, { role: "other" })).toBe(link);
   });
 });

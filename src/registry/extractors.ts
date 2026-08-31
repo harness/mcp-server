@@ -86,13 +86,7 @@ export const agentExtract = (raw: unknown): unknown => {
     return { items, total: items.length };
   }
   if (!isRecord(unwrapped)) return unwrapped;
-  aliasAgentIdentifier(unwrapped);
-  for (const key of ["items", "data", "content"] as const) {
-    const arr = unwrapped[key];
-    if (Array.isArray(arr)) {
-      unwrapped[key] = arr.map(aliasAgentItem);
-    }
-  }
+  aliasAgentRecord(unwrapped);
   return unwrapped;
 };
 
@@ -105,14 +99,31 @@ function unwrapAgentPayload(raw: unknown): unknown {
 }
 
 function looksLikeAgent(record: Record<string, unknown>): boolean {
-  return record.id != null || record.uid != null || record.identifier != null || typeof record.name === "string";
+  return isScalarId(record.id) || isScalarId(record.uid) || isScalarId(record.identifier) || typeof record.name === "string";
+}
+
+function isScalarId(value: unknown): value is string | number {
+  return (typeof value === "string" && value !== "") || typeof value === "number";
+}
+
+/** Alias id/uid onto identifier. Walk nested data/items/content objects, not only arrays. */
+function aliasAgentRecord(record: Record<string, unknown>): void {
+  aliasAgentIdentifier(record);
+  for (const key of ["items", "data", "content"] as const) {
+    const val = record[key];
+    if (Array.isArray(val)) {
+      record[key] = val.map(aliasAgentItem);
+    } else if (isRecord(val)) {
+      aliasAgentRecord(val);
+    }
+  }
 }
 
 function aliasAgentIdentifier(record: Record<string, unknown>): void {
-  if (record.identifier != null && record.identifier !== "") return;
+  if (typeof record.identifier === "string" && record.identifier !== "") return;
   const id = record.id ?? record.uid;
-  if (id != null && id !== "") {
-    record.identifier = id;
+  if (isScalarId(id)) {
+    record.identifier = String(id);
   }
 }
 

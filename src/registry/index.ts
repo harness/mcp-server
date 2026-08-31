@@ -6,7 +6,7 @@ import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName,
 import type { AuditManager } from "../audit/manager.js";
 import type { AuditContext, AuditEvent, AuditOutcome } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
-import { buildDeepLink, appendStoreType } from "../utils/deep-links.js";
+import { buildDeepLink, appendStoreType, appendAgentTypeQuery } from "../utils/deep-links.js";
 import { isFormDataBody } from "../utils/type-guards.js";
 import { canonicalizeListFilterEnums } from "./enum-utils.js";
 import { assertListScopeResolved } from "./list-filter-utils.js";
@@ -1007,6 +1007,9 @@ export class Registry {
             baseLinkParams,
           );
           link = appendStoreType(link, resultRecord);
+          if (def.resourceType === "agent") {
+            link = appendAgentTypeQuery(link, resultRecord);
+          }
           resultRecord.openInHarness = link;
         } catch {
           // Deep link construction failed — non-critical
@@ -1101,6 +1104,9 @@ export class Registry {
               itemLinkParams,
             );
             itemLink = appendStoreType(itemLink, itemRecord);
+            if (def.resourceType === "agent") {
+              itemLink = appendAgentTypeQuery(itemLink, itemRecord);
+            }
             itemRecord.openInHarness = itemLink;
           } catch {
             // Per-item deep link failed — non-critical, skip
