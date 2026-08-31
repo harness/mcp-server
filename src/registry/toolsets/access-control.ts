@@ -31,7 +31,7 @@ export const accessControlToolset: ToolsetDefinition = {
         },
         get: {
           method: "GET",
-          path: "/ng/api/user/{userId}",
+          path: "/ng/api/user/aggregate/{userId}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { user_id: "userId" },
           responseExtractor: ngExtract,
