@@ -396,6 +396,7 @@ export const harV3ListExtract = (raw: unknown): unknown => {
   if (Array.isArray(raw.data) && !("items" in raw)) {
     return {
       items: raw.data,
+      total: typeof raw.itemCount === "number" ? raw.itemCount : raw.data.length,
       page: raw.pageIndex,
       size: raw.pageSize,
       hasMore: typeof raw.pageIndex === "number" && typeof raw.pageCount === "number"
@@ -404,8 +405,16 @@ export const harV3ListExtract = (raw: unknown): unknown => {
       meta: raw.meta,
     };
   }
+  const items = (raw.items as unknown[]) ?? [];
+  const meta = raw.meta as Record<string, unknown> | undefined;
+  const total = typeof meta?.totalCount === "number"
+    ? meta.totalCount
+    : typeof meta?.total === "number"
+      ? meta.total
+      : items.length;
   return {
-    items: (raw.items as unknown[]) ?? [],
+    items,
+    total,
     page: raw.page,
     size: raw.size,
     hasMore: raw.hasMore,

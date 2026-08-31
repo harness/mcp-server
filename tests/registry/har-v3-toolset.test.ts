@@ -25,6 +25,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_SKIP_ELICITATION: false,
     HARNESS_ALLOW_HTTP: false,
     HARNESS_FME_BASE_URL: "https://api.split.io",
+    HARNESS_TOOLSETS: "+registries-v3",
     ...overrides,
   };
 }
@@ -98,14 +99,68 @@ describe("HAR v3 toolset", () => {
 
     const result = (await registry.dispatch(client, "artifact_scan_v3", "list", {})) as {
       items: unknown[];
+      total: number;
       page: number;
       size: number;
       hasMore: boolean;
     };
     expect(result.items).toHaveLength(2);
+    expect(result.total).toBe(2);
     expect(result.page).toBe(0);
     expect(result.size).toBe(20);
     expect(result.hasMore).toBe(false);
+  });
+
+  it("harV3ListExtract surfaces total from meta.totalCount for native v3 responses", async () => {
+    const client = mockClient({
+      items: [{ id: "p-1" }],
+      page: 0,
+      size: 20,
+      hasMore: false,
+      meta: { totalCount: 42 },
+    });
+    const result = (await registry.dispatch(client, "package_v3", "list", {})) as { total: number };
+    expect(result.total).toBe(42);
+  });
+
+  it("firewall_exception_version_v3.list is account-scoped: no org/project params leak", async () => {
+    // Spec's ListFirewallExceptionVersionsV3 takes only AccountIdentifierV3.
+    const client = mockClient({ items: [], page: 0, size: 20, hasMore: false });
+
+    await registry.dispatch(client, "firewall_exception_version_v3", "list", {
+      registry_id: "0183d3a8-91d8-4c49-8025-057b0e16fca8",
+      package_name: "lodash",
+    });
+
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.path).toBe("/har/api/v3/scans/versions");
+    expect(call.params.account_identifier).toBe("acct123");
+    expect(call.params.org_identifier).toBeUndefined();
+    expect(call.params.project_identifier).toBeUndefined();
+    expect(call.params.registry_id).toBe("0183d3a8-91d8-4c49-8025-057b0e16fca8");
+    expect(call.params.package_name).toBe("lodash");
+  });
+
+  it("file_v3.list hits /har/api/v3/files and forwards registry/package/version scoping filters", async () => {
+    const client = mockClient({ items: [], page: 0, size: 20, hasMore: false });
+    await registry.dispatch(client, "file_v3", "list", {
+      registry_id: "reg-1",
+      package_id: "pkg-1",
+      version_id: "v-1",
+    });
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.path).toBe("/har/api/v3/files");
+    expect(call.params.registry_id).toBe("reg-1");
+    expect(call.params.package_id).toBe("pkg-1");
+    expect(call.params.version_id).toBe("v-1");
+  });
+
+  it("metadata_value_v3.list forwards the required `key` param", async () => {
+    const client = mockClient({ items: ["prod", "staging"], page: 0, size: 20, hasMore: false });
+    await registry.dispatch(client, "metadata_value_v3", "list", { key: "env" });
+    const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(call.path).toBe("/har/api/v3/metadata/values");
+    expect(call.params.key).toBe("env");
   });
 
   it("package_metadata_v3.get substitutes package_id into {id} path param", async () => {
