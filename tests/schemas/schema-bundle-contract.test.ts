@@ -220,4 +220,130 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes HttpStepInfo authentication conditional required fields in v0 pipeline and template (#869)", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const httpStepInfo = (defs.pipeline.steps.custom as Record<string, unknown>).HttpStepInfo as {
+        allOf: Array<{
+          properties?: {
+            authentication?: {
+              allOf: Array<{
+                if: { properties: { type: { const: string } } };
+                then: { properties: { spec: { required: string[] } } };
+              }>;
+            };
+          };
+        }>;
+      };
+
+      const authBlock = httpStepInfo.allOf.find((part) => part.properties?.authentication)?.properties
+        ?.authentication;
+      expect(authBlock?.allOf).toBeDefined();
+
+      const requiredByType = new Map(
+        authBlock!.allOf.map((branch) => [
+          branch.if.properties.type.const,
+          branch.then.properties.spec.required,
+        ]),
+      );
+
+      expect(requiredByType.get("Basic")).toEqual(["username", "password"]);
+      expect(requiredByType.get("BearerToken")).toEqual(["token"]);
+      expect(requiredByType.get("ApiKey")).toEqual(["keyName", "keyValue"]);
+    }
+  });
+
+  it("includes UnifiedStageNodeV1 permissions field in v1 pipeline and template (#864)", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const unified = defs[key].stages.unified as Record<string, unknown>;
+      const stage = unified.UnifiedStageNodeV1 as {
+        properties: Record<string, { description?: string; additionalProperties?: boolean }>;
+      };
+
+      expect(stage.properties).toHaveProperty("permissions");
+      expect(stage.properties.permissions.description).toContain("scoped permissions");
+      expect(stage.properties.permissions.additionalProperties).toBe(true);
+    }
+  });
+
+  it("includes Istio-only K8sTrafficRouting provider spec in v0 pipeline and template (#874)", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const cdSteps = defs.pipeline.steps.cd as Record<string, unknown>;
+
+      const routingSpec = cdSteps.K8sTrafficRoutingSpec as {
+        properties: { provider: { enum: string[] } };
+        allOf: Array<{
+          if: { properties: { provider: { const: string } } };
+          then: { properties: { spec: { $ref: string } } };
+        }>;
+      };
+
+      expect(routingSpec.properties.provider.enum).toEqual(["istio"]);
+      expect(routingSpec.properties.provider.enum).not.toContain("smi");
+
+      const istioBranch = routingSpec.allOf.find(
+        (branch) => branch.if.properties.provider.const === "istio",
+      );
+      expect(istioBranch?.then.properties.spec.$ref).toContain("IstioProviderSpec");
+
+      const istioSpec = cdSteps.IstioProviderSpec as {
+        allOf: Array<{ properties?: Record<string, unknown> }>;
+      };
+      const istioProps = istioSpec.allOf.find((part) => part.properties)?.properties ?? {};
+      expect(istioProps).toHaveProperty("gateways");
+      expect(istioProps).toHaveProperty("hosts");
+      expect(istioProps).toHaveProperty("delegateService");
+      expect(istioProps).not.toHaveProperty("rootService");
+    }
+  });
+
+  it("allows runtime expressions for gitFetchType on git-based store configs (#883)", () => {
+    const gitStores = [
+      "AzureRepoStore",
+      "BitbucketStore",
+      "GitStore",
+      "GitLabStore",
+      "GithubStore",
+      "HarnessCodeStore",
+    ] as const;
+
+    for (const key of ["pipeline", "template"] as const) {
+      const cdSteps = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>).pipeline
+        .steps.cd as Record<string, unknown>;
+
+      for (const storeName of gitStores) {
+        const store = cdSteps[storeName] as {
+          allOf: Array<{
+            type?: string;
+            properties?: {
+              gitFetchType?: {
+                oneOf: Array<{ enum?: string[]; pattern?: string }>;
+              };
+            };
+            oneOf?: Array<{ required?: string[] }>;
+          }>;
+        };
+
+        const objectConstraint = store.allOf.find(
+          (part) => part.type === "object" && part.properties?.gitFetchType,
+        );
+        expect(objectConstraint?.properties?.gitFetchType?.oneOf).toEqual([
+          { type: "string", enum: ["Branch", "Commit"] },
+          { type: "string", pattern: "(<\\+.+>.*)", minLength: 1 },
+        ]);
+
+        const requiresCommitOrBranch = store.allOf.some((part) => {
+          const branches = part.oneOf;
+          if (!branches) return false;
+          const hasCommit = branches.some((branch) => branch.required?.includes("commitId"));
+          const hasBranch = branches.some((branch) => branch.required?.includes("branch"));
+          return hasCommit && hasBranch;
+        });
+        expect(requiresCommitOrBranch).toBe(false);
+      }
+    }
+  });
 });
