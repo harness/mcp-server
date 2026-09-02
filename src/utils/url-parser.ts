@@ -316,7 +316,7 @@ export interface ApplyUrlDefaultsOptions {
  * suppress org_id/project_id derived from a pasted Harness URL, since workspace_id isn't
  * a real scoping mode for them.
  */
-const FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES = new Set(["fme_segment", "fme_segment_definition"]);
+const FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES = new Set(["fme_segment", "fme_segment_definition", "fme_metric"]);
 
 /**
  * If `url` is provided, parse it and merge extracted values into args as defaults.

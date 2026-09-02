@@ -1842,3 +1842,444 @@ describe("fme_segment_definition", () => {
     expect(resource.executeActions).toBeUndefined();
   });
 });
+
+describe("fme_metric", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: routes /fme/api/v4/metrics with Harness-native scope params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      offset: 5,
+      size: 20,
+      name: "clicks",
+      traffic_type_id: "tt-1",
+      sort_order: "ASCENDING",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/metrics");
+    expect(req.product).toBeUndefined();
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+      offset: 5,
+      limit: 20,
+      name: "clicks",
+      traffic_type_id: "tt-1",
+      sort_order: "ASCENDING",
+    });
+    expect(req.params?.orgIdentifier).toBeUndefined();
+    expect(req.params?.projectIdentifier).toBeUndefined();
+  });
+
+  it("list: forwards array filters event_type_ids, tags, and ids", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      event_type_ids: ["ev-1", "ev-2"],
+      tags: ["prod", "beta"],
+      ids: ["metric-uuid-1"],
+    });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({
+      event_type_ids: ["ev-1", "ev-2"],
+      tags: ["prod", "beta"],
+      ids: ["metric-uuid-1"],
+    });
+  });
+
+  it("list: rejects invalid sort_order locally", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "list", {
+        org_id: "o1",
+        project_id: "p1",
+        sort_order: "INVALID",
+      }),
+    ).rejects.toThrow(/invalid sort_order/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: throws when org_id/project_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "fme_metric", "list", { project_id: "p1" })).rejects.toThrow(
+      "fme_metric: org_id and project_id are required (account is taken from config).",
+    );
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it.each(["list", "get", "create", "update", "delete"] as const)(
+    "%s: rejects workspace_id (Harness-native only)",
+    async (operation) => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+      const input: Record<string, unknown> = {
+        workspace_id: "ws1",
+        org_id: "o1",
+        project_id: "p1",
+        metric_id: "550e8400-e29b-41d4-a716-446655440000",
+      };
+      if (operation === "create") {
+        input.body = {
+          name: "clicks",
+          trafficType: "user",
+          format: "NUMBER",
+          aggregation: "COUNT",
+          isPositive: true,
+          baseEventTypes: [{ eventTypeId: "ev-1" }],
+        };
+      } else if (operation === "update") {
+        input.body = { description: "updated" };
+      }
+
+      await expect(registry.dispatch(client, "fme_metric", operation, input)).rejects.toThrow(
+        /workspace_id is not supported/i,
+      );
+      expect(mockRequest).not.toHaveBeenCalled();
+    },
+  );
+
+  it("get: routes to /fme/api/v4/metrics/{metric_id}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "550e8400-e29b-41d4-a716-446655440000",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/metrics/550e8400-e29b-41d4-a716-446655440000");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+  });
+
+  it("get: throws when metric_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "get", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/metric_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("delete: routes to /fme/api/v4/metrics/{metric_id}", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "550e8400-e29b-41d4-a716-446655440000",
+    });
+
+    expect(firstRequest(mockRequest).path).toBe("/fme/api/v4/metrics/550e8400-e29b-41d4-a716-446655440000");
+  });
+
+  it("delete: throws when metric_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "delete", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/metric_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: POSTs canonical body with tag wrap and skipScopeBodyInjection", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      body: {
+        name: "clicks",
+        trafficType: "user",
+        format: "NUMBER",
+        aggregation: "COUNT",
+        isPositive: true,
+        baseEventTypes: [{ eventTypeId: "ev-1" }],
+        tags: ["prod"],
+        description: "click count",
+      },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/metrics");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(req.body).toEqual({
+      name: "clicks",
+      trafficType: "user",
+      format: "NUMBER",
+      aggregation: "COUNT",
+      isPositive: true,
+      baseEventTypes: [{ eventTypeId: "ev-1" }],
+      tags: [{ name: "prod" }],
+      description: "click count",
+    });
+    expect((req.body as Record<string, unknown>).orgIdentifier).toBeUndefined();
+  });
+
+  it("create: missing required fields fail before request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: {
+          name: "clicks",
+          trafficType: "user",
+          format: "NUMBER",
+          aggregation: "COUNT",
+          isPositive: true,
+        },
+      }),
+    ).rejects.toThrow(/baseEventTypes/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: rejects empty baseEventTypes", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: {
+          name: "clicks",
+          trafficType: "user",
+          format: "NUMBER",
+          aggregation: "COUNT",
+          isPositive: true,
+          baseEventTypes: [],
+        },
+      }),
+    ).rejects.toThrow(/baseEventTypes/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: rejects invalid format locally", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: {
+          name: "clicks",
+          trafficType: "user",
+          format: "BOGUS",
+          aggregation: "COUNT",
+          isPositive: true,
+          baseEventTypes: [{ eventTypeId: "ev-1" }],
+        },
+      }),
+    ).rejects.toThrow(/invalid format/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("update: PATCHes with merge-patch header, presence semantics, and tag normalization", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "550e8400-e29b-41d4-a716-446655440000",
+      body: { description: null, tags: ["a"], format: "DOLLAR" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("PATCH");
+    expect(req.path).toBe("/fme/api/v4/metrics/550e8400-e29b-41d4-a716-446655440000");
+    expect(req.headers).toMatchObject({ "Content-Type": "application/merge-patch+json" });
+    expect(req.body).toEqual({ description: null, tags: [{ name: "a" }], format: "DOLLAR" });
+  });
+
+  it("update: omits fields not present on input body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "550e8400-e29b-41d4-a716-446655440000",
+      body: { cap: { metricValueCap: 100, granularity: "DAYS" } },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ cap: { metricValueCap: 100, granularity: "DAYS" } });
+  });
+
+  it("update: forwards baseEventTypes replacement list", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "550e8400-e29b-41d4-a716-446655440000",
+      body: { baseEventTypes: [{ eventTypeId: "ev-2" }] },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ baseEventTypes: [{ eventTypeId: "ev-2" }] });
+  });
+
+  it("update: rejects empty baseEventTypes locally", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "update", {
+        org_id: "o1",
+        project_id: "p1",
+        metric_id: "550e8400-e29b-41d4-a716-446655440000",
+        body: { baseEventTypes: [] },
+      }),
+    ).rejects.toThrow(/baseEventTypes/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: rejects missing name locally", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: {
+          trafficType: "user",
+          format: "NUMBER",
+          aggregation: "COUNT",
+          isPositive: true,
+          baseEventTypes: [{ eventTypeId: "ev-1" }],
+        },
+      }),
+    ).rejects.toThrow(/"name" is required/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: rejects missing isPositive locally", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: {
+          name: "clicks",
+          trafficType: "user",
+          format: "NUMBER",
+          aggregation: "COUNT",
+          baseEventTypes: [{ eventTypeId: "ev-1" }],
+        },
+      }),
+    ).rejects.toThrow(/"isPositive" is required/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("update: does not send immutable name or trafficType", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "550e8400-e29b-41d4-a716-446655440000",
+      body: { name: "new-name", trafficType: "account", description: "x" },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ description: "x" });
+  });
+
+  it("update: rejects null on non-clearable format", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "update", {
+        org_id: "o1",
+        project_id: "p1",
+        metric_id: "550e8400-e29b-41d4-a716-446655440000",
+        body: { format: null },
+      }),
+    ).rejects.toThrow(/format cannot be null/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: rejects missing org_id/project_id before making a request", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "create", {
+        body: {
+          name: "clicks",
+          trafficType: "user",
+          format: "NUMBER",
+          aggregation: "COUNT",
+          isPositive: true,
+          baseEventTypes: [{ eventTypeId: "ev-1" }],
+        },
+      }),
+    ).rejects.toThrow(/org_id and project_id are required/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: promotes data to items via fmeV4PaginatedListExtract", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [{ id: "m1", name: "clicks" }],
+      limit: 100,
+      offset: 0,
+      totalCount: 1,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_metric", "list", {
+      org_id: "o1",
+      project_id: "p1",
+    });
+
+    expect(result).toMatchObject({
+      items: [{ id: "m1", name: "clicks" }],
+      total: 1,
+      totalCount: 1,
+    });
+  });
+
+  it("has no execute actions", () => {
+    expect(findResource("fme_metric").executeActions).toBeUndefined();
+  });
+});
