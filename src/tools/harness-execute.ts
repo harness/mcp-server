@@ -30,6 +30,33 @@ function hasNoInlineRuntimeInputs(inputs: unknown): boolean {
   return !!record && Object.keys(record).length === 0;
 }
 
+function normalizeV1PipelineRunInputs(input: Record<string, unknown>): string | undefined {
+  const body = asRecord(input.body);
+  const candidates: Array<{ name: string; value: unknown }> = [];
+  if (input.inputs !== undefined) candidates.push({ name: "inputs", value: input.inputs });
+  if (body?.inputs !== undefined) candidates.push({ name: "body.inputs", value: body.inputs });
+  if (body?.inputs_yaml !== undefined) candidates.push({ name: "body.inputs_yaml", value: body.inputs_yaml });
+
+  if (candidates.length > 1) {
+    return `Conflicting pipeline_v1 runtime inputs were provided via ${candidates.map(({ name }) => name).join(", ")}. Provide only one source; prefer the top-level inputs argument.`;
+  }
+  if (candidates.length === 0) return undefined;
+
+  const candidate = candidates[0]!;
+  if (candidate.name === "body.inputs_yaml" && typeof candidate.value !== "string") {
+    return "body.inputs_yaml must be a YAML string for pipeline_v1 execution.";
+  }
+  if (
+    typeof candidate.value !== "string"
+    && (!candidate.value || typeof candidate.value !== "object" || Array.isArray(candidate.value))
+  ) {
+    return `${candidate.name} must be a YAML string or key-value object for pipeline_v1 execution.`;
+  }
+
+  input.inputs = candidate.value;
+  return undefined;
+}
+
 /**
  * True when `inputs` is a full pipeline document (`{ pipeline: ... }`) rather
  * than a flat key/value override map. These are merged fragment-wise with a
@@ -153,7 +180,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         org_id: orgIdField(registry.orgId),
         project_id: projectIdField(registry.projectId),
         resource_scope: resourceScopeSchema,
-        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe("Pipeline runtime inputs: key-value pairs like {branch: 'main'} (auto-resolved), or full YAML string. Check runtime_input_template first via harness_get."),
+        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe("Pipeline runtime inputs. For v0 pipeline, check runtime_input_template and pass key-value pairs or full overlay YAML. For pipeline_v1, check runtime_input_template_v1 and pass named values; the server sends them as an inputs: YAML document."),
         input_set_ids: z.array(z.string()).optional().describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})."),
         body: z.record(z.string(), z.unknown()).optional().describe("Additional body payload for the action"),
         params: z.record(z.string(), z.unknown()).optional().describe("Action-specific parameters. Call harness_describe for available fields per resource_type."),
@@ -203,6 +230,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         }
 
         const actionSpec = def.executeActions?.[args.action];
+        if (resourceType === "pipeline_v1" && args.action === "run") {
+          const normalizationError = normalizeV1PipelineRunInputs(input);
+          if (normalizationError) return errorResult(normalizationError);
+        }
         const risk = actionSpec?.operationPolicy.risk ?? "low_write";
 
         // Resolve the execute action's path identifier BEFORE any

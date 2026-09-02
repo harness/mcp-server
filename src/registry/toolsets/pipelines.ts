@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema, ParamsSchema, PreflightContext } from "../types.js";
-import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, runtimeInputTemplatePreflight, pipelineResolvedYamlExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, runtimeInputV1Extract, runtimeInputTemplatePreflight, pipelineResolvedYamlExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
 import { asRecord } from "../../utils/type-guards.js";
 import YAML from "yaml";
 
@@ -372,6 +372,36 @@ function buildV1PipelineBody(input: Record<string, unknown>): Record<string, unk
   return result;
 }
 
+function buildV1RuntimeInputsBody(input: Record<string, unknown>): Record<string, unknown> {
+  const runtimeInputs = input.inputs;
+  if (runtimeInputs === undefined || runtimeInputs === null) return {};
+
+  if (typeof runtimeInputs === "string") {
+    const parsed = YAML.parse(runtimeInputs) as unknown;
+    const parsedRecord = asRecord(parsed);
+    if (!parsedRecord) {
+      throw new Error("pipeline_v1 inputs YAML must contain a mapping");
+    }
+    if (!("inputs" in parsedRecord)) {
+      return { inputs_yaml: YAML.stringify({ inputs: parsedRecord }) };
+    }
+    if (Object.keys(parsedRecord).length !== 1) {
+      throw new Error("pipeline_v1 inputs YAML must contain only the inputs root");
+    }
+    if (!asRecord(parsedRecord.inputs)) {
+      throw new Error("pipeline_v1 inputs YAML root must contain a key-value mapping");
+    }
+    return { inputs_yaml: runtimeInputs };
+  }
+
+  const inputsRecord = asRecord(runtimeInputs);
+  if (!inputsRecord) {
+    throw new Error("pipeline_v1 inputs must be a YAML string or key-value object");
+  }
+
+  return { inputs_yaml: YAML.stringify({ inputs: inputsRecord }) };
+}
+
 // ---------------------------------------------------------------------------
 // V0 Pipeline body schemas
 // ---------------------------------------------------------------------------
@@ -674,6 +704,14 @@ export const pipelinesToolset: ToolsetDefinition = {
       identifierFields: ["pipeline_id"],
       searchAliases: ["v1 pipeline", "agent pipeline", "v1"],
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures. V1 pipelines use the same execution engine as v0.",
+      executeHint: "Before executing, fetch harness_get(resource_type='runtime_input_template_v1', resource_id='PIPELINE_ID'). Pass only the named ${{ inputs.* }} values through the top-level inputs argument; the server wraps them under an inputs: YAML root.",
+      relatedResources: [
+        {
+          resourceType: "runtime_input_template_v1",
+          relationship: "runtime-inputs",
+          description: "Discover declared ${{ inputs.* }} values before execute. harness_get(resource_type='runtime_input_template_v1', resource_id=<pipeline_id>).",
+        },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipeline}/pipeline-studio",
       operations: {
         list: {
@@ -749,20 +787,12 @@ export const pipelinesToolset: ToolsetDefinition = {
           queryParams: {
             module: "module",
           },
-          bodyBuilder: (input) => {
-            const inputs = input.inputs;
-            if (!inputs) return {};
-            if (typeof inputs === "string") return { inputs_yaml: inputs };
-            // Object inputs — serialize to YAML
-            return { inputs_yaml: YAML.stringify(inputs) };
-          },
+          bodyBuilder: buildV1RuntimeInputsBody,
           responseExtractor: passthrough,
-          actionDescription: "Execute a v1 pipeline. Optionally pass runtime inputs as inputs_yaml (YAML string) or as a key-value object (auto-serialized to YAML).",
+          actionDescription: "Execute a v1 pipeline. First fetch runtime_input_template_v1, then pass named values through the top-level inputs argument. Values are wrapped under an inputs: YAML root and sent as inputs_yaml.",
           bodySchema: {
-            description: "Runtime inputs for v1 pipeline execution. Pass inputs as a YAML string or key-value object.",
-            fields: [
-              { name: "inputs_yaml", type: "string", required: false, description: "YAML-formatted runtime inputs for the pipeline" },
-            ],
+            description: "Do not put v1 runtime inputs under body. Use the top-level harness_execute inputs argument; the MCP server constructs the inputs_yaml API body.",
+            fields: [],
           },
         },
       },
@@ -1273,6 +1303,33 @@ export const pipelinesToolset: ToolsetDefinition = {
           responseExtractor: pipelineResolvedYamlExtract,
           description:
             "Fetch resolved pipeline YAML with templates expanded. Returns stageMetadataMap for patching entity-type activity inputs (deploymentType, environmentRef).",
+        },
+      },
+    },
+    {
+      resourceType: "runtime_input_template_v1",
+      displayName: "Runtime Input Template (V1)",
+      description: "Fetch the declared runtime inputs for a v1 pipeline. Use this before executing pipeline_v1; returned template_yaml shows every ${{ inputs.* }} reference that can be supplied.",
+      toolset: "pipelines",
+      scope: "project",
+      headerBasedScoping: true,
+      identifierFields: ["pipeline_id"],
+      relatedResources: [
+        {
+          resourceType: "pipeline_v1",
+          relationship: "parent",
+          description: "Saved v1 pipeline definition. harness_get(resource_type='pipeline_v1', resource_id=<pipeline_id>).",
+        },
+      ],
+      operations: {
+        get: {
+          method: "POST",
+          path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/inputs",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
+          bodyBuilder: () => ({ stage_ids: [] }),
+          responseExtractor: runtimeInputV1Extract,
+          description: "Fetch the v1 pipeline input template and resolved pipeline YAML.",
         },
       },
     },

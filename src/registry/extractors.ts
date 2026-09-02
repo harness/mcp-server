@@ -553,6 +553,34 @@ export const pipelineResolvedYamlExtract = (raw: unknown): unknown => {
 };
 
 /**
+ * Extracts the declared inputs returned by the Harness pipeline v1 inputs API.
+ * V1 values are supplied as one YAML document rooted at `inputs:`.
+ */
+export const runtimeInputV1Extract = (raw: unknown): unknown => {
+  const r = raw as {
+    inputs?: Record<string, unknown>;
+    template_yaml?: string;
+    resolved_yaml?: string;
+    has_input_sets?: boolean;
+    replaced_expressions?: string[];
+    replaced_expressions_per_stage?: Record<string, string[]>;
+    modules?: string[];
+  };
+  return {
+    inputs: r.inputs ?? {},
+    template_yaml: r.template_yaml ?? null,
+    resolved_yaml: r.resolved_yaml ?? null,
+    has_input_sets: r.has_input_sets ?? false,
+    replaced_expressions: r.replaced_expressions ?? [],
+    replaced_expressions_per_stage: r.replaced_expressions_per_stage ?? {},
+    modules: r.modules ?? [],
+    _hint: r.template_yaml
+      ? "This v1 template shows the available ${{ inputs.* }} values. Pass matching key-value pairs through harness_execute(resource_type='pipeline_v1', action='run', inputs={...}); they are sent as one inputs: YAML document."
+      : "This v1 pipeline has no runtime inputs. You can execute it without providing inputs.",
+  };
+};
+
+/**
  * Extracts the dynamic-execution response for
  * POST /v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/execute/dynamic.
  *

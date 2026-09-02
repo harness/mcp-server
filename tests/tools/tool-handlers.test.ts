@@ -5,6 +5,7 @@
  * Does not test actual API calls — that's covered by registry dispatch tests.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import YAML from "yaml";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import type { ToolResult } from "../../src/utils/response-formatter.js";
@@ -215,6 +216,40 @@ describe("harness_get", () => {
     expect(result.isError).toBeUndefined();
     const data = parseResult(result) as { identifier: string };
     expect(data.identifier).toBe("my-pipeline");
+  });
+
+  it("fetches and projects the v1 runtime input template", async () => {
+    mockRequest.mockResolvedValueOnce({
+      inputs: {},
+      template_yaml: "pipeline:\n  clone:\n    ref:\n      name: \"${{ inputs.branch }}\"\n",
+      resolved_yaml: "pipeline:\n  id: my-pipeline\n",
+      has_input_sets: false,
+      replaced_expressions: [],
+      replaced_expressions_per_stage: {},
+      modules: ["ci", "pms"],
+    });
+
+    const result = await server.call("harness_get", {
+      resource_type: "runtime_input_template_v1",
+      resource_id: "my-pipeline",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({
+      inputs: {},
+      template_yaml: expect.stringContaining("inputs.branch"),
+      resolved_yaml: expect.stringContaining("my-pipeline"),
+      has_input_sets: false,
+      modules: ["ci", "pms"],
+      _hint: expect.stringContaining("pipeline_v1"),
+    });
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/v1/orgs/default/projects/test-project/pipelines/my-pipeline/inputs",
+        body: { stage_ids: [] },
+      }),
+    );
   });
 
   it("documents resource_scope in the registered input schema", () => {
@@ -1861,6 +1896,181 @@ describe("harness_execute", () => {
     expect(mockRequest).toHaveBeenCalled();
   });
 
+  it("wraps pipeline_v1 input values under the inputs YAML root", async () => {
+    await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: {
+        branch: "feature/my-fix",
+        deploy: { environment: "qa" },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as {
+      path: string;
+      body: { inputs_yaml: string };
+    };
+    expect(call.path).toBe("/v1/orgs/default/projects/test-project/pipelines/my-pipe/execute");
+    expect(call.body.inputs_yaml).toContain("inputs:");
+    expect(call.body.inputs_yaml).toContain("branch: feature/my-fix");
+    expect(call.body.inputs_yaml).toContain("environment: qa");
+  });
+
+  it("sends an empty body when pipeline_v1 has no runtime inputs", async () => {
+    await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(call.body).toEqual({});
+  });
+
+  it("wraps empty pipeline_v1 input values under an empty inputs mapping", async () => {
+    await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: {},
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { inputs_yaml: string } };
+    expect(YAML.parse(call.body.inputs_yaml)).toEqual({ inputs: {} });
+  });
+
+  it("wraps an unrooted pipeline_v1 YAML string", async () => {
+    await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: "branch: feature/my-fix\n",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { inputs_yaml: string } };
+    expect(YAML.parse(call.body.inputs_yaml)).toEqual({
+      inputs: { branch: "feature/my-fix" },
+    });
+  });
+
+  it("preserves arrays as named pipeline_v1 input values", async () => {
+    await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: { services: ["api", "worker"] },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { inputs_yaml: string } };
+    expect(YAML.parse(call.body.inputs_yaml)).toEqual({
+      inputs: { services: ["api", "worker"] },
+    });
+  });
+
+  it("supports a pipeline_v1 runtime input literally named inputs", async () => {
+    await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: { inputs: "literal-value" },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { inputs_yaml: string } };
+    expect(YAML.parse(call.body.inputs_yaml)).toEqual({
+      inputs: { inputs: "literal-value" },
+    });
+  });
+
+  it("preserves pipeline_v1 YAML that already has an inputs root", async () => {
+    const inputsYaml = "inputs:\n  branch: feature/my-fix\n";
+
+    await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: inputsYaml,
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { inputs_yaml: string } };
+    expect(call.body).toEqual({ inputs_yaml: inputsYaml });
+  });
+
+  it.each([
+    ["invalid YAML", "inputs: [\n"],
+    ["an array root", "- branch\n- environment\n"],
+    ["a non-mapping inputs root", "inputs:\n  - branch\n"],
+    ["additional top-level roots", "inputs:\n  branch: main\nextra: value\n"],
+  ])("rejects pipeline_v1 %s before execution", async (_caseName, inputs) => {
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs,
+    });
+
+    expect(result.isError).toBe(true);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("accepts body.inputs as a pipeline_v1 compatibility alias", async () => {
+    await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+      body: { inputs: { branch: "feature/my-fix" } },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { inputs_yaml: string } };
+    expect(call.body.inputs_yaml).toContain("inputs:");
+    expect(call.body.inputs_yaml).toContain("branch: feature/my-fix");
+  });
+
+  it("accepts body.inputs_yaml as a pipeline_v1 compatibility alias", async () => {
+    const inputsYaml = "inputs:\n  branch: feature/my-fix\n";
+
+    await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+      body: { inputs_yaml: inputsYaml },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { inputs_yaml: string } };
+    expect(call.body).toEqual({ inputs_yaml: inputsYaml });
+  });
+
+  it("rejects a non-string body.inputs_yaml compatibility alias", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+      body: { inputs_yaml: { inputs: { branch: "feature/my-fix" } } },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("body.inputs_yaml must be a YAML string"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects conflicting pipeline_v1 input sources before execution", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline_v1",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: { branch: "feature/a" },
+      body: { inputs_yaml: "inputs:\n  branch: feature/b\n" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Conflicting pipeline_v1 runtime inputs"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("passes pipeline_branch from params as ?pipelineBranchName= query param", async () => {
     await server.call("harness_execute", {
       resource_type: "pipeline",
@@ -3181,6 +3391,29 @@ describe("harness_describe", () => {
     const data = parseResult(result) as { resource_type: string; operations: unknown[] };
     expect(data.resource_type).toBe("pipeline");
     expect(data.operations.length).toBeGreaterThan(0);
+  });
+
+  it("describes the pipeline_v1 runtime input template workflow", async () => {
+    const result = await server.call("harness_describe", { resource_type: "pipeline_v1" });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as {
+      executeHint?: string;
+      relatedResources?: Array<{ resourceType: string }>;
+      executeActions?: Array<{
+        action: string;
+        bodySchema?: { description: string; fields: unknown[] };
+      }>;
+    };
+    expect(data.executeHint).toContain("runtime_input_template_v1");
+    expect(data.relatedResources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ resourceType: "runtime_input_template_v1" }),
+      ]),
+    );
+    const run = data.executeActions?.find((action) => action.action === "run");
+    expect(run?.bodySchema?.description).toContain("top-level harness_execute inputs");
+    expect(run?.bodySchema?.fields).toEqual([]);
   });
 
   it("describes account/org/project scope support for multi-scope resources", async () => {
