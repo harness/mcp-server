@@ -64,7 +64,7 @@ function getDownloadOp(): EndpointSpec {
 
 describe("evidence-vault toolset", () => {
   it("registers attestation list against /ssca-manager/v2/attestations", () => {
-    expect(evidenceVaultToolset.name).toBe("evidence-vault");
+    expect(evidenceVaultToolset.name).toBe("evidence_vault");
     const resource = findResource("attestation");
     expect(resource.scope).toBe("account");
     expect(resource.supportedScopes).toEqual(["account", "org", "project"]);

@@ -50,4 +50,22 @@ Codemod whole-token, word-boundary, driven by the §3 mapping tables. Prompts ar
 - [x] .env.example "Available:" list → canonical 38 names + legacy-alias note; "IaCM"→"Infrastructure".
 - [x] AGENTS.md: 41→38 toolset files, 219+→240+ resource types, `iacm_variable_set`→`infrastructure_variable_set`.
 
-## Wave 4 (optional, deferred) — D7: harness_code umbrella + hyphen→underscore toolset-name standardization.
+## Wave 4 — D7
+- harness_code umbrella: **DROPPED** (user decision).
+- hyphen→underscore toolset-name standardization: ✅ DONE. Renamed canonical toolsets
+  `pull-requests`→`pull_requests`, `evidence-vault`→`evidence_vault`, `ai-evals`→`ai_evals`,
+  `release-management`→`release_management` (non-breaking; hyphen names kept as declarative
+  `aliases`). Codemod replaced quote-delimited tokens only (ai-evals.ts API paths
+  `/gateway/ai-evals/api/v1` + url-parser URL segments left intact). Updated ToolsetName union,
+  .env.example, index.ts syntax-comment examples; added it.each alias regression tests.
+  Fixed generate-docs.js curated key `release-management`→`release_management` (re-enables its
+  coverage validation) and fully regenerated the README "Toolset Filtering" table from the
+  registry — that table was hand-maintained and stale for the ENTIRE module rename (still showed
+  iacm/scs/sto/ccm/sei/dbops/idp/knowledge-graph/semantic-layer + old resource types).
+
+## Known follow-up (surfaced, NOT done — out of hyphen scope)
+- README **### Feature Flags** coverage matrix + dual-mode prose still use pre-P4b `fme_*`
+  resource-type names (13 matrix rows + ~10 prose lines w/ API paths & merge-patch semantics).
+  Its generator curated key is still `feature-flags` (stale → canonical is `feature_flags`), so
+  P4b silently disabled this section's validation. Flipping the key requires rewriting the whole
+  matrix+prose first. Needs a focused pass; risky to fold into the hyphen change.

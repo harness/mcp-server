@@ -299,9 +299,9 @@ export class Registry {
    * Parse HARNESS_TOOLSETS env var. Supports three modes:
    *
    *  - Explicit list:    "pipelines,services"         → only those toolsets
-   *  - Additive (+):     "+ai-evals"                  → defaults + ai-evals
+   *  - Additive (+):     "+ai_evals"                  → defaults + ai_evals
    *  - Subtractive (-):  "-chaos,-ccm"                → defaults minus chaos & ccm
-   *  - Mixed +/-:        "+ai-evals,-chaos"            → defaults + ai-evals - chaos
+   *  - Mixed +/-:        "+ai_evals,-chaos"            → defaults + ai_evals - chaos
    *
    * Returns `null` when the value is empty (meaning "all defaults").
    * Returns `"defaults"` when +/- modifiers are used (caller applies them).

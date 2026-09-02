@@ -126,6 +126,19 @@ describe("P0 alias layer — toolset aliases via HARNESS_TOOLSETS", () => {
     const names = registry.getAllToolsets().map((t) => t.name);
     expect(names).toEqual(["agents"]);
   });
+
+  // Hyphen→underscore toolset-name standardization: the four toolsets whose
+  // canonical names were hyphenated keep resolving from their old hyphen names.
+  it.each([
+    ["pull-requests", "pull_requests"],
+    ["evidence-vault", "evidence_vault"],
+    ["ai-evals", "ai_evals"],
+    ["release-management", "release_management"],
+  ])("resolves legacy hyphen name %s → %s", (oldName, canonical) => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: oldName }));
+    const names = registry.getAllToolsets().map((t) => t.name);
+    expect(names).toEqual([canonical]);
+  });
 });
 
 describe("P0 alias layer — merge (two old names → one toolset)", () => {

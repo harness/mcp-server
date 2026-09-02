@@ -185,7 +185,8 @@ export function attestationDownloadExtract(raw: unknown): Record<string, unknown
 }
 
 export const evidenceVaultToolset: ToolsetDefinition = {
-  name: "evidence-vault",
+  name: "evidence_vault",
+  aliases: ["evidence-vault"],
   displayName: "Evidence Vault",
   description:
     "Harness Evidence Vault — in-toto attestations (evidences) for SDLC processes "
@@ -211,7 +212,7 @@ export const evidenceVaultToolset: ToolsetDefinition = {
         "SDLC evidence",
         "gitoid",
       ],
-      toolset: "evidence-vault",
+      toolset: "evidence_vault",
       scope: "account",
       supportedScopes: ["account", "org", "project"],
       scopeParams: { org: "org", project: "project" },
