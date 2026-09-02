@@ -155,7 +155,7 @@ describe("deploy — harness_list", () => {
     const result = await server.call("harness_list", { resource_type: "deploy" });
     const data = parseResult(result) as { items: Array<Record<string, unknown>> };
     expect(data.items[0]!.relatedActivities).toEqual([
-      { prettyId: "INC-7", templateTypeName: "INCIDENT", title: "Checkout latency", name: "relates to" },
+      { prettyId: "INC-7", resource_type: "incident", title: "Checkout latency", name: "relates to" },
     ]);
   });
 
@@ -289,7 +289,7 @@ describe("deploy — harness_get", () => {
     const data = parseResult(result) as Record<string, unknown>;
     expect(data.relatedActivities).toEqual([{
       prettyId: "INC-7",
-      templateTypeName: "INCIDENT",
+      resource_type: "incident",
       title: "Checkout latency",
       name: "relates to",
     }]);

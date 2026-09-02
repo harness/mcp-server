@@ -206,14 +206,36 @@ describe("incident — harness_list", () => {
     const result = await server.call("harness_list", { resource_type: "incident" });
     const data = parseResult(result) as { items: Array<Record<string, unknown>> };
     expect(data.items[0]!.relatedActivities).toEqual([
-      { prettyId: "ALERT-9", templateTypeName: "ALERT", title: "CPU spike", name: "relates to" },
+      { prettyId: "ALERT-9", resource_type: "alert", title: "CPU spike", name: "relates to" },
     ]);
   });
 
-  // A null templateTypeName must not surface as `templateTypeName: null` — the
+  it("translates a DEPLOY edge to the deploy resource_type", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{
+        prettyId: "INC-1",
+        relatedActivities: [{
+          name: "is caused by",
+          templateTypeName: "DEPLOY",
+          prettyId: "DEPLIR1-56",
+          globalId: "global-abc",
+          title: "release 1.2.3",
+        }],
+      }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "incident" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]!.relatedActivities).toEqual([
+      { prettyId: "DEPLIR1-56", resource_type: "deploy", title: "release 1.2.3", name: "is caused by" },
+    ]);
+  });
+
+  // A null templateTypeName must not surface as `resource_type: null` — the
   // field is the caller's routing key, so an unclassified edge should read as
-  // absent rather than as a type that is explicitly nothing.
-  it("omits templateTypeName when the backend leaves it null", async () => {
+  // absent rather than as a type that is explicitly nothing. An empty title is
+  // dropped for the same reason: it is noise, not a title.
+  it("omits resource_type and an empty title when the backend leaves them blank", async () => {
     mockRequest.mockResolvedValueOnce({
       entities: [{
         prettyId: "INC-1",
@@ -230,7 +252,30 @@ describe("incident — harness_list", () => {
     const result = await server.call("harness_list", { resource_type: "incident" });
     const data = parseResult(result) as { items: Array<Record<string, unknown>> };
     expect(data.items[0]!.relatedActivities).toEqual([
-      { prettyId: "DEPLIR1-56", title: "", name: "is caused by" },
+      { prettyId: "DEPLIR1-56", name: "is caused by" },
+    ]);
+  });
+
+  // CHANGE is a real backend templateTypeName with no registered resource type,
+  // so the edge must not claim a resource_type harness_get would reject.
+  it("omits resource_type for a CHANGE edge this server cannot fetch", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{
+        prettyId: "INC-1",
+        relatedActivities: [{
+          name: "relates to",
+          templateTypeName: "CHANGE",
+          prettyId: "CHG-3",
+          globalId: "global-abc",
+          title: "Feature flag flip",
+        }],
+      }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "incident" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]!.relatedActivities).toEqual([
+      { prettyId: "CHG-3", title: "Feature flag flip", name: "relates to" },
     ]);
   });
 
@@ -311,7 +356,7 @@ describe("incident — harness_get", () => {
     const data = parseResult(result) as Record<string, unknown>;
     expect(data.relatedActivities).toEqual([{
       prettyId: "ALERT-9",
-      templateTypeName: "ALERT",
+      resource_type: "alert",
       title: "CPU spike",
       name: "relates to",
     }]);
