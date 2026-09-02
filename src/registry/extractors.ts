@@ -402,7 +402,6 @@ export const harV3ListExtract = (raw: unknown): unknown => {
       hasMore: typeof raw.pageIndex === "number" && typeof raw.pageCount === "number"
         ? raw.pageIndex + 1 < raw.pageCount
         : undefined,
-      meta: raw.meta,
     };
   }
   const items = (raw.items as unknown[]) ?? [];
@@ -412,14 +411,44 @@ export const harV3ListExtract = (raw: unknown): unknown => {
     : typeof meta?.total === "number"
       ? meta.total
       : items.length;
+  // Project the meta counts agents care about instead of forwarding the raw
+  // backend `meta` envelope (which may gain new keys over time).
+  const activeCount = typeof meta?.activeCount === "number" ? meta.activeCount : undefined;
+  const deletedCount = typeof meta?.deletedCount === "number" ? meta.deletedCount : undefined;
   return {
     items,
     total,
     page: raw.page,
     size: raw.size,
     hasMore: raw.hasMore,
-    meta: raw.meta,
+    ...(activeCount !== undefined ? { activeCount } : {}),
+    ...(deletedCount !== undefined ? { deletedCount } : {}),
   };
+};
+
+/**
+ * v3 metadata GETs (GetRegistryMetadataV3 / GetPackageMetadataV3 /
+ * GetVersionMetadataV3 / GetFileMetadataV3) return `{ data: [{ id, key, type,
+ * value }] }`. Project the array under `items` so it looks like every other
+ * v3 list, instead of leaking the backend `data` envelope.
+ */
+export const harV3DataArrayUnwrap = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  const data = raw.data;
+  if (Array.isArray(data)) {
+    return { items: data, total: data.length };
+  }
+  return raw;
+};
+
+/**
+ * v3 GetArtifactScanDetailsV3 returns `{ data: { packageName, scanStatus, ...
+ * } }`. Unwrap to the inner object so the scan detail is the top-level payload.
+ */
+export const harV3DataObjectUnwrap = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  if (isRecord(raw.data)) return raw.data;
+  return raw;
 };
 
 /**

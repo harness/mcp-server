@@ -1,5 +1,75 @@
 import type { ToolsetDefinition } from "../types.js";
-import { passthrough, harV3ListExtract } from "../extractors.js";
+import {
+  passthrough,
+  harV3ListExtract,
+  harV3DataArrayUnwrap,
+  harV3DataObjectUnwrap,
+} from "../extractors.js";
+
+// Projects a raw v3 package list item down to the fields agents actually need.
+// The default `compactItems()` whitelist keeps `id`/`name`/timestamps but drops
+// `packageType`, `packageKind`, `latestVersion`, `registryName`, etc — those
+// aren't recoverable via a per-package `get`, so lose them here and they're
+// gone. Also renames `id` -> `package_id` to match `identifierFields`.
+const compactPackageV3 = (item: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  if (item.id != null) { out.package_id = item.id; out.id = item.id; }
+  if (item.name != null) out.name = item.name;
+  if (item.packageType != null) out.packageType = item.packageType;
+  if (item.packageKind != null) out.packageKind = item.packageKind;
+  if (item.latestVersion != null) out.latestVersion = item.latestVersion;
+  if (item.registryId != null) out.registryId = item.registryId;
+  if (item.registryName != null) out.registryName = item.registryName;
+  if (item.isPublic != null) out.isPublic = item.isPublic;
+  if (item.isQuarantined != null) out.isQuarantined = item.isQuarantined;
+  if (item.quarantineReason != null) out.quarantineReason = item.quarantineReason;
+  if (item.modifiedAt != null) out.modifiedAt = item.modifiedAt;
+  if (item.deletedAt != null) out.deletedAt = item.deletedAt;
+  if (item.orgIdentifier != null) out.orgIdentifier = item.orgIdentifier;
+  if (item.projectIdentifier != null) out.projectIdentifier = item.projectIdentifier;
+  return out;
+};
+
+const compactVersionV3 = (item: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  if (item.id != null) { out.version_id = item.id; out.id = item.id; }
+  if (item.name != null) out.name = item.name;
+  if (item.packageId != null) out.packageId = item.packageId;
+  if (item.packageName != null) out.packageName = item.packageName;
+  if (item.packageType != null) out.packageType = item.packageType;
+  if (item.packageKind != null) out.packageKind = item.packageKind;
+  if (item.registryId != null) out.registryId = item.registryId;
+  if (item.registryName != null) out.registryName = item.registryName;
+  if (item.registryType != null) out.registryType = item.registryType;
+  if (item.pullCommand != null) out.pullCommand = item.pullCommand;
+  if (item.isQuarantined != null) out.isQuarantined = item.isQuarantined;
+  if (item.createdAt != null) out.createdAt = item.createdAt;
+  if (item.modifiedAt != null) out.modifiedAt = item.modifiedAt;
+  if (item.deletedAt != null) out.deletedAt = item.deletedAt;
+  return out;
+};
+
+const compactFirewallExceptionV3 = (item: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
+  if (item.exceptionId != null) out.exceptionId = item.exceptionId;
+  if (item.status != null) out.status = item.status;
+  if (item.packageName != null) out.packageName = item.packageName;
+  if (item.packageType != null) out.packageType = item.packageType;
+  if (item.registryId != null) out.registryId = item.registryId;
+  if (item.registryName != null) out.registryName = item.registryName;
+  if (item.versionId != null) out.versionId = item.versionId;
+  if (item.versionList != null) out.versionList = item.versionList;
+  if (item.versionScanMap != null) out.versionScanMap = item.versionScanMap;
+  if (item.businessJustification != null) out.businessJustification = item.businessJustification;
+  if (item.remediationPlan != null) out.remediationPlan = item.remediationPlan;
+  if (item.notes != null) out.notes = item.notes;
+  if (item.expireAfter != null) out.expireAfter = item.expireAfter;
+  if (item.expirationAt != null) out.expirationAt = item.expirationAt;
+  if (item.statusChangedAt != null) out.statusChangedAt = item.statusChangedAt;
+  if (item.createdAt != null) out.createdAt = item.createdAt;
+  if (item.updatedAt != null) out.updatedAt = item.updatedAt;
+  return out;
+};
 
 /**
  * HAR v3 read-only toolset.
@@ -25,11 +95,23 @@ const V3_SCOPE_PARAMS = {
   project: "project_identifier",
 } as const;
 
+// Known values from api.yaml PackageTypeV3. Extensible — the API may add more
+// (e.g. GITLFS) so treat this as guidance for agents, not a hard whitelist.
 const V3_PACKAGE_TYPES = [
-  "CARGO", "COMPOSER", "CONDA", "DART", "DOCKER", "GENERIC", "GO", "HELM",
-  "HUGGINGFACE", "MAVEN", "NPM", "NUGET", "PYTHON", "RAW", "RPM", "SWIFT",
-  "ALPINE", "DEB", "GITLFS",
+  "DOCKER", "MAVEN", "PYTHON", "GENERIC", "HELM", "HELM_HTTP", "NUGET", "NPM",
+  "RPM", "CARGO", "COMPOSER", "GO", "HUGGINGFACE", "CONDA", "DART", "SWIFT",
+  "PUPPET", "RUBY", "RAW", "DEBIAN", "CONAN", "TERRAFORM", "CRAN", "WOLFI",
+  "ALPINE",
 ];
+const V3_PACKAGE_KINDS = ["model", "dataset", "module", "provider"];
+const V3_SCAN_STATUSES = ["ALLOWED", "BLOCKED", "WARN", "UNKNOWN"];
+const V3_FIREWALL_EXCEPTION_STATUSES = ["PENDING", "APPROVED", "REJECTED", "EXPIRED"];
+const V3_POLICY_CATEGORIES = [
+  "Security", "License", "MaliciousPackage", "PackageAge", "OssRiskLevel", "Unknown",
+];
+const V3_SORT_DESC = "Sort spec `sort_field:sort_order`, e.g. `name:asc` or `modifiedAt:desc`.";
+const V3_PACKAGE_TYPES_DESC =
+  "Package type. Known values include DOCKER, MAVEN, PYTHON, NPM, HELM, HELM_HTTP, etc. The API is extensible; unknown values may appear.";
 
 export const registriesV3Toolset: ToolsetDefinition = {
   name: "registries-v3",
@@ -48,19 +130,28 @@ export const registriesV3Toolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["package_id"],
+      compactItem: compactPackageV3,
       listFilterFields: [
         { name: "search_term", description: "Filter packages by name or keyword" },
         { name: "registry_ids", description: "Comma-separated registry IDs to filter within" },
-        { name: "package_types", description: "Package types filter", enum: V3_PACKAGE_TYPES },
-        { name: "package_kind", description: "Package kind (huggingface model/dataset, terraform module/provider)" },
+        { name: "package_types", description: V3_PACKAGE_TYPES_DESC, enum: V3_PACKAGE_TYPES },
+        {
+          name: "package_kind",
+          description: "Package kind (huggingface model/dataset, terraform module/provider)",
+          enum: V3_PACKAGE_KINDS,
+        },
         {
           name: "deleted",
           description: "Include soft-deleted packages",
           enum: ["exclude", "include", "only"],
         },
         { name: "metadata", description: "Filter by metadata using key:value format" },
-        { name: "include_meta", description: "Include the `meta` block in the response", type: "boolean" },
-        { name: "sort", description: "Sort spec, e.g. `name,ASC`" },
+        {
+          name: "include_meta",
+          description: "Include list-envelope counts (`activeCount`/`deletedCount`) in the response",
+          type: "boolean",
+        },
+        { name: "sort", description: V3_SORT_DESC },
       ],
       operations: {
         list: {
@@ -92,16 +183,21 @@ export const registriesV3Toolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["version_id"],
+      compactItem: compactVersionV3,
       listFilterFields: [
         { name: "search_term", description: "Filter versions by name or keyword" },
         { name: "registry_ids", description: "Comma-separated registry IDs" },
         { name: "package_ids", description: "Comma-separated package IDs" },
-        { name: "package_types", description: "Package types filter", enum: V3_PACKAGE_TYPES },
+        { name: "package_types", description: V3_PACKAGE_TYPES_DESC, enum: V3_PACKAGE_TYPES },
         { name: "deleted", description: "Include soft-deleted versions", enum: ["exclude", "include", "only"] },
         { name: "metadata", description: "Filter by metadata using key:value format" },
         { name: "uploaded_by", description: "Filter by uploader user ID" },
-        { name: "include_meta", description: "Include the `meta` block in the response", type: "boolean" },
-        { name: "sort", description: "Sort spec, e.g. `name,ASC`" },
+        {
+          name: "include_meta",
+          description: "Include list-envelope counts (`activeCount`/`deletedCount`) in the response",
+          type: "boolean",
+        },
+        { name: "sort", description: V3_SORT_DESC },
       ],
       operations: {
         list: {
@@ -139,7 +235,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
         { name: "registry_id", description: "Registry ID to scope the file search" },
         { name: "package_id", description: "Package ID to scope the file search" },
         { name: "version_id", description: "Version ID to scope the file search" },
-        { name: "sort", description: "Sort spec, e.g. `name,ASC`" },
+        { name: "sort", description: V3_SORT_DESC },
       ],
       operations: {
         list: {
@@ -160,12 +256,16 @@ export const registriesV3Toolset: ToolsetDefinition = {
         },
       },
     },
+    // Metadata GETs (registry/package/version/file) are ACCOUNT-scoped in the
+    // v3 spec — Get*MetadataV3 declares only AccountIdentifierV3, not org/project.
+    // Responses are `{ data: [{ id, key, type, value }] }` which we unwrap to
+    // `{ items: [...] }` so the tool boundary matches every other v3 list.
     {
       resourceType: "registry_metadata_v3",
       displayName: "Registry Metadata (v3)",
       description: "Metadata key-value pairs attached to a registry.",
       toolset: "registries-v3",
-      scope: "project",
+      scope: "account",
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["registry_id"],
       operations: {
@@ -174,7 +274,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
           path: "/har/api/v3/registries/{id}/metadata",
           pathParams: { registry_id: "id" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: harV3DataArrayUnwrap,
           description: "Get metadata for a registry (v3)",
         },
       },
@@ -184,7 +284,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
       displayName: "Package Metadata (v3)",
       description: "Metadata key-value pairs attached to a package.",
       toolset: "registries-v3",
-      scope: "project",
+      scope: "account",
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["package_id"],
       operations: {
@@ -193,7 +293,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
           path: "/har/api/v3/packages/{id}/metadata",
           pathParams: { package_id: "id" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: harV3DataArrayUnwrap,
           description: "Get metadata for a package (v3)",
         },
       },
@@ -203,7 +303,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
       displayName: "Version Metadata (v3)",
       description: "Metadata key-value pairs attached to a version.",
       toolset: "registries-v3",
-      scope: "project",
+      scope: "account",
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["version_id"],
       operations: {
@@ -212,7 +312,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
           path: "/har/api/v3/versions/{id}/metadata",
           pathParams: { version_id: "id" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: harV3DataArrayUnwrap,
           description: "Get metadata for a version (v3)",
         },
       },
@@ -222,7 +322,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
       displayName: "File Metadata (v3)",
       description: "Metadata key-value pairs attached to a file.",
       toolset: "registries-v3",
-      scope: "project",
+      scope: "account",
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["file_id"],
       operations: {
@@ -231,7 +331,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
           path: "/har/api/v3/files/{id}/metadata",
           pathParams: { file_id: "id" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: harV3DataArrayUnwrap,
           description: "Get metadata for a file (v3)",
         },
       },
@@ -301,17 +401,25 @@ export const registriesV3Toolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "search_term", description: "Filter scans by keyword" },
         { name: "registry_ids", description: "Comma-separated registry IDs" },
-        { name: "package_types", description: "Package types filter", enum: V3_PACKAGE_TYPES },
+        { name: "package_types", description: V3_PACKAGE_TYPES_DESC, enum: V3_PACKAGE_TYPES },
         { name: "policy_set_ref", description: "OPA policy set reference" },
-        { name: "categories", description: "Security violation categories to include" },
+        {
+          name: "categories",
+          description: "Security violation categories to include",
+          enum: V3_POLICY_CATEGORIES,
+        },
         { name: "scan_id", description: "Specific scan ID" },
-        { name: "scan_status", description: "Scan status filter" },
+        {
+          name: "scan_status",
+          description: "Scan status filter (scan-detail responses only surface `BLOCKED` / `WARN`)",
+          enum: V3_SCAN_STATUSES,
+        },
         {
           name: "scope",
           description: "Registry scope",
           enum: ["none", "ancestors", "descendants"],
         },
-        { name: "sort", description: "Sort spec, e.g. `name,ASC`" },
+        { name: "sort", description: V3_SORT_DESC },
       ],
       operations: {
         list: {
@@ -340,7 +448,8 @@ export const registriesV3Toolset: ToolsetDefinition = {
           pathParams: { scan_id: "id" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { policy_set_ref: "policy_set_ref" },
-          responseExtractor: passthrough,
+          // Response is `{ data: { packageName, scanStatus, ... } }`; unwrap.
+          responseExtractor: harV3DataObjectUnwrap,
           description: "Get scan details for a single artifact scan (v3)",
         },
       },
@@ -372,15 +481,20 @@ export const registriesV3Toolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["exception_id"],
+      compactItem: compactFirewallExceptionV3,
       listFilterFields: [
         { name: "search_term", description: "Filter exceptions by keyword" },
-        { name: "status", description: "Filter by exception status" },
+        {
+          name: "status",
+          description: "Filter by exception status",
+          enum: V3_FIREWALL_EXCEPTION_STATUSES,
+        },
         { name: "package_name", description: "Filter by package name" },
         { name: "version", description: "Filter by version" },
-        { name: "package_types", description: "Package types filter", enum: V3_PACKAGE_TYPES },
+        { name: "package_types", description: V3_PACKAGE_TYPES_DESC, enum: V3_PACKAGE_TYPES },
         { name: "registry_ids", description: "Comma-separated registry IDs" },
         { name: "exception_id", description: "Filter by exception ID" },
-        { name: "sort", description: "Sort spec, e.g. `name,ASC`" },
+        { name: "sort", description: V3_SORT_DESC },
       ],
       operations: {
         list: {
