@@ -183,7 +183,7 @@ const FME_METRIC_SORT_ORDERS = ["ASCENDING", "DESCENDING"] as const;
 
 const fmeMetricCreateSchema: BodySchema = {
   description:
-    "Create a project-scoped metric definition. name, trafficType, format, aggregation, isPositive, baseEventTypes (min 1), and owners (min 1) are required. Optional description, spread (defaults to PER on the backend), filterEventType, tags, and cap.",
+    "Create a project-scoped metric definition. name, trafficType, format, aggregation, isPositive, and baseEventTypes (min 1) are required. Optional description, spread (defaults to PER on the backend), filterEventType, tags, owners, and cap.",
   fields: [
     { name: "name", type: "string", required: true, description: "Metric name (must be unique within the project)" },
     { name: "trafficType", type: "string", required: true, description: "Traffic type name" },
@@ -211,7 +211,7 @@ const fmeMetricCreateSchema: BodySchema = {
     { name: "spread", type: "string", required: false, description: "Spread type. Must be PER or ACROSS if provided." },
     { name: "filterEventType", type: "object", required: false, description: "Optional filter event ({ eventTypeId, filterAggregation?, propertyFilters? })" },
     { name: "tags", type: "array", required: false, description: "Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
-    { name: "owners", type: "array", required: true, description: "At least one owner. Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
     { name: "cap", type: "object", required: false, description: "Optional outlier/cap configuration (MetricCap object)" },
   ],
 };
@@ -1702,9 +1702,6 @@ export const featureFlagsToolset: ToolsetDefinition = {
             if (!Array.isArray(body?.baseEventTypes) || body.baseEventTypes.length < 1) {
               throw new Error("fme_metric.create: baseEventTypes must contain at least one entry.");
             }
-            if (!Array.isArray(body?.owners) || body.owners.length < 1) {
-              throw new Error('fme_metric.create: "owners" is required — pass body.owners (at least one USER or GROUP entry).');
-            }
             return {
               name: body?.name,
               trafficType: body.trafficType,
@@ -1712,18 +1709,18 @@ export const featureFlagsToolset: ToolsetDefinition = {
               aggregation: body?.aggregation,
               isPositive: body?.isPositive,
               baseEventTypes: body.baseEventTypes,
-              owners: body.owners,
               ...(body?.description !== undefined ? { description: body.description } : {}),
               ...(body?.spread !== undefined ? { spread: body.spread } : {}),
               ...(body?.filterEventType !== undefined ? { filterEventType: body.filterEventType } : {}),
               ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
+              ...(body?.owners !== undefined ? { owners: body.owners } : {}),
               ...(body?.cap !== undefined ? { cap: body.cap } : {}),
             };
           },
           responseExtractor: passthrough,
           bodySchema: fmeMetricCreateSchema,
           description:
-            "Create a metric definition. Body requires name, trafficType, format, aggregation, isPositive, baseEventTypes (min 1), and owners (min 1); optional description, spread, filterEventType, tags, and cap.",
+            "Create a metric definition. Body requires name, trafficType, format, aggregation, isPositive, and baseEventTypes (min 1); optional description, spread, filterEventType, tags, owners, and cap.",
         },
         update: {
           method: "PATCH",

@@ -1844,8 +1844,6 @@ describe("fme_segment_definition", () => {
 });
 
 describe("fme_metric", () => {
-  const metricOwners = [{ type: "USER", email: "alice@example.com" }];
-
   let registry: Registry;
 
   beforeEach(() => {
@@ -1945,7 +1943,6 @@ describe("fme_metric", () => {
           aggregation: "COUNT",
           isPositive: true,
           baseEventTypes: [{ eventTypeId: "ev-1" }],
-          owners: metricOwners,
         };
       } else if (operation === "update") {
         input.body = { description: "updated" };
@@ -2026,7 +2023,6 @@ describe("fme_metric", () => {
         baseEventTypes: [{ eventTypeId: "ev-1" }],
         tags: ["prod"],
         description: "click count",
-        owners: metricOwners,
       },
     });
 
@@ -2047,30 +2043,8 @@ describe("fme_metric", () => {
       baseEventTypes: [{ eventTypeId: "ev-1" }],
       tags: [{ name: "prod" }],
       description: "click count",
-      owners: metricOwners,
     });
     expect((req.body as Record<string, unknown>).orgIdentifier).toBeUndefined();
-  });
-
-  it("create: rejects missing owners locally", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_metric", "create", {
-        org_id: "o1",
-        project_id: "p1",
-        body: {
-          name: "clicks",
-          trafficType: "user",
-          format: "NUMBER",
-          aggregation: "COUNT",
-          isPositive: true,
-          baseEventTypes: [{ eventTypeId: "ev-1" }],
-        },
-      }),
-    ).rejects.toThrow(/"owners" is required/i);
-    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("create: missing required fields fail before request", async () => {
@@ -2129,7 +2103,6 @@ describe("fme_metric", () => {
           aggregation: "COUNT",
           isPositive: true,
           baseEventTypes: [{ eventTypeId: "ev-1" }],
-          owners: metricOwners,
         },
       }),
     ).rejects.toThrow(/invalid format/i);
