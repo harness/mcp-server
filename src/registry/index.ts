@@ -33,9 +33,8 @@ import { gitopsToolset } from "./toolsets/gitops.js";
 import { chaosToolset } from "./toolsets/chaos.js";
 import { ccmToolset } from "./toolsets/ccm.js";
 import { seiToolset } from "./toolsets/sei.js";
-import { scsToolset } from "./toolsets/scs.js";
+import { applicationSecurityToolset } from "./toolsets/application-security.js";
 import { evidenceVaultToolset } from "./toolsets/evidence-vault.js";
-import { stoToolset } from "./toolsets/sto.js";
 import { dbopsToolset } from "./toolsets/dbops.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
@@ -204,9 +203,8 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   chaosToolset,
   ccmToolset,
   seiToolset,
-  scsToolset,
+  applicationSecurityToolset,
   evidenceVaultToolset,
-  stoToolset,
   dbopsToolset,
   accessControlToolset,
   settingsToolset,

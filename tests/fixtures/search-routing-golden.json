@@ -251,16 +251,16 @@
     "id": "security-scan",
     "query": "security scan vulnerabilities",
     "mode": "specific",
-    "expectedTypes": ["artifact_security"],
-    "acceptableTypes": ["code_repo_security", "scs_compliance_result"],
+    "expectedTypes": ["application_security_artifact"],
+    "acceptableTypes": ["application_security_code_repo", "application_security_compliance_result"],
     "description": "Security scan language should route to security resources."
   },
   {
     "id": "artifact-component",
     "query": "artifact component sbom",
     "mode": "specific",
-    "expectedTypes": ["scs_artifact_component"],
-    "acceptableTypes": ["scs_artifact_source", "artifact_security"],
+    "expectedTypes": ["application_security_artifact_component"],
+    "acceptableTypes": ["application_security_artifact_source", "application_security_artifact"],
     "description": "SBOM component language should route to artifact component resources."
   },
   {

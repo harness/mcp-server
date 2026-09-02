@@ -1,5 +1,5 @@
 /**
- * Regression tests for STO security_exemption pagination & projection.
+ * Regression tests for STO application_security_exemption pagination & projection.
  *
  * Covers the Cursor review concerns on PR feat/STO-11498:
  *   1. `_nextPageHint` preserves the FULL active filter set (status + search),
@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import { stoExemptionsExtract } from "../../src/registry/extractors.js";
-import { stoToolset } from "../../src/registry/toolsets/sto.js";
+import { applicationSecurityToolset } from "../../src/registry/toolsets/application-security.js";
 import { Registry } from "../../src/registry/index.js";
 import { compactItems } from "../../src/utils/compact.js";
 import type { Config } from "../../src/config.js";
@@ -50,20 +50,20 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
 }
 
 function getExemptionResource(): ResourceDefinition {
-  const r = stoToolset.resources.find((x) => x.resourceType === "security_exemption");
-  if (!r) throw new Error("security_exemption resource not registered");
+  const r = applicationSecurityToolset.resources.find((x) => x.resourceType === "application_security_exemption");
+  if (!r) throw new Error("application_security_exemption resource not registered");
   return r;
 }
 
 function getListSpec(): EndpointSpec {
   const spec = getExemptionResource().operations.list;
-  if (!spec) throw new Error("security_exemption.list spec missing");
+  if (!spec) throw new Error("application_security_exemption.list spec missing");
   return spec;
 }
 
 async function runPreflight(input: Record<string, unknown>): Promise<void> {
   const spec = getListSpec();
-  if (!spec.preflight) throw new Error("security_exemption.list has no preflight");
+  if (!spec.preflight) throw new Error("application_security_exemption.list has no preflight");
   const ctx: PreflightContext = {
     client: { account: "test-account" },
     input,
@@ -130,7 +130,7 @@ describe("stoExemptionsExtract — _nextPageHint", () => {
 
 // ─── 2. Preflight is fail-loud — never silently rewrites ──────────────────
 
-describe("security_exemption list preflight", () => {
+describe("application_security_exemption list preflight", () => {
   it("honors an explicit size=20 (does NOT rewrite to a smaller default)", async () => {
     const input: Record<string, unknown> = { status: "Pending", size: 20, page: 0 };
     await runPreflight(input);
@@ -182,7 +182,7 @@ describe("security_exemption list preflight", () => {
 
 // ─── 3. End-to-end: dispatch round-trip & skipCompact ─────────────────────
 
-describe("security_exemption list — registry dispatch", () => {
+describe("application_security_exemption list — registry dispatch", () => {
   const rawApiResponse = {
     exemptions: [
       {
@@ -207,9 +207,9 @@ describe("security_exemption list — registry dispatch", () => {
   it("propagates caller filters into the request and surfaces them in _nextPageHint", async () => {
     const requestSpy = vi.fn().mockResolvedValue(rawApiResponse);
     const client = makeClient(requestSpy);
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
 
-    const result = (await registry.dispatch(client, "security_exemption", "list", {
+    const result = (await registry.dispatch(client, "application_security_exemption", "list", {
       status: "Pending",
       search: "log4j",
       size: 5,
@@ -234,10 +234,10 @@ describe("security_exemption list — registry dispatch", () => {
   it("rejects size=51 at dispatch time (fail loud, never reaches the API)", async () => {
     const requestSpy = vi.fn().mockResolvedValue(rawApiResponse);
     const client = makeClient(requestSpy);
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
 
     await expect(
-      registry.dispatch(client, "security_exemption", "list", { status: "Pending", size: 51 }),
+      registry.dispatch(client, "application_security_exemption", "list", { status: "Pending", size: 51 }),
     ).rejects.toThrow(/size.*<= 50/i);
     expect(requestSpy).not.toHaveBeenCalled();
   });
@@ -246,20 +246,20 @@ describe("security_exemption list — registry dispatch", () => {
     const requestSpy = vi.fn().mockResolvedValue(rawApiResponse);
     const client = makeClient(requestSpy);
     const registry = new Registry(
-      makeConfig({ HARNESS_TOOLSETS: "sto", HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }),
+      makeConfig({ HARNESS_TOOLSETS: "application_security", HARNESS_ORG: undefined, HARNESS_PROJECT: undefined }),
     );
 
     await expect(
-      registry.dispatch(client, "security_exemption", "list", { status: "Pending" }),
+      registry.dispatch(client, "application_security_exemption", "list", { status: "Pending" }),
     ).rejects.toThrow(/requires project scope \(org_id \+ project_id\)/i);
     expect(requestSpy).not.toHaveBeenCalled();
   });
 
   it("preserves projected display fields under skipCompact (severity, requested_by, …)", async () => {
     const client = makeClient(vi.fn().mockResolvedValue(rawApiResponse));
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
 
-    const result = (await registry.dispatch(client, "security_exemption", "list", {
+    const result = (await registry.dispatch(client, "application_security_exemption", "list", {
       status: "Pending",
       size: 5,
     })) as Record<string, unknown> & { items: Array<Record<string, unknown>>; __skipCompact?: boolean };

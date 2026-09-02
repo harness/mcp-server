@@ -3,14 +3,14 @@
  * - T2-v2: ensureArray normalization in bodyBuilders
  * - T4-v2: Remediation limitation note in description
  * - T11-v2: ID retention hints in resource descriptions
- * - T12-v2: dependency_type filter on scs_artifact_component
+ * - T12-v2: dependency_type filter on application_security_artifact_component
  * - T13-v2: scsCleanExtract strips null/empty fields
  * - T14-v2: artifact_type, status, standards filter enrichment
  */
 import { describe, it, expect, vi } from "vitest";
 import { scsCleanExtract, scsListExtract } from "../../src/registry/extractors.js";
 import { compactItems } from "../../src/utils/compact.js";
-import { scsToolset, normalizePurl, sbomDownloadExtract } from "../../src/registry/toolsets/scs.js";
+import { applicationSecurityToolset, normalizePurl, sbomDownloadExtract } from "../../src/registry/toolsets/application-security.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
@@ -47,8 +47,8 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
 
 /** Helper: find a resource definition by resourceType */
 function findResource(type: string): ResourceDefinition {
-  const res = scsToolset.resources.find((r) => r.resourceType === type);
-  if (!res) throw new Error(`Resource type "${type}" not found in scsToolset`);
+  const res = applicationSecurityToolset.resources.find((r) => r.resourceType === type);
+  if (!res) throw new Error(`Resource type "${type}" not found in applicationSecurityToolset`);
   return res;
 }
 
@@ -141,50 +141,50 @@ describe("scsCleanExtract", () => {
 // ─── T2-v2: ensureArray via bodyBuilder ───────────────────────────────────
 
 describe("T2-v2: array parameter normalization", () => {
-  it("scs_compliance_result bodyBuilder wraps scalar standards to array", () => {
-    const spec = getOp("scs_compliance_result", "list");
+  it("application_security_compliance_result bodyBuilder wraps scalar standards to array", () => {
+    const spec = getOp("application_security_compliance_result", "list");
     const body = spec.bodyBuilder!({ standards: "CIS" });
     expect(body).toEqual({ standards: ["CIS"] });
   });
 
-  it("scs_compliance_result bodyBuilder passes array standards through", () => {
-    const spec = getOp("scs_compliance_result", "list");
+  it("application_security_compliance_result bodyBuilder passes array standards through", () => {
+    const spec = getOp("application_security_compliance_result", "list");
     const body = spec.bodyBuilder!({ standards: ["CIS", "OWASP"] });
     expect(body).toEqual({ standards: ["CIS", "OWASP"] });
   });
 
-  it("scs_compliance_result bodyBuilder wraps scalar status to array", () => {
-    const spec = getOp("scs_compliance_result", "list");
+  it("application_security_compliance_result bodyBuilder wraps scalar status to array", () => {
+    const spec = getOp("application_security_compliance_result", "list");
     const body = spec.bodyBuilder!({ status: "FAILED" });
     expect(body).toEqual({ status: ["FAILED"] });
   });
 
-  it("scs_compliance_result bodyBuilder handles both standards and status", () => {
-    const spec = getOp("scs_compliance_result", "list");
+  it("application_security_compliance_result bodyBuilder handles both standards and status", () => {
+    const spec = getOp("application_security_compliance_result", "list");
     const body = spec.bodyBuilder!({ standards: "CIS", status: ["PASSED", "FAILED"] });
     expect(body).toEqual({ standards: ["CIS"], status: ["PASSED", "FAILED"] });
   });
 
-  it("scs_compliance_result bodyBuilder omits absent filters", () => {
-    const spec = getOp("scs_compliance_result", "list");
+  it("application_security_compliance_result bodyBuilder omits absent filters", () => {
+    const spec = getOp("application_security_compliance_result", "list");
     const body = spec.bodyBuilder!({});
     expect(body).toEqual({});
   });
 
-  it("scs_artifact_source bodyBuilder wraps scalar artifact_type to array", () => {
-    const spec = getOp("scs_artifact_source", "list");
+  it("application_security_artifact_source bodyBuilder wraps scalar artifact_type to array", () => {
+    const spec = getOp("application_security_artifact_source", "list");
     const body = spec.bodyBuilder!({ artifact_type: "CONTAINER" });
     expect(body).toEqual({ artifact_type: ["CONTAINER"] });
   });
 
-  it("scs_artifact_source bodyBuilder passes array artifact_type through", () => {
-    const spec = getOp("scs_artifact_source", "list");
+  it("application_security_artifact_source bodyBuilder passes array artifact_type through", () => {
+    const spec = getOp("application_security_artifact_source", "list");
     const body = spec.bodyBuilder!({ artifact_type: ["CONTAINER", "FILE"] });
     expect(body).toEqual({ artifact_type: ["CONTAINER", "FILE"] });
   });
 
-  it("scs_artifact_source bodyBuilder handles search_term + artifact_type together", () => {
-    const spec = getOp("scs_artifact_source", "list");
+  it("application_security_artifact_source bodyBuilder handles search_term + artifact_type together", () => {
+    const spec = getOp("application_security_artifact_source", "list");
     const body = spec.bodyBuilder!({ search_term: "nginx", artifact_type: "CONTAINER" });
     expect(body).toEqual({ search_term: "nginx", artifact_type: ["CONTAINER"] });
   });
@@ -193,26 +193,26 @@ describe("T2-v2: array parameter normalization", () => {
 // ─── T12-v2: dependency_type filter ───────────────────────────────────────
 
 describe("T12-v2: dependency type filter", () => {
-  it("scs_artifact_component bodyBuilder passes dependency_type as dependency_type_filter array", () => {
-    const spec = getOp("scs_artifact_component", "list");
+  it("application_security_artifact_component bodyBuilder passes dependency_type as dependency_type_filter array", () => {
+    const spec = getOp("application_security_artifact_component", "list");
     const body = spec.bodyBuilder!({ dependency_type: "DIRECT" });
     expect(body).toEqual({ dependency_type_filter: ["DIRECT"] });
   });
 
-  it("scs_artifact_component bodyBuilder passes search_term + dependency_type_filter", () => {
-    const spec = getOp("scs_artifact_component", "list");
+  it("application_security_artifact_component bodyBuilder passes search_term + dependency_type_filter", () => {
+    const spec = getOp("application_security_artifact_component", "list");
     const body = spec.bodyBuilder!({ search_term: "lodash", dependency_type: "TRANSITIVE" });
     expect(body).toEqual({ search_term: "lodash", dependency_type_filter: ["TRANSITIVE"] });
   });
 
-  it("scs_artifact_component bodyBuilder omits absent filters", () => {
-    const spec = getOp("scs_artifact_component", "list");
+  it("application_security_artifact_component bodyBuilder omits absent filters", () => {
+    const spec = getOp("application_security_artifact_component", "list");
     const body = spec.bodyBuilder!({});
     expect(body).toEqual({});
   });
 
-  it("scs_artifact_component has dependency_type in listFilterFields", () => {
-    const res = findResource("scs_artifact_component");
+  it("application_security_artifact_component has dependency_type in listFilterFields", () => {
+    const res = findResource("application_security_artifact_component");
     const filterNames = res.listFilterFields?.map((f) => f.name) ?? [];
     expect(filterNames).toContain("dependency_type");
     expect(filterNames).toContain("search_term");
@@ -222,15 +222,15 @@ describe("T12-v2: dependency type filter", () => {
 // ─── T14-v2: filter enrichment ────────────────────────────────────────────
 
 describe("T14-v2: SCS list filter enrichment", () => {
-  it("scs_artifact_source has artifact_type in listFilterFields", () => {
-    const res = findResource("scs_artifact_source");
+  it("application_security_artifact_source has artifact_type in listFilterFields", () => {
+    const res = findResource("application_security_artifact_source");
     const filterNames = res.listFilterFields?.map((f) => f.name) ?? [];
     expect(filterNames).toContain("artifact_type");
     expect(filterNames).toContain("search_term");
   });
 
-  it("scs_compliance_result has standards and status in listFilterFields", () => {
-    const res = findResource("scs_compliance_result");
+  it("application_security_compliance_result has standards and status in listFilterFields", () => {
+    const res = findResource("application_security_compliance_result");
     const filterNames = res.listFilterFields?.map((f) => f.name) ?? [];
     expect(filterNames).toContain("standards");
     expect(filterNames).toContain("status");
@@ -240,14 +240,14 @@ describe("T14-v2: SCS list filter enrichment", () => {
 // ─── T4-v2: remediation limitation note ───────────────────────────────────
 
 describe("T4-v2: remediation limitation note", () => {
-  it("scs_artifact_remediation description mentions code repository limitation", () => {
-    const res = findResource("scs_artifact_remediation");
+  it("application_security_artifact_remediation description mentions code repository limitation", () => {
+    const res = findResource("application_security_artifact_remediation");
     expect(res.description).toContain("code repository");
     expect(res.description).toContain("not available for container");
   });
 
-  it("scs_artifact_remediation maps target_version query param to targetVersion (API camelCase)", () => {
-    const spec = getOp("scs_artifact_remediation", "get");
+  it("application_security_artifact_remediation maps target_version query param to targetVersion (API camelCase)", () => {
+    const spec = getOp("application_security_artifact_remediation", "get");
     expect(spec.queryParams).toEqual({
       purl: "purl",
       target_version: "targetVersion",
@@ -258,33 +258,33 @@ describe("T4-v2: remediation limitation note", () => {
 // ─── T11-v2: ID retention hints ───────────────────────────────────────────
 
 describe("T11-v2: ID retention hints in descriptions", () => {
-  it("scs_artifact_source description mentions retaining source_id", () => {
-    const res = findResource("scs_artifact_source");
+  it("application_security_artifact_source description mentions retaining source_id", () => {
+    const res = findResource("application_security_artifact_source");
     expect(res.description).toContain("source_id");
     expect(res.description).toMatch(/[Rr]etain/);
   });
 
-  it("artifact_security description mentions retaining artifact_id and source_id", () => {
-    const res = findResource("artifact_security");
+  it("application_security_artifact description mentions retaining artifact_id and source_id", () => {
+    const res = findResource("application_security_artifact");
     expect(res.description).toContain("artifact_id");
     expect(res.description).toContain("source_id");
     expect(res.description).toMatch(/[Rr]etain/);
   });
 
-  it("code_repo_security description mentions retaining repo_id", () => {
-    const res = findResource("code_repo_security");
+  it("application_security_code_repo description mentions retaining repo_id", () => {
+    const res = findResource("application_security_code_repo");
     expect(res.description).toContain("repo_id");
     expect(res.description).toMatch(/[Rr]etain/);
   });
 
-  it("scs_chain_of_custody description mentions orchestration IDs", () => {
-    const res = findResource("scs_chain_of_custody");
+  it("application_security_chain_of_custody description mentions orchestration IDs", () => {
+    const res = findResource("application_security_chain_of_custody");
     expect(res.description).toContain("orchestration");
     expect(res.description).toContain("SBOM");
   });
 
-  it("scs_chain_of_custody get wraps arrays for MCP structuredContent", async () => {
-    const { chainOfCustodyExtract } = await import("../../src/registry/toolsets/scs.js");
+  it("application_security_chain_of_custody get wraps arrays for MCP structuredContent", async () => {
+    const { chainOfCustodyExtract } = await import("../../src/registry/toolsets/application-security.js");
     const raw = [
       { orchestration: { id: "orch-1" }, type: "SBOM", empty: null },
       { orchestration: { id: "orch-2" }, type: "SLSA", name: "" },
@@ -296,11 +296,11 @@ describe("T11-v2: ID retention hints in descriptions", () => {
       ],
       total: 2,
     });
-    expect(findResource("scs_chain_of_custody").operations.get?.responseExtractor).toBe(chainOfCustodyExtract);
+    expect(findResource("application_security_chain_of_custody").operations.get?.responseExtractor).toBe(chainOfCustodyExtract);
   });
 
-  it("scs_artifact_component description mentions retaining purl", () => {
-    const res = findResource("scs_artifact_component");
+  it("application_security_artifact_component description mentions retaining purl", () => {
+    const res = findResource("application_security_artifact_component");
     expect(res.description).toContain("purl");
     expect(res.description).toMatch(/[Rr]etain/);
   });
@@ -310,7 +310,7 @@ describe("T11-v2: ID retention hints in descriptions", () => {
 
 describe("T13-v2: all SCS resources use scsCleanExtract", () => {
   it("no SCS resource uses passthrough extractor", () => {
-    for (const res of scsToolset.resources) {
+    for (const res of applicationSecurityToolset.resources.filter((r) => r.searchAliases?.includes("scs"))) {
       for (const [opName, spec] of Object.entries(res.operations)) {
         // scsCleanExtract is a named function — verify it's not passthrough
         const extractorName = spec.responseExtractor?.name ?? "anonymous";
@@ -323,7 +323,7 @@ describe("T13-v2: all SCS resources use scsCleanExtract", () => {
   });
 
   it("every SCS operation has a responseExtractor", () => {
-    for (const res of scsToolset.resources) {
+    for (const res of applicationSecurityToolset.resources.filter((r) => r.searchAliases?.includes("scs"))) {
       for (const [opName, spec] of Object.entries(res.operations)) {
         expect(
           spec.responseExtractor,
@@ -385,8 +385,8 @@ describe("P2-2: scsListExtract field selection", () => {
     ]);
   });
 
-  it("scs_artifact_source list uses scsListExtract", () => {
-    const spec = getOp("scs_artifact_source", "list");
+  it("application_security_artifact_source list uses scsListExtract", () => {
+    const spec = getOp("application_security_artifact_source", "list");
     // scsListExtract returns a closure — verify it's not scsCleanExtract directly
     expect(spec.responseExtractor).toBeDefined();
     // Verify field selection works by testing with a mock response
@@ -404,8 +404,8 @@ describe("P2-2: scsListExtract field selection", () => {
     expect(summary).toEqual({ total: 1, by_type: { CONTAINER: 1 } });
   });
 
-  it("artifact_security list preserves orchestration for ID capture", () => {
-    const spec = getOp("artifact_security", "list");
+  it("application_security_artifact list preserves orchestration for ID capture", () => {
+    const spec = getOp("application_security_artifact", "list");
     const result = spec.responseExtractor!([
       { id: "art1", name: "nginx", tag: "latest", orchestration: { id: "orch1" }, internal_metadata: "dropped" },
     ]) as Record<string, unknown>[];
@@ -413,8 +413,8 @@ describe("P2-2: scsListExtract field selection", () => {
     expect(result[0]).not.toHaveProperty("internal_metadata");
   });
 
-  it("scs_artifact_component list preserves purl for remediation", () => {
-    const spec = getOp("scs_artifact_component", "list");
+  it("application_security_artifact_component list preserves purl for remediation", () => {
+    const spec = getOp("application_security_artifact_component", "list");
     const result = spec.responseExtractor!([
       { purl: "pkg:npm/express@4.18.0", package_name: "express", dependency_type: "DIRECT", internal: "dropped" },
     ]) as Record<string, unknown>[];
@@ -424,8 +424,8 @@ describe("P2-2: scsListExtract field selection", () => {
     expect(result[0]).not.toHaveProperty("internal");
   });
 
-  it("code_repo_security list uses scsListExtract", () => {
-    const spec = getOp("code_repo_security", "list");
+  it("application_security_code_repo list uses scsListExtract", () => {
+    const spec = getOp("application_security_code_repo", "list");
     const result = spec.responseExtractor!([
       { id: "repo1", name: "my-repo", branch: "main", internal: "dropped" },
     ]) as Record<string, unknown>[];
@@ -439,11 +439,11 @@ describe("P2-2: scsListExtract field selection", () => {
 
 describe("P2-3A: SCS list pagination defaults", () => {
   const listResources = [
-    "scs_artifact_source",
-    "artifact_security",
-    "scs_artifact_component",
-    "scs_compliance_result",
-    "code_repo_security",
+    "application_security_artifact_source",
+    "application_security_artifact",
+    "application_security_artifact_component",
+    "application_security_compliance_result",
+    "application_security_code_repo",
   ];
 
   for (const rt of listResources) {
@@ -459,19 +459,19 @@ describe("P2-3A: SCS list pagination defaults", () => {
 
 describe("P2-6: SCS resource diagnosticHints", () => {
   const resourcesWithHints = [
-    "scs_artifact_source",
-    "artifact_security",
-    "scs_artifact_component",
-    "scs_artifact_remediation",
-    "scs_chain_of_custody",
-    "scs_compliance_result",
-    "code_repo_security",
-    "scs_sbom",
-    "scs_component_dependencies",
-    "scs_component_remediation",
-    "scs_remediation_pr",
-    "scs_auto_pr_config",
-    "scs_bom_violation",
+    "application_security_artifact_source",
+    "application_security_artifact",
+    "application_security_artifact_component",
+    "application_security_artifact_remediation",
+    "application_security_chain_of_custody",
+    "application_security_compliance_result",
+    "application_security_code_repo",
+    "application_security_sbom",
+    "application_security_component_dependencies",
+    "application_security_component_remediation",
+    "application_security_remediation_pr",
+    "application_security_auto_pr_config",
+    "application_security_bom_violation",
   ];
 
   for (const rt of resourcesWithHints) {
@@ -491,83 +491,83 @@ describe("P2-6: SCS resource diagnosticHints", () => {
 // ─── P2-12: Two-step artifact listing guidance ─────────────────────────────
 
 describe("P2-12: Two-step artifact listing guidance", () => {
-  it("scs_artifact_source description mentions two-step flow", () => {
-    const res = findResource("scs_artifact_source");
+  it("application_security_artifact_source description mentions two-step flow", () => {
+    const res = findResource("application_security_artifact_source");
     expect(res.description).toMatch(/[Tt]wo-step/);
   });
 
-  it("artifact_security description mentions source_id requirement", () => {
-    const res = findResource("artifact_security");
+  it("application_security_artifact description mentions source_id requirement", () => {
+    const res = findResource("application_security_artifact");
     expect(res.description).toContain("source_id is required");
-    expect(res.description).toContain("scs_artifact_source");
+    expect(res.description).toContain("application_security_artifact_source");
   });
 });
 
 // ─── P3-8: Component Dependencies (dependency tree) ───────────────────────
 
-describe("P3-8: scs_component_dependencies resource", () => {
-  it("exists in scsToolset", () => {
-    expect(() => findResource("scs_component_dependencies")).not.toThrow();
+describe("P3-8: application_security_component_dependencies resource", () => {
+  it("exists in applicationSecurityToolset", () => {
+    expect(() => findResource("application_security_component_dependencies")).not.toThrow();
   });
 
   it("has a get operation pointing to the dependencies endpoint", () => {
-    const spec = getOp("scs_component_dependencies", "get");
+    const spec = getOp("application_security_component_dependencies", "get");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/component/dependencies");
   });
 
   it("maps purl as query param", () => {
-    const spec = getOp("scs_component_dependencies", "get");
+    const spec = getOp("application_security_component_dependencies", "get");
     expect(spec.queryParams).toEqual({
       purl: "purl",
     });
   });
 
   it("uses scsListExtract for field selection", () => {
-    const spec = getOp("scs_component_dependencies", "get");
+    const spec = getOp("application_security_component_dependencies", "get");
     expect(spec.responseExtractor).toBeDefined();
   });
 
-  it("description distinguishes from scs_artifact_component (flat list)", () => {
-    const res = findResource("scs_component_dependencies");
+  it("description distinguishes from application_security_artifact_component (flat list)", () => {
+    const res = findResource("application_security_component_dependencies");
     expect(res.description).toContain("dependency tree");
-    expect(res.description).toContain("scs_artifact_component");
+    expect(res.description).toContain("application_security_artifact_component");
   });
 
   it("description mentions transitive dependencies", () => {
-    const res = findResource("scs_component_dependencies");
+    const res = findResource("application_security_component_dependencies");
     expect(res.description).toContain("transitive");
   });
 
   it("has purl as required get param", () => {
-    const spec = getOp("scs_component_dependencies", "get");
+    const spec = getOp("application_security_component_dependencies", "get");
     const purlField = spec.paramsSchema?.fields.find((f) => f.name === "purl");
     expect(purlField).toBeDefined();
     expect(purlField!.required).toBe(true);
   });
 
-  it("has diagnosticHint mentioning scs_artifact_component for purl values", () => {
-    const res = findResource("scs_component_dependencies");
+  it("has diagnosticHint mentioning application_security_artifact_component for purl values", () => {
+    const res = findResource("application_security_component_dependencies");
     expect(res.diagnosticHint).toBeDefined();
-    expect(res.diagnosticHint!).toContain("scs_artifact_component");
+    expect(res.diagnosticHint!).toContain("application_security_artifact_component");
   });
 
   it("has searchAliases including dependency tree and dependency graph", () => {
-    const res = findResource("scs_component_dependencies");
+    const res = findResource("application_security_component_dependencies");
     expect(res.searchAliases).toContain("dependency tree");
     expect(res.searchAliases).toContain("dependency graph");
   });
 
-  it("relatedResources links to scs_artifact_component as parent", () => {
-    const res = findResource("scs_component_dependencies");
-    const parent = res.relatedResources?.find((r) => r.resourceType === "scs_artifact_component");
+  it("relatedResources links to application_security_artifact_component as parent", () => {
+    const res = findResource("application_security_component_dependencies");
+    const parent = res.relatedResources?.find((r) => r.resourceType === "application_security_artifact_component");
     expect(parent).toBeDefined();
     expect(parent!.relationship).toBe("parent");
   });
 
-  it("scs_artifact_component links to scs_component_dependencies as child", () => {
-    const res = findResource("scs_artifact_component");
-    const child = res.relatedResources?.find((r) => r.resourceType === "scs_component_dependencies");
+  it("application_security_artifact_component links to application_security_component_dependencies as child", () => {
+    const res = findResource("application_security_artifact_component");
+    const child = res.relatedResources?.find((r) => r.resourceType === "application_security_component_dependencies");
     expect(child).toBeDefined();
     expect(child!.relationship).toBe("child");
   });
@@ -575,19 +575,19 @@ describe("P3-8: scs_component_dependencies resource", () => {
 
 // ─── P3-6: Component Remediation (upgrade suggestions + impact analysis) ───
 
-describe("P3-6: scs_component_remediation resource", () => {
-  it("exists in scsToolset", () => {
-    expect(() => findResource("scs_component_remediation")).not.toThrow();
+describe("P3-6: application_security_component_remediation resource", () => {
+  it("exists in applicationSecurityToolset", () => {
+    expect(() => findResource("application_security_component_remediation")).not.toThrow();
   });
 
   it("has a get operation pointing to the remediation endpoint", () => {
-    const spec = getOp("scs_component_remediation", "get");
+    const spec = getOp("application_security_component_remediation", "get");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/component/remediation");
   });
 
   it("maps purl and target_version as query params", () => {
-    const spec = getOp("scs_component_remediation", "get");
+    const spec = getOp("application_security_component_remediation", "get");
     expect(spec.queryParams).toEqual({
       purl: "purl",
       target_version: "targetVersion",
@@ -595,31 +595,31 @@ describe("P3-6: scs_component_remediation resource", () => {
   });
 
   it("uses scsCleanExtract", () => {
-    const spec = getOp("scs_component_remediation", "get");
+    const spec = getOp("application_security_component_remediation", "get");
     expect(spec.responseExtractor).toBeDefined();
     expect(spec.responseExtractor!.name).not.toBe("passthrough");
   });
 
   it("description mentions dependency impact analysis (P3-9)", () => {
-    const res = findResource("scs_component_remediation");
+    const res = findResource("application_security_component_remediation");
     expect(res.description).toContain("dependency impact");
     expect(res.description).toContain("dependency_changes");
   });
 
-  it("description mentions scs_remediation_pr for follow-up", () => {
-    const res = findResource("scs_component_remediation");
-    expect(res.description).toContain("scs_remediation_pr");
+  it("description mentions application_security_remediation_pr for follow-up", () => {
+    const res = findResource("application_security_component_remediation");
+    expect(res.description).toContain("application_security_remediation_pr");
   });
 
   it("has purl as required get param", () => {
-    const spec = getOp("scs_component_remediation", "get");
+    const spec = getOp("application_security_component_remediation", "get");
     const purlField = spec.paramsSchema?.fields.find((f) => f.name === "purl");
     expect(purlField).toBeDefined();
     expect(purlField!.required).toBe(true);
   });
 
   it("has diagnosticHint", () => {
-    const res = findResource("scs_component_remediation");
+    const res = findResource("application_security_component_remediation");
     expect(res.diagnosticHint).toBeDefined();
     expect(res.diagnosticHint!).toContain("code repo");
   });
@@ -627,43 +627,43 @@ describe("P3-6: scs_component_remediation resource", () => {
 
 // ─── P3-6: Remediation Pull Requests ───────────────────────────────────────
 
-describe("P3-6: scs_remediation_pr resource", () => {
-  it("exists in scsToolset", () => {
-    expect(() => findResource("scs_remediation_pr")).not.toThrow();
+describe("P3-6: application_security_remediation_pr resource", () => {
+  it("exists in applicationSecurityToolset", () => {
+    expect(() => findResource("application_security_remediation_pr")).not.toThrow();
   });
 
   it("has a list operation", () => {
-    const spec = getOp("scs_remediation_pr", "list");
+    const spec = getOp("application_security_remediation_pr", "list");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/remediation/pull-requests");
   });
 
   it("list has defaultQueryParams with limit=10", () => {
-    const spec = getOp("scs_remediation_pr", "list");
+    const spec = getOp("application_security_remediation_pr", "list");
     expect(spec.defaultQueryParams).toBeDefined();
     expect(spec.defaultQueryParams!.limit).toBe("10");
   });
 
   it("has a create operation (write)", () => {
-    const spec = getOp("scs_remediation_pr", "create" as "list");
+    const spec = getOp("application_security_remediation_pr", "create" as "list");
     expect(spec.method).toBe("POST");
     expect(spec.path).toContain("/create-pull-request");
   });
 
   it("create bodyBuilder passes purl and target_version", () => {
-    const spec = getOp("scs_remediation_pr", "create" as "list");
+    const spec = getOp("application_security_remediation_pr", "create" as "list");
     const body = spec.bodyBuilder!({ purl: "pkg:npm/express@4.18.0", target_version: "4.19.0" });
     expect(body).toEqual({ purl: "pkg:npm/express@4.18.0", target_version: "4.19.0" });
   });
 
   it("create bodyBuilder omits absent fields", () => {
-    const spec = getOp("scs_remediation_pr", "create" as "list");
+    const spec = getOp("application_security_remediation_pr", "create" as "list");
     const body = spec.bodyBuilder!({});
     expect(body).toEqual({});
   });
 
   it("create has bodySchema with purl and target_version fields", () => {
-    const spec = getOp("scs_remediation_pr", "create" as "list");
+    const spec = getOp("application_security_remediation_pr", "create" as "list");
     expect(spec.bodySchema).toBeDefined();
     expect(spec.bodySchema!.description).toBeTruthy();
     const fieldNames = spec.bodySchema!.fields.map((f) => f.name);
@@ -672,13 +672,13 @@ describe("P3-6: scs_remediation_pr resource", () => {
   });
 
   it("description warns about write operation", () => {
-    const res = findResource("scs_remediation_pr");
+    const res = findResource("application_security_remediation_pr");
     expect(res.description).toContain("WRITE OPERATION");
     expect(res.description).not.toMatch(/\bclose\b/i);
   });
 
   it("has diagnosticHint", () => {
-    const res = findResource("scs_remediation_pr");
+    const res = findResource("application_security_remediation_pr");
     expect(res.diagnosticHint).toBeDefined();
     expect(res.diagnosticHint!.length).toBeGreaterThan(20);
   });
@@ -689,7 +689,7 @@ describe("P3-6: scs_remediation_pr resource", () => {
     // non-whitelisted field (purl/pr_number/pr_url/target_version/...) leaving
     // each PR as {}. The replacement extractor must flatten to a bare array
     // and retain PR-specific fields so the agent gets actionable data.
-    const spec = getOp("scs_remediation_pr", "list");
+    const spec = getOp("application_security_remediation_pr", "list");
     expect(spec.responseExtractor).toBeDefined();
     const raw = {
       items: [
@@ -723,48 +723,48 @@ describe("P3-6: scs_remediation_pr resource", () => {
 
 // ─── P3-12: Auto PR Configuration ──────────────────────────────────────────
 
-describe("P3-12: scs_auto_pr_config resource", () => {
-  it("exists in scsToolset", () => {
-    expect(() => findResource("scs_auto_pr_config")).not.toThrow();
+describe("P3-12: application_security_auto_pr_config resource", () => {
+  it("exists in applicationSecurityToolset", () => {
+    expect(() => findResource("application_security_auto_pr_config")).not.toThrow();
   });
 
   it("has a get operation", () => {
-    const spec = getOp("scs_auto_pr_config", "get");
+    const spec = getOp("application_security_auto_pr_config", "get");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/auto-pr-config");
   });
 
   it("has an update operation (write)", () => {
-    const spec = getOp("scs_auto_pr_config", "update" as "list");
+    const spec = getOp("application_security_auto_pr_config", "update" as "list");
     expect(spec.method).toBe("PUT");
     expect(spec.path).toContain("/auto-pr-config");
   });
 
   it("update has bodySchema", () => {
-    const spec = getOp("scs_auto_pr_config", "update" as "list");
+    const spec = getOp("application_security_auto_pr_config", "update" as "list");
     expect(spec.bodySchema).toBeDefined();
     expect(spec.bodySchema!.description).toBeTruthy();
   });
 
   it("update bodyBuilder passes body through", () => {
-    const spec = getOp("scs_auto_pr_config", "update" as "list");
+    const spec = getOp("application_security_auto_pr_config", "update" as "list");
     const config = { enabled: true, severity_threshold: "HIGH" };
     const body = spec.bodyBuilder!({ body: config });
     expect(body).toEqual(config);
   });
 
   it("has empty identifierFields (project-level config)", () => {
-    const res = findResource("scs_auto_pr_config");
+    const res = findResource("application_security_auto_pr_config");
     expect(res.identifierFields).toEqual([]);
   });
 
   it("description warns about write operation", () => {
-    const res = findResource("scs_auto_pr_config");
+    const res = findResource("application_security_auto_pr_config");
     expect(res.description).toContain("WRITE OPERATION");
   });
 
   it("has diagnosticHint", () => {
-    const res = findResource("scs_auto_pr_config");
+    const res = findResource("application_security_auto_pr_config");
     expect(res.diagnosticHint).toBeDefined();
     expect(res.diagnosticHint!).toContain("harness_get");
   });
@@ -772,21 +772,21 @@ describe("P3-12: scs_auto_pr_config resource", () => {
 
 // ─── P3-7: Code repo → repo dependency guidance ────────────────────────────
 
-describe("P3-7: code_repo_security repo-level dependency guidance", () => {
+describe("P3-7: application_security_code_repo repo-level dependency guidance", () => {
   it("description mentions repo_id IS an artifact_id", () => {
-    const res = findResource("code_repo_security");
+    const res = findResource("application_security_code_repo");
     expect(res.description).toContain("repo_id IS an artifact_id");
   });
 
-  it("description shows scs_artifact_component query pattern", () => {
-    const res = findResource("code_repo_security");
-    expect(res.description).toContain("scs_artifact_component");
+  it("description shows application_security_artifact_component query pattern", () => {
+    const res = findResource("application_security_code_repo");
+    expect(res.description).toContain("application_security_artifact_component");
     expect(res.description).toContain("dependency_type='DIRECT'");
   });
 
-  it("description references scs_component_remediation for repo deps", () => {
-    const res = findResource("code_repo_security");
-    expect(res.description).toContain("scs_component_remediation");
+  it("description references application_security_component_remediation for repo deps", () => {
+    const res = findResource("application_security_code_repo");
+    expect(res.description).toContain("application_security_component_remediation");
   });
 });
 
@@ -835,11 +835,11 @@ describe("T9-v2: compactItems effectiveness for SCS", () => {
   });
 });
 
-// ─── P3-10: scs_compliance_result governance cross-references ───────────────
+// ─── P3-10: application_security_compliance_result governance cross-references ───────────────
 
-describe("P3-10: scs_compliance_result governance cross-references", () => {
+describe("P3-10: application_security_compliance_result governance cross-references", () => {
   it("has relatedResources pointing to governance policy", () => {
-    const res = findResource("scs_compliance_result");
+    const res = findResource("application_security_compliance_result");
     const policyRef = res.relatedResources!.find(
       (rel) => rel.resourceType === "policy",
     );
@@ -849,7 +849,7 @@ describe("P3-10: scs_compliance_result governance cross-references", () => {
   });
 
   it("has relatedResources pointing to governance policy_set", () => {
-    const res = findResource("scs_compliance_result");
+    const res = findResource("application_security_compliance_result");
     const policySetRef = res.relatedResources!.find(
       (rel) => rel.resourceType === "policy_set",
     );
@@ -858,67 +858,67 @@ describe("P3-10: scs_compliance_result governance cross-references", () => {
     expect(policySetRef!.description).toContain("governance");
   });
 
-  it("retains parent reference to artifact_security", () => {
-    const res = findResource("scs_compliance_result");
+  it("retains parent reference to application_security_artifact", () => {
+    const res = findResource("application_security_compliance_result");
     const parentRef = res.relatedResources!.find(
-      (rel) => rel.resourceType === "artifact_security",
+      (rel) => rel.resourceType === "application_security_artifact",
     );
     expect(parentRef).toBeDefined();
     expect(parentRef!.relationship).toBe("parent");
   });
 
   it("searchAliases cover CIS/OWASP but NOT enforcement (P3-1 disambiguation)", () => {
-    const res = findResource("scs_compliance_result");
+    const res = findResource("application_security_compliance_result");
     const aliases = res.searchAliases!.map((a) => a.toLowerCase());
     expect(aliases).toContain("compliance");
     expect(aliases).toContain("cis");
     expect(aliases).toContain("owasp");
-    // Enforcement aliases moved to scs_bom_violation (P3-1)
+    // Enforcement aliases moved to application_security_bom_violation (P3-1)
     expect(aliases).not.toContain("enforcement");
     expect(aliases).not.toContain("sbom enforcement");
     expect(aliases).not.toContain("bom enforcement");
   });
 });
 
-// ─── P3-8: scs_component_dependencies structural tests ─────────────────────
+// ─── P3-8: application_security_component_dependencies structural tests ─────────────────────
 
-describe("P3-8: scs_component_dependencies resource", () => {
-  it("exists in scsToolset", () => {
-    expect(() => findResource("scs_component_dependencies")).not.toThrow();
+describe("P3-8: application_security_component_dependencies resource", () => {
+  it("exists in applicationSecurityToolset", () => {
+    expect(() => findResource("application_security_component_dependencies")).not.toThrow();
   });
 
   it("has a get operation with correct path", () => {
-    const spec = getOp("scs_component_dependencies", "get");
+    const spec = getOp("application_security_component_dependencies", "get");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/component/dependencies");
   });
 
   it("get operation requires purl as query param", () => {
-    const spec = getOp("scs_component_dependencies", "get");
+    const spec = getOp("application_security_component_dependencies", "get");
     expect(spec.queryParams).toBeDefined();
     expect(spec.queryParams!.purl).toBe("purl");
   });
 
-  it("description distinguishes from scs_artifact_component (flat list)", () => {
-    const res = findResource("scs_component_dependencies");
+  it("description distinguishes from application_security_artifact_component (flat list)", () => {
+    const res = findResource("application_security_component_dependencies");
     expect(res.description).toContain("DEPENDS ON");
-    expect(res.description).toContain("DIFFERENT from scs_artifact_component");
+    expect(res.description).toContain("DIFFERENT from application_security_artifact_component");
   });
 
   it("description mentions transitive dependencies", () => {
-    const res = findResource("scs_component_dependencies");
+    const res = findResource("application_security_component_dependencies");
     expect(res.description).toContain("transitive");
   });
 
   it("diagnosticHint explains how to get purl values", () => {
-    const res = findResource("scs_component_dependencies");
+    const res = findResource("application_security_component_dependencies");
     expect(res.diagnosticHint).toBeDefined();
-    expect(res.diagnosticHint!).toContain("scs_artifact_component");
+    expect(res.diagnosticHint!).toContain("application_security_artifact_component");
     expect(res.diagnosticHint!).toContain("purl");
   });
 
   it("searchAliases include dependency tree terms", () => {
-    const res = findResource("scs_component_dependencies");
+    const res = findResource("application_security_component_dependencies");
     const aliases = res.searchAliases!.map((a) => a.toLowerCase());
     expect(aliases).toContain("dependency tree");
     expect(aliases).toContain("transitive dependencies");
@@ -926,47 +926,47 @@ describe("P3-8: scs_component_dependencies resource", () => {
     expect(aliases).toContain("depends on");
   });
 
-  it("has relatedResources referencing scs_artifact_component as parent", () => {
-    const res = findResource("scs_component_dependencies");
+  it("has relatedResources referencing application_security_artifact_component as parent", () => {
+    const res = findResource("application_security_component_dependencies");
     const parentRef = res.relatedResources!.find(
-      (rel) => rel.resourceType === "scs_artifact_component",
+      (rel) => rel.resourceType === "application_security_artifact_component",
     );
     expect(parentRef).toBeDefined();
     expect(parentRef!.relationship).toBe("parent");
   });
 
-  it("has relatedResources referencing scs_component_remediation as sibling", () => {
-    const res = findResource("scs_component_dependencies");
+  it("has relatedResources referencing application_security_component_remediation as sibling", () => {
+    const res = findResource("application_security_component_dependencies");
     const siblingRef = res.relatedResources!.find(
-      (rel) => rel.resourceType === "scs_component_remediation",
+      (rel) => rel.resourceType === "application_security_component_remediation",
     );
     expect(siblingRef).toBeDefined();
     expect(siblingRef!.relationship).toBe("sibling");
   });
 
   it("purl is a required get param", () => {
-    const spec = getOp("scs_component_dependencies", "get");
+    const spec = getOp("application_security_component_dependencies", "get");
     const purlField = spec.paramsSchema!.fields.find((f) => f.name === "purl");
     expect(purlField).toBeDefined();
     expect(purlField!.required).toBe(true);
   });
 });
 
-// ─── P3-11: scs_component_enrichment structural tests ────────────────────────
+// ─── P3-11: application_security_component_enrichment structural tests ────────────────────────
 
-describe("P3-11: scs_component_enrichment resource", () => {
-  it("exists in scsToolset", () => {
-    expect(() => findResource("scs_component_enrichment")).not.toThrow();
+describe("P3-11: application_security_component_enrichment resource", () => {
+  it("exists in applicationSecurityToolset", () => {
+    expect(() => findResource("application_security_component_enrichment")).not.toThrow();
   });
 
   it("has a get operation with correct fallback path", () => {
-    const spec = getOp("scs_component_enrichment", "get");
+    const spec = getOp("application_security_component_enrichment", "get");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/v1/components/details");
   });
 
   it("has a pathBuilder that returns project-scoped path when artifact_id is provided", () => {
-    const spec = getOp("scs_component_enrichment", "get");
+    const spec = getOp("application_security_component_enrichment", "get");
     expect(spec.pathBuilder).toBeDefined();
     const path = spec.pathBuilder!(
       { artifact_id: "art123", org_id: "myOrg", project_id: "myProj", purl: "pkg:npm/express@4.18.0" },
@@ -976,7 +976,7 @@ describe("P3-11: scs_component_enrichment resource", () => {
   });
 
   it("pathBuilder falls back to account-scoped path when artifact_id is absent", () => {
-    const spec = getOp("scs_component_enrichment", "get");
+    const spec = getOp("application_security_component_enrichment", "get");
     const path = spec.pathBuilder!(
       { purl: "pkg:npm/express@4.18.0" },
       { HARNESS_ACCOUNT_ID: "acc", HARNESS_ORG: "defOrg", HARNESS_PROJECT: "defProj" },
@@ -986,7 +986,7 @@ describe("P3-11: scs_component_enrichment resource", () => {
   });
 
   it("pathBuilder uses default org/project from config when not in input", () => {
-    const spec = getOp("scs_component_enrichment", "get");
+    const spec = getOp("application_security_component_enrichment", "get");
     const path = spec.pathBuilder!(
       { artifact_id: "art123", purl: "pkg:npm/express@4.18.0" },
       { HARNESS_ACCOUNT_ID: "acc", HARNESS_ORG: "defOrg", HARNESS_PROJECT: "defProj" },
@@ -995,38 +995,38 @@ describe("P3-11: scs_component_enrichment resource", () => {
   });
 
   it("get operation requires purl as query param", () => {
-    const spec = getOp("scs_component_enrichment", "get");
+    const spec = getOp("application_security_component_enrichment", "get");
     expect(spec.queryParams).toBeDefined();
     expect(spec.queryParams!.purl).toBe("purl");
   });
 
   it("is project-scoped with scopeOptional for account fallback", () => {
-    const res = findResource("scs_component_enrichment");
+    const res = findResource("application_security_component_enrichment");
     expect(res.scope).toBe("project");
     expect(res.scopeOptional).toBe(true);
   });
 
   it("description mentions EOL, outdated, unmaintained", () => {
-    const res = findResource("scs_component_enrichment");
+    const res = findResource("application_security_component_enrichment");
     expect(res.description).toContain("end-of-life");
     expect(res.description).toContain("outdated");
     expect(res.description).toContain("unmaintained");
   });
 
-  it("description clarifies CVE boundary with scs_component_vulnerability", () => {
-    const res = findResource("scs_component_enrichment");
-    expect(res.description).toContain("scs_component_vulnerability");
+  it("description clarifies CVE boundary with application_security_component_vulnerability", () => {
+    const res = findResource("application_security_component_enrichment");
+    expect(res.description).toContain("application_security_component_vulnerability");
     expect(res.description).toContain("CVE");
   });
 
   it("diagnosticHint explains PURL format", () => {
-    const res = findResource("scs_component_enrichment");
+    const res = findResource("application_security_component_enrichment");
     expect(res.diagnosticHint).toBeDefined();
     expect(res.diagnosticHint!).toContain("pkg:");
   });
 
   it("searchAliases include OSS risk terms", () => {
-    const res = findResource("scs_component_enrichment");
+    const res = findResource("application_security_component_enrichment");
     const aliases = res.searchAliases!.map((a) => a.toLowerCase());
     expect(aliases).toContain("oss risk");
     expect(aliases).toContain("end of life");
@@ -1036,63 +1036,63 @@ describe("P3-11: scs_component_enrichment resource", () => {
     expect(aliases).toContain("latest version");
   });
 
-  it("has relatedResources referencing scs_artifact_component as parent", () => {
-    const res = findResource("scs_component_enrichment");
+  it("has relatedResources referencing application_security_artifact_component as parent", () => {
+    const res = findResource("application_security_component_enrichment");
     const parentRef = res.relatedResources!.find(
-      (rel) => rel.resourceType === "scs_artifact_component",
+      (rel) => rel.resourceType === "application_security_artifact_component",
     );
     expect(parentRef).toBeDefined();
     expect(parentRef!.relationship).toBe("parent");
   });
 
-  it("has relatedResources referencing scs_component_remediation as sibling", () => {
-    const res = findResource("scs_component_enrichment");
+  it("has relatedResources referencing application_security_component_remediation as sibling", () => {
+    const res = findResource("application_security_component_enrichment");
     const siblingRef = res.relatedResources!.find(
-      (rel) => rel.resourceType === "scs_component_remediation",
+      (rel) => rel.resourceType === "application_security_component_remediation",
     );
     expect(siblingRef).toBeDefined();
     expect(siblingRef!.relationship).toBe("sibling");
   });
 
-  it("has relatedResources referencing scs_component_vulnerability as sibling", () => {
-    const res = findResource("scs_component_enrichment");
+  it("has relatedResources referencing application_security_component_vulnerability as sibling", () => {
+    const res = findResource("application_security_component_enrichment");
     const vulnRef = res.relatedResources!.find(
-      (rel) => rel.resourceType === "scs_component_vulnerability",
+      (rel) => rel.resourceType === "application_security_component_vulnerability",
     );
     expect(vulnRef).toBeDefined();
     expect(vulnRef!.relationship).toBe("sibling");
   });
 
   it("purl is a required get param", () => {
-    const spec = getOp("scs_component_enrichment", "get");
+    const spec = getOp("application_security_component_enrichment", "get");
     const purlField = spec.paramsSchema!.fields.find((f) => f.name === "purl");
     expect(purlField).toBeDefined();
     expect(purlField!.required).toBe(true);
   });
 
   it("artifact_id is an optional get param", () => {
-    const spec = getOp("scs_component_enrichment", "get");
+    const spec = getOp("application_security_component_enrichment", "get");
     const artifactField = spec.paramsSchema!.fields.find((f) => f.name === "artifact_id");
     expect(artifactField).toBeDefined();
     expect(artifactField!.required).toBeFalsy();
   });
 
   it("has artifact_id in identifierFields", () => {
-    const res = findResource("scs_component_enrichment");
+    const res = findResource("application_security_component_enrichment");
     expect(res.identifierFields).toContain("artifact_id");
   });
 
   it("description mentions both modes and artifact_id", () => {
-    const res = findResource("scs_component_enrichment");
+    const res = findResource("application_security_component_enrichment");
     expect(res.description).toContain("artifact_id");
     expect(res.description).toContain("Account-scoped");
     expect(res.description).toContain("Project-scoped");
   });
 
-  it("scs_artifact_component has relatedResources referencing scs_component_enrichment", () => {
-    const res = findResource("scs_artifact_component");
+  it("application_security_artifact_component has relatedResources referencing application_security_component_enrichment", () => {
+    const res = findResource("application_security_artifact_component");
     const enrichmentRef = res.relatedResources!.find(
-      (rel) => rel.resourceType === "scs_component_enrichment",
+      (rel) => rel.resourceType === "application_security_component_enrichment",
     );
     expect(enrichmentRef).toBeDefined();
     expect(enrichmentRef!.relationship).toBe("sibling");
@@ -1102,20 +1102,20 @@ describe("P3-11: scs_component_enrichment resource", () => {
 
 // ─── P3-1: BOM Enforcement Violations ───────────────────────────────────────
 
-describe("P3-1: scs_bom_violation resource", () => {
-  it("exists in scsToolset", () => {
-    expect(() => findResource("scs_bom_violation")).not.toThrow();
+describe("P3-1: application_security_bom_violation resource", () => {
+  it("exists in applicationSecurityToolset", () => {
+    expect(() => findResource("application_security_bom_violation")).not.toThrow();
   });
 
   it("has a list operation pointing to policy-violations endpoint", () => {
-    const spec = getOp("scs_bom_violation", "list");
+    const spec = getOp("application_security_bom_violation", "list");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/enforcement/");
     expect(spec.path).toContain("/policy-violations");
   });
 
   it("list maps enforcement_id to path param", () => {
-    const spec = getOp("scs_bom_violation", "list");
+    const spec = getOp("application_security_bom_violation", "list");
     expect(spec.pathParams).toEqual({
       org_id: "org",
       project_id: "project",
@@ -1124,12 +1124,12 @@ describe("P3-1: scs_bom_violation resource", () => {
   });
 
   it("list maps search_term to searchText query param", () => {
-    const spec = getOp("scs_bom_violation", "list");
+    const spec = getOp("application_security_bom_violation", "list");
     expect(spec.queryParams!.search_term).toBe("searchText");
   });
 
   it("list has pagination query params", () => {
-    const spec = getOp("scs_bom_violation", "list");
+    const spec = getOp("application_security_bom_violation", "list");
     expect(spec.queryParams!.page).toBe("page");
     expect(spec.queryParams!.size).toBe("limit");
     expect(spec.queryParams!.sort).toBe("sort");
@@ -1137,13 +1137,13 @@ describe("P3-1: scs_bom_violation resource", () => {
   });
 
   it("list has defaultQueryParams with limit=10", () => {
-    const spec = getOp("scs_bom_violation", "list");
+    const spec = getOp("application_security_bom_violation", "list");
     expect(spec.defaultQueryParams).toBeDefined();
     expect(spec.defaultQueryParams!.limit).toBe("10");
   });
 
   it("list uses scsListExtract for field selection", () => {
-    const spec = getOp("scs_bom_violation", "list");
+    const spec = getOp("application_security_bom_violation", "list");
     expect(spec.responseExtractor).toBeDefined();
     // Verify field selection works
     const result = spec.responseExtractor!([
@@ -1173,7 +1173,7 @@ describe("P3-1: scs_bom_violation resource", () => {
   });
 
   it("list extractor preserves exempted violations (isExempted=true)", () => {
-    const spec = getOp("scs_bom_violation", "list");
+    const spec = getOp("application_security_bom_violation", "list");
     const result = spec.responseExtractor!([
       { name: "dep1", violationType: "ALLOW_LIST", isExempted: true, exemptionId: "ex-123" },
     ]) as Record<string, unknown>[];
@@ -1182,14 +1182,14 @@ describe("P3-1: scs_bom_violation resource", () => {
   });
 
   it("has a get operation pointing to enforcement summary endpoint", () => {
-    const spec = getOp("scs_bom_violation", "get");
+    const spec = getOp("application_security_bom_violation", "get");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/enforcement/");
     expect(spec.path).toContain("/summary");
   });
 
   it("get maps enforcement_id to path param", () => {
-    const spec = getOp("scs_bom_violation", "get");
+    const spec = getOp("application_security_bom_violation", "get");
     expect(spec.pathParams).toEqual({
       org_id: "org",
       project_id: "project",
@@ -1198,51 +1198,51 @@ describe("P3-1: scs_bom_violation resource", () => {
   });
 
   it("get uses scsCleanExtract", () => {
-    const spec = getOp("scs_bom_violation", "get");
+    const spec = getOp("application_security_bom_violation", "get");
     expect(spec.responseExtractor).toBeDefined();
     expect(spec.responseExtractor!.name).not.toBe("passthrough");
   });
 
   it("enforcement_id is a required listFilterField", () => {
-    const res = findResource("scs_bom_violation");
+    const res = findResource("application_security_bom_violation");
     const field = res.listFilterFields!.find((f) => f.name === "enforcement_id");
     expect(field).toBeDefined();
     expect(field!.required).toBe(true);
   });
 
   it("has enforcement_id as identifierField", () => {
-    const res = findResource("scs_bom_violation");
+    const res = findResource("application_security_bom_violation");
     expect(res.identifierFields).toContain("enforcement_id");
   });
 
   it("description mentions two-step flow", () => {
-    const res = findResource("scs_bom_violation");
+    const res = findResource("application_security_bom_violation");
     expect(res.description).toMatch(/[Tt]wo-step/);
-    expect(res.description).toContain("artifact_security");
+    expect(res.description).toContain("application_security_artifact");
     expect(res.description).toContain("enforcement_id");
   });
 
   it("description mentions both deny-list and allow-list violations", () => {
-    const res = findResource("scs_bom_violation");
+    const res = findResource("application_security_bom_violation");
     expect(res.description).toContain("deny-list");
     expect(res.description).toContain("allow-list");
   });
 
   it("description mentions exempted violations", () => {
-    const res = findResource("scs_bom_violation");
+    const res = findResource("application_security_bom_violation");
     expect(res.description).toContain("exempted");
     expect(res.description).toContain("isExempted");
   });
 
-  it("has diagnosticHint mentioning artifact_security for enforcement_id", () => {
-    const res = findResource("scs_bom_violation");
+  it("has diagnosticHint mentioning application_security_artifact for enforcement_id", () => {
+    const res = findResource("application_security_bom_violation");
     expect(res.diagnosticHint).toBeDefined();
-    expect(res.diagnosticHint!).toContain("artifact_security");
+    expect(res.diagnosticHint!).toContain("application_security_artifact");
     expect(res.diagnosticHint!).toContain("enforcementId");
   });
 
   it("has searchAliases covering violation-related terms", () => {
-    const res = findResource("scs_bom_violation");
+    const res = findResource("application_security_bom_violation");
     const aliases = res.searchAliases!.map((a) => a.toLowerCase());
     expect(aliases).toContain("bom violation");
     expect(aliases).toContain("policy violation");
@@ -1250,22 +1250,22 @@ describe("P3-1: scs_bom_violation resource", () => {
     expect(aliases).toContain("allow list violation");
   });
 
-  it("relatedResources links to artifact_security as parent", () => {
-    const res = findResource("scs_bom_violation");
-    const parent = res.relatedResources!.find((r) => r.resourceType === "artifact_security");
+  it("relatedResources links to application_security_artifact as parent", () => {
+    const res = findResource("application_security_bom_violation");
+    const parent = res.relatedResources!.find((r) => r.resourceType === "application_security_artifact");
     expect(parent).toBeDefined();
     expect(parent!.relationship).toBe("parent");
   });
 
-  it("relatedResources links to scs_compliance_result as sibling", () => {
-    const res = findResource("scs_bom_violation");
-    const sibling = res.relatedResources!.find((r) => r.resourceType === "scs_compliance_result");
+  it("relatedResources links to application_security_compliance_result as sibling", () => {
+    const res = findResource("application_security_bom_violation");
+    const sibling = res.relatedResources!.find((r) => r.resourceType === "application_security_compliance_result");
     expect(sibling).toBeDefined();
     expect(sibling!.relationship).toBe("sibling");
   });
 
   it("relatedResources links to governance policy as sibling", () => {
-    const res = findResource("scs_bom_violation");
+    const res = findResource("application_security_bom_violation");
     const sibling = res.relatedResources!.find((r) => r.resourceType === "policy");
     expect(sibling).toBeDefined();
     expect(sibling!.relationship).toBe("sibling");
@@ -1275,7 +1275,7 @@ describe("P3-1: scs_bom_violation resource", () => {
   // Without a direct pointer to policy_set, the agent cannot discover the set that fired
   // the violation and falls back to (wrongly) asking "no SSCA policy sets configured".
   it("relatedResources links to governance policy_set as sibling (SSCA-6347 chain: violation → policy_set → policy)", () => {
-    const res = findResource("scs_bom_violation");
+    const res = findResource("application_security_bom_violation");
     const sibling = res.relatedResources!.find((r) => r.resourceType === "policy_set");
     expect(sibling).toBeDefined();
     expect(sibling!.relationship).toBe("sibling");
@@ -1285,32 +1285,32 @@ describe("P3-1: scs_bom_violation resource", () => {
     expect(sibling!.description).toMatch(/NOT 'sbom_enforcement' or 'ssca_enforcement'/);
   });
 
-  it("governance cross-toolset chain is complete: scs_bom_violation \u2194 policy_set \u2194 policy", () => {
+  it("governance cross-toolset chain is complete: application_security_bom_violation \u2194 policy_set \u2194 policy", () => {
     // End-to-end structural assertion for the AC chain. A broken link at any hop sends the
     // agent back into the SSCA-6347 failure mode (empty list, "none configured" reply).
-    const violation = findResource("scs_bom_violation");
+    const violation = findResource("application_security_bom_violation");
     const violationPolicySetRef = violation.relatedResources!.find((r) => r.resourceType === "policy_set");
     const violationPolicyRef = violation.relatedResources!.find((r) => r.resourceType === "policy");
     expect(violationPolicySetRef).toBeDefined();
     expect(violationPolicyRef).toBeDefined();
 
-    // policy_set → scs_bom_violation (back-edge) is asserted in governance.test.ts; here we
+    // policy_set → application_security_bom_violation (back-edge) is asserted in governance.test.ts; here we
     // just confirm the agent can walk both legs from the violation without leaving scs.ts.
     expect(violationPolicySetRef!.description.length).toBeGreaterThan(0);
     expect(violationPolicyRef!.description.length).toBeGreaterThan(0);
   });
 
-  it("artifact_security relatedResources includes scs_bom_violation", () => {
-    const res = findResource("artifact_security");
-    const child = res.relatedResources!.find((r) => r.resourceType === "scs_bom_violation");
+  it("application_security_artifact relatedResources includes application_security_bom_violation", () => {
+    const res = findResource("application_security_artifact");
+    const child = res.relatedResources!.find((r) => r.resourceType === "application_security_bom_violation");
     expect(child).toBeDefined();
     expect(child!.relationship).toBe("child");
     expect(child!.description).toContain("enforcement_id");
   });
 
   it("uses singular org/project path (consistent with enforcement API)", () => {
-    const listSpec = getOp("scs_bom_violation", "list");
-    const getSpec = getOp("scs_bom_violation", "get");
+    const listSpec = getOp("application_security_bom_violation", "list");
+    const getSpec = getOp("application_security_bom_violation", "get");
     // Enforcement endpoints use /v1/org/{org}/project/{project}/ (singular, no 's')
     expect(listSpec.path).toContain("/v1/org/");
     expect(listSpec.path).toContain("/project/");
@@ -1323,25 +1323,25 @@ describe("P3-1: scs_bom_violation resource", () => {
 
 // ─── P3-5: Project Security Overview ─────────────────────────────────────────
 
-describe("P3-5: scs_project_security_overview resource", () => {
-  it("exists in scsToolset", () => {
-    expect(() => findResource("scs_project_security_overview")).not.toThrow();
+describe("P3-5: application_security_project_overview resource", () => {
+  it("exists in applicationSecurityToolset", () => {
+    expect(() => findResource("application_security_project_overview")).not.toThrow();
   });
 
   it("has a get operation pointing to security-overview endpoint", () => {
-    const spec = getOp("scs_project_security_overview", "get");
+    const spec = getOp("application_security_project_overview", "get");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/security-overview");
   });
 
   it("get uses plural orgs/projects path (consistent with ssca-manager v1 pattern)", () => {
-    const spec = getOp("scs_project_security_overview", "get");
+    const spec = getOp("application_security_project_overview", "get");
     expect(spec.path).toContain("/v1/orgs/");
     expect(spec.path).toContain("/projects/");
   });
 
   it("get maps org_id and project_id as path params", () => {
-    const spec = getOp("scs_project_security_overview", "get");
+    const spec = getOp("application_security_project_overview", "get");
     expect(spec.pathParams).toEqual({
       org_id: "org",
       project_id: "project",
@@ -1349,13 +1349,13 @@ describe("P3-5: scs_project_security_overview resource", () => {
   });
 
   it("get uses scsCleanExtract", () => {
-    const spec = getOp("scs_project_security_overview", "get");
+    const spec = getOp("application_security_project_overview", "get");
     expect(spec.responseExtractor).toBeDefined();
     expect(spec.responseExtractor!.name).not.toBe("passthrough");
   });
 
   it("get extractor strips null fields from response", () => {
-    const spec = getOp("scs_project_security_overview", "get");
+    const spec = getOp("application_security_project_overview", "get");
     const result = spec.responseExtractor!({
       artifact_count: { total: 10, images: 7, repositories: 3 },
       vulnerability_summary: { total: 50, critical: 5, high: 10, medium: 20, low: 15, artifacts_with_vulnerabilities: 6 },
@@ -1373,7 +1373,7 @@ describe("P3-5: scs_project_security_overview resource", () => {
   });
 
   it("get extractor preserves zero counts (falsy but meaningful)", () => {
-    const spec = getOp("scs_project_security_overview", "get");
+    const spec = getOp("application_security_project_overview", "get");
     const result = spec.responseExtractor!({
       artifact_count: { total: 0, images: 0, repositories: 0 },
       vulnerability_summary: { total: 0, critical: 0, high: 0, medium: 0, low: 0, artifacts_with_vulnerabilities: 0 },
@@ -1396,22 +1396,22 @@ describe("P3-5: scs_project_security_overview resource", () => {
   });
 
   it("has empty identifierFields (project-level resource)", () => {
-    const res = findResource("scs_project_security_overview");
+    const res = findResource("application_security_project_overview");
     expect(res.identifierFields).toEqual([]);
   });
 
   it("is project-scoped", () => {
-    const res = findResource("scs_project_security_overview");
+    const res = findResource("application_security_project_overview");
     expect(res.scope).toBe("project");
   });
 
   it("has no list operation (get-only resource)", () => {
-    const res = findResource("scs_project_security_overview");
+    const res = findResource("application_security_project_overview");
     expect(res.operations.list).toBeUndefined();
   });
 
   it("description mentions all six response sections", () => {
-    const res = findResource("scs_project_security_overview");
+    const res = findResource("application_security_project_overview");
     expect(res.description).toContain("artifact_count");
     expect(res.description).toContain("vulnerability_summary");
     expect(res.description).toContain("compliance_summary");
@@ -1421,7 +1421,7 @@ describe("P3-5: scs_project_security_overview resource", () => {
   });
 
   it("description mentions common user queries for LLM routing", () => {
-    const res = findResource("scs_project_security_overview");
+    const res = findResource("application_security_project_overview");
     expect(res.description).toContain("security overview");
     expect(res.description).toContain("security posture");
     expect(res.description).toContain("vulnerabilities");
@@ -1429,28 +1429,28 @@ describe("P3-5: scs_project_security_overview resource", () => {
   });
 
   it("description mentions READ-ONLY and drill-down guidance", () => {
-    const res = findResource("scs_project_security_overview");
+    const res = findResource("application_security_project_overview");
     expect(res.description).toContain("READ-ONLY");
-    expect(res.description).toContain("artifact_security");
-    expect(res.description).toContain("scs_compliance_result");
-    expect(res.description).toContain("scs_bom_violation");
+    expect(res.description).toContain("application_security_artifact");
+    expect(res.description).toContain("application_security_compliance_result");
+    expect(res.description).toContain("application_security_bom_violation");
   });
 
   it("has diagnosticHint with recovery guidance", () => {
-    const res = findResource("scs_project_security_overview");
+    const res = findResource("application_security_project_overview");
     expect(res.diagnosticHint).toBeDefined();
     expect(res.diagnosticHint!.length).toBeGreaterThan(20);
     expect(res.diagnosticHint!).toMatch(/harness_(list|get)/);
   });
 
   it("diagnosticHint mentions SBOM generation as prerequisite", () => {
-    const res = findResource("scs_project_security_overview");
+    const res = findResource("application_security_project_overview");
     expect(res.diagnosticHint!).toContain("SBOM");
     expect(res.diagnosticHint!).toContain("pipeline");
   });
 
   it("has searchAliases covering security overview queries", () => {
-    const res = findResource("scs_project_security_overview");
+    const res = findResource("application_security_project_overview");
     const aliases = res.searchAliases!.map((a) => a.toLowerCase());
     expect(aliases).toContain("security overview");
     expect(aliases).toContain("project security");
@@ -1460,79 +1460,79 @@ describe("P3-5: scs_project_security_overview resource", () => {
     expect(aliases).toContain("sbom coverage");
   });
 
-  it("relatedResources links to scs_artifact_source as child", () => {
-    const res = findResource("scs_project_security_overview");
-    const child = res.relatedResources!.find((r) => r.resourceType === "scs_artifact_source");
+  it("relatedResources links to application_security_artifact_source as child", () => {
+    const res = findResource("application_security_project_overview");
+    const child = res.relatedResources!.find((r) => r.resourceType === "application_security_artifact_source");
     expect(child).toBeDefined();
     expect(child!.relationship).toBe("child");
   });
 
-  it("relatedResources links to artifact_security as child", () => {
-    const res = findResource("scs_project_security_overview");
-    const child = res.relatedResources!.find((r) => r.resourceType === "artifact_security");
+  it("relatedResources links to application_security_artifact as child", () => {
+    const res = findResource("application_security_project_overview");
+    const child = res.relatedResources!.find((r) => r.resourceType === "application_security_artifact");
     expect(child).toBeDefined();
     expect(child!.relationship).toBe("child");
   });
 
-  it("relatedResources links to scs_compliance_result as child", () => {
-    const res = findResource("scs_project_security_overview");
-    const child = res.relatedResources!.find((r) => r.resourceType === "scs_compliance_result");
+  it("relatedResources links to application_security_compliance_result as child", () => {
+    const res = findResource("application_security_project_overview");
+    const child = res.relatedResources!.find((r) => r.resourceType === "application_security_compliance_result");
     expect(child).toBeDefined();
     expect(child!.relationship).toBe("child");
   });
 
-  it("relatedResources links to scs_bom_violation as child", () => {
-    const res = findResource("scs_project_security_overview");
-    const child = res.relatedResources!.find((r) => r.resourceType === "scs_bom_violation");
+  it("relatedResources links to application_security_bom_violation as child", () => {
+    const res = findResource("application_security_project_overview");
+    const child = res.relatedResources!.find((r) => r.resourceType === "application_security_bom_violation");
     expect(child).toBeDefined();
     expect(child!.relationship).toBe("child");
   });
 
-  it("relatedResources links to scs_oss_risk_summary as sibling", () => {
-    const res = findResource("scs_project_security_overview");
-    const sibling = res.relatedResources!.find((r) => r.resourceType === "scs_oss_risk_summary");
+  it("relatedResources links to application_security_oss_risk_summary as sibling", () => {
+    const res = findResource("application_security_project_overview");
+    const sibling = res.relatedResources!.find((r) => r.resourceType === "application_security_oss_risk_summary");
     expect(sibling).toBeDefined();
     expect(sibling!.relationship).toBe("sibling");
   });
 });
 
-// ─── scs_component_vulnerability resource ───────────────────────────────────
+// ─── application_security_component_vulnerability resource ───────────────────────────────────
 
-describe("scs_component_vulnerability resource", () => {
-  it("exists in scsToolset", () => {
-    expect(() => findResource("scs_component_vulnerability")).not.toThrow();
+describe("application_security_component_vulnerability resource", () => {
+  it("exists in applicationSecurityToolset", () => {
+    expect(() => findResource("application_security_component_vulnerability")).not.toThrow();
   });
 
   it("has a list operation", () => {
-    const spec = getOp("scs_component_vulnerability", "list");
+    const spec = getOp("application_security_component_vulnerability", "list");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/vulnerabilities");
   });
 
   it("list has defaultQueryParams with limit=10", () => {
-    const spec = getOp("scs_component_vulnerability", "list");
+    const spec = getOp("application_security_component_vulnerability", "list");
     expect(spec.defaultQueryParams).toBeDefined();
     expect(spec.defaultQueryParams!.limit).toBe("10");
   });
 
   it("has purl queryParam", () => {
-    const spec = getOp("scs_component_vulnerability", "list");
+    const spec = getOp("application_security_component_vulnerability", "list");
     expect(spec.queryParams).toHaveProperty("purl");
   });
 
   it("has pathBuilder for dual-mode (account/artifact scoped)", () => {
-    const spec = getOp("scs_component_vulnerability", "list");
+    const spec = getOp("application_security_component_vulnerability", "list");
     expect(spec.pathBuilder).toBeDefined();
   });
 
   it("pathBuilder returns account-scoped path without artifact_id", () => {
-    const spec = getOp("scs_component_vulnerability", "list");
+    const spec = getOp("application_security_component_vulnerability", "list");
     const path = spec.pathBuilder!({ purl: "pkg:npm/express@4.18.0" }, {});
     expect(path).toBe("/ssca-manager/v1/components/vulnerabilities");
   });
 
   it("pathBuilder returns artifact-scoped path with artifact_id", () => {
-    const spec = getOp("scs_component_vulnerability", "list");
+    const spec = getOp("application_security_component_vulnerability", "list");
     const path = spec.pathBuilder!(
       { artifact_id: "art123", purl: "pkg:npm/express@4.18.0" },
       { HARNESS_ORG: "myorg", HARNESS_PROJECT: "myproj" },
@@ -1541,7 +1541,7 @@ describe("scs_component_vulnerability resource", () => {
   });
 
   it("has searchAliases for CVE queries", () => {
-    const res = findResource("scs_component_vulnerability");
+    const res = findResource("application_security_component_vulnerability");
     expect(res.searchAliases).toBeDefined();
     const aliases = res.searchAliases!.map((a) => a.toLowerCase());
     expect(aliases).toContain("cve");
@@ -1550,48 +1550,48 @@ describe("scs_component_vulnerability resource", () => {
   });
 
   it("has diagnosticHint", () => {
-    const res = findResource("scs_component_vulnerability");
+    const res = findResource("application_security_component_vulnerability");
     expect(res.diagnosticHint).toBeDefined();
     expect(res.diagnosticHint!.length).toBeGreaterThan(20);
   });
 
   it("responseExtractor is defined", () => {
-    const spec = getOp("scs_component_vulnerability", "list");
+    const spec = getOp("application_security_component_vulnerability", "list");
     expect(spec.responseExtractor).toBeDefined();
   });
 });
 
-// ─── scs_component_search resource ──────────────────────────────────────────
+// ─── application_security_component_search resource ──────────────────────────────────────────
 
-describe("scs_component_search resource", () => {
-  it("exists in scsToolset", () => {
-    expect(() => findResource("scs_component_search")).not.toThrow();
+describe("application_security_component_search resource", () => {
+  it("exists in applicationSecurityToolset", () => {
+    expect(() => findResource("application_security_component_search")).not.toThrow();
   });
 
   it("has a list operation (GET)", () => {
-    const spec = getOp("scs_component_search", "list");
+    const spec = getOp("application_security_component_search", "list");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/components/search");
   });
 
   it("list has defaultQueryParams with limit=20", () => {
-    const spec = getOp("scs_component_search", "list");
+    const spec = getOp("application_security_component_search", "list");
     expect(spec.defaultQueryParams).toBeDefined();
     expect(spec.defaultQueryParams!.limit).toBe("20");
   });
 
   it("has elkFallback enabled", () => {
-    const spec = getOp("scs_component_search", "list");
+    const spec = getOp("application_security_component_search", "list");
     expect(spec.elkFallback).toBe(true);
   });
 
   it("has search_term in queryParams", () => {
-    const spec = getOp("scs_component_search", "list");
+    const spec = getOp("application_security_component_search", "list");
     expect(spec.queryParams).toHaveProperty("search_term");
   });
 
   it("has searchAliases for cross-artifact queries", () => {
-    const res = findResource("scs_component_search");
+    const res = findResource("application_security_component_search");
     expect(res.searchAliases).toBeDefined();
     const aliases = res.searchAliases!.map((a) => a.toLowerCase());
     expect(aliases).toContain("cross-artifact search");
@@ -1599,18 +1599,18 @@ describe("scs_component_search resource", () => {
   });
 
   it("description mentions search_term is required", () => {
-    const res = findResource("scs_component_search");
+    const res = findResource("application_security_component_search");
     expect(res.description).toContain("search_term");
   });
 
   it("has diagnosticHint", () => {
-    const res = findResource("scs_component_search");
+    const res = findResource("application_security_component_search");
     expect(res.diagnosticHint).toBeDefined();
     expect(res.diagnosticHint!.length).toBeGreaterThan(20);
   });
 
   it("responseExtractor is scsListExtract with correct fields", () => {
-    const spec = getOp("scs_component_search", "list");
+    const spec = getOp("application_security_component_search", "list");
     expect(spec.responseExtractor).toBeDefined();
     // Verify it functions as a list extractor
     const result = spec.responseExtractor!([
@@ -1629,7 +1629,7 @@ describe("scs_component_search resource", () => {
 describe("custom SCS extractors", () => {
   describe("artifactSecurityListExtract", () => {
     it("injects _next_step when policy violations exist", () => {
-      const spec = getOp("artifact_security", "list");
+      const spec = getOp("application_security_artifact", "list");
       const result = spec.responseExtractor!([
         {
           id: "art1",
@@ -1638,12 +1638,12 @@ describe("custom SCS extractors", () => {
       ]);
       const items = result as Record<string, unknown>[];
       expect(items[0]._next_step).toBeDefined();
-      expect(items[0]._next_step).toContain("scs_bom_violation");
+      expect(items[0]._next_step).toContain("application_security_bom_violation");
       expect(items[0]._next_step).toContain("enf1");
     });
 
     it("does not inject _next_step when no violations", () => {
-      const spec = getOp("artifact_security", "list");
+      const spec = getOp("application_security_artifact", "list");
       const result = spec.responseExtractor!([
         {
           id: "art1",
@@ -1657,7 +1657,7 @@ describe("custom SCS extractors", () => {
 
   describe("artifactSourceListExtract", () => {
     it("appends _summary with type breakdown", () => {
-      const spec = getOp("scs_artifact_source", "list");
+      const spec = getOp("application_security_artifact_source", "list");
       const result = spec.responseExtractor!([
         { id: "1", name: "src1", artifact_type: { type: "CONTAINER" } },
         { id: "2", name: "src2", artifact_type: { type: "FILE" } },
@@ -1673,7 +1673,7 @@ describe("custom SCS extractors", () => {
     });
 
     it("returns cleaned array as-is when empty", () => {
-      const spec = getOp("scs_artifact_source", "list");
+      const spec = getOp("application_security_artifact_source", "list");
       const result = spec.responseExtractor!([]);
       expect(result).toEqual([]);
     });
@@ -1681,14 +1681,14 @@ describe("custom SCS extractors", () => {
 
   describe("componentDependenciesExtract", () => {
     it("returns EMPTY message for empty array", () => {
-      const spec = getOp("scs_component_dependencies", "get");
+      const spec = getOp("application_security_component_dependencies", "get");
       const result = spec.responseExtractor!([]) as Record<string, unknown>;
       expect(result._result).toBe("EMPTY");
       expect(result._message).toContain("Zero");
     });
 
     it("returns cleaned items for non-empty array", () => {
-      const spec = getOp("scs_component_dependencies", "get");
+      const spec = getOp("application_security_component_dependencies", "get");
       const result = spec.responseExtractor!([
         { name: "lodash", version: "4.17.21", purl: "pkg:npm/lodash@4.17.21" },
       ]);
@@ -1698,14 +1698,14 @@ describe("custom SCS extractors", () => {
 
   describe("componentVulnerabilityExtract", () => {
     it("returns EMPTY message for empty array", () => {
-      const spec = getOp("scs_component_vulnerability", "list");
+      const spec = getOp("application_security_component_vulnerability", "list");
       const result = spec.responseExtractor!([]) as Record<string, unknown>;
       expect(result._result).toBe("EMPTY");
       expect(result._message).toContain("No CVEs");
     });
 
     it("appends _total_cves and _reminder for non-empty results", () => {
-      const spec = getOp("scs_component_vulnerability", "list");
+      const spec = getOp("application_security_component_vulnerability", "list");
       const result = spec.responseExtractor!([
         { cve_id: "CVE-2023-0001", severity: "CRITICAL" },
         { cve_id: "CVE-2023-0002", severity: "HIGH" },
@@ -1716,7 +1716,7 @@ describe("custom SCS extractors", () => {
     });
 
     it("passes through non-array values unchanged", () => {
-      const spec = getOp("scs_component_vulnerability", "list");
+      const spec = getOp("application_security_component_vulnerability", "list");
       const result = spec.responseExtractor!({ error: "something" });
       expect(result).toEqual({ error: "something" });
     });
@@ -1724,7 +1724,7 @@ describe("custom SCS extractors", () => {
 
   describe("componentRemediationExtract", () => {
     it("adds _reminder when remediation is not available", () => {
-      const spec = getOp("scs_component_remediation", "get");
+      const spec = getOp("application_security_component_remediation", "get");
       const result = spec.responseExtractor!({
         remediation_warnings: [{ message: "remediation guidance is not available for this component" }],
       }) as Record<string, unknown>;
@@ -1732,7 +1732,7 @@ describe("custom SCS extractors", () => {
     });
 
     it("adds version _reminder when recommended_version present", () => {
-      const spec = getOp("scs_component_remediation", "get");
+      const spec = getOp("application_security_component_remediation", "get");
       const result = spec.responseExtractor!({
         current_version: "1.0.0",
         recommended_version: "2.0.0",
@@ -1741,7 +1741,7 @@ describe("custom SCS extractors", () => {
     });
 
     it("does not add _reminder when no warnings and no versions", () => {
-      const spec = getOp("scs_component_remediation", "get");
+      const spec = getOp("application_security_component_remediation", "get");
       const result = spec.responseExtractor!({
         some_field: "value",
       }) as Record<string, unknown>;
@@ -1751,7 +1751,7 @@ describe("custom SCS extractors", () => {
 
   describe("projectSecurityOverviewExtract", () => {
     it("adds _reminder to response object", () => {
-      const spec = getOp("scs_project_security_overview", "get");
+      const spec = getOp("application_security_project_overview", "get");
       const result = spec.responseExtractor!({
         artifact_count: 10,
         vulnerability_summary: { critical: 5 },
@@ -1763,7 +1763,7 @@ describe("custom SCS extractors", () => {
 
   describe("bomViolationListExtract", () => {
     it("appends _total and _reminder with violation types", () => {
-      const spec = getOp("scs_bom_violation", "list");
+      const spec = getOp("application_security_bom_violation", "list");
       const result = spec.responseExtractor!([
         { name: "pkg1", violation_type: "Deny List Violation" },
         { name: "pkg2", violation_type: "Allow List Violation" },
@@ -1776,7 +1776,7 @@ describe("custom SCS extractors", () => {
     });
 
     it("returns empty array as-is", () => {
-      const spec = getOp("scs_bom_violation", "list");
+      const spec = getOp("application_security_bom_violation", "list");
       const result = spec.responseExtractor!([]);
       expect(result).toEqual([]);
     });
@@ -1784,7 +1784,7 @@ describe("custom SCS extractors", () => {
 
   describe("codeRepoListExtract", () => {
     it("appends _total and _note for non-empty results", () => {
-      const spec = getOp("code_repo_security", "list");
+      const spec = getOp("application_security_code_repo", "list");
       const result = spec.responseExtractor!([
         { id: "r1", name: "repo1" },
         { id: "r2", name: "repo2" },
@@ -1797,18 +1797,18 @@ describe("custom SCS extractors", () => {
 
   describe("artifactComponentListExtract", () => {
     it("appends _next_step when risk components present", () => {
-      const spec = getOp("scs_artifact_component", "list");
+      const spec = getOp("application_security_artifact_component", "list");
       const result = spec.responseExtractor!([
         { purl: "pkg:npm/old@1.0", name: "old", is_outdated: true },
         { purl: "pkg:npm/ok@2.0", name: "ok" },
       ]) as unknown[];
       const last = result[result.length - 1] as Record<string, unknown>;
       expect(last._next_step).toBeDefined();
-      expect(last._next_step).toContain("scs_component_enrichment");
+      expect(last._next_step).toContain("application_security_component_enrichment");
     });
 
     it("does not append _next_step when no risk", () => {
-      const spec = getOp("scs_artifact_component", "list");
+      const spec = getOp("application_security_artifact_component", "list");
       const result = spec.responseExtractor!([
         { purl: "pkg:npm/ok@2.0", name: "ok" },
       ]) as unknown[];
@@ -1862,7 +1862,7 @@ describe("normalizePurl", () => {
   });
 });
 
-describe("scs_remediation_pr create preflight", () => {
+describe("application_security_remediation_pr create preflight", () => {
   /** Build a minimal PreflightContext with a stubbed registry.dispatch.
    *  `dispatchImpl` signature mirrors Registry.dispatch at runtime; typed
    *  loosely here because PreflightContext.registry is intentionally `unknown`.
@@ -1883,8 +1883,8 @@ describe("scs_remediation_pr create preflight", () => {
   }
 
   function getPreflight(): (ctx: PreflightContext) => Promise<void> {
-    const spec = getOp("scs_remediation_pr", "create" as "list");
-    if (!spec.preflight) throw new Error("preflight hook missing on scs_remediation_pr create");
+    const spec = getOp("application_security_remediation_pr", "create" as "list");
+    if (!spec.preflight) throw new Error("preflight hook missing on application_security_remediation_pr create");
     return spec.preflight;
   }
 
@@ -2223,8 +2223,8 @@ describe("scs_remediation_pr create preflight", () => {
 // ─── Registry short-circuit: preflight throws → outbound request never made ──
 
 describe("Registry dispatch — preflight short-circuits outbound request", () => {
-  it("skips client.request when scs_remediation_pr create preflight throws", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+  it("skips client.request when application_security_remediation_pr create preflight throws", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
     // The preflight's internal registry.dispatch(...) call (for the duplicate
     // list check) is the SAME registry instance — so the first client.request
     // we observe is for the list call, and if it returns a conflict we expect
@@ -2244,7 +2244,7 @@ describe("Registry dispatch — preflight short-circuits outbound request", () =
     const client = makeClient(requestFn);
 
     await expect(
-      registry.dispatch(client, "scs_remediation_pr", "create" as "list", {
+      registry.dispatch(client, "application_security_remediation_pr", "create" as "list", {
         artifact_id: "art-1",
         org_id: "myOrg",
         project_id: "myProj",
@@ -2274,11 +2274,11 @@ describe("Registry dispatch — preflight short-circuits outbound request", () =
   });
 });
 
-// ─── P3-12: scs_auto_pr_config path + scope ─────────────────────────────────
+// ─── P3-12: application_security_auto_pr_config path + scope ─────────────────────────────────
 
-describe("scs_auto_pr_config path and scope", () => {
+describe("application_security_auto_pr_config path and scope", () => {
   it("get uses /v1/ssca-config/auto-pr-config", () => {
-    const spec = getOp("scs_auto_pr_config", "get");
+    const spec = getOp("application_security_auto_pr_config", "get");
     expect(spec.method).toBe("GET");
     expect(spec.path).toContain("/v1/ssca-config/auto-pr-config");
     // Path has no {org}/{project} placeholders — scope is conveyed via query params.
@@ -2287,23 +2287,23 @@ describe("scs_auto_pr_config path and scope", () => {
   });
 
   it("update uses /v1/ssca-config/auto-pr-config", () => {
-    const spec = getOp("scs_auto_pr_config", "update" as "list");
+    const spec = getOp("application_security_auto_pr_config", "update" as "list");
     expect(spec.method).toBe("PUT");
     expect(spec.path).toContain("/v1/ssca-config/auto-pr-config");
   });
 
   it("is project-scoped with scopeParams mapping to org_id / project_id query params", () => {
-    const res = findResource("scs_auto_pr_config");
+    const res = findResource("application_security_auto_pr_config");
     expect(res.scope).toBe("project");
     expect(res.scopeParams).toEqual({ org: "org_id", project: "project_id" });
   });
 
   it("registry dispatch sends org_id/project_id as query params (not path params)", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
     const requestFn = vi.fn().mockResolvedValue({ enabled: true });
     const client = makeClient(requestFn);
 
-    await registry.dispatch(client, "scs_auto_pr_config", "get", {
+    await registry.dispatch(client, "application_security_auto_pr_config", "get", {
       org_id: "myOrg",
       project_id: "myProj",
     });
@@ -2337,14 +2337,14 @@ describe("sbomDownloadExtract", () => {
   });
 });
 
-describe("scs_sbom download dispatch", () => {
+describe("application_security_sbom download dispatch", () => {
   it("GETs download-sbom path with orchestration_id", async () => {
     const request = vi.fn().mockResolvedValue({
       download_url: "https://s3.example/presigned",
       expires_at: 1700003600000,
     });
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
-    const result = await registry.dispatch(makeClient(request), "scs_sbom", "get", {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
+    const result = await registry.dispatch(makeClient(request), "application_security_sbom", "get", {
       org_id: "SSCA",
       project_id: "Sanity",
       orchestration_id: "orch-123",
@@ -2367,36 +2367,57 @@ describe("scs_sbom download dispatch", () => {
     });
   });
 
-  it("scs_sbom get uses sbomDownloadExtract and keeps CoC as parent for orchestration_id", () => {
-    const res = findResource("scs_sbom");
+  it("application_security_sbom get uses sbomDownloadExtract and keeps CoC as parent for orchestration_id", () => {
+    const res = findResource("application_security_sbom");
     expect(res.operations.get?.path).toContain("/download-sbom");
     expect(res.operations.get?.responseExtractor?.name).toBe("sbomDownloadExtract");
-    expect(res.description).toMatch(/scs_chain_of_custody/);
-    expect(res.diagnosticHint).toMatch(/scs_chain_of_custody/);
+    expect(res.description).toMatch(/application_security_chain_of_custody/);
+    expect(res.diagnosticHint).toMatch(/application_security_chain_of_custody/);
     expect(res.relatedResources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          resourceType: "scs_chain_of_custody",
+          resourceType: "application_security_chain_of_custody",
           relationship: "parent",
         }),
       ]),
     );
   });
 
-  it("allows scs_sbom get under HARNESS_READ_ONLY (risk read)", async () => {
+  it("allows application_security_sbom get under HARNESS_READ_ONLY (risk read)", async () => {
     const request = vi.fn().mockResolvedValue({
       download_url: "https://s3.example/presigned",
       expires_at: 1700003600000,
     });
     const registry = new Registry(
-      makeConfig({ HARNESS_TOOLSETS: "scs", HARNESS_READ_ONLY: true }),
+      makeConfig({ HARNESS_TOOLSETS: "application_security", HARNESS_READ_ONLY: true }),
     );
     await expect(
-      registry.dispatch(makeClient(request), "scs_sbom", "get", {
+      registry.dispatch(makeClient(request), "application_security_sbom", "get", {
         org_id: "SSCA",
         project_id: "Sanity",
         orchestration_id: "orch-123",
       }),
     ).resolves.toMatchObject({ download_url: "https://s3.example/presigned" });
+  });
+});
+
+// ─── application_security merge: canonical resourceTypes + legacy aliases ────
+
+describe("application_security toolset merge (sto + scs)", () => {
+  const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
+
+  it("resolves the legacy scs_sbom alias to the canonical application_security_sbom type", () => {
+    expect(registry.getResource("scs_sbom").resourceType).toBe("application_security_sbom");
+  });
+
+  it("resolves the legacy sto security_issue alias to the canonical application_security_issue type", () => {
+    expect(registry.getResource("security_issue").resourceType).toBe("application_security_issue");
+  });
+
+  it("owns every merged resourceType under the single application_security toolset", () => {
+    for (const res of applicationSecurityToolset.resources) {
+      expect(res.toolset).toBe("application_security");
+      expect(res.resourceType.startsWith("application_security")).toBe(true);
+    }
   });
 });

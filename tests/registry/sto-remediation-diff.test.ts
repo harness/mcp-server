@@ -1,9 +1,9 @@
 /**
- * Tests for the `remediation_diff` resource that wraps
+ * Tests for the `application_security_remediation_diff` resource that wraps
  * STO DiffOccurrences (`GET /sto/api/v2/remediation-agent/diff-occurrences`).
  */
 import { describe, it, expect, vi } from "vitest";
-import { stoToolset } from "../../src/registry/toolsets/sto.js";
+import { applicationSecurityToolset } from "../../src/registry/toolsets/application-security.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -37,18 +37,18 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
 }
 
 function getResource(): ResourceDefinition {
-  const r = stoToolset.resources.find((x) => x.resourceType === "remediation_diff");
-  if (!r) throw new Error("remediation_diff resource not registered");
+  const r = applicationSecurityToolset.resources.find((x) => x.resourceType === "application_security_remediation_diff");
+  if (!r) throw new Error("application_security_remediation_diff resource not registered");
   return r;
 }
 
 function getListSpec(): EndpointSpec {
   const spec = getResource().operations.list;
-  if (!spec) throw new Error("remediation_diff.list spec missing");
+  if (!spec) throw new Error("application_security_remediation_diff.list spec missing");
   return spec;
 }
 
-describe("remediation_diff resource registration", () => {
+describe("application_security_remediation_diff resource registration", () => {
   it("registers list-only GET against remediation-agent/diff-occurrences", () => {
     const resource = getResource();
     const list = getListSpec();
@@ -75,7 +75,7 @@ describe("remediation_diff resource registration", () => {
   });
 });
 
-describe("remediation_diff preflight", () => {
+describe("application_security_remediation_diff preflight", () => {
   it("rejects missing scan_id", async () => {
     const spec = getListSpec();
     await expect(
@@ -219,7 +219,7 @@ describe("remediation_diff preflight", () => {
   });
 });
 
-describe("remediation_diff responseExtractor", () => {
+describe("application_security_remediation_diff responseExtractor", () => {
   const MOCK_API_RESPONSE = {
     validationScanId: "val-scan-1",
     existingOccurrences: [
@@ -287,7 +287,7 @@ describe("remediation_diff responseExtractor", () => {
   });
 });
 
-describe("remediation_diff — registry dispatch", () => {
+describe("application_security_remediation_diff — registry dispatch", () => {
   it("passes required query params through to the Harness client", async () => {
     const request = vi.fn().mockResolvedValue({
       validationScanId: "val-scan-1",
@@ -298,9 +298,9 @@ describe("remediation_diff — registry dispatch", () => {
       matchedCount: 0,
     });
     const client = makeClient(request);
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
 
-    await registry.dispatch(client, "remediation_diff", "list", {
+    await registry.dispatch(client, "application_security_remediation_diff", "list", {
       scan_id: "orig-scan",
       validation_execution_id: "val-exec",
       only_true_positive_issue_types: "SAST",
@@ -344,9 +344,9 @@ describe("remediation_diff — registry dispatch", () => {
       matchedCount: 0,
     });
     const client = makeClient(request);
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
 
-    await registry.dispatch(client, "remediation_diff", "list", {
+    await registry.dispatch(client, "application_security_remediation_diff", "list", {
       scan_id: "orig-scan",
       validation_execution_id: "val-exec",
       issue_types: ["SAST"],
@@ -370,9 +370,9 @@ describe("remediation_diff — registry dispatch", () => {
       matchedCount: 0,
     });
     const client = makeClient(request);
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
 
-    await registry.dispatch(client, "remediation_diff", "list", {
+    await registry.dispatch(client, "application_security_remediation_diff", "list", {
       scan_id: "orig-scan",
       execution_id: "val-exec-legacy",
     });

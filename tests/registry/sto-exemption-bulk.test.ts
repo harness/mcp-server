@@ -1,5 +1,5 @@
 /**
- * Tests for the `security_exemption_bulk` resource that wraps
+ * Tests for the `application_security_exemption_bulk` resource that wraps
  * POST /sto/api/v2/exemptions/bulk.
  *
  * Covers:
@@ -14,7 +14,7 @@
  *      from the user).
  */
 import { describe, it, expect, vi } from "vitest";
-import { stoToolset } from "../../src/registry/toolsets/sto.js";
+import { applicationSecurityToolset } from "../../src/registry/toolsets/application-security.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -52,14 +52,14 @@ function makeClient(
 }
 
 function getBulkResource(): ResourceDefinition {
-  const r = stoToolset.resources.find((x) => x.resourceType === "security_exemption_bulk");
-  if (!r) throw new Error("security_exemption_bulk resource not registered");
+  const r = applicationSecurityToolset.resources.find((x) => x.resourceType === "application_security_exemption_bulk");
+  if (!r) throw new Error("application_security_exemption_bulk resource not registered");
   return r;
 }
 
 function getCreateSpec(): EndpointSpec {
   const spec = getBulkResource().operations.create;
-  if (!spec) throw new Error("security_exemption_bulk.create spec missing");
+  if (!spec) throw new Error("application_security_exemption_bulk.create spec missing");
   return spec;
 }
 
@@ -82,7 +82,7 @@ async function runPreflight(input: Record<string, unknown>, getCurrentUserId?: R
 
 // ─── 1. Preflight validation ────────────────────────────────────────────
 
-describe("security_exemption_bulk preflight — required fields", () => {
+describe("application_security_exemption_bulk preflight — required fields", () => {
   it("rejects when type is missing", async () => {
     const input = { body: { reason: "x", items: [{ issue_id: "i1" }] } };
     await expect(runPreflight(input)).rejects.toThrow(/Missing required fields.*type/);
@@ -136,7 +136,7 @@ describe("security_exemption_bulk preflight — required fields", () => {
 
 // ─── 2. bodyBuilder transformation ──────────────────────────────────────
 
-describe("security_exemption_bulk bodyBuilder", () => {
+describe("application_security_exemption_bulk bodyBuilder", () => {
   it("maps snake_case → camelCase, preserves item order, defaults durationDays=30", () => {
     const spec = getCreateSpec();
     const body = spec.bodyBuilder!({
@@ -208,7 +208,7 @@ describe("security_exemption_bulk bodyBuilder", () => {
 
 // ─── 3. responseExtractor (all-or-none status banner) ───────────────────
 
-describe("security_exemption_bulk responseExtractor", () => {
+describe("application_security_exemption_bulk responseExtractor", () => {
   const extract = getCreateSpec().responseExtractor!;
 
   it("emits ALL_SUCCEEDED when failed=0", () => {
@@ -263,7 +263,7 @@ describe("security_exemption_bulk responseExtractor", () => {
 // dispatcher body injection, scope-param mapping, or preflight ordering is
 // caught here rather than only in production.
 
-describe("security_exemption_bulk — registry dispatch", () => {
+describe("application_security_exemption_bulk — registry dispatch", () => {
   const rawApiResponse = {
     results: [
       { issueId: "issueA", id: "exemA", statusCode: 201 },
@@ -276,9 +276,9 @@ describe("security_exemption_bulk — registry dispatch", () => {
   it("posts to /sto/api/v2/exemptions/bulk with STO scope params, derived requesterId, camelCase body, and surfaces ALL_SUCCEEDED", async () => {
     const requestSpy = vi.fn().mockResolvedValue(rawApiResponse);
     const client = makeClient(requestSpy, "user-uuid-derived");
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
 
-    const result = (await registry.dispatch(client, "security_exemption_bulk", "create", {
+    const result = (await registry.dispatch(client, "application_security_exemption_bulk", "create", {
       body: {
         type: "False Positive",
         reason: "Patched upstream",
@@ -348,9 +348,9 @@ describe("security_exemption_bulk — registry dispatch", () => {
       failed: 2,
     });
     const client = makeClient(requestSpy);
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
 
-    const result = (await registry.dispatch(client, "security_exemption_bulk", "create", {
+    const result = (await registry.dispatch(client, "application_security_exemption_bulk", "create", {
       body: {
         type: "Other",
         reason: "x",
@@ -363,7 +363,7 @@ describe("security_exemption_bulk — registry dispatch", () => {
     expect(result._action_hint).toMatch(/full corrected list/i);
   });
 
-  it("pipeline_security_issue list surfaces _target_id_lookup_hint and _pipeline_id_lookup_hint so agents don't chase IDs through unrelated endpoints", async () => {
+  it("application_security_pipeline_issue list surfaces _target_id_lookup_hint and _pipeline_id_lookup_hint so agents don't chase IDs through unrelated endpoints", async () => {
     const requestSpy = vi.fn().mockResolvedValue({
       existing: {
         issues: [{ id: "issueA", title: "Eval Injection", targetVariantName: "nodegoat:master" }],
@@ -374,16 +374,16 @@ describe("security_exemption_bulk — registry dispatch", () => {
       matchingSteps: [],
     });
     const client = makeClient(requestSpy);
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
 
-    const result = (await registry.dispatch(client, "pipeline_security_issue", "list", {
+    const result = (await registry.dispatch(client, "application_security_pipeline_issue", "list", {
       execution_id: "exec-1",
     })) as Record<string, unknown>;
 
-    // target_id hint must point at pipeline_security_step + the join key.
+    // target_id hint must point at application_security_pipeline_step + the join key.
     expect(result._target_id_lookup_hint).toBeDefined();
     const targetHint = String(result._target_id_lookup_hint);
-    expect(targetHint).toMatch(/pipeline_security_step/);
+    expect(targetHint).toMatch(/application_security_pipeline_step/);
     expect(targetHint).toMatch(/targetName:targetVariant/);
     expect(targetHint).toMatch(/targetVariantName/);
 
@@ -400,10 +400,10 @@ describe("security_exemption_bulk — registry dispatch", () => {
   it("fails dispatch BEFORE issuing a request when preflight catches a mutual-exclusion violation", async () => {
     const requestSpy = vi.fn();
     const client = makeClient(requestSpy);
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
 
     await expect(
-      registry.dispatch(client, "security_exemption_bulk", "create", {
+      registry.dispatch(client, "application_security_exemption_bulk", "create", {
         body: {
           type: "Other",
           reason: "x",
