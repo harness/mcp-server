@@ -8,6 +8,8 @@ import { join } from "node:path";
 
 const REPO_ROOT = join(import.meta.dirname, "../..");
 const STANDARDS_PATH = join(REPO_ROOT, "docs/coding-standards.md");
+const AGENTS_PATH = join(REPO_ROOT, "AGENTS.md");
+const CONTRIBUTING_PATH = join(REPO_ROOT, "CONTRIBUTING.md");
 
 const REQUIRED_TOOLS = [
   "harness_list",
@@ -44,5 +46,21 @@ describe("Coding standards — documentation consistency", () => {
 
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
+  });
+
+  it("AGENTS.md documents 11 consolidated tools and Zod v4", () => {
+    const agents = readFileSync(AGENTS_PATH, "utf8");
+    expect(agents).toMatch(/11 consolidated tools/);
+    expect(agents).toContain("harness_schema");
+    expect(agents).toMatch(/Zod v4/);
+    expect(agents).toContain("pnpm standards:check");
+  });
+
+  it("CONTRIBUTING.md documents 11 MCP tools and standards:check", () => {
+    const contributing = readFileSync(CONTRIBUTING_PATH, "utf8");
+    expect(contributing).toMatch(/11 generic MCP tools/);
+    expect(contributing).toContain("harness_schema");
+    expect(contributing).toContain("pnpm standards:check");
+    expect(contributing).toContain("docs/coding-standards.md");
   });
 });
