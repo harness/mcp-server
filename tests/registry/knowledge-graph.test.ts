@@ -1,8 +1,11 @@
 /**
- * Verifies the Knowledge Graph and Semantic Layer toolsets at the registry
- * dispatch layer: HQL request-body construction (including zero-valued
- * options) and the schema/related-type extractors that strip internal
- * metadata while preserving meaningful empty collections.
+ * Verifies the merged Software Delivery Knowledge Graph toolset (formerly the
+ * separate knowledge-graph + semantic-layer toolsets) at the registry dispatch
+ * layer: HQL request-body construction (including zero-valued options), the
+ * schema/related-type extractors that strip internal metadata while preserving
+ * meaningful empty collections, and that the legacy kg_* / toolset names still
+ * resolve via the alias layer. Dispatch calls intentionally use the legacy
+ * kg_* names to exercise alias resolution end-to-end.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Registry } from "../../src/registry/index.js";
@@ -463,5 +466,60 @@ describe("hql_query run policy", () => {
     });
 
     expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// software_delivery_knowledge_graph — merged toolset & alias resolution
+// ---------------------------------------------------------------------------
+
+describe("software_delivery_knowledge_graph merged toolset", () => {
+  it("resolves legacy kg_* resource types to their canonical names", () => {
+    const registry = new Registry(makeConfig());
+    expect(registry.getResource("kg_queryable_type_summary").resourceType).toBe(
+      "software_delivery_knowledge_graph_queryable_type_summary",
+    );
+    expect(registry.getResource("kg_grammar").resourceType).toBe(
+      "software_delivery_knowledge_graph_grammar",
+    );
+    expect(registry.getResource("kg_type").resourceType).toBe(
+      "software_delivery_knowledge_graph_type",
+    );
+    expect(registry.getResource("kg_related_type").resourceType).toBe(
+      "software_delivery_knowledge_graph_related_type",
+    );
+    // hql_query keeps its own name — HQL (Harness Query Language) is distinct
+    // from the kg_* schema resources and is not renamed.
+    expect(registry.getResource("hql_query").resourceType).toBe("hql_query");
+  });
+
+  it("folds the former knowledge-graph + semantic-layer resources into one toolset", () => {
+    const registry = new Registry(makeConfig());
+    for (const legacy of [
+      "kg_queryable_type_summary",
+      "kg_grammar",
+      "kg_type",
+      "kg_related_type",
+      "hql_query",
+    ]) {
+      expect(registry.getResource(legacy).toolset).toBe("software_delivery_knowledge_graph");
+    }
+  });
+
+  it("enables the merged toolset via the legacy HARNESS_TOOLSETS='semantic-layer' name", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "semantic-layer" }));
+    const names = registry.getAllToolsets().map((t) => t.name);
+    expect(names).toContain("software_delivery_knowledge_graph");
+    // Resources originally from BOTH former toolsets are present under the merge.
+    expect(registry.getResource("kg_type").resourceType).toBe(
+      "software_delivery_knowledge_graph_type",
+    );
+    expect(registry.getResource("hql_query").resourceType).toBe("hql_query");
+  });
+
+  it("also enables the merged toolset via the legacy HARNESS_TOOLSETS='knowledge-graph' name", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "knowledge-graph" }));
+    const names = registry.getAllToolsets().map((t) => t.name);
+    expect(names).toContain("software_delivery_knowledge_graph");
   });
 });

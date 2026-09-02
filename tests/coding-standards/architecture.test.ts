@@ -65,7 +65,7 @@ const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
   "src/registry/toolsets/governance.ts": 1,
   "src/registry/toolsets/iacm.ts": 1,
   "src/registry/toolsets/idp.ts": 1,
-  "src/registry/toolsets/knowledge-graph.ts": 1,
+  "src/registry/toolsets/software-delivery-knowledge-graph.ts": 1,
   "src/registry/toolsets/sto.ts": 3,
 };
 

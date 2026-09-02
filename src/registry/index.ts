@@ -46,8 +46,7 @@ import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
 import { aiEvalsToolset } from "./toolsets/ai-evals.js";
-import { knowledgeGraphToolset } from "./toolsets/knowledge-graph.js";
-import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
+import { softwareDeliveryKnowledgeGraphToolset } from "./toolsets/software-delivery-knowledge-graph.js";
 import { ansibleToolset } from "./toolsets/ansible.js";
 import { incidentsToolset } from "./toolsets/incidents.js";
 import { alertsToolset } from "./toolsets/alerts.js";
@@ -218,8 +217,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   freezeToolset,
   overridesToolset,
   aiEvalsToolset,
-  knowledgeGraphToolset,
-  semanticLayerToolset,
+  softwareDeliveryKnowledgeGraphToolset,
   ansibleToolset,
   incidentsToolset,
   alertsToolset,

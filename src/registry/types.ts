@@ -131,7 +131,7 @@ export type ToolsetName =
   | "dashboards"
   | "developer_portal"
   | "pull-requests"
-  | "feature-flags"
+  | "feature_flags"
   | "gitops"
   | "chaos"
   | "cost"
@@ -154,8 +154,7 @@ export type ToolsetName =
   | "alerts"
   | "deploys"
   | "release-management"
-  | "knowledge-graph"
-  | "semantic-layer";
+  | "software_delivery_knowledge_graph";
 
 export type ProductName = "harness" | "fme";
 
