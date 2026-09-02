@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema, ParamsSchema, PreflightContext } from "../types.js";
-import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, runtimeInputTemplatePreflight, pipelineResolvedYamlExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
 import { asRecord } from "../../utils/type-guards.js";
 import YAML from "yaml";
 
@@ -1199,8 +1199,40 @@ export const pipelinesToolset: ToolsetDefinition = {
             branch: "branch",
           },
           bodyBuilder: () => ({}),
+          preflight: runtimeInputTemplatePreflight,
           responseExtractor: runtimeInputExtract,
-          description: "Fetch the runtime input template for a pipeline. Shows all fields that require values at execution time.",
+          description:
+            "Fetch the runtime input template for a pipeline. Merges pipeline-definition variable metadata (default, allowedValues) when present. Use variableInputMetadata when authoring release activities.",
+        },
+      },
+    },
+    {
+      resourceType: "pipeline_resolved_yaml",
+      displayName: "Pipeline Resolved YAML",
+      description:
+        "Fetch a pipeline with all template refs resolved — returns resolvedTemplatesPipelineYaml and per-stage deployment metadata (deploymentType, environmentRef). Use with runtime_input_template when authoring release activities that map pipeline runtime inputs.",
+      toolset: "pipelines",
+      scope: "project",
+      identifierFields: ["pipeline_id"],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/pipeline/api/pipelines/{pipelineIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { pipeline_id: "pipelineIdentifier" },
+          queryParams: {
+            branch: "branch",
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+          },
+          staticQueryParams: {
+            getTemplatesResolvedPipeline: "true",
+            validateAsync: "true",
+          },
+          responseExtractor: pipelineResolvedYamlExtract,
+          description:
+            "Fetch resolved pipeline YAML with templates expanded. Returns stageMetadataMap for patching entity-type activity inputs (deploymentType, environmentRef).",
         },
       },
     },

@@ -2,8 +2,13 @@
  * Shared response extractors for Harness API responses.
  * Used across all toolset definitions — eliminates per-file duplication.
  */
+import YAML from "yaml";
 import { isRecord } from "../utils/type-guards.js";
 import { parseZipCsv } from "../utils/zip-csv.js";
+import {
+  extractVariableInputMetadata,
+  mergeTemplateYamlWithDefinitionVariables,
+} from "../utils/runtime-input-metadata.js";
 import type { PreflightContext } from "./types.js";
 
 /** Extract `data` from standard NG API responses: `{ status, data, ... }` */
@@ -455,19 +460,116 @@ export const gqlExtract = (field: string) => (raw: unknown): unknown => {
 };
 
 /**
+ * Fetch saved pipeline definition YAML so runtime_input_template can recover
+ * `.default()` / `.selectOneFrom()` metadata stripped from the template API.
+ */
+export async function runtimeInputTemplatePreflight({
+  client,
+  input,
+  signal,
+}: PreflightContext): Promise<void> {
+  const pipelineId = String(input.pipeline_id ?? input.resource_id ?? "").trim();
+  if (!pipelineId) return;
+
+  const params: Record<string, string> = {};
+  if (input.org_id) params.orgIdentifier = String(input.org_id);
+  if (input.project_id) params.projectIdentifier = String(input.project_id);
+  if (input.branch) params.branch = String(input.branch);
+
+  const raw = await client.request<unknown>({
+    method: "GET",
+    path: `/pipeline/api/pipelines/${encodeURIComponent(pipelineId)}`,
+    params,
+    signal,
+  });
+  const yamlPipeline = (raw as { data?: { yamlPipeline?: string } })?.data?.yamlPipeline;
+  if (typeof yamlPipeline === "string" && yamlPipeline.trim()) {
+    input._pipelineDefinitionYaml = yamlPipeline;
+  }
+}
+
+/**
  * Extracts the runtime input template from the Harness pipeline template endpoint.
  * Unwraps `data.inputSetTemplateYaml`, `data.hasInputSets`, `data.modules`, and adds
  * a `_hint` field describing whether inputs are required.
+ *
+ * When preflight attached `_pipelineDefinitionYaml`, merges variable expressions and
+ * returns `variableInputMetadata` for release-activity authoring.
  */
-export const runtimeInputExtract = (raw: unknown): unknown => {
+export const runtimeInputExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
   const r = raw as { data?: { inputSetTemplateYaml?: string; hasInputSets?: boolean; modules?: string[] } };
+  const templateYaml = r.data?.inputSetTemplateYaml ?? null;
+  const pipelineDefinitionYaml =
+    typeof input?._pipelineDefinitionYaml === "string" ? input._pipelineDefinitionYaml : undefined;
+  const enrichedTemplateYaml = mergeTemplateYamlWithDefinitionVariables(
+    templateYaml,
+    pipelineDefinitionYaml,
+  );
+  const variableInputMetadata = extractVariableInputMetadata(
+    pipelineDefinitionYaml ?? enrichedTemplateYaml,
+  );
+
   return {
-    inputSetTemplateYaml: r.data?.inputSetTemplateYaml ?? null,
+    inputSetTemplateYaml: enrichedTemplateYaml,
     hasInputSets: r.data?.hasInputSets ?? false,
     modules: r.data?.modules ?? [],
-    _hint: r.data?.inputSetTemplateYaml
-      ? "This YAML template shows all runtime inputs needed. Fields with '<+input>' are required. Pass matching key-value pairs to harness_execute(action='run', inputs={...})."
+    variableInputMetadata,
+    _hint: enrichedTemplateYaml
+      ? Object.keys(variableInputMetadata).length > 0
+        ? "Template includes runtime inputs. variableInputMetadata carries pipeline defaults and allowed values — copy default onto matching primitive activity inputs."
+        : "This YAML template shows all runtime inputs needed. Fields with '<+input>' are required."
       : "This pipeline has no runtime inputs. You can execute it without providing any inputs.",
+  };
+};
+
+type StageMetadata = {
+  deploymentType: string;
+  environmentRef: string;
+};
+
+/** Parse resolved pipeline YAML into per-stage deployment metadata. */
+export function buildStageMetadataMap(resolvedYaml: string | null | undefined): Record<string, StageMetadata> {
+  const stageMap: Record<string, StageMetadata> = {};
+  if (!resolvedYaml) return stageMap;
+
+  try {
+    const pipelineDoc = YAML.parse(resolvedYaml) as {
+      pipeline?: { stages?: Array<{ stage?: Record<string, unknown> }> };
+    } | null;
+    const stages = pipelineDoc?.pipeline?.stages ?? [];
+    for (const stageEntry of stages) {
+      const stage = stageEntry.stage ?? {};
+      const stageId = typeof stage.identifier === "string" ? stage.identifier : "";
+      if (!stageId) continue;
+
+      const spec = (stage.spec ?? {}) as Record<string, unknown>;
+      const deploymentType = typeof spec.deploymentType === "string" ? spec.deploymentType : "";
+      const environment = (spec.environment ?? {}) as Record<string, unknown>;
+      const environmentRef = typeof environment.environmentRef === "string" ? environment.environmentRef : "";
+
+      stageMap[stageId] = { deploymentType, environmentRef };
+    }
+  } catch {
+    // Malformed YAML — return empty map; caller can still use resolvedTemplatesPipelineYaml.
+  }
+  return stageMap;
+}
+
+/**
+ * Extracts resolved pipeline YAML (templates expanded) for activity input mapping.
+ * Mirrors genai-service GET /pipeline/api/pipelines/{id}?getTemplatesResolvedPipeline=true.
+ */
+export const pipelineResolvedYamlExtract = (raw: unknown): unknown => {
+  const r = raw as { data?: { resolvedTemplatesPipelineYaml?: string } };
+  const resolvedTemplatesPipelineYaml = r.data?.resolvedTemplatesPipelineYaml ?? null;
+  const stageMetadataMap = buildStageMetadataMap(resolvedTemplatesPipelineYaml);
+
+  return {
+    resolvedTemplatesPipelineYaml,
+    stageMetadataMap,
+    _hint: resolvedTemplatesPipelineYaml
+      ? "Use stageMetadataMap to patch deploymentType and environmentRef on entity-type activity inputs during release-activity authoring."
+      : "No resolved pipeline YAML returned. Entity input metadata may be incomplete.",
   };
 };
 
