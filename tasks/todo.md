@@ -19,7 +19,15 @@ Branch: `module-capability-rename`. Plan: `tasks/module-rename-plan.md`.
 P1 first (structural: infrastructure.ts delete/recreate, environments.ts, index.ts) →
 P4b (semantic-layer removal in index.ts) → P2 (sto/scs removal in index.ts) → P3 → P4a (no index.ts).
 
-## P5 — global cross-ref pass (I OWN THIS — agents only fix within-file refs)
+## P5 — global cross-ref pass ✅ DONE (commit follows)
+Below = the worklist; all resolved. Deliberate residue: FME dual-mode **error-message
+labels** in feature-flags.ts (e.g. `fme_feature_flag.create: ...`) LEFT canonical-as-`fme_` —
+they're non-behavioral diagnostic strings, heavily asserted by existing tests (churning them
+violates plan §5), and `product:"fme"` remains the real internal product identity.
+Pre-existing orphans LEFT: `scs_opa_policy` (never a real resource), `idp_scorecard`/`idp_catalog_entity`
+URL-segment hints (matched no resourceType even pre-rename), url-parser `MODULES` set (real UI path codes).
+
+## P5 worklist (I OWN THIS — agents only fix within-file refs)
 Codemod whole-token, word-boundary, driven by the §3 mapping tables. Prompts are cosmetic (resolve via alias) but should be updated. The following are **behavioral** (alias layer does NOT cover internal string comparisons — internal code sees the canonical `.resourceType`):
 
 - [ ] **src/utils/url-parser.ts L319/L356-361 — CORRECTNESS-CRITICAL.** `declaredResourceType` is raw user input (old alias OR new canonical, pre-registry). Fix to accept BOTH:
@@ -34,11 +42,12 @@ Codemod whole-token, word-boundary, driven by the §3 mapping tables. Prompts ar
 - [ ] src/resources/*, src/data/* — grep for old tokens after merge; update.
 - [ ] Stale relatedResources in UNtouched toolsets referencing renamed types (grep all toolsets/ post-merge).
 
-## P6 — docs + full verification (I OWN)
-- [ ] `pnpm build && pnpm docs:generate` (fresh build first) → fix `docs:check` counts.
-- [ ] `pnpm standards:check` → green.
-- [ ] `pnpm test` full → green.
-- [ ] grep sweep: no stray old tokens outside `aliases`/`searchAliases`/comments-that-explain-the-alias.
-- [ ] Update .env.example / AGENTS.md tool count/toolset-name references if any.
+## P6 — docs + full verification (I OWN) ✅ DONE
+- [x] `pnpm build && pnpm docs:generate` → README: 241 resource types, 38 toolsets, 35 prompts. `docs:check` green.
+- [x] `pnpm standards:check` → green (10 files, 77 tests).
+- [x] `pnpm test` full → green (143 files, 3255 tests).
+- [x] grep sweep: no stray old tokens outside aliases/searchAliases/FME-error-labels/orphans. No refs to deleted toolset files.
+- [x] .env.example "Available:" list → canonical 38 names + legacy-alias note; "IaCM"→"Infrastructure".
+- [x] AGENTS.md: 41→38 toolset files, 219+→240+ resource types, `iacm_variable_set`→`infrastructure_variable_set`.
 
 ## Wave 4 (optional, deferred) — D7: harness_code umbrella + hyphen→underscore toolset-name standardization.
