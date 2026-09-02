@@ -1,6 +1,6 @@
 /**
- * Parse Harness runtime-input expressions and enrich template YAML with pipeline
- * definition metadata (defaults, allowed values) for release-activity authoring.
+ * Parse Harness runtime-input expressions and extract pipeline variable metadata
+ * (defaults, allowed values) and resolved-pipeline stage deployment metadata.
  */
 import YAML from "yaml";
 import { isRecord, asString } from "./type-guards.js";
@@ -166,45 +166,82 @@ export function extractVariableInputMetadata(
   return metadata;
 }
 
-/**
- * Merge richer pipeline-variable expressions from definition YAML into the
- * input-set template (template API often strips `.default()` / `.selectOneFrom()`).
- */
-export function mergeTemplateYamlWithDefinitionVariables(
-  templateYaml: string | null | undefined,
-  pipelineYaml: string | null | undefined,
-): string | null {
-  if (!templateYaml) return templateYaml ?? null;
-  if (!pipelineYaml) return templateYaml;
+export type StageMetadata = {
+  deploymentType: string;
+  environmentRef: string;
+};
 
-  const definitionVars = collectPipelineVariables(pipelineYaml);
-  if (definitionVars.size === 0) return templateYaml;
+function stageMetadataFromStage(stage: Record<string, unknown>): StageMetadata {
+  const spec = (stage.spec ?? {}) as Record<string, unknown>;
+  const deploymentType = typeof spec.deploymentType === "string" ? spec.deploymentType : "";
+  const environment = (spec.environment ?? {}) as Record<string, unknown>;
+  const environmentRef = typeof environment.environmentRef === "string" ? environment.environmentRef : "";
+  return { deploymentType, environmentRef };
+}
 
-  try {
-    const doc = YAML.parse(templateYaml) as Record<string, unknown>;
-    const pipeline = doc.pipeline;
-    if (!isRecord(pipeline)) return templateYaml;
-    const variables = pipeline.variables;
-    if (!Array.isArray(variables)) return templateYaml;
+function hasStageMetadata(metadata: StageMetadata): boolean {
+  return metadata.deploymentType !== "" || metadata.environmentRef !== "";
+}
 
-    for (const entry of variables) {
-      if (!isRecord(entry)) continue;
-      const name = asString(entry.name);
-      if (!name) continue;
-      const templateValue = entry.value;
-      const definitionValue = definitionVars.get(name);
-      if (
-        templateValue === "<+input>"
-        && typeof definitionValue === "string"
-        && definitionValue.startsWith("<+input>")
-        && definitionValue.length > "<+input>".length
-      ) {
-        entry.value = definitionValue;
-      }
+function collectStageMetadata(
+  stage: Record<string, unknown>,
+  stageMap: Record<string, StageMetadata>,
+): void {
+  const stageId = typeof stage.identifier === "string" ? stage.identifier : "";
+  if (stageId) {
+    const metadata = stageMetadataFromStage(stage);
+    if (hasStageMetadata(metadata)) {
+      stageMap[stageId] = metadata;
+    }
+  }
+  if (Array.isArray(stage.stages)) {
+    walkPipelineStageEntries(stage.stages, stageMap);
+  }
+}
+
+/** Walk v0 pipeline stage entries including parallel blocks and nested stage groups. */
+export function walkPipelineStageEntries(
+  entries: unknown,
+  stageMap: Record<string, StageMetadata>,
+): void {
+  if (!Array.isArray(entries)) return;
+
+  for (const entry of entries) {
+    if (!isRecord(entry)) continue;
+
+    if (isRecord(entry.stage)) {
+      collectStageMetadata(entry.stage, stageMap);
+      continue;
     }
 
-    return YAML.stringify(doc);
-  } catch {
-    return templateYaml;
+    if (entry.parallel !== undefined) {
+      const parallel = entry.parallel;
+      if (Array.isArray(parallel)) {
+        walkPipelineStageEntries(parallel, stageMap);
+      } else if (isRecord(parallel) && Array.isArray(parallel.stages)) {
+        walkPipelineStageEntries(parallel.stages, stageMap);
+      }
+      continue;
+    }
+
+    if (typeof entry.identifier === "string") {
+      collectStageMetadata(entry, stageMap);
+    }
   }
+}
+
+/** Parse resolved pipeline YAML into per-stage deployment metadata. */
+export function buildStageMetadataMap(resolvedYaml: string | null | undefined): Record<string, StageMetadata> {
+  const stageMap: Record<string, StageMetadata> = {};
+  if (!resolvedYaml) return stageMap;
+
+  try {
+    const pipelineDoc = YAML.parse(resolvedYaml) as {
+      pipeline?: { stages?: unknown[] };
+    } | null;
+    walkPipelineStageEntries(pipelineDoc?.pipeline?.stages ?? [], stageMap);
+  } catch {
+    // Malformed YAML — return empty map; caller can still use resolvedTemplatesPipelineYaml.
+  }
+  return stageMap;
 }

@@ -7,7 +7,7 @@ import { isRecord } from "../utils/type-guards.js";
 import { parseZipCsv } from "../utils/zip-csv.js";
 import {
   extractVariableInputMetadata,
-  mergeTemplateYamlWithDefinitionVariables,
+  buildStageMetadataMap,
 } from "../utils/runtime-input-metadata.js";
 import type { PreflightContext } from "./types.js";
 
@@ -507,111 +507,32 @@ export async function runtimeInputTemplatePreflight({
  * Unwraps `data.inputSetTemplateYaml`, `data.hasInputSets`, `data.modules`, and adds
  * a `_hint` field describing whether inputs are required.
  *
- * When preflight attached `_pipelineDefinitionYaml`, merges variable expressions and
- * returns `variableInputMetadata` for release-activity authoring.
+ * When preflight attached `_pipelineDefinitionYaml`, returns `variableInputMetadata`
+ * for release-activity authoring. `inputSetTemplateYaml` is returned verbatim from the API.
  */
 export const runtimeInputExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
   const r = raw as { data?: { inputSetTemplateYaml?: string; hasInputSets?: boolean; modules?: string[] } };
   const templateYaml = r.data?.inputSetTemplateYaml ?? null;
   const pipelineDefinitionYaml =
     typeof input?._pipelineDefinitionYaml === "string" ? input._pipelineDefinitionYaml : undefined;
-  const enrichedTemplateYaml = mergeTemplateYamlWithDefinitionVariables(
-    templateYaml,
-    pipelineDefinitionYaml,
-  );
-  const variableInputMetadata = extractVariableInputMetadata(
-    pipelineDefinitionYaml ?? enrichedTemplateYaml,
-  );
+  const variableInputMetadata = extractVariableInputMetadata(pipelineDefinitionYaml);
 
-  const executeHint = enrichedTemplateYaml
+  const executeHint = templateYaml
     ? "This YAML template shows all runtime inputs needed. Fields with '<+input>' are required — pass key-value pairs via harness_execute(resource_type='pipeline', action='run', inputs={...}) or use input_set_ids for complex inputs."
     : "This pipeline has no runtime inputs. You can execute it without providing any inputs.";
   const activityHint =
     "variableInputMetadata covers pipeline-level variables only (not stage/service/env inputs) — copy default onto matching primitive activity inputs when authoring release activities.";
 
   return {
-    inputSetTemplateYaml: enrichedTemplateYaml,
+    inputSetTemplateYaml: templateYaml,
     hasInputSets: r.data?.hasInputSets ?? false,
     modules: r.data?.modules ?? [],
     variableInputMetadata,
-    _hint: enrichedTemplateYaml && Object.keys(variableInputMetadata).length > 0
+    _hint: templateYaml && Object.keys(variableInputMetadata).length > 0
       ? `${executeHint} ${activityHint}`
       : executeHint,
   };
 };
-
-type StageMetadata = {
-  deploymentType: string;
-  environmentRef: string;
-};
-
-function stageMetadataFromStage(stage: Record<string, unknown>): StageMetadata {
-  const spec = (stage.spec ?? {}) as Record<string, unknown>;
-  const deploymentType = typeof spec.deploymentType === "string" ? spec.deploymentType : "";
-  const environment = (spec.environment ?? {}) as Record<string, unknown>;
-  const environmentRef = typeof environment.environmentRef === "string" ? environment.environmentRef : "";
-  return { deploymentType, environmentRef };
-}
-
-function collectStageMetadata(
-  stage: Record<string, unknown>,
-  stageMap: Record<string, StageMetadata>,
-): void {
-  const stageId = typeof stage.identifier === "string" ? stage.identifier : "";
-  if (stageId) {
-    stageMap[stageId] = stageMetadataFromStage(stage);
-  }
-  if (Array.isArray(stage.stages)) {
-    walkPipelineStageEntries(stage.stages, stageMap);
-  }
-}
-
-/** Walk v0 pipeline stage entries including parallel blocks and nested stage groups. */
-export function walkPipelineStageEntries(
-  entries: unknown,
-  stageMap: Record<string, StageMetadata>,
-): void {
-  if (!Array.isArray(entries)) return;
-
-  for (const entry of entries) {
-    if (!isRecord(entry)) continue;
-
-    if (isRecord(entry.stage)) {
-      collectStageMetadata(entry.stage, stageMap);
-      continue;
-    }
-
-    if (entry.parallel !== undefined) {
-      const parallel = entry.parallel;
-      if (Array.isArray(parallel)) {
-        walkPipelineStageEntries(parallel, stageMap);
-      } else if (isRecord(parallel) && Array.isArray(parallel.stages)) {
-        walkPipelineStageEntries(parallel.stages, stageMap);
-      }
-      continue;
-    }
-
-    if (typeof entry.identifier === "string") {
-      collectStageMetadata(entry, stageMap);
-    }
-  }
-}
-
-/** Parse resolved pipeline YAML into per-stage deployment metadata. */
-export function buildStageMetadataMap(resolvedYaml: string | null | undefined): Record<string, StageMetadata> {
-  const stageMap: Record<string, StageMetadata> = {};
-  if (!resolvedYaml) return stageMap;
-
-  try {
-    const pipelineDoc = YAML.parse(resolvedYaml) as {
-      pipeline?: { stages?: unknown[] };
-    } | null;
-    walkPipelineStageEntries(pipelineDoc?.pipeline?.stages ?? [], stageMap);
-  } catch {
-    // Malformed YAML — return empty map; caller can still use resolvedTemplatesPipelineYaml.
-  }
-  return stageMap;
-}
 
 /**
  * Extracts resolved pipeline YAML (templates expanded) for activity input mapping.

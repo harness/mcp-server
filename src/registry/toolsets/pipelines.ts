@@ -435,6 +435,18 @@ export const pipelinesToolset: ToolsetDefinition = {
         { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
         { name: "filter_type", description: "Filter type qualifier" },
       ],
+      relatedResources: [
+        {
+          resourceType: "runtime_input_template",
+          relationship: "runtime-inputs",
+          description: "Discover required `<+input>` placeholders and pipeline-level variable defaults before execute. harness_get(resource_type='runtime_input_template', resource_id=<pipeline_id>).",
+        },
+        {
+          resourceType: "pipeline_resolved_yaml",
+          relationship: "resolved-definition",
+          description: "Fetch template-expanded pipeline YAML and per-stage deployment metadata for release-activity authoring. harness_get(resource_type='pipeline_resolved_yaml', resource_id=<pipeline_id>).",
+        },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
       operations: {
         list: {
@@ -1189,6 +1201,18 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id"],
+      relatedResources: [
+        {
+          resourceType: "pipeline",
+          relationship: "parent",
+          description: "Saved pipeline definition. harness_get(resource_type='pipeline', resource_id=<pipeline_id>). For remote pipelines pass the same git params (branch, store_type, connector_ref, repo_name).",
+        },
+        {
+          resourceType: "pipeline_resolved_yaml",
+          relationship: "complements",
+          description: "Resolved pipeline YAML with per-stage deploymentType/environmentRef for release-activity authoring. harness_get(resource_type='pipeline_resolved_yaml', resource_id=<pipeline_id>).",
+        },
+      ],
       operations: {
         get: {
           method: "POST",
@@ -1201,11 +1225,12 @@ export const pipelinesToolset: ToolsetDefinition = {
             connector_ref: "connectorRef",
             repo_name: "repoName",
           },
+          paramsSchema: PIPELINE_V0_GET_PARAMS,
           bodyBuilder: () => ({}),
           preflight: runtimeInputTemplatePreflight,
           responseExtractor: runtimeInputExtract,
           description:
-            "Fetch the runtime input template for a pipeline. Merges pipeline-definition variable metadata (default, allowedValues) when present. variableInputMetadata covers pipeline.variables only — not stage/service/env inputs.",
+            "Fetch the runtime input template for a pipeline. Returns inputSetTemplateYaml verbatim from the API plus variableInputMetadata from the pipeline definition when available. variableInputMetadata covers pipeline.variables only — not stage/service/env inputs.",
         },
       },
     },
@@ -1217,6 +1242,18 @@ export const pipelinesToolset: ToolsetDefinition = {
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id"],
+      relatedResources: [
+        {
+          resourceType: "pipeline",
+          relationship: "parent",
+          description: "Unexpanded pipeline definition. harness_get(resource_type='pipeline', resource_id=<pipeline_id>).",
+        },
+        {
+          resourceType: "runtime_input_template",
+          relationship: "complements",
+          description: "Runtime input placeholders and pipeline-level variable defaults. harness_get(resource_type='runtime_input_template', resource_id=<pipeline_id>).",
+        },
+      ],
       operations: {
         get: {
           method: "GET",
@@ -1229,6 +1266,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             connector_ref: "connectorRef",
             repo_name: "repoName",
           },
+          paramsSchema: PIPELINE_V0_GET_PARAMS,
           staticQueryParams: {
             getTemplatesResolvedPipeline: "true",
           },
