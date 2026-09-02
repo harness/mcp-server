@@ -631,7 +631,7 @@ async function perspectiveCreatePreflight(ctx: PreflightContext): Promise<void> 
 // ---------------------------------------------------------------------------
 
 export const ccmToolset: ToolsetDefinition = {
-  name: "ccm",
+  name: "cost",
   displayName: "Cloud Cost Management",
   description:
     "Cloud cost visibility, analysis, recommendations, and anomaly detection. Covers perspectives, cost breakdowns, time series, summaries, recommendations, and anomalies.",
@@ -644,7 +644,8 @@ export const ccmToolset: ToolsetDefinition = {
       displayName: "Cost Perspective",
       description:
         "A cloud cost perspective (saved view). Use harness_list to see all perspectives, harness_get for details. This is the starting point — get a perspective_id first, then use cost_breakdown or cost_timeseries to drill into costs.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["perspective_id"],
       listFilterFields: [
@@ -771,7 +772,8 @@ export const ccmToolset: ToolsetDefinition = {
       displayName: "Cost Perspective Folder",
       description:
         "Folders for organizing cost perspectives. Use harness_list to see all folders, harness_get to list perspectives in a folder. Use the move_perspectives action to move perspectives between folders.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["folder_id"],
       listFilterFields: [
@@ -869,7 +871,8 @@ export const ccmToolset: ToolsetDefinition = {
 
 Required: perspective_id (get from cost_perspective list).
 Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any label key like "env", "team", "app"), time_filter (${VALID_TIME_FILTERS.join(", ")}), limit, offset.`,
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["perspective_id"],
       listFilterFields: [
@@ -923,7 +926,8 @@ Optional: group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any labe
 
 Required: perspective_id, group_by (predefined: ${VALID_GROUP_BY_FIELDS.join(", ")}, OR any label key).
 Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}), time_resolution (DAY, MONTH, WEEK), limit.`,
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["perspective_id"],
       compactItem: compactTimeseriesStat,
@@ -985,7 +989,8 @@ Required: perspective_id.
 Optional: time_filter (${VALID_TIME_FILTERS.join(", ")}).
 
 Use with no perspective_id to get CCM metadata (available connectors, default perspective IDs).`,
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["perspective_id"],
       listFilterFields: [
@@ -1065,7 +1070,8 @@ harness_list: General recommendations across the account. Supports filters: min_
 harness_get: Perspective-scoped recommendations — pass perspective_id to get recs for a specific perspective with savings stats. Optionally pass min_saving, time_filter (${VALID_TIME_FILTERS.join(", ")}), limit, offset.
 
 Replaces the 5 separate resource-type tools from the official server (EC2, Azure VM, ECS, Node Pool, Workload) — all resource types are returned in a single list.`,
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["perspective_id"],
       diagnosticHint: "To fetch recommendations for a specific team, business unit, or any custom grouping, use the cost_category + cost_buckets filters. Cost categories are user-defined groupings (e.g. by team, environment, project). Discover available values with: harness_list(resource_type='cost_recommendation_filter') for category names, then harness_get(resource_type='cost_recommendation_filter', cost_category='<name>') for bucket names within that category.",
@@ -1228,7 +1234,8 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
 
 Filter by: perspective_id, status (ACTIVE, IGNORED, ARCHIVED, RESOLVED), anomaly_view (RESOURCE, PERSPECTIVE), search_text, time_filter or start_time/end_time, order_by, group_by, min_amount, min_anomalous_spend, limit, offset.
 All the separate anomaly tools from the official server (list, list_all, list_ignored, by_perspective) are unified here via filter parameters.`,
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["anomaly_id"],
       listFilterFields: [
@@ -1360,7 +1367,8 @@ harness_get: Returns anomaly details (resource, expected vs actual spend, anomal
 harness_list: Returns drill-down sub-items for the anomaly.
 
 For cost time-series data, use harness_get with start_time and end_time.`,
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["anomaly_id"],
       listFilterFields: [
@@ -1411,7 +1419,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       displayName: "Cost Anomaly Summary",
       description:
         "Summary statistics for cloud cost anomalies — total count, total anomalous spend, breakdown by cloud provider.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: [],
       deepLinkTemplate: "/ng/account/{accountId}/ce/anomaly-detection",
@@ -1442,7 +1451,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       displayName: "Cost Category",
       description:
         "Cost categories (business mappings) for organizing cloud costs into business units. Use harness_list to see all categories, harness_get with category_id for details. Use harness_create to create a new cost category with cost targets and rules.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["category_id"],
       listFilterFields: [
@@ -1559,7 +1569,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       displayName: "Cost Budget",
       description:
         "Cloud cost budgets — set spend targets and receive alerts when costs exceed (or are forecasted to exceed) the budget. Use harness_list to see all budgets, harness_get with budget_id for details, harness_create/harness_update to manage them. Use the clone action to copy a budget and bulk_delete to delete several at once.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["budget_id"],
       deepLinkTemplate: "/ng/account/{accountId}/ce/budget",
@@ -1732,7 +1743,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       displayName: "Cost Budget Variance",
       description:
         "Read-only time-series detail for a single budget: actual vs budgeted cost per period (month-by-month or yearly) with variance tracking and end-of-period forecast. Use harness_get with budget_id (from cost_budget list) and optional breakdown (MONTHLY or YEARLY) to see how a budget has tracked over time and where it went over.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["budget_id"],
       deepLinkTemplate: "/ng/account/{accountId}/ce/budget",
@@ -1757,7 +1769,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       displayName: "Cost Budget Group",
       description:
         "Budget groups — roll up multiple child budgets (or nested groups) under a single parent target and cascade alerts. Use harness_list to see all budget groups, harness_get with budget_group_id for details, and harness_create/harness_update/harness_delete to manage them.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["budget_group_id"],
       deepLinkTemplate: "/ng/account/{accountId}/ce/budget",
@@ -1867,7 +1880,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       displayName: "Cost Recommendation Filter",
       description:
         "Discover available cost category names and their buckets for use as filters in cost_recommendation. Call harness_list to get all cost category names. Call harness_get with cost_category=<name> to get bucket names within that category.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["cost_category"],
       operations: {
@@ -1898,7 +1912,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       resourceType: "cost_account_overview",
       displayName: "Cost Account Overview",
       description: "Account-level cost overview with start/end time and groupBy. Supports get. Use cost_summary for perspective-scoped data.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: [],
       deepLinkTemplate: "/ng/account/{accountId}/ce/overview",
@@ -1946,7 +1961,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       resourceType: "cost_filter_value",
       displayName: "Cost Filter Value",
       description: "Multi-purpose endpoint for fetching perspective filter values. Use value_type to specify what to fetch: 'label_v2_key' for label keys, 'label_v2' for label values, 'region' for regions, etc.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: [],
       listFilterFields: [
@@ -2098,7 +2114,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       resourceType: "cost_recommendation_count",
       displayName: "Cost Recommendation Count",
       description: "Get total count of recommendations. Supports same filters as cost_recommendation (cost_category + cost_buckets, recommendation_states, min_saving, days_back). Use this to get the accurate total before fetching paginated results.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: [],
       operations: {
@@ -2150,7 +2167,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       resourceType: "cost_recommendation_stats",
       displayName: "Cost Recommendation Stats",
       description: "Cost recommendation statistics. harness_get: aggregate stats. harness_get with group_by=type: stats grouped by resource type (resize, terminate, etc.). Supports cost_category filtering — pass cost_category name and cost_buckets (comma-separated) to scope stats to a specific category. Both fields are required to apply category filtering; discover bucket names with harness_get(resource_type='cost_recommendation_filter', cost_category='<name>').",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: [],
       deepLinkTemplate: "/ng/account/{accountId}/ce/recommendations",
@@ -2209,7 +2227,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       resourceType: "cost_recommendation_detail",
       displayName: "Cost Recommendation Detail",
       description: "Detailed cost recommendation for a specific resource. Supports get. Pass type_path (ec2-instance, azure-vm, ecs-service, node-pool, workload) and recommendation_id.",
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["type_path", "recommendation_id"],
       deepLinkTemplate: "/ng/account/{accountId}/ce/recommendations",
@@ -2236,7 +2255,8 @@ For cost time-series data, use harness_get with start_time and end_time.`,
       resourceType: "cost_commitment",
       displayName: "Cost Commitment",
       description: `Commitment (RI/savings plan) data. harness_get with aspect: coverage | savings | utilisation | analysis | estimated_savings. For estimated_savings, pass cloud_account_id.`,
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["aspect", "cloud_account_id"],
       deepLinkTemplate: "/ng/account/{accountId}/ce/commitment-orchestration",
@@ -2306,7 +2326,8 @@ Use harness_create/harness_update to manage metrics with unitMetricRecords.
 Use harness_delete to remove records in a time range.
 
 Requires CCM_UNIT_COST_METRICS feature flag.`,
-      toolset: "ccm",
+      toolset: "cost",
+      searchAliases: ["ccm", "cloud cost"],
       scope: "account",
       identifierFields: ["metric_identifier"],
       listFilterFields: [

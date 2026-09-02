@@ -316,7 +316,7 @@ const databaseInstanceUpdateSchema = {
 };
 
 export const dbopsToolset: ToolsetDefinition = {
-  name: "dbops",
+  name: "databases",
   displayName: "Database DevOps",
   description:
     "Harness Database DevOps — database schema management, Liquibase/Flyway migrations, and instance lifecycle",
@@ -333,7 +333,8 @@ export const dbopsToolset: ToolsetDefinition = {
         "The DB engine type (MySQL, PostgreSQL, etc.) is NOT stored on the schema — it is on the JDBC " +
         "connector referenced by each instance. Use the 'connector' field from database_instance with the " +
         "connectors toolset to look it up when you need the engine type.",
-      toolset: "dbops",
+      toolset: "databases",
+      searchAliases: ["dbops", "database devops"],
       scope: "project",
       identifierFields: ["dbschema_id"],
       listFilterFields: [
@@ -448,7 +449,8 @@ export const dbopsToolset: ToolsetDefinition = {
         "The 'connector' field holds the connector identifier — the DB engine type " +
         "(MySQL, PostgreSQL, etc.) is determined by that connector. " +
         "Use the connectors toolset to look up the connector when you need the exact engine type or JDBC details.",
-      toolset: "dbops",
+      toolset: "databases",
+      searchAliases: ["dbops", "database devops"],
       scope: "project",
       identifierFields: ["dbinstance_id"],
       listFilterFields: [
@@ -583,7 +585,8 @@ export const dbopsToolset: ToolsetDefinition = {
         "Use harness_list to discover all object names for a given type, then harness_get to retrieve " +
         "the complete JSON metadata (columns, constraints, indexes) for specific named objects. " +
         "Both dbschema_id and dbinstance_id are required.",
-      toolset: "dbops",
+      toolset: "databases",
+      searchAliases: ["dbops", "database devops"],
       scope: "project",
       identifierFields: ["dbschema_id", "dbinstance_id"],
       listFilterFields: [
@@ -704,7 +707,8 @@ export const dbopsToolset: ToolsetDefinition = {
         "Check whether Liquibase changeSet ids already exist in a schema's catalog. " +
         "Use before presenting new changesets for review to ensure ids are unique. " +
         "Only the id field is evaluated; author and fileName are ignored by the API.",
-      toolset: "dbops",
+      toolset: "databases",
+      searchAliases: ["dbops", "database devops"],
       scope: "project",
       identifierFields: ["dbschema_id"],
       operations: {
@@ -759,7 +763,8 @@ export const dbopsToolset: ToolsetDefinition = {
         "DB engine type — no separate instance fetch is needed. " +
         "Use this when a schema has no primaryDbInstanceId configured and you need " +
         "to auto-select an instance for changeset generation.",
-      toolset: "dbops",
+      toolset: "databases",
+      searchAliases: ["dbops", "database devops"],
       scope: "project",
       identifierFields: ["dbschema_id"],
       operations: {
@@ -798,7 +803,8 @@ export const dbopsToolset: ToolsetDefinition = {
         "project Database DevOps settings — in which case the override is returned instead. " +
         "Used by the changeset skill during Accept & Commit to find which pipeline to execute. " +
         "IMPORTANT: This is an x-internal endpoint.",
-      toolset: "dbops",
+      toolset: "databases",
+      searchAliases: ["dbops", "database devops"],
       scope: "project",
       identifierFields: ["dbschema_id"],
       operations: {
@@ -846,7 +852,8 @@ export const dbopsToolset: ToolsetDefinition = {
         "Returns { executionId, pipelineIdentifier, openInHarness }. " +
         "Show the user the openInHarness link; the changeauthoring billing job reconciles " +
         "execution status server-side.",
-      toolset: "dbops",
+      toolset: "databases",
+      searchAliases: ["dbops", "database devops"],
       scope: "project",
       identifierFields: [],
       operations: {},

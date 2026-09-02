@@ -64,6 +64,8 @@ const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
 /** Backward-compatible aliases for renamed public toolset names. */
 const TOOLSET_ALIASES: Record<string, string> = {
   "agent-pipelines": "agents",
+  ccm: "cost",
+  dbops: "databases",
 };
 
 /**

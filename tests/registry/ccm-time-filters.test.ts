@@ -372,3 +372,14 @@ describe("CCM group_by mapping — GenAI (identifier 'AI') and label fallback", 
     });
   });
 });
+
+describe("ccm → cost toolset alias (backward compatibility)", () => {
+  it("HARNESS_TOOLSETS='ccm' still enables the renamed cost toolset", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "ccm" }));
+    // The old module code resolves via the toolset alias; the renamed
+    // resources are enabled and report the new toolset name.
+    const def = registry.getResource("cost_budget");
+    expect(def.toolset).toBe("cost");
+    expect(registry.getAllResourceTypes()).toContain("cost_perspective");
+  });
+});
