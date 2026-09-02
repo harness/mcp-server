@@ -1,6 +1,7 @@
 import type { ToolsetDefinition, BodySchema, ParamsSchema, PreflightContext } from "../types.js";
-import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, runtimeInputTemplatePreflight, pipelineResolvedYamlExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, runtimeInputV1Extract, runtimeInputTemplatePreflight, pipelineResolvedYamlExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
 import { asRecord } from "../../utils/type-guards.js";
+import { buildV1RuntimeInputsBody } from "../../utils/pipeline-v1-runtime-inputs.js";
 import YAML from "yaml";
 
 function coerceTriggerBodyRecord(body: unknown): Record<string, unknown> {
@@ -105,6 +106,24 @@ const PIPELINE_V1_GET_PARAMS: ParamsSchema = {
     { name: "load_from_fallback_branch", required: false, description: "When true, load from the created non-default branch if the requested branch is empty. Pass via params." },
     { name: "template_applied", required: false, description: "When true, return YAML with templates applied. Pass via params." },
     { name: "validate_async", required: false, description: "When true, validate the pipeline asynchronously. Pass via params." },
+  ],
+};
+
+const PIPELINE_V1_GIT_READ_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "branch", required: false, description: "Git branch alias — maps to branch_name on the wire. Pass via params." },
+    { name: "branch_name", required: false, description: "Git branch — sent as branch_name. Alias of branch. Pass via params." },
+    { name: "repo_name", required: false, description: "Git repository name for Git Experience. Pass via params." },
+    { name: "connector_ref", required: false, description: "Git connector for remote pipelines. Pass via params." },
+  ],
+};
+
+const PIPELINE_V1_EXECUTE_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "module", required: false, description: "Pipeline module, such as CI or CD. Pass via params." },
+    { name: "notify_only_user", required: false, description: "Notify only the user who started the execution. Pass via params." },
+    { name: "notes", required: false, description: "Execution notes. Pass via params." },
+    ...PIPELINE_V1_GIT_READ_PARAMS.fields,
   ],
 };
 
@@ -674,6 +693,14 @@ export const pipelinesToolset: ToolsetDefinition = {
       identifierFields: ["pipeline_id"],
       searchAliases: ["v1 pipeline", "agent pipeline", "v1"],
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures. V1 pipelines use the same execution engine as v0.",
+      executeHint: "Before executing, fetch harness_get(resource_type='runtime_input_template_v1', resource_id='PIPELINE_ID'). Pass only the named ${{ inputs.* }} values through the top-level inputs argument; the server wraps them under an inputs: YAML root.",
+      relatedResources: [
+        {
+          resourceType: "runtime_input_template_v1",
+          relationship: "runtime-inputs",
+          description: "Discover declared ${{ inputs.* }} values before execute. harness_get(resource_type='runtime_input_template_v1', resource_id=<pipeline_id>).",
+        },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipeline}/pipeline-studio",
       operations: {
         list: {
@@ -748,21 +775,20 @@ export const pipelinesToolset: ToolsetDefinition = {
           pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
           queryParams: {
             module: "module",
+            notify_only_user: "notify_only_user",
+            notes: "notes",
+            branch: "branch_name",
+            branch_name: "branch_name",
+            connector_ref: "connector_ref",
+            repo_name: "repo_name",
           },
-          bodyBuilder: (input) => {
-            const inputs = input.inputs;
-            if (!inputs) return {};
-            if (typeof inputs === "string") return { inputs_yaml: inputs };
-            // Object inputs — serialize to YAML
-            return { inputs_yaml: YAML.stringify(inputs) };
-          },
-          responseExtractor: passthrough,
-          actionDescription: "Execute a v1 pipeline. Optionally pass runtime inputs as inputs_yaml (YAML string) or as a key-value object (auto-serialized to YAML).",
+          bodyBuilder: buildV1RuntimeInputsBody,
+          responseExtractor: dynamicExecutionExtract,
+          paramsSchema: PIPELINE_V1_EXECUTE_PARAMS,
+          actionDescription: "Execute a v1 pipeline. First fetch runtime_input_template_v1, then pass named values through the top-level inputs argument. Values are wrapped under an inputs: YAML root and sent as inputs_yaml.",
           bodySchema: {
-            description: "Runtime inputs for v1 pipeline execution. Pass inputs as a YAML string or key-value object.",
-            fields: [
-              { name: "inputs_yaml", type: "string", required: false, description: "YAML-formatted runtime inputs for the pipeline" },
-            ],
+            description: "Do not put v1 runtime inputs under body. Use the top-level harness_execute inputs argument; the MCP server constructs the inputs_yaml API body.",
+            fields: [],
           },
         },
       },
@@ -1273,6 +1299,39 @@ export const pipelinesToolset: ToolsetDefinition = {
           responseExtractor: pipelineResolvedYamlExtract,
           description:
             "Fetch resolved pipeline YAML with templates expanded. Returns stageMetadataMap for patching entity-type activity inputs (deploymentType, environmentRef).",
+        },
+      },
+    },
+    {
+      resourceType: "runtime_input_template_v1",
+      displayName: "Runtime Input Schema (V1)",
+      description: "Fetch the declared runtime input schema for a v1 pipeline. Use the returned inputs[].details names and constraints before executing pipeline_v1.",
+      toolset: "pipelines",
+      scope: "project",
+      headerBasedScoping: true,
+      identifierFields: ["pipeline_id"],
+      relatedResources: [
+        {
+          resourceType: "pipeline_v1",
+          relationship: "parent",
+          description: "Saved v1 pipeline definition. harness_get(resource_type='pipeline_v1', resource_id=<pipeline_id>).",
+        },
+      ],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/inputs-schema",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
+          queryParams: {
+            branch: "branch_name",
+            branch_name: "branch_name",
+            connector_ref: "connector_ref",
+            repo_name: "repo_name",
+          },
+          paramsSchema: PIPELINE_V1_GIT_READ_PARAMS,
+          responseExtractor: runtimeInputV1Extract,
+          description: "Fetch v1 pipeline input names, types, defaults, allowed values, and dependencies.",
         },
       },
     },

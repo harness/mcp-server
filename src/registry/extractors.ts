@@ -3,7 +3,7 @@
  * Used across all toolset definitions — eliminates per-file duplication.
  */
 import YAML from "yaml";
-import { isRecord } from "../utils/type-guards.js";
+import { asRecord, isRecord } from "../utils/type-guards.js";
 import { parseZipCsv } from "../utils/zip-csv.js";
 import {
   extractVariableInputMetadata,
@@ -549,6 +549,34 @@ export const pipelineResolvedYamlExtract = (raw: unknown): unknown => {
     _hint: resolvedTemplatesPipelineYaml
       ? "Use stageMetadataMap to patch deploymentType and environmentRef on entity-type activity inputs during release-activity authoring."
       : "No resolved pipeline YAML returned. Entity input metadata may be incomplete.",
+  };
+};
+
+/**
+ * Extracts the declared inputs returned by the Harness pipeline v1 inputs-schema API.
+ * The API may return its public shape directly or inside the standard `data` envelope.
+ */
+export const runtimeInputV1Extract = (raw: unknown): unknown => {
+  const outer = asRecord(raw);
+  const r = asRecord(outer?.data) ?? outer;
+  const hasInputsField = !!r && Object.prototype.hasOwnProperty.call(r, "inputs");
+  const inputs = hasInputsField && Array.isArray(r?.inputs) ? r.inputs : null;
+
+  let hint: string;
+  if (!hasInputsField) {
+    hint = "The v1 inputs-schema response omitted inputs metadata. Do not assume the pipeline has no runtime inputs.";
+  } else if (!inputs) {
+    hint = "The v1 inputs-schema response contained an invalid inputs field. Expected an array; do not execute until the schema is confirmed.";
+  } else if (inputs.length === 0) {
+    hint = "This v1 pipeline declares no runtime inputs. Execute it without the inputs argument.";
+  } else {
+    hint = "Use each inputs[].details.name as a top-level harness_execute inputs key for pipeline_v1. The server sends those values as one inputs: YAML document.";
+  }
+
+  return {
+    inputs,
+    metadata_available: inputs !== null,
+    _hint: hint,
   };
 };
 

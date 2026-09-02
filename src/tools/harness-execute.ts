@@ -13,6 +13,7 @@ import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, resolveRuntimeInputsWithBaseYaml, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml, mergeRuntimePipelineFragments } from "../utils/materialize-input-sets.js";
+import { normalizeV1PipelineRunInputs } from "../utils/pipeline-v1-runtime-inputs.js";
 import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
@@ -153,7 +154,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         org_id: orgIdField(registry.orgId),
         project_id: projectIdField(registry.projectId),
         resource_scope: resourceScopeSchema,
-        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe("Pipeline runtime inputs: key-value pairs like {branch: 'main'} (auto-resolved), or full YAML string. Check runtime_input_template first via harness_get."),
+        inputs: z.union([z.string(), z.record(z.string(), z.unknown())]).optional().describe("Pipeline runtime inputs. For v0 pipeline, check runtime_input_template and pass key-value pairs or full overlay YAML. For pipeline_v1, check runtime_input_template_v1 and pass named values; the server sends them as an inputs: YAML document."),
         input_set_ids: z.array(z.string()).optional().describe("Input set IDs for complex pipelines. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})."),
         body: z.record(z.string(), z.unknown()).optional().describe("Additional body payload for the action"),
         params: z.record(z.string(), z.unknown()).optional().describe("Action-specific parameters. Call harness_describe for available fields per resource_type."),
@@ -203,6 +204,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         }
 
         const actionSpec = def.executeActions?.[args.action];
+        if (resourceType === "pipeline_v1" && args.action === "run") {
+          const normalizationError = normalizeV1PipelineRunInputs(input);
+          if (normalizationError) return errorResult(normalizationError);
+        }
         const risk = actionSpec?.operationPolicy.risk ?? "low_write";
 
         // Resolve the execute action's path identifier BEFORE any
