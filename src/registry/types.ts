@@ -401,6 +401,14 @@ export interface EndpointSpec {
 export interface ResourceDefinition {
   /** Unique key: "pipeline", "service", "connector", etc. */
   resourceType: string;
+  /**
+   * Backward-compatible former resourceType names for this resource.
+   * Old names resolve to this canonical `resourceType` via the registry's
+   * `resolveType()` alias layer, so renaming a resource never breaks callers
+   * that still pass the old `type`. Aliases are intentionally NOT enumerated by
+   * `getAllResourceTypes()` — they stay out of harness_describe / search / docs.
+   */
+  aliases?: string[];
   /** Human-readable name: "Pipeline", "Service", etc. */
   displayName: string;
   /** Brief description for harness_describe output */
@@ -493,6 +501,13 @@ export interface ResourceDefinition {
  */
 export interface ToolsetDefinition {
   name: string;
+  /**
+   * Backward-compatible former toolset names. Old names resolve to this
+   * canonical `name` when parsing HARNESS_TOOLSETS, so renaming (or merging)
+   * a toolset never breaks HARNESS_TOOLSETS configs that reference the old
+   * name. Multiple aliases may point at the same toolset (e.g. a merge).
+   */
+  aliases?: string[];
   displayName: string;
   description: string;
   resources: ResourceDefinition[];
