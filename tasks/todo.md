@@ -10,7 +10,7 @@ Branch: `module-capability-rename`. Plan: `tasks/module-rename-plan.md`.
 
 ## Parallel rename agents (worktree-isolated, opus)
 - P1  iacm → infrastructure + move CD infra-def → environments as `infrastructure_definition` ✅ INTEGRATED (cherry-pick da9ef943; 3233 tests green)
-- P2  sto + scs → `application_security` (merge, 27 resources) — running (agent ae74d856c432baac4)
+- P2  sto + scs → `application_security` (merge, 27 resources) ✅ INTEGRATED (cherry-pick c5b19029; resolved types.ts union + architecture.test.ts extractor-count map, dropped stale ccm/sei/dbops/iacm.ts entries; 3255 tests green)
 - P3  ccm → `cost`, dbops → `databases` (toolset-name-only; file/const kept → no index.ts change) ✅ INTEGRATED (23c5b736)
 - P4a sei → `developer_insights`, idp → `developer_portal` (scorecard* kept; file/const kept) ✅ INTEGRATED (98d5a0a5)
 - P4b fme → `feature_flags` (token-collapse), knowledge-graph + semantic-layer → `software_delivery_knowledge_graph` (merge) ✅ INTEGRATED (cherry-pick c54ccaef; index.ts conflict resolved — dropped stale iacmToolset from P4b's pre-P1 base; 3252 tests green)
