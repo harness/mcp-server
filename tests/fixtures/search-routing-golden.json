@@ -4,7 +4,7 @@
     "query": "kubernetes connector",
     "mode": "specific",
     "expectedTypes": ["connector"],
-    "acceptableTypes": ["infrastructure"],
+    "acceptableTypes": ["infrastructure_definition"],
     "description": "Kubernetes integration should route to connectors, with infrastructure acceptable because cluster infra references connectors."
   },
   {
@@ -84,14 +84,14 @@
     "query": "production environment",
     "mode": "specific",
     "expectedTypes": ["environment"],
-    "acceptableTypes": ["infrastructure"],
+    "acceptableTypes": ["infrastructure_definition"],
     "description": "Environment language should route to environments."
   },
   {
     "id": "infrastructure-k8s",
     "query": "kubernetes infrastructure definition",
     "mode": "specific",
-    "expectedTypes": ["infrastructure"],
+    "expectedTypes": ["infrastructure_definition"],
     "acceptableTypes": ["connector", "environment"],
     "description": "Infrastructure definition should route to infrastructure resources."
   },
@@ -299,8 +299,8 @@
     "id": "iac-workspace",
     "query": "terraform workspace plan",
     "mode": "specific",
-    "expectedTypes": ["iacm_workspace"],
-    "acceptableTypes": ["iacm_module"],
+    "expectedTypes": ["infrastructure_workspace"],
+    "acceptableTypes": ["infrastructure_module"],
     "description": "Terraform workspace language should route to IaCM resources."
   },
   {

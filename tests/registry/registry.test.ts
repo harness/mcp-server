@@ -634,7 +634,7 @@ describe("Registry", () => {
       ["connectors", "connector"],
       ["services", "service"],
       ["environments", "environment"],
-      ["infrastructure", "infrastructure"],
+      ["environments", "infrastructure_definition"],
       ["secrets", "secret"],
       ["templates", "template"],
       ["governance", "policy"],

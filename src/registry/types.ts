@@ -148,7 +148,6 @@ export type ToolsetName =
   | "governance"
   | "freeze"
   | "overrides"
-  | "iacm"
   | "ansible"
   | "ai-evals"
   | "incidents"
