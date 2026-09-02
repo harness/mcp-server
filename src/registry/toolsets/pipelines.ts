@@ -1185,7 +1185,7 @@ export const pipelinesToolset: ToolsetDefinition = {
     {
       resourceType: "runtime_input_template",
       displayName: "Runtime Input Template",
-      description: "Fetch the runtime input template for a pipeline — shows all `<+input>` placeholders that need values. Use this to discover what runtime inputs a pipeline requires before executing it.",
+      description: "Fetch the runtime input template for a pipeline — shows all `<+input>` placeholders that need values. Use this to discover what runtime inputs a pipeline requires before executing it. variableInputMetadata (when present) covers pipeline-level variables only, not stage/service/env inputs.",
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id"],
@@ -1197,12 +1197,15 @@ export const pipelinesToolset: ToolsetDefinition = {
           queryParams: {
             pipeline_id: "pipelineIdentifier",
             branch: "branch",
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
           },
           bodyBuilder: () => ({}),
           preflight: runtimeInputTemplatePreflight,
           responseExtractor: runtimeInputExtract,
           description:
-            "Fetch the runtime input template for a pipeline. Merges pipeline-definition variable metadata (default, allowedValues) when present. Use variableInputMetadata when authoring release activities.",
+            "Fetch the runtime input template for a pipeline. Merges pipeline-definition variable metadata (default, allowedValues) when present. variableInputMetadata covers pipeline.variables only — not stage/service/env inputs.",
         },
       },
     },
@@ -1210,7 +1213,7 @@ export const pipelinesToolset: ToolsetDefinition = {
       resourceType: "pipeline_resolved_yaml",
       displayName: "Pipeline Resolved YAML",
       description:
-        "Fetch a pipeline with all template refs resolved — returns resolvedTemplatesPipelineYaml and per-stage deployment metadata (deploymentType, environmentRef). Use with runtime_input_template when authoring release activities that map pipeline runtime inputs.",
+        "Fetch a pipeline with all template refs resolved — returns resolvedTemplatesPipelineYaml and per-stage deployment metadata (deploymentType, environmentRef). Use with runtime_input_template when authoring release activities that map pipeline runtime inputs. stageMetadataMap includes deployment stages inside parallel blocks and stage groups.",
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id"],
@@ -1228,7 +1231,6 @@ export const pipelinesToolset: ToolsetDefinition = {
           },
           staticQueryParams: {
             getTemplatesResolvedPipeline: "true",
-            validateAsync: "true",
           },
           responseExtractor: pipelineResolvedYamlExtract,
           description:

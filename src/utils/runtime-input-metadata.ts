@@ -13,6 +13,78 @@ export type RuntimeInputVariableMetadata = {
   allowedValues?: string[];
 };
 
+/** Extract the argument string from `.methodName(...)` handling nested parens. */
+function extractMethodArg(suffix: string, methodName: string): string | undefined {
+  const prefix = `.${methodName}(`;
+  const startIdx = suffix.indexOf(prefix);
+  if (startIdx === -1) return undefined;
+
+  let depth = 1;
+  let i = startIdx + prefix.length;
+  while (i < suffix.length && depth > 0) {
+    const ch = suffix[i];
+    if (ch === "(") depth++;
+    else if (ch === ")") depth--;
+    i++;
+  }
+  if (depth !== 0) return undefined;
+  return suffix.slice(startIdx + prefix.length, i - 1).trim();
+}
+
+/** Split comma-separated args at top level (respects quotes and nested parens). */
+function splitTopLevelArgs(argString: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let depth = 0;
+  let inQuote: "\"" | "'" | null = null;
+
+  for (let i = 0; i < argString.length; i++) {
+    const ch = argString[i];
+    if (inQuote) {
+      current += ch;
+      if (ch === inQuote && argString[i - 1] !== "\\") inQuote = null;
+      continue;
+    }
+    if (ch === "\"" || ch === "'") {
+      inQuote = ch;
+      current += ch;
+      continue;
+    }
+    if (ch === "(") {
+      depth++;
+      current += ch;
+      continue;
+    }
+    if (ch === ")") {
+      depth--;
+      current += ch;
+      continue;
+    }
+    if (ch === "," && depth === 0) {
+      const trimmed = current.trim();
+      if (trimmed) parts.push(trimmed);
+      current = "";
+      continue;
+    }
+    current += ch;
+  }
+
+  const trimmed = current.trim();
+  if (trimmed) parts.push(trimmed);
+  return parts;
+}
+
+function unquoteHarnessArg(value: string): string {
+  const trimmed = value.trim();
+  if (
+    (trimmed.startsWith("\"") && trimmed.endsWith("\""))
+    || (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
 /** Parse `<+input>.default(x).selectOneFrom(a,b)` / `.allowedValues(...)` suffixes. */
 export function parseRuntimeInputExpression(value: unknown): RuntimeInputVariableMetadata | null {
   if (typeof value !== "string" || !RUNTIME_INPUT_PREFIX.test(value)) {
@@ -23,28 +95,23 @@ export function parseRuntimeInputExpression(value: unknown): RuntimeInputVariabl
   const suffix = value.replace(/^<\+input>/, "");
 
   let defaultValue: string | undefined;
-  const defaultMatch = suffix.match(/\.default\(([^)]*)\)/);
-  if (defaultMatch) {
-    const raw = defaultMatch[1]?.trim();
-    if (raw && raw !== "*") {
-      defaultValue = raw;
-    }
+  const defaultArg = extractMethodArg(suffix, "default");
+  if (defaultArg && defaultArg !== "*") {
+    defaultValue = unquoteHarnessArg(defaultArg);
   }
 
   let allowedValues: string[] | undefined;
-  const selectOneMatch = suffix.match(/\.selectOneFrom\(([^)]*)\)/);
-  if (selectOneMatch?.[1]) {
-    allowedValues = selectOneMatch[1]
-      .split(",")
-      .map((part) => part.trim())
+  const selectOneArg = extractMethodArg(suffix, "selectOneFrom");
+  if (selectOneArg) {
+    allowedValues = splitTopLevelArgs(selectOneArg)
+      .map(unquoteHarnessArg)
       .filter((part) => part.length > 0);
   }
 
-  const allowedMatch = suffix.match(/\.allowedValues\(([^)]*)\)/);
-  if (allowedMatch?.[1]) {
-    allowedValues = allowedMatch[1]
-      .split(",")
-      .map((part) => part.trim())
+  const allowedArg = extractMethodArg(suffix, "allowedValues");
+  if (allowedArg) {
+    allowedValues = splitTopLevelArgs(allowedArg)
+      .map(unquoteHarnessArg)
       .filter((part) => part.length > 0 && part !== "*");
   }
 

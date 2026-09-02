@@ -28,6 +28,38 @@ describe("parseRuntimeInputExpression", () => {
   it("returns null for bare runtime input", () => {
     expect(parseRuntimeInputExpression("<+input>")).toBeNull();
   });
+
+  it("strips quotes from default values", () => {
+    expect(parseRuntimeInputExpression('<+input>.default("foo")')).toEqual({
+      runtimeExpression: '<+input>.default("foo")',
+      default: "foo",
+    });
+  });
+
+  it("parses Harness expressions with nested parens in default", () => {
+    expect(parseRuntimeInputExpression("<+input>.default(<+pipeline.name>)")).toEqual({
+      runtimeExpression: "<+input>.default(<+pipeline.name>)",
+      default: "<+pipeline.name>",
+    });
+  });
+
+  it("parses quoted selectOneFrom values with commas inside quotes", () => {
+    expect(
+      parseRuntimeInputExpression('<+input>.selectOneFrom("us-east-1","us-west-2")'),
+    ).toEqual({
+      runtimeExpression: '<+input>.selectOneFrom("us-east-1","us-west-2")',
+      allowedValues: ["us-east-1", "us-west-2"],
+    });
+  });
+
+  it("parses selectOneFrom with nested parens in an allowed value", () => {
+    expect(
+      parseRuntimeInputExpression("<+input>.selectOneFrom(foo,bar(baz))"),
+    ).toEqual({
+      runtimeExpression: "<+input>.selectOneFrom(foo,bar(baz))",
+      allowedValues: ["foo", "bar(baz)"],
+    });
+  });
 });
 
 describe("mergeTemplateYamlWithDefinitionVariables", () => {

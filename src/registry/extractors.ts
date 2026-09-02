@@ -459,32 +459,46 @@ export const gqlExtract = (field: string) => (raw: unknown): unknown => {
   return r.data?.[field] ?? raw;
 };
 
+function pipelineDefinitionGetParams(input: Record<string, unknown>, registry: PreflightContext["registry"]): Record<string, string> {
+  const params: Record<string, string> = {};
+  const orgId = input.org_id ?? registry.orgId;
+  const projectId = input.project_id ?? registry.projectId;
+  if (orgId) params.orgIdentifier = String(orgId);
+  if (projectId) params.projectIdentifier = String(projectId);
+  if (input.branch) params.branch = String(input.branch);
+  if (input.store_type) params.storeType = String(input.store_type);
+  if (input.connector_ref) params.connectorRef = String(input.connector_ref);
+  if (input.repo_name) params.repoName = String(input.repo_name);
+  return params;
+}
+
 /**
  * Fetch saved pipeline definition YAML so runtime_input_template can recover
  * `.default()` / `.selectOneFrom()` metadata stripped from the template API.
+ * Fail-open: enrichment is best-effort; the template POST still succeeds without it.
  */
 export async function runtimeInputTemplatePreflight({
   client,
   input,
+  registry,
   signal,
 }: PreflightContext): Promise<void> {
   const pipelineId = String(input.pipeline_id ?? input.resource_id ?? "").trim();
   if (!pipelineId) return;
 
-  const params: Record<string, string> = {};
-  if (input.org_id) params.orgIdentifier = String(input.org_id);
-  if (input.project_id) params.projectIdentifier = String(input.project_id);
-  if (input.branch) params.branch = String(input.branch);
-
-  const raw = await client.request<unknown>({
-    method: "GET",
-    path: `/pipeline/api/pipelines/${encodeURIComponent(pipelineId)}`,
-    params,
-    signal,
-  });
-  const yamlPipeline = (raw as { data?: { yamlPipeline?: string } })?.data?.yamlPipeline;
-  if (typeof yamlPipeline === "string" && yamlPipeline.trim()) {
-    input._pipelineDefinitionYaml = yamlPipeline;
+  try {
+    const raw = await client.request<unknown>({
+      method: "GET",
+      path: `/pipeline/api/pipelines/${encodeURIComponent(pipelineId)}`,
+      params: pipelineDefinitionGetParams(input, registry),
+      signal,
+    });
+    const yamlPipeline = (raw as { data?: { yamlPipeline?: string } })?.data?.yamlPipeline;
+    if (typeof yamlPipeline === "string" && yamlPipeline.trim()) {
+      input._pipelineDefinitionYaml = yamlPipeline;
+    }
+  } catch {
+    // Fail-open: template POST still works without definition enrichment.
   }
 }
 
@@ -509,16 +523,20 @@ export const runtimeInputExtract = (raw: unknown, input?: Record<string, unknown
     pipelineDefinitionYaml ?? enrichedTemplateYaml,
   );
 
+  const executeHint = enrichedTemplateYaml
+    ? "This YAML template shows all runtime inputs needed. Fields with '<+input>' are required — pass key-value pairs via harness_execute(resource_type='pipeline', action='run', inputs={...}) or use input_set_ids for complex inputs."
+    : "This pipeline has no runtime inputs. You can execute it without providing any inputs.";
+  const activityHint =
+    "variableInputMetadata covers pipeline-level variables only (not stage/service/env inputs) — copy default onto matching primitive activity inputs when authoring release activities.";
+
   return {
     inputSetTemplateYaml: enrichedTemplateYaml,
     hasInputSets: r.data?.hasInputSets ?? false,
     modules: r.data?.modules ?? [],
     variableInputMetadata,
-    _hint: enrichedTemplateYaml
-      ? Object.keys(variableInputMetadata).length > 0
-        ? "Template includes runtime inputs. variableInputMetadata carries pipeline defaults and allowed values — copy default onto matching primitive activity inputs."
-        : "This YAML template shows all runtime inputs needed. Fields with '<+input>' are required."
-      : "This pipeline has no runtime inputs. You can execute it without providing any inputs.",
+    _hint: enrichedTemplateYaml && Object.keys(variableInputMetadata).length > 0
+      ? `${executeHint} ${activityHint}`
+      : executeHint,
   };
 };
 
@@ -527,6 +545,58 @@ type StageMetadata = {
   environmentRef: string;
 };
 
+function stageMetadataFromStage(stage: Record<string, unknown>): StageMetadata {
+  const spec = (stage.spec ?? {}) as Record<string, unknown>;
+  const deploymentType = typeof spec.deploymentType === "string" ? spec.deploymentType : "";
+  const environment = (spec.environment ?? {}) as Record<string, unknown>;
+  const environmentRef = typeof environment.environmentRef === "string" ? environment.environmentRef : "";
+  return { deploymentType, environmentRef };
+}
+
+function collectStageMetadata(
+  stage: Record<string, unknown>,
+  stageMap: Record<string, StageMetadata>,
+): void {
+  const stageId = typeof stage.identifier === "string" ? stage.identifier : "";
+  if (stageId) {
+    stageMap[stageId] = stageMetadataFromStage(stage);
+  }
+  if (Array.isArray(stage.stages)) {
+    walkPipelineStageEntries(stage.stages, stageMap);
+  }
+}
+
+/** Walk v0 pipeline stage entries including parallel blocks and nested stage groups. */
+export function walkPipelineStageEntries(
+  entries: unknown,
+  stageMap: Record<string, StageMetadata>,
+): void {
+  if (!Array.isArray(entries)) return;
+
+  for (const entry of entries) {
+    if (!isRecord(entry)) continue;
+
+    if (isRecord(entry.stage)) {
+      collectStageMetadata(entry.stage, stageMap);
+      continue;
+    }
+
+    if (entry.parallel !== undefined) {
+      const parallel = entry.parallel;
+      if (Array.isArray(parallel)) {
+        walkPipelineStageEntries(parallel, stageMap);
+      } else if (isRecord(parallel) && Array.isArray(parallel.stages)) {
+        walkPipelineStageEntries(parallel.stages, stageMap);
+      }
+      continue;
+    }
+
+    if (typeof entry.identifier === "string") {
+      collectStageMetadata(entry, stageMap);
+    }
+  }
+}
+
 /** Parse resolved pipeline YAML into per-stage deployment metadata. */
 export function buildStageMetadataMap(resolvedYaml: string | null | undefined): Record<string, StageMetadata> {
   const stageMap: Record<string, StageMetadata> = {};
@@ -534,21 +604,9 @@ export function buildStageMetadataMap(resolvedYaml: string | null | undefined): 
 
   try {
     const pipelineDoc = YAML.parse(resolvedYaml) as {
-      pipeline?: { stages?: Array<{ stage?: Record<string, unknown> }> };
+      pipeline?: { stages?: unknown[] };
     } | null;
-    const stages = pipelineDoc?.pipeline?.stages ?? [];
-    for (const stageEntry of stages) {
-      const stage = stageEntry.stage ?? {};
-      const stageId = typeof stage.identifier === "string" ? stage.identifier : "";
-      if (!stageId) continue;
-
-      const spec = (stage.spec ?? {}) as Record<string, unknown>;
-      const deploymentType = typeof spec.deploymentType === "string" ? spec.deploymentType : "";
-      const environment = (spec.environment ?? {}) as Record<string, unknown>;
-      const environmentRef = typeof environment.environmentRef === "string" ? environment.environmentRef : "";
-
-      stageMap[stageId] = { deploymentType, environmentRef };
-    }
+    walkPipelineStageEntries(pipelineDoc?.pipeline?.stages ?? [], stageMap);
   } catch {
     // Malformed YAML — return empty map; caller can still use resolvedTemplatesPipelineYaml.
   }
