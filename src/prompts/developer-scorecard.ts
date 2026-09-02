@@ -22,8 +22,8 @@ export function registerDeveloperScorecardPrompt(server: McpServer): void {
 Steps:
 1. **List scorecards**: Call harness_list with resource_type="scorecard"${projectFilter} to see all defined scorecards
 2. **Get scorecard checks**: Call harness_list with resource_type="scorecard_check"${projectFilter} to see individual checks and their pass/fail status
-3. **List entities**: Call harness_list with resource_type="idp_entity"${projectFilter} to see registered components/services
-4. **Get scores**: Call harness_list with resource_type="idp_score"${projectFilter} to see current scores per entity
+3. **List entities**: Call harness_list with resource_type="developer_portal_entity"${projectFilter} to see registered components/services
+4. **Get scores**: Call harness_list with resource_type="developer_portal_score"${projectFilter} to see current scores per entity
 5. **Analyze results**: For each scorecard:
    - Overall pass rate and trend
    - Lowest-scoring entities

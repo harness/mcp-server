@@ -20,8 +20,8 @@ export function registerExemptionReviewPrompt(server: McpServer): void {
             text: `Review pending security exemptions and provide approval recommendations.
 
 Steps:
-1. **List exemptions**: Call harness_list with resource_type="security_exemption"${projectFilter} to get all exemptions
-2. **Get security context**: Call harness_list with resource_type="security_issue"${projectFilter} to understand the broader security landscape
+1. **List exemptions**: Call harness_list with resource_type="application_security_exemption"${projectFilter} to get all exemptions
+2. **Get security context**: Call harness_list with resource_type="application_security_issue"${projectFilter} to understand the broader security landscape
 3. **For each pending exemption, assess**:
    - **Justification quality**: Is the reason valid and well-documented?
    - **Risk level**: What's the exposure if this vulnerability remains unpatched?
@@ -36,7 +36,7 @@ Steps:
    - **Reject**: High-risk without adequate mitigation.
    - **Needs review**: Insufficient justification or missing context.
 
-To take action, I can use harness_execute with resource_type="security_exemption" and action="approve" or "reject" — but only after you confirm each decision. For approve, the body must include scope: "CURRENT" | "ACCOUNT" | "ORG" | "PROJECT". approver_id is optional for approve/reject because the server derives it from the authenticated user when omitted.
+To take action, I can use harness_execute with resource_type="application_security_exemption" and action="approve" or "reject" — but only after you confirm each decision. For approve, the body must include scope: "CURRENT" | "ACCOUNT" | "ORG" | "PROJECT". approver_id is optional for approve/reject because the server derives it from the authenticated user when omitted.
 
 ## Suggested next steps
 

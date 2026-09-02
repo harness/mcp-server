@@ -31,7 +31,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         org_id: orgIdField(registry.orgId),
         project_id: projectIdField(registry.projectId),
         page: z.number().default(0).optional().describe("Page number, 0-indexed"),
-        size: z.number().min(1).max(100).default(20).optional().describe("Page size (1–100). Some resource types enforce a lower max (e.g. security_exemption max 50) — call harness_describe for per-resource limits."),
+        size: z.number().min(1).max(100).default(20).optional().describe("Page size (1–100). Some resource types enforce a lower max (e.g. application_security_exemption max 50) — call harness_describe for per-resource limits."),
         search_term: z.string().optional().describe("Filter results by name or keyword"),
         compact: z.boolean().default(true).optional().describe("Strip verbose metadata from list items, keeping only essential fields (default true)"),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources (e.g. repo_id for pull requests). Call harness_describe for fields per resource_type."),

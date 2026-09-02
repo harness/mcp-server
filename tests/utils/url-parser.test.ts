@@ -90,7 +90,7 @@ describe("parseHarnessUrl", () => {
       "https://app.harness.io/ng/account/lnFZRF6jQO6tQnB9znMALw/all/settings/infrastructures",
     );
     expect(result.account_id).toBe("lnFZRF6jQO6tQnB9znMALw");
-    expect(result.resource_type).toBe("infrastructure");
+    expect(result.resource_type).toBe("infrastructure_definition");
     expect(result.resource_scope).toBe("account");
     expect(result.org_id).toBeUndefined();
     expect(result.project_id).toBeUndefined();
@@ -200,7 +200,7 @@ describe("parseHarnessUrl", () => {
     const result = parseHarnessUrl(
       "https://app.harness.io/ng/account/abc123/cf/orgs/default/projects/myProject/feature-flags/my_flag",
     );
-    expect(result.resource_type).toBe("fme_feature_flag");
+    expect(result.resource_type).toBe("feature_flag");
     expect(result.resource_id).toBe("my_flag");
     expect(result.resource_scope).toBeUndefined();
   });

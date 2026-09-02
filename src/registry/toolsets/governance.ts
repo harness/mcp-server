@@ -77,7 +77,7 @@ export const governanceToolset: ToolsetDefinition = {
       relatedResources: [
         { resourceType: "policy_set", relationship: "parent", description: "Group policies into policy sets with enforcement actions" },
         { resourceType: "policy_evaluation", relationship: "child", description: "View evaluation results for this policy" },
-        { resourceType: "scs_compliance_result", relationship: "sibling", description: "SCS compliance results showing policy enforcement outcomes on artifacts" },
+        { resourceType: "application_security_compliance_result", relationship: "sibling", description: "Application Security compliance results showing policy enforcement outcomes on artifacts" },
       ],
       toolset: "governance",
       scope: "project",
@@ -164,8 +164,8 @@ export const governanceToolset: ToolsetDefinition = {
       relatedResources: [
         { resourceType: "policy", relationship: "child", description: "Individual policies contained in this set (use type='sbom_enforcement' to list SBOM policies)" },
         { resourceType: "policy_evaluation", relationship: "child", description: "Evaluation results for this policy set" },
-        { resourceType: "scs_compliance_result", relationship: "sibling", description: "SCS compliance results showing enforcement outcomes" },
-        { resourceType: "scs_bom_violation", relationship: "sibling", description: "BOM enforcement violations — each violation references the policy set identifier that fired it" },
+        { resourceType: "application_security_compliance_result", relationship: "sibling", description: "Application Security compliance results showing enforcement outcomes" },
+        { resourceType: "application_security_bom_violation", relationship: "sibling", description: "BOM enforcement violations — each violation references the policy set identifier that fired it" },
       ],
       toolset: "governance",
       scope: "project",

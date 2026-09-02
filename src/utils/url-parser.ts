@@ -59,8 +59,8 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "input-sets":       { type: "input_set",           contextField: "resource_id" },
   "services":         { type: "service",             contextField: "resource_id" },
   "environments":     { type: "environment",         contextField: "environment_id" },
-  "infrastructures":  { type: "infrastructure",      contextField: "resource_id" },
-  "infrastructure-definitions": { type: "infrastructure", contextField: "resource_id" },
+  "infrastructures":  { type: "infrastructure_definition", contextField: "resource_id" },
+  "infrastructure-definitions": { type: "infrastructure_definition", contextField: "resource_id" },
   "connectors":       { type: "connector",           contextField: "resource_id" },
   "templates":        { type: "template",            contextField: "resource_id" },
   "secrets":          { type: "secret",              contextField: "resource_id" },
@@ -68,8 +68,8 @@ const RESOURCE_SEGMENTS: Record<string, { type: string; contextField: ContextFie
   "agents":           { type: "gitops_agent",        contextField: "agent_id" },
   "applications":     { type: "gitops_application",  contextField: "resource_id" },
   "clusters":         { type: "gitops_cluster",      contextField: "resource_id" },
-  "feature-flags":    { type: "fme_feature_flag",     contextField: "resource_id" },
-  "splits":           { type: "fme_feature_flag",     contextField: "resource_id" },
+  "feature-flags":    { type: "feature_flag",          contextField: "resource_id" },
+  "splits":           { type: "feature_flag",          contextField: "resource_id" },
   "experiments":      { type: "chaos_experiment",    contextField: "resource_id" },
   "load-tests":       { type: "chaos_loadtest",       contextField: "resource_id" },
   "registries":       { type: "registry",            contextField: "registry_id" },
@@ -100,7 +100,7 @@ const URL_RESOURCE_SCOPE_TYPES = new Set([
   "connector",
   "service",
   "environment",
-  "infrastructure",
+  "infrastructure_definition",
   "secret",
   "template",
   "file_store",
@@ -315,8 +315,17 @@ export interface ApplyUrlDefaultsOptions {
  * see requireHarnessNativeSegmentScope). A stray workspace_id on these calls must not
  * suppress org_id/project_id derived from a pasted Harness URL, since workspace_id isn't
  * a real scoping mode for them.
+ *
+ * Both the old (`fme_*`) and renamed canonical (`feature_flag_*`) names are listed:
+ * this Set is matched against raw caller input (resource_type) before the registry's
+ * alias layer resolves it, so a caller passing either name must be recognized.
  */
-const FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES = new Set(["fme_segment", "fme_segment_definition"]);
+const FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES = new Set([
+  "fme_segment",
+  "fme_segment_definition",
+  "feature_flag_segment",
+  "feature_flag_segment_definition",
+]);
 
 /**
  * If `url` is provided, parse it and merge extracted values into args as defaults.
@@ -351,14 +360,19 @@ export function applyUrlDefaults(
   // exclusive scoping modes for FME resources (see resolveFmeDualMode).
   // Use the caller's declared resource_type when present — the URL's own parsed
   // type may be absent or non-FME even when the call itself targets an FME resource.
-  // Harness-native-only resources (fme_segment/fme_segment_definition) are excluded:
-  // they have no workspace_id contract, so a stray value must not suppress org/project.
+  // Harness-native-only resources (feature_flag_segment/_definition, old fme_segment*)
+  // are excluded: they have no workspace_id contract, so a stray value must not suppress
+  // org/project. Match both the old `fme_` prefix and the renamed `feature_flag` prefix,
+  // since this runs on raw caller input before the registry's alias layer resolves it.
   const declaredResourceType = (args.resource_type as string | undefined) ?? parsed.resource_type;
+  const isFeatureFlagType =
+    declaredResourceType?.startsWith("fme_") === true ||
+    declaredResourceType?.startsWith("feature_flag") === true;
   const hasWorkspaceId = typeof args.workspace_id === "string" && args.workspace_id !== "";
   const skipOrgProjectFromUrl =
     hasWorkspaceId &&
-    declaredResourceType?.startsWith("fme_") === true &&
-    !FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES.has(declaredResourceType);
+    isFeatureFlagType &&
+    !FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES.has(declaredResourceType as string);
   for (const field of MERGEABLE_FIELDS) {
     if (skipOrgProjectFromUrl && (field === "org_id" || field === "project_id")) continue;
     if ((merged[field] === undefined || merged[field] === "") && parsed[field] !== undefined) {

@@ -220,7 +220,7 @@ export const stoExemptionsExtract = (raw: unknown, input?: Record<string, unknow
     _action_id_by_row,
     _display_hint: "Render a compact table with columns: # | Issue Title | Severity | Type | Requested by | Target | Status. NEVER add an 'ID' column — the items contain no ID field by design. If the user asks to approve/reject row N, look up the ID in _action_id_by_row[N].",
     _nextPageHint: hasMore
-      ? `For the next page, call harness_list with resource_type='security_exemption' and filters=${filterJson}. You MUST keep size=${pageSize} and ALL other filters identical — the backend computes offset = page × size, so changing size or dropping filters silently shifts the dataset. Pages remaining: ${totalPages - page - 1}.`
+      ? `For the next page, call harness_list with resource_type='application_security_exemption' and filters=${filterJson}. You MUST keep size=${pageSize} and ALL other filters identical — the backend computes offset = page × size, so changing size or dropping filters silently shifts the dataset. Pages remaining: ${totalPages - page - 1}.`
       : "No more pages — all exemptions have been returned.",
   };
 };

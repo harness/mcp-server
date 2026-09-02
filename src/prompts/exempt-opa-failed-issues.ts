@@ -14,7 +14,7 @@ import { parseHarnessUrl } from "../utils/url-parser.js";
  *   3. Read scan-step metadata + Pipeline Security issues for that execution.
  *   4. Correlate deny signals → candidate STO issue_ids (LLM-mediated).
  *   5. Show a candidate table; require explicit user confirmation.
- *   6. Loop create security_exemption per issue.
+ *   6. Loop create application_security_exemption per issue.
  *   7. Summary + suggested next steps.
  *
  * See docs/exempt-opa-failed-issues-design.md for the full design.
@@ -45,7 +45,7 @@ export function registerExemptOpaFailedIssuesPrompt(server: McpServer): void {
           target_types: z.string().optional(),
           search: z.string().optional(),
           steps: z.string().optional(),
-        }).describe("Optional additional pipeline_security_issue filters to narrow further (e.g. severity_codes='Critical').").optional(),
+        }).describe("Optional additional application_security_pipeline_issue filters to narrow further (e.g. severity_codes='Critical').").optional(),
         dry_run: z.boolean().describe("When true, stop after the candidate table — do not create exemptions even on user confirmation. Useful for previewing.").optional(),
       },
     },
@@ -111,7 +111,7 @@ ${reason ? `- reason: "${reason}"` : "- reason: (NOT PROVIDED — ask at the con
 
 2. If \`evaluation.input\` has no \`{ name: "securityTestData", outcome: { issues: [...] } }\` segment OR \`output\` exposes no canonical \`deny_list_violations\` AND \`deny_messages\` do not match the canonical \`Vulnerability ['<title>'] …\` shape, REFUSE to produce candidates. Tell the user the rego is non-canonical and ask for explicit \`issue_ids\`. Never substitute severity / CVE / component heuristics.
 
-3. Never use \`harness_list(resource_type="security_issue")\` (that's the cross-execution Issues page). Always use \`pipeline_security_issue\` (execution-scoped).
+3. Never use \`harness_list(resource_type="application_security_issue")\` (that's the cross-execution Issues page). Always use \`application_security_pipeline_issue\` (execution-scoped).
 
 4. Never send \`requester_id\` or \`exempt_future_occurrences\` in the exemption body — server enforces both.
 
@@ -170,7 +170,7 @@ The fetched Evaluation has this shape:
 For each \`evaluation.details[]\` (per policy_set), classify by \`(type, action)\`:
 
 - **REFUSE — pipeline governance**: \`type=="pipeline"\` AND \`action in ("onrun","onsave","onstepstart")\`. Pre-run block; nothing to exempt. Report verbatim and skip this set.
-- **REFUSE — SBOM enforcement**: \`type=="sbom"\` AND \`action=="onstep"\`. Different domain. Route the user to \`harness_list(resource_type="scs_bom_violation", …)\` and skip this set.
+- **REFUSE — SBOM enforcement**: \`type=="sbom"\` AND \`action=="onstep"\`. Different domain. Route the user to \`harness_list(resource_type="application_security_bom_violation", …)\` and skip this set.
 - **PROCEED**: \`type=="securityTests"\` AND \`action=="onstep"\` (canonical STO step), OR \`type=="custom"\` AND \`action=="onstep"\` (Custom Stage OPA Evaluation step). For \`custom\`, the input shape is customer-defined — proceed only if the rules below detect the canonical \`securityTestData\` shape.
 - **ANYTHING ELSE**: treat as REFUSE; surface the unfamiliar \`(type, action)\` to the user.
 
@@ -233,7 +233,7 @@ Where \`source\` ∈ { \`output.deny_list_violations\`, \`deny_messages_regex\` 
 
 ## 4. Verify candidates against Pipeline Security and present the table
 
-  harness_list(resource_type="pipeline_security_issue",
+  harness_list(resource_type="application_security_pipeline_issue",
                filters={
                  execution_id: "${resolvedExecutionId ?? "<executionId>"}",
                  include_exempted: false,
@@ -282,7 +282,7 @@ If \`dry_run=true\`, STOP HERE regardless of reply. Do not create.
 For every confirmed \`issue_id\`:
 
   harness_create(
-    resource_type="security_exemption"${scope},
+    resource_type="application_security_exemption"${scope},
     body={
       issue_id: "<issue_id>",
       type: "${exemption_type}",

@@ -19,7 +19,7 @@ export function registerBulkExemptionCreatePrompt(server: McpServer): void {
           pipeline_ids: z.string().optional(),
           scan_tools: z.string().optional(),
           exemption_statuses: z.string().optional(),
-        }).describe("Optional security_issue filter input set. All fields are optional and map directly to harness_list(resource_type='security_issue') filters.").optional(),
+        }).describe("Optional application_security_issue filter input set. All fields are optional and map directly to harness_list(resource_type='application_security_issue') filters.").optional(),
         search: z.string().describe("Optional issue search term (component name, CVE, keyword)").optional(),
         severity_codes: z.string().describe("Optional comma-separated severities (Critical,High,Medium,Low,Info)").optional(),
         issue_types: z.string().describe("Optional comma-separated issue types (SAST,DAST,SCA,IAC,SECRET,MISCONFIG)").optional(),
@@ -89,8 +89,8 @@ Follow this workflow exactly:
      - issue_filter_input_set (if present), plus
      - top-level optional filters: search, severity_codes, issue_types, target_ids, target_types, pipeline_ids, scan_tools, exemption_statuses.
    - Top-level filter args override overlapping keys from issue_filter_input_set.
-   - Drop empty/undefined keys and keep only valid security_issue filters listed above.
-   - Call harness_list with resource_type="security_issue"${orgScope}${projectScope} and this validated filter set.
+   - Drop empty/undefined keys and keep only valid application_security_issue filters listed above.
+   - Call harness_list with resource_type="application_security_issue"${orgScope}${projectScope} and this validated filter set.
    - Paginate as needed until all matching issues are collected.
 
 2. Keep only non-exempt issues.
@@ -98,13 +98,13 @@ Follow this workflow exactly:
    - If no candidate issues remain, return a short "nothing to create" summary and stop.
 
 3. Create exemptions in bulk (one all-or-none transaction per chunk).
-   - Use resource_type="security_exemption_bulk" — NOT a loop of single security_exemption creates.
+   - Use resource_type="application_security_exemption_bulk" — NOT a loop of single application_security_exemption creates.
      The bulk endpoint writes ONE audit row and ONE DB transaction for the whole chunk;
      looping the single endpoint produces N audit rows and N transactions and is the wrong shape here.
    - Chunk the de-duplicated issue_id list into batches of AT MOST 100 items.
    - For every chunk, call:
      harness_create(
-       resource_type="security_exemption_bulk"${orgScope}${projectScope},
+       resource_type="application_security_exemption_bulk"${orgScope}${projectScope},
        body={
          type: "${exemption_type}",
          reason: "${reason}"${duration_days ? `,

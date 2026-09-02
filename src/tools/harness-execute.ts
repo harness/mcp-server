@@ -64,7 +64,7 @@ function extractPipelineFragment(yamlOrObj: unknown): Record<string, unknown> {
  *
  * Most resources use `identifierFields[0]`, but some execute endpoints
  * omit the parent identifier used by get/update/delete and target a child
- * path field directly (e.g. `security_exemption.approve` writes to
+ * path field directly (e.g. `application_security_exemption.approve` writes to
  * `exemption_id`, not the resource's primary id).
  *
  * Returns the same `input` reference for chaining; idempotent (safe to
@@ -207,7 +207,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
         // Resolve the execute action's path identifier BEFORE any
         // pre-dispatch audit emission. Without this, blocked rows for
-        // pathBuilder-backed actions (e.g. security_exemption.approve
+        // pathBuilder-backed actions (e.g. application_security_exemption.approve
         // reading `input.exemption_id`) record an http_path with empty
         // placeholders ("/sto/api/v2/exemptions//approve").
         applyExecuteActionTargetRemap(input, def, actionSpec, resourceId);

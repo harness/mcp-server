@@ -176,7 +176,7 @@ Optional: an \`AgentConfig\` manifest (Git/Harness store) can carry the agent's 
 - Ask the user: reuse an existing environment or create a new one. Create with harness_create resource_type="environment" if needed.
 
 ### Step 9 — Infrastructure
-- Confirm field shapes with harness_schema resource_type="infrastructure", then harness_create resource_type="infrastructure".
+- Confirm field shapes with harness_schema resource_type="infrastructure_definition", then harness_create resource_type="infrastructure_definition".
 
 **GoogleAgentRuntime infrastructure:**
 \`\`\`yaml

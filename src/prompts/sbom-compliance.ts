@@ -22,11 +22,11 @@ export function registerSbomCompliancePrompt(server: McpServer): void {
             text: `Audit the Software Bill of Materials (SBOM) and compliance posture.
 
 Steps:
-1. **Get SBOM**: Call harness_list with resource_type="scs_sbom"${projectFilter}${artifactFilter} to retrieve the SBOM for the artifact(s)
-2. **Check compliance**: Call harness_list with resource_type="scs_compliance_result"${projectFilter} to see policy compliance results
-3. **List components**: Call harness_list with resource_type="scs_artifact_component"${projectFilter}${artifactFilter} to see all dependencies
+1. **Get SBOM**: Call harness_list with resource_type="application_security_sbom"${projectFilter}${artifactFilter} to retrieve the SBOM for the artifact(s)
+2. **Check compliance**: Call harness_list with resource_type="application_security_compliance_result"${projectFilter} to see policy compliance results
+3. **List components**: Call harness_list with resource_type="application_security_artifact_component"${projectFilter}${artifactFilter} to see all dependencies
 4. **Check policies**: Call harness_list with resource_type="scs_opa_policy"${projectFilter} to see OPA policies governing compliance
-5. **Check remediation**: Call harness_list with resource_type="scs_artifact_remediation"${projectFilter}${artifactFilter} to see available fixes
+5. **Check remediation**: Call harness_list with resource_type="application_security_artifact_remediation"${projectFilter}${artifactFilter} to see available fixes
 6. **Analyze and report**:
    - **Component count**: Total dependencies, direct vs transitive
    - **License breakdown**: Group by license type, flag copyleft or unknown licenses

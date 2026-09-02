@@ -113,7 +113,7 @@ describe("P3-10: policy resource SCS enhancements", () => {
     const res = findResource("policy");
     expect(res.relatedResources).toBeDefined();
     const scsComplianceRef = res.relatedResources!.find(
-      (rel) => rel.resourceType === "scs_compliance_result",
+      (rel) => rel.resourceType === "application_security_compliance_result",
     );
     expect(scsComplianceRef).toBeDefined();
     expect(scsComplianceRef!.relationship).toBe("sibling");
@@ -221,7 +221,7 @@ describe("P3-10: policy_set resource SCS enhancements", () => {
     const res = findResource("policy_set");
     expect(res.relatedResources).toBeDefined();
     const scsComplianceRef = res.relatedResources!.find(
-      (rel) => rel.resourceType === "scs_compliance_result",
+      (rel) => rel.resourceType === "application_security_compliance_result",
     );
     expect(scsComplianceRef).toBeDefined();
     expect(scsComplianceRef!.relationship).toBe("sibling");
@@ -277,9 +277,9 @@ describe("P3-10: policy_set resource SCS enhancements", () => {
     expect(actionFilter!.description).toContain("onstep");
   });
 
-  it("relatedResources includes scs_bom_violation sibling so the violation → policy_set → policy chain is discoverable", () => {
+  it("relatedResources includes application_security_bom_violation sibling so the violation → policy_set → policy chain is discoverable", () => {
     const res = findResource("policy_set");
-    const bomRef = res.relatedResources!.find((rel) => rel.resourceType === "scs_bom_violation");
+    const bomRef = res.relatedResources!.find((rel) => rel.resourceType === "application_security_bom_violation");
     expect(bomRef).toBeDefined();
     expect(bomRef!.relationship).toBe("sibling");
     expect(bomRef!.description.length).toBeGreaterThan(0);
