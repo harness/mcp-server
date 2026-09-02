@@ -9,11 +9,11 @@ Branch: `module-capability-rename`. Plan: `tasks/module-rename-plan.md`.
 - tests/registry/aliases.test.ts (12 tests). Full suite green (3217).
 
 ## Parallel rename agents (worktree-isolated, opus)
-- P1  iacm → infrastructure + move CD infra-def → environments as `infrastructure_definition`
-- P2  sto + scs → `application_security` (merge, 27 resources)
-- P3  ccm → `cost`, dbops → `databases` (toolset-name-only; file/const kept → no index.ts change)
-- P4a sei → `developer_insights`, idp → `developer_portal` (scorecard* kept; file/const kept)
-- P4b fme → `feature_flags` (token-collapse), knowledge-graph + semantic-layer → `software_delivery_knowledge_graph` (merge)
+- P1  iacm → infrastructure + move CD infra-def → environments as `infrastructure_definition` ✅ INTEGRATED (cherry-pick da9ef943; 3233 tests green)
+- P2  sto + scs → `application_security` (merge, 27 resources) — running (agent ae74d856c432baac4)
+- P3  ccm → `cost`, dbops → `databases` (toolset-name-only; file/const kept → no index.ts change) ✅ INTEGRATED (23c5b736)
+- P4a sei → `developer_insights`, idp → `developer_portal` (scorecard* kept; file/const kept) ✅ INTEGRATED (98d5a0a5)
+- P4b fme → `feature_flags` (token-collapse), knowledge-graph + semantic-layer → `software_delivery_knowledge_graph` (merge) — running (agent a5f317de3ecb25233)
 
 ## Merge order (sequential, resolve index.ts conflicts, `pnpm build && pnpm test` after each)
 P1 first (structural: infrastructure.ts delete/recreate, environments.ts, index.ts) →
