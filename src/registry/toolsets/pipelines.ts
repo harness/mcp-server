@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema, ParamsSchema, PreflightContext } from "../types.js";
-import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
+import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, runtimeInputTemplatePreflight, pipelineResolvedYamlExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
 import { asRecord } from "../../utils/type-guards.js";
 import YAML from "yaml";
 
@@ -434,6 +434,18 @@ export const pipelinesToolset: ToolsetDefinition = {
         { name: "search_term", description: "Filter pipelines by name or keyword" },
         { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
         { name: "filter_type", description: "Filter type qualifier" },
+      ],
+      relatedResources: [
+        {
+          resourceType: "runtime_input_template",
+          relationship: "runtime-inputs",
+          description: "Discover required `<+input>` placeholders and pipeline-level variable defaults before execute. harness_get(resource_type='runtime_input_template', resource_id=<pipeline_id>).",
+        },
+        {
+          resourceType: "pipeline_resolved_yaml",
+          relationship: "resolved-definition",
+          description: "Fetch template-expanded pipeline YAML and per-stage deployment metadata for release-activity authoring. harness_get(resource_type='pipeline_resolved_yaml', resource_id=<pipeline_id>).",
+        },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/pipelines/{pipelineIdentifier}/pipeline-studio",
       operations: {
@@ -1185,10 +1197,22 @@ export const pipelinesToolset: ToolsetDefinition = {
     {
       resourceType: "runtime_input_template",
       displayName: "Runtime Input Template",
-      description: "Fetch the runtime input template for a pipeline — shows all `<+input>` placeholders that need values. Use this to discover what runtime inputs a pipeline requires before executing it.",
+      description: "Fetch the runtime input template for a pipeline — shows all `<+input>` placeholders that need values. Use this to discover what runtime inputs a pipeline requires before executing it. variableInputMetadata (when present) covers pipeline-level variables only, not stage/service/env inputs.",
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id"],
+      relatedResources: [
+        {
+          resourceType: "pipeline",
+          relationship: "parent",
+          description: "Saved pipeline definition. harness_get(resource_type='pipeline', resource_id=<pipeline_id>). For remote pipelines pass the same git params (branch, store_type, connector_ref, repo_name).",
+        },
+        {
+          resourceType: "pipeline_resolved_yaml",
+          relationship: "complements",
+          description: "Resolved pipeline YAML with per-stage deploymentType/environmentRef for release-activity authoring. harness_get(resource_type='pipeline_resolved_yaml', resource_id=<pipeline_id>).",
+        },
+      ],
       operations: {
         get: {
           method: "POST",
@@ -1197,10 +1221,58 @@ export const pipelinesToolset: ToolsetDefinition = {
           queryParams: {
             pipeline_id: "pipelineIdentifier",
             branch: "branch",
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
           },
+          paramsSchema: PIPELINE_V0_GET_PARAMS,
           bodyBuilder: () => ({}),
+          preflight: runtimeInputTemplatePreflight,
           responseExtractor: runtimeInputExtract,
-          description: "Fetch the runtime input template for a pipeline. Shows all fields that require values at execution time.",
+          description:
+            "Fetch the runtime input template for a pipeline. Returns inputSetTemplateYaml verbatim from the API plus variableInputMetadata from the pipeline definition when available. variableInputMetadata covers pipeline.variables only — not stage/service/env inputs.",
+        },
+      },
+    },
+    {
+      resourceType: "pipeline_resolved_yaml",
+      displayName: "Pipeline Resolved YAML",
+      description:
+        "Fetch a pipeline with all template refs resolved — returns resolvedTemplatesPipelineYaml and per-stage deployment metadata (deploymentType, environmentRef). Use with runtime_input_template when authoring release activities that map pipeline runtime inputs. stageMetadataMap includes deployment stages inside parallel blocks and stage groups.",
+      toolset: "pipelines",
+      scope: "project",
+      identifierFields: ["pipeline_id"],
+      relatedResources: [
+        {
+          resourceType: "pipeline",
+          relationship: "parent",
+          description: "Unexpanded pipeline definition. harness_get(resource_type='pipeline', resource_id=<pipeline_id>).",
+        },
+        {
+          resourceType: "runtime_input_template",
+          relationship: "complements",
+          description: "Runtime input placeholders and pipeline-level variable defaults. harness_get(resource_type='runtime_input_template', resource_id=<pipeline_id>).",
+        },
+      ],
+      operations: {
+        get: {
+          method: "GET",
+          path: "/pipeline/api/pipelines/{pipelineIdentifier}",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { pipeline_id: "pipelineIdentifier" },
+          queryParams: {
+            branch: "branch",
+            store_type: "storeType",
+            connector_ref: "connectorRef",
+            repo_name: "repoName",
+          },
+          paramsSchema: PIPELINE_V0_GET_PARAMS,
+          staticQueryParams: {
+            getTemplatesResolvedPipeline: "true",
+          },
+          responseExtractor: pipelineResolvedYamlExtract,
+          description:
+            "Fetch resolved pipeline YAML with templates expanded. Returns stageMetadataMap for patching entity-type activity inputs (deploymentType, environmentRef).",
         },
       },
     },
