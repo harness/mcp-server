@@ -7,6 +7,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import { registriesV3Toolset } from "../../src/registry/toolsets/registries-v3.js";
+import { compactItems } from "../../src/utils/compact.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 
@@ -65,27 +66,25 @@ describe("HAR v3 toolset", () => {
     expect(call.params.projectIdentifier).toBeUndefined();
   });
 
-  it("harV3ListExtract exposes items/page/size/hasMore/meta from bare v3 body", async () => {
+  it("harV3ListExtract projects activeCount/deletedCount and does NOT forward raw meta", async () => {
     const client = mockClient({
       items: [{ id: "v-1" }, { id: "v-2" }],
       page: 1,
       size: 20,
       hasMore: true,
-      meta: { activeCount: 2, deletedCount: 0 },
+      meta: { activeCount: 2, deletedCount: 0, futureBackendKey: "leak-me-if-you-dare" },
     });
 
-    const result = (await registry.dispatch(client, "version_v3", "list", {})) as {
-      items: unknown[];
-      page: number;
-      size: number;
-      hasMore: boolean;
-      meta: unknown;
-    };
+    const result = (await registry.dispatch(client, "version_v3", "list", {})) as Record<string, unknown>;
     expect(result.items).toHaveLength(2);
     expect(result.page).toBe(1);
     expect(result.size).toBe(20);
     expect(result.hasMore).toBe(true);
-    expect(result.meta).toEqual({ activeCount: 2, deletedCount: 0 });
+    expect(result.activeCount).toBe(2);
+    expect(result.deletedCount).toBe(0);
+    // Raw `meta` envelope must not cross the tool boundary.
+    expect(result.meta).toBeUndefined();
+    expect(JSON.stringify(result)).not.toContain("futureBackendKey");
   });
 
   it("artifact_scan_v3.list normalizes v1-style {data,itemCount} envelope into v3 items shape", async () => {
@@ -164,15 +163,22 @@ describe("HAR v3 toolset", () => {
     expect(call.params.key).toBe("env");
   });
 
-  it("package_metadata_v3.get substitutes package_id into {id} path param", async () => {
-    const client = mockClient({ metadata: { env: "prod" } });
+  it("package_metadata_v3.get substitutes package_id into {id} path param and is account-scoped", async () => {
+    // Spec's GetPackageMetadataV3 takes only AccountIdentifierV3.
+    const client = mockClient({ data: [{ id: "m-1", key: "env", type: "STRING", value: "prod" }] });
 
-    await registry.dispatch(client, "package_metadata_v3", "get", {
+    const result = (await registry.dispatch(client, "package_metadata_v3", "get", {
       package_id: "pkg-uuid-42",
-    });
+    })) as Record<string, unknown>;
 
     const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(call.path).toBe("/har/api/v3/packages/pkg-uuid-42/metadata");
+    expect(call.params.account_identifier).toBe("acct123");
+    expect(call.params.org_identifier).toBeUndefined();
+    expect(call.params.project_identifier).toBeUndefined();
+    // `{ data: [...] }` envelope must be unwrapped to `{ items: [...] }`.
+    expect(result.items).toEqual([{ id: "m-1", key: "env", type: "STRING", value: "prod" }]);
+    expect(result.data).toBeUndefined();
   });
 
   it("firewall_exception_v3.list forwards status + package filters", async () => {
@@ -191,17 +197,21 @@ describe("HAR v3 toolset", () => {
     expect(call.params.version).toBe("2.31.0");
   });
 
-  it("artifact_scan_v3.get builds /scans/{id}/details from scan_id", async () => {
-    const client = mockClient({ id: "scan-9", violations: [] });
+  it("artifact_scan_v3.get builds /scans/{id}/details and unwraps `{ data: {...} }`", async () => {
+    const client = mockClient({ data: { packageName: "lodash", scanStatus: "BLOCKED", violations: [] } });
 
-    await registry.dispatch(client, "artifact_scan_v3", "get", {
+    const result = (await registry.dispatch(client, "artifact_scan_v3", "get", {
       scan_id: "scan-9",
       policy_set_ref: "default-policies",
-    });
+    })) as Record<string, unknown>;
 
     const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(call.path).toBe("/har/api/v3/scans/scan-9/details");
     expect(call.params.policy_set_ref).toBe("default-policies");
+    // `{ data: {...} }` envelope must be unwrapped to the inner object.
+    expect(result.packageName).toBe("lodash");
+    expect(result.scanStatus).toBe("BLOCKED");
+    expect(result.data).toBeUndefined();
   });
 
   it("bulk_scan_evaluation_v3.get substitutes evaluation_id into path", async () => {
@@ -213,6 +223,96 @@ describe("HAR v3 toolset", () => {
 
     const call = (client.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(call.path).toBe("/har/api/v3/scans/bulk-evaluate/eval-abc");
+  });
+});
+
+// ─── compactItem projection ───────────────────────────────────────────────────
+// The default `compactItems()` whitelist would strip `packageType`,
+// `latestVersion`, `registryName`, `versionList` — fields agents actually need.
+// Verify our per-resource projectors keep them and rename `id` → `<x>_id`.
+
+describe("registries-v3 compactItem projection", () => {
+  const getResource = (rt: string) => {
+    const r = registriesV3Toolset.resources.find((res) => res.resourceType === rt);
+    if (!r) throw new Error(`resource ${rt} not found`);
+    return r;
+  };
+
+  it("package_v3.compactItem keeps packageType/latestVersion/registryName and adds package_id", () => {
+    const resource = getResource("package_v3");
+    expect(resource.compactItem).toBeDefined();
+    const items = compactItems(
+      [
+        {
+          id: "pkg-uuid-1",
+          name: "lodash",
+          packageType: "NPM",
+          latestVersion: "4.17.21",
+          registryName: "harness-npm",
+          registryId: "reg-1",
+          extra: "should-be-dropped",
+          debug: { should: "not-leak" },
+        },
+      ],
+      resource.compactItem,
+    ) as Record<string, unknown>[];
+    expect(items[0].package_id).toBe("pkg-uuid-1");
+    expect(items[0].id).toBe("pkg-uuid-1");
+    expect(items[0].name).toBe("lodash");
+    expect(items[0].packageType).toBe("NPM");
+    expect(items[0].latestVersion).toBe("4.17.21");
+    expect(items[0].registryName).toBe("harness-npm");
+    expect(items[0].extra).toBeUndefined();
+    expect(items[0].debug).toBeUndefined();
+  });
+
+  it("version_v3.compactItem keeps packageType/packageName/pullCommand and adds version_id", () => {
+    const resource = getResource("version_v3");
+    const items = compactItems(
+      [
+        {
+          id: "ver-uuid-1",
+          name: "4.17.21",
+          packageId: "pkg-uuid-1",
+          packageName: "lodash",
+          packageType: "NPM",
+          registryName: "harness-npm",
+          registryType: "VIRTUAL",
+          pullCommand: "npm install lodash@4.17.21",
+          extra: "gone",
+        },
+      ],
+      resource.compactItem,
+    ) as Record<string, unknown>[];
+    expect(items[0].version_id).toBe("ver-uuid-1");
+    expect(items[0].pullCommand).toBe("npm install lodash@4.17.21");
+    expect(items[0].packageType).toBe("NPM");
+    expect(items[0].registryType).toBe("VIRTUAL");
+    expect(items[0].extra).toBeUndefined();
+  });
+
+  it("firewall_exception_v3.compactItem keeps versionList/versionScanMap/status", () => {
+    const resource = getResource("firewall_exception_v3");
+    const items = compactItems(
+      [
+        {
+          exceptionId: "exc-1",
+          status: "PENDING",
+          packageName: "requests",
+          registryName: "harness-py",
+          versionList: ["2.30.0", "2.31.0"],
+          versionScanMap: { "2.31.0": "scan-9" },
+          businessJustification: "urgent hotfix",
+          extra: "gone",
+        },
+      ],
+      resource.compactItem,
+    ) as Record<string, unknown>[];
+    expect(items[0].versionList).toEqual(["2.30.0", "2.31.0"]);
+    expect(items[0].versionScanMap).toEqual({ "2.31.0": "scan-9" });
+    expect(items[0].status).toBe("PENDING");
+    expect(items[0].businessJustification).toBe("urgent hotfix");
+    expect(items[0].extra).toBeUndefined();
   });
 });
 
