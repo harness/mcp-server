@@ -176,6 +176,120 @@ const fmeSegmentDefinitionUpdateSchema: BodySchema = {
   fields: [{ name: "description", type: "string", required: false, description: "Omit to keep the current value, null to clear it, or a string to set it" }],
 };
 
+const FME_METRIC_FORMATS = ["NUMBER", "DOLLAR", "PERCENTAGE", "SECONDS", "MILLISECONDS", "BYTES"] as const;
+const FME_METRIC_AGGREGATIONS = ["TOTAL", "COUNT", "RATE", "AVERAGE", "NONE"] as const;
+const FME_METRIC_SPREADS = ["PER", "ACROSS"] as const;
+const FME_METRIC_SORT_ORDERS = ["ASCENDING", "DESCENDING"] as const;
+
+const fmeMetricCreateSchema: BodySchema = {
+  description:
+    "Create a project-scoped metric definition. name, trafficType, format, aggregation, isPositive, and baseEventTypes (min 1) are required. Optional description, spread (defaults to PER on the backend), filterEventType, tags, owners, and cap.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Metric name (must be unique within the project)" },
+    { name: "trafficType", type: "string", required: true, description: "Traffic type name" },
+    {
+      name: "format",
+      type: "string",
+      required: true,
+      description: "Display format. Must be one of: NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES.",
+    },
+    {
+      name: "aggregation",
+      type: "string",
+      required: true,
+      description: "Aggregation type. Must be one of: TOTAL, COUNT, RATE, AVERAGE, NONE.",
+    },
+    { name: "isPositive", type: "boolean", required: true, description: "Whether higher values are better" },
+    {
+      name: "baseEventTypes",
+      type: "array",
+      required: true,
+      description: "Base event types for the metric (at least one required)",
+      itemType: "object",
+    },
+    { name: "description", type: "string", required: false, description: "Optional metric description" },
+    { name: "spread", type: "string", required: false, description: "Spread type. Must be PER or ACROSS if provided." },
+    { name: "filterEventType", type: "object", required: false, description: "Optional filter event ({ eventTypeId, filterAggregation?, propertyFilters? })" },
+    { name: "tags", type: "array", required: false, description: "Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
+    { name: "cap", type: "object", required: false, description: "Optional outlier/cap configuration (MetricCap object)" },
+  ],
+};
+
+const fmeMetricUpdateSchema: BodySchema = {
+  description:
+    "Partial metric update via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. description, filterEventType, tags, owners, and cap can be set to null to clear them. format, aggregation, isPositive, and spread cannot be null — omit them instead. name and trafficType are immutable and are never sent. baseEventTypes is a full replacement list (min 1) when provided.",
+  fields: [
+    { name: "description", type: "string", required: false, description: "Omit to keep, null to clear, or a string to set" },
+    {
+      name: "format",
+      type: "string",
+      required: false,
+      description: "Updated display format (not clearable). Must be one of: NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES.",
+    },
+    {
+      name: "aggregation",
+      type: "string",
+      required: false,
+      description: "Updated aggregation type (not clearable). Must be one of: TOTAL, COUNT, RATE, AVERAGE, NONE.",
+    },
+    { name: "isPositive", type: "boolean", required: false, description: "Updated positive-direction flag (not clearable)" },
+    { name: "spread", type: "string", required: false, description: "Updated spread type (not clearable). Must be PER or ACROSS if provided." },
+    {
+      name: "baseEventTypes",
+      type: "array",
+      required: false,
+      description: "Full replacement base-event list (min 1); not clearable with null",
+      itemType: "object",
+    },
+    { name: "filterEventType", type: "object", required: false, description: "Omit to keep, null to clear, or a FilterEventType object to set" },
+    { name: "tags", type: "array", required: false, description: "Omit to keep, null to clear, or provide tags (strings auto-wrapped)", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Omit to keep, null to clear, or provide owners", itemType: "object" },
+    { name: "cap", type: "object", required: false, description: "Omit to keep, null to clear, or a MetricCap object to set" },
+  ],
+};
+
+function requireFmeMetricScope(input: Record<string, unknown>, operation: string): void {
+  if (input.workspace_id) {
+    throw new Error(
+      `fme_metric.${operation}: Harness-native only (org_id+project_id) — workspace_id is not supported.`,
+    );
+  }
+  requireHarnessNativeSegmentScope(input, "fme_metric");
+}
+
+function validateFmeMetricFormat(value: unknown, context: string): void {
+  if (!FME_METRIC_FORMATS.includes(value as (typeof FME_METRIC_FORMATS)[number])) {
+    throw new Error(
+      `${context}: invalid format '${value}'. Must be one of: ${FME_METRIC_FORMATS.join(", ")}.`,
+    );
+  }
+}
+
+function validateFmeMetricAggregation(value: unknown, context: string): void {
+  if (!FME_METRIC_AGGREGATIONS.includes(value as (typeof FME_METRIC_AGGREGATIONS)[number])) {
+    throw new Error(
+      `${context}: invalid aggregation '${value}'. Must be one of: ${FME_METRIC_AGGREGATIONS.join(", ")}.`,
+    );
+  }
+}
+
+function validateFmeMetricSpread(value: unknown, context: string): void {
+  if (!FME_METRIC_SPREADS.includes(value as (typeof FME_METRIC_SPREADS)[number])) {
+    throw new Error(`${context}: invalid spread '${value}'. Must be one of: ${FME_METRIC_SPREADS.join(", ")}.`);
+  }
+}
+
+function validateFmeMetricSortOrder(input: Record<string, unknown>): void {
+  if (input.sort_order === undefined) return;
+  const value = String(input.sort_order);
+  if (!FME_METRIC_SORT_ORDERS.includes(value as (typeof FME_METRIC_SORT_ORDERS)[number])) {
+    throw new Error(
+      `fme_metric.list: invalid sort_order '${value}'. Must be one of: ${FME_METRIC_SORT_ORDERS.join(", ")}.`,
+    );
+  }
+}
+
 const fmeRbsUpdateDefinitionSchema: BodySchema = {
   description: "Update a rule-based segment definition in an environment. Rules use: {condition: {combiner: 'AND', matchers: [{type, attribute, ...}]}}. Matcher types: IN_LIST_STRING (strings:[]), GREATER_THAN_OR_EQUAL_NUMBER (number:N), LESS_THAN_OR_EQUAL_NUMBER (number:N), BETWEEN_NUMBER (between:{from,to}), BOOLEAN (bool:true/false), ON_DATE (date:ms), IN_SPLIT (depends:{splitName,treatment}). Combiner values: AND, OR.",
   fields: [
@@ -1501,6 +1615,186 @@ export const featureFlagsToolset: ToolsetDefinition = {
           queryParams: { environment_id: "environment_id" },
           responseExtractor: passthrough,
           description: "Delete a segment definition from an environment.",
+        },
+      },
+    },
+    {
+      resourceType: "fme_metric",
+      displayName: "FME Metric",
+      description:
+        "Project-scoped metric definitions (Harness-native org_id+project_id only — workspace_id is not supported). Supports list, get, create, update (JSON Merge Patch), and delete. Use metric_id (UUID from list items or create response) for get/update/delete — not the metric name.",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["metric_id"],
+      listFilterFields: [
+        { name: "offset", description: "Pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Page size (default 100, max 100)", type: "number" },
+        { name: "name", description: "Filter by metric name (partial match)", type: "string" },
+        { name: "traffic_type_id", description: "Filter by traffic type UUID", type: "string" },
+        { name: "event_type_ids", description: "Filter by base event type IDs (array of eventTypeId strings)", type: "string" },
+        { name: "tags", description: "Filter by tag (array of tag strings)", type: "string" },
+        { name: "ids", description: "Filter by metric UUIDs (array of UUID strings)", type: "string" },
+        { name: "sort_order", description: "Sort direction", enum: ["ASCENDING", "DESCENDING"] },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireFmeMetricScope(input, "list");
+            validateFmeMetricSortOrder(input);
+            return { path: "/fme/api/v4/metrics" };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            offset: "offset",
+            size: "limit",
+            limit: "limit",
+            name: "name",
+            traffic_type_id: "traffic_type_id",
+            event_type_ids: "event_type_ids",
+            tags: "tags",
+            ids: "ids",
+            sort_order: "sort_order",
+          },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description:
+            "List metric definitions in a project with pagination (offset/limit, max 100; harness_list size maps to limit) and optional filters (name, traffic_type_id, event_type_ids, tags, ids, sort_order).",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireFmeMetricScope(input, "get");
+            const metricId = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            return { path: `/fme/api/v4/metrics/${metricId}` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description: "Get a single metric definition by metric_id (UUID from list items or create response).",
+        },
+        create: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => {
+            requireFmeMetricScope(input, "create");
+            return { path: "/fme/api/v4/metrics" };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (typeof body?.name !== "string" || !body.name) {
+              throw new Error('fme_metric.create: "name" is required — pass body.name.');
+            }
+            if (typeof body?.trafficType !== "string" || !body.trafficType) {
+              throw new Error('fme_metric.create: "trafficType" is required — pass body.trafficType.');
+            }
+            if (body?.isPositive === undefined || body?.isPositive === null || typeof body.isPositive !== "boolean") {
+              throw new Error('fme_metric.create: "isPositive" is required — pass body.isPositive (boolean).');
+            }
+            validateFmeMetricFormat(body?.format, "fme_metric.create");
+            validateFmeMetricAggregation(body?.aggregation, "fme_metric.create");
+            if (body?.spread !== undefined) {
+              validateFmeMetricSpread(body.spread, "fme_metric.create");
+            }
+            if (!Array.isArray(body?.baseEventTypes) || body.baseEventTypes.length < 1) {
+              throw new Error("fme_metric.create: baseEventTypes must contain at least one entry.");
+            }
+            return {
+              name: body?.name,
+              trafficType: body.trafficType,
+              format: body?.format,
+              aggregation: body?.aggregation,
+              isPositive: body?.isPositive,
+              baseEventTypes: body.baseEventTypes,
+              ...(body?.description !== undefined ? { description: body.description } : {}),
+              ...(body?.spread !== undefined ? { spread: body.spread } : {}),
+              ...(body?.filterEventType !== undefined ? { filterEventType: body.filterEventType } : {}),
+              ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
+              ...(body?.owners !== undefined ? { owners: body.owners } : {}),
+              ...(body?.cap !== undefined ? { cap: body.cap } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeMetricCreateSchema,
+          description:
+            "Create a metric definition. Body requires name, trafficType, format, aggregation, isPositive, and baseEventTypes (min 1); optional description, spread, filterEventType, tags, owners, and cap.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireFmeMetricScope(input, "update");
+            const metricId = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            return { path: `/fme/api/v4/metrics/${metricId}` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body) return {};
+            const patch: Record<string, unknown> = {};
+            if ("format" in body) {
+              if (body.format === null) {
+                throw new Error("fme_metric.update: format cannot be null.");
+              }
+              validateFmeMetricFormat(body.format, "fme_metric.update");
+              patch.format = body.format;
+            }
+            if ("aggregation" in body) {
+              if (body.aggregation === null) {
+                throw new Error("fme_metric.update: aggregation cannot be null.");
+              }
+              validateFmeMetricAggregation(body.aggregation, "fme_metric.update");
+              patch.aggregation = body.aggregation;
+            }
+            if ("isPositive" in body) {
+              if (body.isPositive === null) {
+                throw new Error("fme_metric.update: isPositive cannot be null.");
+              }
+              patch.isPositive = body.isPositive;
+            }
+            if ("spread" in body) {
+              if (body.spread === null) {
+                throw new Error("fme_metric.update: spread cannot be null.");
+              }
+              validateFmeMetricSpread(body.spread, "fme_metric.update");
+              patch.spread = body.spread;
+            }
+            if ("baseEventTypes" in body) {
+              if (!Array.isArray(body.baseEventTypes) || body.baseEventTypes.length < 1) {
+                throw new Error("fme_metric.update: baseEventTypes must contain at least one entry.");
+              }
+              patch.baseEventTypes = body.baseEventTypes;
+            }
+            if ("description" in body) patch.description = body.description;
+            if ("filterEventType" in body) patch.filterEventType = body.filterEventType;
+            if ("tags" in body) {
+              patch.tags = body.tags === null ? null : normalizeFmeTags(body.tags);
+            }
+            if ("owners" in body) patch.owners = body.owners;
+            if ("cap" in body) patch.cap = body.cap;
+            return patch;
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeMetricUpdateSchema,
+          description:
+            "Update a metric definition via JSON Merge Patch. Omit fields to leave them unchanged; set description/filterEventType/tags/owners/cap to null to clear them. format/aggregation/isPositive/spread cannot be null. baseEventTypes is a full replacement list (min 1) when provided. name and trafficType are immutable.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => {
+            requireFmeMetricScope(input, "delete");
+            const metricId = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            return { path: `/fme/api/v4/metrics/${metricId}` };
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description: "Delete a metric definition by metric_id (UUID).",
         },
       },
     },
