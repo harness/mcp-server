@@ -107,6 +107,15 @@ describe("scorecard mutate operations", () => {
     expect(def.operations.delete).toBeUndefined();
   });
 
+  it("keeps the generic scorecard resourceType under the renamed developer_portal toolset", () => {
+    expect(idpToolset.name).toBe("developer_portal");
+    expect(idpToolset.aliases).toContain("idp");
+    const def = findResource("scorecard");
+    expect(def.resourceType).toBe("scorecard");
+    expect(def.toolset).toBe("developer_portal");
+    expect(def.searchAliases).toContain("idp");
+  });
+
   it("create: POST /v1/scorecards with scorecard body", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "production_readiness" });
     const client = makeClient(mockRequest);

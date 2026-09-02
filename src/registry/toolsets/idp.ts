@@ -98,10 +98,10 @@ const buildIdpEntityScopePath = (input: Record<string, unknown>, config: PathBui
   const kind = input.kind as string | undefined;
   const entityId = input.entity_id as string | undefined;
   if (!kind) {
-    throw new Error(`Missing required field "kind" for idp_entity. Pass it via params: { kind: "component" }.`);
+    throw new Error(`Missing required field "kind" for developer_portal_entity. Pass it via params: { kind: "component" }.`);
   }
   if (!entityId) {
-    throw new Error(`Missing required field "entity_id" for idp_entity. Pass it via params or as resource_id.`);
+    throw new Error(`Missing required field "entity_id" for developer_portal_entity. Pass it via params or as resource_id.`);
   }
 
   if (orgId) input.org_id = orgId;
@@ -223,17 +223,20 @@ const scorecardCheckMutateBodySchema: BodySchema = {
 };
 
 export const idpToolset: ToolsetDefinition = {
-  name: "idp",
+  name: "developer_portal",
+  aliases: ["idp"],
   displayName: "Internal Developer Portal",
   description: "Harness IDP — service catalog entities, scorecards, checks, and workflows",
   resources: [
     {
-      resourceType: "idp_entity",
+      resourceType: "developer_portal_entity",
+      aliases: ["idp_entity"],
+      searchAliases: ["idp"],
       displayName: "IDP Entity",
       description:
         "Internal Developer Portal catalog entity. Supports list, get, create, and update. " +
         "Lists Harness IDP catalog metadata (services, APIs, user groups, resources, etc.) including identifier, scope, kind, ref type (INLINE/GIT), YAML, Git details, ownership, tags, lifecycle, scorecards, status, and group.",
-      toolset: "idp",
+      toolset: "developer_portal",
       scope: "account",
       supportedScopes: ["account", "org", "project"],
       identifierFields: ["kind", "entity_id"],
@@ -361,9 +364,10 @@ export const idpToolset: ToolsetDefinition = {
     },
     {
       resourceType: "scorecard",
+      searchAliases: ["idp"],
       displayName: "Scorecard",
       description: "IDP scorecard for tracking developer standards. Supports list, get, create, and update.",
-      toolset: "idp",
+      toolset: "developer_portal",
       scope: "account",
       identifierFields: ["scorecard_id"],
       deepLinkTemplate: "/ng/account/{accountId}/idp/scorecards/{scorecardIdentifier}",
@@ -416,11 +420,12 @@ export const idpToolset: ToolsetDefinition = {
     },
     {
       resourceType: "scorecard_check",
+      searchAliases: ["idp"],
       displayName: "Scorecard Check",
       description:
         "Individual check within an IDP scorecard. A check is a query performed against a data point for a software component which results in either Pass or Fail. " +
         "Supports list, get, create, and update.",
-      toolset: "idp",
+      toolset: "developer_portal",
       scope: "account",
       identifierFields: ["check_id"],
       listFilterFields: [
@@ -492,9 +497,10 @@ export const idpToolset: ToolsetDefinition = {
     },
     {
       resourceType: "scorecard_stats",
+      searchAliases: ["idp"],
       displayName: "Scorecard Stats",
       description: "Aggregate statistics for an IDP scorecard — the scores of every entity that has this scorecard configured. Supports get.",
-      toolset: "idp",
+      toolset: "developer_portal",
       scope: "account",
       identifierFields: ["scorecard_id"],
       deepLinkTemplate: "/ng/account/{accountId}/idp/scorecards/{scorecardIdentifier}",
@@ -511,9 +517,10 @@ export const idpToolset: ToolsetDefinition = {
     },
     {
       resourceType: "scorecard_check_stats",
+      searchAliases: ["idp"],
       displayName: "Scorecard Check Stats",
       description: "Statistics for a specific scorecard check — the PASS/FAIL status for every entity whose scorecard contains this check. Supports get.",
-      toolset: "idp",
+      toolset: "developer_portal",
       scope: "account",
       identifierFields: ["check_id"],
       deepLinkTemplate: "/ng/account/{accountId}/idp/scorecards",
@@ -531,10 +538,12 @@ export const idpToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "idp_score",
+      resourceType: "developer_portal_score",
+      aliases: ["idp_score"],
+      searchAliases: ["idp"],
       displayName: "IDP Score",
       description: "Per-scorecard scores for an entity in the Harness IDP Catalog. Supports list (returns all scorecard scores for the given entity).",
-      toolset: "idp",
+      toolset: "developer_portal",
       scope: "account",
       identifierFields: ["entity_identifier"],
       listFilterFields: [
@@ -558,10 +567,12 @@ export const idpToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "idp_score_summary",
+      resourceType: "developer_portal_score_summary",
+      aliases: ["idp_score_summary"],
+      searchAliases: ["idp"],
       displayName: "IDP Score Summary",
       description: "Aggregate score summary across all scorecards for an entity. Supports get.",
-      toolset: "idp",
+      toolset: "developer_portal",
       scope: "account",
       identifierFields: ["entity_identifier"],
       operations: {
@@ -572,7 +583,7 @@ export const idpToolset: ToolsetDefinition = {
           pathBuilder: (input) => {
             if (!input.entity_identifier) {
               throw new Error(
-                "Missing required field 'entity_identifier' for idp_score_summary. " +
+                "Missing required field 'entity_identifier' for developer_portal_score_summary. " +
                 "Pass it via params or as resource_id (format: 'namespace/Kind/name', e.g. 'default/Component/my-service').",
               );
             }
@@ -587,12 +598,14 @@ export const idpToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "idp_workflow",
+      resourceType: "developer_portal_workflow",
+      aliases: ["idp_workflow"],
+      searchAliases: ["idp"],
       displayName: "IDP Workflow",
       description:
         "IDP self-service workflow. Supports list and execute. " +
-        "Workflows are IDP catalog entities with kind=workflow — list here is a thin wrapper over /v1/entities that pins kind=workflow and exposes the same filter surface as idp_entity (search_term, scope_level, owned_by_me, favorites, owner, lifecycle, tags, sort).",
-      toolset: "idp",
+        "Workflows are IDP catalog entities with kind=workflow — list here is a thin wrapper over /v1/entities that pins kind=workflow and exposes the same filter surface as developer_portal_entity (search_term, scope_level, owned_by_me, favorites, owner, lifecycle, tags, sort).",
+      toolset: "developer_portal",
       scope: "account",
       identifierFields: ["workflow_id"],
       listFilterFields: [
@@ -684,7 +697,7 @@ export const idpToolset: ToolsetDefinition = {
             const wfDetails = b.workflow_details as Record<string, unknown> | undefined;
             if (!wfDetails) {
               throw new Error(
-                "workflow_details is required. Fetch it first with harness_get(resource_type=idp_entity, kind=workflow, entity_id=<id>) and pass the result.",
+                "workflow_details is required. Fetch it first with harness_get(resource_type=developer_portal_entity, kind=workflow, entity_id=<id>) and pass the result.",
               );
             }
 
@@ -734,7 +747,7 @@ export const idpToolset: ToolsetDefinition = {
           actionDescription:
             "Execute a workflow in the Harness IDP Catalog.\n\n" +
             "Required inputs:\n" +
-            "- workflow_details: full workflow entity. Fetch FIRST via harness_get(resource_type=idp_entity, kind=workflow, entity_id=<id>) and pass the result. Required so the tool can inspect spec.steps[] and inject the correct values for HarnessAuthToken-style parameters.\n" +
+            "- workflow_details: full workflow entity. Fetch FIRST via harness_get(resource_type=developer_portal_entity, kind=workflow, entity_id=<id>) and pass the result. Required so the tool can inspect spec.steps[] and inject the correct values for HarnessAuthToken-style parameters.\n" +
             "- identifier: workflow identifier (or pass via resource_id; auto-extracted from workflow_details.identifier).\n" +
             "- values: user-supplied values for the workflow's spec.parameters (validated against required fields). OMIT any parameter whose ui:field is HarnessAuthToken — the tool auto-fills those.\n\n" +
             "Optional input:\n" +
@@ -779,13 +792,14 @@ export const idpToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "idp_tech_doc",
+      resourceType: "developer_portal_tech_doc",
+      aliases: ["idp_tech_doc"],
       displayName: "IDP Tech Doc",
       description: "Semantic search across documentation for entities in the Harness IDP — services, APIs, workflows, user groups, environments. Returns ranked documents with content and the corresponding entity_id. Use this for any general 'how do I…' question that internal documentation may answer (debug a failing workflow, install steps, configuration details, monitoring an entity, etc.).",
-      toolset: "idp",
+      toolset: "developer_portal",
       scope: "account",
       identifierFields: [],
-      searchAliases: ["techdocs", "tech docs", "documentation", "docs", "knowledge"],
+      searchAliases: ["techdocs", "tech docs", "documentation", "docs", "knowledge", "idp"],
       listFilterFields: [
         { name: "query", description: "The semantic search query (e.g. 'how to troubleshoot a failing workflow?'). Falls back to the standard search_term when omitted." },
       ],
@@ -798,7 +812,7 @@ export const idpToolset: ToolsetDefinition = {
             const query = (input.query as string | undefined) || (input.search_term as string | undefined);
             if (!query) {
               throw new Error(
-                "Missing required field 'query' for idp_tech_doc search. " +
+                "Missing required field 'query' for developer_portal_tech_doc search. " +
                 "Pass it via filters: { query: '...' } or use the standard search_term.",
               );
             }

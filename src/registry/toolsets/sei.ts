@@ -44,7 +44,7 @@ const BA_GET_FILTER_FIELDS: FilterFieldSpec[] = [
 ];
 
 const AI_FILTER_FIELDS: FilterFieldSpec[] = [
-  { name: "team_ref_id", description: "Team reference identifier (use sei_team list to find)" },
+  { name: "team_ref_id", description: "Team reference identifier (use developer_insights_team list to find)" },
   { name: "date_start", description: "Start date (YYYY-MM-DD)" },
   { name: "date_end", description: "End date (YYYY-MM-DD)" },
   { name: "integration_type", description: "AI coding assistant type", enum: ["cursor", "windsurf", "all_assistants"] },
@@ -150,7 +150,7 @@ function doraPathBuilder(input: Record<string, unknown>, _config: PathBuilderCon
 
 function teamDetailPathBuilder(input: Record<string, unknown>, _config: PathBuilderConfig): string {
   const teamRefId = input.team_ref_id as string;
-  if (!teamRefId) throw new Error("team_ref_id is required for sei_team_detail");
+  if (!teamRefId) throw new Error("team_ref_id is required for developer_insights_team_detail");
   const aspect = (input.aspect as string) || "integrations";
   const suffix =
     aspect === "integrations"
@@ -163,7 +163,7 @@ function teamDetailPathBuilder(input: Record<string, unknown>, _config: PathBuil
 
 function orgTreeDetailPathBuilder(input: Record<string, unknown>, _config: PathBuilderConfig): string {
   const orgTreeId = input.org_tree_id as string;
-  if (!orgTreeId) throw new Error("org_tree_id is required for sei_org_tree_detail");
+  if (!orgTreeId) throw new Error("org_tree_id is required for developer_insights_org_tree_detail");
   const aspect = (input.aspect as string) || "efficiency_profile";
   const suffix =
     aspect === "efficiency_profile"
@@ -222,17 +222,20 @@ function aiImpactPathBuilder(input: Record<string, unknown>, _config: PathBuilde
 // ─── Toolset Definition ───────────────────────────────────────────────────────
 
 export const seiToolset: ToolsetDefinition = {
-  name: "sei",
+  name: "developer_insights",
+  aliases: ["sei"],
   displayName: "Software Engineering Insights",
   description:
     "Harness SEI — engineering metrics, DORA metrics, teams, org trees, business alignment, and AI coding insights",
   resources: [
     // ─── Generic Metrics ──────────────────────────────────────────────────────
     {
-      resourceType: "sei_metric",
+      resourceType: "developer_insights_metric",
+      aliases: ["sei_metric"],
+      searchAliases: ["sei"],
       displayName: "SEI Metric",
       description: "Software engineering insight metric. Supports list.",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "account",
       headerBasedScoping: true,
       identifierFields: [],
@@ -250,11 +253,13 @@ export const seiToolset: ToolsetDefinition = {
 
     // ─── Productivity Feature Metrics ─────────────────────────────────────────
     {
-      resourceType: "sei_productivity_metric",
+      resourceType: "developer_insights_productivity_metric",
+      aliases: ["sei_productivity_metric"],
+      searchAliases: ["sei"],
       displayName: "SEI Productivity Metric",
       description:
         "Productivity feature metrics (e.g. PR velocity). Supports get. Pass team_ref_id or developer IDs, date_start, date_end, feature_type.",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "project",
       headerBasedScoping: true,
       identifierFields: [],
@@ -288,11 +293,13 @@ export const seiToolset: ToolsetDefinition = {
 
     // ─── DORA Metrics (consolidated: 6 → 1) ─────────────────────────────────────
     {
-      resourceType: "sei_dora_metric",
+      resourceType: "developer_insights_dora_metric",
+      aliases: ["sei_dora_metric"],
+      searchAliases: ["sei"],
       displayName: "SEI DORA Metric",
       description:
         "DORA metrics. harness_get with metric: deployment_frequency | deployment_frequency_drilldown | change_failure_rate | change_failure_rate_drilldown | mttr | lead_time. Pass team_ref_id, date_start, date_end, granularity.",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "project",
       headerBasedScoping: true,
       identifierFields: [],
@@ -313,10 +320,12 @@ export const seiToolset: ToolsetDefinition = {
 
     // ─── Teams ────────────────────────────────────────────────────────────────
     {
-      resourceType: "sei_team",
+      resourceType: "developer_insights_team",
+      aliases: ["sei_team"],
+      searchAliases: ["sei"],
       displayName: "SEI Team",
       description: "SEI team entity. Supports list and get.",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "account",
       headerBasedScoping: true,
       identifierFields: ["team_ref_id"],
@@ -341,11 +350,13 @@ export const seiToolset: ToolsetDefinition = {
     },
     // Team detail (consolidated: integrations, developers, integration_filters → 1)
     {
-      resourceType: "sei_team_detail",
+      resourceType: "developer_insights_team_detail",
+      aliases: ["sei_team_detail"],
+      searchAliases: ["sei"],
       displayName: "SEI Team Detail",
       description:
         "Team sub-resources. harness_list with team_ref_id and aspect: integrations | developers | integration_filters. For integration_filters, optionally pass integration_type.",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "project",
       headerBasedScoping: true,
       identifierFields: ["team_ref_id"],
@@ -373,10 +384,12 @@ export const seiToolset: ToolsetDefinition = {
 
     // ─── Org Trees ────────────────────────────────────────────────────────────
     {
-      resourceType: "sei_org_tree",
+      resourceType: "developer_insights_org_tree",
+      aliases: ["sei_org_tree"],
+      searchAliases: ["sei"],
       displayName: "SEI Org Tree",
       description: "SEI organizational tree. Supports list and get.",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "project",
       headerBasedScoping: true,
       identifierFields: ["org_tree_id"],
@@ -401,11 +414,13 @@ export const seiToolset: ToolsetDefinition = {
     },
     // Org tree detail (consolidated: 5 sub-resources → 1)
     {
-      resourceType: "sei_org_tree_detail",
+      resourceType: "developer_insights_org_tree_detail",
+      aliases: ["sei_org_tree_detail"],
+      searchAliases: ["sei"],
       displayName: "SEI Org Tree Detail",
       description:
         "Org tree sub-resources. harness_get or harness_list with org_tree_id and aspect: efficiency_profile | productivity_profile | business_alignment_profile | integrations | teams.",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "project",
       headerBasedScoping: true,
       identifierFields: ["org_tree_id"],
@@ -439,11 +454,13 @@ export const seiToolset: ToolsetDefinition = {
 
     // ─── Business Alignment (consolidated: 3 → 1) ──────────────────────────────
     {
-      resourceType: "sei_business_alignment",
+      resourceType: "developer_insights_business_alignment",
+      aliases: ["sei_business_alignment"],
+      searchAliases: ["sei"],
       displayName: "SEI Business Alignment",
       description:
         "Business alignment. harness_list for profiles. harness_get for metrics/summary/drilldown (pass aspect: feature_metrics | feature_summary | drilldown, profile_id, team_ref_id, date_start, date_end).",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "project",
       headerBasedScoping: true,
       identifierFields: ["profile_id"],
@@ -470,13 +487,15 @@ export const seiToolset: ToolsetDefinition = {
     },
 
     // ─── AI Coding Insights (consolidated: 11 → 4) ─────────────────────────────
-    // sei_ai_usage: metrics | breakdown | summary | top_languages
+    // developer_insights_ai_usage: metrics | breakdown | summary | top_languages
     {
-      resourceType: "sei_ai_usage",
+      resourceType: "developer_insights_ai_usage",
+      aliases: ["sei_ai_usage"],
+      searchAliases: ["sei"],
       displayName: "SEI AI Usage",
       description:
         "AI coding assistant usage. harness_get or harness_list with aspect: metrics | breakdown | summary | top_languages. Pass team_ref_id, date_start, date_end, integration_type. For metrics: granularity, metric_type.",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "project",
       headerBasedScoping: true,
       identifierFields: [],
@@ -512,13 +531,15 @@ export const seiToolset: ToolsetDefinition = {
         },
       },
     },
-    // sei_ai_adoption: metrics | breakdown | summary
+    // developer_insights_ai_adoption: metrics | breakdown | summary
     {
-      resourceType: "sei_ai_adoption",
+      resourceType: "developer_insights_ai_adoption",
+      aliases: ["sei_ai_adoption"],
+      searchAliases: ["sei"],
       displayName: "SEI AI Adoption",
       description:
         "AI coding assistant adoption. harness_get or harness_list with aspect: metrics | breakdown | summary. Pass team_ref_id, date_start, date_end, integration_type, granularity.",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "project",
       headerBasedScoping: true,
       identifierFields: [],
@@ -553,13 +574,15 @@ export const seiToolset: ToolsetDefinition = {
         },
       },
     },
-    // sei_ai_impact: pr_velocity | rework
+    // developer_insights_ai_impact: pr_velocity | rework
     {
-      resourceType: "sei_ai_impact",
+      resourceType: "developer_insights_ai_impact",
+      aliases: ["sei_ai_impact"],
+      searchAliases: ["sei"],
       displayName: "SEI AI Impact",
       description:
         "AI impact on PR velocity or rework. harness_get with aspect: pr_velocity | rework. Pass team_ref_id, date_start, date_end, integration_type, granularity.",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "project",
       headerBasedScoping: true,
       identifierFields: [],
@@ -577,13 +600,15 @@ export const seiToolset: ToolsetDefinition = {
         },
       },
     },
-    // sei_ai_raw_metric: per-developer raw metrics (unchanged)
+    // developer_insights_ai_raw_metric: per-developer raw metrics (unchanged)
     {
-      resourceType: "sei_ai_raw_metric",
+      resourceType: "developer_insights_ai_raw_metric",
+      aliases: ["sei_ai_raw_metric"],
+      searchAliases: ["sei"],
       displayName: "SEI AI Raw Metric",
       description:
         "Per-developer raw AI coding assistant metrics — lines suggested, accepted, acceptance rates per individual. Supports list.",
-      toolset: "sei",
+      toolset: "developer_insights",
       scope: "project",
       headerBasedScoping: true,
       identifierFields: [],

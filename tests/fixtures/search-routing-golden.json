@@ -235,16 +235,16 @@
     "id": "cost-perspective",
     "query": "software engineering insight metrics",
     "mode": "specific",
-    "expectedTypes": ["sei_metric"],
-    "acceptableTypes": ["sei_business_alignment"],
+    "expectedTypes": ["developer_insights_metric"],
+    "acceptableTypes": ["developer_insights_business_alignment"],
     "description": "Engineering insights language should route to SEI metrics."
   },
   {
     "id": "slo",
     "query": "service level objective error budget",
     "mode": "specific",
-    "expectedTypes": ["sei_metric"],
-    "acceptableTypes": ["sei_business_alignment"],
+    "expectedTypes": ["developer_insights_metric"],
+    "acceptableTypes": ["developer_insights_business_alignment"],
     "description": "SLO and error budget language should route to SLO resources."
   },
   {

@@ -1,5 +1,5 @@
 /**
- * Unit tests for idp_entity create/update operations.
+ * Unit tests for developer_portal_entity create/update operations.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Registry } from "../../src/registry/index.js";
@@ -69,7 +69,7 @@ function getOp(type: string, op: string): EndpointSpec {
   return spec;
 }
 
-describe("idp_entity mutate operations", () => {
+describe("developer_portal_entity mutate operations", () => {
   let registry: Registry;
 
   beforeEach(() => {
@@ -77,18 +77,23 @@ describe("idp_entity mutate operations", () => {
   });
 
   it("exposes create and update but not delete", () => {
-    const def = findResource("idp_entity");
+    const def = findResource("developer_portal_entity");
     expect(def.operations.create).toBeDefined();
     expect(def.operations.update).toBeDefined();
     expect(def.operations.delete).toBeUndefined();
     expect(def.supportedScopes).toEqual(["account", "org", "project"]);
   });
 
+  it("resolves the legacy idp_entity resourceType via alias", () => {
+    expect(registry.getResource("idp_entity").resourceType).toBe("developer_portal_entity");
+    expect(registry.getResource("idp_entity")).toBe(registry.getResource("developer_portal_entity"));
+  });
+
   it("create: POST /v1/entities with yaml body and scope query params", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service", kind: "component" });
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "idp_entity", "create", {
+    await registry.dispatch(client, "developer_portal_entity", "create", {
       org_id: "my_org",
       project_id: "my_project",
       body: { yaml: SAMPLE_YAML },
@@ -114,7 +119,7 @@ describe("idp_entity mutate operations", () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "idp_entity", "create", {
+    await registry.dispatch(client, "developer_portal_entity", "create", {
       body: SAMPLE_YAML,
     });
 
@@ -126,7 +131,7 @@ describe("idp_entity mutate operations", () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "idp_entity", "create", {
+    await registry.dispatch(client, "developer_portal_entity", "create", {
       body: { yaml: SAMPLE_YAML },
       convert: true,
       dry_run: true,
@@ -150,7 +155,7 @@ describe("idp_entity mutate operations", () => {
       store_type: "REMOTE",
     };
 
-    await registry.dispatch(client, "idp_entity", "create", {
+    await registry.dispatch(client, "developer_portal_entity", "create", {
       body: { yaml: SAMPLE_YAML, git_details: gitDetails },
     });
 
@@ -162,7 +167,7 @@ describe("idp_entity mutate operations", () => {
     const client = makeClient();
 
     await expect(
-      registry.dispatch(client, "idp_entity", "create", { body: {} }),
+      registry.dispatch(client, "developer_portal_entity", "create", { body: {} }),
     ).rejects.toThrow(/yaml is required/);
   });
 
@@ -170,7 +175,7 @@ describe("idp_entity mutate operations", () => {
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "idp_entity", "update", {
+    await registry.dispatch(client, "developer_portal_entity", "update", {
       org_id: "my_org",
       project_id: "my_project",
       kind: "component",
@@ -195,7 +200,7 @@ describe("idp_entity mutate operations", () => {
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "idp_entity", "update", {
+    await registry.dispatch(client, "developer_portal_entity", "update", {
       kind: "component",
       entity_id: "boutique-service",
       body: { yaml: SAMPLE_YAML },
@@ -214,7 +219,7 @@ describe("idp_entity mutate operations", () => {
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "boutique-service" });
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "idp_entity", "update", {
+    await registry.dispatch(client, "developer_portal_entity", "update", {
       resource_scope: "account",
       org_id: "my_org",
       project_id: "my_project",
@@ -236,14 +241,14 @@ describe("idp_entity mutate operations", () => {
     const client = makeClient();
 
     await expect(
-      registry.dispatch(client, "idp_entity", "update", {
+      registry.dispatch(client, "developer_portal_entity", "update", {
         entity_id: "boutique-service",
         body: { yaml: SAMPLE_YAML },
       }),
     ).rejects.toThrow(/Missing required field "kind"/);
 
     await expect(
-      registry.dispatch(client, "idp_entity", "update", {
+      registry.dispatch(client, "developer_portal_entity", "update", {
         kind: "component",
         body: { yaml: SAMPLE_YAML },
       }),
@@ -251,8 +256,8 @@ describe("idp_entity mutate operations", () => {
   });
 
   it("bodyBuilder helpers match registry specs", () => {
-    const createSpec = getOp("idp_entity", "create");
-    const updateSpec = getOp("idp_entity", "update");
+    const createSpec = getOp("developer_portal_entity", "create");
+    const updateSpec = getOp("developer_portal_entity", "update");
 
     expect(createSpec.skipScopeBodyInjection).toBe(true);
     expect(updateSpec.skipScopeBodyInjection).toBe(true);
