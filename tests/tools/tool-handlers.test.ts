@@ -220,34 +220,53 @@ describe("harness_get", () => {
 
   it("fetches and projects the v1 runtime input template", async () => {
     mockRequest.mockResolvedValueOnce({
-      inputs: {},
-      template_yaml: "pipeline:\n  clone:\n    ref:\n      name: \"${{ inputs.branch }}\"\n",
-      resolved_yaml: "pipeline:\n  id: my-pipeline\n",
-      has_input_sets: false,
-      replaced_expressions: [],
-      replaced_expressions_per_stage: {},
-      modules: ["ci", "pms"],
+      data: {
+        inputs: [
+          {
+            details: {
+              name: "branch",
+              type: "string",
+              required: true,
+            },
+          },
+        ],
+      },
     });
 
     const result = await server.call("harness_get", {
       resource_type: "runtime_input_template_v1",
       resource_id: "my-pipeline",
+      params: {
+        branch_name: "feature/my-fix",
+        connector_ref: "account.git",
+        repo_name: "my-repo",
+      },
     });
 
     expect(result.isError).toBeUndefined();
     expect(parseResult(result)).toMatchObject({
-      inputs: {},
-      template_yaml: expect.stringContaining("inputs.branch"),
-      resolved_yaml: expect.stringContaining("my-pipeline"),
-      has_input_sets: false,
-      modules: ["ci", "pms"],
-      _hint: expect.stringContaining("pipeline_v1"),
+      inputs: [
+        {
+          details: {
+            name: "branch",
+            type: "string",
+            required: true,
+          },
+        },
+      ],
+      metadata_available: true,
+      _hint: expect.stringContaining("inputs[].details.name"),
     });
     expect(mockRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        method: "POST",
-        path: "/v1/orgs/default/projects/test-project/pipelines/my-pipeline/inputs",
-        body: { stage_ids: [] },
+        method: "GET",
+        path: "/v1/orgs/default/projects/test-project/pipelines/my-pipeline/inputs-schema",
+        params: expect.objectContaining({
+          branch_name: "feature/my-fix",
+          connector_ref: "account.git",
+          repo_name: "my-repo",
+        }),
+        headerBasedScoping: true,
       }),
     );
   });
@@ -1897,7 +1916,10 @@ describe("harness_execute", () => {
   });
 
   it("wraps pipeline_v1 input values under the inputs YAML root", async () => {
-    await server.call("harness_execute", {
+    mockRequest.mockResolvedValueOnce({
+      execution_details: { execution_id: "v1-exec", status: "RUNNING" },
+    });
+    const result = await server.call("harness_execute", {
       resource_type: "pipeline_v1",
       action: "run",
       resource_id: "my-pipe",
@@ -1905,13 +1927,28 @@ describe("harness_execute", () => {
         branch: "feature/my-fix",
         deploy: { environment: "qa" },
       },
+      params: {
+        branch_name: "feature/my-fix",
+        connector_ref: "account.git",
+        repo_name: "my-repo",
+      },
     });
 
     const call = mockRequest.mock.calls[0]![0] as {
       path: string;
+      params: Record<string, unknown>;
       body: { inputs_yaml: string };
     };
+    expect(parseResult(result)).toMatchObject({
+      execution_id: "v1-exec",
+      status: "RUNNING",
+    });
     expect(call.path).toBe("/v1/orgs/default/projects/test-project/pipelines/my-pipe/execute");
+    expect(call.params).toMatchObject({
+      branch_name: "feature/my-fix",
+      connector_ref: "account.git",
+      repo_name: "my-repo",
+    });
     expect(call.body.inputs_yaml).toContain("inputs:");
     expect(call.body.inputs_yaml).toContain("branch: feature/my-fix");
     expect(call.body.inputs_yaml).toContain("environment: qa");

@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
-import { runtimeInputTemplatePreflight } from "../../src/registry/extractors.js";
+import {
+  runtimeInputTemplatePreflight,
+  runtimeInputV1Extract,
+} from "../../src/registry/extractors.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -165,6 +168,149 @@ describe("runtime_input_template resource — request shape", () => {
     expect(result).toMatchObject({
       inputSetTemplateYaml: expect.stringContaining("identifier: p"),
     });
+  });
+});
+
+describe("runtimeInputV1Extract — response shape", () => {
+  const branchInput = {
+    details: {
+      name: "branch",
+      type: "string",
+      required: true,
+      allowed_values: ["main", "develop"],
+    },
+    metadata: {
+      dependencies: {
+        required_runtime_inputs: [],
+        required_fixed_values: [],
+      },
+    },
+  };
+
+  it("unwraps a data envelope without changing the inputs schema", () => {
+    expect(runtimeInputV1Extract({ data: { inputs: [branchInput] } })).toEqual({
+      inputs: [branchInput],
+      metadata_available: true,
+      _hint: expect.stringContaining("inputs[].details.name"),
+    });
+  });
+
+  it("accepts the flat public response shape", () => {
+    expect(runtimeInputV1Extract({ inputs: [branchInput] })).toMatchObject({
+      inputs: [branchInput],
+      metadata_available: true,
+    });
+  });
+
+  it("distinguishes an empty input schema from missing metadata", () => {
+    expect(runtimeInputV1Extract({ data: { inputs: [] } })).toEqual({
+      inputs: [],
+      metadata_available: true,
+      _hint: expect.stringContaining("declares no runtime inputs"),
+    });
+    expect(runtimeInputV1Extract({ data: {} })).toEqual({
+      inputs: null,
+      metadata_available: false,
+      _hint: expect.stringContaining("Do not assume"),
+    });
+  });
+
+  it("rejects an invalid inputs field without claiming there are no inputs", () => {
+    expect(runtimeInputV1Extract({ inputs: {} })).toEqual({
+      inputs: null,
+      metadata_available: false,
+      _hint: expect.stringContaining("invalid inputs field"),
+    });
+  });
+});
+
+describe("runtime_input_template_v1 resource — request shape", () => {
+  it("dispatches documented GET inputs-schema with Git Experience params", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: {
+        inputs: [
+          {
+            details: { name: "branch", type: "string", required: true },
+          },
+        ],
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "runtime_input_template_v1", "get", {
+      pipeline_id: "my-pipe",
+      org_id: "myorg",
+      project_id: "myproj",
+      branch_name: "feature/runtime-inputs",
+      connector_ref: "account.git",
+      repo_name: "my-repo",
+    });
+
+    expect(result).toMatchObject({
+      inputs: [
+        {
+          details: { name: "branch", type: "string", required: true },
+        },
+      ],
+      metadata_available: true,
+    });
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/v1/orgs/myorg/projects/myproj/pipelines/my-pipe/inputs-schema",
+        params: expect.objectContaining({
+          branch_name: "feature/runtime-inputs",
+          connector_ref: "account.git",
+          repo_name: "my-repo",
+        }),
+        body: undefined,
+        headerBasedScoping: true,
+      }),
+    );
+  });
+});
+
+describe("pipeline_v1.run — request and response shape", () => {
+  it("forwards Git Experience params and flattens execution details", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      execution_details: {
+        execution_id: "exec-1",
+        status: "RUNNING",
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(client, "pipeline_v1", "run", {
+      pipeline_id: "my-pipe",
+      org_id: "myorg",
+      project_id: "myproj",
+      branch_name: "feature/runtime-inputs",
+      connector_ref: "account.git",
+      repo_name: "my-repo",
+      inputs: { branch: "feature/runtime-inputs" },
+    });
+
+    expect(result).toMatchObject({
+      execution_id: "exec-1",
+      status: "RUNNING",
+    });
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/v1/orgs/myorg/projects/myproj/pipelines/my-pipe/execute",
+        params: expect.objectContaining({
+          branch_name: "feature/runtime-inputs",
+          connector_ref: "account.git",
+          repo_name: "my-repo",
+        }),
+        body: {
+          inputs_yaml: "inputs:\n  branch: feature/runtime-inputs\n",
+        },
+        headerBasedScoping: true,
+      }),
+    );
   });
 });
 

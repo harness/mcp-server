@@ -13,6 +13,7 @@ import { asRecord, asString, coerceRecord } from "../utils/type-guards.js";
 import { isFlatKeyValueInputs, isResolvableInputs, flattenInputs, resolveRuntimeInputs, resolveRuntimeInputsWithBaseYaml, type ResolutionResult } from "../utils/runtime-input-resolver.js";
 import { applyInputExpansions } from "../utils/input-expander.js";
 import { materializeInputSetsToRuntimeYaml, mergeRuntimePipelineFragments } from "../utils/materialize-input-sets.js";
+import { normalizeV1PipelineRunInputs } from "../utils/pipeline-v1-runtime-inputs.js";
 import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
 import { pollExecutionToTerminal, FAILURE_STATUSES, AbortError } from "../utils/poll-execution.js";
 import { sendProgress } from "../utils/progress.js";
@@ -28,33 +29,6 @@ function hasNoInlineRuntimeInputs(inputs: unknown): boolean {
   if (inputs === undefined) return true;
   const record = asRecord(inputs);
   return !!record && Object.keys(record).length === 0;
-}
-
-function normalizeV1PipelineRunInputs(input: Record<string, unknown>): string | undefined {
-  const body = asRecord(input.body);
-  const candidates: Array<{ name: string; value: unknown }> = [];
-  if (input.inputs !== undefined) candidates.push({ name: "inputs", value: input.inputs });
-  if (body?.inputs !== undefined) candidates.push({ name: "body.inputs", value: body.inputs });
-  if (body?.inputs_yaml !== undefined) candidates.push({ name: "body.inputs_yaml", value: body.inputs_yaml });
-
-  if (candidates.length > 1) {
-    return `Conflicting pipeline_v1 runtime inputs were provided via ${candidates.map(({ name }) => name).join(", ")}. Provide only one source; prefer the top-level inputs argument.`;
-  }
-  if (candidates.length === 0) return undefined;
-
-  const candidate = candidates[0]!;
-  if (candidate.name === "body.inputs_yaml" && typeof candidate.value !== "string") {
-    return "body.inputs_yaml must be a YAML string for pipeline_v1 execution.";
-  }
-  if (
-    typeof candidate.value !== "string"
-    && (!candidate.value || typeof candidate.value !== "object" || Array.isArray(candidate.value))
-  ) {
-    return `${candidate.name} must be a YAML string or key-value object for pipeline_v1 execution.`;
-  }
-
-  input.inputs = candidate.value;
-  return undefined;
 }
 
 /**
