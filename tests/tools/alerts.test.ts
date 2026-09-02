@@ -193,6 +193,37 @@ describe("alert — harness_list", () => {
     expect(item).not.toHaveProperty("__internalMeta");
   });
 
+  it("keeps the linked type and relationship verb in list view, dropping globalId", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{
+        prettyId: "ALERT-1",
+        relatedActivities: [{
+          name: "relates to",
+          templateTypeName: "INCIDENT",
+          prettyId: "INC-7",
+          globalId: "global-abc",
+          title: "Checkout latency",
+        }],
+      }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "alert" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]!.relatedActivities).toEqual([
+      { prettyId: "INC-7", resource_type: "incident", title: "Checkout latency", name: "relates to" },
+    ]);
+  });
+
+  it("omits relatedActivities when the alert has none", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{ prettyId: "ALERT-1", relatedActivities: [] }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", { resource_type: "alert" });
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]!).not.toHaveProperty("relatedActivities");
+  });
+
   it("keeps a short description verbatim in list view", async () => {
     mockRequest.mockResolvedValueOnce({
       entities: [{ prettyId: "ALERT-1", description: "short" }],
@@ -268,6 +299,28 @@ describe("alert — harness_get", () => {
     expect(data.keyEvents).toEqual([{ timestamp: 1, status: "TRIGGERED", details: "looking" }]);
     expect(data).not.toHaveProperty("__internalMeta");
     expect(data).not.toHaveProperty("correlationId");
+  });
+
+  it("projects related activities the same way as the list view", async () => {
+    mockRequest.mockResolvedValueOnce({
+      prettyId: "ALERT-42",
+      relatedActivities: [{
+        name: "relates to",
+        templateTypeName: "INCIDENT",
+        prettyId: "INC-7",
+        globalId: "global-abc",
+        title: "Checkout latency",
+        __internalMeta: { trace: "abc" },
+      }],
+    });
+    const result = await server.call("harness_get", { resource_type: "alert", resource_id: "ALERT-42" });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.relatedActivities).toEqual([{
+      prettyId: "INC-7",
+      resource_type: "incident",
+      title: "Checkout latency",
+      name: "relates to",
+    }]);
   });
 
   it("keeps the full description in the detail view", async () => {

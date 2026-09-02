@@ -2,6 +2,7 @@ import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { buildBodyNormalized } from "../../utils/body-normalizer.js";
 import { offsetListExtract } from "../extractors.js";
 import { MC_SCOPE } from "./scopes.js";
+import { projectRelatedActivity } from "./related-activities.js";
 import { isRecord } from "../../utils/type-guards.js";
 
 /**
@@ -28,7 +29,8 @@ const LIST_DESCRIPTION_MAX = 400;
  * compactor. Emits a stable, documented shape and drops backend
  * envelope/debug/meta. `verbose` controls whether the heavy keyEvents array
  * is projected in full (detail view) or replaced with a count (list), and
- * whether description is kept in full or truncated.
+ * whether description is kept in full or truncated. Related activities are
+ * already small enough to emit in full in both views.
  */
 function projectAlert(raw: Record<string, unknown>, verbose: boolean): Record<string, unknown> {
   const slim: Record<string, unknown> = {};
@@ -57,6 +59,9 @@ function projectAlert(raw: Record<string, unknown>, verbose: boolean): Record<st
   }
   if (Array.isArray(raw.keyEvents)) {
     slim.keyEvents = verbose ? raw.keyEvents.map(projectKeyEvent) : raw.keyEvents.length;
+  }
+  if (Array.isArray(raw.relatedActivities) && raw.relatedActivities.length > 0) {
+    slim.relatedActivities = raw.relatedActivities.map(projectRelatedActivity);
   }
   return slim;
 }
