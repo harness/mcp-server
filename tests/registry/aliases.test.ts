@@ -228,7 +228,21 @@ describe("P0 alias layer — load-time collision guards", () => {
       description: "d",
       resources: [res({ resourceType: "shared_thing", toolset: "cap_b" })],
     };
-    expect(() => registryWith([a, b])).toThrow(/Duplicate resourceType "shared_thing"/);
+    expect(() => registryWith([a, b])).toThrow(
+      'Duplicate resourceType "shared_thing" declared in both "cap_a" and "cap_b" toolsets.',
+    );
+  });
+
+  it("throws when an additionalToolset declares a resourceType owned by a production toolset", () => {
+    const extra: ToolsetDefinition = {
+      name: "extra_fixture",
+      displayName: "Extra",
+      description: "d",
+      resources: [res({ resourceType: "pipeline", toolset: "extra_fixture" })],
+    };
+    expect(() => registryWith([extra])).toThrow(
+      /Duplicate resourceType "pipeline" declared in both "pipelines" and "extra_fixture"/,
+    );
   });
 
   it("checks canonical-resourceType uniqueness against the full static toolset list, not just the enabled subset", () => {
