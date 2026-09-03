@@ -909,7 +909,7 @@ For v1 pipelines:
 
 1. Fetch `harness_get(resource_type="runtime_input_template_v1", resource_id="<pipeline_id>")`.
    For Git-backed pipelines, pass `branch_name`, `connector_ref`, and `repo_name` through `params`.
-2. Use each returned `inputs[].details.name` as a top-level key in `harness_execute.inputs`.
+2. Read `template_yaml` and `resolved_yaml` for declared `${{ inputs.* }}` values and defaults.
 3. Run `harness_execute(resource_type="pipeline_v1", action="run", resource_id="<pipeline_id>", inputs={...})`.
    The server wraps these values under an `inputs:` YAML root and sends the API's `inputs_yaml` body.
 

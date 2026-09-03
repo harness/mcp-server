@@ -1304,8 +1304,8 @@ export const pipelinesToolset: ToolsetDefinition = {
     },
     {
       resourceType: "runtime_input_template_v1",
-      displayName: "Runtime Input Schema (V1)",
-      description: "Fetch the declared runtime input schema for a v1 pipeline. Use the returned inputs[].details names and constraints before executing pipeline_v1.",
+      displayName: "Runtime Input Template (V1)",
+      description: "Fetch the declared runtime inputs for a v1 pipeline. Use this before executing pipeline_v1; returned template_yaml and resolved_yaml show every ${{ inputs.* }} reference that can be supplied.",
       toolset: "pipelines",
       scope: "project",
       headerBasedScoping: true,
@@ -1319,8 +1319,8 @@ export const pipelinesToolset: ToolsetDefinition = {
       ],
       operations: {
         get: {
-          method: "GET",
-          path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/inputs-schema",
+          method: "POST",
+          path: "/v1/orgs/{org}/projects/{project}/pipelines/{pipeline}/inputs",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { org_id: "org", project_id: "project", pipeline_id: "pipeline" },
           queryParams: {
@@ -1329,9 +1329,10 @@ export const pipelinesToolset: ToolsetDefinition = {
             connector_ref: "connector_ref",
             repo_name: "repo_name",
           },
+          bodyBuilder: () => ({ stage_ids: [] }),
           paramsSchema: PIPELINE_V1_GIT_READ_PARAMS,
           responseExtractor: runtimeInputV1Extract,
-          description: "Fetch v1 pipeline input names, types, defaults, allowed values, and dependencies.",
+          description: "Fetch the v1 pipeline input template and resolved pipeline YAML.",
         },
       },
     },

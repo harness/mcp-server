@@ -172,69 +172,60 @@ describe("runtime_input_template resource — request shape", () => {
 });
 
 describe("runtimeInputV1Extract — response shape", () => {
-  const branchInput = {
-    details: {
-      name: "branch",
-      type: "string",
-      required: true,
-      allowed_values: ["main", "develop"],
-    },
-    metadata: {
-      dependencies: {
-        required_runtime_inputs: [],
-        required_fixed_values: [],
-      },
-    },
+  const uiResponse = {
+    inputs: {},
+    template_yaml: "pipeline:\n  clone:\n    ref:\n      name: \"${{ inputs.branch }}\"\n",
+    resolved_yaml: "pipeline:\n  inputs:\n    branch:\n      type: string\n      default: main\n",
+    has_input_sets: false,
+    replaced_expressions: [],
+    replaced_expressions_per_stage: {},
+    modules: ["ci", "pms"],
   };
 
-  it("unwraps a data envelope without changing the inputs schema", () => {
-    expect(runtimeInputV1Extract({ data: { inputs: [branchInput] } })).toEqual({
-      inputs: [branchInput],
-      metadata_available: true,
-      _hint: expect.stringContaining("inputs[].details.name"),
+  it("unwraps a data envelope without changing the template fields", () => {
+    expect(runtimeInputV1Extract({ data: uiResponse })).toEqual({
+      inputs: {},
+      template_yaml: uiResponse.template_yaml,
+      resolved_yaml: uiResponse.resolved_yaml,
+      has_input_sets: false,
+      replaced_expressions: [],
+      replaced_expressions_per_stage: {},
+      modules: ["ci", "pms"],
+      _hint: expect.stringContaining("${{ inputs.* }}"),
     });
   });
 
   it("accepts the flat public response shape", () => {
-    expect(runtimeInputV1Extract({ inputs: [branchInput] })).toMatchObject({
-      inputs: [branchInput],
-      metadata_available: true,
+    expect(runtimeInputV1Extract(uiResponse)).toMatchObject({
+      template_yaml: uiResponse.template_yaml,
+      resolved_yaml: uiResponse.resolved_yaml,
+      modules: ["ci", "pms"],
     });
   });
 
-  it("distinguishes an empty input schema from missing metadata", () => {
-    expect(runtimeInputV1Extract({ data: { inputs: [] } })).toEqual({
-      inputs: [],
-      metadata_available: true,
-      _hint: expect.stringContaining("declares no runtime inputs"),
-    });
-    expect(runtimeInputV1Extract({ data: {} })).toEqual({
-      inputs: null,
-      metadata_available: false,
-      _hint: expect.stringContaining("Do not assume"),
-    });
-  });
-
-  it("rejects an invalid inputs field without claiming there are no inputs", () => {
-    expect(runtimeInputV1Extract({ inputs: {} })).toEqual({
-      inputs: null,
-      metadata_available: false,
-      _hint: expect.stringContaining("invalid inputs field"),
+  it("returns a no-inputs hint when template_yaml is absent", () => {
+    expect(runtimeInputV1Extract({ inputs: {}, has_input_sets: false })).toEqual({
+      inputs: {},
+      template_yaml: null,
+      resolved_yaml: null,
+      has_input_sets: false,
+      replaced_expressions: [],
+      replaced_expressions_per_stage: {},
+      modules: [],
+      _hint: expect.stringContaining("no runtime inputs"),
     });
   });
 });
 
 describe("runtime_input_template_v1 resource — request shape", () => {
-  it("dispatches documented GET inputs-schema with Git Experience params", async () => {
+  it("dispatches UI POST /inputs with stage_ids and Git Experience params", async () => {
     const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({
-      data: {
-        inputs: [
-          {
-            details: { name: "branch", type: "string", required: true },
-          },
-        ],
-      },
+      inputs: {},
+      template_yaml: "pipeline:\n  clone:\n    ref:\n      name: \"${{ inputs.branch }}\"\n",
+      resolved_yaml: "pipeline:\n  inputs:\n    branch:\n      type: string\n",
+      has_input_sets: false,
+      modules: ["ci"],
     });
     const client = makeClient(mockRequest);
 
@@ -248,23 +239,20 @@ describe("runtime_input_template_v1 resource — request shape", () => {
     });
 
     expect(result).toMatchObject({
-      inputs: [
-        {
-          details: { name: "branch", type: "string", required: true },
-        },
-      ],
-      metadata_available: true,
+      template_yaml: expect.stringContaining("${{ inputs.branch }}"),
+      resolved_yaml: expect.stringContaining("branch:"),
+      modules: ["ci"],
     });
     expect(mockRequest).toHaveBeenCalledWith(
       expect.objectContaining({
-        method: "GET",
-        path: "/v1/orgs/myorg/projects/myproj/pipelines/my-pipe/inputs-schema",
+        method: "POST",
+        path: "/v1/orgs/myorg/projects/myproj/pipelines/my-pipe/inputs",
         params: expect.objectContaining({
           branch_name: "feature/runtime-inputs",
           connector_ref: "account.git",
           repo_name: "my-repo",
         }),
-        body: undefined,
+        body: { stage_ids: [] },
         headerBasedScoping: true,
       }),
     );
