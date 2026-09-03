@@ -489,6 +489,33 @@ describe("applyUrlDefaults", () => {
     expect(result.project_id).toBe("myProject");
   });
 
+  it("still merges URL org/project for renamed feature_flag_segment even with a stray workspace_id", () => {
+    const result = applyUrlDefaults(
+      { resource_type: "feature_flag_segment", workspace_id: "stale-ws" } as Record<string, unknown>,
+      "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/services",
+    );
+
+    expect(result.org_id).toBe("myOrg");
+    expect(result.project_id).toBe("myProject");
+  });
+
+  it("parses STO issues list URLs to security_issue (registry-resolvable alias)", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/acc/all/orgs/myOrg/projects/myProj/sto/issues",
+    );
+    expect(result.resource_type).toBe("security_issue");
+    expect(result.org_id).toBe("myOrg");
+    expect(result.project_id).toBe("myProj");
+  });
+
+  it("parses STO exemptions list URLs to security_exemption (registry-resolvable alias)", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/acc/all/orgs/myOrg/projects/myProj/sto/exemptions/ex-1",
+    );
+    expect(result.resource_type).toBe("security_exemption");
+    expect(result.resource_id).toBe("ex-1");
+  });
+
   it("falls back to the URL-parsed resource type when the caller declares none", () => {
     const result = applyUrlDefaults(
       { workspace_id: "ws1" } as Record<string, unknown>,
