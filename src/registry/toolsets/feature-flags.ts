@@ -57,7 +57,7 @@ const fmeFeatureFlagKillRestoreReallocateSchema: BodySchema = {
 };
 
 const fmeFeatureFlagArchiveSchema: BodySchema = {
-  description: "Optional comment and/or title recorded with the action. Both fields are accepted in legacy (workspace_id) and Harness-native (org_id+project_id) mode.",
+  description: "Optional comment and/or title recorded with the action.",
   fields: [
     { name: "comment", type: "string", required: false, description: "Optional comment explaining the change" },
     { name: "title", type: "string", required: false, description: "Optional short title for the change" },
