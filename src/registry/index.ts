@@ -98,6 +98,27 @@ function buildToolsetAliases(allToolsets: ToolsetDefinition[]): Map<string, stri
  * resource's declarative `aliases`. An alias must never shadow a canonical
  * resourceType and must map to exactly one canonical type.
  */
+/**
+ * Guards against two toolsets declaring the same canonical resourceType. Checked
+ * against the full static toolset list (not just the runtime-enabled subset), since
+ * a collision is a property of the source data and must fail regardless of which
+ * HARNESS_TOOLSETS filter a given deployment happens to use.
+ */
+function assertUniqueResourceTypes(allToolsets: ToolsetDefinition[]): void {
+  const owner = new Map<string, string>();
+  for (const toolset of allToolsets) {
+    for (const resource of toolset.resources) {
+      const existing = owner.get(resource.resourceType);
+      if (existing && existing !== toolset.name) {
+        throw new Error(
+          `Duplicate resourceType "${resource.resourceType}" declared in both "${existing}" and "${toolset.name}" toolsets.`,
+        );
+      }
+      owner.set(resource.resourceType, toolset.name);
+    }
+  }
+}
+
 function buildResourceTypeAliases(resourceMap: Map<string, ResourceDefinition>): Map<string, string> {
   const map = new Map<string, string>();
   for (const [canonical, def] of resourceMap) {
@@ -260,6 +281,8 @@ export class Registry {
     this.accountIdResolver = options.accountIdResolver;
     this.auditManager = options.auditManager;
     const allToolsets = [...ALL_TOOLSETS, ...(options.additionalToolsets ?? [])];
+
+    assertUniqueResourceTypes(allToolsets);
 
     // Toolset aliases must be resolved before parsing HARNESS_TOOLSETS so old
     // toolset names in that config still enable the renamed toolset.
