@@ -17,7 +17,7 @@ const ROOT = join(__dirname, "..");
 const README_PATH = join(ROOT, "README.md");
 // Other README sections have historical drift; expand this set as those tables are normalized.
 const README_COVERAGE_TOOLSETS = new Map([
-  ["feature-flags", { sectionTitle: "Feature Flags" }],
+  ["feature_flags", { sectionTitle: "Feature Flags" }],
   ["file_store", { sectionTitle: "File Store" }],
   ["chaos", { sectionTitle: "Chaos Engineering" }],
   ["release_management", { sectionTitle: "Release Management" }],

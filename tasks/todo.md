@@ -63,9 +63,10 @@ Codemod whole-token, word-boundary, driven by the §3 mapping tables. Prompts ar
   registry — that table was hand-maintained and stale for the ENTIRE module rename (still showed
   iacm/scs/sto/ccm/sei/dbops/idp/knowledge-graph/semantic-layer + old resource types).
 
-## Known follow-up (surfaced, NOT done — out of hyphen scope)
-- README **### Feature Flags** coverage matrix + dual-mode prose still use pre-P4b `fme_*`
-  resource-type names (13 matrix rows + ~10 prose lines w/ API paths & merge-patch semantics).
-  Its generator curated key is still `feature-flags` (stale → canonical is `feature_flags`), so
-  P4b silently disabled this section's validation. Flipping the key requires rewriting the whole
-  matrix+prose first. Needs a focused pass; risky to fold into the hyphen change.
+## P4b docs gap — ✅ DONE (feature_flags coverage)
+- README **### Feature Flags** matrix + dual-mode prose migrated from pre-P4b `fme_*` to canonical
+  `feature_flag_*` (45 backtick-tokens; product name "FME (Split.io)", `/fme/api/v4/...` paths, and
+  `HARNESS_FME_API_KEY` preserved via leading-backtick anchoring). Matrix regenerated directly from
+  the registry so CRUD+execute-action columns match by construction. Flipped generate-docs.js curated
+  key `feature-flags`→`feature_flags`, re-enabling this section's validation (silently disabled since
+  P4b). docs:check green with feature_flags coverage now guarded.
