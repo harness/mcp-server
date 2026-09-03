@@ -214,4 +214,51 @@ describe("P0 alias layer — load-time collision guards", () => {
     };
     expect(() => registryWith([a, b])).toThrow(/claimed by both/);
   });
+
+  it("throws when two toolsets declare the same canonical resourceType", () => {
+    const a: ToolsetDefinition = {
+      name: "cap_a",
+      displayName: "A",
+      description: "d",
+      resources: [res({ resourceType: "shared_thing", toolset: "cap_a" })],
+    };
+    const b: ToolsetDefinition = {
+      name: "cap_b",
+      displayName: "B",
+      description: "d",
+      resources: [res({ resourceType: "shared_thing", toolset: "cap_b" })],
+    };
+    expect(() => registryWith([a, b])).toThrow(/Duplicate resourceType "shared_thing"/);
+  });
+
+  it("checks canonical-resourceType uniqueness against the full static toolset list, not just the enabled subset", () => {
+    const a: ToolsetDefinition = {
+      name: "cap_a",
+      optIn: true,
+      displayName: "A",
+      description: "d",
+      resources: [res({ resourceType: "shared_thing", toolset: "cap_a" })],
+    };
+    const b: ToolsetDefinition = {
+      name: "cap_b",
+      optIn: true,
+      displayName: "B",
+      description: "d",
+      resources: [res({ resourceType: "shared_thing", toolset: "cap_b" })],
+    };
+    // Neither toolset is enabled by default (optIn), and HARNESS_TOOLSETS selects neither —
+    // the collision must still be caught at construction time.
+    expect(() => registryWith([a, b], { HARNESS_TOOLSETS: "pipelines" })).toThrow(
+      /Duplicate resourceType "shared_thing"/,
+    );
+  });
+});
+
+describe("P0 alias layer — global resourceType uniqueness (production registry)", () => {
+  it("has no two production toolsets declaring the same canonical resourceType", () => {
+    // Constructing the default registry (no additionalToolsets) already runs
+    // assertUniqueResourceTypes against every real toolset; this just documents
+    // the invariant explicitly so a future collision fails with a clear intent.
+    expect(() => new Registry(makeConfig())).not.toThrow();
+  });
 });
