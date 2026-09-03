@@ -57,9 +57,10 @@ const fmeFeatureFlagKillRestoreReallocateSchema: BodySchema = {
 };
 
 const fmeFeatureFlagArchiveSchema: BodySchema = {
-  description: "Optional comment recorded with the action.",
+  description: "Optional comment and/or title recorded with the action.",
   fields: [
     { name: "comment", type: "string", required: false, description: "Optional comment explaining the change" },
+    { name: "title", type: "string", required: false, description: "Optional short title for the change" },
   ],
 };
 
@@ -702,11 +703,14 @@ export const featureFlagsToolset: ToolsetDefinition = {
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           bodyBuilder: (input) => {
             const body = (input.body as Record<string, unknown> | undefined) ?? {};
-            return body.comment !== undefined ? { comment: body.comment } : {};
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
           },
           responseExtractor: fmeActionExtract,
           actionDescription:
-            "Archive a feature flag. Requires feature_flag_name, plus workspace_id (legacy) or org_id+project_id (Harness-native). Subject to OPA policy checks (409 on failure). Optional comment recorded with the change.",
+            "Archive a feature flag. Requires feature_flag_name, plus workspace_id (legacy) or org_id+project_id (Harness-native). Subject to OPA policy checks (409 on failure). Optional comment/title recorded with the change.",
           bodySchema: fmeFeatureFlagArchiveSchema,
         },
         unarchive: {
@@ -728,11 +732,14 @@ export const featureFlagsToolset: ToolsetDefinition = {
           pathParams: { workspace_id: "wsId", feature_flag_name: "featureFlagName" },
           bodyBuilder: (input) => {
             const body = (input.body as Record<string, unknown> | undefined) ?? {};
-            return body.comment !== undefined ? { comment: body.comment } : {};
+            return {
+              ...(body.comment !== undefined ? { comment: body.comment } : {}),
+              ...(body.title !== undefined ? { title: body.title } : {}),
+            };
           },
           responseExtractor: fmeActionExtract,
           actionDescription:
-            "Unarchive a previously archived feature flag. Requires feature_flag_name, plus workspace_id (legacy) or org_id+project_id (Harness-native). Returns 409 if the flag has dependent objects. Optional comment recorded with the change.",
+            "Unarchive a previously archived feature flag. Requires feature_flag_name, plus workspace_id (legacy) or org_id+project_id (Harness-native). Returns 409 if the flag has dependent objects. Optional comment/title recorded with the change.",
           bodySchema: fmeFeatureFlagArchiveSchema,
         },
       },
