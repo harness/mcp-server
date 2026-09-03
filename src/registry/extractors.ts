@@ -553,30 +553,32 @@ export const pipelineResolvedYamlExtract = (raw: unknown): unknown => {
 };
 
 /**
- * Extracts the declared inputs returned by the Harness pipeline v1 inputs-schema API.
+ * Extracts the declared inputs returned by the Harness pipeline v1 inputs API.
+ * V1 values are supplied as one YAML document rooted at `inputs:`.
  * The API may return its public shape directly or inside the standard `data` envelope.
  */
 export const runtimeInputV1Extract = (raw: unknown): unknown => {
   const outer = asRecord(raw);
-  const r = asRecord(outer?.data) ?? outer;
-  const hasInputsField = !!r && Object.prototype.hasOwnProperty.call(r, "inputs");
-  const inputs = hasInputsField && Array.isArray(r?.inputs) ? r.inputs : null;
-
-  let hint: string;
-  if (!hasInputsField) {
-    hint = "The v1 inputs-schema response omitted inputs metadata. Do not assume the pipeline has no runtime inputs.";
-  } else if (!inputs) {
-    hint = "The v1 inputs-schema response contained an invalid inputs field. Expected an array; do not execute until the schema is confirmed.";
-  } else if (inputs.length === 0) {
-    hint = "This v1 pipeline declares no runtime inputs. Execute it without the inputs argument.";
-  } else {
-    hint = "Use each inputs[].details.name as a top-level harness_execute inputs key for pipeline_v1. The server sends those values as one inputs: YAML document.";
-  }
-
+  const r = (asRecord(outer?.data) ?? outer) as {
+    inputs?: Record<string, unknown>;
+    template_yaml?: string;
+    resolved_yaml?: string;
+    has_input_sets?: boolean;
+    replaced_expressions?: string[];
+    replaced_expressions_per_stage?: Record<string, string[]>;
+    modules?: string[];
+  };
   return {
-    inputs,
-    metadata_available: inputs !== null,
-    _hint: hint,
+    inputs: r.inputs ?? {},
+    template_yaml: r.template_yaml ?? null,
+    resolved_yaml: r.resolved_yaml ?? null,
+    has_input_sets: r.has_input_sets ?? false,
+    replaced_expressions: r.replaced_expressions ?? [],
+    replaced_expressions_per_stage: r.replaced_expressions_per_stage ?? {},
+    modules: r.modules ?? [],
+    _hint: r.template_yaml
+      ? "This v1 template shows the available ${{ inputs.* }} values. Pass matching key-value pairs through harness_execute(resource_type='pipeline_v1', action='run', inputs={...}); they are sent as one inputs: YAML document."
+      : "This v1 pipeline has no runtime inputs. You can execute it without providing inputs.",
   };
 };
 
