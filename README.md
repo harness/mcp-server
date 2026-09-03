@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 241 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 243 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,7 +10,7 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 241 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 243 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 37 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **35 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
@@ -870,7 +870,7 @@ Maintainers can refresh the vendored entity snapshots with `pnpm sync-entity-sch
 
 ### Pipeline Run Workflow (Recommended)
 
-Use this sequence to reduce execution-time input errors:
+For v0 pipelines, use this sequence to reduce execution-time input errors:
 
 1. **Discover required runtime inputs**
   - `harness_get(resource_type="runtime_input_template", resource_id="<pipeline_id>")`
@@ -904,6 +904,14 @@ Use this sequence to reduce execution-time input errors:
     ```
 4. **Optional: combine both**
   - Use `input_set_ids` for the base shape and `inputs` for simple overrides.
+
+For v1 pipelines:
+
+1. Fetch `harness_get(resource_type="runtime_input_template_v1", resource_id="<pipeline_id>")`.
+   For Git-backed pipelines, pass `branch_name`, `connector_ref`, and `repo_name` through `params`.
+2. Use each returned `inputs[].details.name` as a top-level key in `harness_execute.inputs`.
+3. Run `harness_execute(resource_type="pipeline_v1", action="run", resource_id="<pipeline_id>", inputs={...})`.
+   The server wraps these values under an `inputs:` YAML root and sends the API's `inputs_yaml` body.
 
 If required fields are unresolved, the tool returns a pre-flight error with expected keys and suggested input sets. You can inspect available shorthand mappings with `harness_describe(resource_type="pipeline")` (`executeActions.run.inputShorthands`).
 
@@ -1205,7 +1213,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-241 resource types organized across 37 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+243 resource types organized across 37 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1230,10 +1238,12 @@ Harness pipelines can be stored in three ways:
 | `pipeline_summary`             |      | x   |        |        |        |                     |
 | `input_set`                    | x    | x   | x      | x      | x      |                     |
 | `runtime_input_template`       |      | x   |        |        |        |                     |
+| `runtime_input_template_v1`    |      | x   |        |        |        |                     |
+| `pipeline_resolved_yaml`       |      | x   |        |        |        |                     |
 | `approval_instance`            | x    |     |        |        |        | `approve`, `reject` |
 
 
-Only one pipeline YAML resource type is loaded at startup. By default `HARNESS_PIPELINE_VERSION=0` exposes `pipeline` and hides `pipeline_v1`; set `HARNESS_PIPELINE_VERSION=1` to expose `pipeline_v1` and hide `pipeline`. In HTTP mode, include `x-harness-pipeline-version: 0` or `1` on the `initialize` request to choose the version for that session.
+Both pipeline YAML resource types are available when the pipelines toolset is enabled. `HARNESS_PIPELINE_VERSION` and the HTTP `x-harness-pipeline-version` initialization header select the default version preference; they do not hide the other version.
 
 ### AI Agents
 
@@ -1872,7 +1882,7 @@ Available toolset names:
 
 | Toolset                             | Resource Types |
 | ----------------------------------- | -------------- |
-| `pipelines`                         | pipeline, pipeline_v1, pipeline_dynamic_execution, execution, execution_inputs, trigger, pipeline_summary, input_set, runtime_input_template, approval_instance |
+| `pipelines`                         | pipeline, pipeline_v1, pipeline_dynamic_execution, execution, execution_inputs, trigger, pipeline_summary, input_set, runtime_input_template, pipeline_resolved_yaml, runtime_input_template_v1, approval_instance |
 | `agents`                            | agent |
 | `services`                          | service |
 | `environments`                      | environment, infrastructure_definition |
@@ -1928,7 +1938,7 @@ Available toolset names:
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
                 |  37 Toolsets      |      (data files, not code)
-                |  241 Resource Types|
+                |  243 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+

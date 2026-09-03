@@ -2,6 +2,7 @@ import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { buildBodyNormalized } from "../../utils/body-normalizer.js";
 import { offsetListExtract } from "../extractors.js";
 import { MC_SCOPE } from "./scopes.js";
+import { projectRelatedActivity } from "./related-activities.js";
 import { isRecord } from "../../utils/type-guards.js";
 
 /**
@@ -42,7 +43,8 @@ const LIST_SUMMARY_MAX = 400;
  * compactor. Emits a stable, documented shape and drops backend
  * envelope/debug/meta. `verbose` controls whether the heavy event/theory
  * arrays are projected in full (detail view) or replaced with counts (list),
- * and whether summary is kept in full or truncated.
+ * and whether summary is kept in full or truncated. Related activities are
+ * already small enough to emit in full in both views.
  */
 function projectIncident(raw: Record<string, unknown>, verbose: boolean): Record<string, unknown> {
   const slim: Record<string, unknown> = {};
@@ -83,7 +85,7 @@ function projectIncident(raw: Record<string, unknown>, verbose: boolean): Record
       : raw.rootCauseTheories.length;
   }
   if (Array.isArray(raw.relatedActivities) && raw.relatedActivities.length > 0) {
-    slim.relatedActivities = raw.relatedActivities;
+    slim.relatedActivities = raw.relatedActivities.map(projectRelatedActivity);
   }
   return slim;
 }

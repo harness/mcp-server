@@ -2,8 +2,13 @@
  * Shared response extractors for Harness API responses.
  * Used across all toolset definitions — eliminates per-file duplication.
  */
-import { isRecord } from "../utils/type-guards.js";
+import YAML from "yaml";
+import { asRecord, isRecord } from "../utils/type-guards.js";
 import { parseZipCsv } from "../utils/zip-csv.js";
+import {
+  extractVariableInputMetadata,
+  buildStageMetadataMap,
+} from "../utils/runtime-input-metadata.js";
 import type { PreflightContext } from "./types.js";
 
 /** Extract `data` from standard NG API responses: `{ status, data, ... }` */
@@ -454,20 +459,124 @@ export const gqlExtract = (field: string) => (raw: unknown): unknown => {
   return r.data?.[field] ?? raw;
 };
 
+function pipelineDefinitionGetParams(input: Record<string, unknown>, registry: PreflightContext["registry"]): Record<string, string> {
+  const params: Record<string, string> = {};
+  const orgId = input.org_id ?? registry.orgId;
+  const projectId = input.project_id ?? registry.projectId;
+  if (orgId) params.orgIdentifier = String(orgId);
+  if (projectId) params.projectIdentifier = String(projectId);
+  if (input.branch) params.branch = String(input.branch);
+  if (input.store_type) params.storeType = String(input.store_type);
+  if (input.connector_ref) params.connectorRef = String(input.connector_ref);
+  if (input.repo_name) params.repoName = String(input.repo_name);
+  return params;
+}
+
+/**
+ * Fetch saved pipeline definition YAML so runtime_input_template can recover
+ * `.default()` / `.selectOneFrom()` metadata stripped from the template API.
+ * Fail-open: enrichment is best-effort; the template POST still succeeds without it.
+ */
+export async function runtimeInputTemplatePreflight({
+  client,
+  input,
+  registry,
+  signal,
+}: PreflightContext): Promise<void> {
+  const pipelineId = String(input.pipeline_id ?? input.resource_id ?? "").trim();
+  if (!pipelineId) return;
+
+  try {
+    const raw = await client.request<unknown>({
+      method: "GET",
+      path: `/pipeline/api/pipelines/${encodeURIComponent(pipelineId)}`,
+      params: pipelineDefinitionGetParams(input, registry),
+      signal,
+    });
+    const yamlPipeline = (raw as { data?: { yamlPipeline?: string } })?.data?.yamlPipeline;
+    if (typeof yamlPipeline === "string" && yamlPipeline.trim()) {
+      input._pipelineDefinitionYaml = yamlPipeline;
+    }
+  } catch {
+    // Fail-open: template POST still works without definition enrichment.
+  }
+}
+
 /**
  * Extracts the runtime input template from the Harness pipeline template endpoint.
  * Unwraps `data.inputSetTemplateYaml`, `data.hasInputSets`, `data.modules`, and adds
  * a `_hint` field describing whether inputs are required.
+ *
+ * When preflight attached `_pipelineDefinitionYaml`, returns `variableInputMetadata`
+ * for release-activity authoring. `inputSetTemplateYaml` is returned verbatim from the API.
  */
-export const runtimeInputExtract = (raw: unknown): unknown => {
+export const runtimeInputExtract = (raw: unknown, input?: Record<string, unknown>): unknown => {
   const r = raw as { data?: { inputSetTemplateYaml?: string; hasInputSets?: boolean; modules?: string[] } };
+  const templateYaml = r.data?.inputSetTemplateYaml ?? null;
+  const pipelineDefinitionYaml =
+    typeof input?._pipelineDefinitionYaml === "string" ? input._pipelineDefinitionYaml : undefined;
+  const variableInputMetadata = extractVariableInputMetadata(pipelineDefinitionYaml);
+
+  const executeHint = templateYaml
+    ? "This YAML template shows all runtime inputs needed. Fields with '<+input>' are required — pass key-value pairs via harness_execute(resource_type='pipeline', action='run', inputs={...}) or use input_set_ids for complex inputs."
+    : "This pipeline has no runtime inputs. You can execute it without providing any inputs.";
+  const activityHint =
+    "variableInputMetadata covers pipeline-level variables only (not stage/service/env inputs) — copy default onto matching primitive activity inputs when authoring release activities.";
+
   return {
-    inputSetTemplateYaml: r.data?.inputSetTemplateYaml ?? null,
+    inputSetTemplateYaml: templateYaml,
     hasInputSets: r.data?.hasInputSets ?? false,
     modules: r.data?.modules ?? [],
-    _hint: r.data?.inputSetTemplateYaml
-      ? "This YAML template shows all runtime inputs needed. Fields with '<+input>' are required. Pass matching key-value pairs to harness_execute(action='run', inputs={...})."
-      : "This pipeline has no runtime inputs. You can execute it without providing any inputs.",
+    variableInputMetadata,
+    _hint: templateYaml && Object.keys(variableInputMetadata).length > 0
+      ? `${executeHint} ${activityHint}`
+      : executeHint,
+  };
+};
+
+/**
+ * Extracts resolved pipeline YAML (templates expanded) for activity input mapping.
+ * Mirrors genai-service GET /pipeline/api/pipelines/{id}?getTemplatesResolvedPipeline=true.
+ */
+export const pipelineResolvedYamlExtract = (raw: unknown): unknown => {
+  const r = raw as { data?: { resolvedTemplatesPipelineYaml?: string } };
+  const resolvedTemplatesPipelineYaml = r.data?.resolvedTemplatesPipelineYaml ?? null;
+  const stageMetadataMap = buildStageMetadataMap(resolvedTemplatesPipelineYaml);
+
+  return {
+    resolvedTemplatesPipelineYaml,
+    stageMetadataMap,
+    _hint: resolvedTemplatesPipelineYaml
+      ? "Use stageMetadataMap to patch deploymentType and environmentRef on entity-type activity inputs during release-activity authoring."
+      : "No resolved pipeline YAML returned. Entity input metadata may be incomplete.",
+  };
+};
+
+/**
+ * Extracts the declared inputs returned by the Harness pipeline v1 inputs-schema API.
+ * The API may return its public shape directly or inside the standard `data` envelope.
+ */
+export const runtimeInputV1Extract = (raw: unknown): unknown => {
+  const outer = asRecord(raw);
+  const r = asRecord(outer?.data) ?? outer;
+  const hasInputsField = !!r && Object.prototype.hasOwnProperty.call(r, "inputs");
+  const inputs = hasInputsField && Array.isArray(r?.inputs) ? r.inputs : null;
+
+  let hint: string;
+  if (!hasInputsField) {
+    hint = "The v1 inputs-schema response omitted inputs metadata. Do not assume the pipeline has no runtime inputs.";
+  } else if (!inputs) {
+    hint = "The v1 inputs-schema response contained an invalid inputs field. Expected an array; do not execute until the schema is confirmed.";
+  } else if (inputs.length === 0) {
+    hint = "This v1 pipeline declares no runtime inputs. Execute it without the inputs argument.";
+  } else {
+    hint = "Use each inputs[].details.name as a top-level harness_execute inputs key for pipeline_v1. The server sends those values as one inputs: YAML document.";
+  }
+
+  return {
+    inputs,
+    metadata_available: inputs !== null,
+    _hint: hint,
   };
 };
 
