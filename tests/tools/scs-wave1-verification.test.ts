@@ -13,7 +13,7 @@ import type { ToolResult } from "../../src/utils/response-formatter.js";
 import { Registry } from "../../src/registry/index.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import { scsCleanExtract, scsListExtract } from "../../src/registry/extractors.js";
-import { scsToolset } from "../../src/registry/toolsets/scs.js";
+import { applicationSecurityToolset } from "../../src/registry/toolsets/application-security.js";
 
 // ---------------------------------------------------------------------------
 // Helpers (same pattern as tool-handlers.test.ts)
@@ -81,7 +81,7 @@ describe("P2-6: 404 errors include diagnosticHint for SCS resources", () => {
 
   beforeEach(async () => {
     server = makeMcpServer();
-    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
     mockRequest = vi.fn();
     const client = makeClient(mockRequest);
 
@@ -91,39 +91,39 @@ describe("P2-6: 404 errors include diagnosticHint for SCS resources", () => {
     registerGetTool(server, registry, client);
   });
 
-  it("harness_list 404 on artifact_security includes source discovery hint", async () => {
+  it("harness_list 404 on application_security_artifact includes source discovery hint", async () => {
     // Two rejections: ELK attempt + MongoDB fallback (elkFallback: true)
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_list", {
-      resource_type: "artifact_security",
+      resource_type: "application_security_artifact",
       params: { source_id: "nonexistent-source" },
     });
     expect(result.isError).toBe(true);
     const data = parseResult(result) as { error: string };
     expect(data.error).toContain("Recovery hint");
-    expect(data.error).toContain("scs_artifact_source");
+    expect(data.error).toContain("application_security_artifact_source");
     expect(data.error).toContain("source_id");
   });
 
-  it("harness_list 404 on scs_artifact_component includes artifact discovery hint", async () => {
+  it("harness_list 404 on application_security_artifact_component includes artifact discovery hint", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_list", {
-      resource_type: "scs_artifact_component",
+      resource_type: "application_security_artifact_component",
       params: { artifact_id: "nonexistent-artifact" },
     });
     expect(result.isError).toBe(true);
     const data = parseResult(result) as { error: string };
     expect(data.error).toContain("Recovery hint");
-    expect(data.error).toContain("artifact_security");
+    expect(data.error).toContain("application_security_artifact");
   });
 
-  it("harness_list 404 on scs_compliance_result includes artifact discovery hint", async () => {
+  it("harness_list 404 on application_security_compliance_result includes artifact discovery hint", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_list", {
-      resource_type: "scs_compliance_result",
+      resource_type: "application_security_compliance_result",
       params: { artifact_id: "nonexistent-artifact" },
     });
     expect(result.isError).toBe(true);
@@ -131,36 +131,36 @@ describe("P2-6: 404 errors include diagnosticHint for SCS resources", () => {
     expect(data.error).toContain("Recovery hint");
   });
 
-  it("harness_get 404 on artifact_security includes source verification hint", async () => {
+  it("harness_get 404 on application_security_artifact includes source verification hint", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_get", {
-      resource_type: "artifact_security",
+      resource_type: "application_security_artifact",
       resource_id: "nonexistent-artifact",
       params: { source_id: "some-source" },
     });
     expect(result.isError).toBe(true);
     const data = parseResult(result) as { error: string };
     expect(data.error).toContain("Recovery hint");
-    expect(data.error).toContain("scs_artifact_source");
+    expect(data.error).toContain("application_security_artifact_source");
   });
 
-  it("harness_get 404 on scs_sbom includes orchestration discovery hint", async () => {
+  it("harness_get 404 on application_security_sbom includes orchestration discovery hint", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_get", {
-      resource_type: "scs_sbom",
+      resource_type: "application_security_sbom",
       resource_id: "nonexistent-orchestration",
     });
     expect(result.isError).toBe(true);
     const data = parseResult(result) as { error: string };
     expect(data.error).toContain("Recovery hint");
     expect(data.error).toContain("orchestration_id");
-    expect(data.error).toContain("scs_chain_of_custody");
+    expect(data.error).toContain("application_security_chain_of_custody");
   });
 
-  it("harness_get 404 on scs_artifact_remediation mentions code repo limitation", async () => {
+  it("harness_get 404 on application_security_artifact_remediation mentions code repo limitation", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_get", {
-      resource_type: "scs_artifact_remediation",
+      resource_type: "application_security_artifact_remediation",
       resource_id: "some-artifact",
       params: { purl: "pkg:npm/express@4.18.0" },
     });
@@ -173,7 +173,7 @@ describe("P2-6: 404 errors include diagnosticHint for SCS resources", () => {
   it("harness_list 400 error does NOT include diagnosticHint", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Bad request: invalid filter", 400));
     const result = await server.call("harness_list", {
-      resource_type: "scs_artifact_source",
+      resource_type: "application_security_artifact_source",
     });
     expect(result.isError).toBe(true);
     const data = parseResult(result) as { error: string };
@@ -181,16 +181,16 @@ describe("P2-6: 404 errors include diagnosticHint for SCS resources", () => {
     expect(data.error).not.toContain("Recovery hint");
   });
 
-  it("harness_list 404 on code_repo_security includes repo discovery hint", async () => {
+  it("harness_list 404 on application_security_code_repo includes repo discovery hint", async () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Not found", 404));
     const result = await server.call("harness_list", {
-      resource_type: "code_repo_security",
+      resource_type: "application_security_code_repo",
     });
     expect(result.isError).toBe(true);
     const data = parseResult(result) as { error: string };
     expect(data.error).toContain("Recovery hint");
-    expect(data.error).toContain("code_repo_security");
+    expect(data.error).toContain("application_security_code_repo");
   });
 });
 
@@ -265,8 +265,8 @@ describe("P2-2: scsListExtract token reduction vs scsCleanExtract", () => {
   }));
 
   it("scsListExtract produces significantly smaller output than scsCleanExtract for artifact sources", () => {
-    const findResource = (type: string) => scsToolset.resources.find(r => r.resourceType === type)!;
-    const spec = findResource("scs_artifact_source").operations.list!;
+    const findResource = (type: string) => applicationSecurityToolset.resources.find(r => r.resourceType === type)!;
+    const spec = findResource("application_security_artifact_source").operations.list!;
 
     const cleanedSize = jsonBytes(scsCleanExtract(mockArtifactSources));
     const selectedSize = jsonBytes(spec.responseExtractor!(mockArtifactSources));
@@ -279,21 +279,21 @@ describe("P2-2: scsListExtract token reduction vs scsCleanExtract", () => {
   });
 
   it("scsListExtract produces significantly smaller output for artifact security list", () => {
-    const findResource = (type: string) => scsToolset.resources.find(r => r.resourceType === type)!;
-    const spec = findResource("artifact_security").operations.list!;
+    const findResource = (type: string) => applicationSecurityToolset.resources.find(r => r.resourceType === type)!;
+    const spec = findResource("application_security_artifact").operations.list!;
 
     const cleanedSize = jsonBytes(scsCleanExtract(mockArtifacts));
     const selectedSize = jsonBytes(spec.responseExtractor!(mockArtifacts));
 
     const reductionPct = Math.round((1 - selectedSize / cleanedSize) * 100);
-    console.log(`  P2-2 artifact_security: ${cleanedSize} → ${selectedSize} bytes (${reductionPct}% reduction)`);
+    console.log(`  P2-2 application_security_artifact: ${cleanedSize} → ${selectedSize} bytes (${reductionPct}% reduction)`);
 
     expect(reductionPct).toBeGreaterThanOrEqual(20);
   });
 
   it("scsListExtract produces significantly smaller output for components list", () => {
-    const findResource = (type: string) => scsToolset.resources.find(r => r.resourceType === type)!;
-    const spec = findResource("scs_artifact_component").operations.list!;
+    const findResource = (type: string) => applicationSecurityToolset.resources.find(r => r.resourceType === type)!;
+    const spec = findResource("application_security_artifact_component").operations.list!;
 
     const cleanedSize = jsonBytes(scsCleanExtract(mockComponents));
     const selectedSize = jsonBytes(spec.responseExtractor!(mockComponents));
@@ -305,42 +305,42 @@ describe("P2-2: scsListExtract token reduction vs scsCleanExtract", () => {
   });
 
   it("field-selected responses still preserve all entity IDs needed for follow-up queries", () => {
-    const findResource = (type: string) => scsToolset.resources.find(r => r.resourceType === type)!;
+    const findResource = (type: string) => applicationSecurityToolset.resources.find(r => r.resourceType === type)!;
 
     // Artifact sources: must preserve id/source_id
-    const sources = findResource("scs_artifact_source").operations.list!.responseExtractor!(mockArtifactSources) as Record<string, unknown>[];
+    const sources = findResource("application_security_artifact_source").operations.list!.responseExtractor!(mockArtifactSources) as Record<string, unknown>[];
     expect(sources[0]).toHaveProperty("id");
     expect(sources[0]).toHaveProperty("name");
 
     // Artifacts: must preserve id, orchestration (for SBOM), source_id
-    const artifacts = findResource("artifact_security").operations.list!.responseExtractor!(mockArtifacts) as Record<string, unknown>[];
+    const artifacts = findResource("application_security_artifact").operations.list!.responseExtractor!(mockArtifacts) as Record<string, unknown>[];
     expect(artifacts[0]).toHaveProperty("id");
     expect(artifacts[0]).toHaveProperty("orchestration");
     expect(artifacts[0]).toHaveProperty("vulnerability_count");
     expect(artifacts[0]).toHaveProperty("scorecard");
 
     // Components: must preserve purl (for remediation)
-    const components = findResource("scs_artifact_component").operations.list!.responseExtractor!(mockComponents) as Record<string, unknown>[];
+    const components = findResource("application_security_artifact_component").operations.list!.responseExtractor!(mockComponents) as Record<string, unknown>[];
     expect(components[0]).toHaveProperty("purl");
     expect(components[0]).toHaveProperty("package_name");
     expect(components[0]).toHaveProperty("dependency_type");
   });
 
   it("field-selected responses strip non-actionable noise fields", () => {
-    const findResource = (type: string) => scsToolset.resources.find(r => r.resourceType === type)!;
+    const findResource = (type: string) => applicationSecurityToolset.resources.find(r => r.resourceType === type)!;
 
-    const sources = findResource("scs_artifact_source").operations.list!.responseExtractor!(mockArtifactSources) as Record<string, unknown>[];
+    const sources = findResource("application_security_artifact_source").operations.list!.responseExtractor!(mockArtifactSources) as Record<string, unknown>[];
     expect(sources[0]).not.toHaveProperty("internal_metadata");
     expect(sources[0]).not.toHaveProperty("audit_trail");
     expect(sources[0]).not.toHaveProperty("tags_metadata");
     expect(sources[0]).not.toHaveProperty("access_policy");
 
-    const artifacts = findResource("artifact_security").operations.list!.responseExtractor!(mockArtifacts) as Record<string, unknown>[];
+    const artifacts = findResource("application_security_artifact").operations.list!.responseExtractor!(mockArtifacts) as Record<string, unknown>[];
     expect(artifacts[0]).not.toHaveProperty("internal_cache_key");
     expect(artifacts[0]).not.toHaveProperty("raw_scan_output");
     expect(artifacts[0]).not.toHaveProperty("provenance_metadata");
 
-    const components = findResource("scs_artifact_component").operations.list!.responseExtractor!(mockComponents) as Record<string, unknown>[];
+    const components = findResource("application_security_artifact_component").operations.list!.responseExtractor!(mockComponents) as Record<string, unknown>[];
     expect(components[0]).not.toHaveProperty("internal_analysis");
     expect(components[0]).not.toHaveProperty("raw_bom_entry");
     expect(components[0]).not.toHaveProperty("description");
@@ -349,10 +349,11 @@ describe("P2-2: scsListExtract token reduction vs scsCleanExtract", () => {
 
 describe("P2-3A: pagination cap reduces default item count", () => {
   it("all SCS list operations default to limit=10 (search ops may use 20)", () => {
-    // scs_component_search uses limit=20 because search results are lightweight
+    // application_security_component_search uses limit=20 because search results are lightweight
     // (name/version/purl tuples) and users benefit from more results.
-    const HIGHER_LIMIT_ALLOWED = new Set(["scs_component_search"]);
-    const listOps = scsToolset.resources
+    const HIGHER_LIMIT_ALLOWED = new Set(["application_security_component_search"]);
+    const listOps = applicationSecurityToolset.resources
+      .filter((r) => r.searchAliases?.includes("scs"))
       .filter(r => r.operations.list)
       .map(r => ({ type: r.resourceType, limit: r.operations.list!.defaultQueryParams?.limit }));
 
@@ -386,32 +387,32 @@ describe("P2-3A: pagination cap reduces default item count", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("P2-12: LLM guidance in tool descriptions", () => {
-  it("scs_artifact_source description teaches two-step flow", () => {
-    const res = scsToolset.resources.find(r => r.resourceType === "scs_artifact_source")!;
+  it("application_security_artifact_source description teaches two-step flow", () => {
+    const res = applicationSecurityToolset.resources.find(r => r.resourceType === "application_security_artifact_source")!;
     // Must contain clear guidance about the two-step pattern
     expect(res.description).toContain("Two-step flow");
     expect(res.description).toContain("source_id");
   });
 
-  it("artifact_security description explicitly states source_id prerequisite", () => {
-    const res = scsToolset.resources.find(r => r.resourceType === "artifact_security")!;
+  it("application_security_artifact description explicitly states source_id prerequisite", () => {
+    const res = applicationSecurityToolset.resources.find(r => r.resourceType === "application_security_artifact")!;
     expect(res.description).toContain("source_id is required");
-    expect(res.description).toContain("scs_artifact_source");
+    expect(res.description).toContain("application_security_artifact_source");
   });
 
   it("all SCS resources with required parent IDs have diagnosticHint with recovery path", () => {
     // Resources that depend on parent entity IDs
     const dependentResources = [
-      { type: "artifact_security", parentHint: "scs_artifact_source" },
-      { type: "scs_artifact_component", parentHint: "artifact_security" },
-      { type: "scs_compliance_result", parentHint: "artifact_security" },
-      { type: "scs_chain_of_custody", parentHint: "artifact_security" },
-      { type: "scs_artifact_remediation", parentHint: "scs_artifact_component" },
-      { type: "scs_sbom", parentHint: "scs_chain_of_custody" },
+      { type: "application_security_artifact", parentHint: "application_security_artifact_source" },
+      { type: "application_security_artifact_component", parentHint: "application_security_artifact" },
+      { type: "application_security_compliance_result", parentHint: "application_security_artifact" },
+      { type: "application_security_chain_of_custody", parentHint: "application_security_artifact" },
+      { type: "application_security_artifact_remediation", parentHint: "application_security_artifact_component" },
+      { type: "application_security_sbom", parentHint: "application_security_chain_of_custody" },
     ];
 
     for (const { type, parentHint } of dependentResources) {
-      const res = scsToolset.resources.find(r => r.resourceType === type)!;
+      const res = applicationSecurityToolset.resources.find(r => r.resourceType === type)!;
       expect(res.diagnosticHint, `${type} should have diagnosticHint`).toBeDefined();
       expect(
         res.diagnosticHint,
@@ -421,13 +422,19 @@ describe("P2-12: LLM guidance in tool descriptions", () => {
   });
 
   it("harness_describe output includes diagnosticHint for SCS resources", () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
     const desc = registry.describe();
-    const scsToolsetDesc = (desc.toolsets as Record<string, { resources: { diagnosticHint?: string }[] }>).scs;
+    const scsToolsetDesc = (desc.toolsets as Record<string, { resources: { resource_type: string; diagnosticHint?: string }[] }>).application_security;
     expect(scsToolsetDesc).toBeDefined();
 
     // Every SCS resource should have diagnosticHint exposed via describe
+    const scsResourceTypes = new Set(
+      applicationSecurityToolset.resources
+        .filter((r) => r.searchAliases?.includes("scs"))
+        .map((r) => r.resourceType),
+    );
     for (const res of scsToolsetDesc.resources) {
+      if (!scsResourceTypes.has(res.resource_type)) continue;
       expect(res.diagnosticHint, "diagnosticHint should be in describe output").toBeDefined();
     }
   });

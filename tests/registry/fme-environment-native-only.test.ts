@@ -105,7 +105,7 @@ describe("fme_environment remaining native-only ops", () => {
     expect(request.method).toBe("POST");
     expect(request.path).toBe("/fme/api/v4/environments");
     expect(request.body).toEqual({ name: "mcp_pr3_smoke", isProduction: false });
-    const create = featureFlagsToolset.resources.find((r) => r.resourceType === "fme_environment")?.operations.create;
+    const create = featureFlagsToolset.resources.find((r) => r.resourceType === "feature_flag_environment")?.operations.create;
     expect(create?.skipScopeBodyInjection).toBe(true);
   });
 

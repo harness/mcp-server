@@ -11,9 +11,9 @@ const variance = ccmToolset.resources.find((r) => r.resourceType === "cost_budge
 const budgetGroup = ccmToolset.resources.find((r) => r.resourceType === "cost_budget_group");
 
 describe("cost_budget resource", () => {
-  it("is registered in the ccm toolset", () => {
+  it("is registered in the cost toolset", () => {
     expect(budget).toBeDefined();
-    expect(budget!.toolset).toBe("ccm");
+    expect(budget!.toolset).toBe("cost");
     expect(budget!.scope).toBe("account");
     expect(budget!.identifierFields).toEqual(["budget_id"]);
   });
@@ -122,9 +122,9 @@ describe("ccmBudgetWriteExtract", () => {
 });
 
 describe("cost_budget_variance resource", () => {
-  it("is registered as a read-only resource in the ccm toolset", () => {
+  it("is registered as a read-only resource in the cost toolset", () => {
     expect(variance).toBeDefined();
-    expect(variance!.toolset).toBe("ccm");
+    expect(variance!.toolset).toBe("cost");
     expect(variance!.scope).toBe("account");
     expect(variance!.identifierFields).toEqual(["budget_id"]);
     // Read-only: only a get operation, no create/update/delete.
@@ -142,9 +142,9 @@ describe("cost_budget_variance resource", () => {
 });
 
 describe("cost_budget_group resource", () => {
-  it("is registered in the ccm toolset", () => {
+  it("is registered in the cost toolset", () => {
     expect(budgetGroup).toBeDefined();
-    expect(budgetGroup!.toolset).toBe("ccm");
+    expect(budgetGroup!.toolset).toBe("cost");
     expect(budgetGroup!.scope).toBe("account");
     expect(budgetGroup!.identifierFields).toEqual(["budget_group_id"]);
   });
@@ -170,5 +170,18 @@ describe("cost_budget_group resource", () => {
     expect(budgetGroup!.operations.create!.injectAccountInBody).toBe("accountId");
     const body = { name: "Eng Group", budgetGroupAmount: 5000 };
     expect(budgetGroup!.operations.create!.bodyBuilder!({ body })).toEqual(body);
+  });
+});
+
+describe("cost toolset rename (was ccm)", () => {
+  it("uses the capability name 'cost' as the toolset name", () => {
+    expect(ccmToolset.name).toBe("cost");
+  });
+
+  it("keeps every resource on the renamed toolset and carries the old 'ccm' search alias", () => {
+    for (const r of ccmToolset.resources) {
+      expect(r.toolset).toBe("cost");
+      expect(r.searchAliases).toContain("ccm");
+    }
   });
 });

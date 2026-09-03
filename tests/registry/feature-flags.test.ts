@@ -66,7 +66,7 @@ function firstRequest(mockRequest: ReturnType<typeof vi.fn>): RequestOptions {
 
 describe("FME registry metadata", () => {
   it("documents fme_workspace as list-only", () => {
-    const resource = findResource("fme_workspace");
+    const resource = findResource("feature_flag_workspace");
 
     expect(resource.description).toContain("Supports list with pagination");
     expect(resource.description).not.toContain("get by workspace_id");
@@ -75,25 +75,25 @@ describe("FME registry metadata", () => {
   });
 
   it("points feature flag create callers at fme_traffic_type for traffic_type_id discovery", () => {
-    const createSpec = getOperation("fme_feature_flag", "create");
+    const createSpec = getOperation("feature_flag", "create");
 
-    expect(createSpec.description).toContain("traffic_type_id (get from fme_traffic_type)");
-    expect(createSpec.description).not.toContain("traffic_type_id (get from fme_workspace)");
+    expect(createSpec.description).toContain("traffic_type_id (get from feature_flag_traffic_type)");
+    expect(createSpec.description).not.toContain("traffic_type_id (get from feature_flag_workspace)");
   });
 
   it("documents fme_traffic_type list workspace_id as a deprecated (non-required) filter", () => {
-    const resource = findResource("fme_traffic_type");
+    const resource = findResource("feature_flag_traffic_type");
 
     expect(resource.listFilterFields).toContainEqual({
       name: "workspace_id",
-      description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping.",
+      description: "FME workspace ID (get from feature_flag_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping.",
     });
   });
 
   it("documents every required FME list path parameter as a list filter", () => {
     const missing: string[] = [];
 
-    for (const resource of featureFlagsToolset.resources.filter((candidate) => candidate.resourceType.startsWith("fme_"))) {
+    for (const resource of featureFlagsToolset.resources.filter((candidate) => candidate.resourceType.startsWith("feature_flag"))) {
       const listPathParamKeys = Object.keys(resource.operations.list?.pathParams ?? {});
       if (listPathParamKeys.length === 0) continue;
 
@@ -109,7 +109,7 @@ describe("FME registry metadata", () => {
   });
 
   it("documents segment key updates as add-only", () => {
-    const resource = findResource("fme_segment_keys");
+    const resource = findResource("feature_flag_segment_keys");
 
     expect(resource.description).toContain("update to add members");
     expect(resource.description).toContain("Removal is not supported by this endpoint");
@@ -117,11 +117,52 @@ describe("FME registry metadata", () => {
   });
 
   it("marks raw-array write canonical bodies as required in structured schema", () => {
-    const identityItemsField = getOperation("fme_identity", "create").bodySchema?.fields.find((field) => field.name === "items");
-    const segmentAddField = getOperation("fme_segment_keys", "update").bodySchema?.fields.find((field) => field.name === "add");
+    const identityItemsField = getOperation("feature_flag_identity", "create").bodySchema?.fields.find((field) => field.name === "items");
+    const segmentAddField = getOperation("feature_flag_segment_keys", "update").bodySchema?.fields.find((field) => field.name === "add");
 
     expect(identityItemsField?.required).toBe(true);
     expect(segmentAddField?.required).toBe(true);
+  });
+});
+
+describe("feature_flags rename & alias resolution", () => {
+  // Legacy fme_* names must keep resolving to the renamed canonical resources so
+  // existing agents/integrations do not break. Note the token-collapse for the
+  // flag itself: fme_feature_flag → feature_flag (not feature_flag_feature_flag).
+  const RENAMES: Array<[string, string]> = [
+    ["fme_workspace", "feature_flag_workspace"],
+    ["fme_environment", "feature_flag_environment"],
+    ["fme_feature_flag", "feature_flag"],
+    ["fme_feature_flag_definition", "feature_flag_definition"],
+    ["fme_rollout_status", "feature_flag_rollout_status"],
+    ["fme_rule_based_segment", "feature_flag_rule_based_segment"],
+    ["fme_rule_based_segment_definition", "feature_flag_rule_based_segment_definition"],
+    ["fme_traffic_type", "feature_flag_traffic_type"],
+    ["fme_identity", "feature_flag_identity"],
+    ["fme_standard_segment", "feature_flag_standard_segment"],
+    ["fme_segment", "feature_flag_segment"],
+    ["fme_segment_definition", "feature_flag_segment_definition"],
+    ["fme_segment_keys", "feature_flag_segment_keys"],
+  ];
+
+  it.each(RENAMES)("resolves legacy %s to canonical %s", (legacy, canonical) => {
+    const registry = new Registry(makeConfig());
+    expect(registry.getResource(legacy).resourceType).toBe(canonical);
+  });
+
+  it("exposes the renamed feature_flags toolset name", () => {
+    const registry = new Registry(makeConfig());
+    const names = registry.getAllToolsets().map((t) => t.name);
+    expect(names).toContain("feature_flags");
+  });
+
+  it("still enables the toolset via the legacy HARNESS_TOOLSETS='feature-flags' name", () => {
+    // makeConfig() sets HARNESS_TOOLSETS: "feature-flags" (the old name); it must
+    // resolve to the renamed toolset via the toolset alias layer.
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    const names = registry.getAllToolsets().map((t) => t.name);
+    expect(names).toContain("feature_flags");
+    expect(registry.getResource("fme_feature_flag").resourceType).toBe("feature_flag");
   });
 });
 
@@ -721,7 +762,7 @@ describe("fme_identity create", () => {
   });
 
   it("opts out of body scope injection", () => {
-    expect(getOperation("fme_identity", "create").skipScopeBodyInjection).toBe(true);
+    expect(getOperation("feature_flag_identity", "create").skipScopeBodyInjection).toBe(true);
   });
 });
 
@@ -799,7 +840,7 @@ describe("fme_segment_keys update", () => {
   });
 
   it("opts out of body scope injection", () => {
-    expect(getOperation("fme_segment_keys", "update").skipScopeBodyInjection).toBe(true);
+    expect(getOperation("feature_flag_segment_keys", "update").skipScopeBodyInjection).toBe(true);
   });
 });
 
@@ -916,7 +957,7 @@ describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
     registry = new Registry(makeConfig());
   });
 
-  it.each(["fme_traffic_type", "fme_rollout_status"] as const)(
+  it.each(["feature_flag_traffic_type", "feature_flag_rollout_status"] as const)(
     "%s descriptions stay tool-facing (no HTTP paths or list-only restatement)",
     (resourceType) => {
       const resource = findResource(resourceType);
@@ -1838,7 +1879,7 @@ describe("fme_segment_definition", () => {
   });
 
   it("has no enable/disable/change_request execute actions", () => {
-    const resource = findResource("fme_segment_definition");
+    const resource = findResource("feature_flag_segment_definition");
     expect(resource.executeActions).toBeUndefined();
   });
 });

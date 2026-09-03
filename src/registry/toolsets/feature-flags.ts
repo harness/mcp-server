@@ -33,7 +33,7 @@ const fmeFeatureFlagUpdateSchema: BodySchema = {
     { name: "description", type: "string", required: false, description: "Updated description" },
     { name: "tags", type: "array", required: false, description: "Updated tags — provide as [{name: 'tag1'}] or ['tag1', 'tag2'] (strings are auto-wrapped)", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Harness-native mode only. Updated owners — each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
-    { name: "rolloutStatus", type: "object", required: false, description: "Rollout status — provide as {id: '<uuid>'} (use fme_rollout_status to discover valid IDs)" },
+    { name: "rolloutStatus", type: "object", required: false, description: "Rollout status — provide as {id: '<uuid>'} (use feature_flag_rollout_status to discover valid IDs)" },
   ],
 };
 
@@ -255,13 +255,14 @@ function resolveNativeOnlyDefinitionRoute(
 }
 
 export const featureFlagsToolset: ToolsetDefinition = {
-  name: "feature-flags",
+  name: "feature_flags",
+  aliases: ["feature-flags"],
   displayName: "Feature Management & Experimentation",
   description:
     "Harness FME — feature flags, segments, environments, and rollout statuses. " +
     "Two mutually exclusive scoping modes: legacy workspace_id (Split.io API) or " +
     "Harness-native org_id+project_id. If you already have org_id and project_id, use " +
-    "them directly and skip fme_workspace entirely — org/project fully identify scope " +
+    "them directly and skip feature_flag_workspace entirely — org/project fully identify scope " +
     "on their own; there is no need to look up a workspace first.",
   resources: [
     // ── FME Resources (Split.io API at https://api.split.io) ───────────
@@ -269,15 +270,17 @@ export const featureFlagsToolset: ToolsetDefinition = {
     // which Split.io does not use. Auth is via Bearer token (HARNESS_FME_API_KEY,
     // or a non-placeholder HARNESS_API_KEY fallback for self-hosted sessions).
     {
-      resourceType: "fme_workspace",
+      resourceType: "feature_flag_workspace",
+      aliases: ["fme_workspace"],
+      searchAliases: ["fme"],
       displayName: "FME Workspace",
       description:
         "Feature Management workspace — legacy Split.io concept only, used solely to discover a " +
-        "workspace_id for other fme_* resources' deprecated legacy calls. Not used by Harness-native " +
+        "workspace_id for other feature_flag_* resources' deprecated legacy calls. Not used by Harness-native " +
         "calls at all: if you already have org_id and project_id, skip this resource entirely and " +
-        "pass them directly to the fme_* resource you actually want. Supports list with pagination " +
+        "pass them directly to the feature_flag_* resource you actually want. Supports list with pagination " +
         "(offset/size, default 20, max 1000).",
-      toolset: "feature-flags",
+      toolset: "feature_flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id"],
@@ -311,17 +314,19 @@ export const featureFlagsToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "fme_environment",
+      resourceType: "feature_flag_environment",
+      aliases: ["fme_environment"],
+      searchAliases: ["fme"],
       displayName: "FME Environment",
       description:
         "Feature Management environment. Dual-mode list (workspace_id or org_id+project_id). get/create/update/delete are Harness-native only. Native create/update use isProduction (production accepted as an alias). Native PATCH is JSON Merge Patch; name and isProduction are not clearable. Name max 15 characters. Delete returns 400 hasDependents while SDK API keys (always created with a new env), flags, or segments remain.",
-      toolset: "feature-flags",
+      toolset: "feature_flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id", "environment_id"],
       product: "fme",
       listFilterFields: [
-        { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=feature_flag_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
         { name: "offset", description: "Harness-native pagination offset (default 0)", type: "number" },
         { name: "limit", description: "Harness-native page size (default 100, max 100)", type: "number" },
       ],
@@ -401,23 +406,25 @@ export const featureFlagsToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "fme_feature_flag",
+      resourceType: "feature_flag",
+      aliases: ["fme_feature_flag"],
+      searchAliases: ["fme"],
       displayName: "FME Feature Flag",
       description:
         "Feature flag. Dual-mode scoping: pass org_id+project_id (Harness-native, preferred — no " +
         "workspace lookup needed) or the deprecated workspace_id (Split.io API). Both modes support " +
         "list/get/create/delete/update/kill/restore/reallocate/archive/unarchive. List supports " +
         "filtering (name, tags, rollout_status_id) and pagination (offset/size, default 20, max 50).",
-      toolset: "feature-flags",
+      toolset: "feature_flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id", "feature_flag_name"],
       product: "fme",
       deepLinkTemplate: "/ng/account/{accountId}/module/fme/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/targets/{trafficTypeId}/splits/{id}",
       listFilterFields: [
-        { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=feature_flag_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
         { name: "offset", description: "Pagination offset for FME feature flags", type: "number" },
-        { name: "rollout_status_id", description: "Filter by rollout status UUID (use fme_rollout_status to discover valid IDs)", type: "string" },
+        { name: "rollout_status_id", description: "Filter by rollout status UUID (use feature_flag_rollout_status to discover valid IDs)", type: "string" },
         { name: "name", description: "Filter flags by name (partial match)", type: "string" },
         { name: "tags", description: "Filter flags by tag", type: "string" },
       ],
@@ -501,7 +508,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           bodySchema: fmeFeatureFlagCreateSchema,
-          description: "Create a feature flag. Legacy mode (workspace_id): requires workspace_id + traffic_type_id (get from fme_traffic_type); body: name, optional description (no tags/owners — use harness_update after creation). Harness-native mode (org_id+project_id): body requires name + trafficType (or pass traffic_type_id / traffic_type at top level), optional description/tags/owners.",
+          description: "Create a feature flag. Legacy mode (workspace_id): requires workspace_id + traffic_type_id (get from feature_flag_traffic_type); body: name, optional description (no tags/owners — use harness_update after creation). Harness-native mode (org_id+project_id): body requires name + trafficType (or pass traffic_type_id / traffic_type at top level), optional description/tags/owners.",
         },
         delete: {
           method: "DELETE",
@@ -738,11 +745,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "fme_feature_flag_definition",
+      resourceType: "feature_flag_definition",
+      aliases: ["fme_feature_flag_definition"],
+      searchAliases: ["fme"],
       displayName: "FME Feature Flag Definition",
       description:
-        "Detailed definition of a feature flag in a specific environment: treatments, rules, targeting, and traffic allocation. Create requires treatments, defaultTreatment, and defaultRule. Get/create/update: pass org_id+project_id (preferred) or the deprecated workspace_id. List/delete/kill/restore/reallocate: org_id+project_id only. Native list requires feature_flag_name and uses offset/limit (max 100); it does not take environment_id. Other ops require environment_id. Kill/restore/reallocate are the same actions as on fme_feature_flag; either resource works.",
-      toolset: "feature-flags",
+        "Detailed definition of a feature flag in a specific environment: treatments, rules, targeting, and traffic allocation. Create requires treatments, defaultTreatment, and defaultRule. Get/create/update: pass org_id+project_id (preferred) or the deprecated workspace_id. List/delete/kill/restore/reallocate: org_id+project_id only. Native list requires feature_flag_name and uses offset/limit (max 100); it does not take environment_id. Other ops require environment_id. Kill/restore/reallocate are the same actions as on feature_flag; either resource works.",
+      toolset: "feature_flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id", "environment_id", "feature_flag_name"],
@@ -869,7 +878,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: fmeActionExtract,
           actionDescription:
-            "Kill (turn off) a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as fme_feature_flag kill.",
+            "Kill (turn off) a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as feature_flag kill.",
           bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
         },
         restore: {
@@ -887,7 +896,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: fmeActionExtract,
           actionDescription:
-            "Restore a killed feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as fme_feature_flag restore.",
+            "Restore a killed feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as feature_flag restore.",
           bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
         },
         reallocate: {
@@ -905,23 +914,25 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: fmeActionExtract,
           actionDescription:
-            "Reallocate traffic across treatments for a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as fme_feature_flag reallocate.",
+            "Reallocate traffic across treatments for a feature flag definition in an environment (org_id+project_id only). Requires feature_flag_name and environment_id. Optional body comment/title. Same action as feature_flag reallocate.",
           bodySchema: fmeFeatureFlagKillRestoreReallocateSchema,
         },
       },
     },
     {
-      resourceType: "fme_rollout_status",
+      resourceType: "feature_flag_rollout_status",
+      aliases: ["fme_rollout_status"],
+      searchAliases: ["fme"],
       displayName: "FME Rollout Status",
       description:
-        "Rollout status definitions (e.g. Killed, Permanent, Ramping). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover rollout_status_id UUIDs for filtering fme_feature_flag lists. Pagination uses offset/limit (max 100; harness_list size maps to limit).",
-      toolset: "feature-flags",
+        "Rollout status definitions (e.g. Killed, Permanent, Ramping). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover rollout_status_id UUIDs for filtering feature_flag lists. Pagination uses offset/limit (max 100; harness_list size maps to limit).",
+      toolset: "feature_flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id"],
       product: "fme",
       listFilterFields: [
-        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "workspace_id", description: "FME workspace ID (get from feature_flag_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
         { name: "offset", description: "Harness-native pagination offset (default 0)", type: "number" },
         { name: "limit", description: "Harness-native page size (default 100, max 100)", type: "number" },
       ],
@@ -946,17 +957,19 @@ export const featureFlagsToolset: ToolsetDefinition = {
     },
     // ── FME Rule-Based Segments ───────────────────────────────────────────
     {
-      resourceType: "fme_rule_based_segment",
+      resourceType: "feature_flag_rule_based_segment",
+      aliases: ["fme_rule_based_segment"],
+      searchAliases: ["fme"],
       displayName: "(Deprecated) FME Rule-Based Segment",
       description:
-        "Deprecated — use fme_segment instead for new integrations. Rule-based segment in a workspace. Supports list, get, create (requires traffic_type_id), and delete via the legacy workspace_id contract only — org_id+project_id (Harness-native) is rejected on every operation here in favor of fme_segment. Create requires traffic_type_id passed via params.",
-      toolset: "feature-flags",
+        "Deprecated — use feature_flag_segment instead for new integrations. Rule-based segment in a workspace. Supports list, get, create (requires traffic_type_id), and delete via the legacy workspace_id contract only — org_id+project_id (Harness-native) is rejected on every operation here in favor of feature_flag_segment. Create requires traffic_type_id passed via params.",
+      toolset: "feature_flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id", "segment_name"],
       product: "fme",
       listFilterFields: [
-        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). This resource only supports the legacy workspace_id contract; use fme_segment for Harness-native org_id+project_id scoping." },
+        { name: "workspace_id", description: "FME workspace ID (get from feature_flag_workspace). This resource only supports the legacy workspace_id contract; use feature_flag_segment for Harness-native org_id+project_id scoping." },
       ],
       operations: {
         list: {
@@ -1036,18 +1049,20 @@ export const featureFlagsToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "fme_rule_based_segment_definition",
+      resourceType: "feature_flag_rule_based_segment_definition",
+      aliases: ["fme_rule_based_segment_definition"],
+      searchAliases: ["fme"],
       displayName: "(Deprecated) FME Rule-Based Segment Definition",
       description:
-        "Deprecated — use fme_segment_definition instead for new integrations. Environment-specific definition of a rule-based segment, including targeting rules, exclusions, and matchers. Supports list (by environment), update, and enable/disable/change_request execute actions.",
-      toolset: "feature-flags",
+        "Deprecated — use feature_flag_segment_definition instead for new integrations. Environment-specific definition of a rule-based segment, including targeting rules, exclusions, and matchers. Supports list (by environment), update, and enable/disable/change_request execute actions.",
+      toolset: "feature_flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id", "environment_id", "segment_name"],
       product: "fme",
       listFilterFields: [
-        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
-        { name: "environment_id", description: "FME environment ID (get from fme_environment)", required: true },
+        { name: "workspace_id", description: "FME workspace ID (get from feature_flag_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "environment_id", description: "FME environment ID (get from feature_flag_environment)", required: true },
       ],
       operations: {
         list: {
@@ -1163,17 +1178,19 @@ export const featureFlagsToolset: ToolsetDefinition = {
     },
     // ── FME Traffic Types ─────────────────────────────────────────────────
     {
-      resourceType: "fme_traffic_type",
+      resourceType: "feature_flag_traffic_type",
+      aliases: ["fme_traffic_type"],
+      searchAliases: ["fme"],
       displayName: "FME Traffic Type",
       description:
         "Traffic type (e.g. 'user', 'account'). Dual-mode: pass org_id+project_id (preferred) or the deprecated workspace_id. Use harness_list to discover traffic_type_id / name values for flag and segment create. Pagination uses offset/limit (max 100; harness_list size maps to limit).",
-      toolset: "feature-flags",
+      toolset: "feature_flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id"],
       product: "fme",
       listFilterFields: [
-        { name: "workspace_id", description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
+        { name: "workspace_id", description: "FME workspace ID (get from feature_flag_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
         { name: "offset", description: "Harness-native pagination offset (default 0)", type: "number" },
         { name: "limit", description: "Harness-native page size (default 100, max 100)", type: "number" },
       ],
@@ -1198,11 +1215,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
     },
     // ── FME Identities / Targets ──────────────────────────────────────────
     {
-      resourceType: "fme_identity",
+      resourceType: "feature_flag_identity",
+      aliases: ["fme_identity"],
+      searchAliases: ["fme"],
       displayName: "FME Identity",
       description:
         "Identity (target) in an environment. Create or update identities to manage display name aliases and custom attributes. Requires traffic_type_id and environment_id. Note: the Split Admin API does not support listing or getting individual identities — use create (batch upsert) and update (PATCH single key).",
-      toolset: "feature-flags",
+      toolset: "feature_flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["traffic_type_id", "environment_id", "key"],
@@ -1281,17 +1300,19 @@ export const featureFlagsToolset: ToolsetDefinition = {
     },
     // ── FME Standard Segments ─────────────────────────────────────────────
     {
-      resourceType: "fme_standard_segment",
+      resourceType: "feature_flag_standard_segment",
+      aliases: ["fme_standard_segment"],
+      searchAliases: ["fme"],
       displayName: "(Deprecated) FME Standard Segment",
       description:
-        "Deprecated — use fme_segment instead for new integrations. Standard (static list) segment in a workspace. List all segments to see names, descriptions, and member counts, via the legacy workspace_id contract only — org_id+project_id (Harness-native) is rejected on every operation here in favor of fme_segment. For member management, use fme_segment_keys.",
-      toolset: "feature-flags",
+        "Deprecated — use feature_flag_segment instead for new integrations. Standard (static list) segment in a workspace. List all segments to see names, descriptions, and member counts, via the legacy workspace_id contract only — org_id+project_id (Harness-native) is rejected on every operation here in favor of feature_flag_segment. For member management, use feature_flag_segment_keys.",
+      toolset: "feature_flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["workspace_id", "segment_name"],
       product: "fme",
       listFilterFields: [
-        { name: "workspace_id", description: "Workspace ID (get from fme_workspace). This resource only supports the legacy workspace_id contract; use fme_segment for Harness-native org_id+project_id scoping." },
+        { name: "workspace_id", description: "Workspace ID (get from feature_flag_workspace). This resource only supports the legacy workspace_id contract; use feature_flag_segment for Harness-native org_id+project_id scoping." },
       ],
       operations: {
         list: {
@@ -1330,11 +1351,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "fme_segment",
+      resourceType: "feature_flag_segment",
+      aliases: ["fme_segment"],
+      searchAliases: ["fme"],
       displayName: "FME Segment",
       description:
         "FME (Harness-native, org_id+project_id scoped). Unified segment type (standard, rule-based, and large). Supports list, get, create, delete. create requires body.type (\"standard\" | \"rule_based\" | \"large\").",
-      toolset: "feature-flags",
+      toolset: "feature_flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
       identifierFields: ["segment_name"],
@@ -1411,16 +1434,18 @@ export const featureFlagsToolset: ToolsetDefinition = {
     },
     // ── FME Segment Definition (Harness-native, unified — Harness_Split/Main PR #12644) ──
     {
-      resourceType: "fme_segment_definition",
+      resourceType: "feature_flag_segment_definition",
+      aliases: ["fme_segment_definition"],
+      searchAliases: ["fme"],
       displayName: "FME Segment Definition",
       description:
-        "Environment-specific definition of a segment (standard or rule-based) — description and lifecycle. Replaces fme_rule_based_segment_definition's role in Harness-native calls, generalized for all segment types. Harness-native only (org_id+project_id; no legacy workspace_id support). Supports list, get, create, update (description only, via JSON Merge Patch), and delete. Wired against Harness_Split/Main PR #12644, which was open (not yet merged) as of this writing — paths may still change before merge. There is no enable/disable/change_request action: the backend has no such endpoints for this unified resource; governance checks are surfaced inline in the create/update/delete responses instead.",
-      toolset: "feature-flags",
+        "Environment-specific definition of a segment (standard or rule-based) — description and lifecycle. Replaces feature_flag_rule_based_segment_definition's role in Harness-native calls, generalized for all segment types. Harness-native only (org_id+project_id; no legacy workspace_id support). Supports list, get, create, update (description only, via JSON Merge Patch), and delete. Wired against Harness_Split/Main PR #12644, which was open (not yet merged) as of this writing — paths may still change before merge. There is no enable/disable/change_request action: the backend has no such endpoints for this unified resource; governance checks are surfaced inline in the create/update/delete responses instead.",
+      toolset: "feature_flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
       identifierFields: ["segment_name", "environment_id"],
       listFilterFields: [
-        { name: "environment_id", description: "FME environment ID (get from fme_environment)", required: true },
+        { name: "environment_id", description: "FME environment ID (get from feature_flag_environment)", required: true },
         { name: "status", description: "Filter by definition status", enum: ["ACTIVE", "ARCHIVED"] },
         { name: "offset", description: "Pagination offset", type: "number" },
         { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
@@ -1505,17 +1530,19 @@ export const featureFlagsToolset: ToolsetDefinition = {
       },
     },
     {
-      resourceType: "fme_segment_keys",
+      resourceType: "feature_flag_segment_keys",
+      aliases: ["fme_segment_keys"],
+      searchAliases: ["fme"],
       displayName: "FME Segment Keys",
       description:
         "Membership keys (members) of a standard segment. List keys with pagination, or update to add members. Removal is not supported by this endpoint. Limit: 10,000 keys per request, 100,000 per segment total.",
-      toolset: "feature-flags",
+      toolset: "feature_flags",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["environment_id", "segment_name"],
       product: "fme",
       listFilterFields: [
-        { name: "environment_id", description: "Environment ID (get from fme_environment)", required: true },
+        { name: "environment_id", description: "Environment ID (get from feature_flag_environment)", required: true },
         { name: "segment_name", description: "Segment name", required: true },
         { name: "offset", description: "Pagination offset", type: "number" },
         { name: "org_id", description: "Optional — pass together with project_id to select the (not yet implemented) Harness-native mode instead of the current contract." },

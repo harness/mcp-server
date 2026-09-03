@@ -1,9 +1,9 @@
 /**
- * Regression tests for STO security_issue list hint injection and
- * pipeline_security_issue partition flattening.
+ * Regression tests for STO application_security_issue list hint injection and
+ * application_security_pipeline_issue partition flattening.
  */
 import { describe, it, expect, vi } from "vitest";
-import { stoToolset } from "../../src/registry/toolsets/sto.js";
+import { applicationSecurityToolset } from "../../src/registry/toolsets/application-security.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -37,7 +37,7 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
 }
 
 function getResource(type: string): ResourceDefinition {
-  const r = stoToolset.resources.find((x) => x.resourceType === type);
+  const r = applicationSecurityToolset.resources.find((x) => x.resourceType === type);
   if (!r) throw new Error(`${type} resource not registered`);
   return r;
 }
@@ -48,30 +48,30 @@ function getListSpec(type: string): EndpointSpec {
   return spec;
 }
 
-describe("security_issue list — _action_hint injection", () => {
+describe("application_security_issue list — _action_hint injection", () => {
   it("injects exemption workflow hint into list response", async () => {
-    const spec = getListSpec("security_issue");
+    const spec = getListSpec("application_security_issue");
     const raw = { items: [{ issue_id: "CVE-2024-1" }], total: 1 };
     const result = spec.responseExtractor!(raw, {}) as Record<string, unknown>;
 
     expect(result.items).toEqual([{ issue_id: "CVE-2024-1" }]);
     expect(result.total).toBe(1);
-    expect(result._action_hint).toContain("security_exemption");
+    expect(result._action_hint).toContain("application_security_exemption");
     expect(result._action_hint).toContain("APPROVE");
     expect(result._action_hint).toContain("REJECT");
   });
 
   it("handles null/undefined API response without throwing", () => {
-    const spec = getListSpec("security_issue");
+    const spec = getListSpec("application_security_issue");
     const result = spec.responseExtractor!(null, {}) as Record<string, unknown>;
-    expect(result._action_hint).toContain("security_exemption");
+    expect(result._action_hint).toContain("application_security_exemption");
     expect(result.items).toBeUndefined();
   });
 });
 
-describe("security_issue list — scope keyword preflight", () => {
+describe("application_security_issue list — scope keyword preflight", () => {
   it("strips literal 'org'/'project' scope keywords from org_id and project_id", async () => {
-    const spec = getListSpec("security_issue");
+    const spec = getListSpec("application_security_issue");
     const input: Record<string, unknown> = {
       org_id: "org",
       project_id: "project",
@@ -80,7 +80,7 @@ describe("security_issue list — scope keyword preflight", () => {
     await spec.preflight!({
       client: { account: "test-account" },
       input,
-      registry: { dispatch: async () => undefined, getResource: () => getResource("security_issue") },
+      registry: { dispatch: async () => undefined, getResource: () => getResource("application_security_issue") },
     });
     expect(input.org_id).toBeUndefined();
     expect(input.project_id).toBeUndefined();
@@ -88,7 +88,7 @@ describe("security_issue list — scope keyword preflight", () => {
   });
 });
 
-describe("pipeline_security_issue list — partition flattening", () => {
+describe("application_security_pipeline_issue list — partition flattening", () => {
   const MOCK_API_RESPONSE = {
     existing: {
       issues: [{ issue_id: "e1", severity: "High" }],
@@ -103,7 +103,7 @@ describe("pipeline_security_issue list — partition flattening", () => {
   };
 
   it("flattens existing+new partitions with _partition tags and side-channels", () => {
-    const spec = getListSpec("pipeline_security_issue");
+    const spec = getListSpec("application_security_pipeline_issue");
     const result = spec.responseExtractor!(MOCK_API_RESPONSE, {}) as Record<string, unknown>;
 
     expect(result.items).toEqual([
@@ -115,12 +115,12 @@ describe("pipeline_security_issue list — partition flattening", () => {
     expect(result.new_total).toBe(3);
     expect(result.counts).toEqual({ existing: 10, new: 3 });
     expect(result.matching_steps).toEqual([{ step: "Build.Trivy" }]);
-    expect(result._target_id_lookup_hint).toContain("pipeline_security_step");
+    expect(result._target_id_lookup_hint).toContain("application_security_pipeline_step");
     expect(result._pipeline_id_lookup_hint).toContain("pipelineIdentifier");
   });
 
   it("falls back to items[] key and row count when pagination metadata is absent", () => {
-    const spec = getListSpec("pipeline_security_issue");
+    const spec = getListSpec("application_security_pipeline_issue");
     const raw = {
       existing: { items: [{ issue_id: "legacy-e" }] },
       new: { items: [{ issue_id: "legacy-n" }, { issue_id: "legacy-n2" }] },
@@ -135,9 +135,9 @@ describe("pipeline_security_issue list — partition flattening", () => {
   it("dispatches through registry with execution_id filter", async () => {
     const mockRequest = vi.fn().mockResolvedValue(MOCK_API_RESPONSE);
     const client = makeClient(mockRequest);
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
 
-    await registry.dispatch(client, "pipeline_security_issue", "list", {
+    await registry.dispatch(client, "application_security_pipeline_issue", "list", {
       execution_id: "exec-abc",
       org_id: "my-org",
       project_id: "my-project",

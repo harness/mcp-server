@@ -33,9 +33,8 @@ import { gitopsToolset } from "./toolsets/gitops.js";
 import { chaosToolset } from "./toolsets/chaos.js";
 import { ccmToolset } from "./toolsets/ccm.js";
 import { seiToolset } from "./toolsets/sei.js";
-import { scsToolset } from "./toolsets/scs.js";
+import { applicationSecurityToolset } from "./toolsets/application-security.js";
 import { evidenceVaultToolset } from "./toolsets/evidence-vault.js";
-import { stoToolset } from "./toolsets/sto.js";
 import { dbopsToolset } from "./toolsets/dbops.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
@@ -46,9 +45,7 @@ import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
 import { aiEvalsToolset } from "./toolsets/ai-evals.js";
-import { iacmToolset } from "./toolsets/iacm.js";
-import { knowledgeGraphToolset } from "./toolsets/knowledge-graph.js";
-import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
+import { softwareDeliveryKnowledgeGraphToolset } from "./toolsets/software-delivery-knowledge-graph.js";
 import { ansibleToolset } from "./toolsets/ansible.js";
 import { incidentsToolset } from "./toolsets/incidents.js";
 import { alertsToolset } from "./toolsets/alerts.js";
@@ -64,7 +61,84 @@ const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
 /** Backward-compatible aliases for renamed public toolset names. */
 const TOOLSET_ALIASES: Record<string, string> = {
   "agent-pipelines": "agents",
+  ccm: "cost",
+  dbops: "databases",
 };
+
+/**
+ * Build the old-toolset-name → canonical-name map from the static
+ * TOOLSET_ALIASES plus each toolset's declarative `aliases`. Multiple aliases
+ * may target the same toolset (a merge), but a single alias must be
+ * unambiguous and must never shadow a canonical toolset name.
+ */
+function buildToolsetAliases(allToolsets: ToolsetDefinition[]): Map<string, string> {
+  const map = new Map<string, string>(Object.entries(TOOLSET_ALIASES));
+  const canonicalNames = new Set(allToolsets.map((t) => t.name));
+  for (const toolset of allToolsets) {
+    for (const alias of toolset.aliases ?? []) {
+      if (canonicalNames.has(alias)) {
+        throw new Error(
+          `Toolset alias "${alias}" (on toolset "${toolset.name}") shadows a canonical toolset name.`,
+        );
+      }
+      const existing = map.get(alias);
+      if (existing && existing !== toolset.name) {
+        throw new Error(
+          `Toolset alias "${alias}" is claimed by both "${existing}" and "${toolset.name}".`,
+        );
+      }
+      map.set(alias, toolset.name);
+    }
+  }
+  return map;
+}
+
+/**
+ * Build the old-resourceType → canonical-resourceType map from each enabled
+ * resource's declarative `aliases`. An alias must never shadow a canonical
+ * resourceType and must map to exactly one canonical type.
+ */
+/**
+ * Guards against two toolsets declaring the same canonical resourceType. Checked
+ * against the full static toolset list (not just the runtime-enabled subset), since
+ * a collision is a property of the source data and must fail regardless of which
+ * HARNESS_TOOLSETS filter a given deployment happens to use.
+ */
+function assertUniqueResourceTypes(allToolsets: ToolsetDefinition[]): void {
+  const owner = new Map<string, string>();
+  for (const toolset of allToolsets) {
+    for (const resource of toolset.resources) {
+      const existing = owner.get(resource.resourceType);
+      if (existing && existing !== toolset.name) {
+        throw new Error(
+          `Duplicate resourceType "${resource.resourceType}" declared in both "${existing}" and "${toolset.name}" toolsets.`,
+        );
+      }
+      owner.set(resource.resourceType, toolset.name);
+    }
+  }
+}
+
+function buildResourceTypeAliases(resourceMap: Map<string, ResourceDefinition>): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const [canonical, def] of resourceMap) {
+    for (const alias of def.aliases ?? []) {
+      if (resourceMap.has(alias)) {
+        throw new Error(
+          `Resource alias "${alias}" (on "${canonical}") shadows a canonical resourceType.`,
+        );
+      }
+      const existing = map.get(alias);
+      if (existing && existing !== canonical) {
+        throw new Error(
+          `Resource alias "${alias}" is claimed by both "${existing}" and "${canonical}".`,
+        );
+      }
+      map.set(alias, canonical);
+    }
+  }
+  return map;
+}
 
 function isResourceScope(value: unknown): value is ResourceScope {
   return typeof value === "string" && RESOURCE_SCOPES.includes(value as ResourceScope);
@@ -150,9 +224,8 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   chaosToolset,
   ccmToolset,
   seiToolset,
-  scsToolset,
+  applicationSecurityToolset,
   evidenceVaultToolset,
-  stoToolset,
   dbopsToolset,
   accessControlToolset,
   settingsToolset,
@@ -163,9 +236,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   freezeToolset,
   overridesToolset,
   aiEvalsToolset,
-  iacmToolset,
-  knowledgeGraphToolset,
-  semanticLayerToolset,
+  softwareDeliveryKnowledgeGraphToolset,
   ansibleToolset,
   incidentsToolset,
   alertsToolset,
@@ -198,6 +269,10 @@ export interface RegistryOptions {
  */
 export class Registry {
   private resourceMap: Map<string, ResourceDefinition> = new Map();
+  /** Old toolset name → canonical toolset name (static + per-toolset `aliases`). */
+  private toolsetAliases: Map<string, string> = new Map();
+  /** Old resourceType → canonical resourceType (from each resource's `aliases`). */
+  private resourceTypeAliases: Map<string, string> = new Map();
   private toolsets: ToolsetDefinition[] = [];
   private accountIdResolver?: () => string | undefined;
   private auditManager?: AuditManager;
@@ -206,6 +281,13 @@ export class Registry {
     this.accountIdResolver = options.accountIdResolver;
     this.auditManager = options.auditManager;
     const allToolsets = [...ALL_TOOLSETS, ...(options.additionalToolsets ?? [])];
+
+    assertUniqueResourceTypes(allToolsets);
+
+    // Toolset aliases must be resolved before parsing HARNESS_TOOLSETS so old
+    // toolset names in that config still enable the renamed toolset.
+    this.toolsetAliases = buildToolsetAliases(allToolsets);
+
     const enabledNames = this.parseToolsetFilter(allToolsets);
     this.toolsets = enabledNames
       ? allToolsets.filter((t) => enabledNames.has(t.name))
@@ -217,9 +299,19 @@ export class Registry {
       }
     }
 
+    // Resource-type aliases are derived only from *enabled* resources, so an
+    // old `type` never resolves to a canonical resource that isn't loaded.
+    this.resourceTypeAliases = buildResourceTypeAliases(this.resourceMap);
+
     log.info(`Registry loaded: ${this.resourceMap.size} resource types from ${this.toolsets.length} toolsets`, {
       defaultPipelineVersion: this.config.HARNESS_PIPELINE_VERSION ?? "0",
     });
+  }
+
+  /** Resolve a possibly-aliased resourceType to its canonical name. */
+  private resolveType(resourceType: string): string {
+    if (this.resourceMap.has(resourceType)) return resourceType;
+    return this.resourceTypeAliases.get(resourceType) ?? resourceType;
   }
 
   getAccountId(): string {
@@ -230,9 +322,9 @@ export class Registry {
    * Parse HARNESS_TOOLSETS env var. Supports three modes:
    *
    *  - Explicit list:    "pipelines,services"         → only those toolsets
-   *  - Additive (+):     "+ai-evals"                  → defaults + ai-evals
+   *  - Additive (+):     "+ai_evals"                  → defaults + ai_evals
    *  - Subtractive (-):  "-chaos,-ccm"                → defaults minus chaos & ccm
-   *  - Mixed +/-:        "+ai-evals,-chaos"            → defaults + ai-evals - chaos
+   *  - Mixed +/-:        "+ai_evals,-chaos"            → defaults + ai_evals - chaos
    *
    * Returns `null` when the value is empty (meaning "all defaults").
    * Returns `"defaults"` when +/- modifiers are used (caller applies them).
@@ -253,7 +345,7 @@ export class Registry {
       for (const token of parsed) {
         const op = token[0];
         const rawName = (op === "+" || op === "-") ? token.slice(1) : token;
-        const name = TOOLSET_ALIASES[rawName] ?? rawName;
+        const name = this.toolsetAliases.get(rawName) ?? rawName;
         if (!validNames.has(name)) {
           invalid.push(rawName);
           continue;
@@ -282,7 +374,7 @@ export class Registry {
     const invalid: string[] = [];
 
     for (const rawName of parsed) {
-      const name = TOOLSET_ALIASES[rawName] ?? rawName;
+      const name = this.toolsetAliases.get(rawName) ?? rawName;
       if (validNames.has(name)) {
         valid.push(name);
       } else {
@@ -307,7 +399,7 @@ export class Registry {
 
   /** Get a resource definition by type, or throw. */
   getResource(resourceType: string): ResourceDefinition {
-    const def = this.resourceMap.get(resourceType);
+    const def = this.resourceMap.get(this.resolveType(resourceType));
     if (!def) {
       const available = Array.from(this.resourceMap.keys()).sort().join(", ");
       throw new Error(`Unknown resource_type "${resourceType}". Available: ${available}`);
@@ -360,13 +452,13 @@ export class Registry {
 
   /** Check if a resource type supports an operation. */
   supportsOperation(resourceType: string, operation: OperationName): boolean {
-    const def = this.resourceMap.get(resourceType);
+    const def = this.resourceMap.get(this.resolveType(resourceType));
     return def?.operations[operation] !== undefined;
   }
 
   /** Check if a resource type has execute actions. */
   getExecuteActions(resourceType: string): Record<string, EndpointSpec & { actionDescription: string }> | undefined {
-    const def = this.resourceMap.get(resourceType);
+    const def = this.resourceMap.get(this.resolveType(resourceType));
     return def?.executeActions;
   }
 
@@ -513,7 +605,7 @@ export class Registry {
     blockReason: string,
   ): void {
     if (!this.auditManager) return;
-    const def = this.resourceMap.get(resourceType);
+    const def = this.resourceMap.get(this.resolveType(resourceType));
     if (!def) return;
     let spec: EndpointSpec | undefined;
     if (operation === "execute") {

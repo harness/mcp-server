@@ -64,10 +64,9 @@ const ALLOWED_INLINE_EXTRACTOR_COUNTS: Record<string, number> = {
   "src/registry/toolsets/chaos.ts": 2,
   "src/registry/toolsets/ccm.ts": 1,
   "src/registry/toolsets/governance.ts": 1,
-  "src/registry/toolsets/iacm.ts": 1,
   "src/registry/toolsets/idp.ts": 1,
-  "src/registry/toolsets/knowledge-graph.ts": 1,
-  "src/registry/toolsets/sto.ts": 3,
+  "src/registry/toolsets/software-delivery-knowledge-graph.ts": 1,
+  "src/registry/toolsets/application-security.ts": 3,
 };
 
 const WRITE_TOOL_FILES = [

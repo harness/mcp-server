@@ -50,7 +50,7 @@ export type FmeDualModeResult =
 /**
  * Detects whether FME call uses deprecated `workspace_id` contract or
  * new Harness-native `org_id`+`project_id` contract. Shared by every
- * `fme_*` resource's `routeResolver` in `feature-flags.ts`.
+ * `feature_flag*` resource's `routeResolver` in `feature-flags.ts`.
  */
 export function resolveFmeDualMode(input: Record<string, unknown>, resourceType: string): FmeDualModeResult {
   const workspaceId = input.workspace_id as string | undefined;
@@ -119,7 +119,7 @@ export function isFmeHarnessNativeSelected(input: Record<string, unknown>, resou
 }
 
 /**
- * Guards Harness-native-only resources (e.g. fme_segment) that have no legacy
+ * Guards Harness-native-only resources (e.g. feature_flag_segment) that have no legacy
  * Split.io fallback. Unlike `resolveFmeDualMode`, missing org_id/project_id here
  * must throw rather than silently falling back to config.HARNESS_ORG/HARNESS_PROJECT —
  * a stray global default must never leak into an FME-adjacent call.

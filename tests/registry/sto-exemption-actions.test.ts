@@ -1,11 +1,11 @@
 /**
- * Regression tests for security_exemption create + approve/reject execute actions.
+ * Regression tests for application_security_exemption create + approve/reject execute actions.
  *
  * Covers scope routing (/approve vs /promote), scope elevation input mutation,
  * approver/requester auto-injection, and snake_case body mapping.
  */
 import { describe, it, expect, vi } from "vitest";
-import { stoToolset } from "../../src/registry/toolsets/sto.js";
+import { applicationSecurityToolset } from "../../src/registry/toolsets/application-security.js";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
@@ -43,26 +43,26 @@ function makeClient(
 }
 
 function getExemptionResource(): ResourceDefinition {
-  const r = stoToolset.resources.find((x) => x.resourceType === "security_exemption");
-  if (!r) throw new Error("security_exemption resource not registered");
+  const r = applicationSecurityToolset.resources.find((x) => x.resourceType === "application_security_exemption");
+  if (!r) throw new Error("application_security_exemption resource not registered");
   return r;
 }
 
 function getCreateSpec(): EndpointSpec {
   const spec = getExemptionResource().operations.create;
-  if (!spec) throw new Error("security_exemption.create spec missing");
+  if (!spec) throw new Error("application_security_exemption.create spec missing");
   return spec;
 }
 
 function getApproveSpec(): EndpointSpec {
   const spec = getExemptionResource().executeActions?.approve;
-  if (!spec) throw new Error("security_exemption.approve spec missing");
+  if (!spec) throw new Error("application_security_exemption.approve spec missing");
   return spec;
 }
 
 function getRejectSpec(): EndpointSpec {
   const spec = getExemptionResource().executeActions?.reject;
-  if (!spec) throw new Error("security_exemption.reject spec missing");
+  if (!spec) throw new Error("application_security_exemption.reject spec missing");
   return spec;
 }
 
@@ -82,7 +82,7 @@ function makeCtx(
 
 // ─── create ─────────────────────────────────────────────────────────────────
 
-describe("security_exemption create", () => {
+describe("application_security_exemption create", () => {
   it("preflight rejects missing required snake_case fields before HTTP", async () => {
     const spec = getCreateSpec();
     const input = { body: { type: "Other", reason: "test" } };
@@ -124,7 +124,7 @@ describe("security_exemption create", () => {
 
 // ─── approve preflight + path/body builders ─────────────────────────────────
 
-describe("security_exemption approve", () => {
+describe("application_security_exemption approve", () => {
   it("preflight requires body.scope with actionable error message", async () => {
     const spec = getApproveSpec();
     const input = { exemption_id: "ex-1", body: {} };
@@ -205,7 +205,7 @@ describe("security_exemption approve", () => {
 
 // ─── reject ─────────────────────────────────────────────────────────────────
 
-describe("security_exemption reject", () => {
+describe("application_security_exemption reject", () => {
   it("preflight auto-injects approver_id when omitted", async () => {
     const spec = getRejectSpec();
     const getCurrentUserId = vi.fn().mockResolvedValue("rejector-uuid");
@@ -218,13 +218,13 @@ describe("security_exemption reject", () => {
 
 // ─── dispatchExecute integration ───────────────────────────────────────────
 
-describe("security_exemption dispatchExecute", () => {
+describe("application_security_exemption dispatchExecute", () => {
   it("approve at CURRENT scope hits /approve with stripped scope in body", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
     const mockRequest = vi.fn().mockResolvedValue({ status: "Approved" });
     const client = makeClient(mockRequest, "dispatch-approver");
 
-    await registry.dispatchExecute(client, "security_exemption", "approve", {
+    await registry.dispatchExecute(client, "application_security_exemption", "approve", {
       exemption_id: "ex-dispatch-1",
       org_id: "my-org",
       project_id: "my-project",
@@ -239,11 +239,11 @@ describe("security_exemption dispatchExecute", () => {
   });
 
   it("approve at ACCOUNT scope hits /promote and clears org/project scope params", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "application_security" }));
     const mockRequest = vi.fn().mockResolvedValue({ status: "Approved" });
     const client = makeClient(mockRequest, "account-approver");
 
-    await registry.dispatchExecute(client, "security_exemption", "approve", {
+    await registry.dispatchExecute(client, "application_security_exemption", "approve", {
       exemption_id: "ex-dispatch-2",
       org_id: "my-org",
       project_id: "my-project",

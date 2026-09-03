@@ -137,7 +137,8 @@ const gitBranchGetParams: ParamsSchema = {
 };
 
 export const releaseManagementToolset: ToolsetDefinition = {
-  name: "release-management",
+  name: "release_management",
+  aliases: ["release-management"],
   displayName: "Release Management",
   description:
     "Harness Release Management (RMG) — orchestration definitions (process/activity YAML) and release execution " +
@@ -156,7 +157,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
         "Orchestration process definition (RMG). A process is a multi-phase release plan composed of activities. " +
         "Use harness_list to discover processes, harness_get for YAML, harness_create/update with body.yaml. " +
         "Search aliases: orchestration process, RMG process, release plan.",
-      toolset: "release-management",
+      toolset: "release_management",
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
@@ -241,7 +242,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
         "referenced by release processes. Use harness_list/get/create/update/delete with body.yaml. " +
         "Use harness_schema(resource_type='release_activity') for the full JSON Schema. " +
         "Search aliases: orchestration activity, RMG activity, release step.",
-      toolset: "release-management",
+      toolset: "release_management",
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
@@ -327,7 +328,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
         "or start_ts/end_ts); narrow further with search_term and status. " +
         "The list item `id` field or UI URL slug (e.g. identifier-1.0.0-abc) can be used as release_id. " +
         "Search aliases: active release, release execution, RMG release.",
-      toolset: "release-management",
+      toolset: "release_management",
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
@@ -446,7 +447,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
       description:
         "An execution phase within a release (status, activity progress, timestamps). Requires release_id " +
         "(from harness_list release `id`, UI URL slug, or filters.release_id). Paste an RMG phases URL to auto-fill.",
-      toolset: "release-management",
+      toolset: "release_management",
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
@@ -500,7 +501,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
       description:
         "Manual execution tasks for a release (TODO, IN_PROGRESS, SUCCEEDED, FAILED, BLOCKED). Requires release_id " +
         "(UUID from harness_list release). Use harness_list with filters.release_id; optional status and limit filters.",
-      toolset: "release-management",
+      toolset: "release_management",
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
@@ -562,7 +563,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
         "Runtime activity executions within a release (pipeline, subprocess, or manual steps). Requires release_id. " +
         "Supports pagination and filters: status (comma-separated OR), activity_type, phase_identifier, time range. " +
         "Default sort: start_ts desc. Search aliases: release activity run, execution activity.",
-      toolset: "release-management",
+      toolset: "release_management",
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
@@ -666,7 +667,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
       description:
         "Execution outputs (variables, artifacts, runtime data) for a release phase. " +
         "Use harness_get with resource_id=release id/slug and params.phase_identifier.",
-      toolset: "release-management",
+      toolset: "release_management",
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
@@ -708,7 +709,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
         "Runtime input values for a release phase execution. Use harness_get with resource_id=release id/slug " +
         "and params.phase_identifier (YAML identifier from harness_list release_execution_phase). " +
         "Optional params.phase_execution_id pins a specific phase execution row.",
-      toolset: "release-management",
+      toolset: "release_management",
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
@@ -750,7 +751,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
         "Execution outputs for a specific activity within a release phase. " +
         "Use harness_get with resource_id=release id/slug, params.phase_identifier, and params.activity_identifier " +
         "(YAML identifiers from release_execution_activity list).",
-      toolset: "release-management",
+      toolset: "release_management",
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
@@ -792,7 +793,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
       description:
         "Latest release input YAML for a release (global inputs). For per-phase runtime inputs use " +
         "harness_get resource_type=release_execution_phase_input with release id/slug and params.phase_identifier.",
-      toolset: "release-management",
+      toolset: "release_management",
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
@@ -825,7 +826,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
       description:
         "Runtime input values for an activity execution. Requires activityExecutionId (UUID) from " +
         "harness_list release_execution_activity — not the YAML activity identifier.",
-      toolset: "release-management",
+      toolset: "release_management",
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,

@@ -4,7 +4,7 @@
     "query": "kubernetes connector",
     "mode": "specific",
     "expectedTypes": ["connector"],
-    "acceptableTypes": ["infrastructure"],
+    "acceptableTypes": ["infrastructure_definition"],
     "description": "Kubernetes integration should route to connectors, with infrastructure acceptable because cluster infra references connectors."
   },
   {
@@ -84,14 +84,14 @@
     "query": "production environment",
     "mode": "specific",
     "expectedTypes": ["environment"],
-    "acceptableTypes": ["infrastructure"],
+    "acceptableTypes": ["infrastructure_definition"],
     "description": "Environment language should route to environments."
   },
   {
     "id": "infrastructure-k8s",
     "query": "kubernetes infrastructure definition",
     "mode": "specific",
-    "expectedTypes": ["infrastructure"],
+    "expectedTypes": ["infrastructure_definition"],
     "acceptableTypes": ["connector", "environment"],
     "description": "Infrastructure definition should route to infrastructure resources."
   },
@@ -163,16 +163,16 @@
     "id": "feature-flag",
     "query": "feature flag rollout",
     "mode": "specific",
-    "expectedTypes": ["fme_feature_flag"],
-    "acceptableTypes": ["fme_environment", "fme_rule_based_segment", "fme_standard_segment", "fme_segment"],
+    "expectedTypes": ["feature_flag"],
+    "acceptableTypes": ["feature_flag_environment", "feature_flag_rule_based_segment", "feature_flag_standard_segment", "feature_flag_segment"],
     "description": "Feature flag rollout language should route to FME flag resources."
   },
   {
     "id": "feature-flag-targeting",
     "query": "target users with a feature flag",
     "mode": "cross_domain",
-    "expectedTypes": ["fme_feature_flag", "fme_rule_based_segment"],
-    "acceptableTypes": ["fme_standard_segment", "fme_environment", "fme_segment"],
+    "expectedTypes": ["feature_flag", "feature_flag_rule_based_segment"],
+    "acceptableTypes": ["feature_flag_standard_segment", "feature_flag_environment", "feature_flag_segment"],
     "description": "Targeting language spans flags and segments."
   },
   {
@@ -235,32 +235,32 @@
     "id": "cost-perspective",
     "query": "software engineering insight metrics",
     "mode": "specific",
-    "expectedTypes": ["sei_metric"],
-    "acceptableTypes": ["sei_business_alignment"],
+    "expectedTypes": ["developer_insights_metric"],
+    "acceptableTypes": ["developer_insights_business_alignment"],
     "description": "Engineering insights language should route to SEI metrics."
   },
   {
     "id": "slo",
     "query": "service level objective error budget",
     "mode": "specific",
-    "expectedTypes": ["sei_metric"],
-    "acceptableTypes": ["sei_business_alignment"],
+    "expectedTypes": ["developer_insights_metric"],
+    "acceptableTypes": ["developer_insights_business_alignment"],
     "description": "SLO and error budget language should route to SLO resources."
   },
   {
     "id": "security-scan",
     "query": "security scan vulnerabilities",
     "mode": "specific",
-    "expectedTypes": ["artifact_security"],
-    "acceptableTypes": ["code_repo_security", "scs_compliance_result"],
+    "expectedTypes": ["application_security_artifact"],
+    "acceptableTypes": ["application_security_code_repo", "application_security_compliance_result"],
     "description": "Security scan language should route to security resources."
   },
   {
     "id": "artifact-component",
     "query": "artifact component sbom",
     "mode": "specific",
-    "expectedTypes": ["scs_artifact_component"],
-    "acceptableTypes": ["scs_artifact_source", "artifact_security"],
+    "expectedTypes": ["application_security_artifact_component"],
+    "acceptableTypes": ["application_security_artifact_source", "application_security_artifact"],
     "description": "SBOM component language should route to artifact component resources."
   },
   {
@@ -299,8 +299,8 @@
     "id": "iac-workspace",
     "query": "terraform workspace plan",
     "mode": "specific",
-    "expectedTypes": ["iacm_workspace"],
-    "acceptableTypes": ["iacm_module"],
+    "expectedTypes": ["infrastructure_workspace"],
+    "acceptableTypes": ["infrastructure_module"],
     "description": "Terraform workspace language should route to IaCM resources."
   },
   {

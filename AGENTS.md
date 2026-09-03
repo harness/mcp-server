@@ -1,6 +1,6 @@
 # AGENTS.md — Harness.io MCP Server
 
-Registry-based MCP server: 11 consolidated tools (`harness_list`, `harness_get`, `harness_create`, `harness_update`, `harness_delete`, `harness_execute`, `harness_search`, `harness_describe`, `harness_diagnose`, `harness_status`, `harness_schema`) dispatching across 219+ resource types. TypeScript (Node.js 20+), ESM, pnpm, Zod v4.
+Registry-based MCP server: 11 consolidated tools (`harness_list`, `harness_get`, `harness_create`, `harness_update`, `harness_delete`, `harness_execute`, `harness_search`, `harness_describe`, `harness_diagnose`, `harness_status`, `harness_schema`) dispatching across 240+ resource types. TypeScript (Node.js 20+), ESM, pnpm, Zod v4.
 
 ---
 
@@ -33,7 +33,7 @@ src/
 │   ├── types.ts        # Registry types: ResourceDefinition, EndpointSpec, OperationPolicy
 │   ├── extractors.ts   # Response shape extractors for all resource types
 │   ├── scope-utils.ts  # Scope resolution utilities
-│   └── toolsets/       # 41 declarative toolset definition files (pure data — add new resources here)
+│   └── toolsets/       # 38 declarative toolset definition files (pure data — add new resources here)
 ├── tools/              # 11 consolidated tool handlers
 ├── prompts/            # ~33 prompt templates (one per workflow)
 ├── resources/          # MCP resources (pipeline YAML, execution summary)
@@ -80,7 +80,7 @@ When adding **writes** (create/update/delete), also check the agent user flow an
 
 1. **Scope symmetry** — list/get/create/update must send the same scope params. Prefer resource-level `supportedScopes` + `scopeParams` (+ `scopeOptional` when ambient `HARNESS_ORG`/`HARNESS_PROJECT` must not leak) over per-operation `queryParams` remaps.
 2. **Cross-repo contract** — verify every CRUD op on the backend OpenAPI (e.g. `iac-server` for IaCM), not only POST/PUT.
-3. **Sibling pattern** — match an existing multi-scope resource in the same toolset (e.g. `iacm_variable_set`) before inventing a new shape.
+3. **Sibling pattern** — match an existing multi-scope resource in the same toolset (e.g. `infrastructure_variable_set`) before inventing a new shape.
 4. **User flow** — an agent that creates at org/project scope must be able to list/get/update at that same scope. Document visibility scope vs body fields that mean something else (e.g. connector location).
 5. **Regressions** — assert shared scope params across ops; for `scopeOptional`, assert config-only org/project produces no scope query params.
 

@@ -834,3 +834,23 @@ describe("database_changeset_existence get", () => {
     expect(call.body).not.toHaveProperty("projectIdentifier");
   });
 });
+
+describe("dbops → databases toolset rename & alias", () => {
+  it("uses the capability name 'databases' as the toolset name", () => {
+    expect(dbopsToolset.name).toBe("databases");
+  });
+
+  it("keeps every resource on the renamed toolset and carries the old 'dbops' search alias", () => {
+    for (const r of dbopsToolset.resources) {
+      expect(r.toolset).toBe("databases");
+      expect(r.searchAliases).toContain("dbops");
+    }
+  });
+
+  it("HARNESS_TOOLSETS='dbops' still enables the renamed databases toolset", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "dbops" }));
+    const def = registry.getResource("database_schema");
+    expect(def.toolset).toBe("databases");
+    expect(registry.getAllResourceTypes()).toContain("database_instance");
+  });
+});
