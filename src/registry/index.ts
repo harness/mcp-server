@@ -37,6 +37,7 @@ import { scsToolset } from "./toolsets/scs.js";
 import { evidenceVaultToolset } from "./toolsets/evidence-vault.js";
 import { stoToolset } from "./toolsets/sto.js";
 import { dbopsToolset } from "./toolsets/dbops.js";
+import { autonomousWorkToolset } from "./toolsets/autonomous_work.js";
 import { accessControlToolset } from "./toolsets/access-control.js";
 import { settingsToolset } from "./toolsets/settings.js";
 import { platformToolset } from "./toolsets/platform.js";
@@ -154,6 +155,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   evidenceVaultToolset,
   stoToolset,
   dbopsToolset,
+  autonomousWorkToolset,
   accessControlToolset,
   settingsToolset,
   platformToolset,
