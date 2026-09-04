@@ -1337,7 +1337,7 @@ export const fmeGetExtract = (raw: unknown): unknown => {
 
 // ── Release Management (RMG) ──────────────────────────────────────────────
 
-const RMG_API_PREFIX = "/api";
+const RMG_API_PREFIX = "/gateway/rmg/api";
 export const RMG_DEFAULT_DAYS_BACK = 30;
 export const RMG_MAX_DAYS_BACK = 365;
 /** Days of look-ahead included in the window so scheduled releases stay visible. */

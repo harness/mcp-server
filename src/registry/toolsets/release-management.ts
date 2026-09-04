@@ -1,6 +1,7 @@
 /**
  * Release Management (RMG) — orchestration definitions and release execution monitoring.
- * Paths are service-native `/api/...`. Base URL is `${HARNESS_BASE_URL}/gateway/rmg`.
+ * Paths use the hosted `/gateway/rmg/api/...` prefix. mcpServerInternal rewrites
+ * that prefix to the service-native `/api/...` path and injects service authentication.
  * Account via Harness-Account header (headerBasedScoping).
  */
 import type { BodySchema, ParamsSchema, ToolsetDefinition } from "../types.js";
@@ -34,7 +35,7 @@ import {
   yamlWriteBody,
 } from "../extractors.js";
 
-const RMG = "/api";
+const RMG = "/gateway/rmg/api";
 
 const RELEASE_STATUSES = ["Running", "Success", "Failed", "Scheduled", "Paused", "Aborted"] as const;
 
@@ -161,7 +162,6 @@ export const releaseManagementToolset: ToolsetDefinition = {
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
       headerBasedScoping: true,
-      baseUrlOverride: "rmg",
       identifierFields: ["process_id"],
       searchAliases: ["orchestration process", "rmg process", "release plan", "process yaml"],
       listFilterFields: [
@@ -246,7 +246,6 @@ export const releaseManagementToolset: ToolsetDefinition = {
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
       headerBasedScoping: true,
-      baseUrlOverride: "rmg",
       identifierFields: ["activity_id"],
       searchAliases: ["orchestration activity", "rmg activity", "release step", "activity yaml"],
       listFilterFields: [
@@ -332,7 +331,6 @@ export const releaseManagementToolset: ToolsetDefinition = {
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
       headerBasedScoping: true,
-      baseUrlOverride: "rmg",
       identifierFields: ["release_id"],
       searchAliases: ["active release", "release execution", "rmg release", "running release"],
       listFilterFields: [
@@ -451,7 +449,6 @@ export const releaseManagementToolset: ToolsetDefinition = {
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
       headerBasedScoping: true,
-      baseUrlOverride: "rmg",
       identifierFields: [],
       searchAliases: ["release phase", "execution phase", "rmg phase"],
       listFilterFields: [
@@ -505,7 +502,6 @@ export const releaseManagementToolset: ToolsetDefinition = {
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
       headerBasedScoping: true,
-      baseUrlOverride: "rmg",
       identifierFields: ["release_id"],
       searchAliases: ["release task", "manual task", "execution task"],
       listFilterFields: [
@@ -567,7 +563,6 @@ export const releaseManagementToolset: ToolsetDefinition = {
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
       headerBasedScoping: true,
-      baseUrlOverride: "rmg",
       identifierFields: ["release_id"],
       searchAliases: ["release activity execution", "execution activity", "activity run"],
       listFilterFields: [
@@ -671,7 +666,6 @@ export const releaseManagementToolset: ToolsetDefinition = {
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
       headerBasedScoping: true,
-      baseUrlOverride: "rmg",
       identifierFields: ["release_id"],
       searchAliases: ["release phase output", "phase output", "execution variable"],
       relatedResources: [
@@ -713,7 +707,6 @@ export const releaseManagementToolset: ToolsetDefinition = {
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
       headerBasedScoping: true,
-      baseUrlOverride: "rmg",
       identifierFields: ["release_id"],
       searchAliases: ["release phase input", "phase input", "execution input"],
       relatedResources: [
@@ -755,7 +748,6 @@ export const releaseManagementToolset: ToolsetDefinition = {
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
       headerBasedScoping: true,
-      baseUrlOverride: "rmg",
       identifierFields: ["release_id"],
       searchAliases: ["release activity output", "activity output", "execution variable"],
       relatedResources: [
@@ -797,7 +789,6 @@ export const releaseManagementToolset: ToolsetDefinition = {
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
       headerBasedScoping: true,
-      baseUrlOverride: "rmg",
       identifierFields: ["release_id"],
       searchAliases: ["release input", "release input yaml", "execution input"],
       relatedResources: [
@@ -830,7 +821,6 @@ export const releaseManagementToolset: ToolsetDefinition = {
       supportedScopes: ["account", "org", "project"],
       scopeOptional: true,
       headerBasedScoping: true,
-      baseUrlOverride: "rmg",
       identifierFields: ["activity_execution_id"],
       searchAliases: ["release activity input", "activity input", "execution input"],
       relatedResources: [

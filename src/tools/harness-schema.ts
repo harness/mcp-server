@@ -219,7 +219,7 @@ export function registerSchemaTool(
   server: McpServer,
   _registry: Registry | undefined,
   client: HarnessClient | undefined,
-  config: Config | undefined,
+  _config: Config | undefined,
   additionalSchemas?: Record<string, SchemaEntry>,
 ): void {
   if (additionalSchemas) {
@@ -237,7 +237,7 @@ export function registerSchemaTool(
       }
     : { ...SCHEMAS };
 
-  const liveFetcher = client ? createLiveSchemaFetcher(client, config) : undefined;
+  const liveFetcher = client ? createLiveSchemaFetcher(client) : undefined;
   const availableSchemas = listAvailableSchemaNames(Object.keys(allSchemas), liveFetcher);
   const hasLiveEntities = liveFetcher !== undefined;
 

@@ -1,5 +1,4 @@
 import type { HarnessClient } from "../../client/harness-client.js";
-import { resolveRmgBaseUrl, type Config } from "../../config.js";
 import { createLogger } from "../../utils/logger.js";
 import {
   normalizeEntitySchema,
@@ -439,7 +438,7 @@ function logBundledServe(
   });
 }
 
-export function createLiveSchemaFetcher(client: HarnessClient, config?: Config): LiveSchemaFetcher {
+export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetcher {
   const cache = new Map<string, EntitySchemaCacheEntry>();
   preloadBundledEntitySchemas(cache, client.account);
 
@@ -479,10 +478,6 @@ export function createLiveSchemaFetcher(client: HarnessClient, config?: Config):
       }
 
       if (api === "rmg") {
-        if (!config) {
-          throw new Error("RMG YAML schema fetch requires server configuration.");
-        }
-
         const scopeParams = buildRmgYamlSchemaParams(params);
         log.debug("Fetching RMG YAML schema", {
           resource_type: resourceType,
@@ -493,8 +488,7 @@ export function createLiveSchemaFetcher(client: HarnessClient, config?: Config):
 
         const response = await client.request<unknown>({
           method: "GET",
-          path: "/api/yamlSchema",
-          baseUrl: resolveRmgBaseUrl(config),
+          path: "/gateway/rmg/api/yamlSchema",
           headerBasedScoping: true,
           params: {
             entityType: definition.entityType,

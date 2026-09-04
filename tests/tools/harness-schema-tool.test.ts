@@ -293,12 +293,12 @@ describe("harness_schema RMG release definitions", () => {
     expect(requestMock).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "GET",
-        path: "/api/yamlSchema",
-        baseUrl: "https://app.harness.io/gateway/rmg",
+        path: "/gateway/rmg/api/yamlSchema",
         headerBasedScoping: true,
         params: expect.objectContaining({ entityType: "PROCESS" }),
       }),
     );
+    expect(requestMock.mock.calls[0]?.[0]).not.toHaveProperty("baseUrl");
     expect(parsed.source).toBe("rmg-yaml-schema");
     expect(parsed.yaml_root).toBe("process");
     expect(parsed.fields).toEqual(

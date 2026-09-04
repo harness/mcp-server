@@ -478,7 +478,6 @@ export interface ResourceDefinition {
    * migrating to plain Harness-native ("harness") routing per-call.
    */
   product?: ProductName;
-  baseUrlOverride?: "fme" | "rmg";
   /**
    * When true, this resource uses header-based scoping (Harness-Account header)
    * instead of the standard `accountIdentifier` query param. Also prevents

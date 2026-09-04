@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { type Config, resolveProductBaseUrl, resolveResourceBaseUrl } from "../config.js";
+import { type Config, resolveProductBaseUrl } from "../config.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import { HarnessApiError } from "../utils/errors.js";
 import type { ResourceDefinition, ToolsetDefinition, ToolsetName, OperationName, EndpointSpec, FilterFieldSpec, ResourceScope } from "./types.js";
@@ -822,9 +822,7 @@ export class Registry {
 
     // Make request — resolve base URL and auth from product backend
     const product = resolvedRoute?.product ?? def.product ?? "harness";
-    const baseUrl = def.baseUrlOverride
-      ? resolveResourceBaseUrl(this.config, def)
-      : resolveProductBaseUrl(this.config, product);
+    const baseUrl = resolveProductBaseUrl(this.config, product);
     const productHeaders: Record<string, string> = { ...spec.headers, ...resolvedRoute?.headers };
 
     const requestOpts = {

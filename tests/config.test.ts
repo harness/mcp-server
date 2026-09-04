@@ -5,8 +5,6 @@ import {
   isPlaceholderCredential,
   loadConfig,
   resolveFmeApiKey,
-  resolveResourceBaseUrl,
-  resolveRmgBaseUrl,
 } from "../src/config.js";
 
 describe("extractAccountIdFromToken", () => {
@@ -505,14 +503,6 @@ describe("ConfigSchema — HTTPS enforcement", () => {
     if (result.success) {
       expect(result.data.HARNESS_FME_API_KEY).toBeUndefined();
     }
-  });
-
-  it("resolves RMG base URL from HARNESS_BASE_URL/gateway/rmg", () => {
-    const result = ConfigSchema.parse(validConfig);
-    expect(resolveRmgBaseUrl(result)).toBe("https://app.harness.io/gateway/rmg");
-    expect(resolveResourceBaseUrl(result, { baseUrlOverride: "rmg" })).toBe(
-      "https://app.harness.io/gateway/rmg",
-    );
   });
 
   it("resolves FME auth from explicit key before Harness API key", () => {
