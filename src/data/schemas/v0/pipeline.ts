@@ -12642,7 +12642,7 @@ const schema: Record<string, any> = {
                           ],
                           "properties": {
                             "ref": {
-                              "description": "Webadmin metric ID",
+                              "description": "Metric name as defined in FME (e.g. page_viewtime1_mean)",
                               "oneOf": [
                                 {
                                   "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
@@ -100945,6 +100945,10 @@ const schema: Record<string, any> = {
                   "weightPercentage"
                 ],
                 "properties": {
+                  "loadBalancer": {
+                    "type": "string",
+                    "pattern": "^(?=\\s*\\S).*$"
+                  },
                   "weightPercentage": {
                     "oneOf": [
                       {
@@ -120878,6 +120882,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/AIExperimentStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
