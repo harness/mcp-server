@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## GitHub Action Tags Must Match the Published Ref Exactly
+- **Issue**: The Trivy release page labels the latest release `v0.36.0`, but the workflow initially referenced `0.36.0`; GitHub Actions failed during job setup because that ref does not exist.
+- **Fix**: Use the exact published action ref, including its `v` prefix, and verify the repository tag before pushing.
+- **Rule**: Treat marketplace display versions and Git refs as different inputs; resolve the exact action tag or commit SHA before adding a third-party action.
+
 ## HTTP Transport Tests Need Localhost Socket Access
 - **Issue**: Running the full suite in the restricted sandbox made HTTP transport tests fail with `listen EPERM: operation not permitted 127.0.0.1`, while all non-socket tests passed.
 - **Fix**: Rerun the same suite with localhost socket access before treating route, auth, host-validation, or rate-limit failures as product regressions.
