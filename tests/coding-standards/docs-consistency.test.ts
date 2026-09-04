@@ -45,4 +45,16 @@ describe("Coding standards — documentation consistency", () => {
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
+
+  it("docs/coding-standards.md documents confirm (not deprecated confirmation) for write tools", () => {
+    expect(content).toMatch(/confirm: true/);
+    expect(content).not.toMatch(/confirmation:\s*true/);
+  });
+
+  it("tasks/eval-comprehensive.md uses confirm (not deprecated confirmation) for write tool examples", () => {
+    const evalPath = join(REPO_ROOT, "tasks/eval-comprehensive.md");
+    const evalContent = readFileSync(evalPath, "utf8");
+    expect(evalContent).not.toMatch(/confirmation:\s*true/);
+    expect(evalContent).toMatch(/confirm:\s*true/);
+  });
 });
