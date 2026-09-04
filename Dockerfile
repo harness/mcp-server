@@ -1,12 +1,25 @@
-# Stage 1 — build
-FROM node:22-alpine AS build
+# syntax=docker/dockerfile:1
+
+ARG NODE_IMAGE=node:22-bookworm-slim
+
+# Shared runtime — ONNX Runtime's Node binding needs glibc and libgomp.
+FROM ${NODE_IMAGE} AS base
 WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates libgomp1 \
+  && rm -rf /var/lib/apt/lists/*
 
 # Enable pnpm via corepack
 RUN corepack enable && corepack prepare pnpm@10.18.2 --activate
 
+# Stage 1 — build
+FROM base AS build
+
 # Install dependencies (layer cache: only re-run when lockfile changes)
 COPY package.json pnpm-lock.yaml ./
+# package.json postinstall imports both files, so they must exist before install.
+COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/
 RUN pnpm install --frozen-lockfile
 
 # Copy source and compile
@@ -20,28 +33,28 @@ ENV HARNESS_HF_CACHE_DIR=/app/.cache/hf
 RUN node scripts/preload-hf-model.mjs /app/.cache/hf
 
 # Stage 2 — production
-FROM node:22-alpine AS production
-WORKDIR /app
+FROM base AS production
 
-RUN corepack enable && corepack prepare pnpm@10.18.2 --activate
+ENV NODE_ENV=production \
+    HOST=0.0.0.0 \
+    PORT=3000 \
+    HARNESS_HF_CACHE_DIR=/app/.cache/hf
 
 # Install production dependencies only
 COPY package.json pnpm-lock.yaml ./
+COPY scripts/ensure-secure-adm-zip.mjs scripts/adm-zip-security-lib.mjs scripts/
 RUN pnpm install --frozen-lockfile --prod
 
 # Copy compiled output and pre-downloaded model cache from build stage
-COPY --from=build /app/build build/
-COPY --from=build /app/.cache/hf /app/.cache/hf
+COPY --from=build --chown=node:node /app/build build/
+COPY --from=build --chown=node:node /app/.cache/hf /app/.cache/hf
 
-ENV HARNESS_HF_CACHE_DIR=/app/.cache/hf
-
-# Non-root user for security
-RUN addgroup -S mcp && adduser -S mcp -G mcp
-USER mcp
+# The official Node image provides a fixed non-root node user (uid/gid 1000).
+USER node
 
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -qO- http://localhost:3000/health || exit 1
+  CMD ["node", "-e", "const port=process.env.PORT||'3000';fetch(`http://127.0.0.1:${port}/health`).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
 
 ENTRYPOINT ["node", "build/index.js", "http"]

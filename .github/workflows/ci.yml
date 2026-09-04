@@ -65,6 +65,44 @@ jobs:
           HARNESS_TOOLSETS: ${{ matrix.toolsets }}
           HARNESS_READ_ONLY: ${{ matrix.read_only }}
 
+  container-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v4
+      - name: Build container image without publishing
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          push: false
+          tags: harness-mcp-server:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Smoke test HTTP reachability and auth
+        run: |
+          container_id="$(docker run --detach \
+            --publish 3000:3000 \
+            --env HARNESS_MCP_MODE=multi-user \
+            --env HARNESS_MCP_AUTH_TOKEN=ci-smoke-token \
+            harness-mcp-server:ci)"
+          trap 'docker logs "$container_id"; docker rm --force "$container_id"' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:3000/health; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "Container health endpoint did not become ready" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+
+          status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            --request POST http://127.0.0.1:3000/mcp)"
+          test "$status" = "401"
+
   npm-consumer-adm-zip:
     runs-on: ubuntu-latest
     needs: build-and-test
