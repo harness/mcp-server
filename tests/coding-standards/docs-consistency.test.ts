@@ -45,4 +45,19 @@ describe("Coding standards — documentation consistency", () => {
   it("docs/coding-standards.md forbids new harness-*.ts handler files", () => {
     expect(content).toMatch(/Do NOT add new `harness-\*\.ts` handler files/);
   });
+
+  it("docs/coding-standards.md does not regress to the retired 10-tool model", () => {
+    expect(content).not.toMatch(/10 consolidated tool handlers/);
+    expect(content).not.toMatch(/The 10 consolidated tools/);
+  });
+
+  it("docs/coding-standards.md documents registerTool() (not deprecated server.tool())", () => {
+    expect(content).toMatch(/server\.registerTool\(\)/);
+    expect(content).not.toMatch(/Do NOT create new `server\.tool\(\)` calls/);
+  });
+
+  it("docs/coding-standards.md documents confirm + elicitation (not legacy confirmation param)", () => {
+    expect(content).toMatch(/confirm:\s*true/);
+    expect(content).not.toMatch(/require `confirmation:\s*true`/);
+  });
 });
