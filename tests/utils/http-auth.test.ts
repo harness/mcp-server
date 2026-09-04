@@ -79,6 +79,26 @@ describe("HTTP MCP auth", () => {
     expect(isAuthorizedHttpRequest({ authorization: "Bearer secret-token" }, "secret-token")).toBe(true);
   });
 
+  it("returns 401 for unauthenticated POST /mcp when auth is configured (container smoke parity)", async () => {
+    const app = express();
+    app.use(createHttpAuthMiddleware("secret-token"));
+    app.use(express.json());
+    app.post("/mcp", (_req, res) => res.json({ ok: true }));
+
+    await withListeningApp(app, async (baseUrl) => {
+      const rejected = await requestWithAuth(baseUrl, "POST", "/mcp");
+      expect(rejected.status).toBe(401);
+      expect(rejected.body).toMatchObject({
+        jsonrpc: "2.0",
+        error: { code: -32001, message: "Unauthorized" },
+      });
+
+      const accepted = await requestWithAuth(baseUrl, "POST", "/mcp", "Bearer secret-token");
+      expect(accepted.status).toBe(200);
+      expect(accepted.body).toEqual({ ok: true });
+    });
+  });
+
   it("rejects unauthenticated MCP routes before handlers run", async () => {
     const app = express();
     app.use(createHttpAuthMiddleware("secret-token"));

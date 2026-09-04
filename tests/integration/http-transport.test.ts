@@ -327,6 +327,54 @@ describe("HTTP transport session management", () => {
   });
 
   describe("HTTP app host-header validation", () => {
+    it("accepts external Host headers when bound to 0.0.0.0 (published container)", async () => {
+      const app = createHarnessHttpExpressApp(resolveHttpHostValidationOptions("0.0.0.0", {}));
+      app.get("/health", (_req, res) => {
+        res.json({ status: "ok" });
+      });
+
+      const server = app.listen(0, "0.0.0.0");
+      await new Promise<void>((resolve, reject) => {
+        server.once("listening", resolve);
+        server.once("error", reject);
+      });
+
+      try {
+        const address = server.address() as AddressInfo;
+        const url = new URL("/health", `http://127.0.0.1:${address.port}`);
+        const res = await new Promise<{ status: number; body: unknown }>((resolve, reject) => {
+          const req = httpRequest(
+            {
+              hostname: url.hostname,
+              port: url.port,
+              path: url.pathname,
+              method: "GET",
+              headers: { Host: "mcp.harness.io" },
+            },
+            (response) => {
+              let rawBody = "";
+              response.setEncoding("utf8");
+              response.on("data", (chunk) => { rawBody += chunk; });
+              response.on("end", () => {
+                resolve({
+                  status: response.statusCode ?? 0,
+                  body: rawBody ? JSON.parse(rawBody) : undefined,
+                });
+              });
+            },
+          );
+          req.on("error", reject);
+          req.end();
+        });
+        expect(res.status).toBe(200);
+        expect(res.body).toEqual({ status: "ok" });
+      } finally {
+        await new Promise<void>((resolve, reject) => {
+          server.close((err) => err ? reject(err) : resolve());
+        });
+      }
+    });
+
     it("accepts hosted MCP host and rejects unexpected hosts for localhost binds", async () => {
       const app = createHarnessHttpExpressApp(resolveHttpHostValidationOptions("127.0.0.1", {}));
       app.get("/probe", (_req, res) => {
