@@ -1,5 +1,29 @@
 # Harness MCP Server — Task Tracking
 
+## Docker image build/runtime alignment (2026-09-04)
+- [x] Copy required postinstall security scripts before dependency installation in both stages
+- [x] Use a glibc-based Node image for the native ONNX search dependency
+- [x] Make HTTP mode reachable through the container network while retaining the auth requirement
+- [x] Align the health check with the configurable runtime port and non-root user
+- [x] Add a CI image build and health smoke test so Dockerfile drift fails pull requests
+- [x] Run repository validation, push the branch, open a PR, and verify its checks
+
+### Plan
+- Preserve the existing multi-stage build, frozen pnpm lockfile, and preloaded local-search model.
+- Keep credentials out of the image; remote deployments must inject `HARNESS_MCP_AUTH_TOKEN`
+  and either single-user Harness credentials or multi-user session credentials at runtime.
+- Validate the container on GitHub's Linux builder because no local Docker-compatible daemon is
+  available, and do not push an image as part of this corrective PR.
+
+### Review
+- Local validation passed: dependency install/postinstall, build, docs check, typecheck,
+  standards (77 tests), and the full suite (3,264 tests).
+- The first full-suite attempt was blocked by sandbox localhost binding (`listen EPERM`);
+  the same suite passed with localhost socket access.
+- GitHub's non-publishing container job built the Linux image and passed the external
+  health-reachability and bearer-auth smoke tests.
+- Branch `fix/dockerfile-build-runtime` was pushed and PR #907 opened against `main`.
+
 ## OPA policy multi-scope (this session)
 - [x] Add `supportedScopes: ["account", "org", "project"]` + description hints for `policy` and `policy_set`
 - [x] Extend governance tests for supportedScopes and `resource_scope` query-param dispatch

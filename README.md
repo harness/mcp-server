@@ -502,10 +502,13 @@ pnpm docker:run
 docker run --rm -p 3000:3000 \
   -e HARNESS_API_KEY=pat.xxx.xxx.xxx \
   -e HARNESS_ACCOUNT_ID=your-account-id \
+  -e HARNESS_MCP_AUTH_TOKEN=replace-with-a-long-random-token \
   harness-mcp-server
 ```
 
 The container runs in HTTP mode on port 3000 by default with a built-in health check.
+It binds to the container network, so set `HARNESS_MCP_AUTH_TOKEN` in `.env` or the
+container environment and send that value as `Authorization: Bearer <token>` on MCP requests.
 
 ### Kubernetes
 
