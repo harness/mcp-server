@@ -127,6 +127,7 @@ export type ToolsetName =
   | "delegates"
   | "repositories"
   | "registries"
+  | "registries-v3"
   | "templates"
   | "dashboards"
   | "idp"

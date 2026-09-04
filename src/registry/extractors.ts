@@ -385,6 +385,73 @@ export const harListExtract = (arrayKey: string) => (raw: unknown): unknown => {
 };
 
 /**
+ * Factory for HAR v3 list responses. Shape: `{ page, size, hasMore, items[], meta? }`.
+ * Unlike v1, responses are not wrapped in a `data` envelope.
+ */
+export const harV3ListExtract = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  // Some v3 list endpoints (notably /scans) still return the v1 envelope
+  // { data, itemCount, pageIndex, pageSize, pageCount }. Normalize to the v3
+  // shape so downstream consumers can rely on `items`.
+  if (Array.isArray(raw.data) && !("items" in raw)) {
+    return {
+      items: raw.data,
+      total: typeof raw.itemCount === "number" ? raw.itemCount : raw.data.length,
+      page: raw.pageIndex,
+      size: raw.pageSize,
+      hasMore: typeof raw.pageIndex === "number" && typeof raw.pageCount === "number"
+        ? raw.pageIndex + 1 < raw.pageCount
+        : undefined,
+    };
+  }
+  const items = (raw.items as unknown[]) ?? [];
+  const meta = raw.meta as Record<string, unknown> | undefined;
+  const total = typeof meta?.totalCount === "number"
+    ? meta.totalCount
+    : typeof meta?.total === "number"
+      ? meta.total
+      : items.length;
+  // Project the meta counts agents care about instead of forwarding the raw
+  // backend `meta` envelope (which may gain new keys over time).
+  const activeCount = typeof meta?.activeCount === "number" ? meta.activeCount : undefined;
+  const deletedCount = typeof meta?.deletedCount === "number" ? meta.deletedCount : undefined;
+  return {
+    items,
+    total,
+    page: raw.page,
+    size: raw.size,
+    hasMore: raw.hasMore,
+    ...(activeCount !== undefined ? { activeCount } : {}),
+    ...(deletedCount !== undefined ? { deletedCount } : {}),
+  };
+};
+
+/**
+ * v3 metadata GETs (GetRegistryMetadataV3 / GetPackageMetadataV3 /
+ * GetVersionMetadataV3 / GetFileMetadataV3) return `{ data: [{ id, key, type,
+ * value }] }`. Project the array under `items` so it looks like every other
+ * v3 list, instead of leaking the backend `data` envelope.
+ */
+export const harV3DataArrayUnwrap = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  const data = raw.data;
+  if (Array.isArray(data)) {
+    return { items: data, total: data.length };
+  }
+  return raw;
+};
+
+/**
+ * v3 GetArtifactScanDetailsV3 returns `{ data: { packageName, scanStatus, ...
+ * } }`. Unwrap to the inner object so the scan detail is the top-level payload.
+ */
+export const harV3DataObjectUnwrap = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  if (isRecord(raw.data)) return raw.data;
+  return raw;
+};
+
+/**
  * Factory for v1 list responses (bare arrays).
  * If `wrapperKey` is provided, each item is unwrapped: `{ project: {...} }` → `{...}`.
  * Total is derived from array length since response headers aren't accessible.

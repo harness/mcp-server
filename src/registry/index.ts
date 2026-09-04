@@ -24,6 +24,7 @@ import { auditToolset } from "./toolsets/audit.js";
 import { delegatesToolset } from "./toolsets/delegates.js";
 import { repositoriesToolset } from "./toolsets/repositories.js";
 import { registriesToolset } from "./toolsets/registries.js";
+import { registriesV3Toolset } from "./toolsets/registries-v3.js";
 import { templatesToolset } from "./toolsets/templates.js";
 import { dashboardsToolset } from "./toolsets/dashboards.js";
 import { idpToolset } from "./toolsets/idp.js";
@@ -141,6 +142,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   delegatesToolset,
   repositoriesToolset,
   registriesToolset,
+  registriesV3Toolset,
   templatesToolset,
   dashboardsToolset,
   idpToolset,
