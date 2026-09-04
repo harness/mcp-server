@@ -1,5 +1,19 @@
 # Harness MCP Server — Task Tracking
 
+## Container runtime vulnerability hardening (2026-09-04)
+
+- [ ] Keep pnpm/Corepack and dependency installation out of the production image.
+- [ ] Assemble a minimal glibc runtime that preserves Node, CA certificates, `libgomp1`, production dependencies, and the preloaded model.
+- [ ] Add a CI vulnerability gate for fixable critical and high findings.
+- [ ] Run repository checks plus Linux container build, startup, auth, and vulnerability verification.
+- [ ] Commit, push, open the follow-up PR, and verify its live checks and review state.
+
+### Plan
+
+- Preserve the merged PR #907 HTTP behavior, non-root execution, deterministic dependency install, and ONNX native-runtime requirements.
+- Separate build tooling from runtime contents instead of treating every scanner finding as application reachability.
+- Keep the image unpublished in CI; the customer tag will be published only after the hardened image passes the new gate.
+
 ## Docker image build/runtime alignment (2026-09-04)
 - [x] Copy required postinstall security scripts before dependency installation in both stages
 - [x] Use a glibc-based Node image for the native ONNX search dependency

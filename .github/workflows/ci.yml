@@ -76,9 +76,28 @@ jobs:
           context: .
           load: true
           push: false
+          pull: true
           tags: harness-mcp-server:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      - name: Block fixable critical and high vulnerabilities
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: harness-mcp-server:ci
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+      - name: Verify production image excludes package managers
+        run: |
+          set -euo pipefail
+          for command in npm npx corepack pnpm yarn yarnpkg; do
+            if docker run --rm --entrypoint "$command" harness-mcp-server:ci --version >/dev/null 2>&1; then
+              echo "Production image unexpectedly contains $command" >&2
+              exit 1
+            fi
+          done
       - name: Smoke test HTTP reachability and auth
         run: |
           container_id="$(docker run --detach \
