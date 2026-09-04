@@ -413,7 +413,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       scopeOptional: true,
       identifierFields: ["workspace_id", "feature_flag_name"],
       product: "fme",
-      deepLinkTemplate: "/ng/account/{accountId}/module/fme/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/targets/{trafficTypeId}/splits/{id}",
+      deepLinkTemplate: "/ng/account/{accountId}/module/fme/orgs/{org}/projects/{project}/feature-flags/{id}",
       listFilterFields: [
         { name: "workspace_id", description: "FME workspace ID (get from harness_list resource_type=fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping." },
         { name: "offset", description: "Pagination offset for FME feature flags", type: "number" },
