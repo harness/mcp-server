@@ -140,6 +140,7 @@ export type ToolsetName =
   | "evidence-vault"
   | "sto"
   | "dbops"
+  | "autonomous_work"
   | "access_control"
   | "settings"
   | "platform"

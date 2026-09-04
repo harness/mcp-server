@@ -1839,7 +1839,7 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 40 of 41 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
+By default, 40 of 42 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 
