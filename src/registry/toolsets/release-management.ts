@@ -1,7 +1,6 @@
 /**
  * Release Management (RMG) — orchestration definitions and release execution monitoring.
- * Paths use the hosted `/gateway/rmg/api/...` prefix. mcpServerInternal rewrites
- * that prefix to the service-native `/api/...` path and injects service authentication.
+ * Paths use the hosted `/gateway/rmg/api/...` prefix.
  * Account via Harness-Account header (headerBasedScoping).
  */
 import type { BodySchema, ParamsSchema, ToolsetDefinition } from "../types.js";
