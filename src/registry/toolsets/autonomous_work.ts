@@ -819,30 +819,5 @@ export const autonomousWorkToolset: ToolsetDefinition = {
         },
       },
     },
-
-    // ── Agent execution (the trigger) ─────────────────────────────────────
-    {
-      resourceType: "agent_execution",
-      displayName: "Agent Execution",
-      description:
-        "Launch an autonomous agent pipeline execution. Takes org/project scope only (no body) — " +
-        "the agent pipeline is configured server-side per WorkClass. Returns { executionId, status }.",
-      toolset: "autonomous_work",
-      scope: "project",
-      identifierFields: [],
-      operations: {},
-      executeActions: {
-        run: {
-          method: "POST",
-          path: "/adlc/api/agent/executions",
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          skipScopeBodyInjection: true,
-          bodyBuilder: () => ({}),
-          responseExtractor: passthrough,
-          actionDescription: "Launch an agent pipeline execution for autonomous work.",
-          bodySchema: emptyBodySchema,
-        },
-      },
-    },
   ],
 };
