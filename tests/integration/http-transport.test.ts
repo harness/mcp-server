@@ -345,6 +345,19 @@ describe("HTTP transport session management", () => {
         });
       });
     });
+
+    it("accepts container-style Host headers when bound to 0.0.0.0 without allowed hosts", async () => {
+      const app = createHarnessHttpExpressApp(resolveHttpHostValidationOptions("0.0.0.0", {}));
+      app.get("/probe", (_req, res) => {
+        res.json({ ok: true });
+      });
+
+      await withListeningApp(app, async (baseUrl) => {
+        const publishedHost = await getWithHost(baseUrl, "mcp.example.com:3000");
+        expect(publishedHost.status).toBe(200);
+        expect(publishedHost.body).toEqual({ ok: true });
+      });
+    });
   });
 
   describe("graceful shutdown behavior", () => {
