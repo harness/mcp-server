@@ -6,7 +6,7 @@
 - [x] Make HTTP mode reachable through the container network while retaining the auth requirement
 - [x] Align the health check with the configurable runtime port and non-root user
 - [x] Add a CI image build and health smoke test so Dockerfile drift fails pull requests
-- [ ] Run repository validation, push the branch, open a PR, and verify its checks
+- [x] Run repository validation, push the branch, open a PR, and verify its checks
 
 ### Plan
 - Preserve the existing multi-stage build, frozen pnpm lockfile, and preloaded local-search model.
@@ -20,7 +20,9 @@
   standards (77 tests), and the full suite (3,264 tests).
 - The first full-suite attempt was blocked by sandbox localhost binding (`listen EPERM`);
   the same suite passed with localhost socket access.
-- Container build/runtime verification is delegated to the new non-publishing GitHub CI job.
+- GitHub's non-publishing container job built the Linux image and passed the external
+  health-reachability and bearer-auth smoke tests.
+- Branch `fix/dockerfile-build-runtime` was pushed and PR #907 opened against `main`.
 
 ## OPA policy multi-scope (this session)
 - [x] Add `supportedScopes: ["account", "org", "project"]` + description hints for `policy` and `policy_set`
