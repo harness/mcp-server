@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { releaseManagementToolset } from "../../../src/registry/toolsets/release-management.js";
 import { Registry } from "../../../src/registry/index.js";
 import type { Config } from "../../../src/config.js";
+import type { HarnessClient } from "../../../src/client/harness-client.js";
 import {
   releaseGetExtract,
   rmgYamlEntityExtract,
@@ -68,6 +69,32 @@ describe("release-management toolset", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: undefined }));
     expect(registry.getAllResourceTypes()).toContain("release_process");
     expect(registry.getAllResourceTypes()).toContain("release");
+  });
+
+  it("dispatches release_process create through the gateway without a baseUrl override", async () => {
+    const request = vi.fn().mockResolvedValue({
+      identifier: "rmg-smoke",
+      yaml: "process:\n  id: rmg-smoke\n",
+    });
+    const client = {
+      account: "test-account",
+      request,
+    } as unknown as HarnessClient;
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "release-management" }));
+
+    await registry.dispatch(client, "release_process", "create", {
+      org_id: "default",
+      project_id: "test-project",
+      body: { yaml: "process:\n  id: rmg-smoke\n" },
+    });
+
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/gateway/rmg/api/orchestration/process",
+      }),
+    );
+    expect(request.mock.calls[0]?.[0]).not.toHaveProperty("baseUrl");
   });
 });
 

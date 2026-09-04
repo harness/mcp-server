@@ -286,7 +286,7 @@ describe("harness_schema RMG release definitions", () => {
     expect(description).toContain("release_activity");
   });
 
-  it("fetches release_process schema from RMG /api/yamlSchema", async () => {
+  it("fetches release_process schema through the RMG gateway path", async () => {
     const result = await server.call("harness_schema", { resource_type: "release_process" });
     const parsed = parseResult(result) as Record<string, unknown>;
 

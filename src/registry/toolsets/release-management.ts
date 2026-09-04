@@ -146,7 +146,7 @@ export const releaseManagementToolset: ToolsetDefinition = {
     "Execution: harness_list resource_type=release (org/project scoped), harness_get release by id/slug, " +
     "harness_list release_execution_phase/release_execution_task/release_execution_activity (release_id required), " +
     "harness_get release_input|release_execution_phase_input|release_execution_phase_output|release_execution_activity_output|release_execution_activity_input. " +
-    "YAML JSON Schema: harness_schema(resource_type='release_process'|'release_activity') or GET {rmgBase}/api/yamlSchema?entityType=PROCESS|ACTIVITY.",
+    "YAML JSON Schema: harness_schema(resource_type='release_process'|'release_activity') or GET /gateway/rmg/api/yamlSchema?entityType=PROCESS|ACTIVITY.",
   optIn: false,
   resources: [
     {
