@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## HTTP Transport Tests Need Localhost Socket Access
+- **Issue**: Running the full suite in the restricted sandbox made HTTP transport tests fail with `listen EPERM: operation not permitted 127.0.0.1`, while all non-socket tests passed.
+- **Fix**: Rerun the same suite with localhost socket access before treating route, auth, host-validation, or rate-limit failures as product regressions.
+- **Rule**: A cluster of HTTP test failures sharing `listen EPERM` is an environment failure; report both runs and require a clean socket-enabled rerun for the functional verdict.
+
 ## Generated Docs Checks Must Run After Build Completes
 - **Issue**: Running `pnpm build` and `pnpm docs:check` concurrently lets the docs checker read a partially rewritten `build/`, producing false resource-count and operation-table drift even when README is current.
 - **Fix**: Complete `pnpm build` first, then run `pnpm docs:check` or `pnpm docs:generate` sequentially. A sequential regenerate after the false failure reported README already up to date.
