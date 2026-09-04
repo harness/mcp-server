@@ -2,17 +2,26 @@
 
 ## Container runtime vulnerability hardening (2026-09-04)
 
-- [ ] Keep pnpm/Corepack and dependency installation out of the production image.
-- [ ] Assemble a minimal glibc runtime that preserves Node, CA certificates, `libgomp1`, production dependencies, and the preloaded model.
-- [ ] Add a CI vulnerability gate for fixable critical and high findings.
-- [ ] Run repository checks plus Linux container build, startup, auth, and vulnerability verification.
-- [ ] Commit, push, open the follow-up PR, and verify its live checks and review state.
+- [x] Keep pnpm/Corepack and dependency installation out of the production image.
+- [x] Assemble a minimal glibc runtime that preserves Node, CA certificates, `libgomp1`, production dependencies, and the preloaded model.
+- [x] Add a CI vulnerability gate for fixable critical and high findings.
+- [x] Run repository checks plus Linux container build, startup, auth, and vulnerability verification.
+- [x] Commit, push, open the follow-up PR, and verify its live checks and review state.
 
 ### Plan
 
 - Preserve the merged PR #907 HTTP behavior, non-root execution, deterministic dependency install, and ONNX native-runtime requirements.
 - Separate build tooling from runtime contents instead of treating every scanner finding as application reachability.
 - Keep the image unpublished in CI; the customer tag will be published only after the hardened image passes the new gate.
+
+### Review
+
+- Opened PR #910 because GitHub had already assigned #908 to an automated regression-test draft.
+- The production stage now starts from Debian 12, copies only the Node executable and runtime artifacts, and contains none of npm, npx, Corepack, pnpm, Yarn, or Yarnpkg.
+- The pinned Trivy v0.36.0 action runs Trivy v0.70.0 and reports zero fixable critical/high OS or library findings for the built image.
+- Linux container verification passed: fresh base pull, package-manager exclusion, HTTP startup, local-search model initialization, healthy `/health`, and unauthenticated `/mcp` rejection with `401`.
+- Repository verification passed: production audit (0 known findings across 174 audited dependencies), build, typecheck, standards (77 tests), docs check, full suite (144 files / 3,264 tests), workflow YAML parse, and diff check.
+- The initial action ref omitted the published `v` prefix and failed during runner setup; the corrected workflow pins the verified release commit SHA and the final CI run is green. Human review remains required by branch policy.
 
 ## Docker image build/runtime alignment (2026-09-04)
 - [x] Copy required postinstall security scripts before dependency installation in both stages
