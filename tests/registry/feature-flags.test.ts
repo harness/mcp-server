@@ -484,7 +484,7 @@ describe("fme_feature_flag kill/restore/reallocate/archive/unarchive dual-mode",
     expect(req.body).toEqual({ comment: "no longer needed", title: "cleanup" });
   });
 
-  it("new mode: unarchive routes to the Harness-native feature-flags path", async () => {
+  it("new mode: unarchive routes to the Harness-native feature-flags path and forwards comment/title", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -492,12 +492,13 @@ describe("fme_feature_flag kill/restore/reallocate/archive/unarchive dual-mode",
       org_id: "o1",
       project_id: "p1",
       feature_flag_name: "my_flag",
+      body: { comment: "bring it back", title: "restore" },
     });
 
     const req = firstRequest(mockRequest);
     expect(req.method).toBe("POST");
     expect(req.path).toBe("/fme/api/v4/feature-flags/my_flag/unarchive");
-    expect(req.body).toEqual({});
+    expect(req.body).toEqual({ comment: "bring it back", title: "restore" });
   });
 
   it("legacy mode: archive still posts to the Split.io path and forwards comment/title", async () => {
@@ -514,6 +515,22 @@ describe("fme_feature_flag kill/restore/reallocate/archive/unarchive dual-mode",
     expect(req.method).toBe("POST");
     expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/archive");
     expect(req.body).toEqual({ comment: "no longer needed", title: "cleanup" });
+  });
+
+  it("legacy mode: unarchive still posts to the Split.io path and forwards comment/title", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "fme_feature_flag", "unarchive", {
+      workspace_id: "ws1",
+      feature_flag_name: "my_flag",
+      body: { comment: "bring it back", title: "restore" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/unarchive");
+    expect(req.body).toEqual({ comment: "bring it back", title: "restore" });
   });
 });
 
