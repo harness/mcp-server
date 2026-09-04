@@ -85,6 +85,7 @@ describe("HTTP MCP auth", () => {
     app.get("/health", (_req, res) => res.json({ status: "ok" }));
     app.options("/mcp", (_req, res) => res.status(204).end());
     app.get("/mcp", (_req, res) => res.json({ ok: true }));
+    app.post("/mcp", (_req, res) => res.json({ ok: true }));
 
     await withListeningApp(app, async (baseUrl) => {
       const health = await getWithAuth(baseUrl, "/health");
@@ -97,6 +98,13 @@ describe("HTTP MCP auth", () => {
       const rejected = await getWithAuth(baseUrl, "/mcp");
       expect(rejected.status).toBe(401);
       expect(rejected.body).toMatchObject({
+        jsonrpc: "2.0",
+        error: { code: -32001, message: "Unauthorized" },
+      });
+
+      const rejectedPost = await requestWithAuth(baseUrl, "POST", "/mcp");
+      expect(rejectedPost.status).toBe(401);
+      expect(rejectedPost.body).toMatchObject({
         jsonrpc: "2.0",
         error: { code: -32001, message: "Unauthorized" },
       });
