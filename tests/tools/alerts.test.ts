@@ -91,6 +91,9 @@ describe("alert resource definition", () => {
     const statusFilter = def.listFilterFields?.find((f) => f.name === "status");
     expect(def.diagnosticHint).toContain("external writers");
     expect(def.diagnosticHint).toContain("harness_execute");
+    expect(def.executeHint).toContain("acknowledge");
+    expect(def.executeHint).toContain("resolve");
+    expect(def.executeHint).toContain("dismiss");
     expect(statusFilter?.description).toContain("responses return status uppercase");
     expect(statusFilter?.description).toContain("case-insensitively");
   });
