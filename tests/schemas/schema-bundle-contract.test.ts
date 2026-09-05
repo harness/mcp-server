@@ -220,4 +220,48 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream FmeMetricCheck step definitions in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const customSteps = defs.pipeline.steps.custom as Record<string, unknown>;
+
+      const nodeKey = key === "template" ? "FmeMetricCheckStepNode_template" : "FmeMetricCheckStepNode";
+      expect(customSteps).toHaveProperty(nodeKey);
+      expect(customSteps).toHaveProperty("FmeMetricCheckStepInfo");
+
+      const stepNode = customSteps[nodeKey] as {
+        properties: { type: { enum: string[] } };
+      };
+      expect(stepNode.properties.type.enum).toContain("FmeMetricCheck");
+
+      const stepInfo = customSteps.FmeMetricCheckStepInfo as {
+        allOf: Array<{ properties?: { metrics?: { oneOf?: Array<{ items?: { properties?: { ref?: { description?: string } } } }> } } }>;
+      };
+      const metricsRef = stepInfo.allOf
+        .flatMap((branch) => {
+          const metrics = branch.properties?.metrics?.oneOf?.[0];
+          return metrics && "items" in metrics ? [metrics.items?.properties?.ref] : [];
+        })
+        .find((ref) => ref?.description !== undefined);
+      expect(metricsRef?.description).toContain("Webadmin metric ID");
+    }
+  });
+
+  it("includes upstream InheritEcsTrafficShiftSpec in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const cdSteps = defs.pipeline.steps.cd as Record<string, unknown>;
+
+      expect(cdSteps).toHaveProperty("InheritEcsTrafficShiftSpec");
+
+      const inheritSpec = cdSteps.InheritEcsTrafficShiftSpec as {
+        allOf: Array<{ required?: string[]; properties?: Record<string, unknown> }>;
+      };
+      const specBody = inheritSpec.allOf.find((branch) => branch.required?.includes("weightPercentage"));
+      expect(specBody?.required).toContain("weightPercentage");
+      expect(specBody?.properties).toHaveProperty("ruleOverrides");
+      expect(specBody?.properties).toHaveProperty("downsizeOldService");
+    }
+  });
 });
