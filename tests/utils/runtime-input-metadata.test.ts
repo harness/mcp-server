@@ -30,6 +30,19 @@ describe("parseRuntimeInputExpression", () => {
     expect(parseRuntimeInputExpression("<+input>")).toBeNull();
   });
 
+  it("returns null for default(*) wildcard (no concrete default)", () => {
+    expect(parseRuntimeInputExpression("<+input>.default(*)")).toBeNull();
+  });
+
+  it("returns null for non-string values", () => {
+    expect(parseRuntimeInputExpression(null)).toBeNull();
+    expect(parseRuntimeInputExpression(42)).toBeNull();
+  });
+
+  it("returns null when nested parens are unbalanced", () => {
+    expect(parseRuntimeInputExpression("<+input>.default(foo(bar")).toBeNull();
+  });
+
   it("strips quotes from default values", () => {
     expect(parseRuntimeInputExpression('<+input>.default("foo")')).toEqual({
       runtimeExpression: '<+input>.default("foo")',
@@ -104,6 +117,27 @@ pipeline:
       env: {
         runtimeExpression: "<+input>.default(qa)",
         default: "qa",
+      },
+    });
+  });
+
+  it("returns empty object for malformed YAML", () => {
+    expect(extractVariableInputMetadata("pipeline:\n  variables: [[[")).toEqual({});
+  });
+
+  it("skips variables with bare <+input> (no default or allowed values)", () => {
+    const yaml = `
+pipeline:
+  variables:
+    - name: required
+      value: <+input>
+    - name: optional
+      value: <+input>.default(dev)
+`;
+    expect(extractVariableInputMetadata(yaml)).toEqual({
+      optional: {
+        runtimeExpression: "<+input>.default(dev)",
+        default: "dev",
       },
     });
   });
