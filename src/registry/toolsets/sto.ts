@@ -49,6 +49,18 @@ function normalizeRemAgentEnumList(raw: unknown): string[] | undefined {
   return normalized.length > 0 ? normalized : undefined;
 }
 
+/** Like normalizeRemAgentEnumList but preserves case (glob patterns for exclude_repo_patterns). */
+function normalizeRemAgentStringList(raw: unknown): string[] | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const parts = Array.isArray(raw)
+    ? raw.map((v) => String(v))
+    : String(raw).split(",");
+  const normalized = parts
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0);
+  return normalized.length > 0 ? normalized : undefined;
+}
+
 export const stoToolset: ToolsetDefinition = {
   name: "sto",
   displayName: "Security Testing Orchestration",
@@ -937,6 +949,12 @@ export const stoToolset: ToolsetDefinition = {
               } else {
                 input[key] = normalized;
               }
+            }
+            const repoPatterns = normalizeRemAgentStringList(input.exclude_repo_patterns);
+            if (repoPatterns === undefined) {
+              delete input.exclude_repo_patterns;
+            } else {
+              input.exclude_repo_patterns = repoPatterns;
             }
           },
           responseExtractor: stoRemediationDiffExtract,
