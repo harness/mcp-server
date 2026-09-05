@@ -4828,6 +4828,14 @@ const schema: Record<string, any> = {
                 "description": "Script to execute. Supports expressions.",
                 "type": "string"
               },
+              "uses": {
+                "description": "Plugin identifier registered with VMS. Supports expressions.",
+                "type": "string"
+              },
+              "version": {
+                "description": "Optional plugin version pin. Unset lets VMS resolve. Supports expressions.",
+                "type": "string"
+              },
               "container": {
                 "description": "Container configuration for the step.",
                 "$ref": "#/definitions/template_v1/steps/unified/Container"
