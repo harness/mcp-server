@@ -109,4 +109,28 @@ describe("assertListScopeResolved", () => {
       ),
     ).not.toThrow();
   });
+
+  it("treats whitespace-only org_id and project_id as unresolved scope", () => {
+    expect(() =>
+      assertListScopeResolved(
+        "security_exemption",
+        projectScoped,
+        { org_id: "   ", project_id: "\t" },
+        undefined,
+        undefined,
+      ),
+    ).toThrow(/requires project scope \(org_id \+ project_id\)/i);
+  });
+
+  it("treats whitespace-only config defaults as unresolved scope", () => {
+    expect(() =>
+      assertListScopeResolved(
+        "security_exemption",
+        projectScoped,
+        { status: "Pending" },
+        "  ",
+        "  ",
+      ),
+    ).toThrow(/requires project scope \(org_id \+ project_id\)/i);
+  });
 });

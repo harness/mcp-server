@@ -183,6 +183,30 @@ describe("harness_list", () => {
     mockRequest.mockRejectedValueOnce(new HarnessApiError("Server error", 500));
     await expect(server.call("harness_list", { resource_type: "pipeline" })).rejects.toThrow();
   });
+
+  it("merges Harness-native org/project from URL when filters carry an empty workspace_id", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
+    mockRequest = vi.fn().mockResolvedValue({ objects: [] });
+    client = makeClient(mockRequest);
+    const fmeServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(fmeServer, registry, client);
+
+    const result = await fmeServer.call("harness_list", {
+      resource_type: "fme_feature_flag",
+      url: "https://app.harness.io/ng/account/abc/cf/orgs/default/projects/payments/feature-flags",
+      filters: { workspace_id: "" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(call.path).toBe("/fme/api/v4/feature-flags");
+    expect(call.params).toMatchObject({
+      organization_identifier: "default",
+      project_identifier: "payments",
+    });
+    expect(call.params).not.toHaveProperty("workspace_id");
+  });
 });
 
 describe("harness_get", () => {

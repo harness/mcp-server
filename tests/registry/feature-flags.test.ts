@@ -232,6 +232,24 @@ describe("fme_feature_flag dual-mode routing", () => {
     expect(req.params?.projectIdentifier).toBeUndefined();
   });
 
+  it("new mode: empty-string workspace_id does not suppress Harness-native scope params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "list", {
+      workspace_id: "",
+      org_id: "o1",
+      project_id: "p1",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/feature-flags");
+    expect(req.params).toMatchObject({
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+  });
+
   it("new mode: get routes to the Harness-native path with the flag name in the URL", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
