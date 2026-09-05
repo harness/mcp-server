@@ -220,4 +220,60 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("drops the removed smi provider from K8sTrafficRoutingSpec in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const cdSteps = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>).pipeline
+        .steps.cd as Record<string, unknown>;
+      const routingSpec = cdSteps.K8sTrafficRoutingSpec as {
+        properties: { provider: { enum: string[] } };
+        allOf: Array<{
+          if: { properties: { provider: { const: string } } };
+          then: { properties: { spec: { $ref: string } } };
+        }>;
+      };
+
+      expect(routingSpec.properties.provider.enum).toEqual(["istio"]);
+      expect(cdSteps).not.toHaveProperty("SMIProviderSpec");
+
+      const istioBranch = routingSpec.allOf.find(
+        (rule) => rule.if?.properties?.provider?.const === "istio",
+      );
+      expect(istioBranch?.then.properties.spec.$ref).toContain("IstioProviderSpec");
+    }
+  });
+
+  it("includes upstream IstioProviderSpec traffic-routing fields in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const cdSteps = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>).pipeline
+        .steps.cd as Record<string, unknown>;
+      const istioSpec = cdSteps.IstioProviderSpec as {
+        title: string;
+        allOf: Array<{ properties?: Record<string, unknown> }>;
+      };
+
+      expect(istioSpec.title).toBe("IstioProviderSpec");
+
+      const props = istioSpec.allOf.find((part) => part.properties?.gateways)?.properties;
+      expect(props).toHaveProperty("gateways");
+      expect(props).toHaveProperty("hosts");
+      expect(props).toHaveProperty("delegateService");
+      expect(props).not.toHaveProperty("rootService");
+    }
+  });
+
+  it("includes NotificationRules in pipeline template allowedOverrides", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const pipelineTemplate = templateDefs.template.pipeline as {
+      template: { properties: { allowedOverrides: { items: { enum: string[] } } } };
+    };
+
+    expect(pipelineTemplate.template.properties.allowedOverrides.items.enum).toEqual([
+      "PipelineTimeout",
+      "AllowStageExecutions",
+      "FixedInputsOnRerun",
+      "DelegateSelectors",
+      "NotificationRules",
+    ]);
+  });
 });
