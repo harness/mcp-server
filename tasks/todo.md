@@ -5,7 +5,7 @@
 - [x] Update package, shrinkwrap, and MCP manifest versions to 3.2.24.
 - [x] Update release metadata and bundle filename expectations.
 - [x] Run release checks, typecheck, build, docs, standards, audit, and the full suite.
-- [ ] Commit, push, open a PR against current main, and verify its live checks.
+- [x] Commit, push, open a PR against current main, and verify its live checks.
 
 ### Plan
 
@@ -18,6 +18,7 @@
 - Updated `package.json`, both `npm-shrinkwrap.json` root version fields, `manifest.json`, and `mcp-directory/manifest.json` from 3.2.23 to 3.2.24.
 - Updated release metadata, MCPB asset naming, and legacy-manifest normalization expectations for 3.2.24.
 - Local verification passed: install/postinstall, seven release tests, shrinkwrap check, typecheck, build, sequential docs check, standards (77 tests), production audit (0 findings), full suite (144 files / 3,267 tests), and diff check.
+- Branch `chore/version-3.2.24` was pushed and PR #915 opened against current main; all repository, container, Trivy, and automation checks passed, with an approving review and no inline comments.
 
 ## Container runtime vulnerability hardening (2026-09-04)
 
