@@ -1,5 +1,24 @@
 # Harness MCP Server — Task Tracking
 
+## Version bump 3.2.24 (2026-09-04)
+
+- [x] Update package, shrinkwrap, and MCP manifest versions to 3.2.24.
+- [x] Update release metadata and bundle filename expectations.
+- [x] Run release checks, typecheck, build, docs, standards, audit, and the full suite.
+- [ ] Commit, push, open a PR against current main, and verify its live checks.
+
+### Plan
+
+- Keep the change metadata-only and avoid dependency or generated-schema churn.
+- Synchronize both shrinkwrap root version fields with the package and bundle manifests.
+- Stage only the release metadata files and this task record.
+
+### Review
+
+- Updated `package.json`, both `npm-shrinkwrap.json` root version fields, `manifest.json`, and `mcp-directory/manifest.json` from 3.2.23 to 3.2.24.
+- Updated release metadata, MCPB asset naming, and legacy-manifest normalization expectations for 3.2.24.
+- Local verification passed: install/postinstall, seven release tests, shrinkwrap check, typecheck, build, sequential docs check, standards (77 tests), production audit (0 findings), full suite (144 files / 3,267 tests), and diff check.
+
 ## Container runtime vulnerability hardening (2026-09-04)
 
 - [x] Keep pnpm/Corepack and dependency installation out of the production image.
