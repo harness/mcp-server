@@ -496,4 +496,115 @@ describe("policy and policy_set multi-scope support", () => {
       expect(mockRequest).not.toHaveBeenCalled();
     },
   );
+
+  const policyBody = {
+    identifier: "deny-log4j",
+    name: "Deny log4j",
+    rego: "package harness\n\ndefault allow = false",
+  };
+
+  const policySetBody = {
+    identifier: "sbom-enforcement",
+    name: "SBOM enforcement",
+    action: "onstep",
+    type: "sbom",
+    enabled: true,
+  };
+
+  it.each([
+    ["policy", "create", policyBody, "/pm/api/v1/policies"],
+    ["policy", "update", { name: "Updated" }, "/pm/api/v1/policies/deny-log4j"],
+    ["policy_set", "create", policySetBody, "/pm/api/v1/policysets"],
+    ["policy_set", "update", { enabled: false }, "/pm/api/v1/policysets/sbom-enforcement"],
+  ] as const)(
+    "%s %s omits org/project scope params for resource_scope=account",
+    async (resourceType, operation, body, path) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      const input: Record<string, unknown> = {
+        resource_scope: "account",
+        body,
+      };
+      if (operation !== "create") {
+        input[resourceType === "policy" ? "policy_id" : "policy_set_id"] =
+          resourceType === "policy" ? "deny-log4j" : "sbom-enforcement";
+      }
+
+      await registry.dispatch(client, resourceType, operation, input);
+
+      const call = mockRequest.mock.calls[0][0] as {
+        method: string;
+        path: string;
+        params: Record<string, unknown>;
+        body?: Record<string, unknown>;
+      };
+      expect(call.path).toBe(path);
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+      if (operation === "create") {
+        expect(call.body?.orgIdentifier).toBeUndefined();
+        expect(call.body?.projectIdentifier).toBeUndefined();
+      }
+    },
+  );
+
+  it.each([
+    ["policy", "create", policyBody, "/pm/api/v1/policies"],
+    ["policy", "update", { name: "Updated" }, "/pm/api/v1/policies/deny-log4j"],
+    ["policy_set", "create", policySetBody, "/pm/api/v1/policysets"],
+    ["policy_set", "update", { enabled: false }, "/pm/api/v1/policysets/sbom-enforcement"],
+  ] as const)(
+    "%s %s injects only org scope for resource_scope=org",
+    async (resourceType, operation, body, path) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      const input: Record<string, unknown> = {
+        resource_scope: "org",
+        org_id: "platform",
+        body,
+      };
+      if (operation !== "create") {
+        input[resourceType === "policy" ? "policy_id" : "policy_set_id"] =
+          resourceType === "policy" ? "deny-log4j" : "sbom-enforcement";
+      }
+
+      await registry.dispatch(client, resourceType, operation, input);
+
+      const call = mockRequest.mock.calls[0][0] as {
+        path: string;
+        params: Record<string, unknown>;
+        body?: Record<string, unknown>;
+      };
+      expect(call.path).toBe(path);
+      expect(call.params.orgIdentifier).toBe("platform");
+      expect(call.params.projectIdentifier).toBeUndefined();
+      if (operation === "create") {
+        expect(call.body?.orgIdentifier).toBe("platform");
+        expect(call.body?.projectIdentifier).toBeUndefined();
+      }
+    },
+  );
+
+  it.each(["policy", "policy_set"] as const)(
+    "%s delete omits org/project scope params for resource_scope=account",
+    async (resourceType) => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "governance" }));
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, resourceType, "delete", {
+        resource_scope: "account",
+        [resourceType === "policy" ? "policy_id" : "policy_set_id"]:
+          resourceType === "policy" ? "deny-log4j" : "sbom-enforcement",
+      });
+
+      const call = mockRequest.mock.calls[0][0] as { params: Record<string, unknown> };
+      expect(call.params.orgIdentifier).toBeUndefined();
+      expect(call.params.projectIdentifier).toBeUndefined();
+    },
+  );
 });

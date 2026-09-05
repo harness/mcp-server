@@ -294,6 +294,60 @@ describe("pipeline_v1 Git Experience mapping", () => {
     }));
   });
 
+  it("throws when v0 preflight discovers remote storage but Git lock context stays incomplete", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn().mockResolvedValueOnce({
+      data: {
+        identifier: "ci_build",
+        storeType: "REMOTE",
+        gitDetails: {
+          branch: "main",
+          repoName: "Pipelines",
+          filePath: ".harness/ci.yaml",
+        },
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "pipeline", "update", {
+        pipeline_id: "ci_build",
+        org_id: "PROD",
+        project_id: "Traceable",
+        body: "pipeline:\n  identifier: ci_build\n  name: CI Build\n",
+      }),
+    ).rejects.toThrow(/Unable to resolve Git branch and current object\/commit IDs for remote pipeline update/);
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toEqual(expect.objectContaining({ method: "GET" }));
+  });
+
+  it("throws when v1 preflight discovers remote storage but Git lock context stays incomplete", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn().mockResolvedValueOnce({
+      identifier: "ci_build",
+      store_type: "REMOTE",
+      git_details: {
+        branch_name: "main",
+        repo_name: "Pipelines",
+        file_path: ".harness/ci.yaml",
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "pipeline_v1", "update", {
+        pipeline_id: "ci_build",
+        org_id: "PROD",
+        project_id: "Traceable",
+        body: yaml,
+      }),
+    ).rejects.toThrow(/Unable to resolve Git branch and current object\/commit IDs for remote pipeline_v1 update/);
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toEqual(expect.objectContaining({ method: "GET" }));
+  });
+
   it("skips update preflight GET when the caller explicitly selects INLINE storage", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
     const mockRequest = vi.fn().mockResolvedValue({ identifier: "ci_build" });
