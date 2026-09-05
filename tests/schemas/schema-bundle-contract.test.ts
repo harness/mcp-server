@@ -220,4 +220,56 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream FmeMetricCheck step definitions in v0 pipeline custom steps", () => {
+    const customSteps = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>).pipeline
+      .steps.custom as Record<string, unknown>;
+
+    expect(customSteps).toHaveProperty("FmeMetricCheckStepNode");
+    expect(customSteps).toHaveProperty("FmeMetricCheckStepInfo");
+
+    const stepNode = customSteps.FmeMetricCheckStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("FmeMetricCheck");
+
+    const stepInfo = customSteps.FmeMetricCheckStepInfo as {
+      allOf: Array<{ required?: string[]; properties?: Record<string, unknown> }>;
+    };
+    expect(stepInfo.allOf[1]?.required).toEqual(
+      expect.arrayContaining(["flagName", "environment", "lookbackWindow", "failureCriteria"]),
+    );
+
+    const metrics = stepInfo.allOf[1]?.properties?.metrics as {
+      oneOf: Array<{ items?: { properties?: { ref?: { description?: string } } } }>;
+    };
+    const metricRefDescription = metrics.oneOf[0]?.items?.properties?.ref?.description;
+    expect(metricRefDescription).toContain("Metric name as defined in FME");
+    expect(metricRefDescription).toContain("page_viewtime1_mean");
+  });
+
+  it("includes upstream FmeMetricCheck step definitions in v0 template custom steps", () => {
+    const customSteps = (SCHEMAS.template.definitions as Record<string, Record<string, unknown>>).pipeline
+      .steps.custom as Record<string, unknown>;
+
+    expect(customSteps).toHaveProperty("FmeMetricCheckStepNode");
+    expect(customSteps).toHaveProperty("FmeMetricCheckStepNode_template");
+    expect(customSteps).toHaveProperty("FmeMetricCheckStepInfo");
+  });
+
+  it("includes upstream InheritEcsTrafficShiftSpec loadBalancer in v0 pipeline and template cd steps", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const cdSteps = (SCHEMAS[key].definitions as Record<string, Record<string, unknown>>).pipeline
+        .steps.cd as Record<string, unknown>;
+
+      expect(cdSteps).toHaveProperty("InheritEcsTrafficShiftSpec");
+
+      const inheritSpec = cdSteps.InheritEcsTrafficShiftSpec as {
+        allOf: Array<{ properties?: Record<string, { type?: string; pattern?: string }> }>;
+      };
+      const loadBalancer = inheritSpec.allOf[1]?.properties?.loadBalancer;
+      expect(loadBalancer?.type).toBe("string");
+      expect(loadBalancer?.pattern).toBe("^(?=\\s*\\S).*$");
+    }
+  });
 });
