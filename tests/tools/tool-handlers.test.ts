@@ -1282,6 +1282,54 @@ describe("harness_update", () => {
     expect(mockRequest).toHaveBeenCalledOnce();
   });
 
+  it("does not invent version_label=v1 for template updates without params", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, templateRegistry, client, makeConfig());
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "my_tpl",
+      org_id: "default",
+      project_id: "proj",
+      body: {
+        template_yaml:
+          "template:\n  identifier: my_tpl\n  name: My\n  versionLabel: v2\n  type: Step\n  spec: {}\n",
+      },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("Missing required param(s) for template.update: version_label"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("lifts version_label from body when callers omit params", async () => {
+    const templateRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const templateServer = makeMcpServer("accept");
+    mockRequest.mockResolvedValue({ data: { identifier: "my_tpl" } });
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(templateServer, templateRegistry, client, makeConfig());
+
+    const result = await templateServer.call("harness_update", {
+      resource_type: "template",
+      resource_id: "my_tpl",
+      org_id: "default",
+      project_id: "proj",
+      body: {
+        version_label: "v2",
+        template_yaml:
+          "template:\n  identifier: my_tpl\n  name: My\n  versionLabel: v2\n  type: Step\n  spec: {}\n",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string };
+    expect(callArgs.path).toBe("/template/api/templates/update/my_tpl/v2");
+  });
+
   it("coerces JSON-string bodies before dispatch", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "platform" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "proj1" } });
