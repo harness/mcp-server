@@ -286,19 +286,19 @@ describe("harness_schema RMG release definitions", () => {
     expect(description).toContain("release_activity");
   });
 
-  it("fetches release_process schema from RMG /api/yamlSchema", async () => {
+  it("fetches release_process schema through the RMG gateway path", async () => {
     const result = await server.call("harness_schema", { resource_type: "release_process" });
     const parsed = parseResult(result) as Record<string, unknown>;
 
     expect(requestMock).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "GET",
-        path: "/api/yamlSchema",
-        baseUrl: "https://app.harness.io/gateway/rmg",
+        path: "/gateway/rmg/api/yamlSchema",
         headerBasedScoping: true,
         params: expect.objectContaining({ entityType: "PROCESS" }),
       }),
     );
+    expect(requestMock.mock.calls[0]?.[0]).not.toHaveProperty("baseUrl");
     expect(parsed.source).toBe("rmg-yaml-schema");
     expect(parsed.yaml_root).toBe("process");
     expect(parsed.fields).toEqual(

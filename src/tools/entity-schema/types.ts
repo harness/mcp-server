@@ -9,7 +9,7 @@ export type LiveEntitySchemaApi = "ng" | "rmg";
 export interface LiveEntitySchemaDefinition {
   entityType: string;
   description: string;
-  /** Default `ng` — Harness NG `/ng/api/yaml-schema`. `rmg` uses Release Management `/api/yamlSchema`. */
+  /** Default `ng` — Harness NG `/ng/api/yaml-schema`. `rmg` uses `/gateway/rmg/api/yamlSchema`. */
   api?: LiveEntitySchemaApi;
   /** Top-level YAML wrapper key in RMG schemas (e.g. `process`, `activity`). */
   rootProperty?: string;

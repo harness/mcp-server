@@ -48,7 +48,7 @@ export function registerHarnessSchemaResource(
         `Harness JSON Schema definitions (bundled). Valid schema names: ${allSchemaNames.join(", ")}. ` +
         "For connector, environment, service, secret, and infrastructure schemas, use the harness_schema tool " +
         "(live fetch from NG /yaml-schema). For release_process and release_activity, use harness_schema " +
-        "(live fetch from RMG /api/yamlSchema) — they are not available via schema:/// resources.",
+        "(live fetch from /gateway/rmg/api/yamlSchema) — they are not available via schema:/// resources.",
       mimeType: "application/schema+json",
     },
     async (uri) => {

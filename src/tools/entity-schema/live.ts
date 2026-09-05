@@ -1,5 +1,4 @@
 import type { HarnessClient } from "../../client/harness-client.js";
-import { resolveRmgBaseUrl, type Config } from "../../config.js";
 import { createLogger } from "../../utils/logger.js";
 import {
   normalizeEntitySchema,
@@ -52,13 +51,13 @@ export const LIVE_ENTITY_SCHEMAS: Record<string, LiveEntitySchemaDefinition> = {
     entityType: "PROCESS",
     api: "rmg",
     rootProperty: "process",
-    description: "Release orchestration process YAML schema from RMG /api/yamlSchema",
+    description: "Release orchestration process YAML schema from /gateway/rmg/api/yamlSchema",
   },
   release_activity: {
     entityType: "ACTIVITY",
     api: "rmg",
     rootProperty: "activity",
-    description: "Release orchestration activity YAML schema from RMG /api/yamlSchema",
+    description: "Release orchestration activity YAML schema from /gateway/rmg/api/yamlSchema",
   },
 };
 
@@ -192,7 +191,7 @@ function buildYamlSchemaParams(
   return query;
 }
 
-/** Build RMG /api/yamlSchema query params (org/project only — account via Harness-Account header). */
+/** Build RMG schema query params (org/project only — account via Harness-Account header). */
 function buildRmgYamlSchemaParams(params: LiveSchemaFetchParams): Record<string, string> {
   const scope = resolveScope(params.scope);
   const query: Record<string, string> = {};
@@ -340,7 +339,7 @@ export function getEntitySchemaSummary(
     source === "bundled"
       ? "Schema from vendored snapshot (pnpm sync-entity-schemas). Use scope, org_id, and project_id for org/project entities."
       : source === "rmg-yaml-schema"
-        ? "Schema from live RMG /api/yamlSchema. Pass scope, org_id, and project_id when scoping to org or project."
+        ? "Schema from live RMG /gateway/rmg/api/yamlSchema. Pass scope, org_id, and project_id when scoping to org or project."
         : "Schema from live NG /ng/api/yaml-schema. Pass scope, org_id, and project_id for org/project scoped entities.";
 
   return {
@@ -439,7 +438,7 @@ function logBundledServe(
   });
 }
 
-export function createLiveSchemaFetcher(client: HarnessClient, config?: Config): LiveSchemaFetcher {
+export function createLiveSchemaFetcher(client: HarnessClient): LiveSchemaFetcher {
   const cache = new Map<string, EntitySchemaCacheEntry>();
   preloadBundledEntitySchemas(cache, client.account);
 
@@ -479,10 +478,6 @@ export function createLiveSchemaFetcher(client: HarnessClient, config?: Config):
       }
 
       if (api === "rmg") {
-        if (!config) {
-          throw new Error("RMG YAML schema fetch requires server configuration.");
-        }
-
         const scopeParams = buildRmgYamlSchemaParams(params);
         log.debug("Fetching RMG YAML schema", {
           resource_type: resourceType,
@@ -493,8 +488,7 @@ export function createLiveSchemaFetcher(client: HarnessClient, config?: Config):
 
         const response = await client.request<unknown>({
           method: "GET",
-          path: "/api/yamlSchema",
-          baseUrl: resolveRmgBaseUrl(config),
+          path: "/gateway/rmg/api/yamlSchema",
           headerBasedScoping: true,
           params: {
             entityType: definition.entityType,

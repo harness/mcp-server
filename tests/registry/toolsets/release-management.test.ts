@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { releaseManagementToolset } from "../../../src/registry/toolsets/release-management.js";
 import { Registry } from "../../../src/registry/index.js";
 import type { Config } from "../../../src/config.js";
+import type { HarnessClient } from "../../../src/client/harness-client.js";
 import {
   releaseGetExtract,
   rmgYamlEntityExtract,
@@ -69,6 +70,32 @@ describe("release-management toolset", () => {
     expect(registry.getAllResourceTypes()).toContain("release_process");
     expect(registry.getAllResourceTypes()).toContain("release");
   });
+
+  it("dispatches release_process create through the gateway without a baseUrl override", async () => {
+    const request = vi.fn().mockResolvedValue({
+      identifier: "rmg-smoke",
+      yaml: "process:\n  id: rmg-smoke\n",
+    });
+    const client = {
+      account: "test-account",
+      request,
+    } as unknown as HarnessClient;
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "release-management" }));
+
+    await registry.dispatch(client, "release_process", "create", {
+      org_id: "default",
+      project_id: "test-project",
+      body: { yaml: "process:\n  id: rmg-smoke\n" },
+    });
+
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/gateway/rmg/api/orchestration/process",
+      }),
+    );
+    expect(request.mock.calls[0]?.[0]).not.toHaveProperty("baseUrl");
+  });
 });
 
 describe("release-management execution resources", () => {
@@ -100,11 +127,12 @@ describe("release-management execution resources", () => {
     expect(input.project_id).toBe("cfgProject");
   });
 
-  it("release_process and release_activity use RMG base override and header scoping", () => {
-    expect(releaseProcessResource.baseUrlOverride).toBe("rmg");
+  it("release_process and release_activity use gateway paths and header scoping", () => {
     expect(releaseProcessResource.headerBasedScoping).toBe(true);
-    expect(releaseDefinitionActivityResource.baseUrlOverride).toBe("rmg");
     expect(releaseDefinitionActivityResource.headerBasedScoping).toBe(true);
+    expect(releaseProcessResource.operations.create?.path).toBe(
+      "/gateway/rmg/api/orchestration/process",
+    );
   });
 
   it("release_process has no execute action", () => {
@@ -129,23 +157,23 @@ describe("release-management execution resources", () => {
     );
   });
 
-  it("release_execution_phase list hits GET /api/orchestration/execution/{releaseId}/phases", () => {
+  it("release_execution_phase list uses the RMG gateway path", () => {
     expect(releasePhaseResource.operations.list?.method).toBe("GET");
     expect(releasePhaseResource.operations.list?.path).toBe(
-      "/api/orchestration/execution/{releaseId}/phases",
+      "/gateway/rmg/api/orchestration/execution/{releaseId}/phases",
     );
   });
 
   it("release_execution_activity list hits paginated activities path", () => {
     expect(releaseActivityResource.operations.list?.method).toBe("GET");
     expect(releaseActivityResource.operations.list?.path).toBe(
-      "/api/release/{releaseId}/execution/activities",
+      "/gateway/rmg/api/release/{releaseId}/execution/activities",
     );
   });
 
-  it("release list hits POST /api/release/list with the Orchestration type param", () => {
+  it("release list hits the RMG gateway with the Orchestration type param", () => {
     expect(releaseResource.operations.list?.method).toBe("POST");
-    expect(releaseResource.operations.list?.path).toBe("/api/release/list");
+    expect(releaseResource.operations.list?.path).toBe("/gateway/rmg/api/release/list");
     expect(releaseResource.operations.list?.staticQueryParams).toEqual({ type: "Orchestration" });
     expect(releaseResource.operations.list?.queryParams).toMatchObject({
       search_term: "searchTerm",
@@ -251,12 +279,14 @@ describe("release-management execution resources", () => {
       },
       {},
     );
-    expect(path).toBe("/api/orchestration/execution/release/rel-slug/phase/deploy/input");
+    expect(path).toBe(
+      "/gateway/rmg/api/orchestration/execution/release/rel-slug/phase/deploy/input",
+    );
   });
 
   it("release_execution_phase_input get hits phase execution input endpoint", () => {
     expect(phaseInputResource.operations.get?.path).toBe(
-      "/api/orchestration/execution/release/{releaseId}/phase/{phaseIdentifier}/input",
+      "/gateway/rmg/api/orchestration/execution/release/{releaseId}/phase/{phaseIdentifier}/input",
     );
     expect(phaseInputResource.operations.get?.queryParams).toEqual({ phase_execution_id: "phaseExecutionId" });
     expect(phaseInputResource.identifierFields).toEqual(["release_id"]);
@@ -280,7 +310,9 @@ describe("release-management execution resources", () => {
       },
       {},
     );
-    expect(path).toBe("/api/orchestration/execution/release/rel-slug/phase/deploy/output");
+    expect(path).toBe(
+      "/gateway/rmg/api/orchestration/execution/release/rel-slug/phase/deploy/output",
+    );
   });
 
   it("activity output pathBuilder hits activity /output endpoint", () => {
@@ -293,19 +325,19 @@ describe("release-management execution resources", () => {
       {},
     );
     expect(path).toBe(
-      "/api/orchestration/execution/release/rel-slug/phase/deploy/activity/run-pipeline/output",
+      "/gateway/rmg/api/orchestration/execution/release/rel-slug/phase/deploy/activity/run-pipeline/output",
     );
   });
 
   it("release_input get hits releaseInput endpoint", () => {
     expect(releaseInputResource.operations.get?.path).toBe(
-      "/api/orchestration/execution/releaseInput/{releaseId}",
+      "/gateway/rmg/api/orchestration/execution/releaseInput/{releaseId}",
     );
   });
 
   it("release_execution_activity_input get hits activity execution input endpoint", () => {
     expect(activityInputResource.operations.get?.path).toBe(
-      "/api/orchestration/execution/activity/{activityExecutionId}/input",
+      "/gateway/rmg/api/orchestration/execution/activity/{activityExecutionId}/input",
     );
     expect(activityInputResource.identifierFields).toEqual(["activity_execution_id"]);
   });

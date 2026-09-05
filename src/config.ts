@@ -272,24 +272,6 @@ export function resolveProductBaseUrl(config: Config, product: "harness" | "fme"
   return undefined;
 }
 
-/** Resolve Release Management (RMG) API root: `${HARNESS_BASE_URL}/gateway/rmg`. */
-export function resolveRmgBaseUrl(config: Config): string {
-  return `${config.HARNESS_BASE_URL.replace(/\/$/, "")}/gateway/rmg`;
-}
-
-/**
- * Resolve per-resource base URL overrides (FME, RMG). Returns undefined to use
- * the default Harness client base URL.
- */
-export function resolveResourceBaseUrl(
-  config: Config,
-  def: { product?: "harness" | "fme"; baseUrlOverride?: "fme" | "rmg" },
-): string | undefined {
-  if (def.baseUrlOverride === "rmg") return resolveRmgBaseUrl(config);
-  if (def.baseUrlOverride === "fme" || def.product === "fme") return config.HARNESS_FME_BASE_URL;
-  return resolveProductBaseUrl(config, def.product ?? "harness");
-}
-
 export function loadConfig(): Config {
   const result = ConfigSchema.safeParse(process.env);
   if (!result.success) {

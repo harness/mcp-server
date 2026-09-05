@@ -219,7 +219,7 @@ export function registerSchemaTool(
   server: McpServer,
   _registry: Registry | undefined,
   client: HarnessClient | undefined,
-  config: Config | undefined,
+  _config: Config | undefined,
   additionalSchemas?: Record<string, SchemaEntry>,
 ): void {
   if (additionalSchemas) {
@@ -237,7 +237,7 @@ export function registerSchemaTool(
       }
     : { ...SCHEMAS };
 
-  const liveFetcher = client ? createLiveSchemaFetcher(client, config) : undefined;
+  const liveFetcher = client ? createLiveSchemaFetcher(client) : undefined;
   const availableSchemas = listAvailableSchemaNames(Object.keys(allSchemas), liveFetcher);
   const hasLiveEntities = liveFetcher !== undefined;
 
@@ -248,7 +248,7 @@ export function registerSchemaTool(
         "Fetch Harness YAML schema or examples for a resource type. " +
         "Pipeline/template schemas are bundled from harness-schema; connector, environment, service, " +
         "secret, and infrastructure schemas are fetched live from NG /yaml-schema (pass scope, org_id, project_id). " +
-        "release_process and release_activity schemas are fetched live from RMG /api/yamlSchema. " +
+        "release_process and release_activity schemas are fetched live from /gateway/rmg/api/yamlSchema. " +
         "Use without path for a summary of fields and available sections. " +
         "Use with path to drill into a specific section. " +
         "Use with example to fetch a named example YAML snippet. " +
