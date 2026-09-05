@@ -1,12 +1,12 @@
 {
   "name": "harness-mcp-v2",
-  "version": "3.2.23",
+  "version": "3.2.24",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
       "name": "harness-mcp-v2",
-      "version": "3.2.23",
+      "version": "3.2.24",
       "dependencies": {
         "@hono/node-server": "^2.0.10",
         "@modelcontextprotocol/sdk": "^1.27.1",
