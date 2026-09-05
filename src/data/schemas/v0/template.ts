@@ -783,6 +783,9 @@ const schema: Record<string, any> = {
                   "$ref": "#/definitions/pipeline/steps/custom/FmeFlagCreateStepNode_template"
                 },
                 {
+                  "$ref": "#/definitions/pipeline/steps/custom/FmeChangeProposalSubmitStepNode_template"
+                },
+                {
                   "$ref": "#/definitions/pipeline/steps/custom/FmeSegmentCreateStepNode_template"
                 },
                 {
@@ -57853,6 +57856,10 @@ const schema: Record<string, any> = {
                   "weightPercentage"
                 ],
                 "properties": {
+                  "loadBalancer": {
+                    "type": "string",
+                    "pattern": "^(?=\\s*\\S).*$"
+                  },
                   "weightPercentage": {
                     "oneOf": [
                       {
@@ -65049,6 +65056,160 @@ const schema: Record<string, any> = {
             ],
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
+          "FmeChangeProposalSubmitStepNode_template": {
+            "title": "FmeChangeProposalSubmitStepNode_template",
+            "type": "object",
+            "required": [
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "FmeChangeProposalSubmit"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "FmeChangeProposalSubmit"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/FmeChangeProposalSubmitStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "FmeChangeProposalSubmitStepInfo": {
+            "title": "FmeChangeProposalSubmitStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "resourceType",
+                  "changes"
+                ],
+                "properties": {
+                  "resourceType": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/fme-change-proposal-common-resource-type"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "resourceId": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/fme-change-proposal-common-resource-id"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "environmentId": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/fme-change-proposal-common-resource-id"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "changes": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "$ref": "#/definitions/pipeline/steps/common/fme-change-proposal-common-change"
+                        },
+                        "minItems": 1
+                      }
+                    ]
+                  },
+                  "title": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/fme-change-proposal-common-title"
+                      }
+                    ]
+                  },
+                  "comment": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/fme-change-proposal-common-comment"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "FmeSegmentCreateStepNode_template": {
             "title": "FmeSegmentCreateStepNode_template",
             "type": "object",
@@ -69682,7 +69843,7 @@ const schema: Record<string, any> = {
                           ],
                           "properties": {
                             "ref": {
-                              "description": "Webadmin metric ID",
+                              "description": "Metric name as defined in FME (e.g. page_viewtime1_mean)",
                               "oneOf": [
                                 {
                                   "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
@@ -72393,6 +72554,101 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/steps/custom/ChangeAdvisorStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "FmeChangeProposalSubmitStepNode": {
+            "title": "FmeChangeProposalSubmitStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for FmeChangeProposalSubmitStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "FmeChangeProposalSubmit"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "FmeChangeProposalSubmit"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/FmeChangeProposalSubmitStepInfo"
                     }
                   }
                 }
@@ -99655,6 +99911,92 @@ const schema: Record<string, any> = {
             "type": "string",
             "description": "FME Treatment Name",
             "pattern": "^[a-zA-Z0-9][-_\\.a-zA-Z0-9]*$"
+          },
+          "fme-change-proposal-common-resource-type": {
+            "title": "fme-change-proposal-common-resource-type",
+            "type": "string",
+            "description": "Change Proposal Resource Type",
+            "enum": [
+              "configMetadata",
+              "configDefinition"
+            ]
+          },
+          "fme-change-proposal-common-resource-id": {
+            "title": "fme-change-proposal-common-resource-id",
+            "type": "string",
+            "description": "Change Proposal Resource Id - accepts either a UUID or a ULID",
+            "oneOf": [
+              {
+                "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+              },
+              {
+                "pattern": "^[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "fme-change-proposal-common-change": {
+            "title": "fme-change-proposal-common-change",
+            "type": "object",
+            "description": "A single JSON Patch-style change operation (RFC 6902), with an optional previousValue for audit purposes",
+            "required": [
+              "op",
+              "path"
+            ],
+            "properties": {
+              "op": {
+                "type": "string",
+                "description": "The patch operation to apply",
+                "enum": [
+                  "add",
+                  "replace",
+                  "remove"
+                ]
+              },
+              "path": {
+                "type": "string",
+                "description": "JSON Pointer (RFC 6901) to the target location. Empty string represents the root document"
+              },
+              "value": {
+                "description": "New value to set. Required for add/replace, not used for remove. Can be any JSON type (object, string, number, array, boolean, null)"
+              },
+              "previousValue": {
+                "description": "Previous value before this change was applied, for audit/validation purposes. Can be any JSON type, including null"
+              }
+            },
+            "additionalProperties": false,
+            "if": {
+              "properties": {
+                "op": {
+                  "enum": [
+                    "add",
+                    "replace"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "op",
+                "path",
+                "value"
+              ]
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "fme-change-proposal-common-title": {
+            "title": "fme-change-proposal-common-title",
+            "type": "string",
+            "description": "Change Proposal Title",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "fme-change-proposal-common-comment": {
+            "title": "fme-change-proposal-common-comment",
+            "type": "string",
+            "description": "Change Proposal Comment",
+            "minLength": 1,
+            "maxLength": 480
           },
           "fme-segment-common-segment-name": {
             "title": "fme-segment-common-segment-name",
@@ -138550,6 +138892,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/aisre/AisreCreateAlertStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeChangeProposalSubmitStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeFlagCreateStepNode"
                   },
                   {
@@ -146185,7 +146530,8 @@ const schema: Record<string, any> = {
               "type": {
                 "type": "string",
                 "enum": [
-                  "container"
+                  "container",
+                  "s3"
                 ]
               },
               "description": {
@@ -146209,6 +146555,22 @@ const schema: Record<string, any> = {
                     }
                   }
                 }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "s3"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/stages/cd/S3AgentSource"
+                    }
+                  }
+                }
               }
             ]
           },
@@ -146224,6 +146586,45 @@ const schema: Record<string, any> = {
               },
               "description": {
                 "desc": "This is the description for ContainerAgentSource"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "S3AgentSource": {
+            "title": "S3AgentSource",
+            "type": "object",
+            "required": [
+              "bucketName",
+              "key",
+              "runtime",
+              "entryPoint"
+            ],
+            "properties": {
+              "bucketName": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "versionId": {
+                "type": "string"
+              },
+              "runtime": {
+                "type": "string",
+                "enum": [
+                  "PYTHON_3_12",
+                  "PYTHON_3_13",
+                  "PYTHON_3_14"
+                ]
+              },
+              "entryPoint": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "description": {
+                "desc": "This is the description for S3AgentSource"
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
@@ -147827,6 +148228,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/aisre/AisreCreateAlertStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeChangeProposalSubmitStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeFlagCreateStepNode"
                   },
                   {
@@ -148929,6 +149333,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/AIExperimentStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeMetricCheckStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/IdpActionStepNode"
@@ -150994,6 +151401,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/aisre/AisreCreateAlertStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/FmeChangeProposalSubmitStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/FmeFlagCreateStepNode"
