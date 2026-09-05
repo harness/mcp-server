@@ -558,6 +558,58 @@ describe("harness_schema nested static definition lookup", () => {
     const schema = parsed.schema as { required?: string[] };
     expect(schema.required).toContain("dynamic");
   });
+
+  it("resolves newly synced ClaudeCodeSecurityNode from v0 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "ClaudeCodeSecurityNode",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("steps.common.ClaudeCodeSecurityNode");
+    expect(parsed.requested_path).toBe("ClaudeCodeSecurityNode");
+    const schema = parsed.schema as { properties?: { type?: { enum?: string[] } } };
+    expect(schema.properties?.type?.enum).toContain("ClaudeCodeSecurity");
+  });
+
+  it("resolves ClaudeCodeSecurityStepInfo with llmConnectorRef from v0 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline",
+      path: "ClaudeCodeSecurityStepInfo",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("steps.common.ClaudeCodeSecurityStepInfo");
+    const schema = parsed.schema as {
+      allOf?: Array<{ properties?: Record<string, { description?: string }> }>;
+    };
+    const spec = schema.allOf?.find((part) => part.properties?.llmConnectorRef);
+    expect(spec?.properties?.llmConnectorRef?.description).toContain("Claude Code Security");
+  });
+
+  it("resolves UnifiedStageNodeV1 permissions from v1 pipeline", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined);
+    const result = await server.call("harness_schema", {
+      resource_type: "pipeline_v1",
+      path: "UnifiedStageNodeV1",
+    });
+    const parsed = parseResult(result) as Record<string, unknown>;
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.path).toBe("stages.unified.UnifiedStageNodeV1");
+    const schema = parsed.schema as {
+      properties?: Record<string, { description?: string; additionalProperties?: boolean }>;
+    };
+    expect(schema.properties?.permissions?.description).toContain("scoped permissions");
+    expect(schema.properties?.permissions?.additionalProperties).toBe(true);
+  });
 });
 
 // Wrapper definitions that are grouping objects (not schema nodes) must still

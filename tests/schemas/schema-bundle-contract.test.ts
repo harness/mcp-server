@@ -220,4 +220,48 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream ClaudeCodeSecurity step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const commonSteps = pipelineDefs.pipeline.steps.common as Record<string, unknown>;
+
+    expect(commonSteps).toHaveProperty("ClaudeCodeSecurityNode");
+    expect(commonSteps).toHaveProperty("ClaudeCodeSecurityStepInfo");
+    expect(commonSteps).toHaveProperty("STOYamlClaudeCodeSecurityToolData");
+
+    const stepNode = commonSteps.ClaudeCodeSecurityNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("ClaudeCodeSecurity");
+
+    const stepInfo = commonSteps.ClaudeCodeSecurityStepInfo as {
+      allOf: Array<{ required?: string[]; properties?: Record<string, unknown> }>;
+    };
+    const spec = stepInfo.allOf.find((part) => part.required?.includes("config"));
+    expect(spec?.required).toEqual(expect.arrayContaining(["config", "mode", "target"]));
+    expect(spec?.properties).toHaveProperty("llmConnectorRef");
+  });
+
+  it("includes upstream ClaudeCodeSecurity step definitions in v0 template", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const commonSteps = templateDefs.pipeline.steps.common as Record<string, unknown>;
+
+    expect(commonSteps).toHaveProperty("ClaudeCodeSecurityNode");
+    expect(commonSteps).toHaveProperty("ClaudeCodeSecurityStepInfo");
+    expect(commonSteps).toHaveProperty("STOYamlClaudeCodeSecurityToolData");
+  });
+
+  it("includes upstream stage permissions on UnifiedStageNodeV1 in v1 pipeline and template", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const unified = defs[key].stages.unified as Record<string, unknown>;
+      const stage = unified.UnifiedStageNodeV1 as {
+        properties: Record<string, { description?: string; additionalProperties?: boolean }>;
+      };
+
+      expect(stage.properties).toHaveProperty("permissions");
+      expect(stage.properties.permissions.description).toContain("scoped permissions");
+      expect(stage.properties.permissions.additionalProperties).toBe(true);
+    }
+  });
 });
