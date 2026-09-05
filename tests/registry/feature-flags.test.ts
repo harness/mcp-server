@@ -1842,3 +1842,72 @@ describe("fme_segment_definition", () => {
     expect(resource.executeActions).toBeUndefined();
   });
 });
+
+describe("fme_feature_flag deep link", () => {
+  // A v4 FeatureFlag response: `id` is the flag UUID the UI's :splitId param expects.
+  const flagPayload = {
+    type: "FEATURE_FLAG",
+    id: "0ab78cc0-5e72-11f1-a78d-62a1a48ed05e",
+    name: "my_flag",
+    trafficType: { id: "64bf1ba0-6e15-11f0-9751-56ca2eed5650", type: "TRAFFIC_TYPE", name: "user" },
+  };
+
+  const expectedLink =
+    "https://app.harness.io/ng/account/test-account/module/fme/orgs/anotherorg/projects/projectA" +
+    "/feature-flags/0ab78cc0-5e72-11f1-a78d-62a1a48ed05e";
+
+  it("get: builds the flag detail URL from the flag UUID and the request scope", async () => {
+    const registry = new Registry(makeConfig());
+    const client = makeClient(vi.fn().mockResolvedValue({ ...flagPayload }));
+
+    const result = (await registry.dispatch(client, "fme_feature_flag", "get", {
+      org_id: "anotherorg",
+      project_id: "projectA",
+      feature_flag_name: "my_flag",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(expectedLink);
+  });
+
+  it("get: never emits the old settings-bound route or unresolved placeholders", async () => {
+    const registry = new Registry(makeConfig());
+    const client = makeClient(vi.fn().mockResolvedValue({ ...flagPayload }));
+
+    const result = (await registry.dispatch(client, "fme_feature_flag", "get", {
+      org_id: "anotherorg",
+      project_id: "projectA",
+      feature_flag_name: "my_flag",
+    })) as Record<string, unknown>;
+
+    const link = result.openInHarness as string;
+    expect(link).not.toContain("setup/resources");
+    expect(link).not.toContain("/splits/");
+    expect(link).not.toMatch(/\{\w+\}/);
+    // Scope must survive: FME sends snake_case scope params, so {orgIdentifier} never resolved.
+    expect(link).not.toContain("/orgs//");
+    expect(link).toContain("/orgs/anotherorg/projects/projectA/");
+  });
+
+  it("list: builds a per-item flag detail URL from each item's UUID", async () => {
+    const registry = new Registry(makeConfig());
+    const client = makeClient(
+      vi.fn().mockResolvedValue({
+        data: [
+          { ...flagPayload },
+          { ...flagPayload, id: "aaaaaaaa-5e72-11f1-a78d-62a1a48ed05e", name: "other_flag" },
+        ],
+      }),
+    );
+
+    const result = (await registry.dispatch(client, "fme_feature_flag", "list", {
+      org_id: "anotherorg",
+      project_id: "projectA",
+    })) as { data: Record<string, unknown>[] };
+
+    expect(result.data[0]!.openInHarness).toBe(expectedLink);
+    expect(result.data[1]!.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/module/fme/orgs/anotherorg/projects/projectA" +
+        "/feature-flags/aaaaaaaa-5e72-11f1-a78d-62a1a48ed05e",
+    );
+  });
+});
