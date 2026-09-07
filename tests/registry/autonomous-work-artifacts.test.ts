@@ -89,6 +89,10 @@ describe("work_artifact resource shape", () => {
     });
   });
 
+  it("links work_artifact from work_phase_artifact relatedResources", () => {
+    expect(workPhaseArtifact!.relatedResources?.some((r) => r.resourceType === "work_artifact")).toBe(true);
+  });
+
   it("links work_artifact from work_item relatedResources", () => {
     expect(workItem!.relatedResources?.some((r) => r.resourceType === "work_artifact")).toBe(true);
   });
@@ -123,6 +127,48 @@ describe("work_artifact dispatch", () => {
     expect(call.params.limit).toBe(20);
     expect(call.params.orgIdentifier).toBe("default");
     expect(call.params.projectIdentifier).toBe("adlc-project");
+  });
+
+  it("emits _nextPageHint with page × size contract and active filters", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [{ id: "art-1" }],
+      total: 40,
+      limit: 20,
+      offset: 0,
+      exceptions: [],
+    });
+    const registry = new Registry(makeConfig());
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "work_artifact", "list", {
+      work_item_id: "WI-1",
+      type: "DESIGN",
+      phase_id: "implement",
+      page: 0,
+      size: 20,
+    }) as { _nextPageHint: string };
+
+    expect(result._nextPageHint).toContain("resource_type='work_artifact'");
+    expect(result._nextPageHint).toContain('"work_item_id":"WI-1"');
+    expect(result._nextPageHint).toContain('"type":"DESIGN"');
+    expect(result._nextPageHint).toContain('"phase_id":"implement"');
+    expect(result._nextPageHint).toContain('"page":1');
+    expect(result._nextPageHint).toContain('"size":20');
+    expect(result._nextPageHint).toContain("offset = page × size");
+    expect(result._nextPageHint).toContain("work_item list");
+  });
+
+  it("says no more pages when the catalog total fits on this page", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ items: [{ id: "art-1" }], total: 1, exceptions: [] });
+    const registry = new Registry(makeConfig());
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "work_artifact", "list", {
+      work_item_id: "WI-1",
+      type: "DESIGN",
+    }) as { _nextPageHint: string };
+
+    expect(result._nextPageHint).toMatch(/No more pages/i);
   });
 
   it("maps harness_list page to ADLC offset as page × size", async () => {

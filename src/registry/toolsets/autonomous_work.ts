@@ -62,15 +62,24 @@ const softwareComponentBodySchema: BodySchema = {
 const listResponseExtractor = passthrough;
 
 /** Guarantee `items` + `total` so skipCompact survives harness_list normalization. */
-function workArtifactListExtract(raw: unknown): Record<string, unknown> {
+function workArtifactListExtract(raw: unknown, input?: Record<string, unknown>): Record<string, unknown> {
   const r = raw !== null && typeof raw === "object" && !Array.isArray(raw)
     ? (raw as Record<string, unknown>)
     : {};
   const items = Array.isArray(r.items) ? r.items : [];
+  const total = typeof r.total === "number" ? r.total : items.length;
+  const size = typeof input?.size === "number" && input.size > 0 ? input.size : 20;
+  const page = typeof input?.page === "number" && input.page >= 0 ? input.page : 0;
+  const filters: Record<string, unknown> = { type: input?.type, page: page + 1, size };
+  if (input?.phase_id) filters.phase_id = input.phase_id;
+  const hasMore = (page + 1) * size < total;
   return {
     ...r,
     items,
-    total: typeof r.total === "number" ? r.total : items.length,
+    total,
+    _nextPageHint: hasMore
+      ? `For the next page, call harness_list with resource_type='work_artifact', params={"work_item_id":${JSON.stringify(input?.work_item_id ?? "")}} and filters=${JSON.stringify(filters)}. Keep type and size identical — this list uses offset = page × size, unlike work_item list which maps page to offset directly.`
+      : "No more pages — all matching artifacts have been returned.",
   };
 }
 
@@ -258,6 +267,14 @@ export const autonomousWorkToolset: ToolsetDefinition = {
       toolset: "autonomous_work",
       scope: "project",
       identifierFields: ["work_item_id", "phase_id"],
+      relatedResources: [
+        {
+          resourceType: "work_artifact",
+          relationship: "related",
+          description:
+            "Fetch blob content with harness_get on work_artifact using the catalog id from this list. Do not pass phase_id on get.",
+        },
+      ],
       operations: {
         list: {
           method: "GET",
