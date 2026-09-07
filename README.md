@@ -502,13 +502,10 @@ pnpm docker:run
 docker run --rm -p 3000:3000 \
   -e HARNESS_API_KEY=pat.xxx.xxx.xxx \
   -e HARNESS_ACCOUNT_ID=your-account-id \
-  -e HARNESS_MCP_AUTH_TOKEN=replace-with-a-long-random-token \
   harness-mcp-server
 ```
 
 The container runs in HTTP mode on port 3000 by default with a built-in health check.
-It binds to the container network, so set `HARNESS_MCP_AUTH_TOKEN` in `.env` or the
-container environment and send that value as `Authorization: Bearer <token>` on MCP requests.
 
 ### Kubernetes
 
@@ -669,7 +666,7 @@ Current multi-scope resources include `connector`, `service`, `environment`, `in
 | Tool               | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | --------------------| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `harness_describe` | Discover available resource types, operations, and fields. No API call — returns local registry metadata.                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| `harness_schema`   | Fetch exact YAML/JSON Schema definitions and examples for creating/updating resources. Pipeline/template schemas are bundled; connector, environment, service, secret, and infrastructure schemas are scope-aware entity schemas fetched from bundled snapshots or NG `/yaml-schema`; `release_process` and `release_activity` schemas are fetched live from `/gateway/rmg/api/yamlSchema`. Supports deep drilling via `path`.                                                                                                              |
+| `harness_schema`   | Fetch exact YAML/JSON Schema definitions and examples for creating/updating resources. Pipeline/template schemas are bundled; connector, environment, service, secret, and infrastructure schemas are scope-aware entity schemas fetched from bundled snapshots or NG `/yaml-schema`; `release_process` and `release_activity` schemas are fetched live from RMG `/api/yamlSchema`. Supports deep drilling via `path`.                                                                                                          |
 | `harness_list`     | List resources of a given type with filtering, search, and pagination.                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | `harness_get`      | Get a single resource by its identifier.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | `harness_create`   | Create a new resource. Supports inline and remote (Git-backed) pipelines. Prompts for user confirmation via [elicitation](#elicitation).                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -687,7 +684,7 @@ Use `harness_schema` before creating or updating YAML-backed resources so agents
 
 - Bundled schemas include `pipeline`, `template`, `trigger`, `pipeline_v1`, `template_v1`, `inputSet_v1`, `overlayInputSet_v1`, and `agent-pipeline`.
 - Entity schemas include `connector`, `environment`, `service`, `secret`, and `infrastructure`. They are scope-aware (`account`, `org`, or `project`) and require `org_id`/`project_id` when the selected scope requires them.
-- Release Management definitions (`release_process`, `release_activity`) fetch live JSON Schema from `/gateway/rmg/api/yamlSchema` (not bundled). Pass `scope`, `org_id`, and `project_id` when scoping to org or project.
+- Release Management definitions (`release_process`, `release_activity`) fetch live JSON Schema from RMG `/api/yamlSchema` (not bundled). Pass `scope`, `org_id`, and `project_id` when scoping to org or project.
 - Vendored entity snapshots are used first when they match the runtime account; otherwise the tool falls back to the Harness NG `/yaml-schema` API and caches the result.
 - Omit `path` for a field/section summary, then pass a dot-separated `path` to inspect a nested definition.
 
@@ -912,7 +909,7 @@ For v1 pipelines:
 
 1. Fetch `harness_get(resource_type="runtime_input_template_v1", resource_id="<pipeline_id>")`.
    For Git-backed pipelines, pass `branch_name`, `connector_ref`, and `repo_name` through `params`.
-2. Read `template_yaml` and `resolved_yaml` for declared `${{ inputs.* }}` values and defaults.
+2. Use each returned `inputs[].details.name` as a top-level key in `harness_execute.inputs`.
 3. Run `harness_execute(resource_type="pipeline_v1", action="run", resource_id="<pipeline_id>", inputs={...})`.
    The server wraps these values under an `inputs:` YAML root and sends the API's `inputs_yaml` body.
 
@@ -1505,7 +1502,7 @@ Use `harness_execute(resource_type="pull_request", action="close", ...)` for an 
 
 Release Management (RMG) resources are default-enabled. Definition resources (`release_process`, `release_activity`) support list/get/create/update/delete with `body.yaml`; call `harness_schema(resource_type="release_process"|"release_activity")` before create/update. Execution resources monitor running releases — most list operations require `release_id` (UUID from `harness_list resource_type=release`, or the UI URL slug such as `identifier-1.0.0-abc`). Paste an RMG release URL into `harness_list` to auto-fill `release_id`.
 
-RMG requests use `/gateway/rmg/api/...` paths on the default Harness client, with account scoping via the `Harness-Account` header. Org/project scope uses header-based scoping when `org_id`/`project_id` are provided. `release_execution_phase` is list-only — use each phase item's `identifier` field as `params.phase_identifier` when calling `harness_get` on phase input/output resources (do not call `harness_get` on `release_execution_phase` itself). Release list `status` filtering is applied client-side on the current page only; keep paging with the same filters when results may span pages.
+RMG calls use `${HARNESS_BASE_URL}/gateway/rmg` with account scoping via the `Harness-Account` header. Org/project scope uses header-based scoping when `org_id`/`project_id` are provided. `release_execution_phase` is list-only — use each phase item's `identifier` field as `params.phase_identifier` when calling `harness_get` on phase input/output resources (do not call `harness_get` on `release_execution_phase` itself). Release list `status` filtering is applied client-side on the current page only; keep paging with the same filters when results may span pages.
 
 | Resource Type                         | List | Get | Create | Update | Delete | Execute Actions |
 | ------------------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
@@ -1842,9 +1839,11 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 40 of 42 toolsets are enabled. One toolset is opt-in and excluded from the defaults:
+By default, 40 of 43 toolsets are enabled. Three toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
+- **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
+- **`registries-v3`** — Harness Artifact Registry v3 (packages, versions, files, metadata, scans, firewall exceptions). Opt-in until v3 writes land, so agents don't have to disambiguate between v1 registries/artifacts and v3 packages/versions.
 
 ### Adding toolsets with `+` prefix
 
@@ -1922,6 +1921,7 @@ Available toolset names:
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item, eval_git_registration, online_eval |
 | `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_provider, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                               |
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
+| `registries-v3` *(opt-in)* | package_v3, version_v3, file_v3, registry_metadata_v3, package_metadata_v3, version_metadata_v3, file_metadata_v3, metadata_key_v3, metadata_value_v3, artifact_scan_v3, bulk_scan_evaluation_v3, firewall_exception_v3, firewall_exception_version_v3                                       |
 | `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
 
 
