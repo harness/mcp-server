@@ -1839,9 +1839,10 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 40 of 42 toolsets are enabled. Two toolsets are opt-in and excluded from the defaults:
+By default, 40 of 43 toolsets are enabled. Three toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
+- **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
 - **`registries-v3`** — Harness Artifact Registry v3 (packages, versions, files, metadata, scans, firewall exceptions). Opt-in until v3 writes land, so agents don't have to disambiguate between v1 registries/artifacts and v3 packages/versions.
 
 ### Adding toolsets with `+` prefix
