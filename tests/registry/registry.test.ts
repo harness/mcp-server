@@ -1566,6 +1566,91 @@ describe("Registry", () => {
     });
   });
 
+  describe("registry create and update", () => {
+    let registriesRegistry: Registry;
+    beforeEach(() => {
+      registriesRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries" }));
+    });
+
+    it("create hits POST /har/api/v1/registry with space_ref query param from config", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "my-docker" } });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "create", {
+        body: {
+          identifier: "my-docker",
+          type: "VIRTUAL",
+          packageType: "DOCKER",
+          isPublic: false,
+          parentRef: "test-account/default/test-project",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toContain("/har/api/v1/registry");
+      expect(call.path).toContain("space_ref=");
+      expect(call.path).toContain("test-account");
+      expect(call.body).toMatchObject({
+        identifier: "my-docker",
+        type: "VIRTUAL",
+        packageType: "DOCKER",
+      });
+    });
+
+    it("create uses org_id/project_id inputs over config defaults for space_ref", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "r1" } });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "create", {
+        org_id: "custom-org",
+        project_id: "custom-proj",
+        body: {
+          identifier: "r1",
+          type: "UPSTREAM",
+          packageType: "NPM",
+          isPublic: false,
+          parentRef: "test-account/custom-org/custom-proj",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toContain("custom-org");
+      expect(call.path).toContain("custom-proj");
+    });
+
+    it("update hits PUT /har/api/v1/registry/{registryRef}/+ with body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "my-docker" } });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "update", {
+        registry_id: "my-docker",
+        body: {
+          identifier: "my-docker",
+          type: "VIRTUAL",
+          packageType: "DOCKER",
+          isPublic: true,
+          parentRef: "test-account/default/test-project",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toContain("/har/api/v1/registry/");
+      expect(call.path).toContain("my-docker");
+      expect(call.path).toContain("/+");
+      expect(call.body).toMatchObject({ identifier: "my-docker", isPublic: true });
+    });
+
+    it("registry resource has bodySchema on create and update", () => {
+      const def = registriesRegistry.getResource("registry");
+      expect(def.operations.create?.bodySchema).toBeDefined();
+      expect(def.operations.create?.bodySchema?.fields.length).toBeGreaterThan(0);
+      expect(def.operations.update?.bodySchema).toBeDefined();
+      expect(def.operations.update?.bodySchema?.fields.length).toBeGreaterThan(0);
+    });
+  });
+
   describe("ELK→Mongo fallback", () => {
     let registry: Registry;
     beforeEach(() => {

@@ -1,5 +1,46 @@
-import type { ToolsetDefinition, PathBuilderConfig } from "../types.js";
+import type { ToolsetDefinition, PathBuilderConfig, BodySchema } from "../types.js";
 import { passthrough, harListExtract } from "../extractors.js";
+
+// ---------------------------------------------------------------------------
+// Body schemas
+// ---------------------------------------------------------------------------
+
+const PACKAGE_TYPES = [
+  "CARGO", "COMPOSER", "CONDA", "DART", "DOCKER", "GENERIC", "GO", "HELM",
+  "HELM_HTTP", "HUGGINGFACE", "MAVEN", "NPM", "NUGET", "PYTHON", "RAW",
+  "RPM", "SWIFT", "DEBIAN", "CONAN", "TERRAFORM", "CRAN", "WOLFI", "ALPINE",
+];
+
+const registryCreateSchema: BodySchema = {
+  description: "Registry definition. Set `config.type` to VIRTUAL (aggregates upstreams) or UPSTREAM (proxy to a single remote).",
+  fields: [
+    { name: "identifier", type: "string", required: true, description: "Registry slug / identifier (e.g. my-npm-registry)" },
+    { name: "type", type: "string", required: true, description: "Registry kind: VIRTUAL or UPSTREAM" },
+    { name: "packageType", type: "string", required: true, description: `Package type: ${PACKAGE_TYPES.join(", ")}` },
+    { name: "isPublic", type: "boolean", required: true, description: "Whether the registry is publicly accessible" },
+    { name: "parentRef", type: "string", required: true, description: "Scope reference: accountId/orgId/projectId" },
+    { name: "description", type: "string", required: false, description: "Human-readable description" },
+    { name: "allowedPattern", type: "array", required: false, description: "Glob patterns for artifacts allowed in this registry", itemType: "string" },
+    { name: "blockedPattern", type: "array", required: false, description: "Glob patterns for artifacts blocked in this registry", itemType: "string" },
+    { name: "labels", type: "array", required: false, description: "Labels to attach to the registry", itemType: "string" },
+    { name: "policyRefs", type: "array", required: false, description: "OPA policy set references to enforce on this registry", itemType: "string" },
+    {
+      name: "config",
+      type: "object",
+      required: false,
+      description:
+        "Registry-type-specific config. " +
+        "VIRTUAL: `{ type: 'VIRTUAL', upstreamProxies: ['<registryRef>', ...] }`. " +
+        "UPSTREAM: `{ type: 'UPSTREAM', source: 'Dockerhub|PyPi|NpmJs|MavenCentral|Custom|...', url: '<url>' }` (url required when source is Custom).",
+    },
+  ],
+};
+
+// Update uses the same shape as create but all fields are optional (PUT replaces the full resource).
+const registryUpdateSchema: BodySchema = {
+  description: "Full registry definition to replace the existing one (PUT semantics). Same fields as create; all are optional.",
+  fields: registryCreateSchema.fields.map((f) => ({ ...f, required: false })),
+};
 
 /**
  * HAR API uses path-based scope refs (not query params).
@@ -29,7 +70,7 @@ export const registriesToolset: ToolsetDefinition = {
     {
       resourceType: "registry",
       displayName: "Registry",
-      description: "Artifact registry. Supports list and get.",
+      description: "Artifact registry. Supports list, get, create, and update.",
       toolset: "registries",
       scope: "project",
       identifierFields: ["registry_id"],
@@ -72,6 +113,30 @@ export const registriesToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get registry details",
+        },
+        create: {
+          method: "POST",
+          path: "/har/api/v1/registry",
+          // space_ref is a required query param; derive it from scope config.
+          pathBuilder: (input, config) =>
+            `/har/api/v1/registry?space_ref=${encodeURIComponent(harSpaceRef(input, config))}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description: "Create a new artifact registry",
+          bodySchema: registryCreateSchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/har/api/v1/registry",
+          pathBuilder: (input, config) =>
+            `/har/api/v1/registry/${harRegistryRef(input, config)}/+`,
+          pathParams: { registry_id: "registryIdentifier" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description: "Update (replace) an existing artifact registry",
+          bodySchema: registryUpdateSchema,
         },
       },
     },
