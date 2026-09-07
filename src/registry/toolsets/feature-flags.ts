@@ -306,7 +306,7 @@ const fmeMetricCreateSchema: BodySchema = {
     { name: "description", type: "string", required: false, description: "Optional human-readable description" },
     { name: "trafficType", type: "string", required: true, description: "Traffic type name (get from fme_traffic_type). Immutable after creation." },
     { name: "format", type: "string", required: true, description: "Display format. One of: NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES." },
-    { name: "aggregation", type: "string", required: true, description: "How individual event values are aggregated per unit. One of: TOTAL, COUNT, RATE, AVERAGE, NONE." },
+    { name: "aggregation", type: "string", required: true, description: "How individual event values are aggregated per unit. One of: TOTAL, COUNT, RATE, AVERAGE. Do not use NONE — the backend always rejects it on create." },
     { name: "isPositive", type: "boolean", required: true, description: "true when an increase in this metric is a good outcome" },
     { name: "spread", type: "string", required: true, description: "PER (per-unit) or ACROSS (population). Required here even though the backend accepts omitting it (defaults to PER) — set it explicitly, especially for RATE metrics where PER vs ACROSS changes what is measured." },
     { name: "baseEventTypes", type: "array", required: true, description: "The base event type(s) this metric measures (at least one). Each entry: {eventTypeId, propertyFilters?, propertyForValue?}. Get event type IDs from fme_event_type.", itemType: "object" },
@@ -323,7 +323,7 @@ const fmeMetricUpdateSchema: BodySchema = {
   fields: [
     { name: "description", type: "string", required: false, description: "Updated description; null clears it" },
     { name: "format", type: "string", required: false, description: "Updated format (NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES); cannot be cleared with null" },
-    { name: "aggregation", type: "string", required: false, description: "Updated aggregation (TOTAL, COUNT, RATE, AVERAGE, NONE); cannot be cleared with null" },
+    { name: "aggregation", type: "string", required: false, description: "Updated aggregation (TOTAL, COUNT, RATE, AVERAGE); cannot be cleared with null. Do not use NONE — the backend always rejects it." },
     { name: "isPositive", type: "boolean", required: false, description: "Updated direction; cannot be cleared with null" },
     { name: "spread", type: "string", required: false, description: "Updated spread (PER or ACROSS); cannot be cleared with null" },
     { name: "baseEventTypes", type: "array", required: false, description: "Replacement base-event list (full replacement, at least one entry required when provided)", itemType: "object" },
@@ -1804,10 +1804,14 @@ export const featureFlagsToolset: ToolsetDefinition = {
             ids: "ids",
             sort_order: "sort_order",
             offset: "offset",
+            size: "limit",
             limit: "limit",
           },
           responseExtractor: fmeV4PaginatedListExtract,
-          description: "List metric definitions in a project, with pagination and filters.",
+          description:
+            "List metric definitions in a project, with pagination and filters (harness_list size maps to limit). " +
+            "totalCount reflects the backend's own count and is not guaranteed accurate — do not loop on offset " +
+            "until collected >= totalCount without an upper bound on iterations.",
         },
         get: {
           method: "GET",
@@ -1870,7 +1874,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           headers: { "Content-Type": "application/merge-patch+json" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
-            if (!body) return {};
+            if (!body || typeof body !== "object" || Array.isArray(body)) return {};
             const patchableFields = [
               "description",
               "format",
@@ -1921,7 +1925,10 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "An FME event type — id, name, description, and the traffic types it's associated with. " +
         "Harness-native only (org_id + project_id; no legacy workspace_id support). Read-only: " +
         "supports list and get. Use to discover event type IDs before referencing one in " +
-        "fme_metric's baseEventTypes/filterEventType or event_type_ids filter.",
+        "fme_metric's baseEventTypes/filterEventType or event_type_ids filter. Backed by " +
+        "/fme/api/v4/event-types, which was still in-flight (not yet merged/deployed) as of this " +
+        "writing — a 404 (or an HTML response instead of JSON) means the endpoint isn't live yet " +
+        "in this environment, not that the resource is misconfigured.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
@@ -1945,10 +1952,14 @@ export const featureFlagsToolset: ToolsetDefinition = {
             name: "name",
             traffic_type_id: "traffic_type_id",
             offset: "offset",
+            size: "limit",
             limit: "limit",
           },
           responseExtractor: fmeV4PaginatedListExtract,
-          description: "List event types in a project, with pagination and filters.",
+          description:
+            "List event types in a project, with pagination and filters (harness_list size maps to limit). " +
+            "totalCount reflects the backend's own count and is not guaranteed accurate — do not loop on offset " +
+            "until collected >= totalCount without an upper bound on iterations.",
         },
         get: {
           method: "GET",

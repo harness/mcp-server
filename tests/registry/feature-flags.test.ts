@@ -2235,6 +2235,30 @@ describe("fme_metric", () => {
     expect(result.total).toBe(1);
   });
 
+  it("list: harness_list size maps to limit", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 5, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      size: 5,
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({ limit: 5 });
+  });
+
+  it("rejects workspace_id (no legacy Split.io equivalent)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "list", { workspace_id: "ws1" }),
+    ).rejects.toThrow(/no legacy Split\.io equivalent/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("get: routes to /fme/api/v4/metrics/{metric_id} and URL-encodes the id", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ id: "m1/with slash", name: "revenue" });
     const client = makeClient(mockRequest);
@@ -2324,6 +2348,28 @@ describe("fme_metric", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("create: throws when spread is explicitly null", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: {
+          name: "checkout-conversion",
+          trafficType: "user",
+          format: "PERCENTAGE",
+          aggregation: "COUNT",
+          isPositive: true,
+          spread: null,
+          baseEventTypes: [{ eventTypeId: "e1" }],
+        },
+      }),
+    ).rejects.toThrow(/spread is required/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("update: PATCHes with merge-patch content type and only the fields present in body", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
@@ -2355,6 +2401,36 @@ describe("fme_metric", () => {
 
     const req = firstRequest(mockRequest);
     expect(req.body).toEqual({ spread: "ACROSS" });
+  });
+
+  it("update: null clears filterEventType/tags/owners/cap", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "m1",
+      body: { filterEventType: null, tags: null, owners: null, cap: null },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ filterEventType: null, tags: null, owners: null, cap: null });
+  });
+
+  it("update: does not crash when body is a non-object (e.g. a raw string)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "m1",
+      body: "not-an-object",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({});
   });
 
   it("delete: DELETEs to /fme/api/v4/metrics/{metric_id} and URL-encodes the id", async () => {
@@ -2457,6 +2533,30 @@ describe("fme_event_type", () => {
 
     expect(result.items).toEqual(eventTypes);
     expect(result.total).toBe(1);
+  });
+
+  it("list: harness_list size maps to limit", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 5, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_event_type", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      size: 5,
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({ limit: 5 });
+  });
+
+  it("rejects workspace_id (no legacy Split.io equivalent)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_event_type", "list", { workspace_id: "ws1" }),
+    ).rejects.toThrow(/no legacy Split\.io equivalent/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("get: routes to /fme/api/v4/event-types/{event_type_id} and URL-encodes the id", async () => {
