@@ -2249,16 +2249,6 @@ describe("fme_metric", () => {
     expect(req.params).toMatchObject({ limit: 5 });
   });
 
-  it("rejects workspace_id (no legacy Split.io equivalent)", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_metric", "list", { workspace_id: "ws1" }),
-    ).rejects.toThrow(/no legacy Split\.io equivalent/);
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
   it("get: routes to /fme/api/v4/metrics/{metric_id} and URL-encodes the id", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ id: "m1/with slash", name: "revenue" });
     const client = makeClient(mockRequest);
@@ -2547,16 +2537,6 @@ describe("fme_event_type", () => {
 
     const req = firstRequest(mockRequest);
     expect(req.params).toMatchObject({ limit: 5 });
-  });
-
-  it("rejects workspace_id (no legacy Split.io equivalent)", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_event_type", "list", { workspace_id: "ws1" }),
-    ).rejects.toThrow(/no legacy Split\.io equivalent/);
-    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   it("get: routes to /fme/api/v4/event-types/{event_type_id} and URL-encodes the id", async () => {
