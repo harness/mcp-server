@@ -1730,6 +1730,67 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
       },
     },
+    // ── FME Metric (Harness-native only; read-only Phase 1 — create/update deferred) ──
+    // Future create/update phase: the backend CreateMetricRequest keeps `spread` optional
+    // (default PER), but per product decision the MCP-side create tool schema/description
+    // should mark `spread` required — a stricter MCP-only contract, not a backend change.
+    {
+      resourceType: "fme_metric",
+      displayName: "FME Metric",
+      description:
+        "An FME metric definition — name, traffic type, aggregation, format, spread, base event " +
+        "types, filters, cap, tags and owners. Harness-native only (org_id + project_id; no legacy " +
+        "workspace_id support). Supports list and get.",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["metric_id"],
+      listFilterFields: [
+        { name: "name", description: "Filter by name (substring, case-insensitive)" },
+        { name: "traffic_type_id", description: "Filter by traffic type ID (get from fme_traffic_type)" },
+        { name: "event_type_ids", description: "Filter by base event type IDs" },
+        { name: "tags", description: "Filter by tag names" },
+        { name: "ids", description: "Filter to specific metric IDs" },
+        { name: "sort_order", description: "Sort direction by name", enum: ["ASCENDING", "DESCENDING"] },
+        { name: "offset", description: "Pagination offset", type: "number" },
+        { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_metric");
+            return { path: "/fme/api/v4/metrics" };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            name: "name",
+            traffic_type_id: "traffic_type_id",
+            event_type_ids: "event_type_ids",
+            tags: "tags",
+            ids: "ids",
+            sort_order: "sort_order",
+            offset: "offset",
+            limit: "limit",
+          },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description: "List metric definitions in a project, with pagination and filters.",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_metric");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            return { path: `/fme/api/v4/metrics/${id}` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description: "Get a single metric definition by ID.",
+        },
+      },
+    },
     {
       resourceType: "fme_segment_keys",
       displayName: "FME Segment Keys",

@@ -2149,3 +2149,132 @@ describe("fme_feature_flag deep link", () => {
     );
   });
 });
+
+describe("fme_metric", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: routes to /fme/api/v4/metrics with account_id/organization_identifier/project_identifier params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "list", {
+      org_id: "o1",
+      project_id: "p1",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/metrics");
+    expect(req.product).toBeUndefined();
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+  });
+
+  it("list: throws when org_id/project_id missing (no silent fallback to ambient config)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "fme_metric", "list", {})).rejects.toThrow(
+      "fme_metric: org_id and project_id are required (account is taken from config).",
+    );
+    expect(mockRequest).not.toHaveBeenCalled();
+
+    await expect(registry.dispatch(client, "fme_metric", "list", { org_id: "o1" })).rejects.toThrow(
+      "fme_metric: org_id and project_id are required (account is taken from config).",
+    );
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: maps each documented filter to the correct query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      name: "revenue",
+      traffic_type_id: "tt1",
+      event_type_ids: ["purchase"],
+      tags: ["billing"],
+      ids: ["m1", "m2"],
+      sort_order: "ASCENDING",
+      offset: 10,
+      limit: 20,
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({
+      name: "revenue",
+      traffic_type_id: "tt1",
+      event_type_ids: ["purchase"],
+      tags: ["billing"],
+      ids: ["m1", "m2"],
+      sort_order: "ASCENDING",
+      offset: 10,
+      limit: 20,
+    });
+  });
+
+  it("list: extractor maps {data, totalCount} to {items, total}", async () => {
+    const metrics = [{ id: "m1", name: "revenue" }];
+    const mockRequest = vi.fn().mockResolvedValue({ data: metrics, limit: 100, offset: 0, totalCount: 1 });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "fme_metric", "list", {
+      org_id: "o1",
+      project_id: "p1",
+    })) as { items: unknown[]; total: number };
+
+    expect(result.items).toEqual(metrics);
+    expect(result.total).toBe(1);
+  });
+
+  it("get: routes to /fme/api/v4/metrics/{metric_id} and URL-encodes the id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "m1/with slash", name: "revenue" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "m1/with slash",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/metrics/m1%2Fwith%20slash");
+  });
+
+  it("get: throws when metric_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "get", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/metric_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: throws when org_id/project_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "get", { metric_id: "m1" }),
+    ).rejects.toThrow("fme_metric: org_id and project_id are required (account is taken from config).");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("has no create/update/delete operations (Phase 1 is read-only)", () => {
+    const resource = findResource("fme_metric");
+    expect(resource.operations.list).toBeDefined();
+    expect(resource.operations.get).toBeDefined();
+    expect(resource.operations.create).toBeUndefined();
+    expect(resource.operations.update).toBeUndefined();
+    expect(resource.operations.delete).toBeUndefined();
+  });
+});
