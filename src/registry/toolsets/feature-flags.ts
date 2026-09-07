@@ -1791,6 +1791,60 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
       },
     },
+    // ── FME Event Type (Harness-native only; read-only — no create/update/delete) ──
+    // Discovery endpoint for fme_metric: use list/get here to resolve real event type IDs
+    // before referencing one in a metric's baseEventTypes/filterEventType or the
+    // event_type_ids list filter, instead of guessing an ID.
+    {
+      resourceType: "fme_event_type",
+      displayName: "FME Event Type",
+      description:
+        "An FME event type — id, name, description, and the traffic types it's associated with. " +
+        "Harness-native only (org_id + project_id; no legacy workspace_id support). Read-only: " +
+        "supports list and get. Use to discover event type IDs before referencing one in " +
+        "fme_metric's baseEventTypes/filterEventType or event_type_ids filter.",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["event_type_id"],
+      listFilterFields: [
+        { name: "name", description: "Filter by name (substring, case-insensitive)" },
+        { name: "traffic_type_id", description: "Filter by traffic type ID (get from fme_traffic_type)" },
+        { name: "offset", description: "Pagination offset", type: "number" },
+        { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_event_type");
+            return { path: "/fme/api/v4/event-types" };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            name: "name",
+            traffic_type_id: "traffic_type_id",
+            offset: "offset",
+            limit: "limit",
+          },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description: "List event types in a project, with pagination and filters.",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_event_type");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "event_type_id", "fme_event_type"));
+            return { path: `/fme/api/v4/event-types/${id}` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description: "Get a single event type by ID.",
+        },
+      },
+    },
     {
       resourceType: "fme_segment_keys",
       displayName: "FME Segment Keys",
