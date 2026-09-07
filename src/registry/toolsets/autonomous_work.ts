@@ -61,6 +61,26 @@ const softwareComponentBodySchema: BodySchema = {
 // passthrough returns the raw object; harness_list reads .items automatically.
 const listResponseExtractor = passthrough;
 
+/** Guarantee `items` + `total` so skipCompact survives harness_list normalization. */
+function workArtifactListExtract(raw: unknown): Record<string, unknown> {
+  const r = raw !== null && typeof raw === "object" && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : {};
+  const items = Array.isArray(r.items) ? r.items : [];
+  return {
+    ...r,
+    items,
+    total: typeof r.total === "number" ? r.total : items.length,
+  };
+}
+
+/** harness_list page is 0-indexed; ADLC paginates with offset = page × size. */
+function applyWorkArtifactListOffset(input: Record<string, unknown>): void {
+  const size = typeof input.size === "number" && input.size > 0 ? input.size : 20;
+  const page = typeof input.page === "number" && input.page >= 0 ? input.page : 0;
+  input.offset = page * size;
+}
+
 // Execute actions that take an empty or minimal body still declare a bodySchema
 // so harness_describe shows agents what (if anything) to pass, and the
 // structural-validation test's risky-execute contract is satisfied.
@@ -279,18 +299,22 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           path: "/adlc/api/workitems/{workItemId}/artifacts",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { work_item_id: "workItemId" },
-          queryParams: { page: "offset", size: "limit", phase_id: "phaseId" },
+          queryParams: { offset: "offset", size: "limit", phase_id: "phaseId" },
+          preflight: async ({ input }) => {
+            applyWorkArtifactListOffset(input);
+          },
           bodyBuilder: (input) => ({ type: input.type }),
           skipScopeBodyInjection: true,
           skipCompact: true,
-          responseExtractor: listResponseExtractor,
+          responseExtractor: workArtifactListExtract,
           paramsSchema: {
             fields: [
               { name: "work_item_id", required: true, description: "Work item identifier." },
             ],
           },
           description:
-            "List current work-item artifacts of the requested type (latest artifacts_reported attempt per matching phase).",
+            "List current work-item artifacts of the requested type (latest artifacts_reported attempt per matching phase). " +
+            "Pagination is 0-indexed: offset = page × size (keep size constant across pages).",
         },
         get: {
           method: "GET",

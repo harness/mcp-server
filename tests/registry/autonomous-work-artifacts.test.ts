@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import { autonomousWorkToolset } from "../../src/registry/toolsets/autonomous_work.js";
+import { compactItems } from "../../src/utils/compact.js";
+import { normalizeHarnessListPayload } from "../../src/utils/response-formatter.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 
@@ -53,7 +55,7 @@ describe("work_artifact resource shape", () => {
       skipCompact: true,
     });
     expect(workArtifact!.operations.list!.queryParams).toEqual({
-      page: "offset",
+      offset: "offset",
       size: "limit",
       phase_id: "phaseId",
     });
@@ -76,7 +78,8 @@ describe("work_artifact resource shape", () => {
     const phaseField = workArtifact!.listFilterFields?.find((f) => f.name === "phase_id");
     expect(typeField).toMatchObject({ required: true });
     expect(typeField!.enum).toEqual(["TICKET", "DESIGN", "PULL_REQUEST", "PLAN", "OTHER"]);
-    expect(phaseField?.required).toBeFalsy();
+    expect(phaseField).toBeDefined();
+    expect(phaseField!.required).toBeFalsy();
   });
 
   it("still exposes phase collection list on work_phase_artifact", () => {
@@ -120,6 +123,69 @@ describe("work_artifact dispatch", () => {
     expect(call.params.limit).toBe(20);
     expect(call.params.orgIdentifier).toBe("default");
     expect(call.params.projectIdentifier).toBe("adlc-project");
+  });
+
+  it("maps harness_list page to ADLC offset as page × size", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ items: [], total: 40, limit: 20, offset: 20, exceptions: [] });
+    const registry = new Registry(makeConfig());
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "work_artifact", "list", {
+      work_item_id: "WI-1",
+      type: "DESIGN",
+      page: 1,
+      size: 20,
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.offset).toBe(20);
+    expect(call.params.limit).toBe(20);
+  });
+
+  it("forwards type into the POST body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0, exceptions: [] });
+    const registry = new Registry(makeConfig());
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "work_artifact", "list", {
+      work_item_id: "WI-1",
+      type: "DESIGN",
+    });
+
+    expect(mockRequest.mock.calls[0][0].body).toEqual({ type: "DESIGN" });
+  });
+
+  it("keeps skipCompact when the API omits total so source_url survives list compact", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [{
+        id: "art-1",
+        type: "DESIGN",
+        title: "Design",
+        source_url: "https://example.invalid/design",
+        version: 2,
+        path: "design.md",
+      }],
+      exceptions: [],
+    });
+    const registry = new Registry(makeConfig());
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "work_artifact", "list", {
+      work_item_id: "WI-1",
+      type: "DESIGN",
+    }) as Record<string, unknown> & { items: Array<Record<string, unknown>>; __skipCompact?: boolean };
+
+    expect(result.__skipCompact).toBe(true);
+    expect(result.total).toBe(1);
+
+    const normalized = normalizeHarnessListPayload(result, { page: 0 }) as typeof result;
+    expect(normalized.__skipCompact).toBe(true);
+    expect(normalized.items[0]?.source_url).toBe("https://example.invalid/design");
+    expect(normalized.items[0]?.version).toBe(2);
+    expect(normalized.items[0]?.path).toBe("design.md");
+
+    const compacted = compactItems(normalized.items);
+    expect((compacted[0] as Record<string, unknown>).source_url).toBeUndefined();
   });
 
   it("forwards optional phase_id as phaseId query param", async () => {
