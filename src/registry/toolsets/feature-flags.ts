@@ -298,6 +298,42 @@ const fmeSegmentDefinitionUpdateSchema: BodySchema = {
   fields: [{ name: "description", type: "string", required: false, description: "Omit to keep the current value, null to clear it, or a string to set it" }],
 };
 
+const fmeMetricCreateSchema: BodySchema = {
+  description:
+    "Create a new metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required by the backend. spread is also required here — an MCP-only stricter contract: the backend silently defaults to 'PER' when spread is omitted, which changes the metric's semantics for RATE metrics with no warning.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Unique metric name within the project (must start with a letter; letters, digits, '-', '_' only; max 100 chars). Immutable after creation." },
+    { name: "description", type: "string", required: false, description: "Optional human-readable description" },
+    { name: "trafficType", type: "string", required: true, description: "Traffic type name (get from fme_traffic_type). Immutable after creation." },
+    { name: "format", type: "string", required: true, description: "Display format. One of: NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES." },
+    { name: "aggregation", type: "string", required: true, description: "How individual event values are aggregated per unit. One of: TOTAL, COUNT, RATE, AVERAGE, NONE." },
+    { name: "isPositive", type: "boolean", required: true, description: "true when an increase in this metric is a good outcome" },
+    { name: "spread", type: "string", required: true, description: "PER (per-unit) or ACROSS (population). Required here even though the backend accepts omitting it (defaults to PER) — set it explicitly, especially for RATE metrics where PER vs ACROSS changes what is measured." },
+    { name: "baseEventTypes", type: "array", required: true, description: "The base event type(s) this metric measures (at least one). Each entry: {eventTypeId, propertyFilters?, propertyForValue?}. Get event type IDs from fme_event_type.", itemType: "object" },
+    { name: "filterEventType", type: "object", required: false, description: "Optional filter/trigger event that scopes which units are counted: {eventTypeId, filterAggregation?, propertyFilters?}" },
+    { name: "tags", type: "array", required: false, description: "Initial tags. Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
+    { name: "cap", type: "object", required: false, description: "Optional outlier/cap configuration: baseEventCountCap/baseEventSumCap/baseEventValueCap/filterEventCountCap/filterEventSumCap/filterEventValueCap/metricValueCap (all default 0 = no cap), plus granularity (MINUTES|HOURS|DAYS|WEEKS, default DAYS)" },
+  ],
+};
+
+const fmeMetricUpdateSchema: BodySchema = {
+  description:
+    "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name and trafficType are immutable and not accepted here. format/aggregation/isPositive/spread cannot be cleared with null (rejected with 400). baseEventTypes/filterEventType/tags/owners/cap are full replacements when provided; null (or [] for arrays) clears filterEventType/tags/owners/cap.",
+  fields: [
+    { name: "description", type: "string", required: false, description: "Updated description; null clears it" },
+    { name: "format", type: "string", required: false, description: "Updated format (NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES); cannot be cleared with null" },
+    { name: "aggregation", type: "string", required: false, description: "Updated aggregation (TOTAL, COUNT, RATE, AVERAGE, NONE); cannot be cleared with null" },
+    { name: "isPositive", type: "boolean", required: false, description: "Updated direction; cannot be cleared with null" },
+    { name: "spread", type: "string", required: false, description: "Updated spread (PER or ACROSS); cannot be cleared with null" },
+    { name: "baseEventTypes", type: "array", required: false, description: "Replacement base-event list (full replacement, at least one entry required when provided)", itemType: "object" },
+    { name: "filterEventType", type: "object", required: false, description: "Replacement filter event, or null to clear it" },
+    { name: "tags", type: "array", required: false, description: "Replacement tag list; null or [] clears all tags", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Replacement owner list; null or [] clears all owners", itemType: "object" },
+    { name: "cap", type: "object", required: false, description: "Replacement cap configuration, or null to clear it" },
+  ],
+};
+
 const fmeRbsUpdateDefinitionSchema: BodySchema = {
   description: "Update a rule-based segment definition in an environment. Rules use: {condition: {combiner: 'AND', matchers: [{type, attribute, ...}]}}. Matcher types: IN_LIST_STRING (strings:[]), GREATER_THAN_OR_EQUAL_NUMBER (number:N), LESS_THAN_OR_EQUAL_NUMBER (number:N), BETWEEN_NUMBER (between:{from,to}), BOOLEAN (bool:true/false), ON_DATE (date:ms), IN_SPLIT (depends:{splitName,treatment}). Combiner values: AND, OR.",
   fields: [
@@ -1730,17 +1766,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
       },
     },
-    // ── FME Metric (Harness-native only; read-only Phase 1 — create/update deferred) ──
-    // Future create/update phase: the backend CreateMetricRequest keeps `spread` optional
-    // (default PER), but per product decision the MCP-side create tool schema/description
-    // should mark `spread` required — a stricter MCP-only contract, not a backend change.
     {
       resourceType: "fme_metric",
       displayName: "FME Metric",
       description:
         "An FME metric definition — name, traffic type, aggregation, format, spread, base event " +
         "types, filters, cap, tags and owners. Harness-native only (org_id + project_id; no legacy " +
-        "workspace_id support). Supports list and get.",
+        "workspace_id support). Supports list, get, create, update, and delete.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
@@ -1788,6 +1820,93 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
           description: "Get a single metric definition by ID.",
+        },
+        create: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_metric");
+            return { path: "/fme/api/v4/metrics" };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (body?.spread === undefined || body?.spread === null) {
+              throw new Error(
+                "fme_metric.create: spread is required (MCP-only stricter contract — the backend " +
+                  "silently defaults to 'PER' when omitted, changing metric semantics for RATE " +
+                  "metrics). Pass 'PER' or 'ACROSS'.",
+              );
+            }
+            return {
+              name: body?.name,
+              trafficType: body?.trafficType,
+              format: body?.format,
+              aggregation: body?.aggregation,
+              isPositive: body?.isPositive,
+              spread: body.spread,
+              baseEventTypes: body?.baseEventTypes,
+              ...(body?.description !== undefined ? { description: body.description } : {}),
+              ...(body?.filterEventType !== undefined ? { filterEventType: body.filterEventType } : {}),
+              ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
+              ...(body?.owners !== undefined ? { owners: body.owners } : {}),
+              ...(body?.cap !== undefined ? { cap: body.cap } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeMetricCreateSchema,
+          description:
+            "Create a metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes/spread are required (spread required is an MCP-only stricter contract; the backend otherwise defaults it to PER). Get event type IDs from fme_event_type first.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_metric");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            return { path: `/fme/api/v4/metrics/${id}` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body) return {};
+            const patchableFields = [
+              "description",
+              "format",
+              "aggregation",
+              "isPositive",
+              "spread",
+              "baseEventTypes",
+              "filterEventType",
+              "tags",
+              "owners",
+              "cap",
+            ] as const;
+            const patch: Record<string, unknown> = {};
+            for (const field of patchableFields) {
+              if (field in body) {
+                patch[field] = field === "tags" ? normalizeFmeTags(body[field]) : body[field];
+              }
+            }
+            return patch;
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeMetricUpdateSchema,
+          description:
+            "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged; format/aggregation/isPositive/spread cannot be cleared with null. baseEventTypes/filterEventType/tags/owners/cap are full replacements when provided. name and trafficType are immutable and not accepted here.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_metric");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            return { path: `/fme/api/v4/metrics/${id}` };
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description: "Delete a metric definition by ID. Hard delete — permanent, no archive/restore.",
         },
       },
     },

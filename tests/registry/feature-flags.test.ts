@@ -2269,13 +2269,117 @@ describe("fme_metric", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("has no create/update/delete operations (Phase 1 is read-only)", () => {
+  it("create: POSTs to /fme/api/v4/metrics with the full body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "m1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      body: {
+        name: "checkout-conversion",
+        trafficType: "user",
+        format: "PERCENTAGE",
+        aggregation: "COUNT",
+        isPositive: true,
+        spread: "PER",
+        baseEventTypes: [{ eventTypeId: "e1" }],
+        tags: ["checkout"],
+      },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/metrics");
+    expect(req.body).toEqual({
+      name: "checkout-conversion",
+      trafficType: "user",
+      format: "PERCENTAGE",
+      aggregation: "COUNT",
+      isPositive: true,
+      spread: "PER",
+      baseEventTypes: [{ eventTypeId: "e1" }],
+      tags: [{ name: "checkout" }],
+    });
+  });
+
+  it("create: throws when spread is missing (MCP-only stricter contract)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_metric", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: {
+          name: "checkout-conversion",
+          trafficType: "user",
+          format: "PERCENTAGE",
+          aggregation: "COUNT",
+          isPositive: true,
+          baseEventTypes: [{ eventTypeId: "e1" }],
+        },
+      }),
+    ).rejects.toThrow(/spread is required/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("update: PATCHes with merge-patch content type and only the fields present in body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "m1",
+      body: { description: null, tags: ["billing"] },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("PATCH");
+    expect(req.path).toBe("/fme/api/v4/metrics/m1");
+    expect(req.headers).toMatchObject({ "Content-Type": "application/merge-patch+json" });
+    expect(req.body).toEqual({ description: null, tags: [{ name: "billing" }] });
+  });
+
+  it("update: omits fields not present in body (does not send name/trafficType)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "m1",
+      body: { name: "should-be-ignored", trafficType: "should-be-ignored", spread: "ACROSS" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ spread: "ACROSS" });
+  });
+
+  it("delete: DELETEs to /fme/api/v4/metrics/{metric_id} and URL-encodes the id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "m1/with slash",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("DELETE");
+    expect(req.path).toBe("/fme/api/v4/metrics/m1%2Fwith%20slash");
+  });
+
+  it("delete: is classified as destructive risk", () => {
     const resource = findResource("fme_metric");
     expect(resource.operations.list).toBeDefined();
     expect(resource.operations.get).toBeDefined();
-    expect(resource.operations.create).toBeUndefined();
-    expect(resource.operations.update).toBeUndefined();
-    expect(resource.operations.delete).toBeUndefined();
+    expect(resource.operations.create).toBeDefined();
+    expect(resource.operations.update).toBeDefined();
+    expect(resource.operations.delete).toBeDefined();
+    expect(resource.operations.delete?.operationPolicy?.risk).toBe("destructive");
   });
 });
 
