@@ -126,11 +126,6 @@ export function isFmeHarnessNativeSelected(input: Record<string, unknown>, resou
  * must not offer workspace_id as an alternative.
  */
 export function requireHarnessNativeSegmentScope(input: Record<string, unknown>, resourceType: string): void {
-  if (input.workspace_id) {
-    throw new Error(
-      `${resourceType}: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.`,
-    );
-  }
   if (!input.org_id || !input.project_id) {
     throw new Error(`${resourceType}: org_id and project_id are required (account is taken from config).`);
   }
