@@ -179,6 +179,20 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
+  if (isOAuth && data.HARNESS_API_KEY) {
+    throw new Error(
+      "HARNESS_API_KEY must not be set in oauth mode. " +
+      "Each session must authenticate with a HarnessID access token.",
+    );
+  }
+
+  if (isOAuth && data.HARNESS_FME_API_KEY) {
+    throw new Error(
+      "HARNESS_FME_API_KEY must not be set in oauth mode. " +
+      "FME calls must use the session user's HarnessID access token.",
+    );
+  }
+
   if (!isMultiUser && !isOAuth && !data.HARNESS_API_KEY) {
     throw new Error("HARNESS_API_KEY is required in single-user mode.");
   }
@@ -309,14 +323,17 @@ export function isPlaceholderCredential(value: string | undefined): boolean {
 export function resolveFmeApiKey(
   config: Pick<Config, "HARNESS_MCP_MODE" | "HARNESS_FME_API_KEY" | "HARNESS_API_KEY">,
 ): string | undefined {
-  const explicitFmeKey = config.HARNESS_MCP_MODE === "multi-user"
-    ? undefined
-    : config.HARNESS_FME_API_KEY?.trim();
+  const explicitFmeKey =
+    config.HARNESS_MCP_MODE === "multi-user" || config.HARNESS_MCP_MODE === "oauth"
+      ? undefined
+      : config.HARNESS_FME_API_KEY?.trim();
   if (explicitFmeKey && !isPlaceholderCredential(explicitFmeKey)) {
     return explicitFmeKey;
   }
 
-  const fallbackHarnessKey = config.HARNESS_API_KEY?.trim();
+  const fallbackHarnessKey = config.HARNESS_MCP_MODE === "oauth"
+    ? undefined
+    : config.HARNESS_API_KEY?.trim();
   if (fallbackHarnessKey && !isPlaceholderCredential(fallbackHarnessKey)) {
     return fallbackHarnessKey;
   }
