@@ -64,7 +64,7 @@ export HARNESS_MCP_OAUTH_RESOURCE=https://mcp.harness-test.com/mcp
 export HARNESS_MCP_OAUTH_CLIENT_ID=mcp-client
 export HARNESS_MCP_OAUTH_SCOPES="openid profile email organization"
 
-export HARNESS_BASE_URL=https://qa.harness.io
+export HARNESS_BASE_URL=https://mcp.harness-test.com/cli
 export HARNESS_MCP_ALLOWED_HOSTS=mcp.harness-test.com
 export HOST=0.0.0.0
 export PORT=3000
@@ -76,9 +76,11 @@ pnpm start:http
 `https://id.harness-test.com/idp/realms/HarnessIDP/protocol/openid-connect/certs`;
 set it only when HarnessID publishes keys elsewhere.
 
-`HARNESS_BASE_URL` is the Harness Platform API host, which is a different host from
-the MCP endpoint — `mcp.harness-test.com` serves only `/mcp` and its
-`.well-known` metadata, and returns 404 for API paths.
+`HARNESS_BASE_URL` includes the `/cli` prefix: on the QA MCP host the Harness
+Platform APIs are routed under `/cli`, so a call to `/ng/api/organizations`
+resolves to `https://mcp.harness-test.com/cli/ng/api/organizations`. The same
+host serves `/mcp` and its `.well-known` metadata; unprefixed API paths return
+404.
 
 Terminate TLS at the ingress or reverse proxy. `HARNESS_MCP_OAUTH_RESOURCE` must be
 the external HTTPS URL used by clients, not the pod or cluster-local URL.

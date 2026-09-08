@@ -394,6 +394,25 @@ describe("HarnessClient", () => {
       expect(secondHeaders.has("x-api-key")).toBe(false);
     });
 
+    it("keeps the base URL path prefix on OAuth-mode requests", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_API_KEY: "",
+        HARNESS_BASE_URL: "https://mcp.harness-test.com/cli",
+      }));
+      client.setAccountIdResolver(() => "account-from-token");
+      client.setBearerTokenResolver(() => "keycloak-access-token");
+
+      await client.request({ path: "/ng/api/organizations" });
+
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.origin + url.pathname).toBe(
+        "https://mcp.harness-test.com/cli/ng/api/organizations",
+      );
+      expect(url.searchParams.get("accountIdentifier")).toBe("account-from-token");
+    });
+
     it("preserves caller-provided non-FME auth regardless of header casing", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());

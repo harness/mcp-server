@@ -154,8 +154,9 @@ HARNESS_MCP_OAUTH_RESOURCE=https://mcp.harness-test.com/mcp
 HARNESS_MCP_OAUTH_CLIENT_ID=mcp-client
 HARNESS_MCP_OAUTH_SCOPES="openid profile email organization"
 
-# Harness API host the server calls on behalf of the logged-in user.
-HARNESS_BASE_URL=https://qa.harness.io
+# Harness API base the server calls on behalf of the logged-in user. On the QA
+# MCP host, the platform APIs sit behind the /cli prefix.
+HARNESS_BASE_URL=https://mcp.harness-test.com/cli
 ```
 
 `HARNESS_API_KEY` must not be set in this mode. `HARNESS_MCP_OAUTH_JWKS_URI` defaults to `<issuer>/protocol/openid-connect/certs`, and `HARNESS_ACCOUNT_ID` is unnecessary because the account comes from the token.

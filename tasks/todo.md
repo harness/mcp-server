@@ -40,11 +40,13 @@
 - Verification passed: typecheck, build, and the full suite (147 files, 3,312 tests).
 - QA end-to-end against a real `mcp-client` token: local discovery matches the QA
   deployment's published metadata, `initialize` and `tools/list` succeed, and the token is
-  forwarded downstream with the account resolved from the token. Two QA-side gaps remain
-  outside this repo: the deployment gateway has no JWT provider registered for the
-  HarnessID issuer (`Jwt issuer is not configured`), and the QA Harness API returns
-  `500 UNKNOWN_ERROR` for a HarnessID token where an unknown token returns
-  `401 INVALID_TOKEN`.
+  forwarded downstream with the account resolved from the token.
+- QA `HARNESS_BASE_URL` is `https://mcp.harness-test.com/cli`; the platform APIs are routed
+  under `/cli` on the MCP host, and `buildUrl` preserves a base path prefix.
+- Open QA-side items outside this repo: the deployment gateway answered
+  `Jwt issuer is not configured` for the HarnessID issuer on both `/mcp` and `/cli` paths
+  during testing, and calling `qa.harness.io` directly with a HarnessID token returned
+  `500 UNKNOWN_ERROR` where an unknown token returns `401 INVALID_TOKEN`.
 
 ## Version bump 3.2.24 (2026-09-04)
 
