@@ -337,6 +337,84 @@ describe("ConfigSchema", () => {
     ).toThrow("HARNESS_API_KEY is required in single-user mode");
   });
 
+  it("accepts OAuth mode with HarnessID resource-server configuration", () => {
+    const result = ConfigSchema.safeParse({
+      HARNESS_MCP_MODE: "oauth",
+      HARNESS_MCP_OAUTH_ISSUER:
+        "https://id.harness-test.com/idp/realms/HarnessIDP/",
+      HARNESS_MCP_OAUTH_RESOURCE: "https://mcp.harness-test.com/mcp",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_API_KEY).toBe("");
+      expect(result.data.HARNESS_ACCOUNT_ID).toBe("");
+      expect(result.data.HARNESS_MCP_OAUTH_CLIENT_ID).toBe("mcp-client");
+      expect(result.data.HARNESS_MCP_OAUTH_ACCOUNT_CLAIM).toBe("account_id");
+      expect(result.data.HARNESS_MCP_OAUTH_JWKS_URI).toBe(
+        "https://id.harness-test.com/idp/realms/HarnessIDP/protocol/openid-connect/certs",
+      );
+      expect(result.data.HARNESS_MCP_OAUTH_SCOPES).toBe(
+        "openid profile email organization",
+      );
+    }
+  });
+
+  it("requires OAuth issuer and resource but not a shared Harness credential", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_MCP_OAUTH_RESOURCE: "https://mcp.qa.example.com/mcp",
+      }),
+    ).toThrow("HARNESS_MCP_OAUTH_ISSUER is required");
+
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_MCP_OAUTH_ISSUER: "https://harnessid.qa.example.com",
+      }),
+    ).toThrow("HARNESS_MCP_OAUTH_RESOURCE is required");
+
+    expect(() =>
+      ConfigSchema.parse({
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_MCP_OAUTH_ISSUER: "https://harnessid.qa.example.com",
+        HARNESS_MCP_OAUTH_RESOURCE: "https://mcp.qa.example.com/mcp",
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects a static HTTP auth token in OAuth mode", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_MCP_OAUTH_ISSUER: "https://harnessid.qa.example.com",
+        HARNESS_MCP_OAUTH_RESOURCE: "https://mcp.qa.example.com/mcp",
+        HARNESS_MCP_AUTH_TOKEN: "ambiguous-shared-secret",
+      }),
+    ).toThrow("HARNESS_MCP_AUTH_TOKEN must not be set in oauth mode");
+  });
+
+  it("requires HTTPS for OAuth URLs unless local HTTP is explicitly allowed", () => {
+    const httpOAuthConfig = {
+      ...validConfig,
+      HARNESS_MCP_MODE: "oauth",
+      HARNESS_MCP_OAUTH_ISSUER: "http://127.0.0.1:8081",
+      HARNESS_MCP_OAUTH_RESOURCE: "http://127.0.0.1:3000/mcp",
+    };
+
+    expect(() => ConfigSchema.parse(httpOAuthConfig)).toThrow(
+      "HarnessID OAuth issuer, resource, and JWKS URLs must use HTTPS",
+    );
+    expect(ConfigSchema.safeParse({
+      ...httpOAuthConfig,
+      HARNESS_ALLOW_HTTP: "true",
+    }).success).toBe(true);
+  });
+
   it("parses HTTP MCP auth token and unauthenticated opt-out config", () => {
     const result = ConfigSchema.safeParse({
       ...validConfig,

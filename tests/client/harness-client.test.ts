@@ -367,6 +367,33 @@ describe("HarnessClient", () => {
       expect(headers["Harness-Account"]).toBe("test-account");
     });
 
+    it("forwards the current OAuth token as Bearer auth", async () => {
+      fetchSpy.mockImplementation(async () =>
+        new Response(JSON.stringify({}), { status: 200 })
+      );
+      const client = new HarnessClient(makeConfig({
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_API_KEY: "",
+      }));
+      let token = "keycloak-access-token-1";
+      client.setBearerTokenResolver(() => token);
+
+      await client.request({ path: "/ng/api/projects" });
+      token = "keycloak-access-token-2";
+      await client.request({ path: "/ng/api/projects" });
+
+      const firstHeaders = new Headers(fetchSpy.mock.calls[0][1]?.headers);
+      const secondHeaders = new Headers(fetchSpy.mock.calls[1][1]?.headers);
+      expect(firstHeaders.get("Authorization")).toBe(
+        "Bearer keycloak-access-token-1",
+      );
+      expect(secondHeaders.get("Authorization")).toBe(
+        "Bearer keycloak-access-token-2",
+      );
+      expect(firstHeaders.has("x-api-key")).toBe(false);
+      expect(secondHeaders.has("x-api-key")).toBe(false);
+    });
+
     it("preserves caller-provided non-FME auth regardless of header casing", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());

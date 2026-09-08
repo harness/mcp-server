@@ -12,6 +12,7 @@ const booleanFromEnv = z
 
 const emptyStringAsUndefined = (val: unknown): unknown => val === "" ? undefined : val;
 const optionalStringFromEnv = z.preprocess(emptyStringAsUndefined, z.string().optional());
+const optionalUrlFromEnv = z.preprocess(emptyStringAsUndefined, z.string().url().optional());
 const urlFromEnv = (defaultValue: string) =>
   z.preprocess(emptyStringAsUndefined, z.string().url().default(defaultValue));
 
@@ -65,11 +66,26 @@ export function extractAccountIdFromToken(apiKey: string): string | undefined {
 const RawConfigSchema = z.object({
   HARNESS_MCP_MODE: z.preprocess(
     emptyStringAsUndefined,
-    z.enum(["single-user", "multi-user"]).default("single-user"),
+    z.enum(["single-user", "multi-user", "oauth"]).default("single-user"),
   ),
   HARNESS_API_KEY: optionalStringFromEnv,
   HARNESS_ACCOUNT_ID: optionalStringFromEnv,
   HARNESS_BASE_URL: urlFromEnv("https://app.harness.io"),
+  HARNESS_MCP_OAUTH_ISSUER: optionalUrlFromEnv,
+  HARNESS_MCP_OAUTH_RESOURCE: optionalUrlFromEnv,
+  HARNESS_MCP_OAUTH_JWKS_URI: optionalUrlFromEnv,
+  HARNESS_MCP_OAUTH_CLIENT_ID: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().default("mcp-client"),
+  ),
+  HARNESS_MCP_OAUTH_ACCOUNT_CLAIM: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().default("account_id"),
+  ),
+  HARNESS_MCP_OAUTH_SCOPES: z.preprocess(
+    emptyStringAsUndefined,
+    z.string().default("openid profile email organization"),
+  ),
   // New names (preferred)
   HARNESS_ORG: optionalStringFromEnv,
   HARNESS_PROJECT: optionalStringFromEnv,
@@ -147,6 +163,7 @@ const RawConfigSchema = z.object({
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {
   const isMultiUser = data.HARNESS_MCP_MODE === "multi-user";
+  const isOAuth = data.HARNESS_MCP_MODE === "oauth";
 
   if (isMultiUser && data.HARNESS_API_KEY) {
     throw new Error(
@@ -162,14 +179,45 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
-  if (!isMultiUser && !data.HARNESS_API_KEY) {
+  if (!isMultiUser && !isOAuth && !data.HARNESS_API_KEY) {
+    throw new Error("HARNESS_API_KEY is required in single-user mode.");
+  }
+
+  if (isOAuth && !data.HARNESS_MCP_OAUTH_ISSUER) {
+    throw new Error("HARNESS_MCP_OAUTH_ISSUER is required in oauth mode.");
+  }
+
+  if (isOAuth && !data.HARNESS_MCP_OAUTH_RESOURCE) {
+    throw new Error("HARNESS_MCP_OAUTH_RESOURCE is required in oauth mode.");
+  }
+
+  if (
+    isOAuth
+    && !data.HARNESS_ALLOW_HTTP
+    && (
+      !data.HARNESS_MCP_OAUTH_ISSUER!.startsWith("https://")
+      || !data.HARNESS_MCP_OAUTH_RESOURCE!.startsWith("https://")
+      || (
+        data.HARNESS_MCP_OAUTH_JWKS_URI !== undefined
+        && !data.HARNESS_MCP_OAUTH_JWKS_URI.startsWith("https://")
+      )
+    )
+  ) {
     throw new Error(
-      "HARNESS_API_KEY is required in single-user mode.",
+      "HarnessID OAuth issuer, resource, and JWKS URLs must use HTTPS. " +
+      "Set HARNESS_ALLOW_HTTP=true only for local development.",
+    );
+  }
+
+  if (isOAuth && data.HARNESS_MCP_AUTH_TOKEN) {
+    throw new Error(
+      "HARNESS_MCP_AUTH_TOKEN must not be set in oauth mode. " +
+      "OAuth access tokens authenticate HTTP MCP requests.",
     );
   }
 
   let accountId: string | undefined;
-  if (isMultiUser) {
+  if (isMultiUser || isOAuth) {
     accountId = data.HARNESS_ACCOUNT_ID ?? "";
   } else {
     accountId = data.HARNESS_ACCOUNT_ID ?? extractAccountIdFromToken(data.HARNESS_API_KEY!);
@@ -223,8 +271,22 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
 
   // Remove deprecated keys from output, expose only the canonical names
   const { HARNESS_DEFAULT_ORG_ID: _oldOrg, HARNESS_DEFAULT_PROJECT_ID: _oldProject, ...rest } = data;
+  const oauthIssuer = data.HARNESS_MCP_OAUTH_ISSUER;
+  const oauthJwksUri = isOAuth
+    ? data.HARNESS_MCP_OAUTH_JWKS_URI
+      ?? `${oauthIssuer!.replace(/\/+$/, "")}/protocol/openid-connect/certs`
+    : data.HARNESS_MCP_OAUTH_JWKS_URI;
 
-  return { ...rest, HARNESS_API_KEY: data.HARNESS_API_KEY ?? "", HARNESS_ACCOUNT_ID: accountId, HARNESS_ORG, HARNESS_PROJECT, HARNESS_AUTO_APPROVE_RISK };
+  return {
+    ...rest,
+    HARNESS_API_KEY: data.HARNESS_API_KEY ?? "",
+    HARNESS_ACCOUNT_ID: accountId,
+    HARNESS_ORG,
+    HARNESS_PROJECT,
+    HARNESS_AUTO_APPROVE_RISK,
+    HARNESS_MCP_OAUTH_ISSUER: oauthIssuer,
+    HARNESS_MCP_OAUTH_JWKS_URI: oauthJwksUri,
+  };
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

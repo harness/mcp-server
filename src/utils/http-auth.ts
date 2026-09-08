@@ -3,10 +3,23 @@ import type { IncomingHttpHeaders } from "node:http";
 import type { RequestHandler } from "express";
 import type { Config } from "../config.js";
 import { createLogger } from "./logger.js";
+import { createOAuthHttpAuthMiddleware } from "./oauth-auth.js";
 
 const log = createLogger("http-auth");
 
-type HttpAuthConfig = Pick<Config, "HARNESS_MCP_AUTH_TOKEN" | "HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP" | "HARNESS_MCP_MODE" | "HARNESS_API_KEY">;
+type HttpAuthConfig = Pick<
+  Config,
+  | "HARNESS_MCP_AUTH_TOKEN"
+  | "HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP"
+  | "HARNESS_MCP_MODE"
+  | "HARNESS_API_KEY"
+> & Partial<Pick<
+  Config,
+  | "HARNESS_MCP_OAUTH_ISSUER"
+  | "HARNESS_MCP_OAUTH_RESOURCE"
+  | "HARNESS_MCP_OAUTH_JWKS_URI"
+  | "HARNESS_MCP_OAUTH_SCOPES"
+>>;
 
 export function isLoopbackBindHost(host: string): boolean {
   return host === "127.0.0.1" || host === "::1" || host === "localhost";
@@ -57,11 +70,18 @@ export function createHttpAuthMiddleware(token: string | undefined): RequestHand
   };
 }
 
+export function createMcpHttpAuthMiddleware(config: HttpAuthConfig): RequestHandler {
+  if (config.HARNESS_MCP_MODE === "oauth") {
+    return createOAuthHttpAuthMiddleware(config);
+  }
+  return createHttpAuthMiddleware(config.HARNESS_MCP_AUTH_TOKEN);
+}
+
 export function validateHttpAuthForBindHost(host: string, config: HttpAuthConfig): void {
   // Check 1: credentials at risk — single-user with an API key and no MCP auth token.
   // Bind address is irrelevant here: a loopback port exposed via reverse proxy or tunnel
   // is just as reachable as a public bind. Warn now; will become an error in next major.
-  const hasSingleUserCredentials = config.HARNESS_MCP_MODE !== "multi-user" && !!config.HARNESS_API_KEY;
+  const hasSingleUserCredentials = config.HARNESS_MCP_MODE === "single-user" && !!config.HARNESS_API_KEY;
   if (hasSingleUserCredentials && !config.HARNESS_MCP_AUTH_TOKEN && !config.HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP) {
     log.warn(
       "HTTP single-user mode has no HARNESS_MCP_AUTH_TOKEN set. " +
@@ -73,7 +93,13 @@ export function validateHttpAuthForBindHost(host: string, config: HttpAuthConfig
   }
 
   // Check 2: DNS-rebinding defense — non-loopback binds must be explicitly secured.
-  if (!isLoopbackBindHost(host) && !config.HARNESS_MCP_AUTH_TOKEN && !config.HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP) {
+  const hasOAuthAuthentication = config.HARNESS_MCP_MODE === "oauth";
+  if (
+    !isLoopbackBindHost(host)
+    && !config.HARNESS_MCP_AUTH_TOKEN
+    && !hasOAuthAuthentication
+    && !config.HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP
+  ) {
     throw new Error(
       "HARNESS_MCP_AUTH_TOKEN is required when HTTP transport binds to a non-loopback host. " +
       "Set HARNESS_MCP_AUTH_TOKEN or explicitly set HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true.",
