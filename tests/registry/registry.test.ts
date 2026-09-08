@@ -1572,82 +1572,186 @@ describe("Registry", () => {
       registriesRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries" }));
     });
 
-    it("create hits POST /har/api/v1/registry with space_ref query param from config", async () => {
-      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "my-docker" } });
+    it("create: exact path is POST /har/api/v1/registry?space_ref=test-account%2Fdefault%2Ftest-project%2F%2B", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "my-docker" } });
       const client = makeClient(mockRequest);
 
       await registriesRegistry.dispatch(client, "registry", "create", {
         body: {
           identifier: "my-docker",
-          type: "VIRTUAL",
           packageType: "DOCKER",
           isPublic: false,
-          parentRef: "test-account/default/test-project",
+          config: { type: "VIRTUAL", upstreamProxies: [] },
         },
       });
 
       const call = mockRequest.mock.calls[0][0];
       expect(call.method).toBe("POST");
-      expect(call.path).toContain("/har/api/v1/registry");
-      expect(call.path).toContain("space_ref=");
-      expect(call.path).toContain("test-account");
-      expect(call.body).toMatchObject({
-        identifier: "my-docker",
-        type: "VIRTUAL",
-        packageType: "DOCKER",
-      });
+      // space_ref must include the trailing /+ sentinel
+      expect(call.path).toBe("/har/api/v1/registry?space_ref=test-account%2Fdefault%2Ftest-project%2F%2B");
     });
 
-    it("create uses org_id/project_id inputs over config defaults for space_ref", async () => {
-      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "r1" } });
+    it("create: parentRef is auto-derived from config scope and not required from agent", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "r1" } });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "create", {
+        body: { identifier: "r1", packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      // parentRef must be auto-filled, not missing
+      expect(call.body.parentRef).toBe("test-account/default/test-project");
+    });
+
+    it("create: org_id/project_id inputs flow into both space_ref and parentRef", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "r1" } });
       const client = makeClient(mockRequest);
 
       await registriesRegistry.dispatch(client, "registry", "create", {
         org_id: "custom-org",
         project_id: "custom-proj",
-        body: {
-          identifier: "r1",
-          type: "UPSTREAM",
-          packageType: "NPM",
-          isPublic: false,
-          parentRef: "test-account/custom-org/custom-proj",
-        },
+        body: { identifier: "r1", packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } },
       });
 
       const call = mockRequest.mock.calls[0][0];
       expect(call.path).toContain("custom-org");
       expect(call.path).toContain("custom-proj");
+      expect(call.body.parentRef).toBe("test-account/custom-org/custom-proj");
     });
 
-    it("update hits PUT /har/api/v1/registry/{registryRef}/+ with body", async () => {
-      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "my-docker" } });
+    it("create: scope fields (orgIdentifier, projectIdentifier) are NOT injected into the body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "create", {
+        body: { identifier: "r1", packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("create: response is unwrapped from { status, data } envelope", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { identifier: "r1", packageType: "NPM", isPublic: false },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registriesRegistry.dispatch(client, "registry", "create", {
+        body: { identifier: "r1", packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } },
+      }) as Record<string, unknown>;
+
+      // ngExtract must unwrap data — the outer `status` key must not appear
+      expect(result.identifier).toBe("r1");
+      expect(result.status).toBeUndefined();
+    });
+
+    it("update: exact path is PUT /har/api/v1/registry/{spaceRef}/{registryId}/+", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "my-docker" } });
       const client = makeClient(mockRequest);
 
       await registriesRegistry.dispatch(client, "registry", "update", {
         registry_id: "my-docker",
-        body: {
-          identifier: "my-docker",
-          type: "VIRTUAL",
-          packageType: "DOCKER",
-          isPublic: true,
-          parentRef: "test-account/default/test-project",
-        },
+        body: { identifier: "my-docker", packageType: "DOCKER", isPublic: true, config: { type: "VIRTUAL" } },
       });
 
       const call = mockRequest.mock.calls[0][0];
       expect(call.method).toBe("PUT");
-      expect(call.path).toContain("/har/api/v1/registry/");
-      expect(call.path).toContain("my-docker");
-      expect(call.path).toContain("/+");
-      expect(call.body).toMatchObject({ identifier: "my-docker", isPublic: true });
+      expect(call.path).toBe("/har/api/v1/registry/test-account/default/test-project/my-docker/+");
     });
 
-    it("registry resource has bodySchema on create and update", () => {
+    it("update: scope fields (orgIdentifier, projectIdentifier) are NOT injected into the body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "update", {
+        registry_id: "my-docker",
+        body: { identifier: "my-docker", packageType: "DOCKER", isPublic: true, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("update: parentRef is auto-derived when not provided", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "update", {
+        registry_id: "my-docker",
+        body: { identifier: "my-docker", packageType: "DOCKER", isPublic: true, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.parentRef).toBe("test-account/default/test-project");
+    });
+
+    it("update: response is unwrapped from { status, data } envelope", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { identifier: "my-docker", packageType: "DOCKER" },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registriesRegistry.dispatch(client, "registry", "update", {
+        registry_id: "my-docker",
+        body: { identifier: "my-docker", packageType: "DOCKER", isPublic: true, config: { type: "VIRTUAL" } },
+      }) as Record<string, unknown>;
+
+      expect(result.identifier).toBe("my-docker");
+      expect(result.status).toBeUndefined();
+    });
+
+    it("create: parentRef uses accountIdResolver-resolved account, not static config", async () => {
+      // Simulate a multi-tenant deployment where the effective account ID differs per request.
+      const dynamicRegistry = new Registry(
+        makeConfig({ HARNESS_ACCOUNT_ID: "static-account" }),
+        { accountIdResolver: () => "resolved-account" },
+      );
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await dynamicRegistry.dispatch(client, "registry", "create", {
+        body: { identifier: "r1", packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      // parentRef must use the resolved account, not the static config account
+      expect(call.body.parentRef).toMatch(/^resolved-account\//);
+      expect(call.body.parentRef).not.toMatch(/^static-account\//);
+    });
+
+    it("get: response is unwrapped from { status, data } envelope", async () => {
+      const registriesRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries" }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { identifier: "my-reg", packageType: "DOCKER", isPublic: false },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registriesRegistry.dispatch(client, "registry", "get", {
+        registry_id: "my-reg",
+      }) as Record<string, unknown>;
+
+      // ngExtract must unwrap — identifier should be at top level, status must not appear
+      expect(result.identifier).toBe("my-reg");
+      expect(result.status).toBeUndefined();
+    });
+
+    it("bodySchema enforcement: create and update both have bodySchema with required fields", () => {
       const def = registriesRegistry.getResource("registry");
-      expect(def.operations.create?.bodySchema).toBeDefined();
-      expect(def.operations.create?.bodySchema?.fields.length).toBeGreaterThan(0);
-      expect(def.operations.update?.bodySchema).toBeDefined();
-      expect(def.operations.update?.bodySchema?.fields.length).toBeGreaterThan(0);
+      const createFields = def.operations.create?.bodySchema?.fields ?? [];
+      const updateFields = def.operations.update?.bodySchema?.fields ?? [];
+      expect(createFields.length).toBeGreaterThan(0);
+      expect(updateFields.length).toBeGreaterThan(0);
+      // No top-level `type` field — registry kind lives in config.type
+      expect(createFields.map(f => f.name)).not.toContain("type");
+      // config must be present (drives VIRTUAL/UPSTREAM)
+      expect(createFields.map(f => f.name)).toContain("config");
     });
   });
 
