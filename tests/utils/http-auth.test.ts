@@ -4,6 +4,7 @@ import { request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
   createHttpAuthMiddleware,
+  createMcpHttpAuthMiddleware,
   isAuthorizedHttpRequest,
   validateHttpAuthForBindHost,
 } from "../../src/utils/http-auth.js";
@@ -214,5 +215,31 @@ describe("HTTP MCP auth", () => {
 
     expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  it("routes oauth mode through HarnessID JWT validation instead of static tokens", async () => {
+    const app = express();
+    app.use(createMcpHttpAuthMiddleware({
+      HARNESS_MCP_MODE: "oauth",
+      HARNESS_MCP_AUTH_TOKEN: "static-token-should-be-ignored",
+      HARNESS_MCP_OAUTH_ISSUER: "https://harnessid.qa.example.com",
+      HARNESS_MCP_OAUTH_RESOURCE: "https://mcp.qa.example.com/mcp",
+      HARNESS_MCP_OAUTH_JWKS_URI: "https://harnessid.qa.example.com/oauth/jwks",
+    }));
+    app.get("/mcp", (_req, res) => res.json({ ok: true }));
+
+    await withListeningApp(app, async (baseUrl) => {
+      const rejectedWithoutToken = await getWithAuth(baseUrl, "/mcp");
+      expect(rejectedWithoutToken.status).toBe(401);
+      expect(rejectedWithoutToken.body).toMatchObject({
+        error: { code: -32001, message: "OAuth access token required" },
+      });
+
+      const rejectedWithStaticToken = await getWithAuth(baseUrl, "/mcp", "Bearer static-token-should-be-ignored");
+      expect(rejectedWithStaticToken.status).toBe(401);
+      expect(rejectedWithStaticToken.body).toMatchObject({
+        error: { code: -32001, message: "Invalid OAuth access token" },
+      });
+    });
   });
 });

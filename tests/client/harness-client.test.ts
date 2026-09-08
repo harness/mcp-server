@@ -394,6 +394,35 @@ describe("HarnessClient", () => {
       expect(secondHeaders.has("x-api-key")).toBe(false);
     });
 
+    it("uses the OAuth account resolver for Harness-Account headers", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_API_KEY: "",
+        HARNESS_ACCOUNT_ID: "",
+      }));
+      client.setAccountIdResolver(() => "oauth-account-42");
+      client.setBearerTokenResolver(() => "oauth-token");
+
+      await client.request({ path: "/ng/api/projects" });
+
+      const headers = new Headers(fetchSpy.mock.calls[0][1]?.headers);
+      expect(headers.get("Harness-Account")).toBe("oauth-account-42");
+      expect(headers.get("Authorization")).toBe("Bearer oauth-token");
+    });
+
+    it("throws when OAuth mode has no bearer token available", async () => {
+      const client = new HarnessClient(makeConfig({
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_API_KEY: "",
+      }));
+
+      await expect(client.request({ path: "/ng/api/projects" })).rejects.toMatchObject({
+        statusCode: 401,
+        harnessCode: "OAUTH_TOKEN_MISSING",
+      });
+    });
+
     it("preserves caller-provided non-FME auth regardless of header casing", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());

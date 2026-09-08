@@ -94,11 +94,42 @@ export function buildProtectedResourceMetadata(config: OAuthConfig): Record<stri
   };
 }
 
+export interface OAuthSessionCredential {
+  subject: string;
+  accountId: string;
+  accessToken: string;
+}
+
 export function isOAuthSessionSubjectAuthorized(
   sessionSubject: string | undefined,
   requestSubject: unknown,
 ): boolean {
   return sessionSubject === undefined || sessionSubject === requestSubject;
+}
+
+export function refreshOAuthSessionCredential(
+  session: { oauthCredential?: OAuthSessionCredential },
+  locals: Record<string, unknown>,
+): boolean {
+  const requestSubject = locals.harnessOAuthClaims
+    && typeof locals.harnessOAuthClaims === "object"
+    ? (locals.harnessOAuthClaims as { sub?: unknown }).sub
+    : undefined;
+  if (!isOAuthSessionSubjectAuthorized(
+    session.oauthCredential?.subject,
+    requestSubject,
+  )) {
+    return false;
+  }
+  if (!session.oauthCredential) return true;
+  if (locals.harnessOAuthAccountId !== session.oauthCredential.accountId) {
+    return false;
+  }
+  if (typeof locals.harnessOAuthAccessToken !== "string") {
+    return false;
+  }
+  session.oauthCredential.accessToken = locals.harnessOAuthAccessToken;
+  return true;
 }
 
 export function registerOAuthProtectedResourceRoutes(app: Express, config: OAuthConfig): void {
