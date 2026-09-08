@@ -102,6 +102,7 @@ const SEARCH_DIR = join(SRC, "search");
 const ALLOWED_GLOBAL_FETCH_FILES = new Set([
   "src/client/harness-client.ts",
   "src/utils/log-resolver.ts",
+  "src/utils/oauth-auth.ts",
   "src/audit/sinks/webhook.ts",
   "src/search/remote-provider.ts",
 ]);
@@ -115,7 +116,7 @@ function zodV4RequiredFiles(): string[] {
 }
 
 /** Global fetch API calls — not method names like `async fetch(` or interface `fetch(...)`. */
-const GLOBAL_FETCH_PATTERN = /\bawait fetch\s*\(|\breturn fetch\s*\(|[^.\w]fetch\s*\(\s*["'`]|^fetch\s*\(/m;
+const GLOBAL_FETCH_PATTERN = /\bawait fetch\s*\(|\breturn fetch\s*\(|[^.\w]fetch\s*\(\s*["'`]|^fetch\s*\(|\bthis\.fetchImpl\s*\(/m;
 
 function walkTsFiles(dir: string): string[] {
   const results: string[] = [];

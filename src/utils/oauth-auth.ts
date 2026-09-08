@@ -6,6 +6,7 @@ import { createLogger } from "./logger.js";
 
 const log = createLogger("oauth-auth");
 const JWKS_CACHE_TTL_MS = 5 * 60_000;
+const JWT_CLOCK_TOLERANCE_SECONDS = 30;
 
 type OAuthConfig = Partial<Pick<
   Config,
@@ -101,6 +102,28 @@ export function isOAuthSessionSubjectAuthorized(
   return sessionSubject === undefined || sessionSubject === requestSubject;
 }
 
+export function refreshOAuthSessionCredential(
+  credential: { subject: string; accountId: string; accessToken: string } | undefined,
+  locals: Record<string, unknown>,
+): boolean {
+  const requestSubject = locals.harnessOAuthClaims
+    && typeof locals.harnessOAuthClaims === "object"
+    ? (locals.harnessOAuthClaims as { sub?: unknown }).sub
+    : undefined;
+  if (!isOAuthSessionSubjectAuthorized(credential?.subject, requestSubject)) {
+    return false;
+  }
+  if (!credential) return true;
+  if (locals.harnessOAuthAccountId !== credential.accountId) {
+    return false;
+  }
+  if (typeof locals.harnessOAuthAccessToken !== "string") {
+    return false;
+  }
+  credential.accessToken = locals.harnessOAuthAccessToken;
+  return true;
+}
+
 export function registerOAuthProtectedResourceRoutes(app: Express, config: OAuthConfig): void {
   const { resource } = requiredOAuthConfig(config);
   const metadata = buildProtectedResourceMetadata(config);
@@ -130,7 +153,12 @@ class JwksResolver {
       await this.refresh();
     }
 
-    const key = this.cache?.keys.get(kid);
+    let key = this.cache?.keys.get(kid);
+    if (!key) {
+      // A new kid commonly appears before the cache TTL expires during key rotation.
+      await this.refresh();
+      key = this.cache?.keys.get(kid);
+    }
     if (!key) {
       throw new Error(`No OAuth signing key found for kid "${kid}".`);
     }
@@ -211,6 +239,7 @@ export function createOAuthHttpAuthMiddleware(
       const claims = jwt.verify(token, key, {
         algorithms: ["RS256"],
         issuer,
+        clockTolerance: JWT_CLOCK_TOLERANCE_SECONDS,
       }) as JwtPayload;
       if (typeof claims.sub !== "string" || claims.sub.length === 0) {
         throw new Error("Access token is missing sub.");

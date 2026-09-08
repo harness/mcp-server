@@ -366,22 +366,21 @@ describe("ConfigSchema", () => {
     }
   });
 
-  it("requires OAuth issuer and resource but not a shared Harness credential", () => {
-    expect(() =>
-      ConfigSchema.parse({
-        ...oauthConfig,
-        HARNESS_MCP_OAUTH_ISSUER: undefined,
-      }),
-    ).toThrow("HARNESS_MCP_OAUTH_ISSUER is required");
+  it("uses production HarnessID and MCP defaults in OAuth mode", () => {
+    const result = ConfigSchema.parse({ HARNESS_MCP_MODE: "oauth" });
 
-    expect(() =>
-      ConfigSchema.parse({
-        ...oauthConfig,
-        HARNESS_MCP_OAUTH_RESOURCE: undefined,
-      }),
-    ).toThrow("HARNESS_MCP_OAUTH_RESOURCE is required");
-
-    expect(() => ConfigSchema.parse(oauthConfig)).not.toThrow();
+    expect(result.HARNESS_BASE_URL).toBe("https://mcp.harness.io/cli");
+    expect(result.HARNESS_MCP_OAUTH_ISSUER).toBe(
+      "https://id.harness.io/idp/realms/HarnessIDP",
+    );
+    expect(result.HARNESS_MCP_OAUTH_RESOURCE).toBe(
+      "https://mcp.harness.io/mcp",
+    );
+    expect(result.HARNESS_MCP_OAUTH_JWKS_URI).toBe(
+      "https://id.harness.io/idp/realms/HarnessIDP/protocol/openid-connect/certs",
+    );
+    expect(result.HARNESS_API_KEY).toBe("");
+    expect(result.HARNESS_ACCOUNT_ID).toBe("");
   });
 
   it("rejects a static HTTP auth token in OAuth mode", () => {

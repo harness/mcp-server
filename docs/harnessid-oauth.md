@@ -18,6 +18,28 @@ The account ID is read from the access-token claim named by
 token that created it. Later requests may carry a refreshed token for the same user,
 but a token for a different user or account is rejected.
 
+Current HarnessID access tokens identify the OAuth client with `azp: mcp-client` and
+use `aud: account`; they do not emit the MCP resource URL as an audience. The server
+therefore validates `azp`, while `HARNESS_MCP_OAUTH_RESOURCE` identifies the protected
+resource in RFC 9728 metadata and authentication challenges.
+
+## Production defaults
+
+For the production Harness endpoint, OAuth mode needs only:
+
+```bash
+export HARNESS_MCP_MODE=oauth
+```
+
+The server defaults to:
+
+- HarnessID issuer: `https://id.harness.io/idp/realms/HarnessIDP`
+- MCP resource: `https://mcp.harness.io/mcp`
+- Harness API base: `https://mcp.harness.io/cli`
+- OAuth client: `mcp-client`
+
+Override these settings for QA, local development, or another Harness environment.
+
 ## QA HarnessID setup
 
 QA HarnessID realm: `https://id.harness-test.com/idp/realms/HarnessIDP`
@@ -86,6 +108,10 @@ Terminate TLS at the ingress or reverse proxy. `HARNESS_MCP_OAUTH_RESOURCE` must
 the external HTTPS URL used by clients, not the pod or cluster-local URL.
 
 Do not set `HARNESS_MCP_AUTH_TOKEN` or `HARNESS_API_KEY` in OAuth mode.
+Legacy FME calls that use `workspace_id` are unavailable because the server will
+not forward a HarnessID access token to `api.split.io`. Pass `org_id` and
+`project_id` to select the Harness-native FME API routed through
+`HARNESS_BASE_URL`.
 
 ## Check discovery and authentication
 

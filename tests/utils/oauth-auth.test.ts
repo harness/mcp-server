@@ -9,6 +9,7 @@ import {
   createOAuthHttpAuthMiddleware,
   getProtectedResourceMetadataUrl,
   isOAuthSessionSubjectAuthorized,
+  refreshOAuthSessionCredential,
   registerOAuthProtectedResourceRoutes,
 } from "../../src/utils/oauth-auth.js";
 
@@ -33,20 +34,31 @@ const publicJwk = {
   use: "sig",
 };
 
-function accessToken(clientId = "mcp-client"): string {
+interface AccessTokenOptions {
+  clientId?: string;
+  tokenIssuer?: string;
+  accountId?: string | null;
+  expiresIn?: jwt.SignOptions["expiresIn"];
+  signingKey?: typeof privateKey;
+  kid?: string;
+}
+
+function accessToken(options: AccessTokenOptions = {}): string {
+  const accountId = options.accountId === undefined ? "account-1" : options.accountId;
   return jwt.sign(
     {
-      azp: clientId,
+      azp: options.clientId ?? "mcp-client",
+      aud: "account",
       scope: "basic profile email organization:account-1",
-      account_id: "account-1",
+      ...(accountId === null ? {} : { account_id: accountId }),
     },
-    privateKey,
+    options.signingKey ?? privateKey,
     {
       algorithm: "RS256",
-      keyid: publicJwk.kid,
-      issuer,
+      keyid: options.kid ?? publicJwk.kid,
+      issuer: options.tokenIssuer ?? issuer,
       subject: "user-1",
-      expiresIn: "5m",
+      expiresIn: options.expiresIn ?? "5m",
     },
   );
 }
@@ -132,6 +144,32 @@ describe("HarnessID OAuth HTTP authentication", () => {
     expect(isOAuthSessionSubjectAuthorized(undefined, undefined)).toBe(true);
   });
 
+  it("refreshes only the token for the session's subject and account", () => {
+    const credential = {
+      subject: "user-1",
+      accountId: "account-1",
+      accessToken: "old-token",
+    };
+    expect(refreshOAuthSessionCredential(credential, {
+      harnessOAuthClaims: { sub: "user-1" },
+      harnessOAuthAccountId: "account-1",
+      harnessOAuthAccessToken: "refreshed-token",
+    })).toBe(true);
+    expect(credential.accessToken).toBe("refreshed-token");
+
+    expect(refreshOAuthSessionCredential(credential, {
+      harnessOAuthClaims: { sub: "user-2" },
+      harnessOAuthAccountId: "account-1",
+      harnessOAuthAccessToken: "stolen-token",
+    })).toBe(false);
+    expect(refreshOAuthSessionCredential(credential, {
+      harnessOAuthClaims: { sub: "user-1" },
+      harnessOAuthAccountId: "account-2",
+      harnessOAuthAccessToken: "other-account-token",
+    })).toBe(false);
+    expect(credential.accessToken).toBe("refreshed-token");
+  });
+
   it("serves root and path-aware protected-resource metadata without a token", async () => {
     const app = express();
     registerOAuthProtectedResourceRoutes(app, oauthConfig);
@@ -206,7 +244,7 @@ describe("HarnessID OAuth HTTP authentication", () => {
       const response = await get(
         baseUrl,
         "/mcp",
-        `Bearer ${accessToken("another-client")}`,
+        `Bearer ${accessToken({ clientId: "another-client" })}`,
       );
 
       expect(response.status).toBe(401);
@@ -214,6 +252,71 @@ describe("HarnessID OAuth HTTP authentication", () => {
       expect(response.body).toMatchObject({
         error: { code: -32001, message: "Invalid OAuth access token" },
       });
+    });
+  });
+
+  it.each([
+    ["issuer mismatch", accessToken({ tokenIssuer: "https://other.example.com" })],
+    ["expired token", accessToken({ expiresIn: "-1m" })],
+    ["missing account claim", accessToken({ accountId: null })],
+    ["empty account claim", accessToken({ accountId: "" })],
+  ])("rejects a token with %s", async (_case, token) => {
+    const app = express();
+    app.use(createOAuthHttpAuthMiddleware(oauthConfig, jwksFetch()));
+    app.get("/mcp", (_req, res) => res.json({ ok: true }));
+
+    await withListeningApp(app, async (baseUrl) => {
+      const response = await get(baseUrl, "/mcp", `Bearer ${token}`);
+      expect(response.status).toBe(401);
+      expect(response.authenticate).toContain('error="invalid_token"');
+    });
+  });
+
+  it("refreshes a warm JWKS cache when a token uses a rotated kid", async () => {
+    const rotated = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const rotatedJwk = {
+      ...rotated.publicKey.export({ format: "jwk" }),
+      kid: "rotated-signing-key",
+      alg: "RS256",
+      use: "sig",
+    };
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ keys: [publicJwk] })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ keys: [publicJwk, rotatedJwk] })));
+    const app = express();
+    app.use(createOAuthHttpAuthMiddleware(oauthConfig, fetchImpl as unknown as typeof fetch));
+    app.get("/mcp", (_req, res) => res.json({ ok: true }));
+
+    await withListeningApp(app, async (baseUrl) => {
+      expect((await get(baseUrl, "/mcp", `Bearer ${accessToken()}`)).status).toBe(200);
+      const rotatedToken = accessToken({
+        signingKey: rotated.privateKey,
+        kid: rotatedJwk.kid,
+      });
+      expect((await get(baseUrl, "/mcp", `Bearer ${rotatedToken}`)).status).toBe(200);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("rejects an unknown kid after refreshing a warm JWKS cache once", async () => {
+    const unknown = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const fetchImpl = jwksFetch();
+    const app = express();
+    app.use(createOAuthHttpAuthMiddleware(oauthConfig, fetchImpl));
+    app.get("/mcp", (_req, res) => res.json({ ok: true }));
+
+    await withListeningApp(app, async (baseUrl) => {
+      expect((await get(baseUrl, "/mcp", `Bearer ${accessToken()}`)).status).toBe(200);
+      const response = await get(
+        baseUrl,
+        "/mcp",
+        `Bearer ${accessToken({
+          signingKey: unknown.privateKey,
+          kid: "unknown-signing-key",
+        })}`,
+      );
+      expect(response.status).toBe(401);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
     });
   });
 });

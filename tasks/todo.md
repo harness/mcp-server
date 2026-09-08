@@ -4,7 +4,9 @@
 
 - [x] Clone current `harness/mcp-server` main and inspect HTTP authentication/session paths.
 - [x] Add an opt-in OAuth deployment mode with RFC 9728 protected-resource discovery.
-- [x] Validate HarnessID JWT access tokens against issuer, audience, expiry, algorithm, and JWKS.
+- [x] Validate HarnessID JWT access tokens against issuer, expiry, algorithm, JWKS,
+      and the configured OAuth client (`azp`). HarnessID currently emits
+      `aud: account`, not the RFC 9728 MCP resource URL.
 - [x] Keep existing single-user and multi-user PAT behavior unchanged.
 - [x] Forward each session's HarnessID access token to the Harness API instead of a
       shared deployment PAT.

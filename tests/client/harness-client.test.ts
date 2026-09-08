@@ -413,6 +413,23 @@ describe("HarnessClient", () => {
       expect(url.searchParams.get("accountIdentifier")).toBe("account-from-token");
     });
 
+    it("does not forward a HarnessID token to the legacy Split API", async () => {
+      const client = new HarnessClient(makeConfig({
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_API_KEY: "",
+      }));
+      client.setBearerTokenResolver(() => "keycloak-access-token");
+
+      await expect(client.request({
+        path: "/internal/api/v2/splits/ws/workspace-1",
+        product: "fme",
+      })).rejects.toMatchObject({
+        statusCode: 401,
+        harnessCode: "FME_AUTH_MISSING",
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
     it("preserves caller-provided non-FME auth regardless of header casing", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());

@@ -18,7 +18,7 @@ import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
 import { createMcpHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
 import {
-  isOAuthSessionSubjectAuthorized,
+  refreshOAuthSessionCredential,
   registerOAuthProtectedResourceRoutes,
 } from "./utils/oauth-auth.js";
 import { loadEnvFile } from "./utils/env.js";
@@ -257,31 +257,6 @@ interface Session extends HttpSessionActivity {
 
 const REAP_INTERVAL_MS = 60_000; // check every minute
 
-function refreshOAuthSessionCredential(
-  session: Session,
-  locals: Record<string, unknown>,
-): boolean {
-  const requestSubject = locals.harnessOAuthClaims
-    && typeof locals.harnessOAuthClaims === "object"
-    ? (locals.harnessOAuthClaims as { sub?: unknown }).sub
-    : undefined;
-  if (!isOAuthSessionSubjectAuthorized(
-    session.oauthCredential?.subject,
-    requestSubject,
-  )) {
-    return false;
-  }
-  if (!session.oauthCredential) return true;
-  if (locals.harnessOAuthAccountId !== session.oauthCredential.accountId) {
-    return false;
-  }
-  if (typeof locals.harnessOAuthAccessToken !== "string") {
-    return false;
-  }
-  session.oauthCredential.accessToken = locals.harnessOAuthAccessToken;
-  return true;
-}
-
 /**
  * Start the server in HTTP mode — stateful, session-based.
  * Each `initialize` request creates a persistent session (server + transport).
@@ -415,7 +390,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
         });
         return;
       }
-      if (!refreshOAuthSessionCredential(session, res.locals)) {
+      if (!refreshOAuthSessionCredential(session.oauthCredential, res.locals)) {
         res.status(403).json({
           jsonrpc: "2.0",
           error: { code: -32003, message: "This MCP session belongs to another OAuth subject." },
@@ -531,7 +506,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
       });
       return;
     }
-    if (!refreshOAuthSessionCredential(session, res.locals)) {
+    if (!refreshOAuthSessionCredential(session.oauthCredential, res.locals)) {
       res.status(403).json({
         jsonrpc: "2.0",
         error: { code: -32003, message: "This MCP session belongs to another OAuth subject." },
@@ -588,7 +563,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
       });
       return;
     }
-    if (!refreshOAuthSessionCredential(session, res.locals)) {
+    if (!refreshOAuthSessionCredential(session.oauthCredential, res.locals)) {
       res.status(403).json({
         jsonrpc: "2.0",
         error: { code: -32003, message: "This MCP session belongs to another OAuth subject." },
