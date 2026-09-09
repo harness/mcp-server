@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { appendAgentTypeQuery, buildDeepLink } from "../../src/utils/deep-links.js";
+import { appendAgentTypeQuery, appendStoreType, buildDeepLink } from "../../src/utils/deep-links.js";
 
 describe("buildDeepLink", () => {
   const baseUrl = "https://app.harness.io";
@@ -78,6 +78,37 @@ describe("buildDeepLink", () => {
     expect(url).toBe(
       "https://app.harness.io/ng/account/abc123/all/orgs/default/projects/GitX_Test/settings/connectors/github_random_7x4k",
     );
+  });
+});
+
+describe("appendStoreType", () => {
+  const link = "https://app.harness.io/ng/account/a/pipelines/my-pipeline";
+
+  it("appends storeType=INLINE when record has INLINE storeType", () => {
+    expect(appendStoreType(link, { storeType: "INLINE" })).toBe(`${link}?storeType=INLINE`);
+  });
+
+  it("appends storeType=REMOTE when record has REMOTE storeType", () => {
+    expect(appendStoreType(link, { storeType: "REMOTE" })).toBe(`${link}?storeType=REMOTE`);
+  });
+
+  it("uses & when the link already has query parameters", () => {
+    const withQuery = `${link}?stageId=harness`;
+    expect(appendStoreType(withQuery, { storeType: "INLINE" })).toBe(
+      `${withQuery}&storeType=INLINE`,
+    );
+  });
+
+  it("URL-encodes storeType values", () => {
+    expect(appendStoreType(link, { storeType: "REMOTE/INLINE" })).toBe(
+      `${link}?storeType=REMOTE%2FINLINE`,
+    );
+  });
+
+  it("returns the link unchanged when storeType is missing or empty", () => {
+    expect(appendStoreType(link, {})).toBe(link);
+    expect(appendStoreType(link, { storeType: "" })).toBe(link);
+    expect(appendStoreType(link, { storeType: 123 })).toBe(link);
   });
 });
 
