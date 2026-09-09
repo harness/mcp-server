@@ -222,7 +222,38 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     }
   }
 
-  // 7. RMG release-management URLs:
+  // 7. AI Worker Agents (ai-agents module):
+  // .../all/ai-agents/orgs/{org}/projects/{project}/worker-agents[/{agentId}]
+  // Legacy detail (pre AIPLAT-1530): .../ai-agents/.../agents/{agentId}
+  const aiAgentsIdx = segments.indexOf("ai-agents");
+  if (aiAgentsIdx >= 0) {
+    result.resource_type = "agent";
+    if (result.project_id) {
+      result.resource_scope = "project";
+    } else if (result.org_id) {
+      result.resource_scope = "org";
+    }
+
+    const workerAgentsIdx = segments.indexOf("worker-agents", aiAgentsIdx);
+    if (workerAgentsIdx >= 0 && workerAgentsIdx + 1 < segments.length) {
+      const agentId = decodeURIComponent(segments[workerAgentsIdx + 1]!);
+      if (agentId && !STRUCTURAL.has(agentId)) {
+        result.agent_id = agentId;
+        result.resource_id = agentId;
+      }
+    } else {
+      const legacyAgentsIdx = segments.indexOf("agents", aiAgentsIdx);
+      if (legacyAgentsIdx >= 0 && legacyAgentsIdx + 1 < segments.length) {
+        const agentId = decodeURIComponent(segments[legacyAgentsIdx + 1]!);
+        if (agentId && !STRUCTURAL.has(agentId)) {
+          result.agent_id = agentId;
+          result.resource_id = agentId;
+        }
+      }
+    }
+  }
+
+  // 8. RMG release-management URLs:
   // .../release-management/releases/{slug}/execution/phases|tasks|activities
   const rmgRootIdx = segments.indexOf("release-management");
   if (rmgRootIdx >= 0) {

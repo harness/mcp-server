@@ -196,6 +196,39 @@ describe("parseHarnessUrl", () => {
     expect(result.agent_id).toBe("myAgent");
   });
 
+  it("handles ai-agents worker-agents list URL", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc123/all/ai-agents/orgs/avitest/projects/avi/worker-agents",
+    );
+    expect(result.account_id).toBe("abc123");
+    expect(result.org_id).toBe("avitest");
+    expect(result.project_id).toBe("avi");
+    expect(result.resource_type).toBe("agent");
+    expect(result.resource_id).toBeUndefined();
+    expect(result.agent_id).toBeUndefined();
+    expect(result.resource_scope).toBe("project");
+  });
+
+  it("handles ai-agents worker-agents detail URL", () => {
+    const result = parseHarnessUrl(
+      "https://qa.harness.io/ng/account/abc123/all/ai-agents/orgs/avitest/projects/avi/worker-agents/ca_testashish?type=custom",
+    );
+    expect(result.resource_type).toBe("agent");
+    expect(result.agent_id).toBe("ca_testashish");
+    expect(result.resource_id).toBe("ca_testashish");
+    expect(result.resource_scope).toBe("project");
+  });
+
+  it("handles legacy ai-agents detail URL with /agents/ segment (not gitops_agent)", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc123/all/ai-agents/orgs/avitest/projects/avi/agents/ca_testashish?type=custom",
+    );
+    expect(result.resource_type).toBe("agent");
+    expect(result.agent_id).toBe("ca_testashish");
+    expect(result.resource_id).toBe("ca_testashish");
+    expect(result.resource_scope).toBe("project");
+  });
+
   it("handles feature flags URL", () => {
     const result = parseHarnessUrl(
       "https://app.harness.io/ng/account/abc123/cf/orgs/default/projects/myProject/feature-flags/my_flag",

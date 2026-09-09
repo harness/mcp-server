@@ -48,7 +48,7 @@ export const agentsToolset: ToolsetDefinition = {
       scope: "project",
       scopeOptional: false,
       identifierFields: ["agent_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/all/ai-agents/orgs/{orgIdentifier}/projects/{projectIdentifier}/agents/{agentIdentifier}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/ai-agents/orgs/{orgIdentifier}/projects/{projectIdentifier}/worker-agents/{agentIdentifier}",
       operations: {
         list: {
           method: "GET",

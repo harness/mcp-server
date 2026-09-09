@@ -82,7 +82,7 @@ describe("buildDeepLink", () => {
 });
 
 describe("appendAgentTypeQuery", () => {
-  const link = "https://app.harness.io/ng/account/a/all/ai-agents/orgs/o/projects/p/agents/x";
+  const link = "https://app.harness.io/ng/account/a/all/ai-agents/orgs/o/projects/p/worker-agents/x";
 
   it("appends type=custom or type=system from role", () => {
     expect(appendAgentTypeQuery(link, { role: "custom" })).toBe(`${link}?type=custom`);
