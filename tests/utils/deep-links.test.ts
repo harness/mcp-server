@@ -43,6 +43,42 @@ describe("buildDeepLink", () => {
     const url = buildDeepLink(baseUrl, accountId, "/ng/account/{accountId}/home", {});
     expect(url).toBe("https://app.harness.io/ng/account/abc123/home");
   });
+
+  const connectorTemplate =
+    "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/connectors/{connectorIdentifier}";
+
+  it("keeps /all at account scope after stripping empty org/project segments", () => {
+    const url = buildDeepLink(baseUrl, accountId, connectorTemplate, {
+      orgIdentifier: "",
+      projectIdentifier: "",
+      connectorIdentifier: "github_random_7x4k",
+    });
+    expect(url).toBe(
+      "https://app.harness.io/ng/account/abc123/all/settings/connectors/github_random_7x4k",
+    );
+  });
+
+  it("keeps /all at org scope after stripping empty project segment", () => {
+    const url = buildDeepLink(baseUrl, accountId, connectorTemplate, {
+      orgIdentifier: "default",
+      projectIdentifier: "",
+      connectorIdentifier: "github_random_7x4k",
+    });
+    expect(url).toBe(
+      "https://app.harness.io/ng/account/abc123/all/orgs/default/settings/connectors/github_random_7x4k",
+    );
+  });
+
+  it("keeps /all at project scope", () => {
+    const url = buildDeepLink(baseUrl, accountId, connectorTemplate, {
+      orgIdentifier: "default",
+      projectIdentifier: "GitX_Test",
+      connectorIdentifier: "github_random_7x4k",
+    });
+    expect(url).toBe(
+      "https://app.harness.io/ng/account/abc123/all/orgs/default/projects/GitX_Test/settings/connectors/github_random_7x4k",
+    );
+  });
 });
 
 describe("appendAgentTypeQuery", () => {
