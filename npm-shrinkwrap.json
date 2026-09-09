@@ -1,19 +1,19 @@
 {
   "name": "harness-mcp-v2",
-  "version": "3.2.24",
+  "version": "3.2.25",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
       "name": "harness-mcp-v2",
-      "version": "3.2.24",
+      "version": "3.2.25",
       "dependencies": {
         "@hono/node-server": "^2.0.10",
         "@modelcontextprotocol/sdk": "^1.27.1",
         "adm-zip": "^0.6.0",
         "dotenv": "^17.3.1",
         "express": "^5.2.1",
-        "hono": "^4.12.34",
+        "hono": "^4.13.5",
         "jsonwebtoken": "^9.0.3",
         "yaml": "^2.8.3",
         "zod": "^4.0.0"
@@ -1315,9 +1315,9 @@
       }
     },
     "node_modules/hono": {
-      "version": "4.13.5",
-      "resolved": "https://registry.npmjs.org/hono/-/hono-4.13.5.tgz",
-      "integrity": "sha512-O6+/eCYRkzzzy0rPWwKLiGBR1nFuUPZynnwjxN1MBA62NNqbT0wQEzQyK2gSO5yDIDB336sXQleAhOHrzlYyKw==",
+      "version": "4.13.7",
+      "resolved": "https://registry.npmjs.org/hono/-/hono-4.13.7.tgz",
+      "integrity": "sha512-c8/gF9ac8Y78/agExVocyLevgR+JlpNB444Py0FSX8pJoPdYUfUzRcXtYEYGwt6l19qIlVZPN5Mfsw9jFShmQQ==",
       "license": "MIT",
       "peer": true,
       "engines": {
