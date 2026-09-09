@@ -123,14 +123,17 @@ When running in HTTP mode, the server exposes:
 | `/mcp`    | `DELETE`  | Terminate an active MCP session                                  |
 | `/mcp`    | `OPTIONS` | CORS preflight                                                   |
 | `/health` | `GET`     | Health check — returns `{ "status": "ok", "sessions": <count> }` |
+| `/.well-known/oauth-protected-resource` | `GET` | RFC 9728 metadata when `HARNESS_MCP_MODE=oauth` |
+| `/.well-known/oauth-protected-resource/mcp` | `GET` | Path-aware RFC 9728 metadata for the default `/mcp` resource |
 
 
 The HTTP transport runs in **session-based mode**. A new MCP session is created on `initialize`, the server returns an `mcp-session-id` header, and subsequent requests for that session must include the same header.
 
 Operational constraints in HTTP mode:
 
-- Set `HARNESS_MCP_AUTH_TOKEN` for any shared or remotely reachable deployment. When set, every `POST`, `GET`, and `DELETE` request to `/mcp` must include `Authorization: Bearer <token>`.
-- Non-loopback binds require `HARNESS_MCP_AUTH_TOKEN` by default. To run unauthenticated on a non-loopback interface anyway, set `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true` explicitly.
+- Set `HARNESS_MCP_AUTH_TOKEN` for shared or remotely reachable single-user and multi-user deployments. When set, every `POST`, `GET`, and `DELETE` request to `/mcp` must include `Authorization: Bearer <token>`.
+- OAuth mode accepts HarnessID access tokens instead of `HARNESS_MCP_AUTH_TOKEN` and can bind to a non-loopback address without the unauthenticated opt-out.
+- Non-loopback single-user and multi-user binds require `HARNESS_MCP_AUTH_TOKEN` by default. To run unauthenticated on a non-loopback interface anyway, set `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP=true` explicitly.
 - `POST /mcp` without `mcp-session-id` must be an `initialize` request.
 - `POST /mcp`, `GET /mcp`, and `DELETE /mcp` for existing sessions require the `mcp-session-id` header.
 - `GET /mcp` is used for SSE notifications (progress updates and elicitation prompts).
@@ -139,6 +142,45 @@ Operational constraints in HTTP mode:
 - Request body size is capped by `HARNESS_MAX_BODY_SIZE_MB` (default `10` MB).
 - Set `x-harness-pipeline-version: 0` or `1` on the `initialize` request to select V0 or V1 pipeline resources for that HTTP session.
 - Set `x-harness-auto-approve-risk: none|low_write|medium_write|high_write|all` on the `initialize` request to choose a stricter per-session auto-approval threshold. The server caps this value at the deployment-level `HARNESS_AUTO_APPROVE_RISK`, so a session can reduce but not expand the configured approval ceiling.
+
+#### HarnessID OAuth Mode
+
+Set `HARNESS_MCP_MODE=oauth` to let remote MCP clients discover HarnessID and complete OAuth 2.1 Authorization Code with PKCE. OAuth mode is available only with HTTP transport. Production HarnessID, MCP resource, and API routing defaults are built in:
+
+```bash
+HARNESS_MCP_MODE=oauth
+```
+
+This defaults to the issuer `https://id.harness.io/idp/realms/HarnessIDP`, resource `https://mcp.harness.io/mcp`, OAuth client `mcp-client`, and Harness API base `https://mcp.harness.io/cli`. Override them only for QA, local development, or another Harness environment.
+
+`HARNESS_API_KEY` must not be set in this mode. `HARNESS_MCP_OAUTH_JWKS_URI` defaults to `<issuer>/protocol/openid-connect/certs`, and `HARNESS_ACCOUNT_ID` is unnecessary because the account comes from the token.
+
+The server publishes RFC 9728 protected-resource metadata and returns this challenge when a client has not authenticated:
+
+```http
+HTTP/1.1 401 Unauthorized
+WWW-Authenticate: Bearer resource_metadata="https://mcp.harness.io/.well-known/oauth-protected-resource/mcp"
+```
+
+It validates the HarnessID access token's RS256 signature, `iss`, expiry, and `sub` using the configured JWKS endpoint, and checks that the token was issued to `HARNESS_MCP_OAUTH_CLIENT_ID` through the `azp` claim. `HARNESS_MCP_OAUTH_RESOURCE` is the RFC 9728 protected-resource identifier used for discovery and challenges. Current HarnessID access tokens use `aud: account` rather than the MCP URL, so the resource is not compared with `aud`.
+
+The account ID comes from the token's `HARNESS_MCP_OAUTH_ACCOUNT_CLAIM` claim (`account_id` by default), which the HarnessID `organization` scope populates. Each session stores the caller's access token and forwards it to the Harness API as `Authorization: Bearer`, so Harness RBAC and audit records reflect the logged-in user rather than a shared PAT. The session is bound to the `sub` and account it was created with: a later request may carry a refreshed token, but one for a different user or account is rejected.
+
+Clients normally need only the MCP resource URL:
+
+```json
+{
+  "mcpServers": {
+    "harness": {
+      "url": "https://mcp.harness.io/mcp"
+    }
+  }
+}
+```
+
+The client reads the protected-resource metadata, discovers `HARNESS_MCP_OAUTH_ISSUER`, and then uses that authorization server's RFC 8414 metadata. If the client does not support dynamic client registration, use the pre-registered `mcp-client` client ID.
+
+See [HarnessID OAuth for a self-hosted MCP server](docs/harnessid-oauth.md) for the QA Keycloak checklist and validation commands.
 
 #### Multi-User Mode
 
@@ -535,11 +577,17 @@ The server automatically loads environment variables from a `.env` file in the p
 
 | Variable                    | Required | Default                     | Description                                                                                                                                                                                                                                           |
 | --------------------------- | -------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HARNESS_MCP_MODE`          | No       | `single-user`               | Deployment mode: `single-user` (API key in config, used for all sessions) or `multi-user` (HTTP only, per-session credentials via `x-harness-api-key` and optional `x-harness-account-id` headers)                                                   |
-| `HARNESS_API_KEY`           | Yes*     | --                          | Harness personal access token or service account token. Required in `single-user` mode. Must NOT be set in `multi-user` mode                                                                                                                          |
+| `HARNESS_MCP_MODE`          | No       | `single-user`               | Deployment mode: `single-user` (shared API key), `multi-user` (HTTP with per-session API keys), or `oauth` (HTTP with HarnessID access-token validation)                                                                                              |
+| `HARNESS_API_KEY`           | Yes*     | --                          | Harness personal access token or service account token. Required in `single-user` mode. Must NOT be set in `multi-user` or `oauth` mode, where each session brings its own credential                                                                 |
 | `HARNESS_ACCOUNT_ID`        | No       | *(from PAT/SAT)*            | Harness account identifier. Auto-extracted from PAT/SAT tokens in single-user mode; multi-user sessions can provide their own via `x-harness-account-id` when the API key does not embed one                                                          |
-| `HARNESS_BASE_URL`          | No       | `https://app.harness.io`    | Harness API/UI base URL for local stdio or self-hosted HTTP deployments. Set this to environments such as `https://harness0.harness.io` when running the server yourself. It does not affect the managed `https://mcp.harness.io/mcp` hosted endpoint |
-| `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources in **legacy (`workspace_id`) mode only**. This can be a legacy Split admin key or an FME-entitled Harness PAT/SAT. FME calls go directly to `api.split.io`, so hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate these requests. Must not be set in `multi-user` mode; FME must use each session's `x-harness-api-key` credential. If unset, FME falls back to a non-placeholder `HARNESS_API_KEY` for self-hosted sessions. Harness-native (`org_id`+`project_id`) mode ignores this and uses the standard `HARNESS_API_KEY`/`HARNESS_BASE_URL` instead |
+| `HARNESS_BASE_URL`          | No       | `https://app.harness.io` (`https://mcp.harness.io/cli` in OAuth mode) | Harness API/UI base URL. OAuth mode routes through the hosted MCP `/cli` proxy by default; other modes use the Harness SaaS API directly |
+| `HARNESS_MCP_OAUTH_ISSUER`  | No       | `https://id.harness.io/idp/realms/HarnessIDP` | HarnessID issuer matched exactly against the access token `iss` claim                                                                                                                                                  |
+| `HARNESS_MCP_OAUTH_RESOURCE` | No      | `https://mcp.harness.io/mcp` | Public canonical MCP URL published as the RFC 9728 resource identifier                                                                                                     |
+| `HARNESS_MCP_OAUTH_JWKS_URI` | No      | `<issuer>/protocol/openid-connect/certs` | HarnessID JWKS endpoint used to validate RS256 access-token signatures                                                                                                                                                  |
+| `HARNESS_MCP_OAUTH_CLIENT_ID` | No     | `mcp-client`                | HarnessID client the access token must be issued to, checked against the token's `azp` claim                                                                                                                                                        |
+| `HARNESS_MCP_OAUTH_ACCOUNT_CLAIM` | No | `account_id`                | Access-token claim carrying the Harness account ID, populated by the HarnessID `organization` scope                                                                                                                                                 |
+| `HARNESS_MCP_OAUTH_SCOPES`  | No       | `openid profile email organization` | Space-separated scopes advertised in RFC 9728 protected-resource metadata                                                                                                                                                    |
+| `HARNESS_FME_API_KEY`       | No       | --                          | Optional single-user/self-hosted FME/Split Admin credential used for `fme_` resources in **legacy (`workspace_id`) mode only**. Legacy FME is unavailable in OAuth mode so HarnessID tokens are never sent to `api.split.io`; use Harness-native `org_id`+`project_id` scope instead. Must not be set in `multi-user` or `oauth` mode |
 | `HARNESS_FME_BASE_URL`      | No       | `https://api.split.io`      | Split/FME Admin API base URL used by `fme_` resources in **legacy (`workspace_id`) mode only**. HTTP URLs require `HARNESS_ALLOW_HTTP=true` for local development. Harness-native (`org_id`+`project_id`) mode ignores this and uses the standard `HARNESS_API_KEY`/`HARNESS_BASE_URL` instead |
 | `HARNESS_ORG`               | No       | --                          | Organization ID. Used when `org_id` is not specified per tool call. If omitted, `org_id` must be provided explicitly. Agents can also discover orgs dynamically via `harness_list(resource_type="organization")`                                      |
 | `HARNESS_PROJECT`           | No       | --                          | Project ID. Used when `project_id` is not specified per tool call. Agents can also discover projects dynamically via `harness_list(resource_type="project")`                                                                                          |
@@ -555,7 +603,7 @@ The server automatically loads environment variables from a `.env` file in the p
 | `HARNESS_ALLOW_HTTP`        | No       | `false`                     | Allow non-HTTPS `HARNESS_BASE_URL`. By default, the server enforces HTTPS for security. Set to `true` only for local development against a non-TLS Harness instance                                                                                   |
 | `HARNESS_PIPELINE_VERSION`  | No       | `0`                         | **(Alpha)** Pipeline YAML version. `0` loads the `pipeline` resource type and excludes `pipeline_v1`; `1` loads `pipeline_v1` and excludes `pipeline`. HTTP sessions can override this at initialize time with `x-harness-pipeline-version: 0` or `1` |
 | `HARNESS_MCP_ALLOWED_HOSTS` | No       | --                          | Comma-separated hostnames allowed by HTTP transport Host-header validation. `mcp.harness.io` is allowed by default for localhost binds; add proxy/custom domains here                                                                                 |
-| `HARNESS_MCP_AUTH_TOKEN`    | No       | --                          | Bearer token required on `/mcp` HTTP routes when set. Required by default when HTTP transport binds to a non-loopback host                                                                                                                             |
+| `HARNESS_MCP_AUTH_TOKEN`    | No       | --                          | Static Bearer token required on `/mcp` HTTP routes when set. Required by default for non-loopback single-user and multi-user binds. Must be unset in `oauth` mode                                                                                    |
 | `HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP` | No | `false`         | Explicitly allow unauthenticated HTTP transport on non-loopback binds. Use only behind another authenticated control                                                                                                                                    |
 | `HARNESS_MCP_TRUST_PROXY`   | No       | `0`                         | Number of reverse proxy / load balancer hops to trust for client IP resolution (Express `trust proxy`). Set to the proxy count in front of the server so per-IP rate limiting keys on the real client rather than the proxy socket peer                |
 | `HARNESS_MCP_LOG_FILE`      | No       | `~/.claude/harness-mcp.log` | File used for stdio disconnect/crash diagnostics when stderr may no longer be available                                                                                                                                                               |

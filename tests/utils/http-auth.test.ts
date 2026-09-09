@@ -195,4 +195,24 @@ describe("HTTP MCP auth", () => {
     expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
   });
+
+  it("accepts non-loopback OAuth mode without a static auth token", () => {
+    const warnSpy = vi.spyOn(console, "error");
+
+    expect(() =>
+      validateHttpAuthForBindHost("0.0.0.0", {
+        HARNESS_MCP_AUTH_TOKEN: undefined,
+        HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_API_KEY: "pat.test.abc.xyz",
+        HARNESS_MCP_OAUTH_ISSUER: "https://harnessid.qa.example.com",
+        HARNESS_MCP_OAUTH_RESOURCE: "https://mcp.qa.example.com/mcp",
+        HARNESS_MCP_OAUTH_JWKS_URI: "https://harnessid.qa.example.com/oauth/jwks",
+        HARNESS_MCP_OAUTH_SCOPES: "mcp:read mcp:execute",
+      }),
+    ).not.toThrow();
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
 });

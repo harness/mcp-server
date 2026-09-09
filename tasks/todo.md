@@ -1,5 +1,55 @@
 # Harness MCP Server — Task Tracking
 
+## HarnessID OAuth for self-hosted HTTP MCP (2026-09-07)
+
+- [x] Clone current `harness/mcp-server` main and inspect HTTP authentication/session paths.
+- [x] Add an opt-in OAuth deployment mode with RFC 9728 protected-resource discovery.
+- [x] Validate HarnessID JWT access tokens against issuer, expiry, algorithm, JWKS,
+      and the configured OAuth client (`azp`). HarnessID currently emits
+      `aud: account`, not the RFC 9728 MCP resource URL.
+- [x] Keep existing single-user and multi-user PAT behavior unchanged.
+- [x] Forward each session's HarnessID access token to the Harness API instead of a
+      shared deployment PAT.
+- [x] Add config, documentation, and focused HTTP/auth tests.
+- [x] Run build, typecheck, standards, docs, and test verification.
+
+### Plan
+
+- Publish protected-resource metadata from the MCP origin and challenge unauthenticated
+  requests with its URL so MCP clients can discover HarnessID and run authorization code
+  with PKCE.
+- Validate every HTTP MCP request, preserving `/health`, CORS preflight, and OAuth metadata
+  as public routes.
+- Carry the caller's own access token through to Harness API calls so RBAC and audit
+  records reflect the logged-in user, and take the account ID from the token rather than
+  from configuration.
+
+### Review
+
+- Added HTTP-only `oauth` mode, RFC 9728 root and path-aware metadata routes, HarnessID
+  JWKS caching, RS256/issuer/expiry/subject validation, `azp` client checking, and OAuth
+  subject binding for MCP sessions.
+- Sessions store the caller's access token and resolve it per request, so a refreshed token
+  is accepted while a token for a different subject or account is rejected. The client
+  sends it as `Authorization: Bearer` and no longer injects `x-api-key` in this mode;
+  `HARNESS_API_KEY` must not be set.
+- The account ID comes from the `account_id` claim populated by the HarnessID
+  `organization` scope, so `HARNESS_ACCOUNT_ID` is unnecessary in OAuth mode.
+- Kept static `HARNESS_MCP_AUTH_TOKEN`, single-user PAT/SAT, and multi-user session-PAT
+  paths unchanged.
+- Added QA HarnessID setup and validation guidance in `docs/harnessid-oauth.md`, plus
+  README and `.env.example` configuration.
+- Verification passed: typecheck, build, and the full suite (147 files, 3,312 tests).
+- QA end-to-end against a real `mcp-client` token: local discovery matches the QA
+  deployment's published metadata, `initialize` and `tools/list` succeed, and the token is
+  forwarded downstream with the account resolved from the token.
+- QA `HARNESS_BASE_URL` is `https://mcp.harness-test.com/cli`; the platform APIs are routed
+  under `/cli` on the MCP host, and `buildUrl` preserves a base path prefix.
+- Open QA-side items outside this repo: the deployment gateway answered
+  `Jwt issuer is not configured` for the HarnessID issuer on both `/mcp` and `/cli` paths
+  during testing, and calling `qa.harness.io` directly with a HarnessID token returned
+  `500 UNKNOWN_ERROR` where an unknown token returns `401 INVALID_TOKEN`.
+
 ## Version bump 3.2.24 (2026-09-04)
 
 - [x] Update package, shrinkwrap, and MCP manifest versions to 3.2.24.

@@ -367,6 +367,69 @@ describe("HarnessClient", () => {
       expect(headers["Harness-Account"]).toBe("test-account");
     });
 
+    it("forwards the current OAuth token as Bearer auth", async () => {
+      fetchSpy.mockImplementation(async () =>
+        new Response(JSON.stringify({}), { status: 200 })
+      );
+      const client = new HarnessClient(makeConfig({
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_API_KEY: "",
+      }));
+      let token = "keycloak-access-token-1";
+      client.setBearerTokenResolver(() => token);
+
+      await client.request({ path: "/ng/api/projects" });
+      token = "keycloak-access-token-2";
+      await client.request({ path: "/ng/api/projects" });
+
+      const firstHeaders = new Headers(fetchSpy.mock.calls[0][1]?.headers);
+      const secondHeaders = new Headers(fetchSpy.mock.calls[1][1]?.headers);
+      expect(firstHeaders.get("Authorization")).toBe(
+        "Bearer keycloak-access-token-1",
+      );
+      expect(secondHeaders.get("Authorization")).toBe(
+        "Bearer keycloak-access-token-2",
+      );
+      expect(firstHeaders.has("x-api-key")).toBe(false);
+      expect(secondHeaders.has("x-api-key")).toBe(false);
+    });
+
+    it("keeps the base URL path prefix on OAuth-mode requests", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig({
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_API_KEY: "",
+        HARNESS_BASE_URL: "https://mcp.harness-test.com/cli",
+      }));
+      client.setAccountIdResolver(() => "account-from-token");
+      client.setBearerTokenResolver(() => "keycloak-access-token");
+
+      await client.request({ path: "/ng/api/organizations" });
+
+      const url = new URL(fetchSpy.mock.calls[0][0] as string);
+      expect(url.origin + url.pathname).toBe(
+        "https://mcp.harness-test.com/cli/ng/api/organizations",
+      );
+      expect(url.searchParams.get("accountIdentifier")).toBe("account-from-token");
+    });
+
+    it("does not forward a HarnessID token to the legacy Split API", async () => {
+      const client = new HarnessClient(makeConfig({
+        HARNESS_MCP_MODE: "oauth",
+        HARNESS_API_KEY: "",
+      }));
+      client.setBearerTokenResolver(() => "keycloak-access-token");
+
+      await expect(client.request({
+        path: "/internal/api/v2/splits/ws/workspace-1",
+        product: "fme",
+      })).rejects.toMatchObject({
+        statusCode: 401,
+        harnessCode: "FME_AUTH_MISSING",
+      });
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+
     it("preserves caller-provided non-FME auth regardless of header casing", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());

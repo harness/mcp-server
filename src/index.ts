@@ -16,7 +16,11 @@ import { registerAllPrompts } from "./prompts/index.js";
 import { parseArgs, resolvePort, getVersion } from "./utils/cli.js";
 import { configureElicitation } from "./utils/elicitation.js";
 import { resolveHttpHostValidationOptions } from "./utils/http-hosts.js";
-import { createHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
+import { createMcpHttpAuthMiddleware, validateHttpAuthForBindHost } from "./utils/http-auth.js";
+import {
+  refreshOAuthSessionCredential,
+  registerOAuthProtectedResourceRoutes,
+} from "./utils/oauth-auth.js";
 import { loadEnvFile } from "./utils/env.js";
 import { createAuditManager, type AuditManager } from "./audit/index.js";
 import { SearchManager } from "./search/index.js";
@@ -34,13 +38,28 @@ interface HarnessServerResult {
   searchManager: SearchManager;
 }
 
+interface OAuthSessionCredential {
+  subject: string;
+  accountId: string;
+  accessToken: string;
+}
+
 /**
  * Create a fully-configured MCP server instance with all tools, resources, and prompts.
  * @param sharedAuditManager When set (HTTP mode), reuse this manager instead of creating one per session.
  */
-function createHarnessServer(config: Config, sharedAuditManager?: AuditManager, sharedSearchManager?: SearchManager): HarnessServerResult {
+function createHarnessServer(
+  config: Config,
+  sharedAuditManager?: AuditManager,
+  sharedSearchManager?: SearchManager,
+  oauthCredential?: OAuthSessionCredential,
+): HarnessServerResult {
   const auditManager = sharedAuditManager ?? createAuditManager(config);
   const client = new HarnessClient(config);
+  if (oauthCredential) {
+    client.setAccountIdResolver(() => oauthCredential.accountId);
+    client.setBearerTokenResolver(() => oauthCredential.accessToken);
+  }
   const registry = new Registry(config, { auditManager });
   const searchManager = sharedSearchManager ?? new SearchManager(config);
 
@@ -233,6 +252,7 @@ async function startStdio(config: Config): Promise<void> {
 interface Session extends HttpSessionActivity {
   server: McpServer;
   transport: StreamableHTTPServerTransport;
+  oauthCredential?: OAuthSessionCredential;
 }
 
 const REAP_INTERVAL_MS = 60_000; // check every minute
@@ -270,8 +290,12 @@ async function startHttp(config: Config, port: number): Promise<void> {
     next();
   });
 
+  if (config.HARNESS_MCP_MODE === "oauth") {
+    registerOAuthProtectedResourceRoutes(app, config);
+  }
+
   // Auth gate before body parsing — reject unauthenticated requests without allocating body memory
-  app.use(createHttpAuthMiddleware(config.HARNESS_MCP_AUTH_TOKEN));
+  app.use(createMcpHttpAuthMiddleware(config));
 
   // Simple per-IP rate limiting: 60 requests per minute
   const ipHits = new Map<string, { count: number; resetAt: number }>();
@@ -366,6 +390,14 @@ async function startHttp(config: Config, port: number): Promise<void> {
         });
         return;
       }
+      if (!refreshOAuthSessionCredential(session.oauthCredential, res.locals)) {
+        res.status(403).json({
+          jsonrpc: "2.0",
+          error: { code: -32003, message: "This MCP session belongs to another OAuth subject." },
+          id: null,
+        });
+        return;
+      }
       beginSessionRequest(session);
       try {
         await session.transport.handleRequest(req, res, req.body);
@@ -388,8 +420,23 @@ async function startHttp(config: Config, port: number): Promise<void> {
     let server: McpServer | undefined;
     let transport: StreamableHTTPServerTransport | undefined;
     try {
-      const sessionConfig = mergeConfigWithSessionHeaders(config, req.headers);
-      const result = createHarnessServer(sessionConfig, sharedAuditManager, sharedSearchManager);
+      const oauthCredential = config.HARNESS_MCP_MODE === "oauth"
+        ? {
+          subject: res.locals.harnessOAuthClaims.sub as string,
+          accountId: res.locals.harnessOAuthAccountId as string,
+          accessToken: res.locals.harnessOAuthAccessToken as string,
+        }
+        : undefined;
+      const headerConfig = mergeConfigWithSessionHeaders(config, req.headers);
+      const sessionConfig = oauthCredential
+        ? { ...headerConfig, HARNESS_ACCOUNT_ID: oauthCredential.accountId }
+        : headerConfig;
+      const result = createHarnessServer(
+        sessionConfig,
+        sharedAuditManager,
+        sharedSearchManager,
+        oauthCredential,
+      );
       server = result.server;
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
@@ -399,6 +446,7 @@ async function startHttp(config: Config, port: number): Promise<void> {
             transport: transport!,
             lastActivity: Date.now(),
             activeRequests: 0,
+            oauthCredential,
           });
           log.info("Session created", { sessionId: id, total: sessions.size });
         },
@@ -458,6 +506,14 @@ async function startHttp(config: Config, port: number): Promise<void> {
       });
       return;
     }
+    if (!refreshOAuthSessionCredential(session.oauthCredential, res.locals)) {
+      res.status(403).json({
+        jsonrpc: "2.0",
+        error: { code: -32003, message: "This MCP session belongs to another OAuth subject." },
+        id: null,
+      });
+      return;
+    }
 
     beginSessionRequest(session);
     let streamClosed = false;
@@ -503,6 +559,14 @@ async function startHttp(config: Config, port: number): Promise<void> {
       res.status(404).json({
         jsonrpc: "2.0",
         error: { code: -32000, message: "Session not found." },
+        id: null,
+      });
+      return;
+    }
+    if (!refreshOAuthSessionCredential(session.oauthCredential, res.locals)) {
+      res.status(403).json({
+        jsonrpc: "2.0",
+        error: { code: -32003, message: "This MCP session belongs to another OAuth subject." },
         id: null,
       });
       return;
@@ -612,9 +676,9 @@ async function main(): Promise<void> {
   const config = loadConfig();
   setLogLevel(config.LOG_LEVEL);
 
-  if (config.HARNESS_MCP_MODE === "multi-user" && transport === "stdio") {
+  if ((config.HARNESS_MCP_MODE === "multi-user" || config.HARNESS_MCP_MODE === "oauth") && transport === "stdio") {
     throw new Error(
-      "Multi-user mode is only supported with HTTP transport. " +
+      `${config.HARNESS_MCP_MODE} mode is only supported with HTTP transport. ` +
       "Use --transport http or set HARNESS_MCP_MODE=single-user for stdio.",
     );
   }

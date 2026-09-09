@@ -156,6 +156,7 @@ function enrichErrorMessage(
  * AsyncLocalStorage) instead of using the static config value.
  */
 export type AccountIdResolver = () => string | undefined;
+export type BearerTokenResolver = () => string | undefined;
 
 export class HarnessClient {
   private readonly baseUrl: string;
@@ -168,6 +169,7 @@ export class HarnessClient {
   private readonly fmeApiKey: string | undefined;
   private readonly mcpMode: Config["HARNESS_MCP_MODE"];
   private accountIdResolver?: AccountIdResolver;
+  private bearerTokenResolver?: BearerTokenResolver;
   private currentUserId?: string;
   private currentUserPromise?: Promise<string>;
 
@@ -189,6 +191,11 @@ export class HarnessClient {
    */
   setAccountIdResolver(resolver: AccountIdResolver): void {
     this.accountIdResolver = resolver;
+  }
+
+  /** Set the per-session OAuth access token used for downstream Harness calls. */
+  setBearerTokenResolver(resolver: BearerTokenResolver): void {
+    this.bearerTokenResolver = resolver;
   }
 
   /** Resolve the account ID: per-request override → static config fallback. */
@@ -225,6 +232,30 @@ export class HarnessClient {
   }
 
   private applyDefaultAuth(headers: Record<string, string>, isFme: boolean): void {
+    if (this.mcpMode === "oauth") {
+      deleteHeaderValues(headers, "x-api-key");
+      if (isFme) {
+        throw new HarnessApiError(
+          "Legacy workspace-based FME calls are unavailable in oauth mode. " +
+          "Pass org_id and project_id to use the Harness-native FME API.",
+          401,
+          "FME_AUTH_MISSING",
+        );
+      }
+      if (getHeaderValue(headers, "authorization")) return;
+
+      const token = this.bearerTokenResolver?.();
+      if (!token) {
+        throw new HarnessApiError(
+          "OAuth access token is unavailable for this MCP session.",
+          401,
+          "OAUTH_TOKEN_MISSING",
+        );
+      }
+      headers["Authorization"] = `Bearer ${token}`;
+      return;
+    }
+
     if (isFme) {
       // FME/Split Admin APIs expect Bearer auth. Drop x-api-key here so
       // placeholder credentials are never forwarded to api.split.io.

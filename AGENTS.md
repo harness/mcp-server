@@ -96,6 +96,7 @@ pnpm build && pnpm docs:generate   # always pair them
 
 Single-user mode: `HARNESS_API_KEY` required, used for every session.
 Multi-user mode (`HARNESS_MCP_MODE=multi-user`): `HARNESS_API_KEY` must NOT be set; sessions supply credentials via `x-harness-api-key` header.
+OAuth mode (`HARNESS_MCP_MODE=oauth`): `HARNESS_API_KEY` must NOT be set; HTTP clients authenticate with HarnessID access tokens, and each session's token is forwarded to the Harness API as `Authorization: Bearer`.
 
 PAT/SAT tokens embed the account ID (`pat.<accountId>.<tokenId>.<secret>`), so `HARNESS_ACCOUNT_ID` is only needed when the key lacks an embedded segment.
 
@@ -116,7 +117,7 @@ See `.env.example` for the full list. Non-obvious ones:
 
 | Var | Purpose |
 |-----|---------|
-| `HARNESS_MCP_MODE` | `single-user` (default) or `multi-user` |
+| `HARNESS_MCP_MODE` | `single-user` (default), `multi-user`, or HTTP-only `oauth` |
 | `HARNESS_TOOLSETS` | Comma-separated toolset names to restrict exposed tools |
 | `HARNESS_READ_ONLY` | Block all write operations (`true`/`false`) |
 | `HARNESS_AUTO_APPROVE_RISK` | Auto-approve operations at or below this risk level (`none` \| `read` \| `low_write` \| `medium_write` \| `high_write` \| `destructive` \| `all`; default `none`) |
