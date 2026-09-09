@@ -54,8 +54,16 @@ export const agentsToolset: ToolsetDefinition = {
           method: "GET",
           path: "/gateway/agents/api/v1/agents",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            search_term: "search",
+            sort: "sort",
+            order: "order",
+            page: "page",
+            size: "size",
+          },
           responseExtractor: agentExtract,
-          description: "List all agents (system and custom) scoped to the account/org/project context",
+          description:
+            "List all agents (system and custom) scoped to the account/org/project context. Supports search by name and sort by created, last_modified, or name.",
         },
         get: {
           method: "GET",
