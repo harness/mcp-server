@@ -4,6 +4,7 @@ import { request as httpRequest } from "node:http";
 import type { AddressInfo } from "node:net";
 import {
   createHttpAuthMiddleware,
+  createMcpHttpAuthMiddleware,
   isAuthorizedHttpRequest,
   validateHttpAuthForBindHost,
 } from "../../src/utils/http-auth.js";
@@ -194,6 +195,29 @@ describe("HTTP MCP auth", () => {
 
     expect(warnSpy).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+
+  it("routes oauth mode to OAuth middleware and ignores a static auth token", async () => {
+    const app = express();
+    app.use(createMcpHttpAuthMiddleware({
+      HARNESS_MCP_AUTH_TOKEN: "static-should-not-work",
+      HARNESS_MCP_ALLOW_UNAUTHENTICATED_HTTP: false,
+      HARNESS_MCP_MODE: "oauth",
+      HARNESS_API_KEY: "",
+      HARNESS_MCP_OAUTH_ISSUER: "https://harnessid.qa.example.com",
+      HARNESS_MCP_OAUTH_RESOURCE: "https://mcp.qa.example.com/mcp",
+      HARNESS_MCP_OAUTH_JWKS_URI: "https://harnessid.qa.example.com/oauth/jwks",
+      HARNESS_MCP_OAUTH_SCOPES: "openid profile email organization",
+    }));
+    app.get("/mcp", (_req, res) => res.json({ ok: true }));
+
+    await withListeningApp(app, async (baseUrl) => {
+      const withStaticToken = await getWithAuth(baseUrl, "/mcp", "Bearer static-should-not-work");
+      expect(withStaticToken.status).toBe(401);
+      expect(withStaticToken.body).toMatchObject({
+        error: { code: -32001, message: "Invalid OAuth access token" },
+      });
+    });
   });
 
   it("accepts non-loopback OAuth mode without a static auth token", () => {
