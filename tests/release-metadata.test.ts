@@ -32,7 +32,7 @@ describe("release metadata", () => {
     const rootManifest = readJson("manifest.json");
     const directoryManifest = readJson("mcp-directory/manifest.json");
 
-    expect(packageJson.version).toBe("3.2.24");
+    expect(packageJson.version).toBe("3.2.25");
     expect(rootManifest.version).toBe(packageJson.version);
     expect(directoryManifest.version).toBe(packageJson.version);
   });
@@ -52,9 +52,9 @@ describe("release metadata", () => {
     legacyManifest.server.entry_point = "build/index.js";
     legacyManifest.server.mcp_config.args[0] = "${__dirname}/build/index.js";
 
-    expect(assetNameForVersion("3.2.24")).toBe("harness-mcp-server-3.2.24.mcpb");
+    expect(assetNameForVersion("3.2.25")).toBe("harness-mcp-server-3.2.25.mcpb");
     expect(MCPB_CLI_PACKAGE).toBe("@anthropic-ai/mcpb@2.1.2");
-    expect(normalizeBundleManifest(legacyManifest, "3.2.24").server).toMatchObject({
+    expect(normalizeBundleManifest(legacyManifest, "3.2.25").server).toMatchObject({
       entry_point: "server/index.js",
       mcp_config: { args: ["${__dirname}/server/index.js", "stdio"] },
     });
