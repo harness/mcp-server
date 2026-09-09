@@ -38,8 +38,11 @@ const riskEvaluatorBodySchema: BodySchema = {
 };
 
 const teamBodySchema: BodySchema = {
-  description: "Team YAML definition (ask-body).",
-  fields: [{ name: "yaml", type: "yaml", required: true, description: "Full Team YAML document." }],
+  description: "Team definition. Unlike other autonomous_work resources, Team is a plain JSON body (not a YAML ask-body) — pass an object, not a YAML string.",
+  fields: [
+    { name: "id", type: "string", required: true, description: "Stable team identifier within the harness parent scope." },
+    { name: "name", type: "string", required: false, description: "Optional display name." },
+  ],
 };
 
 const memberBodySchema: BodySchema = {
@@ -56,6 +59,24 @@ const softwareComponentBodySchema: BodySchema = {
   description: "SoftwareComponent YAML definition (ask-body).",
   fields: [{ name: "yaml", type: "yaml", required: true, description: "Full SoftwareComponent YAML document." }],
 };
+
+/**
+ * ADLC ask-body create/update ops declare a single `yaml` bodySchema field for
+ * discoverability (harness_describe), but the HTTP client picks Content-Type
+ * from the JS typeof of the body: string -> application/yaml, object ->
+ * application/json (see harness-client.ts). The server only accepts
+ * application/yaml for these routes. Passing body={ yaml: "<doc>" } (following
+ * the declared field name literally) therefore serializes as JSON and 415s.
+ * Unwrap that shape here so both the documented { yaml } form and a raw YAML
+ * string body work.
+ */
+function yamlAskBodyBuilder(input: Record<string, unknown>): unknown {
+  const body = input.body;
+  if (body && typeof body === "object" && !Array.isArray(body) && typeof (body as Record<string, unknown>).yaml === "string") {
+    return (body as Record<string, unknown>).yaml;
+  }
+  return body;
+}
 
 // ADLC list endpoints return { items: [...] } (verified for /workitems).
 // passthrough returns the raw object; harness_list reads .items automatically.
@@ -450,7 +471,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           path: "/adlc/api/work-classes",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Create a work class. Pass the full WorkClass YAML as the body.",
           bodySchema: workClassBodySchema,
@@ -461,7 +482,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { work_class_id: "workClassId" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Update a work class. Pass the full WorkClass YAML as the body.",
           bodySchema: workClassBodySchema,
@@ -505,7 +526,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           path: "/adlc/api/triggers",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Create a trigger. Pass the full Trigger YAML as the body.",
           bodySchema: triggerBodySchema,
@@ -516,7 +537,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { trigger_id: "triggerId" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Update a trigger. Pass the full Trigger YAML as the body.",
           bodySchema: triggerBodySchema,
@@ -560,7 +581,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           path: "/adlc/api/capabilities",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Create a capability. Pass the full Capability YAML as the body.",
           bodySchema: capabilityBodySchema,
@@ -571,7 +592,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { capability_id: "capabilityId" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Update a capability. Pass the full Capability YAML as the body.",
           bodySchema: capabilityBodySchema,
@@ -615,7 +636,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           path: "/adlc/api/risk-evaluators",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Create a risk evaluator. Pass the full RiskEvaluator YAML as the body.",
           bodySchema: riskEvaluatorBodySchema,
@@ -626,7 +647,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { risk_evaluator_id: "riskEvaluatorId" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Update a risk evaluator. Pass the full RiskEvaluator YAML as the body.",
           bodySchema: riskEvaluatorBodySchema,
@@ -646,7 +667,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
     {
       resourceType: "team",
       displayName: "Team",
-      description: "A team configuration. Full CRUD; YAML ask-body.",
+      description: "A team configuration. Full CRUD; plain JSON body (not a YAML ask-body, unlike most other autonomous_work resources).",
       toolset: "autonomous_work",
       scope: "project",
       identifierFields: ["team_id"],
@@ -674,7 +695,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
-          description: "Create a team. Pass the full Team YAML as the body.",
+          description: "Create a team. Pass a JSON object {id, name} as the body (not YAML).",
           bodySchema: teamBodySchema,
         },
         update: {
@@ -685,7 +706,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
-          description: "Update a team. Pass the full Team YAML as the body.",
+          description: "Update a team. Pass a JSON object {name} as the body (not YAML).",
           bodySchema: teamBodySchema,
         },
         delete: {
@@ -727,7 +748,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           path: "/adlc/api/members",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Create a member. Pass the full Member YAML as the body.",
           bodySchema: memberBodySchema,
@@ -738,7 +759,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { member_id: "memberId" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Update a member. Pass the full Member YAML as the body.",
           bodySchema: memberBodySchema,
@@ -782,7 +803,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           path: "/adlc/api/member-templates",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Create a member template. Pass the full MemberTemplate YAML as the body.",
           bodySchema: memberTemplateBodySchema,
@@ -793,7 +814,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { member_template_id: "memberTemplateId" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Update a member template. Pass the full MemberTemplate YAML as the body.",
           bodySchema: memberTemplateBodySchema,
@@ -837,7 +858,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           path: "/adlc/api/software-components",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Create a software component. Pass the full SoftwareComponent YAML as the body.",
           bodySchema: softwareComponentBodySchema,
@@ -848,7 +869,7 @@ export const autonomousWorkToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { software_component_id: "softwareComponentId" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: yamlAskBodyBuilder,
           responseExtractor: passthrough,
           description: "Update a software component. Pass the full SoftwareComponent YAML as the body.",
           bodySchema: softwareComponentBodySchema,

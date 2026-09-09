@@ -170,6 +170,7 @@ export const accessControlToolset: ToolsetDefinition = {
           path: "/ng/api/serviceaccount",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => input.body,
+          injectAccountInBody: true,
           responseExtractor: ngExtract,
           description: "Create a service account",
           bodySchema: {
