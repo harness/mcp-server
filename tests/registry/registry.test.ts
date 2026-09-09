@@ -1201,6 +1201,46 @@ describe("Registry", () => {
     });
   });
 
+  describe("service_account create — injectAccountInBody", () => {
+    it("injects accountIdentifier into the POST body", async () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "access_control" }));
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "sa1" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "service_account", "create", {
+        body: {
+          identifier: "sa1",
+          name: "CI Bot",
+          email: "ci-bot@example.com",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+      expect(call.body.accountIdentifier).toBe("test-account");
+      expect(call.body.identifier).toBe("sa1");
+      expect(call.body.name).toBe("CI Bot");
+      expect(call.body.email).toBe("ci-bot@example.com");
+    });
+
+    it("does not overwrite an explicit accountIdentifier in the body", async () => {
+      const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "access_control" }));
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS" });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "service_account", "create", {
+        body: {
+          identifier: "sa2",
+          name: "Other Bot",
+          email: "other@example.com",
+          accountIdentifier: "caller-account",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+      expect(call.body.accountIdentifier).toBe("caller-account");
+    });
+  });
+
   describe("resource_group create — nested bodyWrapperKey account injection", () => {
     it("injects accountIdentifier inside body.resourceGroup, not at top level", async () => {
       const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "access_control" }));
