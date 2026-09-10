@@ -2497,7 +2497,7 @@ describe("fme_event_type", () => {
       org_id: "o1",
       project_id: "p1",
       name: "page_view",
-      traffic_type_id: "tt1",
+      traffic_type: "tt1",
       offset: 10,
       limit: 20,
     });
@@ -2505,7 +2505,7 @@ describe("fme_event_type", () => {
     const req = firstRequest(mockRequest);
     expect(req.params).toMatchObject({
       name: "page_view",
-      traffic_type_id: "tt1",
+      traffic_type: "tt1",
       offset: 10,
       limit: 20,
     });

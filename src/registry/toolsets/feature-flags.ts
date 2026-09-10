@@ -306,7 +306,7 @@ const fmeMetricCreateSchema: BodySchema = {
     { name: "description", type: "string", required: false, description: "Optional human-readable description" },
     { name: "trafficType", type: "string", required: true, description: "Traffic type name (get from fme_traffic_type). Immutable after creation." },
     { name: "format", type: "string", required: true, description: "Display format. One of: NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES." },
-    { name: "aggregation", type: "string", required: true, description: "How individual event values are aggregated per unit. One of: TOTAL, COUNT, RATE, AVERAGE. Do not use NONE — the backend always rejects it on create." },
+    { name: "aggregation", type: "string", required: true, description: "How individual event values are aggregated per unit. One of: TOTAL, COUNT, RATE, AVERAGE." },
     { name: "isPositive", type: "boolean", required: true, description: "true when an increase in this metric is a good outcome" },
     { name: "spread", type: "string", required: true, description: "PER (per-unit) or ACROSS (population). Required here even though the backend accepts omitting it (defaults to PER) — set it explicitly, especially for RATE metrics where PER vs ACROSS changes what is measured." },
     { name: "baseEventTypes", type: "array", required: true, description: "The base event type(s) this metric measures (at least one). Each entry: {eventTypeId, propertyFilters?, propertyForValue?}. Get event type IDs from fme_event_type.", itemType: "object" },
@@ -323,7 +323,7 @@ const fmeMetricUpdateSchema: BodySchema = {
   fields: [
     { name: "description", type: "string", required: false, description: "Updated description; null clears it" },
     { name: "format", type: "string", required: false, description: "Updated format (NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES); cannot be cleared with null" },
-    { name: "aggregation", type: "string", required: false, description: "Updated aggregation (TOTAL, COUNT, RATE, AVERAGE); cannot be cleared with null. Do not use NONE — the backend always rejects it." },
+    { name: "aggregation", type: "string", required: false, description: "Updated aggregation (TOTAL, COUNT, RATE, AVERAGE); cannot be cleared with null." },
     { name: "isPositive", type: "boolean", required: false, description: "Updated direction; cannot be cleared with null" },
     { name: "spread", type: "string", required: false, description: "Updated spread (PER or ACROSS); cannot be cleared with null" },
     { name: "baseEventTypes", type: "array", required: false, description: "Replacement base-event list (full replacement, at least one entry required when provided)", itemType: "object" },
@@ -1809,9 +1809,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           responseExtractor: fmeV4PaginatedListExtract,
           description:
-            "List metric definitions in a project, with pagination and filters (harness_list size maps to limit). " +
-            "totalCount reflects the backend's own count and is not guaranteed accurate — do not loop on offset " +
-            "until collected >= totalCount without an upper bound on iterations.",
+            "List metric definitions in a project, with pagination and filters (harness_list size maps to limit; " +
+            "pass offset directly via filters — harness_list's page is not honored here, same as the other FME " +
+            "v4 list resources).",
         },
         get: {
           method: "GET",
@@ -1922,20 +1922,20 @@ export const featureFlagsToolset: ToolsetDefinition = {
       resourceType: "fme_event_type",
       displayName: "FME Event Type",
       description:
-        "An FME event type — id, name, description, and the traffic types it's associated with. " +
+        "An FME event type — id (the event name) and the traffic types it's associated with. " +
         "Harness-native only (org_id + project_id; no legacy workspace_id support). Read-only: " +
-        "supports list and get. Use to discover event type IDs before referencing one in " +
-        "fme_metric's baseEventTypes/filterEventType or event_type_ids filter. Backed by " +
-        "/fme/api/v4/event-types, which was still in-flight (not yet merged/deployed) as of this " +
-        "writing — a 404 (or an HTML response instead of JSON) means the endpoint isn't live yet " +
-        "in this environment, not that the resource is misconfigured.",
+        "supports list and get. Only event types with events received in the last 30 days are " +
+        "visible; get returns 404 for an event type with no traffic type in the requesting " +
+        "workspace's scope, or idle longer than 30 days. Use to discover event type IDs before " +
+        "referencing one in fme_metric's baseEventTypes/filterEventType or event_type_ids filter. " +
+        "Backed by /fme/api/v4/event-types.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
       identifierFields: ["event_type_id"],
       listFilterFields: [
         { name: "name", description: "Filter by name (substring, case-insensitive)" },
-        { name: "traffic_type_id", description: "Filter by traffic type ID (get from fme_traffic_type)" },
+        { name: "traffic_type", description: "Filter by traffic type, as an ID or name (get from fme_traffic_type)" },
         { name: "offset", description: "Pagination offset", type: "number" },
         { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
       ],
@@ -1950,16 +1950,16 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             name: "name",
-            traffic_type_id: "traffic_type_id",
+            traffic_type: "traffic_type",
             offset: "offset",
             size: "limit",
             limit: "limit",
           },
           responseExtractor: fmeV4PaginatedListExtract,
           description:
-            "List event types in a project, with pagination and filters (harness_list size maps to limit). " +
-            "totalCount reflects the backend's own count and is not guaranteed accurate — do not loop on offset " +
-            "until collected >= totalCount without an upper bound on iterations.",
+            "List event types in a project, with pagination and filters (harness_list size maps to limit; " +
+            "pass offset directly via filters — harness_list's page is not honored here, same as the other FME " +
+            "v4 list resources).",
         },
         get: {
           method: "GET",

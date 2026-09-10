@@ -365,7 +365,12 @@ export interface ApplyUrlDefaultsOptions {
  * suppress org_id/project_id derived from a pasted Harness URL, since workspace_id isn't
  * a real scoping mode for them.
  */
-const FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES = new Set(["fme_segment", "fme_segment_definition"]);
+const FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES = new Set([
+  "fme_segment",
+  "fme_segment_definition",
+  "fme_metric",
+  "fme_event_type",
+]);
 
 /**
  * If `url` is provided, parse it and merge extracted values into args as defaults.
@@ -400,8 +405,9 @@ export function applyUrlDefaults(
   // exclusive scoping modes for FME resources (see resolveFmeDualMode).
   // Use the caller's declared resource_type when present — the URL's own parsed
   // type may be absent or non-FME even when the call itself targets an FME resource.
-  // Harness-native-only resources (fme_segment/fme_segment_definition) are excluded:
-  // they have no workspace_id contract, so a stray value must not suppress org/project.
+  // Harness-native-only resources (fme_segment/fme_segment_definition/fme_metric/
+  // fme_event_type) are excluded: they have no workspace_id contract, so a stray
+  // value must not suppress org/project.
   const declaredResourceType = (args.resource_type as string | undefined) ?? parsed.resource_type;
   const hasWorkspaceId = typeof args.workspace_id === "string" && args.workspace_id !== "";
   const skipOrgProjectFromUrl =
