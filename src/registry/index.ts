@@ -56,6 +56,7 @@ import { incidentsToolset } from "./toolsets/incidents.js";
 import { alertsToolset } from "./toolsets/alerts.js";
 import { deploysToolset } from "./toolsets/deploys.js";
 import { releaseManagementToolset } from "./toolsets/release-management.js";
+import { vibeToolset } from "./toolsets/vibe.js";
 
 const log = createLogger("registry");
 
@@ -175,6 +176,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   alertsToolset,
   deploysToolset,
   releaseManagementToolset,
+  vibeToolset,
 ];
 
 /** All available toolset names — used by docs generation to discover opt-in toolsets. */

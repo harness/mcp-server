@@ -52,8 +52,8 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Override default timeout for this request (milliseconds). */
   timeoutMs?: number;
-  /** Return raw ArrayBuffer instead of parsing JSON. Used for binary endpoints (ZIP downloads). */
-  responseType?: "json" | "buffer";
+  /** JSON, binary download, or a bounded batch of JSON SSE data events (20 events / 5 seconds / 1 MiB). */
+  responseType?: "json" | "buffer" | "sse";
   /** Product backend — when "fme", skips Harness-specific auth/headers/params. */
   product?: "harness" | "fme";
   /** When true, omit the automatic `accountIdentifier` query param.

@@ -4,7 +4,8 @@ import { HarnessApiError } from "../utils/errors.js";
 import { RateLimiter } from "../utils/rate-limiter.js";
 import { createLogger } from "../utils/logger.js";
 import { redactJsonString } from "../utils/redact.js";
-import { isFormDataBody } from "../utils/type-guards.js";
+import { isFormDataBody, isRecord } from "../utils/type-guards.js";
+import { readJsonEventStream } from "./sse.js";
 
 const log = createLogger("harness-client");
 
@@ -108,6 +109,22 @@ const ERROR_FIELD_ENRICHMENTS: Array<{ pathPrefix: string; field: string }> = [
 ];
 
 const MAX_ERROR_DETAIL_CHARS = 400;
+
+/** Accept standard Harness errors and BFF envelopes with nested error.code/message. */
+function parseApiError(body: string): Record<string, unknown> & { message?: string; code?: string; correlationId?: string } {
+  let raw: unknown;
+  try { raw = JSON.parse(body); } catch { return {}; }
+  if (!isRecord(raw)) return {};
+  const nested = isRecord(raw.error) ? raw.error : {};
+  const message = typeof raw.message === "string" ? raw.message : nested.message;
+  const code = typeof raw.code === "string" ? raw.code : nested.code;
+  return {
+    ...raw,
+    message: typeof message === "string" ? message : undefined,
+    code: typeof code === "string" ? code : undefined,
+    correlationId: typeof raw.correlationId === "string" ? raw.correlationId : undefined,
+  };
+}
 
 /** Extra NG fields (`details`, `detailedMessage`, `responseMessages`) not already in `message`. */
 function collectErrorDetail(parsed: Record<string, unknown>, message: string): string | undefined {
@@ -399,13 +416,7 @@ export class HarnessClient {
 
         if (!response.ok) {
           const body = await response.text();
-          let parsed: { message?: string; code?: string; correlationId?: string } = {};
-          try {
-            parsed = JSON.parse(body);
-          } catch {
-            // Non-JSON error (HTML proxy page, WAF block, etc.)
-            // Provide actionable messages instead of leaking raw HTML to the LLM
-          }
+          const parsed = parseApiError(body);
 
           const rawMessage = isGarbageMessage(parsed.message)
               ? humanizeHttpError(response.status, body)
@@ -431,6 +442,10 @@ export class HarnessClient {
           }
 
           throw error;
+        }
+
+        if (options.responseType === "sse") {
+          return await readJsonEventStream(response, options.signal) as T;
         }
 
         // Binary response mode — return raw ArrayBuffer (used for ZIP downloads)
@@ -542,8 +557,7 @@ export class HarnessClient {
 
         if (!response.ok) {
           const body = await response.text();
-          let parsed: { message?: string; code?: string; correlationId?: string } = {};
-          try { parsed = JSON.parse(body); } catch { /* non-JSON */ }
+          const parsed = parseApiError(body);
 
           const rawMessage = isGarbageMessage(parsed.message)
               ? humanizeHttpError(response.status, body)

@@ -157,6 +157,7 @@ export type ToolsetName =
   | "alerts"
   | "deploys"
   | "release-management"
+  | "vibe"
   | "knowledge-graph"
   | "semantic-layer";
 
@@ -320,8 +321,8 @@ export interface EndpointSpec {
   headers?: Record<string, string>;
   /** For GET: extract the useful part from the raw response */
   responseExtractor?: (raw: unknown, input?: Record<string, unknown>) => unknown;
-  /** Request binary (ArrayBuffer) response instead of JSON. Used for ZIP download endpoints. */
-  responseType?: "json" | "buffer";
+  /** Request JSON, binary, or a bounded JSON SSE batch (20 events / 5 seconds / 1 MiB). */
+  responseType?: "json" | "buffer" | "sse";
   /** Description shown in harness_describe output */
   description?: string;
   /** Optional body schema for write operations — exposed via harness_describe */
