@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
 import { ngExtract, pageExtract } from "../extractors.js";
+import { assertValidBase64, estimateBase64DecodedBytes, normalizeBase64 } from "../../utils/base64.js";
 
 // Matches server-side FileUploadLimit.fileStoreFileLimit (100 MB)
 const MAX_FILE_BYTES = 100_000_000;
@@ -57,61 +58,6 @@ function optionalFileUsageField(
     assertFileUsage(value, fieldLabel);
   }
   return value;
-}
-
-function normalizeBase64Content(value: string): string {
-  const normalized = value.replace(/\s+/g, "");
-  if (normalized.length === 0) {
-    throw new Error("body.content_base64 must not be empty.");
-  }
-  return normalized;
-}
-
-function isBase64Char(charCode: number): boolean {
-  return (
-    (charCode >= 65 && charCode <= 90) ||
-    (charCode >= 97 && charCode <= 122) ||
-    (charCode >= 48 && charCode <= 57) ||
-    charCode === 43 ||
-    charCode === 47
-  );
-}
-
-function assertValidBase64Content(normalizedBase64: string): void {
-  if (normalizedBase64.length % 4 !== 0) {
-    throw new Error("body.content_base64 must be valid base64.");
-  }
-
-  let paddingStart = normalizedBase64.length;
-  for (let i = 0; i < normalizedBase64.length; i += 1) {
-    const charCode = normalizedBase64.charCodeAt(i);
-    if (charCode === 61) {
-      paddingStart = i;
-      break;
-    }
-    if (!isBase64Char(charCode)) {
-      throw new Error("body.content_base64 must be valid base64.");
-    }
-  }
-
-  const paddingLength = normalizedBase64.length - paddingStart;
-  if (paddingLength > 2) {
-    throw new Error("body.content_base64 must be valid base64.");
-  }
-  for (let i = paddingStart; i < normalizedBase64.length; i += 1) {
-    if (normalizedBase64.charCodeAt(i) !== 61) {
-      throw new Error("body.content_base64 must be valid base64.");
-    }
-  }
-}
-
-function estimateBase64DecodedBytes(normalizedBase64: string): number {
-  const paddingBytes = normalizedBase64.endsWith("==")
-    ? 2
-    : normalizedBase64.endsWith("=")
-      ? 1
-      : 0;
-  return (normalizedBase64.length / 4) * 3 - paddingBytes;
 }
 
 /**
@@ -210,12 +156,15 @@ export function buildFileStoreMultipartBody(
       throw new Error("Provide either body.content or body.content_base64, not both.");
     }
     if (contentBase64 !== undefined) {
-      const normalizedBase64 = normalizeBase64Content(contentBase64);
+      const normalizedBase64 = normalizeBase64(contentBase64);
+      if (normalizedBase64.length === 0) {
+        throw new Error("body.content_base64 must not be empty.");
+      }
       const estimatedBytes = estimateBase64DecodedBytes(normalizedBase64);
       if (estimatedBytes > MAX_FILE_BYTES) {
         throw new Error(`File content exceeds maximum size of ${MAX_FILE_BYTES} bytes (estimated ${estimatedBytes} bytes from base64).`);
       }
-      assertValidBase64Content(normalizedBase64);
+      assertValidBase64(normalizedBase64, "body.content_base64");
       const buf = Buffer.from(normalizedBase64, "base64");
       if (buf.byteLength > MAX_FILE_BYTES) {
         throw new Error(`File content exceeds maximum size of ${MAX_FILE_BYTES} bytes.`);

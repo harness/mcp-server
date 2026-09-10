@@ -1,5 +1,72 @@
 import type { ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
+import { assertValidBase64, decodeBase64ToUtf8 } from "../../utils/base64.js";
+import { isRecord } from "../../utils/type-guards.js";
+
+/**
+ * Harness Code's `/content/{path}` endpoint always base64-encodes file
+ * content (`content.encoding === "base64"`, see gitness content_get.go).
+ * Add a decoded `content.text` field so callers get readable text without
+ * decoding client-side; `content.data`/`content.encoding` are left intact
+ * for anyone who wants the raw base64. Binary files that don't decode to
+ * clean UTF-8 just omit `text` (decodeBase64ToUtf8 returns undefined).
+ *
+ * Also flags truncation: the endpoint caps content at 10 MB and silently
+ * returns a partial blob (`data_size < size`) rather than erroring.
+ */
+function decodeFileContent(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+  const content = raw.content;
+  if (!isRecord(content) || content.encoding !== "base64" || typeof content.data !== "string") {
+    return raw;
+  }
+
+  const decodedContent: Record<string, unknown> = { ...content };
+  const decodedText = decodeBase64ToUtf8(content.data);
+  if (decodedText !== undefined) {
+    decodedContent.text = decodedText;
+  }
+
+  const size = typeof content.size === "number" ? content.size : undefined;
+  const dataSize = typeof content.data_size === "number" ? content.data_size : undefined;
+  if (size !== undefined && dataSize !== undefined && dataSize < size) {
+    decodedContent._truncated = true;
+    decodedContent._hint =
+      `Content was truncated by the server (${size} byte file, only ${dataSize} bytes returned — the /content endpoint caps at 10 MB). `
+      + "Clone the repo or use a range-limited approach to read the full file.";
+  }
+
+  return { ...raw, content: decodedContent };
+}
+
+export const fileContentGetExtract = (raw: unknown): unknown => decodeFileContent(raw);
+
+/**
+ * Validate base64-declared commit file payloads client-side, and normalize
+ * away embedded whitespace. Harness Code's commit-files endpoint decodes
+ * `encoding: "base64"` payloads with Go's `base64.StdEncoding.DecodeString`,
+ * which (unlike this validator, and unlike some other base64 decoders)
+ * rejects embedded whitespace/newlines outright with an opaque Internal
+ * (500-style) error rather than a clean 400 — so payload whitespace must be
+ * stripped here too, or a payload that validates fine client-side would
+ * still fail server-side.
+ */
+function buildCommitFilesBody(input: Record<string, unknown>): unknown {
+  const body = input.body;
+  if (!isRecord(body)) return body;
+  const actions = body.actions;
+  if (!Array.isArray(actions)) return body;
+
+  const normalizedActions = actions.map((action, index) => {
+    if (!isRecord(action) || action.encoding !== "base64" || typeof action.payload !== "string") {
+      return action;
+    }
+    const normalizedPayload = assertValidBase64(action.payload, `body.actions[${index}].payload`);
+    return { ...action, payload: normalizedPayload };
+  });
+
+  return { ...body, actions: normalizedActions };
+}
 
 export const repositoriesToolset: ToolsetDefinition = {
   name: "repositories",
@@ -210,7 +277,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: { repo_id: "repoIdentifier" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: buildCommitFilesBody,
           responseExtractor: passthrough,
           description:
             "Commit file changes to a repository. Each action specifies a file operation (CREATE, UPDATE, DELETE, MOVE). Payload is the file content (utf8 or base64). For UPDATE, include the current blob sha. Returns the new commit_id and list of changed files.",
@@ -222,7 +289,7 @@ export const repositoriesToolset: ToolsetDefinition = {
               { name: "message", type: "string", required: false, description: "Extended commit message body" },
               { name: "branch", type: "string", required: true, description: "Target branch to commit to (e.g. 'main')" },
               { name: "new_branch", type: "string", required: false, description: "If set, creates a new branch from 'branch' and commits there instead" },
-              { name: "actions", type: "array", required: true, description: "File operations. Each action: {action: 'CREATE'|'UPDATE'|'DELETE'|'MOVE', path: 'file/path', payload: 'content', encoding: 'utf8'|'base64', sha: 'blob_sha (required for UPDATE)'}." },
+              { name: "actions", type: "array", required: true, description: "File operations. Each action: {action: 'CREATE'|'UPDATE'|'DELETE'|'MOVE', path: 'file/path', payload: 'content', encoding: 'utf8'|'base64' (default utf8 — set explicitly for binary content, payload must then be valid base64), sha: 'blob_sha (required for UPDATE)'}." },
               { name: "bypass_rules", type: "boolean", required: false, description: "Bypass branch protection rules (requires permission)" },
               { name: "dry_run_rules", type: "boolean", required: false, description: "Check rules without committing" },
             ],
@@ -283,9 +350,9 @@ export const repositoriesToolset: ToolsetDefinition = {
             git_ref: "git_ref",
             include_commit: "include_commit",
           },
-          responseExtractor: passthrough,
+          responseExtractor: fileContentGetExtract,
           description:
-            "Get file or directory content. Specify path and optional git_ref (branch/tag/SHA). Returns file content or directory listing.",
+            "Get file or directory content. Specify path and optional git_ref (branch/tag/SHA). Returns file content or directory listing. For files, content.data is base64 (server always encodes it); content.text holds the decoded UTF-8 text when decoding succeeds. content._truncated is set if the server's 10 MB cap cut off the file.",
         },
       },
       executeActions: {
