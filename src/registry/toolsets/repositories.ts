@@ -1,5 +1,32 @@
 import type { ToolsetDefinition } from "../types.js";
-import { passthrough } from "../extractors.js";
+import { fileContentGetExtract, passthrough } from "../extractors.js";
+import { assertValidBase64 } from "../../utils/base64.js";
+import { isRecord } from "../../utils/type-guards.js";
+
+/**
+ * Validate base64-declared commit file payloads client-side, and normalize
+ * away embedded whitespace. Harness Code's commit-files endpoint rejects
+ * embedded whitespace/newlines in `encoding: "base64"` payloads outright,
+ * with an opaque Internal (500-style) error rather than a clean 400 — so
+ * payload whitespace must be stripped here too, or a payload that validates
+ * fine client-side would still fail server-side.
+ */
+function buildCommitFilesBody(input: Record<string, unknown>): unknown {
+  const body = input.body;
+  if (!isRecord(body)) return body;
+  const actions = body.actions;
+  if (!Array.isArray(actions)) return body;
+
+  const normalizedActions = actions.map((action, index) => {
+    if (!isRecord(action) || action.encoding !== "base64" || typeof action.payload !== "string") {
+      return action;
+    }
+    const normalizedPayload = assertValidBase64(action.payload, `body.actions[${index}].payload`);
+    return { ...action, payload: normalizedPayload };
+  });
+
+  return { ...body, actions: normalizedActions };
+}
 
 export const repositoriesToolset: ToolsetDefinition = {
   name: "repositories",
@@ -210,7 +237,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           pathParams: { repo_id: "repoIdentifier" },
           skipScopeBodyInjection: true,
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: buildCommitFilesBody,
           responseExtractor: passthrough,
           description:
             "Commit file changes to a repository. Each action specifies a file operation (CREATE, UPDATE, DELETE, MOVE). Payload is the file content (utf8 or base64). For UPDATE, include the current blob sha. Returns the new commit_id and list of changed files.",
@@ -222,7 +249,7 @@ export const repositoriesToolset: ToolsetDefinition = {
               { name: "message", type: "string", required: false, description: "Extended commit message body" },
               { name: "branch", type: "string", required: true, description: "Target branch to commit to (e.g. 'main')" },
               { name: "new_branch", type: "string", required: false, description: "If set, creates a new branch from 'branch' and commits there instead" },
-              { name: "actions", type: "array", required: true, description: "File operations. Each action: {action: 'CREATE'|'UPDATE'|'DELETE'|'MOVE', path: 'file/path', payload: 'content', encoding: 'utf8'|'base64', sha: 'blob_sha (required for UPDATE)'}." },
+              { name: "actions", type: "array", required: true, description: "File operations. Each action: {action: 'CREATE'|'UPDATE'|'DELETE'|'MOVE', path: 'file/path', payload: 'content', encoding: 'utf8'|'base64' (default utf8 — set explicitly for binary content, payload must then be valid base64), sha: 'blob_sha (required for UPDATE)'}." },
               { name: "bypass_rules", type: "boolean", required: false, description: "Bypass branch protection rules (requires permission)" },
               { name: "dry_run_rules", type: "boolean", required: false, description: "Check rules without committing" },
             ],
@@ -283,9 +310,9 @@ export const repositoriesToolset: ToolsetDefinition = {
             git_ref: "git_ref",
             include_commit: "include_commit",
           },
-          responseExtractor: passthrough,
+          responseExtractor: fileContentGetExtract,
           description:
-            "Get file or directory content. Specify path and optional git_ref (branch/tag/SHA). Returns file content or directory listing.",
+            "Get file or directory content. Specify path and optional git_ref (branch/tag/SHA). Returns file content or directory listing. For files, content.text holds the decoded text and content.encoding is set to 'utf8' when decoding succeeds; content.data (raw base64) and encoding 'base64' are kept only for binary/undecodable content. content._truncated is set if the server's 10 MB cap cut off the file; content._hint explains truncation, binary content, or Git LFS pointers.",
         },
       },
       executeActions: {

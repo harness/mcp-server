@@ -37,6 +37,13 @@ export interface HarnessV1ListResponse<T> {
   totalPages?: number;
 }
 
+/** Endpoint-owned limits for a finite batch of JSON SSE data events. */
+export interface JsonEventStreamLimits {
+  maxEvents: number;
+  durationMs: number;
+  maxBytes: number;
+}
+
 export interface RequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   path: string;
@@ -52,8 +59,10 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** Override default timeout for this request (milliseconds). */
   timeoutMs?: number;
-  /** Return raw ArrayBuffer instead of parsing JSON. Used for binary endpoints (ZIP downloads). */
-  responseType?: "json" | "buffer";
+  /** JSON, binary download, or a bounded batch of JSON SSE data events. */
+  responseType?: "json" | "buffer" | "sse";
+  /** Required for responseType=sse. The caller owns the batch policy. */
+  sseLimits?: JsonEventStreamLimits;
   /** Product backend — when "fme", skips Harness-specific auth/headers/params. */
   product?: "harness" | "fme";
   /** When true, omit the automatic `accountIdentifier` query param.

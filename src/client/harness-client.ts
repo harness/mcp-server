@@ -3,8 +3,9 @@ import type { RequestOptions } from "./types.js";
 import { HarnessApiError } from "../utils/errors.js";
 import { RateLimiter } from "../utils/rate-limiter.js";
 import { createLogger } from "../utils/logger.js";
-import { redactJsonString } from "../utils/redact.js";
-import { isFormDataBody } from "../utils/type-guards.js";
+import { redactJsonString, redactSensitiveFields } from "../utils/redact.js";
+import { isFormDataBody, isRecord } from "../utils/type-guards.js";
+import { assertJsonEventStreamLimits, readJsonEventStream } from "./sse.js";
 
 const log = createLogger("harness-client");
 
@@ -108,6 +109,23 @@ const ERROR_FIELD_ENRICHMENTS: Array<{ pathPrefix: string; field: string }> = [
 ];
 
 const MAX_ERROR_DETAIL_CHARS = 400;
+
+/** Preserve standard Harness errors; adapt Vibe's nested BFF envelope only on Vibe paths. */
+function parseApiError(body: string, path: string): Record<string, unknown> & { message?: string; code?: string | number; correlationId?: string } {
+  let raw: unknown;
+  try { raw = JSON.parse(body); } catch { return {}; }
+  if (!isRecord(raw)) return {};
+  const nested = path.startsWith("/vibe/v1/") && isRecord(raw.error) ? raw.error : {};
+  const message = typeof raw.message === "string" ? raw.message : nested.message;
+  const code = raw.code ?? nested.code;
+  return {
+    ...raw,
+    message: typeof message === "string" ? message : undefined,
+    code: typeof code === "string" || typeof code === "number" ? code : undefined,
+    details: raw.details ?? (isRecord(nested.details) ? JSON.stringify(redactSensitiveFields(nested.details)) : nested.details),
+    correlationId: typeof raw.correlationId === "string" ? raw.correlationId : undefined,
+  };
+}
 
 /** Extra NG fields (`details`, `detailedMessage`, `responseMessages`) not already in `message`. */
 function collectErrorDetail(parsed: Record<string, unknown>, message: string): string | undefined {
@@ -336,6 +354,7 @@ export class HarnessClient {
   }
 
   async request<T>(options: RequestOptions): Promise<T> {
+    if (options.responseType === "sse") assertJsonEventStreamLimits(options.sseLimits);
     await this.rateLimiter.acquire();
 
     const method = options.method ?? "GET";
@@ -361,6 +380,7 @@ export class HarnessClient {
         await new Promise((r) => setTimeout(r, backoff));
       }
 
+      let timer: ReturnType<typeof setTimeout> | undefined;
       try {
         // Check if already aborted before starting the request
         if (options.signal?.aborted) {
@@ -369,7 +389,7 @@ export class HarnessClient {
 
         const timeoutController = new AbortController();
         const effectiveTimeout = options.timeoutMs ?? this.timeout;
-        const timer = setTimeout(() => timeoutController.abort(), effectiveTimeout);
+        timer = setTimeout(() => timeoutController.abort(), effectiveTimeout);
         // Merge external signal (client disconnect) with timeout signal
         const signal = options.signal
           ? AbortSignal.any([options.signal, timeoutController.signal])
@@ -395,17 +415,12 @@ export class HarnessClient {
           signal,
         });
 
-        clearTimeout(timer);
+        // JSON/binary behavior is unchanged; SSE keeps the HTTP deadline through consumption.
+        if (options.responseType !== "sse") clearTimeout(timer);
 
         if (!response.ok) {
           const body = await response.text();
-          let parsed: { message?: string; code?: string; correlationId?: string } = {};
-          try {
-            parsed = JSON.parse(body);
-          } catch {
-            // Non-JSON error (HTML proxy page, WAF block, etc.)
-            // Provide actionable messages instead of leaking raw HTML to the LLM
-          }
+          const parsed = parseApiError(body, options.path);
 
           const rawMessage = isGarbageMessage(parsed.message)
               ? humanizeHttpError(response.status, body)
@@ -431,6 +446,18 @@ export class HarnessClient {
           }
 
           throw error;
+        }
+
+        if (options.responseType === "sse") {
+          try {
+            return await readJsonEventStream(response, signal, options.sseLimits!) as T;
+          } catch (cause) {
+            // Never reconnect a consumed stream, including when the overall HTTP deadline expires.
+            if (timeoutController.signal.aborted && !options.signal?.aborted) {
+              throw new HarnessApiError("Request timed out", 408, undefined, undefined, cause);
+            }
+            throw cause;
+          }
         }
 
         // Binary response mode — return raw ArrayBuffer (used for ZIP downloads)
@@ -481,6 +508,8 @@ export class HarnessClient {
           undefined,
           err,
         );
+      } finally {
+        clearTimeout(timer);
       }
     }
 
@@ -542,8 +571,7 @@ export class HarnessClient {
 
         if (!response.ok) {
           const body = await response.text();
-          let parsed: { message?: string; code?: string; correlationId?: string } = {};
-          try { parsed = JSON.parse(body); } catch { /* non-JSON */ }
+          const parsed = parseApiError(body, options.path);
 
           const rawMessage = isGarbageMessage(parsed.message)
               ? humanizeHttpError(response.status, body)
