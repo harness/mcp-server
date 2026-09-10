@@ -48,14 +48,33 @@ export const agentsToolset: ToolsetDefinition = {
       scope: "project",
       scopeOptional: false,
       identifierFields: ["agent_id"],
+      listFilterFields: [
+        { name: "search_term", description: "Filter agents by name or keyword" },
+        {
+          name: "sort",
+          description: "Field to sort by",
+          enum: ["created", "last_modified", "name"],
+        },
+        { name: "order", description: "Sort order", enum: ["asc", "desc"] },
+        { name: "page", description: "Page number (0-based)" },
+        { name: "size", description: "Page size" },
+      ],
       deepLinkTemplate: "/ng/account/{accountId}/all/ai-agents/orgs/{orgIdentifier}/projects/{projectIdentifier}/worker-agents/{agentIdentifier}",
       operations: {
         list: {
           method: "GET",
           path: "/gateway/agents/api/v1/agents",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            search_term: "search",
+            sort: "sort",
+            order: "order",
+            page: "page",
+            size: "size",
+          },
           responseExtractor: agentExtract,
-          description: "List all agents (system and custom) scoped to the account/org/project context",
+          description:
+            "List all agents (system and custom) scoped to the account/org/project context. Supports search by name and sort by created, last_modified, or name.",
         },
         get: {
           method: "GET",
