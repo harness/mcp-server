@@ -222,7 +222,56 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     }
   }
 
-  // 7. RMG release-management URLs:
+  // 7. AI Worker Agents (ai-agents module):
+  // List:  .../all/ai-agents/orgs/{org}/projects/{project}/worker-agents
+  // Detail: .../worker-agents/{agentId}
+  // Legacy detail: .../ai-agents/.../agents/{agentId}
+  const aiAgentsIdx = segments.indexOf("ai-agents");
+  if (aiAgentsIdx >= 0) {
+    const readAiAgentId = (segmentIdx: number): string | undefined => {
+      if (segmentIdx < 0 || segmentIdx + 1 >= segments.length) return undefined;
+      const candidate = decodeURIComponent(segments[segmentIdx + 1]!);
+      if (!candidate || STRUCTURAL.has(candidate) || RESOURCE_SEGMENTS[candidate]) {
+        return undefined;
+      }
+      return candidate;
+    };
+
+    const applyAiAgentScope = (): void => {
+      if (result.project_id) {
+        result.resource_scope = "project";
+      } else if (result.org_id) {
+        result.resource_scope = "org";
+      }
+    };
+
+    const workerAgentsIdx = segments.indexOf("worker-agents", aiAgentsIdx);
+    if (workerAgentsIdx >= 0) {
+      const agentId = readAiAgentId(workerAgentsIdx);
+      if (agentId) {
+        result.resource_type = "agent";
+        applyAiAgentScope();
+        result.agent_id = agentId;
+        result.resource_id = agentId;
+      } else if (workerAgentsIdx + 1 >= segments.length) {
+        // worker-agents with no following segment is the list page; do not fall
+        // through to legacy .../agents/{id} parsing below.
+        result.resource_type = "agent";
+        applyAiAgentScope();
+      }
+    } else {
+      const legacyAgentsIdx = segments.indexOf("agents", aiAgentsIdx);
+      const agentId = readAiAgentId(legacyAgentsIdx);
+      if (agentId) {
+        result.resource_type = "agent";
+        applyAiAgentScope();
+        result.agent_id = agentId;
+        result.resource_id = agentId;
+      }
+    }
+  }
+
+  // 8. RMG release-management URLs:
   // .../release-management/releases/{slug}/execution/phases|tasks|activities
   const rmgRootIdx = segments.indexOf("release-management");
   if (rmgRootIdx >= 0) {

@@ -6,7 +6,7 @@
  * (".../agents/{agentIdentifier}/details"). Chat navigated to that URL as-is.
  *
  * Correct UI 2.0 path (same layout as the worker-agents list):
- * /ng/account/{accountId}/all/ai-agents/orgs/{org}/projects/{project}/agents/{id}
+ * /ng/account/{accountId}/all/ai-agents/orgs/{org}/projects/{project}/worker-agents/{id}
  *
  * Create with only `id`/`uid` (no `agent_id` on input) is what would have caught
  * the original bug. List also has no `agent_id`; items must not include `name`
@@ -39,7 +39,7 @@ function mockFetchResponse(body: unknown, status = 200): Response {
 }
 
 const EXPECTED_PATH =
-  "https://app.harness.io/ng/account/testaccount/all/ai-agents/orgs/default/projects/aiTeam/agents/pipeline_lister_agent";
+  "https://app.harness.io/ng/account/testaccount/all/ai-agents/orgs/default/projects/aiTeam/worker-agents/pipeline_lister_agent";
 const EXPECTED_CUSTOM_LINK = `${EXPECTED_PATH}?type=custom`;
 const EXPECTED_SYSTEM_LINK = `${EXPECTED_PATH}?type=system`;
 
