@@ -4,10 +4,10 @@
  * - Unwrap common wrapper keys (environment, service, connector) when APIs expect the entity at top level.
  * - Optionally synthesize ``body.yaml`` for APIs that require it (see ``ensureYamlWrapper``).
  *
- * Service/environment create do NOT need yaml synthesis — NG fills ``yaml`` server-side when
- * omitted. Infrastructure create/update DOES: NG returns ``yaml: must not be empty`` if the
- * client sends only flat JSON fields. Wire ``ensureYamlWrapper: "infrastructureDefinition"``
- * for those operations only.
+ * Service create/update with ``serviceDefinition`` must synthesize ``body.yaml`` — NG only
+ * persists metadata when ``yaml`` is omitted. Infrastructure create/update also requires
+ * yaml synthesis (NG returns ``yaml: must not be empty`` for flat JSON). Wire
+ * ``ensureYamlWrapper`` for those operations (``"service"`` or ``"infrastructureDefinition"``).
  */
 
 import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
@@ -37,11 +37,11 @@ export function unwrapBody(body: unknown, wrapperKey: string): unknown {
 
 /**
  * Ensure ``body.yaml`` is a non-empty string for NG APIs that reject missing yaml
- * even when the same entity fields are present as JSON (infra create/update).
+ * even when the same entity fields are present as JSON.
  *
- * Unlike service/environment, NG does not synthesize infra yaml server-side.
- * Agents often send flat ``{ identifier, name, type, environmentRef, spec }``
- * (or a raw ``infrastructureDefinition:`` YAML string body). This helper:
+ * NG does not embed nested config (``serviceDefinition``, infra ``spec``) in yaml
+ * server-side when ``yaml`` is omitted. Agents often send flat JSON bodies (or a raw
+ * ``service:`` / ``infrastructureDefinition:`` YAML string). This helper:
  * - keeps an existing non-empty ``yaml`` string
  * - stringifies an object-shaped ``yaml`` under ``wrapperKey`` if needed
  * - otherwise builds ``yaml: "<wrapperKey>:\\n ..."`` from the remaining fields
@@ -98,10 +98,8 @@ export interface BodyBuilderOptions {
   /** Auto-inject additional fields if missing */
   injectFields?: Array<{ from: string; to: string; onlyIfMissing?: boolean }>;
   /**
-   * Root key for synthesized ``body.yaml`` (e.g. ``infrastructureDefinition``).
-   * When set, after unwrap/strip, ensure a non-empty ``yaml`` string exists —
-   * NG ``POST/PUT /ng/api/infrastructures`` requires it; service/env must not
-   * set this (NG fills yaml for those). See ``ensureYamlField``.
+   * Root key for synthesized ``body.yaml`` (e.g. ``service`` or ``infrastructureDefinition``).
+   * When set, after unwrap/strip, ensure a non-empty ``yaml`` string exists. See ``ensureYamlField``.
    */
   ensureYamlWrapper?: string;
 }
@@ -181,7 +179,7 @@ export function buildBodyNormalized(opts: BodyBuilderOptions = {}): (input: Reco
     let out = stripNulls(body);
     out = typeof out === "object" && out !== null ? out : body;
 
-    // Step 5: NG APIs that require body.yaml (infrastructure create/update)
+    // Step 5: NG APIs that require body.yaml (service/infra create/update)
     if (opts.ensureYamlWrapper) {
       out = ensureYamlField(out, opts.ensureYamlWrapper);
     }

@@ -218,6 +218,25 @@ describe("ensureYamlField", () => {
     expect((result.yaml as string).trim().length).toBeGreaterThan(0);
     expect(result.yaml as string).toContain("identifier: x");
   });
+
+  it("embeds serviceDefinition in synthesized yaml", () => {
+    const result = ensureYamlField(
+      {
+        identifier: "nginx_service",
+        name: "Nginx Service",
+        serviceDefinition: {
+          type: "Kubernetes",
+          spec: { manifests: [{ manifest: { identifier: "m1", type: "K8sManifest" } }] },
+        },
+      },
+      "service",
+    ) as Record<string, unknown>;
+
+    expect(typeof result.yaml).toBe("string");
+    expect(result.yaml as string).toContain("service:");
+    expect(result.yaml as string).toContain("serviceDefinition:");
+    expect(result.yaml as string).toContain("type: Kubernetes");
+  });
 });
 
 describe("buildBodyNormalized ensureYamlWrapper", () => {
@@ -311,5 +330,33 @@ infrastructureDefinition:
     expect(result.projectIdentifier).toBe("cxe_sandbox");
     expect(result.yaml as string).toContain("orgIdentifier: default");
     expect(result.yaml as string).toContain("projectIdentifier: cxe_sandbox");
+  });
+
+  const serviceCreateBuilder = buildBodyNormalized({
+    unwrapKey: "service",
+    ensureYamlWrapper: "service",
+    injectFields: [
+      { from: "org_id", to: "orgIdentifier", onlyIfMissing: true },
+      { from: "project_id", to: "projectIdentifier", onlyIfMissing: true },
+    ],
+  });
+
+  it("unwraps service wrapper and synthesizes yaml for AIPLAT-1561 JSON shape", () => {
+    const result = serviceCreateBuilder({
+      org_id: "default",
+      project_id: "shubh_ai_33",
+      body: {
+        service: {
+          identifier: "nginx_service",
+          name: "Nginx Service",
+          serviceDefinition: { type: "Kubernetes", spec: { manifests: [] } },
+        },
+      },
+    }) as Record<string, unknown>;
+
+    expect(result.orgIdentifier).toBe("default");
+    expect(result.projectIdentifier).toBe("shubh_ai_33");
+    expect(result.yaml as string).toContain("serviceDefinition:");
+    expect(result.yaml as string).toContain("orgIdentifier: default");
   });
 });
