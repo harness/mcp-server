@@ -2,6 +2,34 @@ import type { ToolsetDefinition, BodySchema } from "../types.js";
 import { buildBodyNormalized } from "../../utils/body-normalizer.js";
 import { ngExtract, pageExtract } from "../extractors.js";
 
+/**
+ * Service create/update body shaping — same unwrap/strip pattern as infrastructure, plus
+ * ``ensureYamlWrapper``. NG accepts flat JSON for metadata-only services but drops
+ * ``serviceDefinition`` (manifests, artifacts, deployment type) unless it is embedded in
+ * ``body.yaml``. Without yaml synthesis, AI/HITL flows that POST JSON with
+ * ``serviceDefinition`` persist a skeleton entity (deployment type undefined in UI).
+ *
+ * Inject org/project from tool-level ``org_id``/``project_id`` before yaml synthesis so
+ * the generated ``body.yaml`` includes scope fields.
+ */
+const serviceScopeFields = [
+  { from: "org_id", to: "orgIdentifier", onlyIfMissing: true },
+  { from: "project_id", to: "projectIdentifier", onlyIfMissing: true },
+] as const;
+
+const serviceCreateBodyBuilder = buildBodyNormalized({
+  unwrapKey: "service",
+  ensureYamlWrapper: "service",
+  injectFields: [...serviceScopeFields],
+});
+
+const serviceUpdateBodyBuilder = buildBodyNormalized({
+  unwrapKey: "service",
+  ensureYamlWrapper: "service",
+  injectIdentifier: { inputField: "service_id", bodyField: "identifier" },
+  injectFields: [...serviceScopeFields],
+});
+
 const serviceCreateSchema: BodySchema = {
   description: "Service definition",
   fields: [
@@ -69,7 +97,7 @@ export const servicesToolset: ToolsetDefinition = {
           method: "POST",
           path: "/ng/api/servicesV2",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: buildBodyNormalized({ unwrapKey: "service" }),
+          bodyBuilder: serviceCreateBodyBuilder,
           responseExtractor: ngExtract,
           description: "Create a new service",
           bodySchema: serviceCreateSchema,
@@ -78,10 +106,7 @@ export const servicesToolset: ToolsetDefinition = {
           method: "PUT",
           path: "/ng/api/servicesV2",
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
-          bodyBuilder: buildBodyNormalized({
-            unwrapKey: "service",
-            injectIdentifier: { inputField: "service_id", bodyField: "identifier" },
-          }),
+          bodyBuilder: serviceUpdateBodyBuilder,
           responseExtractor: ngExtract,
           description: "Update an existing service",
           bodySchema: serviceUpdateSchema,
