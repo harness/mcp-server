@@ -100,6 +100,28 @@ describe("Vibe wire contracts through the registry and HTTP client", () => {
     expect(headers).not.toHaveProperty("x-api-key");
   });
 
+  it("keeps the team-tested PAT connection available with default toolsets", async () => {
+    fetchSpy.mockResolvedValue(response(imported));
+    const cfg = config({ HARNESS_TOOLSETS: undefined });
+    await new Registry(cfg).dispatch(new HarnessClient(cfg), "vibe_project", "create", { body: { mode: "github_link" } });
+    expect(fetchSpy.mock.calls[0]![1]?.headers).toMatchObject({ "x-api-key": cfg.HARNESS_API_KEY, "Harness-Account": "account" });
+  });
+
+  it("preserves additional prepare properties allowed by the OpenAPI", async () => {
+    fetchSpy.mockResolvedValue(response(upload));
+    const cfg = config();
+    const body = { name: "demo", extra: { enabled: false }, file: { path: "app.zip", size_bytes: 0, content_type: null, extra: { value: 0 } } };
+    await new Registry(cfg).dispatchExecute(new HarnessClient(cfg), "vibe_project", "prepare", { body });
+    expect(JSON.parse(fetchSpy.mock.calls[0]![1]!.body as string)).toEqual(body);
+  });
+
+  it.each([429, 500, 502, 503, 504])("does not retry the initial event connection on HTTP %s", async status => {
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({ error: { code: "UNAVAILABLE", message: "Try later" } }), { status }));
+    const cfg = config();
+    await expect(new Registry(cfg).dispatchExecute(new HarnessClient(cfg), "vibe_app_lifecycle", "events", { app_id: appId })).rejects.toMatchObject({ statusCode: status });
+    expect(fetchSpy).toHaveBeenCalledOnce();
+  });
+
   it("does not reconnect after a stream abort, even when HTTP retries are enabled", async () => {
     const body = new ReadableStream<Uint8Array>({ start(controller) { controller.error(new DOMException("Connection lost", "AbortError")); } });
     fetchSpy.mockResolvedValue(new Response(body, { headers: { "Content-Type": "text/event-stream" } }));

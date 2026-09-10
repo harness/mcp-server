@@ -1,4 +1,12 @@
 import { HarnessApiError } from "../utils/errors.js";
+import type { JsonEventStreamLimits } from "./types.js";
+
+export function assertJsonEventStreamLimits(limits: JsonEventStreamLimits | undefined): asserts limits is JsonEventStreamLimits {
+  if (!limits || ![limits.maxEvents, limits.durationMs, limits.maxBytes].every(value => Number.isSafeInteger(value) && value > 0)
+      || limits.durationMs > 2_147_483_647) {
+    throw new Error("SSE requires explicit positive integer maxEvents, durationMs, and maxBytes limits; durationMs must fit a timer.");
+  }
+}
 
 export interface JsonEventBatch {
   events: unknown[];
@@ -8,9 +16,10 @@ export interface JsonEventBatch {
 /** Read a finite batch of JSON data events; this is not a reconnecting EventSource. */
 export async function readJsonEventStream(
   response: Response,
-  signal?: AbortSignal,
-  limits = { maxEvents: 20, durationMs: 5000, maxBytes: 1_048_576 },
+  signal: AbortSignal | undefined,
+  limits: JsonEventStreamLimits,
 ): Promise<JsonEventBatch> {
+  assertJsonEventStreamLimits(limits);
   if (response.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() !== "text/event-stream") {
     void response.body?.cancel().catch(() => {});
     throw new HarnessApiError("Expected a text/event-stream response", 502);
@@ -60,7 +69,7 @@ export async function readJsonEventStream(
       if (chunk === "duration_limit") return { events, stop_reason: chunk };
       if (!chunk.done) {
         bytes += chunk.value.byteLength;
-        if (bytes > limits.maxBytes) throw new HarnessApiError("Event stream exceeded the 1 MiB batch size limit", 502);
+        if (bytes > limits.maxBytes) throw new HarnessApiError(`Event stream exceeded the ${limits.maxBytes} byte batch size limit`, 502);
       }
       pending += decoder.decode(chunk.value, { stream: !chunk.done });
       while (true) {

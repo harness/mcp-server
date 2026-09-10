@@ -32,6 +32,7 @@ describe("HarnessClient", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   describe("constructor and account getter", () => {
@@ -568,7 +569,106 @@ describe("HarnessClient", () => {
     });
   });
 
+  describe("request — bounded SSE transport", () => {
+    const sseLimits = { maxEvents: 1, durationMs: 1000, maxBytes: 1024 };
+
+    it("uses the caller's event limit for a non-Vibe endpoint", async () => {
+      const cancel = vi.fn();
+      const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new TextEncoder().encode('data: {"n":1}\n\ndata: {"n":2}\n\n')); }, cancel });
+      fetchSpy.mockResolvedValue(new Response(body, { headers: { "Content-Type": "text/event-stream" } }));
+      const client = new HarnessClient(makeConfig());
+      await expect(client.request({ path: "/other/events", responseType: "sse", sseLimits })).resolves.toEqual({ events: [{ n: 1 }], stop_reason: "event_limit" });
+      expect(cancel).toHaveBeenCalledOnce();
+    });
+
+    it("uses the caller's duration limit and clears the longer HTTP deadline", async () => {
+      vi.useFakeTimers();
+      const cancel = vi.fn();
+      const body = new ReadableStream<Uint8Array>({ cancel });
+      fetchSpy.mockResolvedValue(new Response(body, { headers: { "Content-Type": "text/event-stream" } }));
+      const client = new HarnessClient(makeConfig({ HARNESS_API_TIMEOUT_MS: 100 }));
+      const result = client.request({ path: "/other/events", responseType: "sse", sseLimits: { ...sseLimits, durationMs: 15 } });
+      await vi.advanceTimersByTimeAsync(15);
+      await expect(result).resolves.toEqual({ events: [], stop_reason: "duration_limit" });
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("uses the caller's byte limit", async () => {
+      fetchSpy.mockResolvedValue(new Response(': too many bytes\n', { headers: { "Content-Type": "text/event-stream" } }));
+      const client = new HarnessClient(makeConfig());
+      await expect(client.request({ path: "/other/events", responseType: "sse", sseLimits: { ...sseLimits, maxBytes: 4 } })).rejects.toThrow("4 byte batch size limit");
+    });
+
+    it.each([{ timeoutMs: undefined, deadline: 100 }, { timeoutMs: 50, deadline: 50 }])("keeps the HTTP deadline through SSE consumption ($deadline ms)", async ({ timeoutMs, deadline }) => {
+      vi.useFakeTimers();
+      const cancel = vi.fn();
+      const body = new ReadableStream<Uint8Array>({ cancel });
+      // Connection time counts against the same deadline as body consumption.
+      fetchSpy.mockImplementation(() => new Promise(resolve => setTimeout(() => resolve(new Response(body, { headers: { "Content-Type": "text/event-stream" } })), 20)));
+      const client = new HarnessClient(makeConfig({ HARNESS_API_TIMEOUT_MS: 100 }));
+      const failure = expect(client.request({ path: "/other/events", responseType: "sse", sseLimits, timeoutMs })).rejects.toMatchObject({ statusCode: 408, message: "Request timed out" });
+      await vi.advanceTimersByTimeAsync(deadline);
+      await failure;
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("distinguishes client cancellation from an HTTP timeout", async () => {
+      vi.useFakeTimers();
+      const controller = new AbortController();
+      const cancel = vi.fn();
+      fetchSpy.mockResolvedValue(new Response(new ReadableStream<Uint8Array>({ cancel }), { headers: { "Content-Type": "text/event-stream" } }));
+      const client = new HarnessClient(makeConfig());
+      const failure = expect(client.request({ path: "/other/events", responseType: "sse", sseLimits, signal: controller.signal })).rejects.toMatchObject({ statusCode: 499 });
+      await vi.advanceTimersByTimeAsync(0);
+      controller.abort();
+      await failure;
+      expect(cancel).toHaveBeenCalledOnce();
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it.each([
+      { limits: undefined },
+      { limits: { ...sseLimits, maxEvents: 0 } },
+      { limits: { ...sseLimits, maxBytes: Infinity } },
+      { limits: { ...sseLimits, durationMs: 2 ** 31 } },
+    ])("rejects missing or unbounded SSE policy before HTTP", async ({ limits }) => {
+      const client = new HarnessClient(makeConfig());
+      await expect(client.request({ path: "/other/events", responseType: "sse", sseLimits: limits })).rejects.toThrow("SSE requires explicit");
+      expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
+
   describe("request — error handling", () => {
+    it.each(["request", "requestStream"] as const)("preserves NG numeric codes and correlation IDs through %s", async method => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ message: "Service unavailable", code: 503, correlationId: "ng-corr", error: { message: "Not an NG envelope", details: { field: "ignore" } } }), { status: 503 }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+      await expect(client[method]({ path: "/ng/api/connectors" })).rejects.toMatchObject({
+        message: "Service unavailable", harnessCode: 503, correlationId: "ng-corr", statusCode: 503,
+      });
+      expect(fetchSpy).toHaveBeenCalledOnce();
+    });
+
+    it.each(["request", "requestStream"] as const)("includes nested Vibe validation details through %s", async method => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ error: { code: "INVALID_IMPORT", message: "Invalid import", details: { field: "mode" } }, correlationId: "bff-corr" }), { status: 422 }));
+      const client = new HarnessClient(makeConfig());
+      await expect(client[method]({ path: "/vibe/v1/projects/import" })).rejects.toMatchObject({
+        message: 'Invalid import — {"field":"mode"}', harnessCode: "INVALID_IMPORT", correlationId: "bff-corr", statusCode: 422,
+      });
+    });
+
+    it("redacts credentials and bounds nested Vibe error details", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({ error: { code: "INVALID_IMPORT", message: "Invalid import", details: { token: "private-token", field: "x".repeat(1000) } } }), { status: 422 }));
+      const client = new HarnessClient(makeConfig());
+      const error = await client.request({ path: "/vibe/v1/projects/import" }).then(() => { throw new Error("Expected failure"); }, err => err as HarnessApiError);
+      expect(error.message).toContain('"token":"[REDACTED]"');
+      expect(error.message).not.toContain("private-token");
+      expect(error.message.length).toBe("Invalid import — ".length + 401);
+    });
+
     it("throws HarnessApiError with parsed message on 400", async () => {
       fetchSpy.mockResolvedValue(new Response(
         JSON.stringify({ message: "Invalid input", code: "INVALID", correlationId: "corr-1" }),

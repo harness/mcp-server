@@ -1578,7 +1578,7 @@ Typical workflow:
 
 ### Vibe
 
-The `vibe` toolset covers the [Vibe Orchestrator BFF contract](tests/fixtures/vibe-bff-openapi.yaml) under `${HARNESS_BASE_URL}/vibe/v1`. It uses the existing Harness connection and account header, without adding account/org/project query parameters or scope fields to request bodies. The contract documents bearer/session authentication; the server's OAuth mode forwards the current session's bearer token. PAT acceptance by the Vibe gateway is not specified in this contract.
+The default-enabled `vibe` toolset covers the [Vibe Orchestrator BFF contract](tests/fixtures/vibe-bff-openapi.yaml) under `${HARNESS_BASE_URL}/vibe/v1`. It uses the existing Harness connection and account header, without adding account/org/project query parameters or scope fields to request bodies. The team validated the Vibe flow using Harness API-key authentication (PAT/SAT), so no opt-in setting is required for default sessions. The curated OpenAPI documents bearer/session authentication; the server's OAuth mode forwards the current session's bearer token. Automated regressions verify both header paths; gateway authentication remains subject to the target environment's configuration.
 
 | Resource Type | List | Get | Create | Update | Delete | Execute Actions |
 | ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
@@ -1612,7 +1612,7 @@ For an existing ZIP, prepare the upload:
 }
 ```
 
-Pass this to `harness_execute`. The size must describe the actual ZIP; `size_bytes`, `content_type`, and `md5` are optional and nullable. Preparation returns `projectId`, `sourceId`, and `upload`, including each file's `uploadUrl`, `method`, `headers`, and `expiresAt`. Upload the file bytes directly using that signed URL, method, and headers; preserve the URL exactly and do not add Harness credentials to the storage request. The prepare action does not read or upload local files.
+Pass this to `harness_execute`. The size must describe the actual ZIP; `size_bytes`, `content_type`, and `md5` are optional and nullable. Additional prepare fields are preserved for backend validation, as permitted by the OpenAPI. Preparation returns `projectId`, `sourceId`, and `upload`, including each file's `uploadUrl`, `method`, `headers`, and `expiresAt`. Upload the file bytes directly using that signed URL, method, and headers; preserve the URL exactly and do not add Harness credentials to the storage request. The prepare action does not read or upload local files.
 
 After a successful upload, explicitly deploy:
 
@@ -1626,7 +1626,7 @@ After a successful upload, explicitly deploy:
 
 For JSON imports, use the returned `id` instead. Deployment also accepts `body: {"project_id": "<Vibe app id>"}` or `params.app_id`; the API wire field is snake_case `project_id` even though prepare returns camelCase `projectId`. The generic tool's top-level `project_id` is a Harness scope identifier and is never used as the Vibe app id. Import and prepare create the app/source; neither starts deployment. Writes are not automatically retried, and deployment uses the existing high-risk confirmation policy.
 
-Read progress with `harness_get(resource_type="vibe_app_lifecycle", resource_id="<Vibe app id>")`. It retains app URLs, execution stages, substeps, failures, log lines, and build-analyzer details. The `events` execute action consumes the SSE endpoint as a finite batch: up to 20 JSON events or five seconds after connection, with a 1 MiB response limit. It returns `events` and `stop_reason` (`end`, `event_limit`, or `duration_limit`), closes the stream, and does not reconnect. Events are transient diffs with no documented replay cursor; use lifecycle get for an authoritative snapshot. Both lifecycle reads are available in read-only mode.
+Read progress with `harness_get(resource_type="vibe_app_lifecycle", resource_id="<Vibe app id>")`. It retains app URLs, execution stages, substeps, failures, log lines, and build-analyzer details. The `events` execute action accepts `resource_id` or `params.app_id` and consumes the SSE endpoint as a finite batch: up to 20 JSON events or five seconds after connection, with a 1 MiB response limit. These limits belong to the Vibe endpoint. The connection's `HARNESS_API_TIMEOUT_MS` also bounds connection and stream consumption together; expiration returns a timeout error. A completed batch returns `events` and `stop_reason` (`end`, `event_limit`, or `duration_limit`) and closes the stream. Neither initial connection failures nor broken streams are retried. Events are transient diffs with no documented replay cursor; use lifecycle get for an authoritative snapshot. Both lifecycle reads are available in read-only mode.
 
 ### Feature Flags
 

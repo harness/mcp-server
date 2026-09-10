@@ -321,8 +321,10 @@ export interface EndpointSpec {
   headers?: Record<string, string>;
   /** For GET: extract the useful part from the raw response */
   responseExtractor?: (raw: unknown, input?: Record<string, unknown>) => unknown;
-  /** Request JSON, binary, or a bounded JSON SSE batch (20 events / 5 seconds / 1 MiB). */
+  /** Request JSON, binary, or a bounded JSON SSE batch. */
   responseType?: "json" | "buffer" | "sse";
+  /** Required with responseType=sse; explicitly declares this endpoint's batch policy. */
+  sseLimits?: RequestOptions["sseLimits"];
   /** Description shown in harness_describe output */
   description?: string;
   /** Optional body schema for write operations — exposed via harness_describe */

@@ -99,11 +99,11 @@ describe("Vibe generic MCP tool workflow", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("returns lifecycle event batches in read-only mode through harness_execute", async () => {
+  it.each([{ resource_id: appId }, { params: { app_id: appId } }])("returns lifecycle event batches in read-only mode through either identifier form", async identifier => {
     const event = { type: "preview_ready", payload: { previewUrl: "https://preview.example" }, at: "now" };
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(`data: ${JSON.stringify(event)}\n\n`, { headers: { "Content-Type": "text/event-stream" } }));
     const tools = setup({ HARNESS_READ_ONLY: true, HARNESS_AUTO_APPROVE_RISK: "none" });
-    const result = await tools.call("harness_execute", { resource_type: "vibe_app_lifecycle", action: "events", resource_id: appId });
+    const result = await tools.call("harness_execute", { resource_type: "vibe_app_lifecycle", action: "events", ...identifier });
     expect(data(result)).toEqual({ events: [event], stop_reason: "end" });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
@@ -118,6 +118,6 @@ describe("Vibe generic MCP tool workflow", () => {
       expect.objectContaining({ action: "deploy", bodySchema: expect.objectContaining({ fields: [expect.objectContaining({ name: "project_id" })] }) }),
     ]));
     const lifecycle = data(await tools.call("harness_describe", { resource_type: "vibe_app_lifecycle" }));
-    expect(lifecycle.executeActions).toEqual([expect.objectContaining({ action: "events", description: expect.stringContaining("5 seconds") })]);
+    expect(lifecycle.executeActions).toEqual([expect.objectContaining({ action: "events", description: expect.stringContaining("5 seconds"), paramsSchema: { fields: [{ name: "app_id", required: true, description: expect.stringContaining("resource_id or params.app_id") }] } })]);
   });
 });

@@ -29,7 +29,7 @@ function prepareBody(input: Record<string, unknown>): Record<string, unknown> {
   const body = objectBody(input);
   const name = requiredString(body.name, "body.name");
   if (!isRecord(body.file)) throw new Error("body.file must be an object with a path.");
-  const file: Record<string, unknown> = { path: requiredString(body.file.path, "body.file.path") };
+  const file: Record<string, unknown> = { ...body.file, path: requiredString(body.file.path, "body.file.path") };
   if (body.file.size_bytes !== undefined) {
     const size = body.file.size_bytes;
     if (size !== null && (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0)) {
@@ -44,7 +44,8 @@ function prepareBody(input: Record<string, unknown>): Record<string, unknown> {
       file[field] = value;
     }
   }
-  return { name, file };
+  // The OpenAPI does not prohibit additional properties at either object level.
+  return { ...body, name, file };
 }
 
 function deployBody(input: Record<string, unknown>): Record<string, unknown> {
@@ -102,7 +103,7 @@ export const vibeToolset: ToolsetDefinition = {
           operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           actionDescription: "Create a Source + App and obtain signed file upload targets. Returns projectId, sourceId, and upload metadata; does not upload bytes or deploy.",
           bodySchema: {
-            description: "Project name and metadata for the file to upload. After prepare, upload directly to object storage, then deploy separately.",
+            description: "Project name and metadata for the file to upload. Additional fields are preserved for backend validation. After prepare, upload directly to object storage, then deploy separately.",
             fields: [
               { name: "name", type: "string", required: true, description: "Vibe app name." },
               { name: "file", type: "object", required: true, description: "Upload file metadata (snake_case).", fields: [
@@ -157,9 +158,11 @@ export const vibeToolset: ToolsetDefinition = {
           pathParams: { app_id: "app_id" },
           headers: { Accept: "text/event-stream" },
           responseType: "sse",
+          sseLimits: { maxEvents: 20, durationMs: 5000, maxBytes: 1_048_576 },
           responseExtractor: vibeLifecycleEventsExtract,
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          actionDescription: "Read a bounded SSE batch: up to 20 JSON events over 5 seconds after connection, capped at 1 MiB. Returns events and stop_reason; no automatic reconnect or replay. Use get for a complete snapshot.",
+          operationPolicy: { risk: "read", retryPolicy: "do_not_retry" },
+          paramsSchema: { fields: [{ name: "app_id", required: true, description: "Vibe app UUID. Supply as resource_id or params.app_id; resource_id resolves this required path identifier." }] },
+          actionDescription: "Read a bounded SSE batch: up to 20 JSON events over 5 seconds after connection, capped at 1 MiB and subject to the connection's HTTP timeout. Returns events and stop_reason; no connection retries, automatic reconnect, or replay. Use get for a complete snapshot.",
         },
       },
     },

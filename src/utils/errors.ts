@@ -25,7 +25,7 @@ export class HarnessApiError extends Error {
   constructor(
     message: string,
     public readonly statusCode: number,
-    public readonly harnessCode?: string,
+    public readonly harnessCode?: string | number,
     public readonly correlationId?: string,
     cause?: unknown,
   ) {

@@ -839,6 +839,7 @@ export class Registry {
       ...(baseUrl ? { baseUrl } : {}),
       ...(Object.keys(productHeaders).length > 0 ? { headers: productHeaders } : {}),
       ...(spec.responseType ? { responseType: spec.responseType } : {}),
+      ...(spec.sseLimits ? { sseLimits: spec.sseLimits } : {}),
       ...(product !== "harness" ? { product } : {}),
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
