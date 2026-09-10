@@ -5,13 +5,11 @@ import { isRecord } from "../../utils/type-guards.js";
 
 /**
  * Validate base64-declared commit file payloads client-side, and normalize
- * away embedded whitespace. Harness Code's commit-files endpoint decodes
- * `encoding: "base64"` payloads with Go's `base64.StdEncoding.DecodeString`,
- * which (unlike this validator, and unlike some other base64 decoders)
- * rejects embedded whitespace/newlines outright with an opaque Internal
- * (500-style) error rather than a clean 400 — so payload whitespace must be
- * stripped here too, or a payload that validates fine client-side would
- * still fail server-side.
+ * away embedded whitespace. Harness Code's commit-files endpoint rejects
+ * embedded whitespace/newlines in `encoding: "base64"` payloads outright,
+ * with an opaque Internal (500-style) error rather than a clean 400 — so
+ * payload whitespace must be stripped here too, or a payload that validates
+ * fine client-side would still fail server-side.
  */
 function buildCommitFilesBody(input: Record<string, unknown>): unknown {
   const body = input.body;
