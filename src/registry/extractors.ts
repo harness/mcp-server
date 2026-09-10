@@ -10,6 +10,70 @@ import {
   buildStageMetadataMap,
 } from "../utils/runtime-input-metadata.js";
 import type { PreflightContext } from "./types.js";
+import { HarnessApiError } from "../utils/errors.js";
+
+/** Vibe returns unwrapped, mixed-case DTOs. Keep contract fields without forwarding internal metadata. */
+function pickVibeFields(value: unknown, fields: readonly string[]): Record<string, unknown> {
+  if (!isRecord(value)) throw new HarnessApiError("Unexpected Vibe response: expected an object", 502);
+  return Object.fromEntries(fields.filter((field) => value[field] !== undefined).map((field) => [field, value[field]]));
+}
+
+export function vibeProjectExtract(raw: unknown): unknown {
+  return pickVibeFields(raw, ["id", "name", "source_type", "source_path", "latest_execution_id", "created_at"]);
+}
+
+export function vibeExecutionExtract(raw: unknown): unknown {
+  return pickVibeFields(raw, ["id", "project_id", "status", "error_message", "created_at"]);
+}
+
+export function vibePrepareExtract(raw: unknown): unknown {
+  const result = pickVibeFields(raw, ["projectId", "sourceId", "upload"]);
+  const upload = pickVibeFields(result.upload, ["uploadId", "files", "expiresAt"]);
+  if (!Array.isArray(upload.files)) throw new HarnessApiError("Unexpected Vibe upload response: files must be an array", 502);
+  upload.files = upload.files.map((file) => pickVibeFields(file, ["path", "objectPath", "uploadUrl", "method", "headers", "expiresAt"]));
+  result.upload = upload;
+  return result;
+}
+
+function projectVibeFailure(value: unknown): unknown {
+  if (value === null) return null;
+  const failure = pickVibeFields(value, ["stageKey", "subStepKey", "summary", "file", "exitCode", "logLines", "suggestion", "patch", "attempt", "maxAttempts", "aiReason"]);
+  if (failure.aiReason !== undefined && failure.aiReason !== null) {
+    const reason = pickVibeFields(failure.aiReason, ["rootCause", "primaryError", "suggestedFix", "fixPrompt", "generatedInMs"]);
+    if (reason.primaryError !== undefined && reason.primaryError !== null) {
+      reason.primaryError = pickVibeFields(reason.primaryError, ["ref", "message"]);
+    }
+    failure.aiReason = reason;
+  }
+  return failure;
+}
+
+function projectVibeStage(value: unknown): unknown {
+  const stage = pickVibeFields(value, ["id", "executionId", "appId", "stageKey", "order", "status", "endUserMessage", "adminMessage", "detail", "subSteps", "failure", "startedAt", "finishedAt", "durationLabel", "harnessExecutionId", "harnessExecutionUrl", "artifactRefs", "logs", "origin"]);
+  if (Array.isArray(stage.subSteps)) {
+    stage.subSteps = stage.subSteps.map((step) => pickVibeFields(step, ["key", "label", "state", "durationLabel", "detail", "startedAt", "finishedAt", "href", "linkLabel", "kind"]));
+  }
+  if (stage.failure !== undefined) stage.failure = projectVibeFailure(stage.failure);
+  return stage;
+}
+
+export function vibeLifecycleExtract(raw: unknown): unknown {
+  const result = pickVibeFields(raw, ["app", "execution", "currentStageKey", "overallPercent", "elapsedSeconds", "phase", "failure", "harnessExecutionId", "harnessExecutionUrl"]);
+  result.app = pickVibeFields(result.app, ["id", "name", "status", "approvalStatus", "previewUrl", "productionUrl", "repoUrl", "latestExecutionId", "isOnboarded"]);
+  const execution = pickVibeFields(result.execution, ["id", "appId", "type", "status", "startedAt", "finishedAt", "triggeredBy", "stages", "origin"]);
+  if (Array.isArray(execution.stages)) execution.stages = execution.stages.map(projectVibeStage);
+  result.execution = execution;
+  if (result.failure !== undefined) result.failure = projectVibeFailure(result.failure);
+  return result;
+}
+
+export function vibeLifecycleEventsExtract(raw: unknown): unknown {
+  const result = pickVibeFields(raw, ["events", "stop_reason"]);
+  if (!Array.isArray(result.events)) throw new HarnessApiError("Unexpected Vibe event batch: events must be an array", 502);
+  // payload is deliberately open-ended in the OpenAPI; retain event-specific details.
+  result.events = result.events.map((event) => pickVibeFields(event, ["type", "payload", "at"]));
+  return result;
+}
 
 /** Extract `data` from standard NG API responses: `{ status, data, ... }` */
 export const ngExtract = (raw: unknown): unknown => {

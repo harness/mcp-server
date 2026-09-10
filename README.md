@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 243 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 245 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,8 +10,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 243 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 40 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
+- **11 tools, 245 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 41 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **35 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -1261,7 +1261,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-243 resource types organized across 40 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+245 resource types organized across 41 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1576,6 +1576,58 @@ Typical workflow:
 6. `harness_get` on `release_input`, `release_execution_phase_input`, `release_execution_phase_output`, `release_execution_activity_output`, or `release_execution_activity_input` using `release_id` plus `params.phase_identifier` / `params.activity_identifier` / `activity_execution_id` as documented on each resource.
 
 
+### Vibe
+
+The default-enabled `vibe` toolset covers the [Vibe Orchestrator BFF contract](tests/fixtures/vibe-bff-openapi.yaml) under `${HARNESS_BASE_URL}/vibe/v1`. It uses the existing Harness connection and account header, without adding account/org/project query parameters or scope fields to request bodies. The team validated the Vibe flow using Harness API-key authentication (PAT/SAT), so no opt-in setting is required for default sessions. The curated OpenAPI documents bearer/session authentication; the server's OAuth mode forwards the current session's bearer token. Automated regressions verify both header paths; gateway authentication remains subject to the target environment's configuration.
+
+| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
+| ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `vibe_project` |      |     | x      |        |        | `prepare`, `deploy` |
+| `vibe_app_lifecycle` | | x | | | | `events` |
+
+The API supports two intake paths. Keep these API-native request shapes:
+
+| Source available to the coding agent | API flow |
+| ----------------------------------- | -------- |
+| GitHub repository link/connector | `harness_create` with `resource_type="vibe_project"` and `body.mode` plus the mode-specific fields. The contract names `github_link` and `github_connector` but does not define their URL, branch, or connector field shapes; these fields are forwarded to the backend without inventing a mapping. |
+| ZIP file | Call `prepare` with the app name and file metadata, upload the bytes to the returned signed target, then call `deploy`. |
+| Local source directory | The coding agent archives the intended workspace source into a ZIP locally, then follows the ZIP flow. A local path or conversational context is not an API-supported source upload. |
+
+When packaging a directory, include the source, manifests, lockfiles, configuration, and intended uncommitted edits needed to build it. Exclude credentials, `.git`, installed dependencies, and generated artifacts. Packaging and the signed upload happen where the files are accessible; a hosted MCP server cannot read the coding agent's local directory.
+
+For an existing ZIP, prepare the upload:
+
+```json
+{
+  "resource_type": "vibe_project",
+  "action": "prepare",
+  "body": {
+    "name": "demo-app",
+    "file": {
+      "path": "app.zip",
+      "size_bytes": 12345,
+      "content_type": "application/zip"
+    }
+  }
+}
+```
+
+Pass this to `harness_execute`. The size must describe the actual ZIP; `size_bytes`, `content_type`, and `md5` are optional and nullable. Additional prepare fields are preserved for backend validation, as permitted by the OpenAPI. Preparation returns `projectId`, `sourceId`, and `upload`, including each file's `uploadUrl`, `method`, `headers`, and `expiresAt`. Upload the file bytes directly using that signed URL, method, and headers; preserve the URL exactly and do not add Harness credentials to the storage request. The prepare action does not read or upload local files.
+
+After a successful upload, explicitly deploy:
+
+```json
+{
+  "resource_type": "vibe_project",
+  "action": "deploy",
+  "resource_id": "<projectId returned by prepare>"
+}
+```
+
+For JSON imports, use the returned `id` instead. Deployment also accepts `body: {"project_id": "<Vibe app id>"}` or `params.app_id`; the API wire field is snake_case `project_id` even though prepare returns camelCase `projectId`. The generic tool's top-level `project_id` is a Harness scope identifier and is never used as the Vibe app id. Import and prepare create the app/source; neither starts deployment. Writes are not automatically retried, and deployment uses the existing high-risk confirmation policy.
+
+Read progress with `harness_get(resource_type="vibe_app_lifecycle", resource_id="<Vibe app id>")`. It retains app URLs, execution stages, substeps, failures, log lines, and build-analyzer details. The `events` execute action accepts `resource_id` or `params.app_id` and consumes the SSE endpoint as a finite batch: up to 20 JSON events or five seconds after connection, with a 1 MiB response limit. These limits belong to the Vibe endpoint. The connection's `HARNESS_API_TIMEOUT_MS` also bounds connection and stream consumption together; expiration returns a timeout error. A completed batch returns `events` and `stop_reason` (`end`, `event_limit`, or `duration_limit`) and closes the stream. Neither initial connection failures nor broken streams are retried. Events are transient diffs with no documented replay cursor; use lifecycle get for an authoritative snapshot. Both lifecycle reads are available in read-only mode.
+
 ### Feature Flags
 
 
@@ -1887,7 +1939,7 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 40 of 43 toolsets are enabled. Three toolsets are opt-in and excluded from the defaults:
+By default, 41 of 44 toolsets are enabled. Three toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
@@ -1971,6 +2023,7 @@ Available toolset names:
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
 | `registries-v3` *(opt-in)* | package_v3, version_v3, file_v3, registry_metadata_v3, package_metadata_v3, version_metadata_v3, file_metadata_v3, metadata_key_v3, metadata_value_v3, artifact_scan_v3, bulk_scan_evaluation_v3, firewall_exception_v3, firewall_exception_version_v3                                       |
 | `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
+| `vibe`                | vibe_project, vibe_app_lifecycle |
 
 
 ## Architecture
@@ -1988,8 +2041,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  40 Toolsets      |      (data files, not code)
-                |  243 Resource Types|
+                |  41 Toolsets      |      (data files, not code)
+                |  245 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
