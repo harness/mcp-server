@@ -213,10 +213,40 @@ describe("parseHarnessUrl", () => {
     const result = parseHarnessUrl(
       "https://qa.harness.io/ng/account/abc123/all/ai-agents/orgs/avitest/projects/avi/worker-agents/ca_testashish?type=custom",
     );
+    expect(result.account_id).toBe("abc123");
+    expect(result.org_id).toBe("avitest");
+    expect(result.project_id).toBe("avi");
     expect(result.resource_type).toBe("agent");
     expect(result.agent_id).toBe("ca_testashish");
     expect(result.resource_id).toBe("ca_testashish");
     expect(result.resource_scope).toBe("project");
+  });
+
+  it("does not treat ai-agents module home as resource_type agent", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc123/all/ai-agents",
+    );
+    expect(result.account_id).toBe("abc123");
+    expect(result.resource_type).toBeUndefined();
+    expect(result.agent_id).toBeUndefined();
+  });
+
+  it("does not treat nested worker-agents path segment as agent", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc123/all/ai-agents/orgs/avitest/projects/avi/worker-agents/applications/myApp",
+    );
+    expect(result.resource_type).toBe("gitops_application");
+    expect(result.agent_id).toBeUndefined();
+    expect(result.resource_id).toBe("myApp");
+  });
+
+  it("handles gitops agent URL without ai-agents segment as gitops_agent", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc123/all/orgs/default/projects/myProject/gitops/agents/myAgent",
+    );
+    expect(result.resource_type).toBe("gitops_agent");
+    expect(result.agent_id).toBe("myAgent");
+    expect(result.resource_id).toBe("myAgent");
   });
 
   it("handles legacy ai-agents detail URL with /agents/ segment (not gitops_agent)", () => {

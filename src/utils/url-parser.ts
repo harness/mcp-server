@@ -223,32 +223,50 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
   }
 
   // 7. AI Worker Agents (ai-agents module):
-  // .../all/ai-agents/orgs/{org}/projects/{project}/worker-agents[/{agentId}]
-  // Legacy detail (pre AIPLAT-1530): .../ai-agents/.../agents/{agentId}
+  // List:  .../all/ai-agents/orgs/{org}/projects/{project}/worker-agents
+  // Detail: .../worker-agents/{agentId}
+  // Legacy detail: .../ai-agents/.../agents/{agentId}
   const aiAgentsIdx = segments.indexOf("ai-agents");
   if (aiAgentsIdx >= 0) {
-    result.resource_type = "agent";
-    if (result.project_id) {
-      result.resource_scope = "project";
-    } else if (result.org_id) {
-      result.resource_scope = "org";
-    }
+    const readAiAgentId = (segmentIdx: number): string | undefined => {
+      if (segmentIdx < 0 || segmentIdx + 1 >= segments.length) return undefined;
+      const candidate = decodeURIComponent(segments[segmentIdx + 1]!);
+      if (!candidate || STRUCTURAL.has(candidate) || RESOURCE_SEGMENTS[candidate]) {
+        return undefined;
+      }
+      return candidate;
+    };
+
+    const applyAiAgentScope = (): void => {
+      if (result.project_id) {
+        result.resource_scope = "project";
+      } else if (result.org_id) {
+        result.resource_scope = "org";
+      }
+    };
 
     const workerAgentsIdx = segments.indexOf("worker-agents", aiAgentsIdx);
-    if (workerAgentsIdx >= 0 && workerAgentsIdx + 1 < segments.length) {
-      const agentId = decodeURIComponent(segments[workerAgentsIdx + 1]!);
-      if (agentId && !STRUCTURAL.has(agentId)) {
+    if (workerAgentsIdx >= 0) {
+      const agentId = readAiAgentId(workerAgentsIdx);
+      if (agentId) {
+        result.resource_type = "agent";
+        applyAiAgentScope();
         result.agent_id = agentId;
         result.resource_id = agentId;
+      } else if (workerAgentsIdx + 1 >= segments.length) {
+        // worker-agents with no following segment is the list page; do not fall
+        // through to legacy .../agents/{id} parsing below.
+        result.resource_type = "agent";
+        applyAiAgentScope();
       }
     } else {
       const legacyAgentsIdx = segments.indexOf("agents", aiAgentsIdx);
-      if (legacyAgentsIdx >= 0 && legacyAgentsIdx + 1 < segments.length) {
-        const agentId = decodeURIComponent(segments[legacyAgentsIdx + 1]!);
-        if (agentId && !STRUCTURAL.has(agentId)) {
-          result.agent_id = agentId;
-          result.resource_id = agentId;
-        }
+      const agentId = readAiAgentId(legacyAgentsIdx);
+      if (agentId) {
+        result.resource_type = "agent";
+        applyAiAgentScope();
+        result.agent_id = agentId;
+        result.resource_id = agentId;
       }
     }
   }
