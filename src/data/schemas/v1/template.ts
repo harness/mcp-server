@@ -41,9 +41,7 @@ const schema: Record<string, any> = {
           }
         },
         "inputs": {
-          "description": "Template inputs. Open object so extended types (choice, list, connector), UI metadata, and expression-based required/visible are allowed.",
-          "type": "object",
-          "additionalProperties": true
+          "$ref": "#/definitions/template_v1/common/NGVariableV1Wrapper"
         }
       },
       "oneOf": [
@@ -4714,11 +4712,15 @@ const schema: Record<string, any> = {
             "properties": {
               "id": {
                 "description": "Unique identifier for the step.",
-                "type": "string"
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$"
               },
               "name": {
                 "description": "Display name of the step.",
-                "type": "string"
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z-_ ]{0,127}$",
+                "minLength": 1,
+                "maxLength": 128
               },
               "description": {
                 "description": "Description of the step.",
