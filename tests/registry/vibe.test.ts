@@ -5,7 +5,13 @@ import type { Config } from "../../src/config.js";
 import { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
 import { vibeToolset } from "../../src/registry/toolsets/vibe.js";
-import { vibeLifecycleExtract, vibeLifecycleEventsExtract, vibePrepareExtract } from "../../src/registry/extractors.js";
+import {
+  vibeProjectExtract,
+  vibeExecutionExtract,
+  vibeLifecycleExtract,
+  vibeLifecycleEventsExtract,
+  vibePrepareExtract,
+} from "../../src/registry/extractors.js";
 
 const appId = "08aff27b-6108-4589-bc39-eb32f94c8d5e";
 const imported = { id: appId, name: "demo", source_type: "github", source_path: "repo", latest_execution_id: null, created_at: "2026-09-09T00:00:00Z" };
@@ -146,10 +152,13 @@ describe("Vibe validation and projection", () => {
     { action: "prepare", input: { body: { name: "demo", file: [] } }, error: "body.file" },
     { action: "prepare", input: { body: { name: "demo", file: { path: "" } } }, error: "body.file.path" },
     ...[-1, 1.5, "100", false].map(size => ({ action: "prepare", input: { body: { name: "demo", file: { path: "a.zip", size_bytes: size } } }, error: "size_bytes" })),
+    { action: "prepare", input: { body: { name: "demo", file: { path: "a.zip", content_type: 1 } } }, error: "content_type" },
+    { action: "prepare", input: { body: { name: "demo", file: { path: "a.zip", md5: false } } }, error: "md5" },
     { action: "deploy", input: { project_id: "ambient-project" }, error: "Vibe app id" },
     { action: "deploy", input: { body: { projectId: appId } }, error: "body.project_id" },
     { action: "deploy", input: { app_id: "a", body: { project_id: "b" } }, error: "conflicts" },
     { action: "deploy", input: { body: { project_id: null } }, error: "body.project_id" },
+    { action: "deploy", input: { body: "not-an-object" }, error: "body must" },
   ];
   it.each(invalid)("rejects invalid $action input before HTTP", async ({ action, input, error }) => {
     const request = vi.fn();
@@ -158,6 +167,32 @@ describe("Vibe validation and projection", () => {
     const call = action === "create" ? registry.dispatch(client, "vibe_project", "create", input) : registry.dispatchExecute(client, "vibe_project", action, input);
     await expect(call).rejects.toThrow(error);
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it("passes import mode-specific fields through to the request body", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(response(imported));
+    const cfg = config();
+    const registry = new Registry(cfg);
+    const client = new HarnessClient(cfg);
+    const body = { mode: "github_connector", connector_ref: "org.github", repository: "demo", options: { branch: "main" } };
+    await registry.dispatch(client, "vibe_project", "create", { body });
+    expect(JSON.parse(fetchSpy.mock.calls[0]![1]!.body as string)).toEqual(body);
+    vi.restoreAllMocks();
+  });
+
+  it("accepts null size_bytes on prepare and deploys with app_id only", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(response(upload))
+      .mockResolvedValueOnce(response(execution));
+    const cfg = config();
+    const registry = new Registry(cfg);
+    const client = new HarnessClient(cfg);
+    const prepareBody = { name: "demo", file: { path: "app.zip", size_bytes: null, content_type: null, md5: null } };
+    await registry.dispatchExecute(client, "vibe_project", "prepare", { body: prepareBody });
+    expect(JSON.parse(fetchSpy.mock.calls[0]![1]!.body as string)).toEqual(prepareBody);
+    await registry.dispatchExecute(client, "vibe_project", "deploy", { app_id: appId });
+    expect(JSON.parse(fetchSpy.mock.calls[1]![1]!.body as string)).toEqual({ project_id: appId });
+    vi.restoreAllMocks();
   });
 
   it("keeps signed upload URLs and headers byte-for-byte while removing internal fields", () => {
@@ -180,5 +215,27 @@ describe("Vibe validation and projection", () => {
     Object.assign(raw.failure.aiReason.primaryError, { internal: true });
     expect(vibeLifecycleExtract(raw)).toEqual(expected);
     expect(vibeLifecycleEventsExtract({ events: [{ ...event, payload: { arbitrary: { values: [] } }, debug: true }], stop_reason: "duration_limit", internal: true })).toEqual({ events: [{ ...event, payload: { arbitrary: { values: [] } } }], stop_reason: "duration_limit" });
+  });
+
+  it("strips internal metadata from project and execution responses", () => {
+    const projectRaw = { ...imported, internal: true, debug: { nested: true } };
+    expect(vibeProjectExtract(projectRaw)).toEqual(imported);
+    const executionRaw = { ...execution, traceId: "remove", internal: true };
+    expect(vibeExecutionExtract(executionRaw)).toEqual(execution);
+  });
+
+  it.each([
+    {
+      label: "prepare upload files",
+      call: () => vibePrepareExtract({ projectId: appId, sourceId: "s", upload: { uploadId: "u", files: "bad", expiresAt: "t" } }),
+      error: "files must be an array",
+    },
+    {
+      label: "lifecycle event batch",
+      call: () => vibeLifecycleEventsExtract({ events: "bad", stop_reason: "end" }),
+      error: "events must be an array",
+    },
+  ])("rejects malformed $label responses", ({ call, error }) => {
+    expect(call).toThrow(error);
   });
 });

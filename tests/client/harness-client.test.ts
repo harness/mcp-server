@@ -566,6 +566,21 @@ describe("HarnessClient", () => {
       const result = await client.request<{ data: { id: string } }>({ path: "/test" });
       expect(result.data.id).toBe("p1");
     });
+
+    it("returns parsed SSE batches when responseType is sse", async () => {
+      const event = { type: "heartbeat", payload: { percent: 0 }, at: "2026-09-09T00:00:00Z" };
+      fetchSpy.mockResolvedValue(new Response(`data: ${JSON.stringify(event)}\n\n`, {
+        headers: { "Content-Type": "text/event-stream" },
+      }));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      const result = await client.request<{ events: unknown[]; stop_reason: string }>({
+        path: "/vibe/v1/apps/test/lifecycle/events",
+        responseType: "sse",
+        retryPolicy: "safe",
+      });
+      expect(result).toEqual({ events: [event], stop_reason: "end" });
+    });
   });
 
   describe("request — error handling", () => {
@@ -587,6 +602,43 @@ describe("HarnessClient", () => {
         expect(e.harnessCode).toBe("INVALID");
         expect(e.correlationId).toBe("corr-1");
       }
+    });
+
+    it.each([
+      { method: "request" as const },
+      { method: "requestStream" as const },
+    ])("surfaces nested BFF error envelopes via $method", async ({ method }) => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({ error: { code: "APP_NOT_FOUND", message: "App was not found" } }),
+        { status: 404 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+      const call = method === "request"
+        ? client.request({ path: "/vibe/v1/apps/missing/lifecycle" })
+        : client.requestStream({ path: "/vibe/v1/apps/missing/lifecycle/events" });
+      await expect(call).rejects.toMatchObject({
+        harnessCode: "APP_NOT_FOUND",
+        statusCode: 404,
+        message: "App was not found",
+      });
+    });
+
+    it("prefers top-level message and code over nested error fields", async () => {
+      fetchSpy.mockResolvedValue(new Response(
+        JSON.stringify({
+          message: "Top-level message",
+          code: "TOP_LEVEL",
+          error: { code: "NESTED", message: "Nested message" },
+        }),
+        { status: 409 },
+      ));
+      const client = new HarnessClient(makeConfig({ HARNESS_MAX_RETRIES: 0 }));
+
+      await expect(client.request({ path: "/vibe/v1/projects/deploy" })).rejects.toMatchObject({
+        harnessCode: "TOP_LEVEL",
+        message: "Top-level message",
+        statusCode: 409,
+      });
     });
 
     it.each([
