@@ -4,6 +4,7 @@
  */
 import YAML from "yaml";
 import { asRecord, isRecord } from "../utils/type-guards.js";
+import { decodeBase64ToUtf8 } from "../utils/base64.js";
 import { parseZipCsv } from "../utils/zip-csv.js";
 import {
   extractVariableInputMetadata,
@@ -1466,6 +1467,79 @@ export const fmeGetExtract = (raw: unknown): unknown => {
     flattenTrafficType(raw as Record<string, unknown>);
   }
   return raw;
+};
+
+// ── Harness Code — file content ───────────────────────────────────────────
+
+function fileContentHints(content: Record<string, unknown>, hasText: boolean): string[] {
+  const hints: string[] = [];
+
+  const lfsObjectId = typeof content.lfs_object_id === "string" ? content.lfs_object_id : undefined;
+  if (lfsObjectId) {
+    hints.push(
+      `This file is stored via Git LFS — the returned content is the LFS pointer (lfs_object_id: ${lfsObjectId}), not the actual file body. Clone the repo with LFS support enabled to fetch the real content.`,
+    );
+  }
+
+  if (!hasText) {
+    hints.push(
+      "content.text was omitted: the decoded bytes are not valid UTF-8 (likely a binary file), or the server's base64 payload was malformed. Use content.data (base64) for the raw bytes.",
+    );
+  }
+
+  const size = typeof content.size === "number" ? content.size : undefined;
+  const dataSize = typeof content.data_size === "number" ? content.data_size : undefined;
+  if (size !== undefined && dataSize !== undefined && dataSize < size) {
+    hints.push(
+      `Content was truncated by the server (${size} byte file, only ${dataSize} bytes returned — the /content endpoint caps at 10 MB). Clone the repo or use a range-limited approach to read the full file.`,
+    );
+  }
+
+  return hints;
+}
+
+/**
+ * Harness Code's `/content/{path}` endpoint always base64-encodes file
+ * content (`content.encoding === "base64"`). Add a decoded `content.text`
+ * field so callers get readable text without decoding client-side, dropping
+ * `content.data` once decoded so agents aren't paying to carry both copies
+ * of the same bytes — and flipping `content.encoding` to `"utf8"` so it
+ * still accurately describes what's on the object. Binary files that don't
+ * decode to clean UTF-8 keep `content.data`/`encoding: "base64"` and get a
+ * `_hint` instead of a silently-omitted `text`.
+ *
+ * Also flags truncation (the endpoint caps content at 10 MB and silently
+ * returns a partial blob rather than erroring) and Git LFS pointers (the
+ * decoded "file" is actually the LFS pointer document, not the real bytes).
+ */
+export const fileContentGetExtract = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  const content = raw.content;
+  if (!isRecord(content) || content.encoding !== "base64" || typeof content.data !== "string") {
+    return raw;
+  }
+
+  const decodedText = decodeBase64ToUtf8(content.data);
+  const decodedContent: Record<string, unknown> = { ...content };
+  const hasText = decodedText !== undefined;
+  if (hasText) {
+    decodedContent.text = decodedText;
+    decodedContent.encoding = "utf8";
+    delete decodedContent.data;
+  }
+
+  const size = typeof content.size === "number" ? content.size : undefined;
+  const dataSize = typeof content.data_size === "number" ? content.data_size : undefined;
+  if (size !== undefined && dataSize !== undefined && dataSize < size) {
+    decodedContent._truncated = true;
+  }
+
+  const hints = fileContentHints(content, hasText);
+  if (hints.length > 0) {
+    decodedContent._hint = hints.join(" ");
+  }
+
+  return { ...raw, content: decodedContent };
 };
 
 // ── Release Management (RMG) ──────────────────────────────────────────────
