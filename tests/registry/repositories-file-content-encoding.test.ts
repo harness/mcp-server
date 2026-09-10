@@ -8,7 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
-import { fileContentGetExtract } from "../../src/registry/toolsets/repositories.js";
+import { fileContentGetExtract } from "../../src/registry/extractors.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -37,9 +37,10 @@ function makeClient(requestFn: (...args: unknown[]) => unknown): HarnessClient {
   } as unknown as HarnessClient;
 }
 
-describe("fileContentGetExtract", () => {
-  it("decodes base64 file content into content.text", () => {
-    const raw = {
+describe("file_content get — dispatched through the registry", () => {
+  it("decodes base64 file content into content.text and drops content.data", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({
       type: "file",
       sha: "abc123",
       content: {
@@ -48,14 +49,23 @@ describe("fileContentGetExtract", () => {
         size: 11,
         data_size: 11,
       },
-    };
-    const result = fileContentGetExtract(raw) as { content: { text?: string; _truncated?: boolean } };
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "README.md",
+    })) as { content: { text?: string; data?: string; _truncated?: boolean; _hint?: string } };
+
     expect(result.content.text).toBe("hello world");
+    expect(result.content.data).toBeUndefined();
     expect(result.content._truncated).toBeUndefined();
+    expect(result.content._hint).toBeUndefined();
   });
 
-  it("flags truncated content when data_size < size", () => {
-    const raw = {
+  it("flags truncated content when data_size < size", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({
       type: "file",
       content: {
         encoding: "base64",
@@ -63,36 +73,79 @@ describe("fileContentGetExtract", () => {
         size: 20_000_000,
         data_size: 7,
       },
-    };
-    const result = fileContentGetExtract(raw) as { content: { _truncated?: boolean; _hint?: string } };
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "big-file.bin",
+    })) as { content: { _truncated?: boolean; _hint?: string } };
+
     expect(result.content._truncated).toBe(true);
     expect(result.content._hint).toMatch(/truncated/i);
   });
 
-  it("leaves content.data intact alongside the decoded text", () => {
-    const data = Buffer.from("keep me", "utf8").toString("base64");
-    const raw = { type: "file", content: { encoding: "base64", data, size: 7, data_size: 7 } };
-    const result = fileContentGetExtract(raw) as { content: { data?: string } };
+  it("keeps content.data and sets a hint for binary content that isn't valid UTF-8", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    // 0xFF 0xFE is not a valid UTF-8 byte sequence.
+    const data = Buffer.from([0xff, 0xfe, 0x00, 0x01]).toString("base64");
+    const mockRequest = vi.fn().mockResolvedValue({
+      type: "file",
+      content: { encoding: "base64", data, size: 4, data_size: 4 },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "logo.png",
+    })) as { content: { text?: string; data?: string; _hint?: string } };
+
+    expect(result.content.text).toBeUndefined();
     expect(result.content.data).toBe(data);
+    expect(result.content._hint).toMatch(/binary/i);
   });
 
-  it("passes through directory listings unchanged (no content.encoding)", () => {
+  it("flags Git LFS pointer content with a hint", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const pointer = "version https://git-lfs.github.com/spec/v1\noid sha256:abc\nsize 123\n";
+    const mockRequest = vi.fn().mockResolvedValue({
+      type: "file",
+      content: {
+        encoding: "base64",
+        data: Buffer.from(pointer, "utf8").toString("base64"),
+        size: pointer.length,
+        data_size: pointer.length,
+        lfs_object_id: "abc123",
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "asset.psd",
+    })) as { content: { text?: string; _hint?: string } };
+
+    expect(result.content.text).toBe(pointer);
+    expect(result.content._hint).toMatch(/LFS pointer/i);
+  });
+
+  it("passes through directory listings unchanged (no content.encoding)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
     const raw = { type: "dir", entries: [{ name: "README.md", type: "file" }] };
-    expect(fileContentGetExtract(raw)).toEqual(raw);
+    const mockRequest = vi.fn().mockResolvedValue(raw);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "src",
+    });
+
+    expect(result).toEqual(raw);
   });
 
   it("passes through non-base64 content unchanged (e.g. symlink target)", () => {
     const raw = { type: "symlink", content: { target: "../other/path" } };
     expect(fileContentGetExtract(raw)).toEqual(raw);
-  });
-
-  it("omits content.text for binary content that isn't valid UTF-8", () => {
-    // 0xFF 0xFE is not a valid UTF-8 byte sequence.
-    const data = Buffer.from([0xff, 0xfe, 0x00, 0x01]).toString("base64");
-    const raw = { type: "file", content: { encoding: "base64", data, size: 4, data_size: 4 } };
-    const result = fileContentGetExtract(raw) as { content: { text?: string; data?: string } };
-    expect(result.content.text).toBeUndefined();
-    expect(result.content.data).toBe(data);
   });
 });
 

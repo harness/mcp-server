@@ -1,45 +1,7 @@
 import type { ToolsetDefinition } from "../types.js";
-import { passthrough } from "../extractors.js";
-import { assertValidBase64, decodeBase64ToUtf8 } from "../../utils/base64.js";
+import { fileContentGetExtract, passthrough } from "../extractors.js";
+import { assertValidBase64 } from "../../utils/base64.js";
 import { isRecord } from "../../utils/type-guards.js";
-
-/**
- * Harness Code's `/content/{path}` endpoint always base64-encodes file
- * content (`content.encoding === "base64"`).
- * Add a decoded `content.text` field so callers get readable text without
- * decoding client-side; `content.data`/`content.encoding` are left intact
- * for anyone who wants the raw base64. Binary files that don't decode to
- * clean UTF-8 just omit `text` (decodeBase64ToUtf8 returns undefined).
- *
- * Also flags truncation: the endpoint caps content at 10 MB and silently
- * returns a partial blob (`data_size < size`) rather than erroring.
- */
-function decodeFileContent(raw: unknown): unknown {
-  if (!isRecord(raw)) return raw;
-  const content = raw.content;
-  if (!isRecord(content) || content.encoding !== "base64" || typeof content.data !== "string") {
-    return raw;
-  }
-
-  const decodedContent: Record<string, unknown> = { ...content };
-  const decodedText = decodeBase64ToUtf8(content.data);
-  if (decodedText !== undefined) {
-    decodedContent.text = decodedText;
-  }
-
-  const size = typeof content.size === "number" ? content.size : undefined;
-  const dataSize = typeof content.data_size === "number" ? content.data_size : undefined;
-  if (size !== undefined && dataSize !== undefined && dataSize < size) {
-    decodedContent._truncated = true;
-    decodedContent._hint =
-      `Content was truncated by the server (${size} byte file, only ${dataSize} bytes returned — the /content endpoint caps at 10 MB). `
-      + "Clone the repo or use a range-limited approach to read the full file.";
-  }
-
-  return { ...raw, content: decodedContent };
-}
-
-export const fileContentGetExtract = (raw: unknown): unknown => decodeFileContent(raw);
 
 /**
  * Validate base64-declared commit file payloads client-side, and normalize
@@ -352,7 +314,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           },
           responseExtractor: fileContentGetExtract,
           description:
-            "Get file or directory content. Specify path and optional git_ref (branch/tag/SHA). Returns file content or directory listing. For files, content.data is base64 (server always encodes it); content.text holds the decoded UTF-8 text when decoding succeeds. content._truncated is set if the server's 10 MB cap cut off the file.",
+            "Get file or directory content. Specify path and optional git_ref (branch/tag/SHA). Returns file content or directory listing. For files, content.text holds the decoded UTF-8 text when decoding succeeds (content.data, the raw base64, is kept only for binary/undecodable content). content._truncated is set if the server's 10 MB cap cut off the file; content._hint explains truncation, binary content, or Git LFS pointers.",
         },
       },
       executeActions: {
