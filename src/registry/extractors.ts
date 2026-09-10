@@ -1439,8 +1439,10 @@ function fileContentHints(content: Record<string, unknown>, hasText: boolean): s
  * content (`content.encoding === "base64"`). Add a decoded `content.text`
  * field so callers get readable text without decoding client-side, dropping
  * `content.data` once decoded so agents aren't paying to carry both copies
- * of the same bytes. Binary files that don't decode to clean UTF-8 keep
- * `content.data` and get a `_hint` instead of a silently-omitted `text`.
+ * of the same bytes — and flipping `content.encoding` to `"utf8"` so it
+ * still accurately describes what's on the object. Binary files that don't
+ * decode to clean UTF-8 keep `content.data`/`encoding: "base64"` and get a
+ * `_hint` instead of a silently-omitted `text`.
  *
  * Also flags truncation (the endpoint caps content at 10 MB and silently
  * returns a partial blob rather than erroring) and Git LFS pointers (the
@@ -1458,6 +1460,7 @@ export const fileContentGetExtract = (raw: unknown): unknown => {
   const hasText = decodedText !== undefined;
   if (hasText) {
     decodedContent.text = decodedText;
+    decodedContent.encoding = "utf8";
     delete decodedContent.data;
   }
 

@@ -55,10 +55,11 @@ describe("file_content get — dispatched through the registry", () => {
     const result = (await registry.dispatch(client, "file_content", "get", {
       repo_id: "my-repo",
       path: "README.md",
-    })) as { content: { text?: string; data?: string; _truncated?: boolean; _hint?: string } };
+    })) as { content: { text?: string; data?: string; encoding?: string; _truncated?: boolean; _hint?: string } };
 
     expect(result.content.text).toBe("hello world");
     expect(result.content.data).toBeUndefined();
+    expect(result.content.encoding).toBe("utf8");
     expect(result.content._truncated).toBeUndefined();
     expect(result.content._hint).toBeUndefined();
   });
@@ -102,7 +103,26 @@ describe("file_content get — dispatched through the registry", () => {
 
     expect(result.content.text).toBeUndefined();
     expect(result.content.data).toBe(data);
+    expect(result.content.encoding).toBe("base64");
     expect(result.content._hint).toMatch(/binary/i);
+  });
+
+  it("keeps content.data and sets a hint when the server's declared base64 is malformed", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({
+      type: "file",
+      content: { encoding: "base64", data: "not-valid-base64!!", size: 18, data_size: 18 },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "weird-file.bin",
+    })) as { content: { text?: string; data?: string; _hint?: string } };
+
+    expect(result.content.text).toBeUndefined();
+    expect(result.content.data).toBe("not-valid-base64!!");
+    expect(result.content._hint).toMatch(/malformed/i);
   });
 
   it("flags Git LFS pointer content with a hint", async () => {
@@ -191,7 +211,7 @@ describe("commit create — client-side base64 validation", () => {
     }));
   });
 
-  it("strips embedded whitespace from a base64 payload before sending (Go's decoder rejects it)", async () => {
+  it("strips embedded whitespace from a base64 payload before sending (the backend rejects it)", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
     const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
     const client = makeClient(mockRequest);

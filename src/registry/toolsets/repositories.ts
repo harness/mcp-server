@@ -312,7 +312,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           },
           responseExtractor: fileContentGetExtract,
           description:
-            "Get file or directory content. Specify path and optional git_ref (branch/tag/SHA). Returns file content or directory listing. For files, content.text holds the decoded UTF-8 text when decoding succeeds (content.data, the raw base64, is kept only for binary/undecodable content). content._truncated is set if the server's 10 MB cap cut off the file; content._hint explains truncation, binary content, or Git LFS pointers.",
+            "Get file or directory content. Specify path and optional git_ref (branch/tag/SHA). Returns file content or directory listing. For files, content.text holds the decoded text and content.encoding is set to 'utf8' when decoding succeeds; content.data (raw base64) and encoding 'base64' are kept only for binary/undecodable content. content._truncated is set if the server's 10 MB cap cut off the file; content._hint explains truncation, binary content, or Git LFS pointers.",
         },
       },
       executeActions: {
