@@ -1,8 +1,8 @@
 /**
  * Harness Code's /content/{path} endpoint always base64-encodes file content
- * (gitness content_get.go: FileContent.Encoding is always "base64"). These
- * tests cover the decoded content.text field, the truncation flag, and
- * client-side base64 validation on commit-files writes.
+ * (FileContent.Encoding is always "base64"). These tests cover the decoded
+ * content.text field, the truncation flag, and client-side base64
+ * validation on commit-files writes.
  */
 import { describe, expect, it, vi } from "vitest";
 import type { Config } from "../../src/config.js";

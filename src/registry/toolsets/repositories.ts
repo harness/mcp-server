@@ -5,7 +5,7 @@ import { isRecord } from "../../utils/type-guards.js";
 
 /**
  * Harness Code's `/content/{path}` endpoint always base64-encodes file
- * content (`content.encoding === "base64"`, see gitness content_get.go).
+ * content (`content.encoding === "base64"`).
  * Add a decoded `content.text` field so callers get readable text without
  * decoding client-side; `content.data`/`content.encoding` are left intact
  * for anyone who wants the raw base64. Binary files that don't decode to
