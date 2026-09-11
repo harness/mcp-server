@@ -220,4 +220,21 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream RuntimeV1 delegate selector in v1 pipeline and template", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const runtimeV1 = defs[key].stages.unified.RuntimeV1 as {
+        oneOf: Array<{ type?: string; properties?: Record<string, { $ref?: string; description?: string }> }>;
+      };
+
+      const objectForm = runtimeV1.oneOf.find((variant) => variant.type === "object");
+      expect(objectForm?.properties).toBeDefined();
+
+      const delegate = objectForm!.properties!.delegate;
+      expect(delegate).toBeDefined();
+      expect(delegate.$ref).toContain("Delegate");
+      expect(delegate.description).toMatch(/inherit-from-delegate/i);
+    }
+  });
 });

@@ -161,3 +161,41 @@ describe("service create dispatch", () => {
     expect(body.serviceDefinition).toBeDefined();
   });
 });
+
+describe("service update dispatch", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "services" }));
+  });
+
+  it("PUT body includes synthesized yaml with serviceDefinition and injected identifier", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: { identifier: "nginx_service", name: "Updated Nginx Service" },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "service", "update", {
+      service_id: "nginx_service",
+      org_id: "default",
+      project_id: "avi",
+      body: {
+        name: "Updated Nginx Service",
+        serviceDefinition: {
+          type: "Kubernetes",
+          spec: { manifests: [{ manifest: { identifier: "m1", type: "K8sManifest", spec: {} } }] },
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/ng/api/servicesV2");
+
+    const body = call.body as Record<string, unknown>;
+    expect(body.identifier).toBe("nginx_service");
+    expect(typeof body.yaml).toBe("string");
+    expect(body.yaml as string).toContain("serviceDefinition:");
+    expect(body.yaml as string).toContain("identifier: nginx_service");
+  });
+});
