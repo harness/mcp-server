@@ -232,6 +232,274 @@ describe("commit create — client-side base64 validation", () => {
     expect(call.body.actions[0]!.payload).toBe(rawPayload);
   });
 
+  it("copies actions.content onto payload (file_content GET shape) and drops the alias", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
+    const client = makeClient(mockRequest);
+    const yaml = "apiVersion: apps/v1\nkind: Deployment\n";
+
+    await registry.dispatch(client, "commit", "create", {
+      repo_id: "my-repo",
+      body: {
+        title: "Update deployment",
+        branch: "main",
+        actions: [
+          { action: "UPDATE", path: "k8s/deployment.yaml", sha: "abc123", content: yaml },
+        ],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as {
+      body: { actions: Array<{ payload?: string; content?: unknown; text?: unknown }> };
+    };
+    expect(call.body.actions[0]!.payload).toBe(yaml);
+    expect(call.body.actions[0]!.content).toBeUndefined();
+    expect(call.body.actions[0]!.text).toBeUndefined();
+  });
+
+  it("copies nested content.text onto payload", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "commit", "create", {
+      repo_id: "my-repo",
+      body: {
+        title: "Update file",
+        branch: "main",
+        actions: [
+          {
+            action: "UPDATE",
+            path: "README.md",
+            sha: "abc123",
+            content: { text: "# hello", encoding: "utf8" },
+          },
+        ],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { actions: Array<{ payload?: string }> } };
+    expect(call.body.actions[0]!.payload).toBe("# hello");
+  });
+
+  it("prefers payload over content when both are set", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "commit", "create", {
+      repo_id: "my-repo",
+      body: {
+        title: "Update file",
+        branch: "main",
+        actions: [
+          { action: "UPDATE", path: "a.txt", sha: "abc", payload: "keep-me", content: "ignore-me" },
+        ],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { actions: Array<{ payload?: string }> } };
+    expect(call.body.actions[0]!.payload).toBe("keep-me");
+  });
+
+  it("copies actions.text onto payload", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "commit", "create", {
+      repo_id: "my-repo",
+      body: {
+        title: "Update file",
+        branch: "main",
+        actions: [{ action: "UPDATE", path: "a.txt", sha: "abc", text: "from-text" }],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as {
+      body: { actions: Array<{ payload?: string; text?: unknown }> };
+    };
+    expect(call.body.actions[0]!.payload).toBe("from-text");
+    expect(call.body.actions[0]!.text).toBeUndefined();
+  });
+
+  it("uses content when payload is an empty string", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "commit", "create", {
+      repo_id: "my-repo",
+      body: {
+        title: "Update file",
+        branch: "main",
+        actions: [{ action: "UPDATE", path: "a.txt", sha: "abc", payload: "", content: "from-content" }],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { actions: Array<{ payload?: string }> } };
+    expect(call.body.actions[0]!.payload).toBe("from-content");
+  });
+
+  it("copies nested content.data onto payload and sets encoding base64", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
+    const client = makeClient(mockRequest);
+    const data = Buffer.from([0, 1, 2, 255]).toString("base64");
+
+    await registry.dispatch(client, "commit", "create", {
+      repo_id: "my-repo",
+      body: {
+        title: "Update binary",
+        branch: "main",
+        actions: [
+          {
+            action: "UPDATE",
+            path: "blob.bin",
+            sha: "abc123",
+            content: { data },
+          },
+        ],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as {
+      body: { actions: Array<{ payload?: string; encoding?: string; content?: unknown }> };
+    };
+    expect(call.body.actions[0]!.payload).toBe(data);
+    expect(call.body.actions[0]!.encoding).toBe("base64");
+    expect(call.body.actions[0]!.content).toBeUndefined();
+  });
+
+  it("rejects UPDATE with an empty payload so the file is not wiped", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "commit", "create", {
+        repo_id: "my-repo",
+        body: {
+          title: "Wipe file",
+          branch: "main",
+          actions: [{ action: "UPDATE", path: "k8s/deployment.yaml", sha: "abc" }],
+        },
+      }),
+    ).rejects.toThrow(/payload is required/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects CREATE when payload is omitted", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "commit", "create", {
+        repo_id: "my-repo",
+        body: {
+          title: "Add file",
+          branch: "main",
+          actions: [{ action: "CREATE", path: "notes.txt" }],
+        },
+      }),
+    ).rejects.toThrow(/payload is required/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("allows CREATE with an explicit empty payload", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "commit", "create", {
+      repo_id: "my-repo",
+      body: {
+        title: "Add empty file",
+        branch: "main",
+        actions: [{ action: "CREATE", path: ".gitkeep", payload: "" }],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { actions: Array<{ payload?: string }> } };
+    expect(call.body.actions[0]!.payload).toBe("");
+  });
+
+  it("allows MOVE without file bytes (payload is the destination path)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "commit", "create", {
+      repo_id: "my-repo",
+      body: {
+        title: "Rename file",
+        branch: "main",
+        actions: [{ action: "MOVE", path: "old.txt", payload: "new.txt", sha: "abc" }],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as {
+      body: { actions: Array<{ payload?: string; content?: unknown }> };
+    };
+    expect(call.body.actions[0]!.payload).toBe("new.txt");
+    expect(mockRequest).toHaveBeenCalled();
+  });
+
+  it("does not reject MOVE when payload is omitted", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "commit", "create", {
+      repo_id: "my-repo",
+      body: {
+        title: "Rename file",
+        branch: "main",
+        actions: [{ action: "MOVE", path: "old.txt" }],
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalled();
+  });
+
+  it("does not copy file-content aliases onto MOVE payload", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "commit", "create", {
+      repo_id: "my-repo",
+      body: {
+        title: "Rename file",
+        branch: "main",
+        actions: [
+          { action: "MOVE", path: "old.txt", payload: "new.txt", content: "file-bytes-must-not-replace-dest" },
+        ],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { body: { actions: Array<{ payload?: string }> } };
+    expect(call.body.actions[0]!.payload).toBe("new.txt");
+  });
+
+  it("allows DELETE without a payload", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "commit", "create", {
+      repo_id: "my-repo",
+      body: {
+        title: "Delete file",
+        branch: "main",
+        actions: [{ action: "DELETE", path: "gone.txt" }],
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalled();
+  });
+
   it("does not validate utf8-encoded payloads as base64", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
     const mockRequest = vi.fn().mockResolvedValue({ commit_id: "sha1", files: [] });
