@@ -3,13 +3,33 @@ import { fileContentGetExtract, passthrough } from "../extractors.js";
 import { assertValidBase64 } from "../../utils/base64.js";
 import { isRecord } from "../../utils/type-guards.js";
 
+const COMMIT_ACTIONS_NEEDING_CONTENT = new Set(["CREATE", "UPDATE", "MOVE"]);
+
+function actionNeedsFileContent(actionType: unknown): boolean {
+  return typeof actionType === "string" && COMMIT_ACTIONS_NEEDING_CONTENT.has(actionType.toUpperCase());
+}
+
 /**
- * Validate base64-declared commit file payloads client-side, and normalize
- * away embedded whitespace. Harness Code's commit-files endpoint rejects
- * embedded whitespace/newlines in `encoding: "base64"` payloads outright,
- * with an opaque Internal (500-style) error rather than a clean 400 — so
- * payload whitespace must be stripped here too, or a payload that validates
- * fine client-side would still fail server-side.
+ * Agents often put file bytes on `content` / `text` because
+ * `file_content` GET returns `content.text`. Harness Code only persists
+ * `payload` — a missing payload writes Git's empty blob and wipes the file.
+ */
+function resolveCommitActionPayload(action: Record<string, unknown>): string | undefined {
+  if (typeof action.payload === "string") return action.payload;
+  if (typeof action.content === "string") return action.content;
+  if (typeof action.text === "string") return action.text;
+  const nested = isRecord(action.content) ? action.content : undefined;
+  if (!nested) return undefined;
+  if (typeof nested.text === "string") return nested.text;
+  if (typeof nested.data === "string") return nested.data;
+  return undefined;
+}
+
+/**
+ * Shape commit-file actions for Harness Code:
+ * - copy `content`/`text` onto `payload` when payload is omitted
+ * - reject CREATE/UPDATE/MOVE with empty payload (that would wipe the file)
+ * - validate and strip whitespace from `encoding: "base64"` payloads
  */
 function buildCommitFilesBody(input: Record<string, unknown>): unknown {
   const body = input.body;
@@ -18,11 +38,30 @@ function buildCommitFilesBody(input: Record<string, unknown>): unknown {
   if (!Array.isArray(actions)) return body;
 
   const normalizedActions = actions.map((action, index) => {
-    if (!isRecord(action) || action.encoding !== "base64" || typeof action.payload !== "string") {
-      return action;
+    if (!isRecord(action)) return action;
+
+    const field = `body.actions[${index}]`;
+    const payload = resolveCommitActionPayload(action);
+    const next: Record<string, unknown> = { ...action };
+    delete next.content;
+    delete next.text;
+
+    if (payload !== undefined) {
+      next.payload = payload;
     }
-    const normalizedPayload = assertValidBase64(action.payload, `body.actions[${index}].payload`);
-    return { ...action, payload: normalizedPayload };
+
+    if (actionNeedsFileContent(action.action) && (typeof next.payload !== "string" || next.payload.length === 0)) {
+      throw new Error(
+        `${field}.payload is required for ${String(action.action)} (file content). ` +
+          `Pass payload, or content/text (aliases). An omitted payload commits an empty file.`,
+      );
+    }
+
+    if (next.encoding !== "base64" || typeof next.payload !== "string") {
+      return next;
+    }
+    next.payload = assertValidBase64(next.payload, `${field}.payload`);
+    return next;
   });
 
   return { ...body, actions: normalizedActions };
@@ -240,7 +279,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           bodyBuilder: buildCommitFilesBody,
           responseExtractor: passthrough,
           description:
-            "Commit file changes to a repository. Each action specifies a file operation (CREATE, UPDATE, DELETE, MOVE). Payload is the file content (utf8 or base64). For UPDATE, include the current blob sha. Returns the new commit_id and list of changed files.",
+            "Commit file changes to a repository. Each action specifies a file operation (CREATE, UPDATE, DELETE, MOVE). File bytes go in payload (utf8 or base64). content/text are accepted aliases — omitting payload on CREATE/UPDATE writes an empty file. For UPDATE, include the current blob sha. Returns the new commit_id and list of changed files.",
           bodySchema: {
             description:
               "Commit with one or more file actions. branch is the target branch, message is the commit message, actions is the list of file operations.",
@@ -249,7 +288,7 @@ export const repositoriesToolset: ToolsetDefinition = {
               { name: "message", type: "string", required: false, description: "Extended commit message body" },
               { name: "branch", type: "string", required: true, description: "Target branch to commit to (e.g. 'main')" },
               { name: "new_branch", type: "string", required: false, description: "If set, creates a new branch from 'branch' and commits there instead" },
-              { name: "actions", type: "array", required: true, description: "File operations. Each action: {action: 'CREATE'|'UPDATE'|'DELETE'|'MOVE', path: 'file/path', payload: 'content', encoding: 'utf8'|'base64' (default utf8 — set explicitly for binary content, payload must then be valid base64), sha: 'blob_sha (required for UPDATE)'}." },
+              { name: "actions", type: "array", required: true, description: "File operations. Each action: {action: 'CREATE'|'UPDATE'|'DELETE'|'MOVE', path: 'file/path', payload: 'file bytes (required for CREATE/UPDATE/MOVE; content or text aliases are copied onto payload)', encoding: 'utf8'|'base64' (default utf8 — set explicitly for binary content, payload must then be valid base64), sha: 'blob_sha (required for UPDATE)'}." },
               { name: "bypass_rules", type: "boolean", required: false, description: "Bypass branch protection rules (requires permission)" },
               { name: "dry_run_rules", type: "boolean", required: false, description: "Check rules without committing" },
             ],
