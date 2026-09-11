@@ -33,6 +33,6 @@
 
 ## Notes
 - Chaos API uses `organizationIdentifier` instead of `orgIdentifier` (scopeParams override)
-- The run execute action sends POST to `/chaos/manager/api/rest/v2/experiments/{experimentId}/run` with `isIdentity=false` query param
+- The run execute action sends POST to `/chaos/manager/api/rest/v2/experiments/{experimentId}/run`. `isIdentity` is auto-detected from the shape of `experiment_id` when omitted (UUID → `isIdentity=false`; slug → `isIdentity=true`); pass `is_identity` explicitly to override
 - Runtime inputs structure: `{ experiment: [{name, value}], tasks: { taskName: [{name, value}] } }`
 - Use `chaos_experiment_variable` list to discover required variables before running
