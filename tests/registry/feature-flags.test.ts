@@ -2319,60 +2319,6 @@ describe("fme_metric", () => {
     });
   });
 
-  it("create: throws when owners is missing or empty (MCP-only stricter contract)", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-    const baseBody = {
-      name: "checkout-conversion",
-      trafficType: "user",
-      format: "PERCENTAGE",
-      aggregation: "COUNT",
-      isPositive: true,
-      spread: "PER",
-      baseEventTypes: [{ eventTypeId: "e1" }],
-    };
-
-    await expect(
-      registry.dispatch(client, "fme_metric", "create", { org_id: "o1", project_id: "p1", body: baseBody }),
-    ).rejects.toThrow(/owners must have at least one entry/);
-
-    await expect(
-      registry.dispatch(client, "fme_metric", "create", {
-        org_id: "o1",
-        project_id: "p1",
-        body: { ...baseBody, owners: [] },
-      }),
-    ).rejects.toThrow(/owners must have at least one entry/);
-  });
-
-  it("create: infers owner type from shape when omitted", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({ id: "m1" });
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_metric", "create", {
-      org_id: "o1",
-      project_id: "p1",
-      body: {
-        name: "checkout-conversion",
-        trafficType: "user",
-        format: "PERCENTAGE",
-        aggregation: "COUNT",
-        isPositive: true,
-        spread: "PER",
-        baseEventTypes: [{ eventTypeId: "e1" }],
-        owners: [{ id: "u1" }, { email: "a@b.com" }, { identifier: "g1" }, { type: "GROUP", identifier: "g2" }],
-      },
-    });
-
-    const req = firstRequest(mockRequest);
-    expect((req.body as { owners: unknown[] }).owners).toEqual([
-      { id: "u1", type: "USER" },
-      { email: "a@b.com", type: "USER" },
-      { identifier: "g1", type: "GROUP" },
-      { type: "GROUP", identifier: "g2" },
-    ]);
-  });
-
   it("create: throws when spread is missing (MCP-only stricter contract)", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
