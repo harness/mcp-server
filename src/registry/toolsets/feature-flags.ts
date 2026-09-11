@@ -25,6 +25,41 @@ function normalizeFmeTags(tags: unknown): unknown {
   return Array.isArray(tags) ? tags.map((t) => (typeof t === "string" ? { name: t } : t)) : tags;
 }
 
+// fme_metric owners omit `type` when callers copy an owner's `id`/`email` from a
+// GET response but drop the discriminator — the backend then rejects the whole
+// body with a generic "Invalid JSON request body" instead of a field-level error.
+// Infer it: an `identifier` with no `id`/`email` is a GROUP, everything else is a USER.
+function normalizeFmeMetricOwner(owner: unknown): unknown {
+  if (typeof owner !== "object" || owner === null || Array.isArray(owner)) return owner;
+  const o = owner as Record<string, unknown>;
+  if (o.type !== undefined) return o;
+  if (o.identifier !== undefined && o.id === undefined && o.email === undefined) {
+    return { ...o, type: "GROUP" };
+  }
+  return { ...o, type: "USER" };
+}
+
+function normalizeFmeOwners(owners: unknown): unknown {
+  return Array.isArray(owners) ? owners.map(normalizeFmeMetricOwner) : owners;
+}
+
+// fme_metric baseEventTypes/filterEventType entries omit propertyFilters/propertyForValue
+// when callers copy an eventTypeId alone — the backend rejects the whole create/update
+// body with the same generic "Invalid JSON request body" rather than defaulting them.
+function normalizeFmeBaseEvent(entry: unknown): unknown {
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return entry;
+  return { propertyFilters: [], propertyForValue: null, ...(entry as Record<string, unknown>) };
+}
+
+function normalizeFmeBaseEventTypes(entries: unknown): unknown {
+  return Array.isArray(entries) ? entries.map(normalizeFmeBaseEvent) : entries;
+}
+
+function normalizeFmeFilterEventType(entry: unknown): unknown {
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return entry;
+  return { propertyFilters: [], ...(entry as Record<string, unknown>) };
+}
+
 const FME_SEGMENT_KINDS = ["STANDARD", "LARGE", "RULE_BASED"] as const;
 type FmeSegmentKind = (typeof FME_SEGMENT_KINDS)[number];
 
@@ -300,7 +335,7 @@ const fmeSegmentDefinitionUpdateSchema: BodySchema = {
 
 const fmeMetricCreateSchema: BodySchema = {
   description:
-    "Create a new metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required by the backend. spread is also required here — an MCP-only stricter contract: the backend silently defaults to 'PER' when spread is omitted, which changes the metric's semantics for RATE metrics with no warning.",
+    "Create a new metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required by the backend. spread is also required here — an MCP-only stricter contract: the backend silently defaults it to 'PER' when omitted, changing semantics for RATE metrics with no warning. owners is optional per the API's own schema, but the backend currently still rejects an empty/missing owners list with a 400 (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one owner until that ships.",
   fields: [
     { name: "name", type: "string", required: true, description: "Unique metric name within the project (must start with a letter; letters, digits, '-', '_' only; max 100 chars). Immutable after creation." },
     { name: "description", type: "string", required: false, description: "Optional human-readable description" },
@@ -309,10 +344,10 @@ const fmeMetricCreateSchema: BodySchema = {
     { name: "aggregation", type: "string", required: true, description: "How individual event values are aggregated per unit. One of: TOTAL, COUNT, RATE, AVERAGE." },
     { name: "isPositive", type: "boolean", required: true, description: "true when an increase in this metric is a good outcome" },
     { name: "spread", type: "string", required: true, description: "PER (per-unit) or ACROSS (population). Required here even though the backend accepts omitting it (defaults to PER) — set it explicitly, especially for RATE metrics where PER vs ACROSS changes what is measured." },
-    { name: "baseEventTypes", type: "array", required: true, description: "The base event type(s) this metric measures (at least one). Each entry: {eventTypeId, propertyFilters?, propertyForValue?}. Get event type IDs from fme_event_type.", itemType: "object" },
-    { name: "filterEventType", type: "object", required: false, description: "Optional filter/trigger event that scopes which units are counted: {eventTypeId, filterAggregation?, propertyFilters?}" },
+    { name: "baseEventTypes", type: "array", required: true, description: "The base event type(s) this metric measures (at least one). Each entry: {eventTypeId, propertyFilters?, propertyForValue?} — propertyFilters/propertyForValue default to []/null when omitted. Get event type IDs from fme_event_type.", itemType: "object" },
+    { name: "filterEventType", type: "object", required: false, description: "Optional filter/trigger event that scopes which units are counted: {eventTypeId, filterAggregation?, propertyFilters?} — propertyFilters defaults to [] when omitted." },
     { name: "tags", type: "array", required: false, description: "Initial tags. Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
-    { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Optional per the API's own schema, but for now the backend rejects an empty or missing owners list with 400 \"Owners cannot be empty\" (owners is being deprecated behind a feature flag not yet enabled in prod — pass at least one until it ships). Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}. type is inferred when omitted (identifier alone -> GROUP, id/email -> USER), but the backend rejects the whole request with a generic \"Invalid JSON request body\" if inference guesses wrong — pass type explicitly when in doubt.", itemType: "object" },
     { name: "cap", type: "object", required: false, description: "Optional outlier/cap configuration: baseEventCountCap/baseEventSumCap/baseEventValueCap/filterEventCountCap/filterEventSumCap/filterEventValueCap/metricValueCap (all default 0 = no cap), plus granularity (MINUTES|HOURS|DAYS|WEEKS, default DAYS)" },
   ],
 };
@@ -326,10 +361,10 @@ const fmeMetricUpdateSchema: BodySchema = {
     { name: "aggregation", type: "string", required: false, description: "Updated aggregation (TOTAL, COUNT, RATE, AVERAGE); cannot be cleared with null." },
     { name: "isPositive", type: "boolean", required: false, description: "Updated direction; cannot be cleared with null" },
     { name: "spread", type: "string", required: false, description: "Updated spread (PER or ACROSS); cannot be cleared with null" },
-    { name: "baseEventTypes", type: "array", required: false, description: "Replacement base-event list (full replacement, at least one entry required when provided)", itemType: "object" },
-    { name: "filterEventType", type: "object", required: false, description: "Replacement filter event, or null to clear it" },
+    { name: "baseEventTypes", type: "array", required: false, description: "Replacement base-event list (full replacement, at least one entry required when provided). Each entry's propertyFilters/propertyForValue default to []/null when omitted.", itemType: "object" },
+    { name: "filterEventType", type: "object", required: false, description: "Replacement filter event, or null to clear it. propertyFilters defaults to [] when omitted." },
     { name: "tags", type: "array", required: false, description: "Replacement tag list; null or [] clears all tags", itemType: "object" },
-    { name: "owners", type: "array", required: false, description: "Replacement owner list; null or [] clears all owners", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Replacement owner list; null or [] clears all owners. type is inferred when omitted (identifier alone -> GROUP, id/email -> USER) — pass it explicitly when in doubt.", itemType: "object" },
     { name: "cap", type: "object", required: false, description: "Replacement cap configuration, or null to clear it" },
   ],
 };
@@ -1842,6 +1877,19 @@ export const featureFlagsToolset: ToolsetDefinition = {
                   "metrics). Pass 'PER' or 'ACROSS'.",
               );
             }
+            // TEMPORARY: the backend currently rejects an empty/missing owners list with 400
+            // "Owners cannot be empty", but owners is being deprecated behind a feature flag
+            // that isn't enabled in prod yet. Once that flag ships, this check (and the
+            // required-owners note on fmeMetricCreateSchema) should be deleted — owners will
+            // become genuinely optional, matching the API's own request schema today.
+            if (!Array.isArray(body?.owners) || body.owners.length === 0) {
+              throw new Error(
+                "fme_metric.create: owners must have at least one entry for now — the backend " +
+                  "still rejects an empty or missing owners list with \"Owners cannot be empty\" " +
+                  "(owners is being deprecated behind an unreleased feature flag). Pass at least " +
+                  "one {type: \"USER\", id or email} or {type: \"GROUP\", identifier}.",
+              );
+            }
             return {
               name: body?.name,
               trafficType: body?.trafficType,
@@ -1849,11 +1897,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
               aggregation: body?.aggregation,
               isPositive: body?.isPositive,
               spread: body.spread,
-              baseEventTypes: body?.baseEventTypes,
+              baseEventTypes: normalizeFmeBaseEventTypes(body?.baseEventTypes),
+              owners: normalizeFmeOwners(body.owners),
               ...(body?.description !== undefined ? { description: body.description } : {}),
-              ...(body?.filterEventType !== undefined ? { filterEventType: body.filterEventType } : {}),
+              ...(body?.filterEventType !== undefined ? { filterEventType: normalizeFmeFilterEventType(body.filterEventType) } : {}),
               ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
-              ...(body?.owners !== undefined ? { owners: body.owners } : {}),
               ...(body?.cap !== undefined ? { cap: body.cap } : {}),
             };
           },
@@ -1889,8 +1937,23 @@ export const featureFlagsToolset: ToolsetDefinition = {
             ] as const;
             const patch: Record<string, unknown> = {};
             for (const field of patchableFields) {
-              if (field in body) {
-                patch[field] = field === "tags" ? normalizeFmeTags(body[field]) : body[field];
+              if (!(field in body)) continue;
+              const value = body[field];
+              switch (field) {
+                case "tags":
+                  patch[field] = normalizeFmeTags(value);
+                  break;
+                case "owners":
+                  patch[field] = value === null ? null : normalizeFmeOwners(value);
+                  break;
+                case "baseEventTypes":
+                  patch[field] = value === null ? null : normalizeFmeBaseEventTypes(value);
+                  break;
+                case "filterEventType":
+                  patch[field] = value === null ? null : normalizeFmeFilterEventType(value);
+                  break;
+                default:
+                  patch[field] = value;
               }
             }
             return patch;
