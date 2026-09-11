@@ -2578,6 +2578,10 @@ const schema: Record<string, any> = {
                   "kubernetes": {
                     "description": "Kubernetes runtime specification.",
                     "$ref": "#/definitions/pipeline_v1/stages/unified/K8RuntimeSpec"
+                  },
+                  "delegate": {
+                    "description": "Delegate selectors used for Kubernetes inherit-from-delegate authentication.",
+                    "$ref": "#/definitions/pipeline_v1/common/Delegate"
                   }
                 }
               }
