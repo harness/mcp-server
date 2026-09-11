@@ -849,6 +849,36 @@ describe("chaos_experiment isIdentity routing", () => {
     expect(call.params.isIdentity).toBe(false);
   });
 
+  it("run: auto-detects a UUID-shaped experiment_id and defaults isIdentity=false when is_identity is omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentRunId: "run-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment", "run", {
+      experiment_id: "f8a2c4e6-1b3d-4f5a-9c7e-2d8b6a4f1e3c",
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/f8a2c4e6-1b3d-4f5a-9c7e-2d8b6a4f1e3c/run");
+    expect(call.params.isIdentity).toBe(false);
+  });
+
+  it("run: explicit is_identity=true overrides auto-detection even for a UUID-shaped experiment_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experimentRunId: "run-1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "chaos_experiment", "run", {
+      experiment_id: "f8a2c4e6-1b3d-4f5a-9c7e-2d8b6a4f1e3c",
+      is_identity: true,
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.isIdentity).toBe(true);
+  });
+
   it("variables list: defaults isIdentity=true so a slug experiment_id works", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ experiment: [], tasks: {} });
     const client = makeClient(mockRequest);
@@ -863,6 +893,36 @@ describe("chaos_experiment isIdentity routing", () => {
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/exp-without-runtime/variables");
     expect(call.params.isIdentity).toBe("true");
+  });
+
+  it("variables list: auto-detects a UUID-shaped experiment_id and defaults isIdentity=false when is_identity is omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experiment: [], tasks: {} });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_experiment_variable", "list", {
+      experiment_id: "f8a2c4e6-1b3d-4f5a-9c7e-2d8b6a4f1e3c",
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.path).toBe("/chaos/manager/api/rest/v2/experiments/f8a2c4e6-1b3d-4f5a-9c7e-2d8b6a4f1e3c/variables");
+    expect(call.params.isIdentity).toBe(false);
+  });
+
+  it("variables list: explicit is_identity=true overrides auto-detection even for a UUID-shaped experiment_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ experiment: [], tasks: {} });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "chaos_experiment_variable", "list", {
+      experiment_id: "f8a2c4e6-1b3d-4f5a-9c7e-2d8b6a4f1e3c",
+      is_identity: true,
+      project_id: "templatescopetest",
+      org_id: "templatescopetest",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.isIdentity).toBe(true);
   });
 
   it("variables list: null experiment/tasks returns empty items (no schema error)", async () => {
