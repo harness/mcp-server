@@ -30025,7 +30025,9 @@ const schema: Record<string, any> = {
                       {
                         "type": "string",
                         "enum": [
-                          "pr_scan"
+                          "pr_scan",
+                          "full",
+                          "incremental"
                         ]
                       },
                       {
@@ -30170,7 +30172,9 @@ const schema: Record<string, any> = {
                   {
                     "type": "string",
                     "enum": [
-                      "pr_scan"
+                      "pr_scan",
+                      "full",
+                      "incremental"
                     ]
                   },
                   {
@@ -36927,19 +36931,8 @@ const schema: Record<string, any> = {
                     ]
                   },
                   "reuse": {
-                    "oneOf": [
-                      {
-                        "type": "string",
-                        "not": {
-                          "pattern": "^<\\+.*>.*$"
-                        }
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\))*$",
-                        "minLength": 1
-                      }
-                    ]
+                    "type": "string",
+                    "minLength": 1
                   },
                   "markNextChangeSetRun": {
                     "type": "boolean"
@@ -37177,19 +37170,8 @@ const schema: Record<string, any> = {
                     ]
                   },
                   "reuse": {
-                    "oneOf": [
-                      {
-                        "type": "string",
-                        "not": {
-                          "pattern": "^<\\+.*>.*$"
-                        }
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\))*$",
-                        "minLength": 1
-                      }
-                    ]
+                    "type": "string",
+                    "minLength": 1
                   },
                   "resources": {
                     "$ref": "#/definitions/pipeline/common/ContainerResource"
@@ -37408,19 +37390,8 @@ const schema: Record<string, any> = {
                     ]
                   },
                   "reuse": {
-                    "oneOf": [
-                      {
-                        "type": "string",
-                        "not": {
-                          "pattern": "^<\\+.*>.*$"
-                        }
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\))*$",
-                        "minLength": 1
-                      }
-                    ]
+                    "type": "string",
+                    "minLength": 1
                   },
                   "excludeChangeLogFile": {
                     "type": "boolean"
@@ -37534,19 +37505,8 @@ const schema: Record<string, any> = {
                 ]
               },
               "reuse": {
-                "oneOf": [
-                  {
-                    "type": "string",
-                    "not": {
-                      "pattern": "^<\\+.*>.*$"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\))*$",
-                    "minLength": 1
-                  }
-                ]
+                "type": "string",
+                "minLength": 1
               },
               "excludeChangeLogFile": {
                 "type": "boolean"
@@ -38050,19 +38010,8 @@ const schema: Record<string, any> = {
                     ]
                   },
                   "reuse": {
-                    "oneOf": [
-                      {
-                        "type": "string",
-                        "not": {
-                          "pattern": "^<\\+.*>.*$"
-                        }
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
-                        "minLength": 1
-                      }
-                    ]
+                    "type": "string",
+                    "minLength": 1
                   },
                   "resources": {
                     "$ref": "#/definitions/pipeline/common/ContainerResource"
@@ -38175,19 +38124,8 @@ const schema: Record<string, any> = {
                 ]
               },
               "reuse": {
-                "oneOf": [
-                  {
-                    "type": "string",
-                    "not": {
-                      "pattern": "^<\\+.*>.*$"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
-                    "minLength": 1
-                  }
-                ]
+                "type": "string",
+                "minLength": 1
               },
               "resources": {
                 "$ref": "#/definitions/pipeline/common/ContainerResource"
@@ -38405,19 +38343,8 @@ const schema: Record<string, any> = {
                     ]
                   },
                   "reuse": {
-                    "oneOf": [
-                      {
-                        "type": "string",
-                        "not": {
-                          "pattern": "^<\\+.*>.*$"
-                        }
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
-                        "minLength": 1
-                      }
-                    ]
+                    "type": "string",
+                    "minLength": 1
                   },
                   "resources": {
                     "$ref": "#/definitions/pipeline/common/ContainerResource"
@@ -38524,19 +38451,8 @@ const schema: Record<string, any> = {
                 ]
               },
               "reuse": {
-                "oneOf": [
-                  {
-                    "type": "string",
-                    "not": {
-                      "pattern": "^<\\+.*>.*$"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
-                    "minLength": 1
-                  }
-                ]
+                "type": "string",
+                "minLength": 1
               },
               "resources": {
                 "$ref": "#/definitions/pipeline/common/ContainerResource"
@@ -38784,19 +38700,8 @@ const schema: Record<string, any> = {
                     ]
                   },
                   "reuse": {
-                    "oneOf": [
-                      {
-                        "type": "string",
-                        "not": {
-                          "pattern": "^<\\+.*>.*$"
-                        }
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
-                        "minLength": 1
-                      }
-                    ]
+                    "type": "string",
+                    "minLength": 1
                   },
                   "resources": {
                     "$ref": "#/definitions/pipeline/common/ContainerResource"
@@ -38933,19 +38838,8 @@ const schema: Record<string, any> = {
                 ]
               },
               "reuse": {
-                "oneOf": [
-                  {
-                    "type": "string",
-                    "not": {
-                      "pattern": "^<\\+.*>.*$"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|default|regex)\\(.+?\\))*$",
-                    "minLength": 1
-                  }
-                ]
+                "type": "string",
+                "minLength": 1
               },
               "resources": {
                 "$ref": "#/definitions/pipeline/common/ContainerResource"
@@ -39167,19 +39061,8 @@ const schema: Record<string, any> = {
                     ]
                   },
                   "reuse": {
-                    "oneOf": [
-                      {
-                        "type": "string",
-                        "not": {
-                          "pattern": "^<\\+.*>.*$"
-                        }
-                      },
-                      {
-                        "type": "string",
-                        "pattern": "^<\\+input>((\\.)(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\))*$",
-                        "minLength": 1
-                      }
-                    ]
+                    "type": "string",
+                    "minLength": 1
                   },
                   "resources": {
                     "$ref": "#/definitions/pipeline/common/ContainerResource"
