@@ -745,7 +745,7 @@ export class Registry {
     // Build body BEFORE mapping input→queryParams so that bodyBuilders that
     // hoist fields onto input (e.g. trigger's pipelineIdentifier → pipeline_id)
     // take effect before query params are resolved.
-    const body = spec.bodyBuilder ? spec.bodyBuilder(input) : undefined;
+    const body = spec.bodyBuilder ? spec.bodyBuilder(input, resolvedConfig) : undefined;
 
     // Map input fields to query params (overrides defaults)
     if (spec.queryParams) {

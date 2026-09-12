@@ -1,13 +1,49 @@
-import type { ToolsetDefinition, PathBuilderConfig } from "../types.js";
-import { passthrough, harListExtract } from "../extractors.js";
+import type { ToolsetDefinition, PathBuilderConfig, BodySchema } from "../types.js";
+import { ngExtract, harListExtract } from "../extractors.js";
 
-/**
- * HAR API uses path-based scope refs (not query params).
- * Space ref = {accountId}/{orgId}/{projectId}
- * Registry ref = {spaceRef}/{registryName}
- *
- * Matches the Go MCP server's utils.GetRef(scope, ...) pattern.
- */
+// Canonical PackageType enum — matches RegistryRequest.PackageType in the v1 OpenAPI spec.
+const PACKAGE_TYPES = [
+  "CARGO", "COMPOSER", "CONDA", "CRAN", "DART", "DEBIAN", "DOCKER",
+  "GENERIC", "GO", "HELM", "HELM_HTTP", "HUGGINGFACE", "MAVEN", "NPM",
+  "NUGET", "PUPPET", "PYTHON", "RAW", "RPM", "RUBY", "SWIFT",
+  "TERRAFORM", "TERRAFORM_BACKEND", "CONAN", "WOLFI", "ALPINE",
+];
+
+const registryCreateSchema: BodySchema = {
+  description:
+    "Registry body (RegistryRequest). The registry kind (VIRTUAL or UPSTREAM) is set via `config.type`. " +
+    "`parentRef` is derived automatically from the scope — omit it unless you need to override.",
+  fields: [
+    { name: "identifier", type: "string", required: true, description: "Registry slug / identifier (e.g. my-npm-registry)" },
+    { name: "packageType", type: "string", required: true, description: `Package ecosystem: ${PACKAGE_TYPES.join(", ")}` },
+    { name: "isPublic", type: "boolean", required: true, description: "Whether the registry is publicly accessible" },
+    {
+      name: "config",
+      type: "object",
+      required: true,
+      description:
+        "Registry-kind config — `config.type` is required. " +
+        "VIRTUAL: `{ type: 'VIRTUAL', upstreamProxies: ['<spaceRef>/<registryName>', ...] }`. " +
+        "UPSTREAM: `{ type: 'UPSTREAM', source: 'Dockerhub|PyPi|NpmJs|MavenCentral|NugetOrg|Crates|" +
+        "RubyGems|GoProxy|HuggingFace|Anaconda|Pubdev|Packagist|PuppetForge|HelmChartRepo|" +
+        "ConanCenter|TerraformRegistry|CRAN|Wolfi|Alpine|Custom', url: '<url>' }` (url required for Custom source).",
+    },
+    { name: "parentRef", type: "string", required: false, description: "Scope ref accountId/orgId/projectId — auto-filled from scope; override only when creating in a different scope" },
+    { name: "description", type: "string", required: false, description: "Human-readable description" },
+    { name: "allowedPattern", type: "array", required: false, description: "Glob patterns for artifacts allowed in this registry", itemType: "string" },
+    { name: "blockedPattern", type: "array", required: false, description: "Glob patterns for artifacts blocked in this registry", itemType: "string" },
+    { name: "cleanupPolicy", type: "array", required: false, description: "Cleanup policies attached to this registry" },
+    { name: "labels", type: "array", required: false, description: "Labels to attach to the registry", itemType: "string" },
+    { name: "policyRefs", type: "array", required: false, description: "OPA policy set references to enforce on this registry", itemType: "string" },
+    { name: "scanners", type: "array", required: false, description: "Security scanners to run against artifacts in this registry" },
+  ],
+};
+
+// PUT replaces the full resource — same required fields as create.
+const registryUpdateSchema: BodySchema = {
+  description: "Full registry definition to replace the existing one (PUT semantics). Same fields as create; `parentRef` is auto-filled.",
+  fields: registryCreateSchema.fields,
+};
 
 function harSpaceRef(input: Record<string, unknown>, config: PathBuilderConfig): string {
   const account = config.HARNESS_ACCOUNT_ID ?? "";
@@ -29,7 +65,7 @@ export const registriesToolset: ToolsetDefinition = {
     {
       resourceType: "registry",
       displayName: "Registry",
-      description: "Artifact registry. Supports list and get.",
+      description: "Artifact registry. Supports list, get, create, and update.",
       toolset: "registries",
       scope: "project",
       identifierFields: ["registry_id"],
@@ -39,10 +75,7 @@ export const registriesToolset: ToolsetDefinition = {
         {
           name: "package_type",
           description: "Filter registries by package type",
-          enum: [
-            "CARGO", "COMPOSER", "CONDA", "DART", "DOCKER", "GENERIC", "GO", "HELM",
-            "HUGGINGFACE", "MAVEN", "NPM", "NUGET", "PYTHON", "RAW", "RPM", "SWIFT",
-          ],
+          enum: PACKAGE_TYPES,
         },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/registries/{registryIdentifier}",
@@ -70,8 +103,46 @@ export const registriesToolset: ToolsetDefinition = {
             `/har/api/v1/registry/${harRegistryRef(input, config)}/+`,
           pathParams: { registry_id: "registryIdentifier" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: ngExtract,
           description: "Get registry details",
+        },
+        create: {
+          method: "POST",
+          path: "/har/api/v1/registry",
+          // HAR create requires space_ref=<accountId>/<orgId>/<projectId>/+
+          pathBuilder: (input, config) =>
+            `/har/api/v1/registry?space_ref=${encodeURIComponent(`${harSpaceRef(input, config)}/+`)}`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input, config) => {
+            const body = ((input.body ?? {}) as Record<string, unknown>);
+            return {
+              ...body,
+              parentRef: body.parentRef ?? harSpaceRef(input, config),
+            };
+          },
+          responseExtractor: ngExtract,
+          description: "Create a new artifact registry",
+          bodySchema: registryCreateSchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/har/api/v1/registry",
+          pathBuilder: (input, config) =>
+            `/har/api/v1/registry/${harRegistryRef(input, config)}/+`,
+          pathParams: { registry_id: "registryIdentifier" },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input, config) => {
+            const body = ((input.body ?? {}) as Record<string, unknown>);
+            return {
+              ...body,
+              parentRef: body.parentRef ?? harSpaceRef(input, config),
+            };
+          },
+          responseExtractor: ngExtract,
+          description: "Update (replace) an existing artifact registry",
+          bodySchema: registryUpdateSchema,
         },
       },
     },

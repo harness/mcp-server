@@ -311,7 +311,7 @@ export interface EndpointSpec {
   /** Override default scope query param names (e.g. for APIs using snake_case) */
   scopeParams?: { account?: string; org?: string; project?: string };
   /** For POST/PUT: how to build the request body from tool input */
-  bodyBuilder?: (input: Record<string, unknown>) => unknown;
+  bodyBuilder?: (input: Record<string, unknown>, config: PathBuilderConfig) => unknown;
   /**
    * Static headers to merge into the request (e.g. Content-Type override). For dual-mode
    * resources whose branches need different headers on the same operation, set the per-route
