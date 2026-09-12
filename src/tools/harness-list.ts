@@ -33,7 +33,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         page: z.number().default(0).optional().describe("Page number, 0-indexed"),
         size: z.number().min(1).max(100).default(20).optional().describe("Page size (1–100). Some resource types enforce a lower max (e.g. security_exemption max 50) — call harness_describe for per-resource limits."),
         search_term: z.string().optional().describe("Filter results by name or keyword"),
-        compact: z.boolean().default(true).optional().describe("Strip verbose metadata from list items, keeping only essential fields (default true). Pass as a top-level argument; params.compact / filters.compact=false is also honored."),
+        compact: z.boolean().default(true).optional().describe("Strip verbose metadata from list items, keeping only essential fields (default true)"),
         params: z.record(z.string(), z.unknown()).optional().describe("Additional identifiers for nested resources (e.g. repo_id for pull requests). Call harness_describe for fields per resource_type."),
         filters: z.record(z.string(), z.unknown()).optional().describe(filtersDesc),
       },
@@ -85,8 +85,6 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         // Skip when the endpoint spec has opted out via `skipCompact` (marker
         // propagated as non-enumerable `__skipCompact` by the registry).
         const resultSkipCompact = isRecord(result) && (result as Record<string, unknown> & { __skipCompact?: boolean }).__skipCompact === true;
-        // After params/filters merge so params={compact: false} actually disables
-        // compaction (Zod defaults the top-level flag to true).
         if (input.compact !== false && !resultSkipCompact && isRecord(result)) {
           const items = result.items;
           if (Array.isArray(items)) {
