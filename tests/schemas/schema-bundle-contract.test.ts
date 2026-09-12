@@ -220,4 +220,44 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("models template_v1 root inputs as an open object (not a strict NGVariableV1Wrapper ref)", () => {
+    const templateRoot = SCHEMAS.template_v1.properties as {
+      template: { properties: { inputs: Record<string, unknown> } };
+    };
+    const inputs = templateRoot.template.properties.inputs;
+
+    expect(inputs.type).toBe("object");
+    expect(inputs.additionalProperties).toBe(true);
+    expect(inputs).not.toHaveProperty("$ref");
+  });
+
+  it("includes RuntimeV1 delegate selectors in v1 pipeline and template unified stages", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const runtimeV1 = defs[key].stages.unified.RuntimeV1 as {
+        oneOf: Array<{ type?: string; properties?: Record<string, { $ref?: string }> }>;
+      };
+      const objectBranch = runtimeV1.oneOf.find((branch) => branch.type === "object");
+      expect(objectBranch?.properties?.delegate?.$ref).toContain("/common/Delegate");
+    }
+  });
+
+  it("includes TemplateContainerOverlay on TemplateRef in v1 pipeline and template common definitions", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const templateRef = defs[key].common.TemplateRef as {
+        properties: { container: { $ref?: string } };
+      };
+      expect(templateRef.properties.container.$ref).toContain("TemplateContainerOverlay");
+
+      const overlay = defs[key].common.TemplateContainerOverlay as {
+        additionalProperties: boolean;
+        properties: Record<string, unknown>;
+      };
+      expect(overlay.additionalProperties).toBe(false);
+      expect(overlay.properties).toHaveProperty("resources");
+      expect(overlay.properties).toHaveProperty("privileged");
+    }
+  });
 });
