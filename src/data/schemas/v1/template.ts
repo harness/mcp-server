@@ -41,7 +41,9 @@ const schema: Record<string, any> = {
           }
         },
         "inputs": {
-          "$ref": "#/definitions/template_v1/common/NGVariableV1Wrapper"
+          "description": "Template inputs. Open object so extended types (choice, list, connector), UI metadata, and expression-based required/visible are allowed.",
+          "type": "object",
+          "additionalProperties": true
         }
       },
       "oneOf": [
@@ -1062,6 +1064,10 @@ const schema: Record<string, any> = {
             "gitBranch": {
               "description": "Git branch for remote template resolution.",
               "type": "string"
+            },
+            "container": {
+              "description": "Caller-side container overrides merged into the resolved template step. Applied for any V1 step template whose spec contains run, run-test, or background (including git-clone and build-and-push templates that wrap those steps).\n",
+              "$ref": "#/definitions/template_v1/common/TemplateContainerOverlay"
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -1078,6 +1084,57 @@ const schema: Record<string, any> = {
             }
           },
           "additionalProperties": true,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "TemplateContainerOverlay": {
+          "title": "TemplateContainerOverlay",
+          "description": "Caller-side container overrides on a V1 template step (`template.container`). Mirrors TemplateMergeServiceHelper.CONTAINER_PROPAGATION_ALLOWLIST. Applied to resolved run, run-test, and background containers (including nested group/parallel). Image, connector, and entrypoint stay on the template and are not overridable here.\n",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "user": {
+              "description": "User ID to run as. Supports expressions.",
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "group": {
+              "description": "Group to run as.",
+              "type": "string"
+            },
+            "cpu": {
+              "description": "CPU limit. Ignored when resources.limits.cpu is set.",
+              "type": "string"
+            },
+            "memory": {
+              "description": "Memory limit. Ignored when resources.limits.memory is set.",
+              "type": "string"
+            },
+            "resources": {
+              "description": "Container resource limits and requests. Takes precedence over the flat cpu/memory fields.",
+              "$ref": "#/definitions/template_v1/Resource"
+            },
+            "shm-size": {
+              "description": "Shared memory size.",
+              "type": "string"
+            },
+            "privileged": {
+              "description": "Run in privileged mode. Supports expressions.",
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "$ref": "#/definitions/template_v1/common/Expression"
+                }
+              ]
+            }
+          },
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "StrategyConfigV1": {
@@ -2773,6 +2830,10 @@ const schema: Record<string, any> = {
                   "kubernetes": {
                     "description": "Kubernetes runtime specification.",
                     "$ref": "#/definitions/template_v1/stages/unified/K8RuntimeSpec"
+                  },
+                  "delegate": {
+                    "description": "Delegate selectors used for Kubernetes inherit-from-delegate authentication.",
+                    "$ref": "#/definitions/template_v1/common/Delegate"
                   }
                 }
               }
@@ -3606,6 +3667,10 @@ const schema: Record<string, any> = {
                     "description": "Environment identifier.",
                     "type": "string"
                   },
+                  "all-infra": {
+                    "description": "Deploy to all infrastructures in the environment. With a `deploy-to` runtime input sibling, every infrastructure is preselected in the run form; with no `deploy-to` sibling, deploys to all without prompting.",
+                    "type": "boolean"
+                  },
                   "deploy-to": {
                     "description": "Infrastructure(s) to deploy to.",
                     "$ref": "#/definitions/template_v1/stages/unified/DeployTo"
@@ -3770,6 +3835,10 @@ const schema: Record<string, any> = {
               "ref": {
                 "description": "Git branch for the environment configuration.",
                 "type": "string"
+              },
+              "all-infra": {
+                "description": "Deploy to all infrastructures in the environment. With a `deploy-to` runtime input sibling, every infrastructure is preselected in the run form; with no `deploy-to` sibling, deploys to all without prompting.",
+                "type": "boolean"
               },
               "deploy-to": {
                 "description": "Infrastructure(s) to deploy to.",
@@ -3937,6 +4006,10 @@ const schema: Record<string, any> = {
                   "id": {
                     "description": "Environment group identifier.",
                     "type": "string"
+                  },
+                  "all-env": {
+                    "description": "Deploy to all environments in the group. With an `items` runtime input sibling, every environment is preselected in the run form; with no `items` sibling, deploys to all without prompting.",
+                    "type": "boolean"
                   },
                   "parallel": {
                     "description": "Execute environments in parallel (all at once). Defaults to false, so environments run one at a time (serially) unless set to true.",
@@ -4712,15 +4785,11 @@ const schema: Record<string, any> = {
             "properties": {
               "id": {
                 "description": "Unique identifier for the step.",
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$"
+                "type": "string"
               },
               "name": {
                 "description": "Display name of the step.",
-                "type": "string",
-                "pattern": "^[a-zA-Z_][0-9a-zA-Z-_ ]{0,127}$",
-                "minLength": 1,
-                "maxLength": 128
+                "type": "string"
               },
               "description": {
                 "description": "Description of the step.",
