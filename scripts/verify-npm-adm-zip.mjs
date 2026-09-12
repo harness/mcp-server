@@ -3,8 +3,8 @@
 /**
  * CI helper: simulate the supported global npm install and assert adm-zip is secure.
  *
- * Install scripts must run — do not pass `--ignore-scripts`; nested adm-zip under
- * onnxruntime-node is only upgraded by the package postinstall hook.
+ * This exercises the published install path, including the npm-native override
+ * and the postinstall fallback used when an installer leaves an insecure copy.
  */
 
 import { mkdtempSync, rmSync } from "node:fs";
@@ -14,7 +14,7 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
 import {
-  ADM_ZIP_CVE,
+  ADM_ZIP_ADVISORIES,
   listInsecureAdmZipInstalls,
   SECURE_ADM_ZIP_VERSION,
 } from "./adm-zip-security-lib.mjs";
@@ -59,7 +59,7 @@ try {
   const insecure = listInsecureAdmZipInstalls(packageRoot);
   if (insecure.length > 0) {
     console.error(
-      `insecure adm-zip after npm install (${ADM_ZIP_CVE}, expected >= ${SECURE_ADM_ZIP_VERSION}):`,
+      `insecure adm-zip after npm install (${ADM_ZIP_ADVISORIES}, expected >= ${SECURE_ADM_ZIP_VERSION}):`,
     );
     for (const { dir, version } of insecure) {
       console.error(`  ${dir} @ ${version ?? "missing"}`);

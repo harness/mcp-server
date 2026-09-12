@@ -1,16 +1,16 @@
 {
   "name": "harness-mcp-v2",
-  "version": "3.2.26",
+  "version": "3.2.27",
   "lockfileVersion": 3,
   "requires": true,
   "packages": {
     "": {
       "name": "harness-mcp-v2",
-      "version": "3.2.26",
+      "version": "3.2.27",
       "dependencies": {
         "@hono/node-server": "^2.0.10",
         "@modelcontextprotocol/sdk": "^1.27.1",
-        "adm-zip": "^0.6.0",
+        "adm-zip": "^0.6.1",
         "dotenv": "^17.3.1",
         "express": "^5.2.1",
         "hono": "^4.13.5",
@@ -630,9 +630,9 @@
       }
     },
     "node_modules/adm-zip": {
-      "version": "0.6.0",
-      "resolved": "https://registry.npmjs.org/adm-zip/-/adm-zip-0.6.0.tgz",
-      "integrity": "sha512-XleryMhbuksdKtofnWZ9Sk+4CUTbms4Mb/EU32SZwToAyZ5RgVos/ki8n+yr0LWHOGKuakbXTuuYNHLQjhddgg==",
+      "version": "0.6.1",
+      "resolved": "https://registry.npmjs.org/adm-zip/-/adm-zip-0.6.1.tgz",
+      "integrity": "sha512-Xwrja8nx9e5o2N1my4DsKCeKpdrnACyr1wtbPxBDgGzKzKyE9kRtBFA8mWldI+RVlD7CBZNWY/wQ2+ydwOR6kQ==",
       "license": "MIT",
       "engines": {
         "node": ">=14.0"
@@ -1698,16 +1698,6 @@
         "adm-zip": "^0.5.16",
         "global-agent": "^3.0.0",
         "onnxruntime-common": "1.24.3"
-      }
-    },
-    "node_modules/onnxruntime-node/node_modules/adm-zip": {
-      "version": "0.5.18",
-      "resolved": "https://registry.npmjs.org/adm-zip/-/adm-zip-0.5.18.tgz",
-      "integrity": "sha512-ufJnssQGbxzLNS1Ho9bCtX4rQKCCvoVuDLHoJyc3F9dOGDB4BkWs2Ci0kv53lqocAEQ/Cbi+I2XCsNYGqVYqng==",
-      "license": "MIT",
-      "optional": true,
-      "engines": {
-        "node": ">=12.0"
       }
     },
     "node_modules/onnxruntime-web": {

@@ -4,7 +4,8 @@
  * Generate npm-shrinkwrap.json for npm consumers (harness-ai-agent global install).
  *
  * pnpm-lock.yaml remains the source of truth for repo development; this shrinkwrap
- * documents the npm production tree after the adm-zip postinstall policy is applied.
+ * documents an npm production tree whose overrides resolve every adm-zip copy
+ * to the secure release before postinstall fallback logic is needed.
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -67,12 +68,18 @@ if (checkMode) {
     failCheck("root optionalDependencies do not match package.json");
   }
 
-  const hoistedAdmZipVersion = shrinkwrap.packages?.["node_modules/adm-zip"]?.version;
-  if (
-    !hoistedAdmZipVersion ||
-    !isSecureAdmZipVersion(hoistedAdmZipVersion, SECURE_ADM_ZIP_VERSION)
-  ) {
-    failCheck(`hoisted adm-zip is ${hoistedAdmZipVersion ?? "missing"}`);
+  const admZipInstalls = Object.entries(shrinkwrap.packages ?? {}).filter(([path]) =>
+    path.endsWith("node_modules/adm-zip"),
+  );
+  const insecureAdmZipInstalls = admZipInstalls.filter(
+    ([, metadata]) =>
+      !isSecureAdmZipVersion(metadata?.version, SECURE_ADM_ZIP_VERSION),
+  );
+  if (admZipInstalls.length === 0 || insecureAdmZipInstalls.length > 0) {
+    const details = insecureAdmZipInstalls
+      .map(([path, metadata]) => `${path}@${metadata?.version ?? "missing"}`)
+      .join(", ");
+    failCheck(details || "adm-zip is missing");
   }
 
   console.error("npm-shrinkwrap.json metadata is up to date");
@@ -105,7 +112,7 @@ const stagingManifest = {
   private: true,
   dependencies: pkg.dependencies,
   optionalDependencies: pkg.optionalDependencies,
-  overrides: transitiveOverrides,
+  overrides: { ...transitiveOverrides, ...(pkg.overrides ?? {}) },
 };
 
 writeFileSync(join(stagingRoot, "package.json"), `${JSON.stringify(stagingManifest, null, 2)}\n`);
