@@ -2362,6 +2362,50 @@ describe("fme_metric", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("create: defaults filterEventType.propertyFilters to [] when omitted", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "m1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      body: {
+        name: "checkout-conversion",
+        trafficType: "user",
+        format: "PERCENTAGE",
+        aggregation: "COUNT",
+        isPositive: true,
+        spread: "PER",
+        baseEventTypes: [{ eventTypeId: "e1" }],
+        filterEventType: { eventTypeId: "e2", filterAggregation: "COUNT" },
+      },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body.filterEventType).toEqual({
+      propertyFilters: [],
+      eventTypeId: "e2",
+      filterAggregation: "COUNT",
+    });
+  });
+
+  it("update: normalizes baseEventTypes entries when patching", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "m1",
+      body: { baseEventTypes: [{ eventTypeId: "e2" }] },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({
+      baseEventTypes: [{ propertyFilters: [], propertyForValue: null, eventTypeId: "e2" }],
+    });
+  });
+
   it("update: PATCHes with merge-patch content type and only the fields present in body", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
