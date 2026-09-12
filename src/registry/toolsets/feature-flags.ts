@@ -25,6 +25,23 @@ function normalizeFmeTags(tags: unknown): unknown {
   return Array.isArray(tags) ? tags.map((t) => (typeof t === "string" ? { name: t } : t)) : tags;
 }
 
+// fme_metric baseEventTypes/filterEventType entries omit propertyFilters/propertyForValue
+// when callers copy an eventTypeId alone — the backend rejects the whole create/update
+// body with the same generic "Invalid JSON request body" rather than defaulting them.
+function normalizeFmeBaseEvent(entry: unknown): unknown {
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return entry;
+  return { propertyFilters: [], propertyForValue: null, ...(entry as Record<string, unknown>) };
+}
+
+function normalizeFmeBaseEventTypes(entries: unknown): unknown {
+  return Array.isArray(entries) ? entries.map(normalizeFmeBaseEvent) : entries;
+}
+
+function normalizeFmeFilterEventType(entry: unknown): unknown {
+  if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return entry;
+  return { propertyFilters: [], ...(entry as Record<string, unknown>) };
+}
+
 const FME_SEGMENT_KINDS = ["STANDARD", "LARGE", "RULE_BASED"] as const;
 type FmeSegmentKind = (typeof FME_SEGMENT_KINDS)[number];
 
@@ -296,6 +313,42 @@ const fmeSegmentDefinitionCreateSchema: BodySchema = {
 const fmeSegmentDefinitionUpdateSchema: BodySchema = {
   description: "Update a segment definition. description is the only mutable field: omit it to leave unchanged, pass null to clear it, or a string to set it.",
   fields: [{ name: "description", type: "string", required: false, description: "Omit to keep the current value, null to clear it, or a string to set it" }],
+};
+
+const fmeMetricCreateSchema: BodySchema = {
+  description:
+    "Create a new metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required by the backend. spread is also required here — an MCP-only stricter contract: the backend silently defaults it to 'PER' when omitted, changing semantics for RATE metrics with no warning. owners is optional, but the backend currently rejects an empty/missing owners list with a 400 (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one owner until that ships.",
+  fields: [
+    { name: "name", type: "string", required: true, description: "Unique metric name within the project (must start with a letter; letters, digits, '-', '_' only; max 100 chars). Immutable after creation." },
+    { name: "description", type: "string", required: false, description: "Optional human-readable description" },
+    { name: "trafficType", type: "string", required: true, description: "Traffic type name (get from fme_traffic_type). Immutable after creation." },
+    { name: "format", type: "string", required: true, description: "Display format. One of: NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES." },
+    { name: "aggregation", type: "string", required: true, description: "How individual event values are aggregated per unit. One of: TOTAL, COUNT, RATE, AVERAGE." },
+    { name: "isPositive", type: "boolean", required: true, description: "true when an increase in this metric is a good outcome" },
+    { name: "spread", type: "string", required: true, description: "PER (per-unit) or ACROSS (population). Required here even though the backend accepts omitting it (defaults to PER) — set it explicitly, especially for RATE metrics where PER vs ACROSS changes what is measured." },
+    { name: "baseEventTypes", type: "array", required: true, description: "The base event type(s) this metric measures (at least one). Each entry: {eventTypeId, propertyFilters?, propertyForValue?} — propertyFilters/propertyForValue default to []/null when omitted. Get event type IDs from fme_event_type.", itemType: "object" },
+    { name: "filterEventType", type: "object", required: false, description: "Optional filter/trigger event that scopes which units are counted: {eventTypeId, filterAggregation?, propertyFilters?} — propertyFilters defaults to [] when omitted." },
+    { name: "tags", type: "array", required: false, description: "Initial tags. Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}. For now the backend rejects an empty or missing list with 400 \"Owners cannot be empty\" (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one until it ships.", itemType: "object" },
+    { name: "cap", type: "object", required: false, description: "Optional outlier/cap configuration: baseEventCountCap/baseEventSumCap/baseEventValueCap/filterEventCountCap/filterEventSumCap/filterEventValueCap/metricValueCap (all default 0 = no cap), plus granularity (MINUTES|HOURS|DAYS|WEEKS, default DAYS)" },
+  ],
+};
+
+const fmeMetricUpdateSchema: BodySchema = {
+  description:
+    "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name and trafficType are immutable and not accepted here. format/aggregation/isPositive/spread cannot be cleared with null (rejected with 400). baseEventTypes/filterEventType/tags/owners/cap are full replacements when provided; null (or [] for arrays) clears filterEventType/tags/owners/cap.",
+  fields: [
+    { name: "description", type: "string", required: false, description: "Updated description; null clears it" },
+    { name: "format", type: "string", required: false, description: "Updated format (NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES); cannot be cleared with null" },
+    { name: "aggregation", type: "string", required: false, description: "Updated aggregation (TOTAL, COUNT, RATE, AVERAGE); cannot be cleared with null." },
+    { name: "isPositive", type: "boolean", required: false, description: "Updated direction; cannot be cleared with null" },
+    { name: "spread", type: "string", required: false, description: "Updated spread (PER or ACROSS); cannot be cleared with null" },
+    { name: "baseEventTypes", type: "array", required: false, description: "Replacement base-event list (full replacement, at least one entry required when provided). Each entry's propertyFilters/propertyForValue default to []/null when omitted.", itemType: "object" },
+    { name: "filterEventType", type: "object", required: false, description: "Replacement filter event, or null to clear it. propertyFilters defaults to [] when omitted." },
+    { name: "tags", type: "array", required: false, description: "Replacement tag list; null or [] clears all tags", itemType: "object" },
+    { name: "owners", type: "array", required: false, description: "Replacement owner list; null or [] clears all owners", itemType: "object" },
+    { name: "cap", type: "object", required: false, description: "Replacement cap configuration, or null to clear it" },
+  ],
 };
 
 const fmeRbsUpdateDefinitionSchema: BodySchema = {
@@ -1727,6 +1780,227 @@ export const featureFlagsToolset: ToolsetDefinition = {
           bodySchema: fmeSegmentDefinitionKeysRemoveSchema,
           actionDescription:
             "Remove membership keys from a segment definition. Requires org_id, project_id, segment_name, environment_id, and body.keys with at least one key. Optional body comment/title.",
+        },
+      },
+    },
+    {
+      resourceType: "fme_metric",
+      displayName: "FME Metric",
+      description:
+        "An FME metric definition — name, traffic type, aggregation, format, spread, base event " +
+        "types, filters, cap, tags and owners. Harness-native only (org_id + project_id; no legacy " +
+        "workspace_id support). Supports list, get, create, update, and delete.",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["metric_id"],
+      listFilterFields: [
+        { name: "name", description: "Filter by name (substring, case-insensitive)" },
+        { name: "traffic_type_id", description: "Filter by traffic type ID (get from fme_traffic_type)" },
+        { name: "event_type_ids", description: "Filter by base event type IDs" },
+        { name: "tags", description: "Filter by tag names" },
+        { name: "ids", description: "Filter to specific metric IDs" },
+        { name: "sort_order", description: "Sort direction by name", enum: ["ASCENDING", "DESCENDING"] },
+        { name: "offset", description: "Pagination offset", type: "number" },
+        { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_metric");
+            return { path: "/fme/api/v4/metrics" };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            name: "name",
+            traffic_type_id: "traffic_type_id",
+            event_type_ids: "event_type_ids",
+            tags: "tags",
+            ids: "ids",
+            sort_order: "sort_order",
+            offset: "offset",
+            size: "limit",
+            limit: "limit",
+          },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description:
+            "List metric definitions in a project, with pagination and filters (harness_list size maps to limit; " +
+            "pass offset directly via filters — harness_list's page is not honored here, same as the other FME " +
+            "v4 list resources).",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_metric");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            return { path: `/fme/api/v4/metrics/${id}` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description: "Get a single metric definition by ID.",
+        },
+        create: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_metric");
+            return { path: "/fme/api/v4/metrics" };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (body?.spread === undefined || body?.spread === null) {
+              throw new Error(
+                "fme_metric.create: spread is required (MCP-only stricter contract — the backend " +
+                  "silently defaults to 'PER' when omitted, changing metric semantics for RATE " +
+                  "metrics). Pass 'PER' or 'ACROSS'.",
+              );
+            }
+            return {
+              name: body?.name,
+              trafficType: body?.trafficType,
+              format: body?.format,
+              aggregation: body?.aggregation,
+              isPositive: body?.isPositive,
+              spread: body.spread,
+              baseEventTypes: normalizeFmeBaseEventTypes(body?.baseEventTypes),
+              ...(body?.description !== undefined ? { description: body.description } : {}),
+              ...(body?.owners !== undefined ? { owners: body.owners } : {}),
+              ...(body?.filterEventType !== undefined ? { filterEventType: normalizeFmeFilterEventType(body.filterEventType) } : {}),
+              ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
+              ...(body?.cap !== undefined ? { cap: body.cap } : {}),
+            };
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeMetricCreateSchema,
+          description:
+            "Create a metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes/spread are required (spread required is an MCP-only stricter contract; the backend otherwise defaults it to PER). Get event type IDs from fme_event_type first.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_metric");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            return { path: `/fme/api/v4/metrics/${id}` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body || typeof body !== "object" || Array.isArray(body)) return {};
+            const patchableFields = [
+              "description",
+              "format",
+              "aggregation",
+              "isPositive",
+              "spread",
+              "baseEventTypes",
+              "filterEventType",
+              "tags",
+              "owners",
+              "cap",
+            ] as const;
+            const patch: Record<string, unknown> = {};
+            for (const field of patchableFields) {
+              if (!(field in body)) continue;
+              const value = body[field];
+              switch (field) {
+                case "tags":
+                  patch[field] = normalizeFmeTags(value);
+                  break;
+                case "baseEventTypes":
+                  patch[field] = value === null ? null : normalizeFmeBaseEventTypes(value);
+                  break;
+                case "filterEventType":
+                  patch[field] = value === null ? null : normalizeFmeFilterEventType(value);
+                  break;
+                default:
+                  patch[field] = value;
+              }
+            }
+            return patch;
+          },
+          responseExtractor: passthrough,
+          bodySchema: fmeMetricUpdateSchema,
+          description:
+            "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged; format/aggregation/isPositive/spread cannot be cleared with null. baseEventTypes/filterEventType/tags/owners/cap are full replacements when provided. name and trafficType are immutable and not accepted here.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_metric");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "metric_id", "fme_metric"));
+            return { path: `/fme/api/v4/metrics/${id}` };
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description: "Delete a metric definition by ID. Hard delete — permanent, no archive/restore.",
+        },
+      },
+    },
+    // ── FME Event Type (Harness-native only; read-only — no create/update/delete) ──
+    // Discovery endpoint for fme_metric: use list/get here to resolve real event type IDs
+    // before referencing one in a metric's baseEventTypes/filterEventType or the
+    // event_type_ids list filter, instead of guessing an ID.
+    {
+      resourceType: "fme_event_type",
+      displayName: "FME Event Type",
+      description:
+        "An FME event type — id (the event name) and the traffic types it's associated with. " +
+        "Harness-native only (org_id + project_id; no legacy workspace_id support). Read-only: " +
+        "supports list and get. Only event types with events received in the last 30 days are " +
+        "visible; get returns 404 for an event type with no traffic type in the requesting " +
+        "workspace's scope, or idle longer than 30 days. Use to discover event type IDs before " +
+        "referencing one in fme_metric's baseEventTypes/filterEventType or event_type_ids filter. " +
+        "Backed by /fme/api/v4/event-types.",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["event_type_id"],
+      listFilterFields: [
+        { name: "name", description: "Filter by name (substring, case-insensitive)" },
+        { name: "traffic_type", description: "Filter by traffic type, as an ID or name (get from fme_traffic_type)" },
+        { name: "offset", description: "Pagination offset", type: "number" },
+        { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_event_type");
+            return { path: "/fme/api/v4/event-types" };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            name: "name",
+            traffic_type: "traffic_type",
+            offset: "offset",
+            size: "limit",
+            limit: "limit",
+          },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description:
+            "List event types in a project, with pagination and filters (harness_list size maps to limit; " +
+            "pass offset directly via filters — harness_list's page is not honored here, same as the other FME " +
+            "v4 list resources).",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_event_type");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "event_type_id", "fme_event_type"));
+            return { path: `/fme/api/v4/event-types/${id}` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description: "Get a single event type by ID.",
         },
       },
     },
