@@ -85,7 +85,7 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
         // Skip when the endpoint spec has opted out via `skipCompact` (marker
         // propagated as non-enumerable `__skipCompact` by the registry).
         const resultSkipCompact = isRecord(result) && (result as Record<string, unknown> & { __skipCompact?: boolean }).__skipCompact === true;
-        if (input.compact !== false && !resultSkipCompact && isRecord(result)) {
+        if (args.compact !== false && !resultSkipCompact && isRecord(result)) {
           const items = result.items;
           if (Array.isArray(items)) {
             const compactFn = registry.getResource(resourceType).compactItem;
