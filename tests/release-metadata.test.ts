@@ -70,6 +70,9 @@ describe("release metadata", () => {
     expect(bundled.optionalDependencies).toEqual(packageJson.optionalDependencies);
     expect(bundled.overrides.sharp).toBe(packageJson.pnpm.overrides.sharp);
     expect(bundled.overrides).not.toHaveProperty("hono");
+    expect(bundled.overrides["onnxruntime-node"]).toEqual({
+      "adm-zip": "0.6.1",
+    });
   });
 
   it("ships matching 512×512 directory icons", () => {
