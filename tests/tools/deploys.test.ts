@@ -189,6 +189,19 @@ describe("deploy — harness_list", () => {
     expect(data.items[0]).toHaveProperty("buildVersions");
   });
 
+  it("params compact:false also leaves raw fields intact", async () => {
+    mockRequest.mockResolvedValueOnce({
+      entities: [{ id: "DEPL-1", status: null, buildVersions: [{ service: "x", version: "1" }] }],
+      totalCount: 1,
+    });
+    const result = await server.call("harness_list", {
+      resource_type: "deploy",
+      params: { compact: false },
+    });
+    const data = parseResult(result) as { items: Record<string, unknown>[] };
+    expect(data.items[0]).toHaveProperty("buildVersions");
+  });
+
   it("maps snake_case filters to API query param names", async () => {
     await server.call("harness_list", {
       resource_type: "deploy",

@@ -18,7 +18,7 @@ export function registerOptimizeCostsPrompt(server: McpServer): void {
           text: `Analyze cloud costs and recommend optimizations for this Harness project.
 
 Steps:
-1. Call harness_list with resource_type="cost_recommendation"${projectId ? ` and project_id="${projectId}"` : ""}, params={compact: false} to get current Open-tab recommendations (defaults: days_back=4 last-processed freshness, min_saving=1, OPEN). Do not map a UI date range to days_back. For a team/BU, add cost_category + cost_buckets.
+1. Call harness_list with resource_type="cost_recommendation"${projectId ? ` and project_id="${projectId}"` : ""} and compact=false (top-level argument, not inside params) to get current Open-tab recommendations including monthlySaving (defaults: days_back=4 last-processed freshness, min_saving=1, OPEN). Do not map a UI date range to days_back. For a team/BU, add cost_category + cost_buckets.
 2. Call harness_list with resource_type="cost_anomaly"${projectId ? ` and project_id="${projectId}"` : ""} to identify any cost anomalies
 3. Prioritize findings by potential savings (highest first)
 4. For each recommendation, provide:

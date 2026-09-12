@@ -672,8 +672,13 @@ function buildRecommendationOverviewBody(
   }
 
   if (options.includePaging) {
-    body.offset = (input.offset as number) ?? 0;
-    body.limit = (input.limit as number) ?? 10;
+    const limit = (input.limit as number) ?? (input.size as number) ?? 10;
+    body.limit = limit;
+    body.offset = input.offset != null
+      ? (input.offset as number)
+      : typeof input.page === "number"
+        ? input.page * limit
+        : 0;
     body.sortBy = (input.sort_by as string) ?? "MONTHLY_SAVING";
     body.sortOrder = (input.sort_order as string) ?? "DESCENDING";
   }
@@ -1179,8 +1184,8 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
         { name: "time_filter", description: "Perspective GraphQL get only. REST list ignores this. Do not map this (or the UI date picker) to days_back.", enum: [...VALID_TIME_FILTERS] },
         { name: "sort_by", description: "Sort field (list default MONTHLY_SAVING)", enum: ["MONTHLY_SAVING", "MONTHLY_COST", "RESOURCE_NAME"] },
         { name: "sort_order", description: "Sort direction (list default DESCENDING)", enum: ["ASCENDING", "DESCENDING"] },
-        { name: "limit", description: "Result limit (list default 10, matches UI page size)", type: "number" },
-        { name: "offset", description: "Pagination offset", type: "number" },
+        { name: "limit", description: "Result limit (default 10). harness_list size is honored when limit is omitted.", type: "number" },
+        { name: "offset", description: "Pagination offset. If omitted, harness_list page * limit/size is used.", type: "number" },
       ],
       operations: {
         list: {

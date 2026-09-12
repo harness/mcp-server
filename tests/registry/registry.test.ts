@@ -1936,6 +1936,46 @@ describe("Registry", () => {
       expect(call.body.sortOrder).toBe("DESCENDING");
     });
 
+    it("cost_recommendation list maps harness_list size onto body limit", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        size: 50,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.limit).toBe(50);
+      expect(call.body.offset).toBe(0);
+    });
+
+    it("cost_recommendation list prefers explicit limit over size", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        size: 50,
+        limit: 25,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.limit).toBe(25);
+    });
+
+    it("cost_recommendation list maps harness_list page onto offset using limit", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        size: 50,
+        page: 2,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.limit).toBe(50);
+      expect(call.body.offset).toBe(100);
+    });
+
     it("cost_recommendation list uses days_back override", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
       const client = makeClient(mockRequest);
