@@ -1868,7 +1868,7 @@ describe("Registry", () => {
       expect(call.path).toBe("/ccm/api/business-mapping/cat-uuid-123");
     });
 
-    it("cost_recommendation list sends default body when no filters provided", async () => {
+    it("cost_recommendation list sends Open-tab default body when no filters provided", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
       const client = makeClient(mockRequest);
 
@@ -1878,14 +1878,17 @@ describe("Registry", () => {
       expect(call.path).toBe("/ccm/api/recommendation/overview/list");
       expect(call.body).toEqual({
         filterType: "CCMRecommendation",
-        minSaving: 0,
+        minSaving: 1,
         daysBack: 4,
         offset: 0,
-        limit: 20,
+        limit: 10,
+        sortBy: "MONTHLY_SAVING",
+        sortOrder: "DESCENDING",
+        k8sRecommendationFilterPropertiesDTO: { recommendationStates: ["OPEN"] },
       });
     });
 
-    it("cost_recommendation list passes cost_category and cost_buckets as costCategoryDTOs", async () => {
+    it("cost_recommendation list passes cost_category and cost_buckets as costCategoryDTOs alongside Open defaults", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
       const client = makeClient(mockRequest);
 
@@ -1898,6 +1901,11 @@ describe("Registry", () => {
       expect(call.body.costCategoryDTOs).toEqual([
         { costCategory: "AI Platform team", costBucket: "GCP QA" },
       ]);
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["OPEN"],
+      });
+      expect(call.body.minSaving).toBe(1);
+      expect(call.body.daysBack).toBe(4);
     });
 
     it("cost_recommendation list passes recommendation_states as k8sRecommendationFilterPropertiesDTO", async () => {
@@ -1952,6 +1960,99 @@ describe("Registry", () => {
       expect(call.body.costCategoryDTOs).toBeUndefined();
     });
 
+    it("cost_recommendation list ignores applied_at filters on OPEN", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        applied_at_start: 1786386600000,
+        applied_at_end: 1789064999999,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.baseRecommendationFilterPropertiesDTO).toBeUndefined();
+      expect(call.body.daysBack).toBe(4);
+    });
+
+    it("cost_recommendation list Applied-only omits daysBack and sends appliedAt window", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        recommendation_states: "APPLIED",
+        applied_at_start: 1786386600000,
+        applied_at_end: 1789064999999,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.daysBack).toBeUndefined();
+      expect(call.body.minSaving).toBe(0);
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["APPLIED"],
+      });
+      expect(call.body.baseRecommendationFilterPropertiesDTO).toEqual({
+        appliedAtStartTime: 1786386600000,
+        appliedAtEndTime: 1789064999999,
+      });
+    });
+
+    it("cost_recommendation list expands IGNORED to include TEMPORARILY_IGNORED", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        recommendation_states: "IGNORED",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.daysBack).toBe(4);
+      expect(call.body.minSaving).toBe(1);
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["IGNORED", "TEMPORARILY_IGNORED"],
+      });
+    });
+
+    it("cost_recommendation list passes resource_types on the k8s filter DTO", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        resource_types: "NODE_POOL",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["OPEN"],
+        resourceTypes: ["NODE_POOL"],
+      });
+    });
+
+    it("cost_recommendation list honors min_saving 0 override", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        min_saving: 0,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.minSaving).toBe(0);
+    });
+
+    it("cost_recommendation get includes daysBack 4 on the GraphQL filter", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "get", {
+        perspective_id: "view-1",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ccm/api/graphql");
+      expect(call.body.variables.filter.daysBack).toBe(4);
+      expect(call.body.variables.filter.minSaving).toBe(1);
+    });
+
     it("cost_recommendation_count get sends default body when no filters provided", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: 42 });
       const client = makeClient(mockRequest);
@@ -1962,8 +2063,9 @@ describe("Registry", () => {
       expect(call.path).toBe("/ccm/api/recommendation/overview/count");
       expect(call.body).toEqual({
         filterType: "CCMRecommendation",
-        minSaving: 0,
+        minSaving: 1,
         daysBack: 4,
+        k8sRecommendationFilterPropertiesDTO: { recommendationStates: ["OPEN"] },
       });
     });
 
@@ -1997,8 +2099,9 @@ describe("Registry", () => {
       expect(call.path).toBe("/ccm/api/recommendation/overview/stats");
       expect(call.body).toEqual({
         filterType: "CCMRecommendation",
-        minSaving: 0,
+        minSaving: 1,
         daysBack: 4,
+        k8sRecommendationFilterPropertiesDTO: { recommendationStates: ["OPEN"] },
       });
     });
 
@@ -2041,6 +2144,30 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
         recommendationStates: ["OPEN"],
+      });
+    });
+
+    it("cost_recommendation_stats Applied-only omits daysBack and keeps cost category filters", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_stats", "get", {
+        recommendation_states: "APPLIED",
+        applied_at_start: 1786386600000,
+        applied_at_end: 1789064999999,
+        cost_category: "Teams",
+        cost_buckets: "Engineering",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.daysBack).toBeUndefined();
+      expect(call.body.minSaving).toBe(0);
+      expect(call.body.costCategoryDTOs).toEqual([
+        { costCategory: "Teams", costBucket: "Engineering" },
+      ]);
+      expect(call.body.baseRecommendationFilterPropertiesDTO).toEqual({
+        appliedAtStartTime: 1786386600000,
+        appliedAtEndTime: 1789064999999,
       });
     });
 

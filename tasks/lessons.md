@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## CCM Open Recommendations Use daysBack, Not the Date Picker
+- **Issue**: Chat showed OPEN recs (e.g. `prod-nodepool-v2`) that the CCM Recommendations page hides. The UI date picker is `appliedAt*` and is ignored unless state is APPLIED-only. OPEN freshness is `daysBack: 4` on `lastProcessedAt`. Mapping the calendar to `days_back=30` re-includes stale recs.
+- **Fix**: REST list/stats/count default to the Open-tab payload (`daysBack: 4`, `minSaving: 1`, `OPEN`). Applied-only omits `daysBack` and sends `applied_at_start`/`applied_at_end`. Keep `cost_category` + `cost_buckets` for per-team filters.
+- **Rule**: Never treat the recommendations calendar as OPEN lookback. `days_back` is last-processed TTL; `appliedAt*` is Applied-tab only.
+
 ## GitHub Action Tags Must Match the Published Ref Exactly
 - **Issue**: The Trivy release page labels the latest release `v0.36.0`, but the workflow initially referenced `0.36.0`; GitHub Actions failed during job setup because that ref does not exist.
 - **Fix**: Use the exact published action ref, including its `v` prefix, and verify the repository tag before pushing.
