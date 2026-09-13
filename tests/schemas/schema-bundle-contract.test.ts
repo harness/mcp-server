@@ -29,6 +29,21 @@ function extractStringSet(source: string, constName: string): Set<string> {
 const REMOVED_V1_SCHEMAS = ["trigger", "service", "infra"] as const;
 const REMOVED_V1_KEYS = REMOVED_V1_SCHEMAS.map((name) => `${name}_v1`);
 
+const STEP_NODE_V1_ID_PATTERN = /^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$/;
+const STEP_NODE_V1_NAME_PATTERN = /^[a-zA-Z_][0-9a-zA-Z-_ ]{0,127}$/;
+
+function getV1UnifiedStepNodeV1(schemaKey: "pipeline_v1" | "template_v1") {
+  const defs = SCHEMAS[schemaKey].definitions as Record<string, Record<string, unknown>>;
+  const ns = schemaKey;
+  const unified = defs[ns].steps.unified as Record<string, unknown>;
+  return unified.StepNodeV1 as {
+    properties: {
+      id: { type: string; pattern?: string };
+      name: { type: string; pattern?: string; minLength?: number; maxLength?: number };
+    };
+  };
+}
+
 describe("schema bundle contract", () => {
   it("keeps sync-schemas.js and check-schema-coverage.js v1 lists aligned", () => {
     const syncScript = readFileSync(join(ROOT, "scripts/sync-schemas.js"), "utf8");
@@ -219,5 +234,33 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source");
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
+  });
+
+  it("includes upstream StepNodeV1 id/name identifier constraints in v1 pipeline and template", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const stepNode = getV1UnifiedStepNodeV1(key);
+
+      expect(stepNode.properties.id.type).toBe("string");
+      expect(stepNode.properties.id.pattern).toBe(STEP_NODE_V1_ID_PATTERN.source);
+
+      expect(stepNode.properties.name.type).toBe("string");
+      expect(stepNode.properties.name.pattern).toBe(STEP_NODE_V1_NAME_PATTERN.source);
+      expect(stepNode.properties.name.minLength).toBe(1);
+      expect(stepNode.properties.name.maxLength).toBe(128);
+    }
+  });
+
+  it("StepNodeV1 id pattern allows $ in identifiers but rejects leading digits", () => {
+    expect(STEP_NODE_V1_ID_PATTERN.test("run_build")).toBe(true);
+    expect(STEP_NODE_V1_ID_PATTERN.test("_step$1")).toBe(true);
+    expect(STEP_NODE_V1_ID_PATTERN.test("1run")).toBe(false);
+    expect(STEP_NODE_V1_ID_PATTERN.test("-run")).toBe(false);
+  });
+
+  it("StepNodeV1 name pattern allows spaces and hyphens but rejects empty or digit-first names", () => {
+    expect(STEP_NODE_V1_NAME_PATTERN.test("Build Image")).toBe(true);
+    expect(STEP_NODE_V1_NAME_PATTERN.test("step-1")).toBe(true);
+    expect(STEP_NODE_V1_NAME_PATTERN.test("")).toBe(false);
+    expect(STEP_NODE_V1_NAME_PATTERN.test("9fail")).toBe(false);
   });
 });
