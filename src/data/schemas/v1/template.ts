@@ -41,9 +41,7 @@ const schema: Record<string, any> = {
           }
         },
         "inputs": {
-          "description": "Template inputs. Open object so extended types (choice, list, connector), UI metadata, and expression-based required/visible are allowed.",
-          "type": "object",
-          "additionalProperties": true
+          "$ref": "#/definitions/template_v1/common/NGVariableV1Wrapper"
         }
       },
       "oneOf": [
@@ -219,288 +217,7 @@ const schema: Record<string, any> = {
       }
     },
     "template_v1": {
-      "pipeline": {
-        "type": "object",
-        "title": "pipeline",
-        "additionalProperties": false,
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-          },
-          "name": {
-            "type": "string",
-            "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-          },
-          "description": {
-            "type": "string",
-            "description": "Description of the pipeline."
-          },
-          "clone": {
-            "$ref": "#/definitions/template_v1/Clone"
-          },
-          "inputs": {
-            "$ref": "#/definitions/template_v1/common/NGVariableV1Wrapper"
-          },
-          "timeout": {
-            "type": "string",
-            "description": "Defines pipeline timeout",
-            "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-          },
-          "allow-stage-executions": {
-            "type": "boolean",
-            "description": "Allows stage executions."
-          },
-          "fixed-inputs-on-rerun": {
-            "type": "boolean",
-            "description": "Fixed inputs on rerun."
-          },
-          "delegate": {
-            "$ref": "#/definitions/template_v1/common/Delegate"
-          },
-          "env": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "Provides the default environment variables."
-          },
-          "repo": {
-            "description": "Configures the default repository.",
-            "$ref": "#/definitions/template_v1/Repository"
-          },
-          "barriers": {
-            "type": "array",
-            "description": "Barriers provides optional pipeline barriers.",
-            "items": {
-              "type": "string"
-            }
-          },
-          "if": {
-            "type": "string",
-            "description": "If provides conditional pipeline execution logic. If the condition resolves to false, the pipeline is skipped."
-          },
-          "on": {
-            "$ref": "#/definitions/template_v1/On"
-          },
-          "notifications": {
-            "type": "array",
-            "description": "Notifications provides optional pipeline notifications.",
-            "items": {
-              "$ref": "#/definitions/template_v1/NotificationRules"
-            }
-          },
-          "tags": {
-            "type": "object",
-            "description": "Tags for the pipeline.",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "template": {
-            "description": "Pipeline template reference.",
-            "$ref": "#/definitions/template_v1/common/TemplateRef"
-          },
-          "stages": {
-            "type": "array",
-            "description": "Pipeline stages - can contain stages, groups, or parallel executions.",
-            "items": {
-              "$ref": "#/definitions/template_v1/stages/unified/StageItems"
-            },
-            "maxItems": 256,
-            "minItems": 1
-          }
-        },
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "Clone": {
-        "title": "Clone",
-        "type": "object",
-        "additionalProperties": false,
-        "description": "Clone defines the default clone behavior.",
-        "properties": {
-          "depth": {
-            "description": "Depth defines the clone depth.",
-            "oneOf": [
-              {
-                "type": "integer",
-                "format": "int32"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "enabled": {
-            "description": "Enables or disables the default clone step.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "insecure": {
-            "description": "Insecure disables ssl verification.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "lfs": {
-            "description": "Lfs enables cloning lfs files.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "strategy": {
-            "description": "Strategy configures the PR clone strategy.",
-            "type": "string",
-            "enum": [
-              "source-branch",
-              "merge"
-            ]
-          },
-          "submodules": {
-            "description": "Submodules enables cloning all submodules. Accepts boolean, string (true/false/recursive), or expression.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "string",
-                "enum": [
-                  "true",
-                  "false",
-                  "recursive"
-                ]
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "tags": {
-            "description": "Tags enables cloning all tags.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "trace": {
-            "description": "Trace enables trace logging.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "ref": {
-            "description": "Reference defines the clone ref.",
-            "oneOf": [
-              {
-                "$ref": "#/definitions/template_v1/Reference"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "repo": {
-            "description": "Repo defines the repository name or URL.",
-            "type": "string",
-            "minLength": 1
-          },
-          "connector": {
-            "description": "Connector defines the connector reference.",
-            "type": "string",
-            "minLength": 1
-          },
-          "clonedir": {
-            "description": "Clonedir defines the clone directory path.",
-            "type": "string",
-            "minLength": 1
-          },
-          "resources": {
-            "description": "Resources defines container resource limits.",
-            "$ref": "#/definitions/template_v1/Resource"
-          },
-          "user": {
-            "description": "User ID to run the clone container as. Supports expressions.",
-            "oneOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "string"
-              }
-            ]
-          },
-          "sparse-checkout": {
-            "description": "SparseCheckout defines paths to limit the clone to specific directories.",
-            "oneOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "pre-fetch": {
-            "description": "PreFetch defines a command to run before the clone operation.",
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "persist-credentials": {
-            "description": "PersistCredentials configures git credentials to persist after clone so subsequent git operations in the workspace can authenticate.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          }
-        },
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
       "common": {
-        "Expression": {
-          "title": "Expression",
-          "description": "String value matching a Harness pipeline expression or template placeholder (e.g., <+something> or ${{ ... }}).",
-          "type": "string",
-          "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
         "NGVariableV1Wrapper": {
           "title": "NGVariableV1Wrapper",
           "description": "Wrapper for stage/pipeline-level input variables. Keys are variable names, values define variable configuration.",
@@ -1026,6 +743,13 @@ const schema: Record<string, any> = {
               }
             }
           ],
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "Expression": {
+          "title": "Expression",
+          "description": "String value matching a Harness pipeline expression or template placeholder (e.g., <+something> or ${{ ... }}).",
+          "type": "string",
+          "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "Delegate": {
@@ -1780,6 +1504,280 @@ const schema: Record<string, any> = {
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         }
+      },
+      "pipeline": {
+        "type": "object",
+        "title": "pipeline",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the pipeline."
+          },
+          "clone": {
+            "$ref": "#/definitions/template_v1/Clone"
+          },
+          "inputs": {
+            "$ref": "#/definitions/template_v1/common/NGVariableV1Wrapper"
+          },
+          "timeout": {
+            "type": "string",
+            "description": "Defines pipeline timeout",
+            "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+          },
+          "allow-stage-executions": {
+            "type": "boolean",
+            "description": "Allows stage executions."
+          },
+          "fixed-inputs-on-rerun": {
+            "type": "boolean",
+            "description": "Fixed inputs on rerun."
+          },
+          "delegate": {
+            "$ref": "#/definitions/template_v1/common/Delegate"
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Provides the default environment variables."
+          },
+          "repo": {
+            "description": "Configures the default repository.",
+            "$ref": "#/definitions/template_v1/Repository"
+          },
+          "barriers": {
+            "type": "array",
+            "description": "Barriers provides optional pipeline barriers.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "if": {
+            "type": "string",
+            "description": "If provides conditional pipeline execution logic. If the condition resolves to false, the pipeline is skipped."
+          },
+          "on": {
+            "$ref": "#/definitions/template_v1/On"
+          },
+          "notifications": {
+            "type": "array",
+            "description": "Notifications provides optional pipeline notifications.",
+            "items": {
+              "$ref": "#/definitions/template_v1/NotificationRules"
+            }
+          },
+          "tags": {
+            "type": "object",
+            "description": "Tags for the pipeline.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "template": {
+            "description": "Pipeline template reference.",
+            "$ref": "#/definitions/template_v1/common/TemplateRef"
+          },
+          "stages": {
+            "type": "array",
+            "description": "Pipeline stages - can contain stages, groups, or parallel executions.",
+            "items": {
+              "$ref": "#/definitions/template_v1/stages/unified/StageItems"
+            },
+            "maxItems": 256,
+            "minItems": 1
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "Clone": {
+        "title": "Clone",
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Clone defines the default clone behavior.",
+        "properties": {
+          "depth": {
+            "description": "Depth defines the clone depth.",
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int32"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "enabled": {
+            "description": "Enables or disables the default clone step.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "insecure": {
+            "description": "Insecure disables ssl verification.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "lfs": {
+            "description": "Lfs enables cloning lfs files.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "strategy": {
+            "description": "Strategy configures the PR clone strategy.",
+            "type": "string",
+            "enum": [
+              "source-branch",
+              "merge"
+            ]
+          },
+          "submodules": {
+            "description": "Submodules enables cloning all submodules. Accepts boolean, string (true/false/recursive), or expression.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "true",
+                  "false",
+                  "recursive"
+                ]
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "tags": {
+            "description": "Tags enables cloning all tags.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "trace": {
+            "description": "Trace enables trace logging.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "ref": {
+            "description": "Reference defines the clone ref.",
+            "oneOf": [
+              {
+                "$ref": "#/definitions/template_v1/Reference"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "repo": {
+            "description": "Repo defines the repository name or URL.",
+            "type": "string",
+            "minLength": 1
+          },
+          "connector": {
+            "description": "Connector defines the connector reference.",
+            "type": "string",
+            "minLength": 1
+          },
+          "clonedir": {
+            "description": "Clonedir defines the clone directory path.",
+            "type": "string",
+            "minLength": 1
+          },
+          "resources": {
+            "description": "Resources defines container resource limits.",
+            "$ref": "#/definitions/template_v1/Resource"
+          },
+          "user": {
+            "description": "User ID to run the clone container as. Supports expressions.",
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "sparse-checkout": {
+            "description": "SparseCheckout defines paths to limit the clone to specific directories.",
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "pre-fetch": {
+            "description": "PreFetch defines a command to run before the clone operation.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "persist-credentials": {
+            "description": "PersistCredentials configures git credentials to persist after clone so subsequent git operations in the workspace can authenticate.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
       },
       "Reference": {
         "title": "Reference",
@@ -4785,11 +4783,15 @@ const schema: Record<string, any> = {
             "properties": {
               "id": {
                 "description": "Unique identifier for the step.",
-                "type": "string"
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$"
               },
               "name": {
                 "description": "Display name of the step.",
-                "type": "string"
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z-_ ]{0,127}$",
+                "minLength": 1,
+                "maxLength": 128
               },
               "description": {
                 "description": "Description of the step.",
