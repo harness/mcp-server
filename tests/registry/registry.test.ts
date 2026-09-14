@@ -996,7 +996,7 @@ describe("Registry", () => {
       expect(call.body).toEqual({ state: "closed" });
     });
 
-    it("pipeline execute sends pipeline_branch as ?pipelineBranchName= query param", async () => {
+    it("pipeline execute sends pipeline_branch as ?branch= query param", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-123" } });
       const client = makeClient(mockRequest);
 
@@ -1009,10 +1009,23 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.method).toBe("POST");
       expect(call.path).toContain("/pipeline/api/pipeline/execute/my-pipeline");
-      expect(call.params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+      expect(call.params).toMatchObject({ branch: "feature/my-fix" });
     });
 
-    it("pipeline execute omits pipelineBranchName when pipeline_branch not provided", async () => {
+    it("pipeline execute gives pipeline_branch precedence over the branch alias", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-123" } });
+      await registry.dispatchExecute(makeClient(mockRequest), "pipeline", "run", {
+        pipeline_id: "my-pipeline",
+        branch: "feature/alias",
+        pipeline_branch: "feature/definition",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params).toMatchObject({ branch: "feature/definition" });
+      expect(call.params).not.toHaveProperty("pipelineBranchName");
+    });
+
+    it("pipeline execute omits branch when pipeline_branch not provided", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-456" } });
       const client = makeClient(mockRequest);
 
@@ -1022,10 +1035,10 @@ describe("Registry", () => {
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
-      expect(call.params?.pipelineBranchName).toBeUndefined();
+      expect(call.params?.branch).toBeUndefined();
     });
 
-    it("pipeline execute omits pipelineBranchName when pipeline_branch is empty string", async () => {
+    it("pipeline execute omits branch when pipeline_branch is empty string", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-789" } });
       const client = makeClient(mockRequest);
 
@@ -1036,7 +1049,7 @@ describe("Registry", () => {
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
-      expect(call.params?.pipelineBranchName).toBeUndefined();
+      expect(call.params?.branch).toBeUndefined();
     });
 
     it("pipeline execute sends both pipeline_branch and inputs.branch independently", async () => {
@@ -1046,15 +1059,15 @@ describe("Registry", () => {
       await registry.dispatchExecute(client, "pipeline", "run", {
         pipeline_id: "my-pipeline",
         pipeline_branch: "feature/my-fix",
-        inputs: { branch: "feature/my-fix" },
+        inputs: { branch: "feature/application-code" },
       });
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
       // pipeline_branch → URL query param (which git branch loads the pipeline YAML)
-      expect(call.params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+      expect(call.params).toMatchObject({ branch: "feature/my-fix" });
       // inputs.branch → body build structure (which code branch the CI job checks out)
-      expect(JSON.stringify(call.body)).toContain("feature/my-fix");
+      expect(JSON.parse(call.body)).toEqual({ branch: "feature/application-code" });
     });
 
     it("pipeline update with yamlPipeline sends raw YAML string as body with Content-Type header and returns openInHarness", async () => {

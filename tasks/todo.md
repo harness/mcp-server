@@ -1,5 +1,21 @@
 # Harness MCP Server — Task Tracking
 
+## Remote pipeline definition branch selection (2026-09-14)
+
+- [x] Review contribution guidelines and the execute API branch contract.
+- [x] Add regression coverage for the documented pipeline_branch option, helper reads, and independent CI codebase inputs.
+- [x] Align execute request branch selection and update the discovery descriptions.
+- [x] Run focused regressions, build, typecheck, full tests, standards, docs, and smoke checks.
+- [x] Review the public diff and prepare a draft upstream PR.
+
+
+### Validation
+
+- The focused tests failed before the fix: 334 passed and 9 failed. Afterward all 343 passed.
+- Node 22.22.1 / pnpm 10.18.2: build, typecheck, 3,529 tests across 154 files, 77 standards checks, docs, and shrinkwrap checks passed.
+- All 5 smoke configurations passed: default, read-only, pipelines-only, multiple toolsets, and opt-in toolset.
+- Request construction is verified with mocks. A corrected live external-Git execution remains an integration-validation step.
+
 ## HarnessID OAuth for self-hosted HTTP MCP (2026-09-07)
 
 - [x] Clone current `harness/mcp-server` main and inspect HTTP authentication/session paths.

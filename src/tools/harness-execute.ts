@@ -619,29 +619,18 @@ function normalizeRemotePipelineRunParams(input: Record<string, unknown>): void 
   if (runtimeCodebase?.repoName && input.repo_name === undefined) {
     input.repo_name = runtimeCodebase.repoName;
   }
-  if (runtimeCodebase?.branch && input.branch === undefined) {
-    input.branch = runtimeCodebase.branch;
-  }
-  if (runtimeCodebase?.branch && input.pipeline_branch === undefined) {
-    input.pipeline_branch = runtimeCodebase.branch;
+  // Keep definition reads and execution on the same branch. Explicit selectors
+  // win over the legacy fallback inferred from the CI codebase runtime YAML.
+  const definitionBranch = asString(input.pipeline_branch) || asString(input.branch) || runtimeCodebase?.branch;
+  if (definitionBranch) {
+    input.branch = definitionBranch;
+    input.pipeline_branch = definitionBranch;
   }
   if (
     input.store_type === undefined &&
     (runtimeCodebase?.branch !== undefined || runtimeCodebase?.repoName !== undefined)
   ) {
     input.store_type = "REMOTE";
-  }
-
-  const storeType = asString(input.store_type)?.toUpperCase();
-  const hasRemoteGitParams = storeType === "REMOTE" || input.connector_ref !== undefined || input.repo_name !== undefined;
-
-  if (
-    hasRemoteGitParams &&
-    input.pipeline_branch === undefined &&
-    typeof input.branch === "string" &&
-    input.branch.length > 0
-  ) {
-    input.pipeline_branch = input.branch;
   }
 }
 
