@@ -587,7 +587,7 @@ export const pipelinesToolset: ToolsetDefinition = {
             module: "module",
             input_set_ids: "inputSetIdentifiers",
             branch: "branch",
-            // The explicit definition selector takes precedence over the branch alias.
+            // Keep pipeline_branch after branch: later entries overwrite the same query key.
             pipeline_branch: "branch",
             store_type: "storeType",
             connector_ref: "connectorRef",

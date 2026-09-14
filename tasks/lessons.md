@@ -51,7 +51,7 @@
 
 ## Read Cache Signals Must Not Block Execute Paths
 - **Issue**: A remote pipeline `pipeline.get` response can report `cacheResponse.cacheState=STALE_CACHE` and old YAML from the read/UI cache, while pipeline execution is documented to fetch entities from Git for the selected pipeline branch.
-- **Fix**: Do not fail-close `harness_execute` based on `pipeline.get` cache metadata. Preserve explicit branch selection using the execute endpoint's documented `branch` query parameter, and only block execution on signals from the execute path itself.
+- **Fix**: Do not fail-close `harness_execute` based on `pipeline.get` cache metadata. Preserve explicit branch selection by sending `pipelineBranchName` for remote executions, and only block execution on signals from the execute path itself.
 - **Rule**: A preflight may only block an operation when it proves the same backend path the operation will use. If a check observes a read-model/cache path, surface it as diagnostic context at most, not as execution authority.
 
 ## Multipart Tool Contracts
@@ -176,9 +176,3 @@
   4. Walk the **user flow**: create at org/project → list/get/update must work with the same `resource_scope` / org / project.
   5. Test ambient `HARNESS_ORG`/`HARNESS_PROJECT` does not leak when account is the default (`scopeOptional`).
   6. Update README when writes change the advertised scope model.
-
-## Remote Execute Branch Contract
-
-`pipeline_branch` was mapped to `pipelineBranchName`, while the [selected execute endpoint](https://apidocs.harness.io/pipeline-execute/postpipelineexecutewithinputsetyaml) documents `branch`. Existing tests asserted the incorrect mapping. Full runtime YAML could also override an explicit definition branch.
-
-Normalize selection in the order `pipeline_branch`, `branch`, then the existing runtime-YAML fallback, and leave the runtime body unchanged. Compare request assertions with the exact endpoint contract. Use distinct definition and codebase branches in regressions, including input-set and runtime-template requests.
