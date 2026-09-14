@@ -59,7 +59,7 @@
 
 1. **Deep link {prNumber} not resolved** - Changed template from `{prNumber}` to `{number}` to match API response field. Also added placeholder resolution logic for single-item responses (create/get/update) in registry.
 
-2. **pr_comment list returns HTTP 405** - Removed `list` operation from `pr_comment` resource. The Harness Code API doesn't have a GET endpoint for listing comments. Comments are fetched via `pr_activity` with `kind='comment'` filter.
+2. **pr_comment list returns HTTP 405** - Removed `list` operation from `pr_comment` resource. Comments are fetched via `pr_activity`; use `type=["comment","code-comment"]` to include both general comments and inline PR comments.
 
 3. **pr_activity missing filter support** - Added `kind`, `type`, `after`, `before` query params to match v1 functionality.
 

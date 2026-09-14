@@ -14,6 +14,13 @@ const REPO_PR_PARAMS: ParamsSchema = {
   ],
 };
 
+const PR_COMMENT_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_PR_PARAMS.fields,
+    { name: "comment_id", required: true, description: "Pull request activity/comment ID" },
+  ],
+};
+
 function bodyRecord(input: Record<string, unknown>): Record<string, unknown> | undefined {
   const body = input.body;
   return body && typeof body === "object" && !Array.isArray(body)
@@ -285,7 +292,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           paramsSchema: REPO_PR_PARAMS,
         },
         create: {
-          method: "POST",
+          method: "PUT",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/reviewers",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: {
@@ -337,9 +344,9 @@ export const pullRequestsToolset: ToolsetDefinition = {
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
-      identifierFields: ["repo_id", "pr_number"],
+      identifierFields: ["repo_id", "pr_number", "comment_id"],
       diagnosticHint:
-        "The Harness Code API does not support GET on the comments endpoint. To list or read comments, use harness_list with resource_type='pr_activity' and filters: {kind: 'comment'} or {type: 'comment'}.",
+        "The pr_comment resource is for comment writes. To list or read comments, use harness_list with resource_type='pr_activity' and filters: {type: ['comment', 'code-comment']}.",
       operations: {
         create: {
           method: "POST",
@@ -368,7 +375,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description:
-            "Add a comment to a pull request. Body fields: text (required). For inline code comments, also include: path, line_new OR line_old (line number on the new or old side of the diff), source_commit_sha, target_commit_sha.",
+            "Add a comment to a pull request. Body fields: text (required). For inline PR comments, also include: path, line_new OR line_old (line number on the new or old side of the diff), source_commit_sha, target_commit_sha.",
           paramsSchema: REPO_PR_PARAMS,
           bodySchema: {
             description: "PR comment content",
@@ -395,7 +402,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description:
             "Update an existing pull request comment. Body fields: text (required).",
-          paramsSchema: REPO_PR_PARAMS,
+          paramsSchema: PR_COMMENT_PARAMS,
           bodySchema: {
             description: "Updated comment content",
             fields: [
@@ -414,7 +421,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Delete a pull request comment",
-          paramsSchema: REPO_PR_PARAMS,
+          paramsSchema: PR_COMMENT_PARAMS,
         },
       },
     },
@@ -446,7 +453,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_activity",
       displayName: "PR Activity",
       description:
-        "Activity timeline on a pull request (comments, reviews, status changes). This is the canonical way to READ comments — use kind=comment or type=comment to filter. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
+        "Activity timeline on a pull request (comments, reviews, status changes). Omit filters to return the full PR activity timeline. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
@@ -458,7 +465,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         { name: "before", description: "Only entries created before this timestamp (unix millis)", type: "number" },
       ],
       diagnosticHint:
-        "To list only comments, use filters: {kind: 'comment'}. For code review comments, use {type: 'code-comment'}. For all discussion, use {kind: 'comment'} which includes both general and code comments.",
+        "To list all PR comments, use filters: {type: ['comment', 'code-comment']}. For general comments only, use {type: 'comment'} or {kind: 'comment'}. For inline PR comments, use {type: 'code-comment'} or {kind: 'change-comment'}.",
       operations: {
         list: {
           method: "GET",
@@ -476,7 +483,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             limit: "limit",
           },
           responseExtractor: passthrough,
-          description: "List activities for a pull request. Use kind=comment to get only comments. This is the only way to read PR comments (the /comments endpoint is POST-only).",
+          description: "List activities for a pull request. Omit filters to return the full PR activity timeline.",
           paramsSchema: REPO_PR_PARAMS,
         },
       },
