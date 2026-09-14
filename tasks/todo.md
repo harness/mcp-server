@@ -1,5 +1,27 @@
 # Harness MCP Server — Task Tracking
 
+## PR Comment Read Guidance and PR Tool Drift (2026-09-14)
+
+- [x] Fix pull request registry drift against the public resource contract.
+- [x] Update agent-facing guidance so PR comments are fetched through `pr_activity`, not `pr_comment`.
+- [x] Align README and PR comment test docs with the implemented read/write split.
+- [x] Add focused regression coverage for PR comment/reviewer metadata.
+- [x] Run focused verification and lint checks for touched files.
+
+### Plan
+
+- Keep comment reads on `pr_activity`; `pr_comment` is only for comment write operations.
+- Keep `pr_comment` for comment writes, and document `comment_id` where update/delete require it.
+- Align `pr_reviewer.create` with the configured API method.
+- Avoid public tool-name/schema churn beyond corrected resource metadata; do not broaden activity type metadata.
+
+### Review
+
+- Server instructions, code-review prompt, README, and PR testing docs now direct comment reads through `pr_activity` with `type=["comment","code-comment"]`.
+- `pr_comment` remains the write surface and now advertises `comment_id` for update/delete; generic `resource_id` maps to that field.
+- `pr_reviewer.create` now uses the configured API method.
+- Verification passed: focused PR registry/tool-handler tests, `pnpm typecheck`, `pnpm build && pnpm docs:generate && pnpm docs:check`, lints, and `git diff --check`.
+
 ## HarnessID OAuth for self-hosted HTTP MCP (2026-09-07)
 
 - [x] Clone current `harness/mcp-server` main and inspect HTTP authentication/session paths.

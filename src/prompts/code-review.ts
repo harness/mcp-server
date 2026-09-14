@@ -22,10 +22,10 @@ export function registerCodeReviewPrompt(server: McpServer): void {
             text: `Perform a thorough code review of pull request #${prNumber} in repo "${repoId}".
 
 Steps:
-1. Call harness_get with resource_type="pull_request", repo_id="${repoId}", pr_number="${prNumber}"${projectArg} to get PR details (title, description, source/target branches)
-2. Call harness_list with resource_type="pr_comment", repo_id="${repoId}", pr_number="${prNumber}"${projectArg} to see existing review comments
-3. Call harness_list with resource_type="pr_check", repo_id="${repoId}", pr_number="${prNumber}"${projectArg} to check CI status
-4. Call harness_list with resource_type="pr_activity", repo_id="${repoId}", pr_number="${prNumber}"${projectArg} to see review activity
+1. Call harness_get with resource_type="pull_request", params={repo_id: "${repoId}", pr_number: "${prNumber}"}${projectArg} to get PR details (title, description, source/target branches)
+2. Call harness_list with resource_type="pr_activity", params={repo_id: "${repoId}", pr_number: "${prNumber}"}, filters={type: ["comment", "code-comment"]}${projectArg} to see existing review comments
+3. Call harness_list with resource_type="pr_check", params={repo_id: "${repoId}", pr_number: "${prNumber}"}${projectArg} to check CI status
+4. Call harness_list with resource_type="pr_activity", params={repo_id: "${repoId}", pr_number: "${prNumber}"}${projectArg} to see review activity
 5. Call harness_list with resource_type="commit", repo_id="${repoId}", git_ref="refs/pullreq/${prNumber}/head"${projectArg} to list the PR's commits
 6. Use harness_execute with resource_type="commit", action="diff_stats", repo_id="${repoId}", range="<target_branch>..<source_branch>"${projectArg} to see what files changed and scope of changes
 

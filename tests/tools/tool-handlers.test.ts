@@ -1641,6 +1641,31 @@ describe("harness_update — pull request", () => {
   });
 });
 
+describe("harness_update — PR comment", () => {
+  it("maps resource_id to comment_id for comment updates", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ id: 123, text: "Updated comment" });
+    const prClient = makeClient(prRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(prServer, prRegistry, prClient, makeConfig());
+
+    const result = await prServer.call("harness_update", {
+      resource_type: "pr_comment",
+      resource_id: "123",
+      params: { repo_id: "my-repo", pr_number: "42" },
+      body: { text: "Updated comment" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(prRequest).toHaveBeenCalledOnce();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("PATCH");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/comments/123");
+    expect(call.body).toEqual({ text: "Updated comment" });
+  });
+});
+
 describe("harness_delete", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;

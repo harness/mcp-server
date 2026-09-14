@@ -183,6 +183,24 @@ describe("pull_request registry mappings", () => {
     ).rejects.toThrow(/repo_id/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
+
+  it("adds PR reviewers with the configured API method", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { reviewer_id: 123 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_reviewer", "create", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      body: { reviewer_id: 123 },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "PUT",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/reviewers",
+      body: { reviewer_id: 123 },
+    }));
+  });
 });
 
 describe("paramsSchema on pull_request operations", () => {
@@ -230,9 +248,64 @@ describe("paramsSchema on pull_request operations", () => {
     }
     expect(issues, issues.join("\n")).toEqual([]);
   });
+
+  it("documents comment_id for pr_comment update and delete", () => {
+    const commentDef = registry.getResource("pr_comment");
+    expect(commentDef.identifierFields).toEqual(["repo_id", "pr_number", "comment_id"]);
+
+    for (const opName of ["update", "delete"] as const) {
+      const spec = commentDef.operations[opName];
+      expect(spec?.paramsSchema?.fields).toEqual(expect.arrayContaining([
+        expect.objectContaining({ name: "comment_id", required: true }),
+      ]));
+    }
+  });
+
+  it("documents the PR activity comment-read hint without broadening activity type metadata", () => {
+    const activityDef = registry.getResource("pr_activity");
+    const typeField = activityDef.listFilterFields?.find((field) => field.name === "type");
+
+    expect(typeField?.enum).toEqual([
+      "comment",
+      "code-comment",
+      "review-submit",
+      "reviewer-add",
+      "reviewer-delete",
+      "state-change",
+      "branch-update",
+      "branch-delete",
+      "branch-restore",
+      "merge",
+      "title-change",
+      "label-modify",
+      "target-branch-change",
+      "user-group-reviewer-add",
+      "user-group-reviewer-delete",
+    ]);
+    expect(activityDef.diagnosticHint).toContain("type: ['comment', 'code-comment']");
+  });
 });
 
 describe("pr_comment bodyBuilder translation", () => {
+  it("updates comments with the required comment_id path parameter", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { id: 123, text: "updated" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_comment", "update", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      comment_id: "123",
+      body: { text: "updated" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "PATCH",
+      path: "/code/api/v1/repos/my_repo/pullreq/5/comments/123",
+      body: { text: "updated" },
+    }));
+  });
+
   it("translates line_new to line_start/line_end with line_start_new=true", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
     const mockRequest = vi.fn().mockResolvedValue({ data: { id: 1 } });

@@ -232,12 +232,16 @@ describe("Toolset structural validation", () => {
       expect(issues).toEqual([]);
     });
 
-    it("create operations use POST", () => {
+    it("create operations use POST unless explicitly allowed", () => {
+      const allowedNonPostCreates = new Map<string, EndpointSpec["method"]>([
+        ["pr_reviewer", "PUT"],
+      ]);
       const issues: string[] = [];
       for (const type of allFullTypes) {
         const def = fullRegistry.getResource(type);
         const createSpec = def.operations.create;
-        if (createSpec && createSpec.method !== "POST") {
+        const allowedMethod = allowedNonPostCreates.get(type);
+        if (createSpec && createSpec.method !== "POST" && createSpec.method !== allowedMethod) {
           issues.push(`${type}.create: unexpected method ${createSpec.method}`);
         }
       }
