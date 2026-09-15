@@ -41,6 +41,15 @@ function requiredPathPart(input: Record<string, unknown>, field: string): string
   return encodeURIComponent(String(value));
 }
 
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string" && value !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
 const PR_METADATA_FIELDS = ["title", "description"];
 
 interface MergeBodyField {
@@ -121,7 +130,17 @@ function rejectMixedStateUpdate(input: Record<string, unknown>): void {
 
 function pullRequestUpdateBody(input: Record<string, unknown>): unknown {
   const state = pullRequestState(input);
-  return state ? { state } : input.body;
+  if (!state) return input.body;
+  const body = bodyRecord(input);
+  const isDraft = body?.is_draft;
+  if (isDraft === undefined) {
+    throw new Error(
+      "is_draft is required when changing PR state. " +
+      "The backend resets draft status to false when is_draft is omitted. " +
+      "First GET the pull request to read its current is_draft value, then include it in the state change.",
+    );
+  }
+  return { state, is_draft: isDraft };
 }
 
 export const pullRequestsToolset: ToolsetDefinition = {
@@ -151,11 +170,14 @@ export const pullRequestsToolset: ToolsetDefinition = {
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
+          pageOneIndexed: true,
           queryParams: {
             state: "state",
             query: "query",
+            search_term: "query",
             page: "page",
             limit: "limit",
+            size: "limit",
           },
           responseExtractor: passthrough,
           description: "List pull requests for a repository",
@@ -213,7 +235,8 @@ export const pullRequestsToolset: ToolsetDefinition = {
             fields: [
               { name: "title", type: "string", required: false, description: "Updated PR title" },
               { name: "description", type: "string", required: false, description: "Updated PR description" },
-              { name: "state", type: "string", required: false, description: "PR state: open or closed" },
+              { name: "state", type: "string", required: false, description: "PR state: open or closed. Requires is_draft when provided." },
+              { name: "is_draft", type: "boolean", required: false, description: "Required when changing state. GET the PR first and pass its current is_draft value to prevent silent reset." },
             ],
           },
         },
@@ -228,14 +251,27 @@ export const pullRequestsToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
-          bodyBuilder: () => ({ state: "closed" }),
+          bodyBuilder: (input) => {
+            const body = bodyRecord(input);
+            const isDraft = body?.is_draft;
+            if (isDraft === undefined) {
+              throw new Error(
+                "is_draft is required when closing a PR. " +
+                "The backend resets draft status to false when is_draft is omitted. " +
+                "First GET the pull request to read its current is_draft value, then include it here.",
+              );
+            }
+            return { state: "closed", is_draft: isDraft };
+          },
           responseExtractor: passthrough,
           paramsSchema: REPO_PR_PARAMS,
           actionDescription:
-            "Close a pull request by setting its state to closed.",
+            "Close a pull request. Requires is_draft in the body to prevent silent draft-status reset. GET the PR first to read its current is_draft value.",
           bodySchema: {
             description: "Close pull request state transition",
-            fields: [],
+            fields: [
+              { name: "is_draft", type: "boolean", required: true, description: "Current draft status of the PR. GET the PR first and pass its is_draft value to prevent silent reset." },
+            ],
           },
         },
         merge: {
@@ -358,15 +394,17 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: (input) => {
             const b = { ...(input.body as Record<string, unknown>) };
-            if (typeof b.line_new === "number") {
-              b.line_start = b.line_new;
-              b.line_end = b.line_new;
+            const lineNew = toFiniteNumber(b.line_new);
+            const lineOld = toFiniteNumber(b.line_old);
+            if (lineNew !== undefined) {
+              b.line_start = lineNew;
+              b.line_end = lineNew;
               b.line_start_new = true;
               b.line_end_new = true;
               delete b.line_new;
-            } else if (typeof b.line_old === "number") {
-              b.line_start = b.line_old;
-              b.line_end = b.line_old;
+            } else if (lineOld !== undefined) {
+              b.line_start = lineOld;
+              b.line_end = lineOld;
               b.line_start_new = false;
               b.line_end_new = false;
               delete b.line_old;
@@ -443,6 +481,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
+          pageOneIndexed: true,
           responseExtractor: passthrough,
           description: "List status checks for a pull request",
           paramsSchema: REPO_PR_PARAMS,
@@ -481,6 +520,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             after: "after",
             before: "before",
             limit: "limit",
+            size: "limit",
           },
           responseExtractor: passthrough,
           description: "List activities for a pull request. Omit filters to return the full PR activity timeline.",

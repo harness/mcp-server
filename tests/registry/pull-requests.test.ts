@@ -40,7 +40,7 @@ describe("pull_request registry mappings", () => {
     await registry.dispatch(client, "pull_request", "update", {
       repo_id: "rc_tools",
       pr_number: "42",
-      body: { state: "closed" },
+      body: { state: "closed", is_draft: false },
       org_id: "AI_Devops",
       project_id: "Sanity",
     });
@@ -48,7 +48,7 @@ describe("pull_request registry mappings", () => {
     expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
       method: "POST",
       path: "/code/api/v1/repos/rc_tools/pullreq/42/state",
-      body: { state: "closed" },
+      body: { state: "closed", is_draft: false },
     }));
   });
 
@@ -93,12 +93,45 @@ describe("pull_request registry mappings", () => {
     await registry.dispatchExecute(client, "pull_request", "close", {
       repo_id: "rc_tools",
       pr_number: "42",
+      body: { is_draft: false },
     });
 
     expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
       method: "POST",
       path: "/code/api/v1/repos/rc_tools/pullreq/42/state",
-      body: { state: "closed" },
+      body: { state: "closed", is_draft: false },
+    }));
+  });
+
+  it("rejects close without is_draft to prevent silent undraft", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pull_request", "close", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+      }),
+    ).rejects.toThrow(/is_draft is required/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("close action preserves is_draft when provided in body", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { number: 42, state: "closed" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pull_request", "close", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      body: { is_draft: true },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/state",
+      body: { state: "closed", is_draft: true },
     }));
   });
 
@@ -200,6 +233,106 @@ describe("pull_request registry mappings", () => {
       path: "/code/api/v1/repos/rc_tools/pullreq/42/reviewers",
       body: { reviewer_id: 123 },
     }));
+  });
+});
+
+describe("pull_request list pagination and query mapping", () => {
+  it("converts 0-indexed page to 1-indexed for the Code API", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "my-repo",
+      page: 2,
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as Record<string, unknown>;
+    const params = call.params as Record<string, unknown>;
+    expect(params.page).toBe(3);
+  });
+
+  it("maps search_term to the Code API query param", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "my-repo",
+      search_term: "auth fix",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as Record<string, unknown>;
+    const params = call.params as Record<string, unknown>;
+    expect(params.query).toBe("auth fix");
+  });
+
+  it("maps size to the Code API limit param", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "my-repo",
+      size: 5,
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as Record<string, unknown>;
+    const params = call.params as Record<string, unknown>;
+    expect(params.limit).toBe(5);
+  });
+});
+
+describe("pr_activity list query mapping", () => {
+  it("maps size to the Code API limit param", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_activity", "list", {
+      repo_id: "my-repo",
+      pr_number: "1",
+      size: 10,
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as Record<string, unknown>;
+    const params = call.params as Record<string, unknown>;
+    expect(params.limit).toBe(10);
+  });
+});
+
+describe("pull_request update preserves is_draft on state changes", () => {
+  it("forwards is_draft alongside state", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { number: 42, state: "open" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "update", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      body: { state: "open", is_draft: false },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/state",
+      body: { state: "open", is_draft: false },
+    }));
+  });
+
+  it("rejects state change without is_draft to prevent silent undraft", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "pull_request", "update", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        body: { state: "closed" },
+      }),
+    ).rejects.toThrow(/is_draft is required/);
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
 
@@ -383,6 +516,68 @@ describe("pr_comment bodyBuilder translation", () => {
 
     expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
       body: { text: "general comment" },
+    }));
+  });
+
+  it("coerces string line_new to number for inline comments", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { id: 4 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_comment", "create", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      body: {
+        text: "string line number",
+        path: "main.ts",
+        line_new: "42",
+        source_commit_sha: "abc123",
+        target_commit_sha: "def456",
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: {
+        text: "string line number",
+        path: "main.ts",
+        line_start: 42,
+        line_end: 42,
+        line_start_new: true,
+        line_end_new: true,
+        source_commit_sha: "abc123",
+        target_commit_sha: "def456",
+      },
+    }));
+  });
+
+  it("coerces string line_old to number for inline comments", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { id: 5 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_comment", "create", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      body: {
+        text: "old side string",
+        path: "old.ts",
+        line_old: "7",
+        source_commit_sha: "abc",
+        target_commit_sha: "def",
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: {
+        text: "old side string",
+        path: "old.ts",
+        line_start: 7,
+        line_end: 7,
+        line_start_new: false,
+        line_end_new: false,
+        source_commit_sha: "abc",
+        target_commit_sha: "def",
+      },
     }));
   });
 });

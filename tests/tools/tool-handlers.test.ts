@@ -1608,14 +1608,14 @@ describe("harness_update — pull request", () => {
       resource_type: "pull_request",
       resource_id: "42",
       url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
-      body: { state: "closed" },
+      body: { state: "closed", is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();
     const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
-    expect(call.body).toEqual({ state: "closed" });
+    expect(call.body).toEqual({ state: "closed", is_draft: false });
   });
 
   it("rejects mixed state + metadata via harness_update", async () => {
@@ -2231,6 +2231,7 @@ pipeline:
     const result = await prServer.call("harness_execute", {
       url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
       action: "close",
+      body: { is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();
@@ -2238,7 +2239,7 @@ pipeline:
     const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
-    expect(call.body).toEqual({ state: "closed" });
+    expect(call.body).toEqual({ state: "closed", is_draft: false });
   });
 
   it("uses resource_id for the missing child identifier when parent params are provided", async () => {
@@ -2254,6 +2255,7 @@ pipeline:
       action: "close",
       resource_id: "42",
       params: { repo_id: "my-repo" },
+      body: { is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();
@@ -2273,6 +2275,7 @@ pipeline:
       url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
       resource_id: "43",
       action: "close",
+      body: { is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();

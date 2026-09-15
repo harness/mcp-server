@@ -987,13 +987,14 @@ describe("Registry", () => {
       await prRegistry.dispatchExecute(client, "pull_request", "close", {
         repo_id: "my-repo",
         pr_number: "42",
+        body: { is_draft: false },
       });
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
       expect(call.method).toBe("POST");
       expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
-      expect(call.body).toEqual({ state: "closed" });
+      expect(call.body).toEqual({ state: "closed", is_draft: false });
     });
 
     it("pipeline execute sends pipeline_branch as ?pipelineBranchName= query param", async () => {
