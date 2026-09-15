@@ -31,6 +31,8 @@ export interface ParsedHarnessUrl {
   path?: string;
   /** Git ref for Code file/content URLs (from `.../files/{ref}/` or `git_ref`/`gitRef` query). */
   git_ref?: string;
+  /** Branch name from a Code files URL — used when the caller asks for resource_type=branch. */
+  branch_name?: string;
   /** RMG release id — UUID from search or UI URL slug (identifier-version hash). */
   release_id?: string;
 }
@@ -146,6 +148,7 @@ function applyCodeFileUrl(segments: string[], result: ParsedHarnessUrl): void {
 
   result.resource_type = "file_content";
   result.git_ref = gitRef;
+  result.branch_name = gitRef;
   result.path = path;
   if (path) {
     result.resource_id = path;
@@ -355,6 +358,7 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
 
   const gitRefQuery = url.searchParams.get("git_ref") ?? url.searchParams.get("gitRef");
   if (gitRefQuery && !result.git_ref) result.git_ref = gitRefQuery;
+  if (result.git_ref && !result.branch_name) result.branch_name = result.git_ref;
 
   const storeType = url.searchParams.get("storeType");
   if (storeType) result.store_type = storeType;
@@ -393,6 +397,7 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "repo_name",
   "path",
   "git_ref",
+  "branch_name",
   "release_id",
 ];
 

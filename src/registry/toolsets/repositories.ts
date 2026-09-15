@@ -105,10 +105,11 @@ function buildCommitFilesBody(input: Record<string, unknown>): unknown {
 }
 
 /**
- * Content and blame URLs use a multi-segment path after /content/ or /blame/.
- * Encoding the whole path with encodeURIComponent turns src/index.ts into
- * src%2Findex.ts, which the API treats as one segment and 404s. Encode each
- * segment instead. Empty path is the repo root (`/content`).
+ * Content, blame, branch, tag, and diff URLs use a multi-segment path after
+ * /content/, /blame/, /branches/, /tags/, or /diff/. Encoding the whole value
+ * with encodeURIComponent turns feature/foo into feature%2Ffoo, which the API
+ * treats as one segment and 404s. Encode each segment instead. Empty path is
+ * the repo root (`/content`).
  */
 export function normalizeCodeFilePath(path: string): string {
   const trimmed = path.trim().replaceAll("\\", "/");
@@ -116,52 +117,118 @@ export function normalizeCodeFilePath(path: string): string {
   return trimmed.replace(/^\/+/u, "").replace(/\/+$/u, "").replace(/\/{2,}/gu, "/");
 }
 
-function encodeCodeFilePathSegments(path: string): string {
+function encodeCodePathSegments(path: string): string {
   const normalized = normalizeCodeFilePath(path);
   if (normalized === "") return "";
   return normalized.split("/").map((segment) => encodeURIComponent(segment)).join("/");
 }
 
-function requireFileContentRepoId(input: Record<string, unknown>): string {
+function requireCodeRepoId(input: Record<string, unknown>, resourceType: string): string {
   const repoId = nonEmptyString(input.repo_id);
   if (!repoId) {
     throw new Error(
-      'Missing required field "repo_id" for file_content. Pass params.repo_id or a Harness Code URL.',
+      `Missing required field "repo_id" for ${resourceType}. Pass params.repo_id or a Harness Code URL.`,
     );
   }
   return repoId;
 }
 
+function aliasIfMissing(input: Record<string, unknown>, target: string, sources: readonly string[]): void {
+  if (nonEmptyString(input[target])) return;
+  for (const source of sources) {
+    const value = nonEmptyString(input[source]);
+    if (value) {
+      input[target] = value;
+      return;
+    }
+  }
+}
+
+/**
+ * Build `/code/api/v1/repos/{repo}/{collection}[/{path}]`.
+ * Empty path is allowed only when `allowEmptyPath` is true (repo-root content).
+ */
+function buildCodeRepoPath(
+  input: Record<string, unknown>,
+  opts: {
+    resourceType: string;
+    collection: string;
+    pathField: string;
+    allowEmptyPath?: boolean;
+    emptyPathError?: string;
+  },
+): string {
+  const repoId = encodeURIComponent(requireCodeRepoId(input, opts.resourceType));
+  const value = input[opts.pathField];
+  const raw = typeof value === "string" ? value : "";
+  const encodedPath = encodeCodePathSegments(raw);
+  if (encodedPath === "" && !opts.allowEmptyPath) {
+    throw new Error(
+      opts.emptyPathError ??
+        `Missing required field "${opts.pathField}" for ${opts.resourceType}. Names with slashes (feature/foo) are valid.`,
+    );
+  }
+  const base = `/code/api/v1/repos/${repoId}/${opts.collection}`;
+  return encodedPath ? `${base}/${encodedPath}` : base;
+}
+
 /** Alias URL `branch` onto Code's `git_ref` and normalize `path` before dispatch. */
 export async function fileContentPreflight({ input }: PreflightContext): Promise<void> {
-  if (!nonEmptyString(input.git_ref) && nonEmptyString(input.branch)) {
-    input.git_ref = input.branch;
-  }
+  aliasIfMissing(input, "git_ref", ["branch"]);
   if (typeof input.path === "string") {
     input.path = normalizeCodeFilePath(input.path);
   }
 }
 
-function buildCodeFileApiPath(
-  input: Record<string, unknown>,
-  kind: "content" | "blame",
-): string {
-  const repoId = encodeURIComponent(requireFileContentRepoId(input));
-  const encodedPath = encodeCodeFilePathSegments(
-    typeof input.path === "string" ? input.path : "",
-  );
-  if (kind === "blame" && encodedPath === "") {
-    throw new Error(
-      'Missing required field "path" for file_content.blame. Blame a file path, not the repo root.',
-    );
-  }
-  const base = `/code/api/v1/repos/${repoId}/${kind}`;
-  return encodedPath ? `${base}/${encodedPath}` : base;
+/** Alias Code files-URL `git_ref` / `branch` onto `branch_name` before get/delete. */
+export async function branchPreflight({ input }: PreflightContext): Promise<void> {
+  aliasIfMissing(input, "branch_name", ["git_ref", "branch"]);
 }
+
+const REPO_ID_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\")." },
+  ],
+};
+
+const REPO_BRANCH_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_ID_PARAMS.fields,
+    {
+      name: "branch_name",
+      required: false,
+      description:
+        "Branch name. Required unless git_ref or branch is set (those alias onto this field). Names with slashes are valid (feature/foo).",
+    },
+  ],
+};
+
+const REPO_TAG_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_ID_PARAMS.fields,
+    {
+      name: "tag_name",
+      required: true,
+      description: "Tag name. Names with slashes are valid (releases/v1.0).",
+    },
+  ],
+};
+
+const COMMIT_DIFF_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_ID_PARAMS.fields,
+    {
+      name: "range",
+      required: true,
+      description:
+        "Diff range as 'base..head' (e.g. main..feature/foo). Slash-containing refs stay as path segments.",
+    },
+  ],
+};
 
 const FILE_CONTENT_GET_PARAMS: ParamsSchema = {
   fields: [
-    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\")." },
+    ...REPO_ID_PARAMS.fields,
     {
       name: "path",
       required: false,
@@ -185,7 +252,7 @@ const FILE_CONTENT_GET_PARAMS: ParamsSchema = {
 
 const FILE_CONTENT_LIST_PARAMS: ParamsSchema = {
   fields: [
-    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\")." },
+    ...REPO_ID_PARAMS.fields,
     {
       name: "git_ref",
       required: false,
@@ -202,7 +269,7 @@ const FILE_CONTENT_LIST_PARAMS: ParamsSchema = {
 
 const FILE_CONTENT_BLAME_PARAMS: ParamsSchema = {
   fields: [
-    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\")." },
+    ...REPO_ID_PARAMS.fields,
     { name: "path", required: true, description: "File path relative to the repo root (no leading slash)." },
     {
       name: "git_ref",
@@ -351,8 +418,16 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             branch_name: "branchName",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "branch",
+            collection: "branches",
+            pathField: "branch_name",
+          }),
+          paramsSchema: REPO_BRANCH_PARAMS,
+          preflight: branchPreflight,
           responseExtractor: passthrough,
-          description: "Get branch details including latest commit",
+          description:
+            "Get branch details including latest commit. Branch names with slashes (feature/foo) are valid.",
         },
         create: {
           method: "POST",
@@ -379,8 +454,16 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             branch_name: "branchName",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "branch",
+            collection: "branches",
+            pathField: "branch_name",
+          }),
+          paramsSchema: REPO_BRANCH_PARAMS,
+          preflight: branchPreflight,
           responseExtractor: passthrough,
-          description: "Delete a branch from the repository",
+          description:
+            "Delete a branch from the repository. Branch names with slashes (feature/foo) are valid.",
         },
       },
     },
@@ -466,10 +549,16 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             range: "range",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "commit.diff",
+            collection: "diff",
+            pathField: "range",
+          }),
+          paramsSchema: COMMIT_DIFF_PARAMS,
           responseExtractor: passthrough,
           actionDescription:
-            "Get the raw diff between two refs. Set range to 'base..head' (e.g., 'main..feature-branch').",
-          bodySchema: { description: "No body required. Diff range is specified via path parameter (e.g. main..feature-branch).", fields: [] },
+            "Get the raw diff between two refs. Set range to 'base..head' (e.g. 'main..feature/foo'). Slash-containing refs stay as path segments.",
+          bodySchema: { description: "No body required. Diff range is specified via path parameter (e.g. main..feature/foo).", fields: [] },
         },
         diff_stats: {
           method: "GET",
@@ -479,9 +568,15 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             range: "range",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "commit.diff_stats",
+            collection: "diff-stats",
+            pathField: "range",
+          }),
+          paramsSchema: COMMIT_DIFF_PARAMS,
           responseExtractor: passthrough,
           actionDescription:
-            "Get diff stats (files changed, additions, deletions) between two refs. Set range to 'base..head'.",
+            "Get diff stats (files changed, additions, deletions) between two refs. Set range to 'base..head' (e.g. 'main..feature/foo').",
           bodySchema: { description: "No body required. Range is specified via path parameter.", fields: [] },
         },
       },
@@ -543,7 +638,12 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             path: "filePath",
           },
-          pathBuilder: (input) => buildCodeFileApiPath(input, "content"),
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "file_content",
+            collection: "content",
+            pathField: "path",
+            allowEmptyPath: true,
+          }),
           queryParams: {
             org_id: "orgIdentifier",
             project_id: "projectIdentifier",
@@ -567,7 +667,13 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             path: "filePath",
           },
-          pathBuilder: (input) => buildCodeFileApiPath(input, "blame"),
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "file_content.blame",
+            collection: "blame",
+            pathField: "path",
+            emptyPathError:
+              'Missing required field "path" for file_content.blame. Blame a file path, not the repo root.',
+          }),
           queryParams: {
             org_id: "orgIdentifier",
             project_id: "projectIdentifier",
@@ -643,8 +749,15 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             tag_name: "tagName",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "tag",
+            collection: "tags",
+            pathField: "tag_name",
+          }),
+          paramsSchema: REPO_TAG_PARAMS,
           responseExtractor: passthrough,
-          description: "Delete a tag from the repository",
+          description:
+            "Delete a tag from the repository. Tag names with slashes (releases/v1.0) are valid.",
         },
       },
     },
