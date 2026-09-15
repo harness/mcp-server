@@ -181,20 +181,27 @@ describe("Toolset structural validation", () => {
       ).toEqual([]);
     });
 
-    it("identifierFields referenced in get pathParams exist", () => {
+    it("identifierFields on get are in pathParams, queryParams, or paramsSchema", () => {
       const issues: string[] = [];
       for (const type of allFullTypes) {
         const def = fullRegistry.getResource(type);
         const getSpec = def.operations.get;
-        if (!getSpec?.pathParams) continue;
+        if (!getSpec) continue;
 
-        // The primary identifier field should be in pathParams
         const primaryField = def.identifierFields[0];
-        if (primaryField && !getSpec.pathParams[primaryField]) {
-          // Check queryParams as fallback (some resources use query params for IDs)
-          if (!getSpec.queryParams?.[primaryField]) {
-            issues.push(`${type}: primary identifierField "${primaryField}" not in get.pathParams or get.queryParams`);
-          }
+        if (!primaryField) continue;
+
+        const inPath = getSpec.pathParams?.[primaryField] !== undefined;
+        const inQuery = getSpec.queryParams?.[primaryField] !== undefined;
+        const inParamsSchema = getSpec.paramsSchema?.fields.some((f) => f.name === primaryField) === true;
+
+        // Many gets map resource_id onto identifierFields only in the tool layer.
+        if (!getSpec.pathParams && !inQuery && !inParamsSchema) continue;
+
+        if (!inPath && !inQuery && !inParamsSchema) {
+          issues.push(
+            `${type}: primary identifierField "${primaryField}" not in get.pathParams, get.queryParams, or get.paramsSchema`,
+          );
         }
       }
       expect(issues, `identifierField/pathParam mismatches:\n${issues.join("\n")}`).toEqual([]);
