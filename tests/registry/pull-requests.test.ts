@@ -252,6 +252,21 @@ describe("pull_request list pagination and query mapping", () => {
     expect(params.page).toBe(3);
   });
 
+  it("coerces string page to number before applying +1 offset", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pull_request", "list", {
+      repo_id: "my-repo",
+      page: "2" as unknown as number,
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as Record<string, unknown>;
+    const params = call.params as Record<string, unknown>;
+    expect(params.page).toBe(3);
+  });
+
   it("maps search_term to the Code API query param", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
     const mockRequest = vi.fn().mockResolvedValue([]);
