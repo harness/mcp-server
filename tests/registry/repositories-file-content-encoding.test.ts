@@ -8,7 +8,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
-import { fileContentGetExtract } from "../../src/registry/extractors.js";
+import { fileContentGetExtract, fileContentListExtract } from "../../src/registry/extractors.js";
+import { normalizeCodeFilePath } from "../../src/registry/toolsets/repositories.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -163,6 +164,192 @@ describe("file_content get — dispatched through the registry", () => {
     expect(result).toEqual(raw);
   });
 
+  it("keeps slashes in nested paths instead of encoding them as %2F", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ type: "file", content: { encoding: "base64", data: "YQ==" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "src/index.ts",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/code/api/v1/repos/my-repo/content/src/index.ts",
+    }));
+  });
+
+  it("encodes spaces in path segments but still keeps slashes", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ type: "file", content: { encoding: "base64", data: "YQ==" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "docs/my file.md",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/code/api/v1/repos/my-repo/content/docs/my%20file.md",
+    }));
+  });
+
+  it("treats empty or omitted path as the repo root listing", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ type: "dir", content: { entries: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "",
+    });
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/code/api/v1/repos/my-repo/content",
+    }));
+
+    mockRequest.mockClear();
+    await registry.dispatch(client, "file_content", "get", { repo_id: "my-repo" });
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/code/api/v1/repos/my-repo/content",
+    }));
+  });
+
+  it("strips leading slashes so /README.md hits the same tree path as README.md", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ type: "file", content: { encoding: "base64", data: "YQ==" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "/README.md",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/code/api/v1/repos/my-repo/content/README.md",
+    }));
+  });
+
+  it("aliases branch onto git_ref and forwards flatten_directories", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ type: "dir", content: { entries: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "src",
+      branch: "develop",
+      flatten_directories: true,
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      params: expect.objectContaining({
+        git_ref: "develop",
+        flatten_directories: true,
+      }),
+    }));
+  });
+
+  it("does not guess main when git_ref is omitted", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ type: "file", content: { encoding: "base64", data: "YQ==" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "file_content", "get", {
+      repo_id: "my-repo",
+      path: "README.md",
+    });
+
+    const params = (mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> }).params;
+    expect(params.git_ref).toBeUndefined();
+  });
+});
+
+describe("file_content list — Code GET /paths", () => {
+  it("lists file paths and optional directories as items", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({
+      files: ["README.md", "src/index.ts"],
+      directories: ["src"],
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "file_content", "list", {
+      repo_id: "my-repo",
+      git_ref: "main",
+      include_directories: true,
+    })) as { items: Array<{ path: string; type: string }>; total: number };
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/repos/my-repo/paths",
+      params: expect.objectContaining({
+        git_ref: "main",
+        include_directories: true,
+      }),
+    }));
+    expect(result.total).toBe(3);
+    expect(result.items).toEqual([
+      expect.objectContaining({ path: "README.md", type: "file" }),
+      expect.objectContaining({ path: "src/index.ts", type: "file" }),
+      expect.objectContaining({ path: "src", type: "directory" }),
+    ]);
+    expect(result.items[1]).toEqual(expect.objectContaining({
+      openInHarness: expect.stringContaining("/repos/my-repo/files/main/~/src%2Findex.ts"),
+    }));
+  });
+
+  it("fileContentListExtract ignores non-string entries", () => {
+    expect(fileContentListExtract({ files: ["a.ts", 1], directories: [null, "src"] })).toEqual({
+      items: [
+        { path: "a.ts", filePath: "a.ts", type: "file" },
+        { path: "src", filePath: "src", type: "directory" },
+      ],
+      total: 2,
+      files: ["a.ts"],
+      directories: ["src"],
+    });
+  });
+});
+
+describe("normalizeCodeFilePath", () => {
+  it("strips leading slashes, trailing slashes, and backslashes", () => {
+    expect(normalizeCodeFilePath("/src/index.ts")).toBe("src/index.ts");
+    expect(normalizeCodeFilePath("src\\index.ts")).toBe("src/index.ts");
+    expect(normalizeCodeFilePath("src/")).toBe("src");
+    expect(normalizeCodeFilePath("")).toBe("");
+    expect(normalizeCodeFilePath(".")).toBe("");
+  });
+});
+
+describe("file_content blame path encoding", () => {
+  it("keeps slashes in blame paths", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "file_content", "blame", {
+      repo_id: "my-repo",
+      path: "src/main.go",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/code/api/v1/repos/my-repo/blame/src/main.go",
+    }));
+  });
+
+  it("rejects blame on the repo root", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "file_content", "blame", { repo_id: "my-repo", path: "" }),
+    ).rejects.toThrow(/path/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("fileContentGetExtract", () => {
   it("passes through non-base64 content unchanged (e.g. symlink target)", () => {
     const raw = { type: "symlink", content: { target: "../other/path" } };
     expect(fileContentGetExtract(raw)).toEqual(raw);
@@ -515,5 +702,103 @@ describe("commit create — client-side base64 validation", () => {
     });
 
     expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({ method: "POST" }));
+  });
+});
+
+describe("file_content describe metadata", () => {
+  it("advertises list, get, blame, and related aliases", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const def = registry.getResource("file_content");
+    expect(def.operations.list).toBeDefined();
+    expect(def.operations.get).toBeDefined();
+    expect(def.executeActions?.blame).toBeDefined();
+    expect(def.searchAliases).toEqual(expect.arrayContaining(["file", "blob", "blame"]));
+    expect(def.relatedResources?.map((r) => r.resourceType)).toEqual(
+      expect.arrayContaining(["repository", "branch", "commit"]),
+    );
+    expect(def.diagnosticHint).toMatch(/omit git_ref/i);
+    expect(def.listFilterFields?.map((f) => f.name)).toEqual(
+      expect.arrayContaining(["git_ref", "include_directories"]),
+    );
+  });
+});
+
+describe("file_content harness_get resource_id mapping", () => {
+  it("does not overwrite an explicit empty path with resource_id", async () => {
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    const tools = new Map<string, (args: Record<string, unknown>) => Promise<{ isError?: boolean }>>();
+    const server = {
+      registerTool: (_name: string, _schema: unknown, handler: (args: Record<string, unknown>) => Promise<{ isError?: boolean }>) => {
+        tools.set("harness_get", handler);
+      },
+    };
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ type: "dir", content: { entries: [] } });
+    registerGetTool(server as never, registry, makeClient(mockRequest));
+
+    await tools.get("harness_get")!({
+      resource_type: "file_content",
+      resource_id: "README.md",
+      params: { repo_id: "my-repo", path: "" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/code/api/v1/repos/my-repo/content",
+    }));
+  });
+
+  it("maps resource_id onto path when path is omitted", async () => {
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    const tools = new Map<string, (args: Record<string, unknown>) => Promise<{ isError?: boolean }>>();
+    const server = {
+      registerTool: (_name: string, _schema: unknown, handler: (args: Record<string, unknown>) => Promise<{ isError?: boolean }>) => {
+        tools.set("harness_get", handler);
+      },
+    };
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ type: "file", content: { encoding: "base64", data: "YQ==" } });
+    registerGetTool(server as never, registry, makeClient(mockRequest));
+
+    await tools.get("harness_get")!({
+      resource_type: "file_content",
+      resource_id: "README.md",
+      params: { repo_id: "my-repo" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      path: "/code/api/v1/repos/my-repo/content/README.md",
+    }));
+  });
+});
+
+describe("file_content list compact", () => {
+  it("keeps path, type, and openInHarness after harness_list compact", async () => {
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    const tools = new Map<string, (args: Record<string, unknown>) => Promise<{ content: Array<{ text: string }> }>>();
+    const server = {
+      registerTool: (_name: string, _schema: unknown, handler: (args: Record<string, unknown>) => Promise<{ content: Array<{ text: string }> }>) => {
+        tools.set("harness_list", handler);
+      },
+    };
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({
+      files: ["src/index.ts"],
+      directories: [],
+    });
+    registerListTool(server as never, registry, makeClient(mockRequest));
+
+    const result = await tools.get("harness_list")!({
+      resource_type: "file_content",
+      params: { repo_id: "my-repo", git_ref: "main" },
+    });
+    const payload = JSON.parse(result.content[0]!.text) as {
+      items: Array<{ path?: string; type?: string; openInHarness?: string; filePath?: string }>;
+    };
+    expect(payload.items[0]).toEqual(expect.objectContaining({
+      path: "src/index.ts",
+      type: "file",
+      openInHarness: expect.stringContaining("/repos/my-repo/files/main/~/src%2Findex.ts"),
+    }));
+    expect(payload.items[0]?.filePath).toBeUndefined();
   });
 });

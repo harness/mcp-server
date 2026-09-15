@@ -1,5 +1,13 @@
 # Harness MCP Server — Task Tracking
 
+## file_content read-path bugs and Code API drift (2026-09-15)
+
+- [x] Encode nested file paths as slash-separated segments; allow empty path for repo root; strip leading slashes.
+- [x] Expose Code GET /paths as `file_content` list; add flatten_directories; describe metadata.
+- [x] Parse Code UI `.../repos/{repo}/files/{ref}/~/{path}` URLs; alias `branch` → `git_ref`.
+- [x] Stop mapping `resource_id` onto an explicit empty `path`.
+- [x] Tests, typecheck, docs:generate.
+
 ## PR Comment Read Guidance and PR Tool Drift (2026-09-14)
 
 - [x] Fix pull request registry drift against the public resource contract.

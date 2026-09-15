@@ -6,11 +6,11 @@
 | **Display Name** | File Content |
 | **Toolset** | repositories |
 | **Scope** | project |
-| **Operations** | get |
+| **Operations** | list, get |
 | **Execute Actions** | blame |
 | **Identifier Fields** | repo_id, path |
-| **Filter Fields** | None |
-| **Deep Link** | No |
+| **Filter Fields** | git_ref, include_directories |
+| **Deep Link** | Yes |
 
 ## Test Cases
 
@@ -31,10 +31,15 @@
 | TC-fc-013 | Error | Get file from non-existent repo | `harness_get(resource_type="file_content", repo_id="nonexistent-repo", path="README.md")` | Returns 404 error for repository |
 | TC-fc-014 | Error | Blame on non-existent file | `harness_execute(resource_type="file_content", action="blame", repo_id="my-repo", path="nonexistent.txt")` | Returns 404 error |
 | TC-fc-015 | Edge | Get binary file content | `harness_get(resource_type="file_content", repo_id="my-repo", path="image.png")` | Handles binary file appropriately |
+| TC-fc-016 | List | List file paths at default branch | `harness_list(resource_type="file_content", repo_id="my-repo")` | Returns file paths; git_ref omitted so Code uses the default branch |
+| TC-fc-017 | List | List files and directories | `harness_list(resource_type="file_content", repo_id="my-repo", filters={include_directories: true})` | Returns files and directories |
+| TC-fc-018 | URL | Get from Code file UI URL | `harness_get(url=".../repos/my-repo/files/main/~/src/index.ts")` | Extracts file_content, repo_id, git_ref=main, path=src/index.ts |
 
 ## Notes
-- `file_content` only supports the `get` operation (no list)
-- Identifier fields are `repo_id` and `path`
-- Query params on get: `git_ref` (branch/tag/SHA), `include_commit` (boolean)
-- Execute action `blame` supports optional `line_from`/`line_to` for restricting blame range and `git_ref` for specifying ref
+- `file_content` supports `list` (all paths at a ref) and `get` (file or directory content)
+- Identifier fields are `repo_id` and `path` (`path` is optional on get — empty/omitted lists the repo root)
+- Query params on get: `git_ref` (omit = default branch), `include_commit`, `flatten_directories`
+- Query params on list: `git_ref`, `include_directories`
+- Execute action `blame` supports optional `line_from`/`line_to` and `git_ref`
+- Nested paths keep slashes (`src/index.ts`); do not prefix with `/`
 - Path can point to either a file (returns content) or directory (returns listing)

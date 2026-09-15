@@ -1,5 +1,5 @@
-import type { ToolsetDefinition } from "../types.js";
-import { fileContentGetExtract, passthrough } from "../extractors.js";
+import type { ParamsSchema, PreflightContext, ToolsetDefinition } from "../types.js";
+import { fileContentGetExtract, fileContentListExtract, passthrough } from "../extractors.js";
 import { assertValidBase64 } from "../../utils/base64.js";
 import { isRecord } from "../../utils/type-guards.js";
 
@@ -102,6 +102,124 @@ function buildCommitFilesBody(input: Record<string, unknown>): unknown {
   });
 
   return { ...body, actions: normalizedActions };
+}
+
+/**
+ * Content and blame URLs use a multi-segment path after /content/ or /blame/.
+ * Encoding the whole path with encodeURIComponent turns src/index.ts into
+ * src%2Findex.ts, which the API treats as one segment and 404s. Encode each
+ * segment instead. Empty path is the repo root (`/content`).
+ */
+export function normalizeCodeFilePath(path: string): string {
+  const trimmed = path.trim().replaceAll("\\", "/");
+  if (trimmed === "" || trimmed === "." || trimmed === "./") return "";
+  return trimmed.replace(/^\/+/u, "").replace(/\/+$/u, "").replace(/\/{2,}/gu, "/");
+}
+
+function encodeCodeFilePathSegments(path: string): string {
+  const normalized = normalizeCodeFilePath(path);
+  if (normalized === "") return "";
+  return normalized.split("/").map((segment) => encodeURIComponent(segment)).join("/");
+}
+
+function requireFileContentRepoId(input: Record<string, unknown>): string {
+  const repoId = nonEmptyString(input.repo_id);
+  if (!repoId) {
+    throw new Error(
+      'Missing required field "repo_id" for file_content. Pass params.repo_id or a Harness Code URL.',
+    );
+  }
+  return repoId;
+}
+
+/** Alias URL `branch` onto Code's `git_ref` and normalize `path` before dispatch. */
+export async function fileContentPreflight({ input }: PreflightContext): Promise<void> {
+  if (!nonEmptyString(input.git_ref) && nonEmptyString(input.branch)) {
+    input.git_ref = input.branch;
+  }
+  if (typeof input.path === "string") {
+    input.path = normalizeCodeFilePath(input.path);
+  }
+}
+
+function buildCodeFileApiPath(
+  input: Record<string, unknown>,
+  kind: "content" | "blame",
+): string {
+  const repoId = encodeURIComponent(requireFileContentRepoId(input));
+  const encodedPath = encodeCodeFilePathSegments(
+    typeof input.path === "string" ? input.path : "",
+  );
+  if (kind === "blame" && encodedPath === "") {
+    throw new Error(
+      'Missing required field "path" for file_content.blame. Blame a file path, not the repo root.',
+    );
+  }
+  const base = `/code/api/v1/repos/${repoId}/${kind}`;
+  return encodedPath ? `${base}/${encodedPath}` : base;
+}
+
+const FILE_CONTENT_GET_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\")." },
+    {
+      name: "path",
+      required: false,
+      description:
+        "File or directory path relative to the repo root. Omit or pass empty for the root listing. No leading slash. Nested paths use slashes (src/index.ts).",
+    },
+    {
+      name: "git_ref",
+      required: false,
+      description:
+        "Branch, tag, or commit SHA. Omit to use the repository default branch — do not guess main.",
+    },
+    { name: "include_commit", required: false, description: "If true, include latest_commit on the tree node." },
+    {
+      name: "flatten_directories",
+      required: false,
+      description: "If true, flatten directories that contain a single subdirectory.",
+    },
+  ],
+};
+
+const FILE_CONTENT_LIST_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\")." },
+    {
+      name: "git_ref",
+      required: false,
+      description:
+        "Branch, tag, or commit SHA. Omit to use the repository default branch — do not guess main.",
+    },
+    {
+      name: "include_directories",
+      required: false,
+      description: "If true, include directories in the listing as well as files.",
+    },
+  ],
+};
+
+const FILE_CONTENT_BLAME_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\")." },
+    { name: "path", required: true, description: "File path relative to the repo root (no leading slash)." },
+    {
+      name: "git_ref",
+      required: false,
+      description:
+        "Branch, tag, or commit SHA. Omit to use the repository default branch — do not guess main.",
+    },
+    { name: "line_from", required: false, description: "First line to include (1-based, inclusive)." },
+    { name: "line_to", required: false, description: "Last line to include (1-based, inclusive)." },
+  ],
+};
+
+function compactFileContentListItem(item: Record<string, unknown>): Record<string, unknown> {
+  const compact: Record<string, unknown> = { path: item.path, type: item.type };
+  if (typeof item.openInHarness === "string") compact.openInHarness = item.openInHarness;
+  if (typeof item.git_ref === "string" && item.git_ref) compact.git_ref = item.git_ref;
+  return compact;
 }
 
 export const repositoriesToolset: ToolsetDefinition = {
@@ -365,13 +483,51 @@ export const repositoriesToolset: ToolsetDefinition = {
       resourceType: "file_content",
       displayName: "File Content",
       description:
-        "File or directory content from a Harness Code repository. Supports get. Use execute action 'blame' for git blame.",
+        "File or directory content from a Harness Code repository. Get a path (omit path for repo root), list all paths at a ref, or execute action 'blame'. Omit git_ref to use the repository default branch.",
       toolset: "repositories",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["repo_id", "path"],
-      listFilterFields: [],
+      listFilterFields: [
+        {
+          name: "git_ref",
+          description: "Git ref (branch/tag/SHA). Omit to use the repository default branch — do not guess main.",
+        },
+        {
+          name: "include_directories",
+          description: "If true, include directories in the listing as well as files.",
+          type: "boolean",
+        },
+      ],
+      deepLinkTemplate:
+        "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}/files/{git_ref}/~/{filePath}",
+      searchAliases: ["file", "blob", "blame", "repo file", "source file", "file content"],
+      relatedResources: [
+        { resourceType: "repository", relationship: "parent", description: "Repository that contains this file" },
+        { resourceType: "branch", relationship: "related", description: "List branches when git_ref is unknown" },
+        { resourceType: "commit", relationship: "related", description: "Commit file changes after reading content" },
+      ],
+      diagnosticHint:
+        "A 404 usually means the path, git_ref, or repo scope is wrong: (1) omit git_ref to use the repository default branch — do not guess main; (2) pass org_id and project_id for project-scoped repos; (3) use harness_list(resource_type=\"file_content\") to discover paths before get. Paths are relative with no leading slash.",
+      compactItem: compactFileContentListItem,
       operations: {
+        list: {
+          method: "GET",
+          path: "/code/api/v1/repos/{repoIdentifier}/paths",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { repo_id: "repoIdentifier" },
+          queryParams: {
+            org_id: "orgIdentifier",
+            project_id: "projectIdentifier",
+            git_ref: "git_ref",
+            include_directories: "include_directories",
+          },
+          paramsSchema: FILE_CONTENT_LIST_PARAMS,
+          preflight: fileContentPreflight,
+          responseExtractor: fileContentListExtract,
+          description:
+            "List every file path at a git ref. Pass repo_id. Omit git_ref to use the default branch. Set include_directories=true to also return directories.",
+        },
         get: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/content/{filePath}",
@@ -380,15 +536,19 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             path: "filePath",
           },
+          pathBuilder: (input) => buildCodeFileApiPath(input, "content"),
           queryParams: {
             org_id: "orgIdentifier",
             project_id: "projectIdentifier",
             git_ref: "git_ref",
             include_commit: "include_commit",
+            flatten_directories: "flatten_directories",
           },
+          paramsSchema: FILE_CONTENT_GET_PARAMS,
+          preflight: fileContentPreflight,
           responseExtractor: fileContentGetExtract,
           description:
-            "Get file or directory content. Specify path and optional git_ref (branch/tag/SHA). Returns file content or directory listing. For files, content.text holds the decoded text and content.encoding is set to 'utf8' when decoding succeeds; content.data (raw base64) and encoding 'base64' are kept only for binary/undecodable content. content._truncated is set if the server's 10 MB cap cut off the file; content._hint explains truncation, binary content, or Git LFS pointers.",
+            "Get file or directory content. path is relative to the repo root (src/index.ts); omit or pass empty for the root listing. Omit git_ref to use the repository default branch. Returns file content or a directory listing. For files, content.text holds the decoded text and content.encoding is set to 'utf8' when decoding succeeds; content.data (raw base64) and encoding 'base64' are kept only for binary/undecodable content. content._truncated is set if the server's 10 MB cap cut off the file; content._hint explains truncation, binary content, or Git LFS pointers.",
         },
       },
       executeActions: {
@@ -400,6 +560,7 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             path: "filePath",
           },
+          pathBuilder: (input) => buildCodeFileApiPath(input, "blame"),
           queryParams: {
             org_id: "orgIdentifier",
             project_id: "projectIdentifier",
@@ -407,9 +568,11 @@ export const repositoriesToolset: ToolsetDefinition = {
             line_from: "line_from",
             line_to: "line_to",
           },
+          paramsSchema: FILE_CONTENT_BLAME_PARAMS,
+          preflight: fileContentPreflight,
           responseExtractor: passthrough,
           actionDescription:
-            "Get git blame for a file. Optional line_from/line_to to restrict range.",
+            "Get git blame for a file. Optional line_from/line_to to restrict range. Omit git_ref to use the repository default branch.",
           bodySchema: { description: "No body required. File path and optional line range specified via path/query parameters.", fields: [] },
         },
       },

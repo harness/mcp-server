@@ -664,3 +664,63 @@ describe("applyUrlDefaults", () => {
     expect(result.org_id).toBe("myOrg");
   });
 });
+
+describe("Harness Code file URLs", () => {
+  const fileUrl =
+    "https://app.harness.io/ng/account/acc/module/code/orgs/my-org/projects/my-project/repos/my-repo/files/main/~/src/index.ts";
+  const rootUrl =
+    "https://app.harness.io/ng/account/acc/module/code/orgs/my-org/projects/my-project/repos/my-repo/files/develop";
+
+  it("extracts file_content, git_ref, and nested path from /files/{ref}/~/{path}", () => {
+    const result = parseHarnessUrl(fileUrl);
+    expect(result.resource_type).toBe("file_content");
+    expect(result.repo_id).toBe("my-repo");
+    expect(result.git_ref).toBe("main");
+    expect(result.path).toBe("src/index.ts");
+    expect(result.resource_id).toBe("src/index.ts");
+    expect(result.org_id).toBe("my-org");
+    expect(result.project_id).toBe("my-project");
+  });
+
+  it("treats /files/{ref} without ~/ as file_content root listing", () => {
+    const result = parseHarnessUrl(rootUrl);
+    expect(result.resource_type).toBe("file_content");
+    expect(result.repo_id).toBe("my-repo");
+    expect(result.git_ref).toBe("develop");
+    expect(result.path).toBe("");
+    expect(result.resource_id).toBeUndefined();
+  });
+
+  it("applyUrlDefaults merges Code file URL fields for harness_get", () => {
+    const result = applyUrlDefaults({}, fileUrl);
+    expect(result.resource_type).toBe("file_content");
+    expect(result.repo_id).toBe("my-repo");
+    expect(result.git_ref).toBe("main");
+    expect(result.path).toBe("src/index.ts");
+  });
+
+  it("does not overwrite an explicit resource_type with the file URL type", () => {
+    const result = applyUrlDefaults({ resource_type: "branch" }, rootUrl);
+    expect(result.resource_type).toBe("branch");
+    expect(result.repo_id).toBe("my-repo");
+    expect(result.git_ref).toBe("develop");
+  });
+
+  it("reads git_ref from gitRef query when the path has no /files/{ref}", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r?gitRef=feature",
+    );
+    expect(result.repo_id).toBe("r");
+    expect(result.git_ref).toBe("feature");
+    expect(result.resource_type).toBe("repository");
+  });
+
+  it("joins slash-containing branch names between /files/ and /~/", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r/files/feature/foo/~/src/index.ts",
+    );
+    expect(result.resource_type).toBe("file_content");
+    expect(result.git_ref).toBe("feature/foo");
+    expect(result.path).toBe("src/index.ts");
+  });
+});
