@@ -938,7 +938,7 @@ For v0 pipelines, use this sequence to reduce execution-time input errors:
   - **Constraint:** shorthand expansion is skipped when `inputs.build` is already present (explicit `build` wins).
 3. **Execute the run**
   - `harness_execute(resource_type="pipeline", action="run", resource_id="<pipeline_id>", ...)`
-  - For Git-backed pipelines whose YAML should be loaded from a non-default branch, pass `params.pipeline_branch` (sent to Harness as `pipelineBranchName`):
+  - For Git-backed pipelines whose YAML should be loaded from a non-default branch, pass `params.pipeline_branch` (sent to Harness as `branch`). This explicit definition selector takes precedence over the `params.branch` alias. `inputs.branch` independently selects the CI codebase branch:
 
     ```json
     {
@@ -2350,7 +2350,7 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | `Read-only mode is enabled ... operations are not allowed`                       | `HARNESS_READ_ONLY=true` blocks create/update/delete/execute                                         | Set `HARNESS_READ_ONLY=false` if write operations are intended                                                                       |
 | Pipeline run fails pre-flight with unresolved required inputs                    | Provided `inputs` did not cover required runtime placeholders                                        | Fetch `runtime_input_template`, supply missing simple keys, or use `input_set_ids` for structural inputs                             |
 | Pipeline CI shorthand (`branch`, `tag`, `pr_number`, `commit_sha`) did not apply | `inputs.build` was already provided, so shorthand expansion was intentionally skipped                | Remove `inputs.build` to use shorthand expansion, or keep full explicit `build` structure                                            |
-| Pipeline run loaded the wrong YAML revision                                     | The pipeline definition is stored in Git and the run did not specify the desired pipeline branch      | Pass `params.pipeline_branch` on the `run` action; this maps to Harness `pipelineBranchName`                                         |
+| Pipeline run loaded the wrong YAML revision                                     | The pipeline definition is stored in Git and the run did not specify the desired pipeline branch      | Pass `params.pipeline_branch` on the `run` action; this maps to Harness `branch`                                                     |
 | `wait: true` returned `_wait.error`                                              | The pipeline trigger succeeded, but server-side polling failed                                       | Recheck the `execution_id` with `harness_get(resource_type="execution", ...)` before deciding whether to rerun                        |
 | `wait: true` returned `execution_timed_out: true`                                | The execution did not reach a terminal status before `wait_timeout_seconds`                          | Use the returned `execution_id` to recheck status; wait for a terminal status before running `harness_diagnose`                       |
 | Execution logs are empty or blob downloads return 403                           | Harness-hosted log blob URLs require the configured Harness client/auth path, especially for internal or self-managed hosts | Keep `HARNESS_BASE_URL` pointed at the target Harness host and use `harness_get(resource_type="execution_log", ...)` or `harness_diagnose(..., include_logs=true)` rather than bypassing the MCP client |
