@@ -165,7 +165,7 @@ function buildCodeRepoPath(
   if (encodedPath === "" && !opts.allowEmptyPath) {
     throw new Error(
       opts.emptyPathError ??
-        `Missing required field "${opts.pathField}" for ${opts.resourceType}. Names with slashes (feature/foo) are valid.`,
+        `Missing required field "${opts.pathField}" for ${opts.resourceType}.`,
     );
   }
   const base = `/code/api/v1/repos/${repoId}/${opts.collection}`;
@@ -198,7 +198,7 @@ const REPO_BRANCH_PARAMS: ParamsSchema = {
       name: "branch_name",
       required: false,
       description:
-        "Branch name. Required unless git_ref or branch is set (those alias onto this field). Names with slashes are valid (feature/foo).",
+        "Branch name. Required unless git_ref or branch is set (those alias onto this field).",
     },
   ],
 };
@@ -209,7 +209,7 @@ const REPO_TAG_PARAMS: ParamsSchema = {
     {
       name: "tag_name",
       required: true,
-      description: "Tag name. Names with slashes are valid (releases/v1.0).",
+      description: "Tag name.",
     },
   ],
 };
@@ -220,8 +220,7 @@ const COMMIT_DIFF_PARAMS: ParamsSchema = {
     {
       name: "range",
       required: true,
-      description:
-        "Diff range as 'base..head' (e.g. main..feature/foo). Slash-containing refs stay as path segments.",
+      description: "Diff range as 'base..head' (e.g. main..feature-branch).",
     },
   ],
 };
@@ -426,8 +425,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           paramsSchema: REPO_BRANCH_PARAMS,
           preflight: branchPreflight,
           responseExtractor: passthrough,
-          description:
-            "Get branch details including latest commit. Branch names with slashes (feature/foo) are valid.",
+          description: "Get branch details including latest commit",
         },
         create: {
           method: "POST",
@@ -462,8 +460,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           paramsSchema: REPO_BRANCH_PARAMS,
           preflight: branchPreflight,
           responseExtractor: passthrough,
-          description:
-            "Delete a branch from the repository. Branch names with slashes (feature/foo) are valid.",
+          description: "Delete a branch from the repository",
         },
       },
     },
@@ -557,8 +554,8 @@ export const repositoriesToolset: ToolsetDefinition = {
           paramsSchema: COMMIT_DIFF_PARAMS,
           responseExtractor: passthrough,
           actionDescription:
-            "Get the raw diff between two refs. Set range to 'base..head' (e.g. 'main..feature/foo'). Slash-containing refs stay as path segments.",
-          bodySchema: { description: "No body required. Diff range is specified via path parameter (e.g. main..feature/foo).", fields: [] },
+            "Get the raw diff between two refs. Set range to 'base..head' (e.g., 'main..feature-branch').",
+          bodySchema: { description: "No body required. Diff range is specified via path parameter (e.g. main..feature-branch).", fields: [] },
         },
         diff_stats: {
           method: "GET",
@@ -576,7 +573,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           paramsSchema: COMMIT_DIFF_PARAMS,
           responseExtractor: passthrough,
           actionDescription:
-            "Get diff stats (files changed, additions, deletions) between two refs. Set range to 'base..head' (e.g. 'main..feature/foo').",
+            "Get diff stats (files changed, additions, deletions) between two refs. Set range to 'base..head'.",
           bodySchema: { description: "No body required. Range is specified via path parameter.", fields: [] },
         },
       },
@@ -756,8 +753,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           }),
           paramsSchema: REPO_TAG_PARAMS,
           responseExtractor: passthrough,
-          description:
-            "Delete a tag from the repository. Tag names with slashes (releases/v1.0) are valid.",
+          description: "Delete a tag from the repository",
         },
       },
     },
