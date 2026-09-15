@@ -1364,7 +1364,7 @@ Both pipeline YAML resource types are available when the pipelines toolset is en
 
 | Resource Type    | List | Get | Create | Update | Delete | Execute Actions           |
 | ---------------- | ---- | --- | ------ | ------ | ------ | ------------------------- |
-| `delegate`       | x    |     |        |        |        |                           |
+| `delegate`       | x    | x   |        |        |        |                           |
 | `delegate_token` | x    | x   | x      |        | x      | `revoke`, `get_delegates` |
 
 

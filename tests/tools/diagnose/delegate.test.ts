@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { delegateHandler } from "../../../src/tools/diagnose/delegate.js";
 import { makeContext } from "./helpers.js";
 
@@ -155,6 +155,58 @@ describe("delegateHandler", () => {
     expect(compact).toHaveLength(8);
     expect(compact[0]).toHaveProperty("name");
     expect(compact[0]).not.toHaveProperty("issues");
+  });
+
+  it("handles { items } list envelope from the registry extractor", async () => {
+    const ctx = makeContext({
+      dispatchMap: {
+        delegate: { list: { items: [healthyDelegate("d1")], total: 1 } },
+      },
+    });
+
+    const result = await delegateHandler.diagnose(ctx);
+
+    expect(result.total_delegates).toBe(1);
+    expect(result.healthy_count).toBe(1);
+  });
+
+  it("lists account-wide when no scope is provided", async () => {
+    const ctx = makeContext({
+      dispatchMap: { delegate: { list: [] } },
+    });
+
+    await delegateHandler.diagnose(ctx);
+
+    expect(vi.mocked(ctx.registry.dispatch).mock.calls[0]![3]).toEqual({ all: "true" });
+  });
+
+  it("honors explicit org/project scope", async () => {
+    const ctx = makeContext({
+      input: { org_id: "default", project_id: "test-project", resource_scope: "project" },
+      dispatchMap: { delegate: { list: [] } },
+    });
+
+    await delegateHandler.diagnose(ctx);
+
+    expect(vi.mocked(ctx.registry.dispatch).mock.calls[0]![3]).toEqual({
+      all: "true",
+      resource_scope: "project",
+      org_id: "default",
+      project_id: "test-project",
+    });
+  });
+
+  it("searches account-wide when resource_id is set", async () => {
+    const ctx = makeContext({
+      input: { resource_id: "d2", org_id: "default", project_id: "test-project" },
+      dispatchMap: {
+        delegate: { list: [healthyDelegate("d1"), healthyDelegate("d2")] },
+      },
+    });
+
+    await delegateHandler.diagnose(ctx);
+
+    expect(vi.mocked(ctx.registry.dispatch).mock.calls[0]![3]).toEqual({ all: "true" });
   });
 
   it("handles non-array response gracefully", async () => {
