@@ -7,6 +7,8 @@
 - [x] Alias `git_ref`/`branch` onto `branch_name`; populate `branch_name` from Code files URLs.
 - [x] Tests for get/delete/diff dispatch, URL parsing, typecheck.
 - [x] Diff-range regressions for slash-containing refs on both sides (`feature/a..feature/b`, `feature/a...feature/b`).
+- [x] Do not copy files-URL file-path `resource_id` onto an overridden `resource_type` (branch get/delete).
+- [x] Stamp `branch_name` from `/files/{ref}` only, not from `gitRef` query.
 
 ### Plan
 

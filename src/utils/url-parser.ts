@@ -31,7 +31,7 @@ export interface ParsedHarnessUrl {
   path?: string;
   /** Git ref for Code file/content URLs (from `.../files/{ref}/` or `git_ref`/`gitRef` query). */
   git_ref?: string;
-  /** Branch name from a Code files URL — used when the caller asks for resource_type=branch. */
+  /** Branch name from a Code files URL (`.../files/{ref}`), for resource_type=branch. */
   branch_name?: string;
   /** RMG release id — UUID from search or UI URL slug (identifier-version hash). */
   release_id?: string;
@@ -358,7 +358,6 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
 
   const gitRefQuery = url.searchParams.get("git_ref") ?? url.searchParams.get("gitRef");
   if (gitRefQuery && !result.git_ref) result.git_ref = gitRefQuery;
-  if (result.git_ref && !result.branch_name) result.branch_name = result.git_ref;
 
   const storeType = url.searchParams.get("storeType");
   if (storeType) result.store_type = storeType;
@@ -460,8 +459,17 @@ export function applyUrlDefaults(
     hasWorkspaceId &&
     declaredResourceType?.startsWith("fme_") === true &&
     !FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES.has(declaredResourceType);
+  // Files URLs set resource_id to the file path. That is only the identifier for
+  // file_content — copying it onto an overridden type (e.g. branch) collides with
+  // branch_name in harness_delete / harness_update.
+  const callerResourceType = typeof args.resource_type === "string" ? args.resource_type : "";
+  const skipFilePathResourceId =
+    parsed.resource_type === "file_content" &&
+    callerResourceType !== "" &&
+    callerResourceType !== "file_content";
   for (const field of MERGEABLE_FIELDS) {
     if (skipOrgProjectFromUrl && (field === "org_id" || field === "project_id")) continue;
+    if (skipFilePathResourceId && field === "resource_id") continue;
     if ((merged[field] === undefined || merged[field] === "") && parsed[field] !== undefined) {
       merged[field] = parsed[field];
     }
