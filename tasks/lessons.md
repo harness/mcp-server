@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## Nested File Paths Must Keep Slashes
+- **Issue**: Registry `pathParams` run `encodeURIComponent` on the whole file path, so `src/index.ts` became `src%2Findex.ts` and the content API 404'd. Empty `path` was also treated as unset, so `harness_get` mapped `resource_id` onto it. List deep links need `{filePath}` on items; a custom `compactItem` that drops `openInHarness` strips those links in `harness_list`.
+- **Fix**: `pathBuilder` encodes each path segment and allows `/content` with no extra path. Treat `input[field] === undefined` (not falsy) when mapping `resource_id`. Stamp `filePath` in the list extractor and keep `openInHarness` in `compactItem`.
+- **Rule**: For multi-segment file paths, never encode slashes. Empty string is an explicit identifier. Custom compact functions must preserve `openInHarness`.
+
 ## CCM Open Recommendations Use daysBack, Not the Date Picker
 - **Issue**: Chat showed OPEN recs (e.g. `prod-nodepool-v2`) that the CCM Recommendations page hides. The UI date picker is `appliedAt*` and is ignored unless state is APPLIED-only. OPEN freshness is `daysBack: 4` on `lastProcessedAt`. Mapping the calendar to `days_back=30` re-includes stale recs.
 - **Fix**: REST list/stats/count default to the Open-tab payload (`daysBack: 4`, `minSaving: 1`, `OPEN`). Applied-only omits `daysBack` and sends `applied_at_start`/`applied_at_end`. Keep `cost_category` + `cost_buckets` for per-team filters.

@@ -1542,6 +1542,33 @@ export const fileContentGetExtract = (raw: unknown): unknown => {
   return { ...raw, content: decodedContent };
 };
 
+/**
+ * File-path listings return `{ files, directories }`. Normalize to
+ * `{ items: [{ path, filePath, type, git_ref? }], total }` so harness_list
+ * compact/search work and deep-link `{filePath}` / `{git_ref}` placeholders resolve.
+ */
+export function fileContentListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  if (!isRecord(raw)) return raw;
+  const files = Array.isArray(raw.files)
+    ? raw.files.filter((value): value is string => typeof value === "string")
+    : [];
+  const directories = Array.isArray(raw.directories)
+    ? raw.directories.filter((value): value is string => typeof value === "string")
+    : [];
+  const gitRef = typeof input?.git_ref === "string" && input.git_ref ? input.git_ref : undefined;
+  const toItem = (path: string, type: "file" | "directory") => ({
+    path,
+    filePath: path,
+    type,
+    ...(gitRef ? { git_ref: gitRef } : {}),
+  });
+  const items = [
+    ...files.map((path) => toItem(path, "file")),
+    ...directories.map((path) => toItem(path, "directory")),
+  ];
+  return { items, total: items.length, files, directories };
+}
+
 // ── Release Management (RMG) ──────────────────────────────────────────────
 
 const RMG_API_PREFIX = "/gateway/rmg/api";

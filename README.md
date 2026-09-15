@@ -1376,12 +1376,14 @@ Both pipeline YAML resource types are available when the pipelines toolset is en
 | `repository`   | x    | x   | x      | x      |        |                      |
 | `branch`       | x    | x   | x      |        | x      |                      |
 | `commit`       | x    | x   | x      |        |        | `diff`, `diff_stats` |
-| `file_content` |      | x   |        |        |        | `blame`              |
+| `file_content` | x    | x   |        |        |        | `blame`              |
 | `tag`          | x    |     | x      |        | x      |                      |
 | `repo_rule`    | x    | x   |        |        |        |                      |
 | `space_rule`   | x    | x   |        |        |        |                      |
 
 `commit` creation commits one or more file actions directly through the Harness Code API without cloning. Pass `body.title`, `body.branch`, and `body.actions`; each action is `CREATE`, `UPDATE`, `DELETE`, or `MOVE`, and `UPDATE` requires the current blob SHA.
+
+`file_content` list returns every path at a ref; get returns file or directory content (omit or pass empty `path` for the repo root; nested paths keep slashes). Omit `git_ref` to use the repository default branch — do not guess `main`.
 
 
 ### Artifact Registries

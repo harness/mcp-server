@@ -27,6 +27,10 @@ export interface ParsedHarnessUrl {
   store_type?: string;
   connector_ref?: string;
   repo_name?: string;
+  /** File path inside a Harness Code repo (from `.../files/{ref}/~/{path}`). */
+  path?: string;
+  /** Git ref for Code file/content URLs (from `.../files/{ref}/` or `git_ref`/`gitRef` query). */
+  git_ref?: string;
   /** RMG release id — UUID from search or UI URL slug (identifier-version hash). */
   release_id?: string;
 }
@@ -116,10 +120,39 @@ const STRUCTURAL = new Set([
  * string like `/ng/account/<id>/...`. parseHarnessUrl never reads `url.host` /
  * `url.origin` / `url.protocol`; it walks `url.pathname` and `url.searchParams`
  * only. Using an explicitly fake host makes it clear in code review that the
- * host is not consulted and the parser is cluster-agnostic (prod0 / eu1 /
- * harness0 / self-managed / vanity hosts all parse identically).
+ * host is not consulted and the parser is host-agnostic (SaaS, vanity, and
+ * self-managed hosts all parse identically).
  */
 const PLACEHOLDER_BASE = "https://harness.invalid";
+
+function applyCodeFileUrl(segments: string[], result: ParsedHarnessUrl): void {
+  const reposIdx = Math.max(segments.lastIndexOf("repos"), segments.lastIndexOf("repositories"));
+  if (reposIdx < 0) return;
+  const filesIdx = segments.indexOf("files", reposIdx + 1);
+  if (filesIdx < 0 || filesIdx + 1 >= segments.length) return;
+
+  const tildeIdx = segments.indexOf("~", filesIdx + 1);
+  const refEnd = tildeIdx >= 0 ? tildeIdx : segments.length;
+  const gitRef = segments
+    .slice(filesIdx + 1, refEnd)
+    .map((segment) => decodeURIComponent(segment))
+    .filter(Boolean)
+    .join("/");
+  if (!gitRef || STRUCTURAL.has(gitRef) || RESOURCE_SEGMENTS[gitRef]) return;
+
+  const path = tildeIdx >= 0
+    ? segments.slice(tildeIdx + 1).map((segment) => decodeURIComponent(segment)).filter(Boolean).join("/")
+    : "";
+
+  result.resource_type = "file_content";
+  result.git_ref = gitRef;
+  result.path = path;
+  if (path) {
+    result.resource_id = path;
+  } else {
+    delete result.resource_id;
+  }
+}
 
 /**
  * Parse a Harness UI URL and extract identifiers.
@@ -222,6 +255,9 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     }
   }
 
+  // Code file browser: .../repos/{repo}/files/{gitRef} and .../files/{gitRef}/~/{path}
+  applyCodeFileUrl(segments, result);
+
   // 7. AI Worker Agents (ai-agents module):
   // List:  .../all/ai-agents/orgs/{org}/projects/{project}/worker-agents
   // Detail: .../worker-agents/{agentId}
@@ -317,6 +353,9 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
   const branch = url.searchParams.get("branch");
   if (branch) result.branch = branch;
 
+  const gitRefQuery = url.searchParams.get("git_ref") ?? url.searchParams.get("gitRef");
+  if (gitRefQuery && !result.git_ref) result.git_ref = gitRefQuery;
+
   const storeType = url.searchParams.get("storeType");
   if (storeType) result.store_type = storeType;
 
@@ -352,6 +391,8 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "store_type",
   "connector_ref",
   "repo_name",
+  "path",
+  "git_ref",
   "release_id",
 ];
 
