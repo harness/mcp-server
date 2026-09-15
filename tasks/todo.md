@@ -1,5 +1,20 @@
 # Harness MCP Server — Task Tracking
 
+## Keep slashes in Code branch, tag, and diff paths (2026-09-16)
+
+- [x] Encode slash-containing branch/tag/diff values as path segments, not `%2F`.
+- [x] Share one path builder with `file_content` (empty path only for repo-root content).
+- [x] Alias `git_ref`/`branch` onto `branch_name`; populate `branch_name` from Code files URLs.
+- [x] Tests for get/delete/diff dispatch, URL parsing, typecheck.
+- [x] Diff-range regressions for slash-containing refs on both sides (`feature/a..feature/b`, `feature/a...feature/b`).
+- [x] Do not copy files-URL file-path `resource_id` onto an overridden `resource_type` (branch get/delete).
+- [x] Stamp `branch_name` from `/files/{ref}` only, not from `gitRef` query.
+
+### Plan
+
+- Reuse `file_content` per-segment encoding for branch, tag, and diff paths.
+- Keep files URLs typed as `file_content`; still stamp `branch_name` so explicit `resource_type=branch` works.
+
 ## file_content read-path bugs and Code API drift (2026-09-15)
 
 - [x] Encode nested file paths as slash-separated segments; allow empty path for repo root; strip leading slashes.

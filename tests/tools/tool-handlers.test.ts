@@ -312,6 +312,26 @@ describe("harness_get", () => {
     expect(call.params.orgIdentifier).toBeUndefined();
     expect(call.params.projectIdentifier).toBeUndefined();
   });
+
+  it("gets a branch from a files URL with a path when resource_type is branch", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    mockRequest = vi.fn().mockResolvedValue({ name: "feature/foo" });
+    client = makeClient(mockRequest);
+    const repoServer = makeMcpServer();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(repoServer, registry, client);
+
+    const result = await repoServer.call("harness_get", {
+      resource_type: "branch",
+      url: "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r/files/feature/foo/~/src/index.ts",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/repos/r/branches/feature/foo",
+    }));
+  });
 });
 
 describe("harness_get — execution_inputs", () => {
@@ -1841,6 +1861,32 @@ describe("harness_delete", () => {
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("deletes a branch from a files URL with a path when resource_type is branch", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS" });
+    client = makeClient(mockRequest);
+    const repoServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(repoServer, registry, client, makeConfig());
+
+    const result = await repoServer.call("harness_delete", {
+      resource_type: "branch",
+      url: "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r/files/feature/foo/~/src/index.ts",
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({
+      deleted: true,
+      resource_type: "branch",
+      resource_id: "feature/foo",
+    });
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "DELETE",
+      path: "/code/api/v1/repos/r/branches/feature/foo",
+    }));
   });
 });
 
