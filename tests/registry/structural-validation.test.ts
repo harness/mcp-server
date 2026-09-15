@@ -613,4 +613,39 @@ describe("Toolset structural validation", () => {
       expect(unexpectedlyExposed).toEqual([]);
     });
   });
+
+  describe("Code API paginated list ops require pageOneIndexed and size→limit alias", () => {
+    const CODE_API_PREFIX = "/code/api/v1/";
+
+    function codeListSpecs(): { type: string; spec: EndpointSpec }[] {
+      const results: { type: string; spec: EndpointSpec }[] = [];
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
+        const listSpec = def.operations.list;
+        if (!listSpec) continue;
+        if (!listSpec.path.startsWith(CODE_API_PREFIX)) continue;
+        if (!listSpec.queryParams?.limit) continue;
+        results.push({ type, spec: listSpec });
+      }
+      return results;
+    }
+
+    it("every page-based Code API list endpoint has pageOneIndexed: true", () => {
+      const specs = codeListSpecs().filter(({ spec }) => spec.queryParams?.page);
+      expect(specs.length).toBeGreaterThan(0);
+      const missing = specs
+        .filter(({ spec }) => !spec.pageOneIndexed)
+        .map(({ type, spec }) => `${type}.list (${spec.path})`);
+      expect(missing).toEqual([]);
+    });
+
+    it("every paginated Code API list endpoint maps size→limit", () => {
+      const specs = codeListSpecs();
+      expect(specs.length).toBeGreaterThan(0);
+      const missing = specs
+        .filter(({ spec }) => spec.queryParams?.size !== "limit")
+        .map(({ type, spec }) => `${type}.list (${spec.path})`);
+      expect(missing).toEqual([]);
+    });
+  });
 });

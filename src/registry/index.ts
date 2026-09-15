@@ -752,8 +752,11 @@ export class Registry {
       for (const [inputKey, queryKey] of Object.entries(spec.queryParams)) {
         let value = input[inputKey];
         // Convert 0-indexed page to 1-indexed when the API requires it
-        if (spec.pageOneIndexed && inputKey === "page" && typeof value === "number") {
-          value = value + 1;
+        if (spec.pageOneIndexed && inputKey === "page" && value !== undefined && value !== "") {
+          const n = Number(value);
+          if (Number.isFinite(n)) {
+            value = n + 1;
+          }
         }
         if (Array.isArray(value)) {
           const parts = value.filter(
