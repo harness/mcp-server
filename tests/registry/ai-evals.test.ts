@@ -343,17 +343,153 @@ describe("AI Evals eval_git_registration resource", () => {
 // ─── eval_target test action risk level ────────────────────────────────────
 
 describe("AI Evals eval_target test action", () => {
-  it("test action has low_write risk (not read)", () => {
+  it("test action has medium_write risk because it contacts the target", () => {
     const res = findResource("eval_target");
     const action = res.executeActions?.test;
     expect(action).toBeDefined();
-    expect(action!.operationPolicy?.risk).toBe("low_write");
+    expect(action!.operationPolicy?.risk).toBe("medium_write");
   });
 
   it("test action has do_not_retry policy", () => {
     const res = findResource("eval_target");
     const action = res.executeActions!.test;
     expect(action.operationPolicy?.retryPolicy).toBe("do_not_retry");
+  });
+});
+
+// ─── Managed offline evaluation safety ──────────────────────────────────────
+
+describe("managed offline evaluation safety", () => {
+  it("requires all real composition IDs before creating a managed evaluation", async () => {
+    const registry = new Registry(makeConfig());
+    const client = makeClient();
+
+    await expect(
+      registry.dispatch(client, "evaluation", "create", {
+        body: { name: "Incomplete", storage_type: "managed" },
+      }),
+    ).rejects.toThrow(/requires dataset_id, target_id, metric_set_id/);
+  });
+
+  it("documents the conditional managed-evaluation creation requirements", () => {
+    const res = findResource("evaluation");
+    const createSchema = res.operations.create!.bodySchema!;
+
+    expect(createSchema.description).toContain("Managed evaluations");
+    expect(createSchema.description).toContain("git-backed");
+    for (const field of ["dataset_id", "target_id", "metric_set_id"]) {
+      expect(createSchema.fields.find(candidate => candidate.name === field)?.description).toContain(
+        "Required for managed storage",
+      );
+    }
+  });
+
+  it("does not apply managed composition preflight to a git-backed evaluation run", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({ storage_type: "git" })
+      .mockResolvedValueOnce({ id: "run-1" });
+    const client = makeClient(mockRequest);
+    const evalId = "11111111-1111-4111-8111-111111111111";
+
+    await registry.dispatchExecute(client, "evaluation", "run", { eval_id: evalId });
+
+    expect(mockRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      method: "POST",
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/evals/${evalId}/run`,
+      body: {},
+    }));
+  });
+
+  it("rejects a dataset-generation request without structured LLM configuration", async () => {
+    const registry = new Registry(makeConfig());
+    const client = makeClient();
+
+    await expect(
+      registry.dispatchExecute(client, "eval_dataset", "generate", {
+        dataset_id: "11111111-1111-4111-8111-111111111111",
+        body: { strategy: "use_case", count: 2, description: "Real customer-support questions" },
+      }),
+    ).rejects.toThrow(/llm_config must be/);
+  });
+
+  it("exposes clone, item-history, bulk-delete, and recommendations actions", () => {
+    expect(findResource("evaluation").executeActions).toMatchObject({
+      clone: { method: "POST", operationPolicy: { risk: "low_write" } },
+      item_history: { method: "POST", operationPolicy: { risk: "read" } },
+    });
+    expect(findResource("eval_dataset_item").executeActions).toMatchObject({
+      bulk_delete: { method: "POST", operationPolicy: { risk: "destructive" } },
+    });
+    expect(findResource("eval_run").executeActions).toMatchObject({
+      recommendations: { method: "POST", operationPolicy: { risk: "medium_write" } },
+    });
+  });
+
+  it("routes a dataset-item bulk delete to the scoped bulk-delete endpoint", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi.fn().mockResolvedValue({ deleted: 1 });
+    const client = makeClient(request);
+
+    await registry.dispatchExecute(client, "eval_dataset_item", "bulk_delete", {
+      org_id: "myorg",
+      project_id: "myproj",
+      dataset_id: "11111111-1111-4111-8111-111111111111",
+      body: { item_ids: ["22222222-2222-4222-8222-222222222222"] },
+    });
+
+    expect(request).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/gateway/ai-evals/api/v1/orgs/myorg/projects/myproj/dataset/11111111-1111-4111-8111-111111111111/items/bulk-delete",
+      body: { item_ids: ["22222222-2222-4222-8222-222222222222"] },
+    }));
+  });
+
+  it("marks all external or costly offline actions medium_write", () => {
+    expect(findResource("eval_dataset").executeActions?.generate.operationPolicy.risk).toBe("medium_write");
+    expect(findResource("evaluation").executeActions?.run.operationPolicy.risk).toBe("medium_write");
+    expect(findResource("eval_run").executeActions?.rescore.operationPolicy.risk).toBe("medium_write");
+    expect(findResource("eval_suite").executeActions?.run.operationPolicy.risk).toBe("medium_write");
+    expect(findResource("evaluation").executeActions?.import_yaml.operationPolicy.risk).toBe("medium_write");
+  });
+
+  it("checks the existing dataset when an eval is updated to a precomputed target", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        uuid: "11111111-1111-4111-8111-111111111111",
+        storage_type: "managed",
+        dataset_id: "22222222-2222-4222-8222-222222222222",
+        target_id: "33333333-3333-4333-8333-333333333333",
+        metric_set_id: "44444444-4444-4444-8444-444444444444",
+      })
+      .mockResolvedValueOnce({ uuid: "22222222-2222-4222-8222-222222222222" })
+      .mockResolvedValueOnce({
+        uuid: "55555555-5555-4555-8555-555555555555",
+        type: "precomputed",
+        config: { dataset_id: "66666666-6666-4666-8666-666666666666" },
+      })
+      .mockResolvedValueOnce({ uuid: "66666666-6666-4666-8666-666666666666" })
+      .mockResolvedValueOnce({ entries: [] })
+      .mockResolvedValueOnce({
+        data: [{ item_identifier: "real-case", input: { question: "What is my balance?" } }],
+        total_elements: 1,
+      });
+    const client = makeClient(request);
+
+    await expect(
+      registry.dispatch(client, "evaluation", "update", {
+        eval_id: "11111111-1111-4111-8111-111111111111",
+        body: { target_id: "55555555-5555-4555-8555-555555555555" },
+      }),
+    ).rejects.toThrow(/configured for dataset_id/);
+  });
+
+  it("preflights externally costly actions with scoped resource lookups", () => {
+    expect(findResource("eval_target").executeActions?.test.preflight).toBeDefined();
+    expect(findResource("eval_run").executeActions?.recommendations.preflight).toBeDefined();
+    expect(findResource("eval_suite").executeActions?.run.preflight).toBeDefined();
   });
 });
 
