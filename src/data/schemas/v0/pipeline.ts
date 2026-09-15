@@ -61436,10 +61436,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -61461,20 +61470,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
@@ -61524,10 +61519,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -61549,20 +61553,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
@@ -61690,10 +61680,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -61715,20 +61714,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
@@ -61778,10 +61763,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -61803,20 +61797,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
@@ -61866,10 +61846,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -61891,20 +61880,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
@@ -62386,10 +62361,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -62411,20 +62395,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
