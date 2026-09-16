@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, PathBuilderConfig, BodySchema } from "../types.js";
-import { ngExtract, harListExtract, passthrough } from "../extractors.js";
+import { ngExtract, harListExtract } from "../extractors.js";
 
 // Canonical PackageType enum — matches RegistryRequest.PackageType in the v1 OpenAPI spec.
 const PACKAGE_TYPES = [

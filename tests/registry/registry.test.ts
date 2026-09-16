@@ -1850,6 +1850,22 @@ describe("Registry", () => {
       expect(required).toContain("packageName");
       expect(required).toContain("businessJustification");
     });
+
+    it("response is passed through as-is (no data envelope unwrap)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        exceptionId: "exc-abc",
+        status: "PENDING",
+        packageName: "lodash",
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: { registryId: "reg-uuid-123", packageName: "lodash", businessJustification: "needed" },
+      }) as Record<string, unknown>;
+
+      expect(result.exceptionId).toBe("exc-abc");
+      expect(result.status).toBe("PENDING");
+    });
   });
 
   describe("ELK→Mongo fallback", () => {
