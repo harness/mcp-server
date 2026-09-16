@@ -3,10 +3,15 @@
  * Base path: /ai-evals/api/v1/orgs/{org}/projects/{project}/...
  * Uses Harness-Account header; no accountIdentifier query param (headerBasedScoping).
  */
-import type { BodySchema, PathBuilderConfig, ToolsetDefinition } from "../types.js";
+import type { BodySchema, PathBuilderConfig, PreflightContext, ToolsetDefinition } from "../types.js";
 import { aiEvalsArrayExtract, aiEvalsListExtract, passthrough } from "../extractors.js";
 
 const AI = "/gateway/ai-evals/api/v1";
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const LLM_CONNECTOR_TYPES = new Set(["OpenAi", "OpenAI", "Anthropic", "AzureOpenAI", "AzureOpenAi", "GoogleAI", "GoogleAi"]);
+const JUDGE_BACKED_METRIC_TYPES = new Set(["llm", "ai_judge"]);
+const TARGET_TYPES = new Set(["prompt", "agent", "precomputed"]);
+const AGENT_METHODS = new Set(["GET", "POST", "PUT"]);
 
 function scopeOrThrow(input: Record<string, unknown>, config: PathBuilderConfig): { org: string; project: string } {
   const org = (input.org_id as string) ?? config.HARNESS_ORG ?? "";
@@ -25,6 +30,522 @@ function base(input: Record<string, unknown>, config: PathBuilderConfig): string
 }
 
 const listQ = { page: "page", size: "limit" };
+
+type JsonRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): JsonRecord | undefined {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : undefined;
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function requireBody(input: JsonRecord, operation: string): JsonRecord {
+  const body = asRecord(input.body);
+  if (!body) throw new Error(`${operation} requires body to be a JSON object.`);
+  return body;
+}
+
+function requireUuid(value: unknown, field: string): string {
+  const id = nonEmptyString(value);
+  if (!id || !UUID_PATTERN.test(id)) {
+    throw new Error(
+      `${field} must be a UUID returned by the matching AI Evals list/create call; do not invent an identifier.`,
+    );
+  }
+  return id;
+}
+
+function preflightScope({ input, registry }: PreflightContext): { org_id: string; project_id: string } {
+  const org_id = nonEmptyString(input.org_id) ?? registry.orgId;
+  const project_id = nonEmptyString(input.project_id) ?? registry.projectId;
+  if (!org_id || !project_id) {
+    throw new Error(
+      "AI Evals requires org_id and project_id. Set HARNESS_ORG/HARNESS_PROJECT, or pass both values on the tool call.",
+    );
+  }
+  return { org_id, project_id };
+}
+
+function unwrapRecord(value: unknown): JsonRecord {
+  const record = asRecord(value);
+  if (!record) throw new Error("The referenced AI Evals resource returned an invalid response.");
+  return asRecord(record.data) ?? asRecord(record.content) ?? record;
+}
+
+function listItems(value: unknown): { items: JsonRecord[]; total: number } {
+  const record = asRecord(value);
+  const rawItems = asArray(record?.items ?? record?.data ?? asRecord(record?.data)?.content);
+  const totalValue = record?.total ?? record?.total_elements ?? asRecord(record?.data)?.totalElements;
+  return {
+    items: rawItems.flatMap(item => {
+      const recordItem = asRecord(item);
+      return recordItem ? [recordItem] : [];
+    }),
+    total: typeof totalValue === "number" ? totalValue : rawItems.length,
+  };
+}
+
+async function getScopedResource(
+  ctx: PreflightContext,
+  resourceType: string,
+  idField: string,
+  rawId: unknown,
+): Promise<JsonRecord> {
+  const id = requireUuid(rawId, idField);
+  try {
+    const result = await ctx.registry.dispatch(
+      ctx.client,
+      resourceType,
+      "get",
+      { ...preflightScope(ctx), [idField]: id },
+      ctx.signal,
+    );
+    return unwrapRecord(result);
+  } catch (error) {
+    throw new Error(
+      `${idField}=${id} is not a readable ${resourceType} in this org/project. ` +
+      `List valid choices with harness_list(resource_type="${resourceType}"). ` +
+      `Details: ${(error as Error).message}`,
+    );
+  }
+}
+
+async function getConnector(ctx: PreflightContext, connectorRef: string): Promise<JsonRecord> {
+  try {
+    const result = await ctx.registry.dispatch(
+      ctx.client,
+      "connector",
+      "get",
+      { ...preflightScope(ctx), connector_id: connectorRef },
+      ctx.signal,
+    );
+    const record = unwrapRecord(result);
+    return asRecord(record.connector) ?? record;
+  } catch (error) {
+    throw new Error(
+      `connector_ref=${connectorRef} is not a readable Harness connector in this eval scope. ` +
+      "Ask the user to select an existing connector and provide its scoped identifier (for example, account.my-connector). " +
+      `Details: ${(error as Error).message}`,
+    );
+  }
+}
+
+async function validateLlmConfig(ctx: PreflightContext, field: string, value: unknown): Promise<void> {
+  const config = asRecord(value);
+  if (!config) {
+    throw new Error(`${field} must be { connector_ref: string, model?: string }; raw API keys are not accepted.`);
+  }
+  if (["api_key", "apiKey", "secret", "token"].some(key => key in config)) {
+    throw new Error(`${field} must reference a Harness connector; do not provide raw credentials.`);
+  }
+  const connectorRef = nonEmptyString(config.connector_ref);
+  if (!connectorRef) {
+    throw new Error(`${field}.connector_ref is required. Ask the user for an existing Harness LLM connector identifier.`);
+  }
+  if (config.model !== undefined && !nonEmptyString(config.model)) {
+    throw new Error(`${field}.model must be a non-empty provider model string when supplied.`);
+  }
+  const connector = await getConnector(ctx, connectorRef);
+  const type = nonEmptyString(connector.type);
+  if (!type || !LLM_CONNECTOR_TYPES.has(type)) {
+    throw new Error(
+      `${field}.connector_ref=${connectorRef} is type ${type ?? "unknown"}, not a supported AI Evals LLM connector. ` +
+      "Select an OpenAI, Anthropic, AzureOpenAI, or GoogleAI connector.",
+    );
+  }
+  if (connector.harnessManaged === true && !nonEmptyString(config.model)) {
+    throw new Error(
+      `${field}.model is required because ${connectorRef} is Harness-managed. Ask the user for a provider model name.`,
+    );
+  }
+}
+
+type MetricSetJudge =
+  | { field: "judge_llm_config"; value: unknown }
+  | { field: "judge_llm_connector_ref"; value: unknown }
+  | { field: "judge_model_id"; value: unknown };
+
+function selectMetricSetJudge(metricSet: JsonRecord): MetricSetJudge | undefined {
+  if (metricSet.judge_llm_config !== undefined && metricSet.judge_llm_config !== null) {
+    return { field: "judge_llm_config", value: metricSet.judge_llm_config };
+  }
+  if (metricSet.judge_llm_connector_ref !== undefined && metricSet.judge_llm_connector_ref !== null) {
+    return { field: "judge_llm_connector_ref", value: metricSet.judge_llm_connector_ref };
+  }
+  if (metricSet.judge_model_id !== undefined && metricSet.judge_model_id !== null) {
+    return { field: "judge_model_id", value: metricSet.judge_model_id };
+  }
+  return undefined;
+}
+
+async function validateMetricSetJudge(ctx: PreflightContext, judge: MetricSetJudge): Promise<void> {
+  if (judge.field === "judge_model_id") {
+    requireUuid(judge.value, judge.field);
+    return;
+  }
+  if (judge.field === "judge_llm_connector_ref") {
+    await validateLlmConfig(ctx, judge.field, { connector_ref: judge.value });
+    return;
+  }
+  await validateLlmConfig(ctx, judge.field, judge.value);
+}
+
+async function validateHttpConnector(ctx: PreflightContext, connectorRef: string): Promise<void> {
+  const connector = await getConnector(ctx, connectorRef);
+  const spec = asRecord(connector.spec);
+  const url = nonEmptyString(spec?.url);
+  if (!url || !/^https?:\/\//i.test(url)) {
+    throw new Error(
+      `connector_ref=${connectorRef} is not HTTP-capable (its connector spec has no HTTP(S) url). ` +
+      "Ask the user to select a connector that supplies the agent endpoint URL.",
+    );
+  }
+}
+
+function validateAgentConfig(config: JsonRecord): void {
+  const endpoint = nonEmptyString(config.endpoint_url);
+  if (!endpoint || !/^https?:\/\//i.test(endpoint)) {
+    throw new Error("target.config.endpoint_url is required and must be an HTTP(S) URL.");
+  }
+  const method = nonEmptyString(config.method) ?? "POST";
+  if (!AGENT_METHODS.has(method)) {
+    throw new Error(`target.config.method must be one of ${[...AGENT_METHODS].join(", ")}.`);
+  }
+  if (!nonEmptyString(config.response_path)) {
+    throw new Error("target.config.response_path is required (for example, choices.0.message.content).");
+  }
+  if (config.request_template !== undefined) {
+    const requestTemplate = asRecord(config.request_template);
+    if (!requestTemplate) {
+      throw new Error("target.config.request_template must be a JSON object, such as { input: '{{input}}' }.");
+    }
+  }
+}
+
+async function validateTarget(ctx: PreflightContext, target: JsonRecord): Promise<void> {
+  const type = nonEmptyString(target.type);
+  const config = asRecord(target.config);
+  if (!type || !TARGET_TYPES.has(type) || !config) {
+    throw new Error("A managed target requires type ('prompt', 'agent', or 'precomputed') and a JSON config object.");
+  }
+  if (type === "prompt") {
+    await validateLlmConfig(ctx, "target.config.llm_config", {
+      connector_ref: config.llm_connector_ref,
+      model: config.model,
+    });
+    if (config.prompt_source === "registry") {
+      if (!nonEmptyString(config.prompt_id) || !nonEmptyString(config.prompt_version)) {
+        throw new Error(
+          "Registry prompt targets require target.config.prompt_id and target.config.prompt_version from the Prompt Registry.",
+        );
+      }
+    } else if (!nonEmptyString(config.system_message) || !nonEmptyString(config.user_message_template)) {
+      throw new Error("Inline prompt targets require non-empty system_message and user_message_template.");
+    } else if (!String(config.user_message_template).includes("{{input}}")) {
+      throw new Error("target.config.user_message_template must include the {{input}} placeholder.");
+    }
+    return;
+  }
+  if (type === "agent") {
+    validateAgentConfig(config);
+    const connectorRef = nonEmptyString(target.connector_ref);
+    if (connectorRef) await validateHttpConnector(ctx, connectorRef);
+    return;
+  }
+  const datasetId = config.dataset_id;
+  if (datasetId !== undefined) await getScopedResource(ctx, "eval_dataset", "dataset_id", datasetId);
+}
+
+async function validateTargetWrite(ctx: PreflightContext, isUpdate: boolean): Promise<void> {
+  const body = requireBody(ctx.input, "Target write");
+  if (body.storage_type === "git") return;
+  const existing = isUpdate
+    ? await getScopedResource(ctx, "eval_target", "target_id", ctx.input.target_id)
+    : undefined;
+  await validateTarget(ctx, {
+    ...existing,
+    ...body,
+    type: existing?.type ?? body.type,
+    config: body.config ?? existing?.config,
+    connector_ref: body.connector_ref ?? existing?.connector_ref,
+  });
+}
+
+async function validateOutputUpload(ctx: PreflightContext): Promise<void> {
+  const target = await getScopedResource(ctx, "eval_target", "target_id", ctx.input.target_id);
+  if (target.type !== "precomputed") {
+    throw new Error("Static outputs can only be uploaded to a precomputed target.");
+  }
+  const body = requireBody(ctx.input, "Output upload");
+  const outputs = asArray(body.items).flatMap(item => {
+    const record = asRecord(item);
+    return record ? [record] : [];
+  });
+  if (outputs.length === 0) throw new Error("Output upload requires a non-empty items array.");
+  const datasetId = requireUuid(asRecord(target.config)?.dataset_id, "target.config.dataset_id");
+  await getScopedResource(ctx, "eval_dataset", "dataset_id", datasetId);
+  const datasetItems = await listDatasetItems(ctx, datasetId);
+  const datasetItemIds = new Set(datasetItems.items.map(item => nonEmptyString(item.item_identifier)).filter(Boolean));
+  const seen = new Set<string>();
+  for (const output of outputs) {
+    const itemIdentifier = nonEmptyString(output.item_identifier);
+    if (!itemIdentifier || !asRecord(output.output)) {
+      throw new Error("Each output must be { item_identifier: '<dataset item id>', output: { ... } }.");
+    }
+    if (seen.has(itemIdentifier)) throw new Error(`Output upload contains duplicate item_identifier=${itemIdentifier}.`);
+    seen.add(itemIdentifier);
+    if (!datasetItemIds.has(itemIdentifier)) {
+      throw new Error(
+        `item_identifier=${itemIdentifier} is not in the target's configured dataset. ` +
+        "Use a dataset item business ID returned by harness_list(resource_type='eval_dataset_item').",
+      );
+    }
+  }
+}
+
+async function listDatasetItems(ctx: PreflightContext, datasetId: string): Promise<{ items: JsonRecord[]; total: number }> {
+  const result = await ctx.registry.dispatch(
+    ctx.client,
+    "eval_dataset_item",
+    "list",
+    { ...preflightScope(ctx), dataset_id: datasetId, size: 1000 },
+    ctx.signal,
+  );
+  const list = listItems(result);
+  if (list.total > list.items.length) {
+    throw new Error(
+      `Dataset ${datasetId} has ${list.total} items, more than the MCP safety-check limit of ${list.items.length}. ` +
+      "Split the dataset or use the UI/API after reviewing its precomputed-output coverage.",
+    );
+  }
+  return list;
+}
+
+async function validatePrecomputedData(
+  ctx: PreflightContext,
+  datasetId: string,
+  target: JsonRecord | undefined,
+): Promise<void> {
+  const datasetItems = await listDatasetItems(ctx, datasetId);
+  if (datasetItems.total === 0) {
+    throw new Error(`Dataset ${datasetId} has no items. Add items with stable business id and input before running a precomputed eval.`);
+  }
+
+  const targetConfig = asRecord(target?.config);
+  const configuredDatasetId = targetConfig?.dataset_id;
+  if (configuredDatasetId !== undefined && configuredDatasetId !== datasetId) {
+    throw new Error(
+      `Precomputed target is configured for dataset_id=${String(configuredDatasetId)}, not eval dataset_id=${datasetId}. ` +
+      "Use outputs for the same dataset or update the target deliberately.",
+    );
+  }
+
+  const outputIds = new Set<string>();
+  for (const item of datasetItems.items) {
+    if (asRecord(item.precomputed_output)) {
+      const id = nonEmptyString(item.item_identifier);
+      if (id) outputIds.add(id);
+    }
+  }
+
+  if (target) {
+    const targetId = requireUuid(target.uuid ?? target.id, "target_id");
+    const { org_id, project_id } = preflightScope(ctx);
+    const outputResponse = await ctx.client.request<unknown>({
+      method: "GET",
+      path: `${AI}/orgs/${encodeURIComponent(org_id)}/projects/${encodeURIComponent(project_id)}/targets/${targetId}/outputs`,
+      params: { page: 0, limit: 1000 },
+      headerBasedScoping: true,
+      signal: ctx.signal,
+    });
+    const targetOutputs = listItems(outputResponse);
+    if (targetOutputs.total > targetOutputs.items.length) {
+      throw new Error(
+        `Precomputed target ${targetId} has ${targetOutputs.total} outputs, more than the MCP safety-check limit of ${targetOutputs.items.length}. ` +
+        "Use a smaller dataset or review the mapping in the UI before running.",
+      );
+    }
+    for (const output of targetOutputs.items) {
+      const id = nonEmptyString(output.item_identifier);
+      if (id && asRecord(output.output)) outputIds.add(id);
+    }
+  }
+
+  const missing = datasetItems.items
+    .map(item => nonEmptyString(item.item_identifier))
+    .filter((id): id is string => id !== undefined && !outputIds.has(id));
+  if (missing.length) {
+    throw new Error(
+      `Precomputed evaluation is missing outputs for dataset item IDs: ${missing.join(", ")}. ` +
+      "Provide outputs as { items: [{ item_identifier: '<dataset item id>', output: { ... } }] } before attaching or running.",
+    );
+  }
+}
+
+async function validateMetricSet(ctx: PreflightContext, metricSet: JsonRecord, requireEntries: boolean): Promise<void> {
+  const entries = asArray(metricSet.entries).flatMap(entry => {
+    const record = asRecord(entry);
+    return record ? [record] : [];
+  });
+  if (requireEntries && entries.length === 0) {
+    throw new Error("Metric set has no entries. Add at least one metric before attaching it to an evaluation.");
+  }
+
+  const metricSetJudge = selectMetricSetJudge(metricSet);
+  if (metricSetJudge) {
+    await validateMetricSetJudge(ctx, metricSetJudge);
+  }
+
+  for (const entry of entries) {
+    const metric = await getScopedResource(ctx, "eval_metric", "metric_id", entry.metric_id);
+    if (!JUDGE_BACKED_METRIC_TYPES.has(metric.type as string)) continue;
+    const entryConfig = asRecord(entry.config);
+    const metricConfig = asRecord(metric.config);
+    const judge = entryConfig?.llm_config ?? metricConfig?.llm_config;
+    if (judge !== undefined && judge !== null) {
+      await validateLlmConfig(ctx, `metric entry ${String(entry.metric_id)} judge config`, judge);
+    } else if (metricSetJudge) {
+      await validateMetricSetJudge(ctx, metricSetJudge);
+    } else {
+      throw new Error(
+        `LLM metric ${String(metric.name ?? entry.metric_id)} has no judge configuration. ` +
+        "Provide metric-set judge_llm_config as { connector_ref, model? }, or an entry config.llm_config.",
+      );
+    }
+  }
+}
+
+async function validateMetricSetWrite(ctx: PreflightContext, input: JsonRecord, requireExistingEntries: boolean): Promise<void> {
+  const body = requireBody(input, "Metric set write");
+  const metricSetJudge = selectMetricSetJudge(body);
+  if (metricSetJudge) {
+    await validateMetricSetJudge(ctx, metricSetJudge);
+  }
+  if (body.entries !== undefined) {
+    await validateMetricSet(ctx, body, false);
+  }
+  if (requireExistingEntries) {
+    const set = await getScopedResource(ctx, "eval_metric_set", "set_id", input.set_id);
+    await validateMetricSet(ctx, { ...set, ...body, entries: set.entries }, false);
+  }
+}
+
+async function validateMetricSetEntryWrite(ctx: PreflightContext, isUpdate: boolean): Promise<void> {
+  const body = requireBody(ctx.input, "Metric set entry write");
+  const set = await getScopedResource(ctx, "eval_metric_set", "set_id", ctx.input.set_id);
+  const metricId = body.metric_id ?? (isUpdate ? ctx.input.metric_id : undefined);
+  const metric = await getScopedResource(ctx, "eval_metric", "metric_id", metricId);
+  if (!JUDGE_BACKED_METRIC_TYPES.has(metric.type as string)) return;
+  const judge = asRecord(body.config)?.llm_config;
+  const metricSetJudge = selectMetricSetJudge(set);
+  if (judge !== undefined && judge !== null) {
+    await validateLlmConfig(ctx, "metric entry judge config", judge);
+  } else if (metricSetJudge) {
+    await validateMetricSetJudge(ctx, metricSetJudge);
+  } else {
+    throw new Error(
+      "Adding an LLM metric requires a metric-set judge_llm_config or entry config.llm_config with { connector_ref, model? }.",
+    );
+  }
+}
+
+async function validateMetricSetReplacement(ctx: PreflightContext): Promise<void> {
+  if (!Array.isArray(ctx.input.body)) {
+    throw new Error("replace_metrics requires body to be a JSON array of { metric_id, threshold, weight?, position? }.");
+  }
+  const set = await getScopedResource(ctx, "eval_metric_set", "set_id", ctx.input.set_id);
+  await validateMetricSet(ctx, { ...set, entries: ctx.input.body }, false);
+}
+
+async function validateManagedEvalComposition(ctx: PreflightContext, input: JsonRecord, requireAll: boolean): Promise<void> {
+  const body = requireBody(input, "Evaluation write");
+  const fields = ["dataset_id", "target_id", "metric_set_id"] as const;
+  const changesComposition = fields.some(field => field in body);
+  const existing = !requireAll && changesComposition
+    ? await getScopedResource(ctx, "evaluation", "eval_id", input.eval_id)
+    : undefined;
+  const composition = { ...existing, ...body };
+  if (composition.storage_type === "git") return;
+  if (requireAll) {
+    const missing = fields.filter(field => !nonEmptyString(composition[field]));
+    if (missing.length) {
+      throw new Error(
+        `Managed evaluation requires ${missing.join(", ")}. Ask the user to choose existing resources; do not create a partial evaluation.`,
+      );
+    }
+  }
+
+  const datasetId = nonEmptyString(composition.dataset_id);
+  const targetId = nonEmptyString(composition.target_id);
+  const metricSetId = nonEmptyString(composition.metric_set_id);
+  const dataset = datasetId ? await getScopedResource(ctx, "eval_dataset", "dataset_id", datasetId) : undefined;
+  const target = targetId ? await getScopedResource(ctx, "eval_target", "target_id", targetId) : undefined;
+  const metricSet = metricSetId ? await getScopedResource(ctx, "eval_metric_set", "set_id", metricSetId) : undefined;
+
+  if (target) await validateTarget(ctx, target);
+  if (metricSet) await validateMetricSet(ctx, metricSet, requireAll);
+  if (dataset && target?.type === "precomputed") await validatePrecomputedData(ctx, datasetId!, target);
+}
+
+async function validateEvalRun(ctx: PreflightContext): Promise<void> {
+  const evalId = requireUuid(ctx.input.eval_id, "eval_id");
+  const evalRecord = await getScopedResource(ctx, "evaluation", "eval_id", evalId);
+  if (evalRecord.storage_type === "git") return;
+  const body = asRecord(ctx.input.body) ?? {};
+  const runInputs = asRecord(body.run_inputs) ?? {};
+  const datasetId = runInputs.dataset_id === null ? undefined : nonEmptyString(runInputs.dataset_id) ?? nonEmptyString(evalRecord.dataset_id);
+  const targetId = runInputs.target_id === null ? undefined : nonEmptyString(runInputs.target_id) ?? nonEmptyString(evalRecord.target_id);
+  const metricSetId = runInputs.metric_set_id === null ? undefined : nonEmptyString(runInputs.metric_set_id) ?? nonEmptyString(evalRecord.metric_set_id);
+
+  if (!datasetId || !metricSetId) {
+    throw new Error("A managed evaluation run requires dataset_id and metric_set_id, configured on the evaluation or supplied in run_inputs.");
+  }
+  const dataset = await getScopedResource(ctx, "eval_dataset", "dataset_id", datasetId);
+  const metricSet = await getScopedResource(ctx, "eval_metric_set", "set_id", metricSetId);
+  const target = targetId ? await getScopedResource(ctx, "eval_target", "target_id", targetId) : undefined;
+  if (target) await validateTarget(ctx, target);
+  await validateMetricSet(ctx, metricSet, true);
+  if (target?.type === "precomputed" || !target) await validatePrecomputedData(ctx, datasetId, target);
+  if (runInputs.llm_config !== undefined) await validateLlmConfig(ctx, "run_inputs.llm_config", runInputs.llm_config);
+}
+
+async function validateTargetTest(ctx: PreflightContext): Promise<void> {
+  const target = await getScopedResource(ctx, "eval_target", "target_id", ctx.input.target_id);
+  await validateTarget(ctx, target);
+}
+
+async function validateRunReference(ctx: PreflightContext): Promise<void> {
+  await getScopedResource(ctx, "eval_run", "run_id", ctx.input.run_id);
+}
+
+async function validateSuiteReference(ctx: PreflightContext): Promise<void> {
+  await getScopedResource(ctx, "eval_suite", "suite_id", ctx.input.suite_id);
+}
+
+async function validateDatasetGeneration(ctx: PreflightContext): Promise<void> {
+  const body = requireBody(ctx.input, "Dataset generation");
+  const strategy = nonEmptyString(body.strategy);
+  if (!strategy || !["use_case", "rephrase", "adversarial", "complexity_ladder"].includes(strategy)) {
+    throw new Error("strategy must be one of use_case, rephrase, adversarial, complexity_ladder.");
+  }
+  if (!Number.isInteger(body.count) || (body.count as number) < 1 || (body.count as number) > 200) {
+    throw new Error("count must be an integer from 1 to 200.");
+  }
+  if (strategy === "rephrase") {
+    if (!Array.isArray(body.seed_inputs) || body.seed_inputs.length === 0 || body.seed_inputs.some(value => !nonEmptyString(value))) {
+      throw new Error("rephrase generation requires seed_inputs as a non-empty array of non-empty input strings.");
+    }
+  } else if (!nonEmptyString(body.description)) {
+    throw new Error(`${strategy} generation requires a non-empty description explaining the use case and desired test data.`);
+  }
+  await validateLlmConfig(ctx, "llm_config", body.llm_config);
+}
 
 // --- Body schemas (concise; full shapes in OpenAPI / harness_describe) ---
 
@@ -98,14 +619,15 @@ const updateDatasetItemSchema: BodySchema = {
 };
 
 const createEvalSchema: BodySchema = {
-  description: "Create evaluation (draft until dataset, target, and metric_set are set)",
+  description:
+    "Create evaluation. Managed evaluations (the default) require dataset_id, target_id, and metric_set_id; git-backed evaluations require storage_type='git' and git_source instead.",
   fields: [
     { name: "name", type: "string", required: true, description: "Eval name" },
     { name: "description", type: "string", required: false, description: "Description" },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
-    { name: "dataset_id", type: "string", required: false, description: "Dataset UUID (list with harness_list resource_type=eval_dataset)" },
-    { name: "target_id", type: "string", required: false, description: "Target UUID (list with harness_list resource_type=eval_target)" },
-    { name: "metric_set_id", type: "string", required: false, description: "Metric set UUID (list with harness_list resource_type=eval_metric_set)" },
+    { name: "dataset_id", type: "string", required: false, description: "Required for managed storage (default): dataset UUID (list with harness_list resource_type=eval_dataset)" },
+    { name: "target_id", type: "string", required: false, description: "Required for managed storage (default): target UUID (list with harness_list resource_type=eval_target)" },
+    { name: "metric_set_id", type: "string", required: false, description: "Required for managed storage (default): metric set UUID (list with harness_list resource_type=eval_metric_set)" },
     { name: "sampling_strategy", type: "string", required: false, description: "all | random | first_n (default all)" },
     { name: "sample_size", type: "number", required: false, description: "Sample size" },
     { name: "concurrency", type: "number", required: false, description: "Parallelism (default 5, min 1)" },
@@ -156,10 +678,39 @@ const triggerEvalRunSchema: BodySchema = {
   ],
 };
 
+const cloneEvalSchema: BodySchema = {
+  description: "Clone a managed evaluation. The clone shares the source evaluation's dataset, target, and metric set.",
+  fields: [
+    { name: "name", type: "string", required: false, description: "Name for the clone (default: Copy of the source name)" },
+    { name: "description", type: "string", required: false, description: "Description for the clone (default: source description)" },
+  ],
+};
+
+const datasetItemHistorySchema: BodySchema = {
+  description: "Fetch per-item score history from recent completed runs",
+  fields: [
+    {
+      name: "item_identifiers",
+      type: "array",
+      required: true,
+      description: "1–100 unique dataset business IDs (item_identifier values), not internal item UUIDs",
+      itemType: "string",
+    },
+    { name: "limit", type: "number", required: false, description: "Completed runs per item (1–20; default 5)" },
+  ],
+};
+
 
 const rescoreSchema: BodySchema = {
   description: "Rescore with a different metric set",
   fields: [{ name: "metric_set_id", type: "string", required: true, description: "Metric set UUID" }],
+};
+
+const recommendationsSchema: BodySchema = {
+  description: "Generate or refresh LLM-powered recommendations for failing items",
+  fields: [
+    { name: "force_refresh", type: "boolean", required: false, description: "Regenerate recommendations instead of using the cached analysis" },
+  ],
 };
 
 
@@ -382,10 +933,11 @@ const createTargetSchema: BodySchema = {
       required: false,
       description:
         "Target config (required when storage_type='managed', omit for git). " +
-        "For type='prompt': { llm_connector_ref: '<Harness LLM connector identifier>', " +
-        "prompt_version_id?: string, system_message?: string, temperature?: 0-2, max_tokens?: int, top_p?: 0-1, " +
+        "For type='prompt': { llm_connector_ref: '<existing Harness LLM connector identifier>', " +
+        "model?: string, prompt_source?: 'inline'|'registry', prompt_id?: string, prompt_version?: string, " +
+        "system_message?: string, user_message_template?: '...{{input}}...', temperature?: 0-2, max_tokens?: int, top_p?: 0-1, " +
         "frequency_penalty?: -2 to 2, presence_penalty?: -2 to 2 }. " +
-        "For type='agent': { endpoint: '<agent HTTP URL>' }. " +
+        "For type='agent': { endpoint_url: '<agent HTTP URL>', method: 'GET'|'POST'|'PUT', response_path: '<response JSON path>', request_template?: object }. " +
         "For type='precomputed': { dataset_id?: string, model_name?: string, model_version?: string }.",
     },
     { name: "description", type: "string", required: false, description: "Description" },
@@ -409,8 +961,8 @@ const updateTargetSchema: BodySchema = {
       type: "object",
       required: false,
       description:
-        "Target config. For type='prompt': { llm_connector_ref, prompt_version_id?, system_message?, temperature?, max_tokens?, top_p?, frequency_penalty?, presence_penalty? }. " +
-        "For type='agent': { endpoint }. For type='precomputed': { dataset_id?, model_name?, model_version? }.",
+        "Target config. For type='prompt': { llm_connector_ref, prompt_source?, prompt_id?, prompt_version?, system_message?, user_message_template?, model? }. " +
+        "For type='agent': { endpoint_url, method, response_path, request_template? }. For type='precomputed': { dataset_id?, model_name?, model_version? }.",
     },
     { name: "tags", type: "array", required: false, description: "Tags", itemType: "string" },
     { name: "is_active", type: "boolean", required: false, description: "Active" },
@@ -424,7 +976,7 @@ const updateTargetSchema: BodySchema = {
 const testTargetSchema: BodySchema = {
   description: "Test target invocation",
   fields: [
-    { name: "input", type: "string", required: true, description: "Sample input string" },
+    { name: "input", type: "object", required: true, description: "Sample input: string or JSON object matching a dataset item input" },
     { name: "item_identifier", type: "string", required: false, description: "Dataset item identifier (used by precomputed targets to look up output)" },
   ],
 };
@@ -438,6 +990,19 @@ const uploadOutputsSchema: BodySchema = {
       required: true,
       description: "List of { item_identifier: string, output: object, metadata?: object }",
       itemType: "object",
+    },
+  ],
+};
+
+const bulkDeleteDatasetItemsSchema: BodySchema = {
+  description: "Bulk-delete dataset items by internal UUID or stable business item ID",
+  fields: [
+    {
+      name: "item_ids",
+      type: "array",
+      required: true,
+      description: "One or more internal item UUIDs or item_identifier values. Unknown IDs are returned as not_found.",
+      itemType: "string",
     },
   ],
 };
@@ -743,7 +1308,8 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) =>
             `${base(input, config)}/dataset/${input.dataset_id as string}/generate`,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          preflight: validateDatasetGeneration,
           bodyBuilder: bodyFromInput,
           bodySchema: generateDatasetItemsSchema,
           responseExtractor: passthrough,
@@ -828,6 +1394,24 @@ export const aiEvalsToolset: ToolsetDefinition = {
           responseExtractor: aiEvalsArrayExtract,
           actionDescription: "Bulk upsert dataset items by business ID. Body: { items: CreateDatasetItemRequest[] }",
         },
+        bulk_delete: {
+          method: "POST",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/dataset/${input.dataset_id as string}/items/bulk-delete`,
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          preflight: async (ctx) => {
+            await getScopedResource(ctx, "eval_dataset", "dataset_id", ctx.input.dataset_id);
+            const ids = asArray(requireBody(ctx.input, "Dataset-item bulk delete").item_ids);
+            if (ids.length === 0 || ids.some(id => !nonEmptyString(id))) {
+              throw new Error("item_ids must be a non-empty array of dataset item UUIDs or stable item identifiers.");
+            }
+          },
+          bodyBuilder: bodyFromInput,
+          bodySchema: bulkDeleteDatasetItemsSchema,
+          responseExtractor: passthrough,
+          actionDescription: "Bulk-delete dataset items by internal UUID or stable business item ID.",
+        },
       },
     },
     // --- Evaluations ---
@@ -843,7 +1427,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
       diagnosticHint:
         "An eval requires three components: dataset_id, target_id, and metric_set_id. " +
         "Before creating an eval, list existing resources with harness_list for eval_dataset, eval_target, and eval_metric_set. " +
-        "Create any missing components first. The eval stays in 'draft' status until all three are set, then auto-activates. " +
+        "Create any missing components first. Managed evaluations cannot be created until all three are set. " +
         "When storage_type='git', omit dataset_id/target_id/metric_set_id (they live in the YAML at git_source.file_path).",
       relatedResources: [
         { resourceType: "eval_dataset", relationship: "uses", description: "Eval references a dataset via dataset_id" },
@@ -885,6 +1469,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/evals`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: async (ctx) => validateManagedEvalComposition(ctx, ctx.input, true),
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createEvalSchema,
           responseExtractor: passthrough,
@@ -895,6 +1480,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/evals/${input.eval_id as string}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          preflight: async (ctx) => validateManagedEvalComposition(ctx, ctx.input, false),
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateEvalSchema,
           responseExtractor: passthrough,
@@ -915,17 +1501,54 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) =>
             `${base(input, config)}/evals/${input.eval_id as string}/run`,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          preflight: validateEvalRun,
           bodyBuilder: bodyFromInput,
           bodySchema: triggerEvalRunSchema,
           responseExtractor: passthrough,
           actionDescription: "Trigger an eval run (pipeline or CLI). Pass optional overrides in body.",
         },
+        clone: {
+          method: "POST",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/evals/${input.eval_id as string}/clone`,
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: async (ctx) => {
+            const evaluation = await getScopedResource(ctx, "evaluation", "eval_id", ctx.input.eval_id);
+            if (evaluation.storage_type === "git") {
+              throw new Error("Git-backed evaluations cannot be cloned. Create their YAML definition in source control instead.");
+            }
+          },
+          bodyBuilder: bodyFromInput,
+          bodySchema: cloneEvalSchema,
+          responseExtractor: passthrough,
+          actionDescription: "Clone a managed evaluation. Git-backed evaluations must be exported and managed in Git instead.",
+        },
+        item_history: {
+          method: "POST",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/evals/${input.eval_id as string}/items/history`,
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          preflight: async (ctx) => {
+            await getScopedResource(ctx, "evaluation", "eval_id", ctx.input.eval_id);
+            const body = requireBody(ctx.input, "Dataset-item history");
+            const identifiers = asArray(body.item_identifiers);
+            if (identifiers.length === 0 || identifiers.length > 100 || identifiers.some(value => !nonEmptyString(value))) {
+              throw new Error("item_identifiers must contain 1–100 non-empty dataset business IDs.");
+            }
+          },
+          bodyBuilder: bodyFromInput,
+          bodySchema: datasetItemHistorySchema,
+          responseExtractor: passthrough,
+          actionDescription: "Get score history for one or more stable dataset item identifiers.",
+        },
         import_yaml: {
           method: "POST",
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/evals/import-yaml`,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: bodyFromInput,
           bodySchema: importEvalYamlSchema,
           responseExtractor: passthrough,
@@ -997,11 +1620,29 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/runs/${input.run_id as string}/rescore`,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          preflight: async (ctx) => {
+            await validateRunReference(ctx);
+            const body = requireBody(ctx.input, "Rescore");
+            const metricSet = await getScopedResource(ctx, "eval_metric_set", "set_id", body.metric_set_id);
+            await validateMetricSet(ctx, metricSet, true);
+          },
           bodyBuilder: bodyFromInput,
           bodySchema: rescoreSchema,
           responseExtractor: passthrough,
           actionDescription: "Create a new run rescored with a different metric set",
+        },
+        recommendations: {
+          method: "POST",
+          path: "",
+          pathBuilder: (input, config) =>
+            `${base(input, config)}/runs/${input.run_id as string}/recommendations`,
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          preflight: validateRunReference,
+          bodyBuilder: bodyFromInput,
+          bodySchema: recommendationsSchema,
+          responseExtractor: passthrough,
+          actionDescription: "Generate LLM-powered recommendations for a completed run's failing items.",
         },
       },
     },
@@ -1187,6 +1828,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/metric-sets`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: async (ctx) => validateMetricSetWrite(ctx, ctx.input, false),
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createMetricSetSchema,
           responseExtractor: passthrough,
@@ -1197,6 +1839,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/metric-sets/${input.set_id as string}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          preflight: async (ctx) => validateMetricSetWrite(ctx, ctx.input, true),
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateMetricSetSchema,
           responseExtractor: passthrough,
@@ -1217,7 +1860,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) =>
             `${base(input, config)}/metric-sets/${input.set_id as string}/calibrate`,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: bodyFromInput,
           bodySchema: calibrateSchema,
           responseExtractor: passthrough,
@@ -1229,6 +1872,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/metric-sets/${input.set_id as string}/metrics`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          preflight: validateMetricSetReplacement,
           bodyBuilder: (input) => {
             const b = input.body;
             if (Array.isArray(b)) return b;
@@ -1277,6 +1921,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/metric-sets/${input.set_id as string}/metrics`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: async (ctx) => validateMetricSetEntryWrite(ctx, false),
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: addMetricSetEntrySchema,
           responseExtractor: passthrough,
@@ -1288,6 +1933,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/metric-sets/${input.set_id as string}/metrics/${input.metric_id as string}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          preflight: async (ctx) => validateMetricSetEntryWrite(ctx, true),
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateMetricSetEntrySchema,
           responseExtractor: passthrough,
@@ -1376,7 +2022,8 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) =>
             `${base(input, config)}/suites/${input.suite_id as string}/run`,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          preflight: validateSuiteReference,
           bodyBuilder: bodyFromInput,
           bodySchema: triggerSuiteRunSchema,
           responseExtractor: passthrough,
@@ -1397,7 +2044,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           method: "POST",
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/suites/import-yaml`,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
           bodyBuilder: bodyFromInput,
           bodySchema: importSuiteYamlSchema,
           responseExtractor: passthrough,
@@ -1541,6 +2188,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/targets`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: async (ctx) => validateTargetWrite(ctx, false),
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: createTargetSchema,
           responseExtractor: passthrough,
@@ -1551,6 +2199,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/targets/${input.target_id as string}`,
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          preflight: async (ctx) => validateTargetWrite(ctx, true),
           bodyBuilder: (input) => input.body ?? {},
           bodySchema: updateTargetSchema,
           responseExtractor: passthrough,
@@ -1571,7 +2220,8 @@ export const aiEvalsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) =>
             `${base(input, config)}/targets/${input.target_id as string}/test`,
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          preflight: validateTargetTest,
           bodyBuilder: bodyFromInput,
           bodySchema: testTargetSchema,
           responseExtractor: passthrough,
@@ -1583,6 +2233,7 @@ export const aiEvalsToolset: ToolsetDefinition = {
           pathBuilder: (input, config) =>
             `${base(input, config)}/targets/${input.target_id as string}/outputs`,
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          preflight: validateOutputUpload,
           bodyBuilder: bodyFromInput,
           bodySchema: uploadOutputsSchema,
           responseExtractor: passthrough,
