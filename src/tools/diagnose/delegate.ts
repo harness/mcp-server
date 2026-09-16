@@ -5,7 +5,7 @@ import { asString, isRecord } from "../../utils/type-guards.js";
 
 const log = createLogger("diagnose:delegate");
 
-/** Matches the actual listDelegates API response schema (resource[] items). */
+/** Matches the delegate list response schema (resource[] items). */
 interface DelegateInfo {
   type?: string;
   name?: string;
@@ -91,12 +91,24 @@ export const delegateHandler: DiagnoseHandler = {
     await sendProgress(extra, 0, 1, "Fetching delegates...");
     log.info("Listing delegates", { targetId: targetId ?? "all" });
 
-    // Always pass all=true to get delegates across all org/project scopes
-    const raw = await registry.dispatch(client, "delegate", "list", { ...input, all: "true" }, signal);
+    // Named lookup is account-wide so a project-scoped caller still finds the delegate.
+    // Otherwise honor explicit scope; with none, all=true and no org/project is account-wide.
+    const listInput: Record<string, unknown> = { all: "true" };
+    if (!targetId) {
+      const resourceScope = asString(input.resource_scope);
+      const orgId = asString(input.org_id);
+      const projectId = asString(input.project_id);
+      if (resourceScope) listInput.resource_scope = resourceScope;
+      if (orgId) listInput.org_id = orgId;
+      if (projectId) listInput.project_id = projectId;
+    }
+    const raw = await registry.dispatch(client, "delegate", "list", listInput, signal);
 
     let delegates: DelegateInfo[];
     if (Array.isArray(raw)) {
       delegates = raw as DelegateInfo[];
+    } else if (isRecord(raw) && Array.isArray(raw.items)) {
+      delegates = raw.items as DelegateInfo[];
     } else {
       delegates = [];
       log.warn("Unexpected delegate list response shape", {

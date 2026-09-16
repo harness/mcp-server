@@ -92,7 +92,7 @@ describe("file_content scope query params", () => {
 
     expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
       method: "GET",
-      path: "/code/api/v1/repos/my-repo/blame/src%2Fmain.go",
+      path: "/code/api/v1/repos/my-repo/blame/src/main.go",
       params: expect.objectContaining({
         orgIdentifier: "AI_Devops",
         projectIdentifier: "Sanity",
@@ -123,6 +123,27 @@ describe("file_content scope query params", () => {
       params: expect.objectContaining({
         orgIdentifier: "explicit-org",
         projectIdentifier: "explicit-project",
+      }),
+    }));
+  });
+
+  it("forwards org_id and project_id on list paths", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue({ files: ["README.md"], directories: [] });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "file_content", "list", {
+      repo_id: "my-repo",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/repos/my-repo/paths",
+      params: expect.objectContaining({
+        orgIdentifier: "AI_Devops",
+        projectIdentifier: "Sanity",
       }),
     }));
   });

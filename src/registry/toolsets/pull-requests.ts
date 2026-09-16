@@ -14,6 +14,13 @@ const REPO_PR_PARAMS: ParamsSchema = {
   ],
 };
 
+const PR_COMMENT_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_PR_PARAMS.fields,
+    { name: "comment_id", required: true, description: "Pull request activity/comment ID" },
+  ],
+};
+
 function bodyRecord(input: Record<string, unknown>): Record<string, unknown> | undefined {
   const body = input.body;
   return body && typeof body === "object" && !Array.isArray(body)
@@ -32,6 +39,15 @@ function requiredPathPart(input: Record<string, unknown>, field: string): string
     throw new Error(`Missing required field "${field}" for pull_request.`);
   }
   return encodeURIComponent(String(value));
+}
+
+function toFiniteNumber(value: unknown): number | undefined {
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string" && value !== "") {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
 }
 
 const PR_METADATA_FIELDS = ["title", "description"];
@@ -114,7 +130,17 @@ function rejectMixedStateUpdate(input: Record<string, unknown>): void {
 
 function pullRequestUpdateBody(input: Record<string, unknown>): unknown {
   const state = pullRequestState(input);
-  return state ? { state } : input.body;
+  if (!state) return input.body;
+  const body = bodyRecord(input);
+  const isDraft = body?.is_draft;
+  if (isDraft === undefined) {
+    throw new Error(
+      "is_draft is required when changing PR state. " +
+      "The backend resets draft status to false when is_draft is omitted. " +
+      "First GET the pull request to read its current is_draft value, then include it in the state change.",
+    );
+  }
+  return { state, is_draft: isDraft };
 }
 
 export const pullRequestsToolset: ToolsetDefinition = {
@@ -144,11 +170,14 @@ export const pullRequestsToolset: ToolsetDefinition = {
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
+          pageOneIndexed: true,
           queryParams: {
             state: "state",
             query: "query",
+            search_term: "query",
             page: "page",
             limit: "limit",
+            size: "limit",
           },
           responseExtractor: passthrough,
           description: "List pull requests for a repository",
@@ -206,7 +235,8 @@ export const pullRequestsToolset: ToolsetDefinition = {
             fields: [
               { name: "title", type: "string", required: false, description: "Updated PR title" },
               { name: "description", type: "string", required: false, description: "Updated PR description" },
-              { name: "state", type: "string", required: false, description: "PR state: open or closed" },
+              { name: "state", type: "string", required: false, description: "PR state: open or closed. Requires is_draft when provided." },
+              { name: "is_draft", type: "boolean", required: false, description: "Required when changing state. GET the PR first and pass its current is_draft value to prevent silent reset." },
             ],
           },
         },
@@ -221,14 +251,27 @@ export const pullRequestsToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
-          bodyBuilder: () => ({ state: "closed" }),
+          bodyBuilder: (input) => {
+            const body = bodyRecord(input);
+            const isDraft = body?.is_draft;
+            if (isDraft === undefined) {
+              throw new Error(
+                "is_draft is required when closing a PR. " +
+                "The backend resets draft status to false when is_draft is omitted. " +
+                "First GET the pull request to read its current is_draft value, then include it here.",
+              );
+            }
+            return { state: "closed", is_draft: isDraft };
+          },
           responseExtractor: passthrough,
           paramsSchema: REPO_PR_PARAMS,
           actionDescription:
-            "Close a pull request by setting its state to closed.",
+            "Close a pull request. Requires is_draft in the body to prevent silent draft-status reset. GET the PR first to read its current is_draft value.",
           bodySchema: {
             description: "Close pull request state transition",
-            fields: [],
+            fields: [
+              { name: "is_draft", type: "boolean", required: true, description: "Current draft status of the PR. GET the PR first and pass its is_draft value to prevent silent reset." },
+            ],
           },
         },
         merge: {
@@ -285,7 +328,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           paramsSchema: REPO_PR_PARAMS,
         },
         create: {
-          method: "POST",
+          method: "PUT",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/reviewers",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: {
@@ -337,9 +380,9 @@ export const pullRequestsToolset: ToolsetDefinition = {
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
-      identifierFields: ["repo_id", "pr_number"],
+      identifierFields: ["repo_id", "pr_number", "comment_id"],
       diagnosticHint:
-        "The Harness Code API does not support GET on the comments endpoint. To list or read comments, use harness_list with resource_type='pr_activity' and filters: {kind: 'comment'} or {type: 'comment'}.",
+        "The pr_comment resource is for comment writes. To list or read comments, use harness_list with resource_type='pr_activity' and filters: {type: ['comment', 'code-comment']}.",
       operations: {
         create: {
           method: "POST",
@@ -351,15 +394,17 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           bodyBuilder: (input) => {
             const b = { ...(input.body as Record<string, unknown>) };
-            if (typeof b.line_new === "number") {
-              b.line_start = b.line_new;
-              b.line_end = b.line_new;
+            const lineNew = toFiniteNumber(b.line_new);
+            const lineOld = toFiniteNumber(b.line_old);
+            if (lineNew !== undefined) {
+              b.line_start = lineNew;
+              b.line_end = lineNew;
               b.line_start_new = true;
               b.line_end_new = true;
               delete b.line_new;
-            } else if (typeof b.line_old === "number") {
-              b.line_start = b.line_old;
-              b.line_end = b.line_old;
+            } else if (lineOld !== undefined) {
+              b.line_start = lineOld;
+              b.line_end = lineOld;
               b.line_start_new = false;
               b.line_end_new = false;
               delete b.line_old;
@@ -368,7 +413,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description:
-            "Add a comment to a pull request. Body fields: text (required). For inline code comments, also include: path, line_new OR line_old (line number on the new or old side of the diff), source_commit_sha, target_commit_sha.",
+            "Add a comment to a pull request. Body fields: text (required). For inline PR comments, also include: path, line_new OR line_old (line number on the new or old side of the diff), source_commit_sha, target_commit_sha.",
           paramsSchema: REPO_PR_PARAMS,
           bodySchema: {
             description: "PR comment content",
@@ -395,7 +440,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description:
             "Update an existing pull request comment. Body fields: text (required).",
-          paramsSchema: REPO_PR_PARAMS,
+          paramsSchema: PR_COMMENT_PARAMS,
           bodySchema: {
             description: "Updated comment content",
             fields: [
@@ -414,7 +459,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description: "Delete a pull request comment",
-          paramsSchema: REPO_PR_PARAMS,
+          paramsSchema: PR_COMMENT_PARAMS,
         },
       },
     },
@@ -436,6 +481,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
+          pageOneIndexed: true,
           responseExtractor: passthrough,
           description: "List status checks for a pull request",
           paramsSchema: REPO_PR_PARAMS,
@@ -446,7 +492,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_activity",
       displayName: "PR Activity",
       description:
-        "Activity timeline on a pull request (comments, reviews, status changes). This is the canonical way to READ comments — use kind=comment or type=comment to filter. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
+        "Activity timeline on a pull request (comments, reviews, status changes). Omit filters to return the full PR activity timeline. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
@@ -458,7 +504,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         { name: "before", description: "Only entries created before this timestamp (unix millis)", type: "number" },
       ],
       diagnosticHint:
-        "To list only comments, use filters: {kind: 'comment'}. For code review comments, use {type: 'code-comment'}. For all discussion, use {kind: 'comment'} which includes both general and code comments.",
+        "To list all PR comments, use filters: {type: ['comment', 'code-comment']}. For general comments only, use {type: 'comment'} or {kind: 'comment'}. For inline PR comments, use {type: 'code-comment'} or {kind: 'change-comment'}.",
       operations: {
         list: {
           method: "GET",
@@ -474,9 +520,10 @@ export const pullRequestsToolset: ToolsetDefinition = {
             after: "after",
             before: "before",
             limit: "limit",
+            size: "limit",
           },
           responseExtractor: passthrough,
-          description: "List activities for a pull request. Use kind=comment to get only comments. This is the only way to read PR comments (the /comments endpoint is POST-only).",
+          description: "List activities for a pull request. Omit filters to return the full PR activity timeline.",
           paramsSchema: REPO_PR_PARAMS,
         },
       },

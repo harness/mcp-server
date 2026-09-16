@@ -1,5 +1,50 @@
 # Harness MCP Server — Task Tracking
 
+## Keep slashes in Code branch, tag, and diff paths (2026-09-16)
+
+- [x] Encode slash-containing branch/tag/diff values as path segments, not `%2F`.
+- [x] Share one path builder with `file_content` (empty path only for repo-root content).
+- [x] Alias `git_ref`/`branch` onto `branch_name`; populate `branch_name` from Code files URLs.
+- [x] Tests for get/delete/diff dispatch, URL parsing, typecheck.
+- [x] Diff-range regressions for slash-containing refs on both sides (`feature/a..feature/b`, `feature/a...feature/b`).
+- [x] Do not copy files-URL file-path `resource_id` onto an overridden `resource_type` (branch get/delete).
+- [x] Stamp `branch_name` from `/files/{ref}` only, not from `gitRef` query.
+
+### Plan
+
+- Reuse `file_content` per-segment encoding for branch, tag, and diff paths.
+- Keep files URLs typed as `file_content`; still stamp `branch_name` so explicit `resource_type=branch` works.
+
+## file_content read-path bugs and Code API drift (2026-09-15)
+
+- [x] Encode nested file paths as slash-separated segments; allow empty path for repo root; strip leading slashes.
+- [x] Expose Code GET /paths as `file_content` list; add flatten_directories; describe metadata.
+- [x] Parse Code UI `.../repos/{repo}/files/{ref}/~/{path}` URLs; alias `branch` → `git_ref`.
+- [x] Stop mapping `resource_id` onto an explicit empty `path`.
+- [x] Tests, typecheck, docs:generate.
+
+## PR Comment Read Guidance and PR Tool Drift (2026-09-14)
+
+- [x] Fix pull request registry drift against the public resource contract.
+- [x] Update agent-facing guidance so PR comments are fetched through `pr_activity`, not `pr_comment`.
+- [x] Align README and PR comment test docs with the implemented read/write split.
+- [x] Add focused regression coverage for PR comment/reviewer metadata.
+- [x] Run focused verification and lint checks for touched files.
+
+### Plan
+
+- Keep comment reads on `pr_activity`; `pr_comment` is only for comment write operations.
+- Keep `pr_comment` for comment writes, and document `comment_id` where update/delete require it.
+- Align `pr_reviewer.create` with the configured API method.
+- Avoid public tool-name/schema churn beyond corrected resource metadata; do not broaden activity type metadata.
+
+### Review
+
+- Server instructions, code-review prompt, README, and PR testing docs now direct comment reads through `pr_activity` with `type=["comment","code-comment"]`.
+- `pr_comment` remains the write surface and now advertises `comment_id` for update/delete; generic `resource_id` maps to that field.
+- `pr_reviewer.create` now uses the configured API method.
+- Verification passed: focused PR registry/tool-handler tests, `pnpm typecheck`, `pnpm build && pnpm docs:generate && pnpm docs:check`, lints, and `git diff --check`.
+
 ## HarnessID OAuth for self-hosted HTTP MCP (2026-09-07)
 
 - [x] Clone current `harness/mcp-server` main and inspect HTTP authentication/session paths.

@@ -552,6 +552,19 @@ describe("applyUrlDefaults", () => {
     expect(result.project_id).toBe("myProject");
   });
 
+  it.each(["fme_metric", "fme_event_type"])(
+    "still merges URL org/project for Harness-native-only %s even with a stray workspace_id",
+    (resourceType) => {
+      const result = applyUrlDefaults(
+        { resource_type: resourceType, workspace_id: "stale-ws" } as Record<string, unknown>,
+        "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/services",
+      );
+
+      expect(result.org_id).toBe("myOrg");
+      expect(result.project_id).toBe("myProject");
+    },
+  );
+
   it("falls back to the URL-parsed resource type when the caller declares none", () => {
     const result = applyUrlDefaults(
       { workspace_id: "ws1" } as Record<string, unknown>,
@@ -649,5 +662,99 @@ describe("applyUrlDefaults", () => {
     );
     expect(args).toEqual({ resource_type: "pipeline" }); // unchanged
     expect(result.org_id).toBe("myOrg");
+  });
+});
+
+describe("Harness Code file URLs", () => {
+  const fileUrl =
+    "https://app.harness.io/ng/account/acc/module/code/orgs/my-org/projects/my-project/repos/my-repo/files/main/~/src/index.ts";
+  const rootUrl =
+    "https://app.harness.io/ng/account/acc/module/code/orgs/my-org/projects/my-project/repos/my-repo/files/develop";
+
+  it("extracts file_content, git_ref, and nested path from /files/{ref}/~/{path}", () => {
+    const result = parseHarnessUrl(fileUrl);
+    expect(result.resource_type).toBe("file_content");
+    expect(result.repo_id).toBe("my-repo");
+    expect(result.git_ref).toBe("main");
+    expect(result.path).toBe("src/index.ts");
+    expect(result.resource_id).toBe("src/index.ts");
+    expect(result.org_id).toBe("my-org");
+    expect(result.project_id).toBe("my-project");
+  });
+
+  it("treats /files/{ref} without ~/ as file_content root listing", () => {
+    const result = parseHarnessUrl(rootUrl);
+    expect(result.resource_type).toBe("file_content");
+    expect(result.repo_id).toBe("my-repo");
+    expect(result.git_ref).toBe("develop");
+    expect(result.branch_name).toBe("develop");
+    expect(result.path).toBe("");
+    expect(result.resource_id).toBeUndefined();
+  });
+
+  it("applyUrlDefaults merges Code file URL fields for harness_get", () => {
+    const result = applyUrlDefaults({}, fileUrl);
+    expect(result.resource_type).toBe("file_content");
+    expect(result.repo_id).toBe("my-repo");
+    expect(result.git_ref).toBe("main");
+    expect(result.path).toBe("src/index.ts");
+  });
+
+  it("does not overwrite an explicit resource_type with the file URL type", () => {
+    const result = applyUrlDefaults({ resource_type: "branch" }, rootUrl);
+    expect(result.resource_type).toBe("branch");
+    expect(result.repo_id).toBe("my-repo");
+    expect(result.git_ref).toBe("develop");
+    expect(result.branch_name).toBe("develop");
+    expect(result.resource_id).toBeUndefined();
+  });
+
+  it("does not copy a files-URL file path onto resource_id when resource_type is overridden", () => {
+    const result = applyUrlDefaults({ resource_type: "branch" }, fileUrl);
+    expect(result.resource_type).toBe("branch");
+    expect(result.repo_id).toBe("my-repo");
+    expect(result.git_ref).toBe("main");
+    expect(result.branch_name).toBe("main");
+    expect(result.path).toBe("src/index.ts");
+    expect(result.resource_id).toBeUndefined();
+  });
+
+  it("still copies the file path onto resource_id for file_content", () => {
+    const result = applyUrlDefaults({ resource_type: "file_content" }, fileUrl);
+    expect(result.resource_type).toBe("file_content");
+    expect(result.resource_id).toBe("src/index.ts");
+    expect(result.path).toBe("src/index.ts");
+    expect(result.git_ref).toBe("main");
+  });
+
+  it("reads git_ref from gitRef query when the path has no /files/{ref}", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r?gitRef=feature",
+    );
+    expect(result.repo_id).toBe("r");
+    expect(result.git_ref).toBe("feature");
+    expect(result.branch_name).toBeUndefined();
+    expect(result.resource_type).toBe("repository");
+  });
+
+  it("joins slash-containing branch names between /files/ and /~/", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r/files/feature/foo/~/src/index.ts",
+    );
+    expect(result.resource_type).toBe("file_content");
+    expect(result.git_ref).toBe("feature/foo");
+    expect(result.branch_name).toBe("feature/foo");
+    expect(result.path).toBe("src/index.ts");
+  });
+
+  it("joins slash-containing branch names on /files/{ref} without ~/", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r/files/feature/foo",
+    );
+    expect(result.resource_type).toBe("file_content");
+    expect(result.git_ref).toBe("feature/foo");
+    expect(result.branch_name).toBe("feature/foo");
+    expect(result.path).toBe("");
+    expect(result.resource_id).toBeUndefined();
   });
 });

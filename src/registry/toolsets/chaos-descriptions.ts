@@ -323,7 +323,7 @@ export const descGetExperimentRun = `Get the full timeline of a chaos experiment
 Returns the execution pipeline: individual fault/probe/action nodes with status, timing, chaos data, and error details.
 Also returns experiment name, infraID, resiliency score, run phase, manifest version, and template details.
 Pass experiment_id via resource_id. Pass run_id or notify_id via params (not resource_id) to identify the specific run.
-To start a new run, use chaos_experiment execute action: run instead. By default, chaos_experiment.run accepts the human-readable identity slug as experiment_id (isIdentity=true). Pass is_identity=false in params if you have the internal UUID (experimentID, e.g. "ef9199b6-0248-4c0b-9d63-9176bf2b7123"). See descIsIdentity for details.`;
+To start a new run, use chaos_experiment execute action: run instead. is_identity is auto-detected from the shape of experiment_id when omitted (UUID vs. slug) — pass is_identity explicitly in params to override. See descIsIdentity for details.`;
 
 export const descListProbes = `List chaos probes with optional filtering.
 Supports filtering by name, tags, date range, probe IDs, infrastructure type, probe entity type, and sorting.
@@ -496,7 +496,7 @@ export const descDeleteExperimentTemplate = `Delete a chaos experiment template 
 Requires hub_identity to identify which chaos hub owns the template.
 Returns a success confirmation on completion.`;
 
-export const descListExperimentVariables = `List variables for a chaos experiment (experiment-level and task-level). By default treats experiment_id as a human-readable identity slug (e.g. "exp-without-runtime"); pass is_identity=false to use the internal UUID instead.`;
+export const descListExperimentVariables = `List variables for a chaos experiment (experiment-level and task-level). is_identity is auto-detected from the shape of experiment_id when omitted: a UUID (e.g. "ef9199b6-0248-4c0b-9d63-9176bf2b7123") defaults to is_identity=false; a human-readable slug (e.g. "exp-without-runtime") defaults to is_identity=true. Pass is_identity explicitly to override.`;
 
 export const descListLinuxInfra = `List chaos Linux infrastructures (load runners)`;
 
@@ -1600,7 +1600,9 @@ export const descInputSetSpec = `JSON string containing the input set variable o
 
 export const descInputSetId = `Input set ID. Use harness_list with resource_type=chaos_input_set to find input set IDs.`;
 
-export const descIsIdentity = `Controls how experiment_id is interpreted by the backend. Pass is_identity=true to use the human-readable identity slug (e.g. "exp-without-runtime" from the UI URL). Pass is_identity=false to use the internal UUID (e.g. "ef9199b6-0248-4c0b-9d63-9176bf2b7123"). Default varies by resource: chaos_input_set operations default to false (UUID); chaos_experiment_variable.list and chaos_experiment.run default to true (slug). Only applies where the backend honors the toggle: chaos_experiment.run, chaos_experiment_variable.list, and chaos_input_set.{list,get,create,update,delete}. If is_identity=true fails with "no documents in result", the experiment may predate the identity field — use harness_list(resource_type=chaos_experiment) to find the UUID and retry with is_identity=false.`;
+export const descIsIdentity = `Controls how experiment_id is interpreted by the backend. Pass is_identity=true to use the human-readable identity slug (e.g. "exp-without-runtime" from the UI URL). Pass is_identity=false to use the internal UUID (e.g. "ef9199b6-0248-4c0b-9d63-9176bf2b7123"). Only applies where the backend honors the toggle: chaos_experiment.run, chaos_experiment_variable.list, and chaos_input_set.{list,get,create,update,delete}.
+Auto-detected when omitted for chaos_experiment.run and chaos_experiment_variable.list: if experiment_id looks like a UUID, is_identity defaults to false; otherwise it defaults to true (slug). chaos_input_set operations always default to false (UUID) regardless of shape. Pass is_identity explicitly to override the auto-detected/default value.
+If the call still fails with "no documents in result", the experiment may predate the identity field, or the ID's shape may not match what was auto-detected — retry the same call with the opposite is_identity value, or use harness_list(resource_type=chaos_experiment) to find the correct UUID.`;
 
 // ── Chaos Component Variables (unified v3 endpoint) ─────────────────
 

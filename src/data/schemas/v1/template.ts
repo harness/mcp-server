@@ -217,288 +217,7 @@ const schema: Record<string, any> = {
       }
     },
     "template_v1": {
-      "pipeline": {
-        "type": "object",
-        "title": "pipeline",
-        "additionalProperties": false,
-        "properties": {
-          "id": {
-            "type": "string",
-            "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
-          },
-          "name": {
-            "type": "string",
-            "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
-          },
-          "description": {
-            "type": "string",
-            "description": "Description of the pipeline."
-          },
-          "clone": {
-            "$ref": "#/definitions/template_v1/Clone"
-          },
-          "inputs": {
-            "$ref": "#/definitions/template_v1/common/NGVariableV1Wrapper"
-          },
-          "timeout": {
-            "type": "string",
-            "description": "Defines pipeline timeout",
-            "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
-          },
-          "allow-stage-executions": {
-            "type": "boolean",
-            "description": "Allows stage executions."
-          },
-          "fixed-inputs-on-rerun": {
-            "type": "boolean",
-            "description": "Fixed inputs on rerun."
-          },
-          "delegate": {
-            "$ref": "#/definitions/template_v1/common/Delegate"
-          },
-          "env": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            },
-            "description": "Provides the default environment variables."
-          },
-          "repo": {
-            "description": "Configures the default repository.",
-            "$ref": "#/definitions/template_v1/Repository"
-          },
-          "barriers": {
-            "type": "array",
-            "description": "Barriers provides optional pipeline barriers.",
-            "items": {
-              "type": "string"
-            }
-          },
-          "if": {
-            "type": "string",
-            "description": "If provides conditional pipeline execution logic. If the condition resolves to false, the pipeline is skipped."
-          },
-          "on": {
-            "$ref": "#/definitions/template_v1/On"
-          },
-          "notifications": {
-            "type": "array",
-            "description": "Notifications provides optional pipeline notifications.",
-            "items": {
-              "$ref": "#/definitions/template_v1/NotificationRules"
-            }
-          },
-          "tags": {
-            "type": "object",
-            "description": "Tags for the pipeline.",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "template": {
-            "description": "Pipeline template reference.",
-            "$ref": "#/definitions/template_v1/common/TemplateRef"
-          },
-          "stages": {
-            "type": "array",
-            "description": "Pipeline stages - can contain stages, groups, or parallel executions.",
-            "items": {
-              "$ref": "#/definitions/template_v1/stages/unified/StageItems"
-            },
-            "maxItems": 256,
-            "minItems": 1
-          }
-        },
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
-      "Clone": {
-        "title": "Clone",
-        "type": "object",
-        "additionalProperties": false,
-        "description": "Clone defines the default clone behavior.",
-        "properties": {
-          "depth": {
-            "description": "Depth defines the clone depth.",
-            "oneOf": [
-              {
-                "type": "integer",
-                "format": "int32"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "enabled": {
-            "description": "Enables or disables the default clone step.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "insecure": {
-            "description": "Insecure disables ssl verification.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "lfs": {
-            "description": "Lfs enables cloning lfs files.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "strategy": {
-            "description": "Strategy configures the PR clone strategy.",
-            "type": "string",
-            "enum": [
-              "source-branch",
-              "merge"
-            ]
-          },
-          "submodules": {
-            "description": "Submodules enables cloning all submodules. Accepts boolean, string (true/false/recursive), or expression.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "string",
-                "enum": [
-                  "true",
-                  "false",
-                  "recursive"
-                ]
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "tags": {
-            "description": "Tags enables cloning all tags.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "trace": {
-            "description": "Trace enables trace logging.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "ref": {
-            "description": "Reference defines the clone ref.",
-            "oneOf": [
-              {
-                "$ref": "#/definitions/template_v1/Reference"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "repo": {
-            "description": "Repo defines the repository name or URL.",
-            "type": "string",
-            "minLength": 1
-          },
-          "connector": {
-            "description": "Connector defines the connector reference.",
-            "type": "string",
-            "minLength": 1
-          },
-          "clonedir": {
-            "description": "Clonedir defines the clone directory path.",
-            "type": "string",
-            "minLength": 1
-          },
-          "resources": {
-            "description": "Resources defines container resource limits.",
-            "$ref": "#/definitions/template_v1/Resource"
-          },
-          "user": {
-            "description": "User ID to run the clone container as. Supports expressions.",
-            "oneOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "string"
-              }
-            ]
-          },
-          "sparse-checkout": {
-            "description": "SparseCheckout defines paths to limit the clone to specific directories.",
-            "oneOf": [
-              {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "pre-fetch": {
-            "description": "PreFetch defines a command to run before the clone operation.",
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          },
-          "persist-credentials": {
-            "description": "PersistCredentials configures git credentials to persist after clone so subsequent git operations in the workspace can authenticate.",
-            "oneOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "$ref": "#/definitions/template_v1/common/Expression"
-              }
-            ]
-          }
-        },
-        "$schema": "http://json-schema.org/draft-07/schema#"
-      },
       "common": {
-        "Expression": {
-          "title": "Expression",
-          "description": "String value matching a Harness pipeline expression or template placeholder (e.g., <+something> or ${{ ... }}).",
-          "type": "string",
-          "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
-          "$schema": "http://json-schema.org/draft-07/schema#"
-        },
         "NGVariableV1Wrapper": {
           "title": "NGVariableV1Wrapper",
           "description": "Wrapper for stage/pipeline-level input variables. Keys are variable names, values define variable configuration.",
@@ -1026,6 +745,13 @@ const schema: Record<string, any> = {
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
+        "Expression": {
+          "title": "Expression",
+          "description": "String value matching a Harness pipeline expression or template placeholder (e.g., <+something> or ${{ ... }}).",
+          "type": "string",
+          "pattern": "(\\$\\{\\{.+\\}\\}|<\\+.+>.*)",
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
         "Delegate": {
           "title": "Delegate",
           "description": "Delegate defines the delegate matching logic. Supports expressions.",
@@ -1062,6 +788,10 @@ const schema: Record<string, any> = {
             "gitBranch": {
               "description": "Git branch for remote template resolution.",
               "type": "string"
+            },
+            "container": {
+              "description": "Caller-side container overrides merged into the resolved template step. Applied for any V1 step template whose spec contains run, run-test, or background (including git-clone and build-and-push templates that wrap those steps).\n",
+              "$ref": "#/definitions/template_v1/common/TemplateContainerOverlay"
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -1078,6 +808,57 @@ const schema: Record<string, any> = {
             }
           },
           "additionalProperties": true,
+          "$schema": "http://json-schema.org/draft-07/schema#"
+        },
+        "TemplateContainerOverlay": {
+          "title": "TemplateContainerOverlay",
+          "description": "Caller-side container overrides on a V1 template step (`template.container`). Mirrors TemplateMergeServiceHelper.CONTAINER_PROPAGATION_ALLOWLIST. Applied to resolved run, run-test, and background containers (including nested group/parallel). Image, connector, and entrypoint stay on the template and are not overridable here.\n",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "user": {
+              "description": "User ID to run as. Supports expressions.",
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            },
+            "group": {
+              "description": "Group to run as.",
+              "type": "string"
+            },
+            "cpu": {
+              "description": "CPU limit. Ignored when resources.limits.cpu is set.",
+              "type": "string"
+            },
+            "memory": {
+              "description": "Memory limit. Ignored when resources.limits.memory is set.",
+              "type": "string"
+            },
+            "resources": {
+              "description": "Container resource limits and requests. Takes precedence over the flat cpu/memory fields.",
+              "$ref": "#/definitions/template_v1/Resource"
+            },
+            "shm-size": {
+              "description": "Shared memory size.",
+              "type": "string"
+            },
+            "privileged": {
+              "description": "Run in privileged mode. Supports expressions.",
+              "oneOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "$ref": "#/definitions/template_v1/common/Expression"
+                }
+              ]
+            }
+          },
           "$schema": "http://json-schema.org/draft-07/schema#"
         },
         "StrategyConfigV1": {
@@ -1723,6 +1504,280 @@ const schema: Record<string, any> = {
           ],
           "$schema": "http://json-schema.org/draft-07/schema#"
         }
+      },
+      "pipeline": {
+        "type": "object",
+        "title": "pipeline",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+          },
+          "name": {
+            "type": "string",
+            "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+          },
+          "description": {
+            "type": "string",
+            "description": "Description of the pipeline."
+          },
+          "clone": {
+            "$ref": "#/definitions/template_v1/Clone"
+          },
+          "inputs": {
+            "$ref": "#/definitions/template_v1/common/NGVariableV1Wrapper"
+          },
+          "timeout": {
+            "type": "string",
+            "description": "Defines pipeline timeout",
+            "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+          },
+          "allow-stage-executions": {
+            "type": "boolean",
+            "description": "Allows stage executions."
+          },
+          "fixed-inputs-on-rerun": {
+            "type": "boolean",
+            "description": "Fixed inputs on rerun."
+          },
+          "delegate": {
+            "$ref": "#/definitions/template_v1/common/Delegate"
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Provides the default environment variables."
+          },
+          "repo": {
+            "description": "Configures the default repository.",
+            "$ref": "#/definitions/template_v1/Repository"
+          },
+          "barriers": {
+            "type": "array",
+            "description": "Barriers provides optional pipeline barriers.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "if": {
+            "type": "string",
+            "description": "If provides conditional pipeline execution logic. If the condition resolves to false, the pipeline is skipped."
+          },
+          "on": {
+            "$ref": "#/definitions/template_v1/On"
+          },
+          "notifications": {
+            "type": "array",
+            "description": "Notifications provides optional pipeline notifications.",
+            "items": {
+              "$ref": "#/definitions/template_v1/NotificationRules"
+            }
+          },
+          "tags": {
+            "type": "object",
+            "description": "Tags for the pipeline.",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "template": {
+            "description": "Pipeline template reference.",
+            "$ref": "#/definitions/template_v1/common/TemplateRef"
+          },
+          "stages": {
+            "type": "array",
+            "description": "Pipeline stages - can contain stages, groups, or parallel executions.",
+            "items": {
+              "$ref": "#/definitions/template_v1/stages/unified/StageItems"
+            },
+            "maxItems": 256,
+            "minItems": 1
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      },
+      "Clone": {
+        "title": "Clone",
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Clone defines the default clone behavior.",
+        "properties": {
+          "depth": {
+            "description": "Depth defines the clone depth.",
+            "oneOf": [
+              {
+                "type": "integer",
+                "format": "int32"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "enabled": {
+            "description": "Enables or disables the default clone step.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "insecure": {
+            "description": "Insecure disables ssl verification.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "lfs": {
+            "description": "Lfs enables cloning lfs files.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "strategy": {
+            "description": "Strategy configures the PR clone strategy.",
+            "type": "string",
+            "enum": [
+              "source-branch",
+              "merge"
+            ]
+          },
+          "submodules": {
+            "description": "Submodules enables cloning all submodules. Accepts boolean, string (true/false/recursive), or expression.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "true",
+                  "false",
+                  "recursive"
+                ]
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "tags": {
+            "description": "Tags enables cloning all tags.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "trace": {
+            "description": "Trace enables trace logging.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "ref": {
+            "description": "Reference defines the clone ref.",
+            "oneOf": [
+              {
+                "$ref": "#/definitions/template_v1/Reference"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "repo": {
+            "description": "Repo defines the repository name or URL.",
+            "type": "string",
+            "minLength": 1
+          },
+          "connector": {
+            "description": "Connector defines the connector reference.",
+            "type": "string",
+            "minLength": 1
+          },
+          "clonedir": {
+            "description": "Clonedir defines the clone directory path.",
+            "type": "string",
+            "minLength": 1
+          },
+          "resources": {
+            "description": "Resources defines container resource limits.",
+            "$ref": "#/definitions/template_v1/Resource"
+          },
+          "user": {
+            "description": "User ID to run the clone container as. Supports expressions.",
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "sparse-checkout": {
+            "description": "SparseCheckout defines paths to limit the clone to specific directories.",
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "pre-fetch": {
+            "description": "PreFetch defines a command to run before the clone operation.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          },
+          "persist-credentials": {
+            "description": "PersistCredentials configures git credentials to persist after clone so subsequent git operations in the workspace can authenticate.",
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "$ref": "#/definitions/template_v1/common/Expression"
+              }
+            ]
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
       },
       "Reference": {
         "title": "Reference",
@@ -2773,6 +2828,10 @@ const schema: Record<string, any> = {
                   "kubernetes": {
                     "description": "Kubernetes runtime specification.",
                     "$ref": "#/definitions/template_v1/stages/unified/K8RuntimeSpec"
+                  },
+                  "delegate": {
+                    "description": "Delegate selectors used for Kubernetes inherit-from-delegate authentication.",
+                    "$ref": "#/definitions/template_v1/common/Delegate"
                   }
                 }
               }
@@ -3606,6 +3665,10 @@ const schema: Record<string, any> = {
                     "description": "Environment identifier.",
                     "type": "string"
                   },
+                  "all-infra": {
+                    "description": "Deploy to all infrastructures in the environment. With a `deploy-to` runtime input sibling, every infrastructure is preselected in the run form; with no `deploy-to` sibling, deploys to all without prompting.",
+                    "type": "boolean"
+                  },
                   "deploy-to": {
                     "description": "Infrastructure(s) to deploy to.",
                     "$ref": "#/definitions/template_v1/stages/unified/DeployTo"
@@ -3770,6 +3833,10 @@ const schema: Record<string, any> = {
               "ref": {
                 "description": "Git branch for the environment configuration.",
                 "type": "string"
+              },
+              "all-infra": {
+                "description": "Deploy to all infrastructures in the environment. With a `deploy-to` runtime input sibling, every infrastructure is preselected in the run form; with no `deploy-to` sibling, deploys to all without prompting.",
+                "type": "boolean"
               },
               "deploy-to": {
                 "description": "Infrastructure(s) to deploy to.",
@@ -3937,6 +4004,10 @@ const schema: Record<string, any> = {
                   "id": {
                     "description": "Environment group identifier.",
                     "type": "string"
+                  },
+                  "all-env": {
+                    "description": "Deploy to all environments in the group. With an `items` runtime input sibling, every environment is preselected in the run form; with no `items` sibling, deploys to all without prompting.",
+                    "type": "boolean"
                   },
                   "parallel": {
                     "description": "Execute environments in parallel (all at once). Defaults to false, so environments run one at a time (serially) unless set to true.",

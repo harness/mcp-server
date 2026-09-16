@@ -56,6 +56,7 @@ import { incidentsToolset } from "./toolsets/incidents.js";
 import { alertsToolset } from "./toolsets/alerts.js";
 import { deploysToolset } from "./toolsets/deploys.js";
 import { releaseManagementToolset } from "./toolsets/release-management.js";
+import { vibeToolset } from "./toolsets/vibe.js";
 
 const log = createLogger("registry");
 
@@ -175,6 +176,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   alertsToolset,
   deploysToolset,
   releaseManagementToolset,
+  vibeToolset,
 ];
 
 /** All available toolset names — used by docs generation to discover opt-in toolsets. */
@@ -750,8 +752,11 @@ export class Registry {
       for (const [inputKey, queryKey] of Object.entries(spec.queryParams)) {
         let value = input[inputKey];
         // Convert 0-indexed page to 1-indexed when the API requires it
-        if (spec.pageOneIndexed && inputKey === "page" && typeof value === "number") {
-          value = value + 1;
+        if (spec.pageOneIndexed && inputKey === "page" && value !== undefined && value !== "") {
+          const n = Number(value);
+          if (Number.isFinite(n)) {
+            value = n + 1;
+          }
         }
         if (Array.isArray(value)) {
           const parts = value.filter(
@@ -837,6 +842,7 @@ export class Registry {
       ...(baseUrl ? { baseUrl } : {}),
       ...(Object.keys(productHeaders).length > 0 ? { headers: productHeaders } : {}),
       ...(spec.responseType ? { responseType: spec.responseType } : {}),
+      ...(spec.sseLimits ? { sseLimits: spec.sseLimits } : {}),
       ...(product !== "harness" ? { product } : {}),
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),

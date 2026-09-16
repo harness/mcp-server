@@ -8,6 +8,9 @@ dist/
 *.mcpb
 .DS_Store
 
+.worktrees/
+worktrees/
+
 # Editor files
 *.swp
 *.swo

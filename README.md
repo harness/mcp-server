@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 243 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 247 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,8 +10,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 243 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 40 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
+- **11 tools, 247 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 41 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **35 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -1261,7 +1261,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-243 resource types organized across 40 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+247 resource types organized across 41 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1364,7 +1364,7 @@ Both pipeline YAML resource types are available when the pipelines toolset is en
 
 | Resource Type    | List | Get | Create | Update | Delete | Execute Actions           |
 | ---------------- | ---- | --- | ------ | ------ | ------ | ------------------------- |
-| `delegate`       | x    |     |        |        |        |                           |
+| `delegate`       | x    | x   |        |        |        |                           |
 | `delegate_token` | x    | x   | x      |        | x      | `revoke`, `get_delegates` |
 
 
@@ -1376,12 +1376,14 @@ Both pipeline YAML resource types are available when the pipelines toolset is en
 | `repository`   | x    | x   | x      | x      |        |                      |
 | `branch`       | x    | x   | x      |        | x      |                      |
 | `commit`       | x    | x   | x      |        |        | `diff`, `diff_stats` |
-| `file_content` |      | x   |        |        |        | `blame`              |
+| `file_content` | x    | x   |        |        |        | `blame`              |
 | `tag`          | x    |     | x      |        | x      |                      |
 | `repo_rule`    | x    | x   |        |        |        |                      |
 | `space_rule`   | x    | x   |        |        |        |                      |
 
 `commit` creation commits one or more file actions directly through the Harness Code API without cloning. Pass `body.title`, `body.branch`, and `body.actions`; each action is `CREATE`, `UPDATE`, `DELETE`, or `MOVE`, and `UPDATE` requires the current blob SHA.
+
+`file_content` list returns every path at a ref; get returns file or directory content (omit or pass empty `path` for the repo root; nested paths keep slashes). Omit `git_ref` to use the repository default branch — do not guess `main`.
 
 
 ### Artifact Registries
@@ -1539,11 +1541,13 @@ IaCM list responses expose `page_count` as the count for the current page only (
 | -------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `pull_request` | x    | x   | x      | x      |        | `close`, `merge` |
 | `pr_reviewer`  | x    |     | x      |        |        | `submit_review` |
-| `pr_comment`   | x    |     | x      |        |        |                 |
+| `pr_comment`   |      |     | x      | x      | x      |                 |
 | `pr_check`     | x    |     |        |        |        |                 |
 | `pr_activity`  | x    |     |        |        |        |                 |
 
 Use `harness_execute(resource_type="pull_request", action="close", ...)` for an explicit close operation. `harness_update` also accepts `body.state` (`open` or `closed`) and routes state changes to the dedicated Harness Code PR state endpoint; send title/description edits in a separate update call.
+
+Use `harness_list(resource_type="pr_activity", filters={type: ["comment", "code-comment"]}, ...)` to read PR comments. Use `pr_comment` for comment write operations.
 
 
 ### Release Management
@@ -1576,6 +1580,58 @@ Typical workflow:
 6. `harness_get` on `release_input`, `release_execution_phase_input`, `release_execution_phase_output`, `release_execution_activity_output`, or `release_execution_activity_input` using `release_id` plus `params.phase_identifier` / `params.activity_identifier` / `activity_execution_id` as documented on each resource.
 
 
+### Vibe
+
+The default-enabled `vibe` toolset covers the [Vibe Orchestrator BFF contract](tests/fixtures/vibe-bff-openapi.yaml) under `${HARNESS_BASE_URL}/vibe/v1`. It uses the existing Harness connection and account header, without adding account/org/project query parameters or scope fields to request bodies. The team validated the Vibe flow using Harness API-key authentication (PAT/SAT), so no opt-in setting is required for default sessions. The curated OpenAPI documents bearer/session authentication; the server's OAuth mode forwards the current session's bearer token. Automated regressions verify both header paths; gateway authentication remains subject to the target environment's configuration.
+
+| Resource Type | List | Get | Create | Update | Delete | Execute Actions |
+| ------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `vibe_project` |      |     | x      |        |        | `prepare`, `deploy` |
+| `vibe_app_lifecycle` | | x | | | | `events` |
+
+The API supports two intake paths. Keep these API-native request shapes:
+
+| Source available to the coding agent | API flow |
+| ----------------------------------- | -------- |
+| GitHub repository link/connector | `harness_create` with `resource_type="vibe_project"` and `body.mode` plus the mode-specific fields. The contract names `github_link` and `github_connector` but does not define their URL, branch, or connector field shapes; these fields are forwarded to the backend without inventing a mapping. |
+| ZIP file | Call `prepare` with the app name and file metadata, upload the bytes to the returned signed target, then call `deploy`. |
+| Local source directory | The coding agent archives the intended workspace source into a ZIP locally, then follows the ZIP flow. A local path or conversational context is not an API-supported source upload. |
+
+When packaging a directory, include the source, manifests, lockfiles, configuration, and intended uncommitted edits needed to build it. Exclude credentials, `.git`, installed dependencies, and generated artifacts. Packaging and the signed upload happen where the files are accessible; a hosted MCP server cannot read the coding agent's local directory.
+
+For an existing ZIP, prepare the upload:
+
+```json
+{
+  "resource_type": "vibe_project",
+  "action": "prepare",
+  "body": {
+    "name": "demo-app",
+    "file": {
+      "path": "app.zip",
+      "size_bytes": 12345,
+      "content_type": "application/zip"
+    }
+  }
+}
+```
+
+Pass this to `harness_execute`. The size must describe the actual ZIP; `size_bytes`, `content_type`, and `md5` are optional and nullable. Additional prepare fields are preserved for backend validation, as permitted by the OpenAPI. Preparation returns `projectId`, `sourceId`, and `upload`, including each file's `uploadUrl`, `method`, `headers`, and `expiresAt`. Upload the file bytes directly using that signed URL, method, and headers; preserve the URL exactly and do not add Harness credentials to the storage request. The prepare action does not read or upload local files.
+
+After a successful upload, explicitly deploy:
+
+```json
+{
+  "resource_type": "vibe_project",
+  "action": "deploy",
+  "resource_id": "<projectId returned by prepare>"
+}
+```
+
+For JSON imports, use the returned `id` instead. Deployment also accepts `body: {"project_id": "<Vibe app id>"}` or `params.app_id`; the API wire field is snake_case `project_id` even though prepare returns camelCase `projectId`. The generic tool's top-level `project_id` is a Harness scope identifier and is never used as the Vibe app id. Import and prepare create the app/source; neither starts deployment. Writes are not automatically retried, and deployment uses the existing high-risk confirmation policy.
+
+Read progress with `harness_get(resource_type="vibe_app_lifecycle", resource_id="<Vibe app id>")`. It retains app URLs, execution stages, substeps, failures, log lines, and build-analyzer details. The `events` execute action accepts `resource_id` or `params.app_id` and consumes the SSE endpoint as a finite batch: up to 20 JSON events or five seconds after connection, with a 1 MiB response limit. These limits belong to the Vibe endpoint. The connection's `HARNESS_API_TIMEOUT_MS` also bounds connection and stream consumption together; expiration returns a timeout error. A completed batch returns `events` and `stop_reason` (`end`, `event_limit`, or `duration_limit`) and closes the stream. Neither initial connection failures nor broken streams are retried. Events are transient diffs with no documented replay cursor; use lifecycle get for an authoritative snapshot. Both lifecycle reads are available in read-only mode.
+
 ### Feature Flags
 
 
@@ -1594,9 +1650,11 @@ Typical workflow:
 | `fme_segment_keys`                  | x    |     |        | x      |        |                                           |
 | `fme_segment`                       | x    | x   | x      | x      | x      |                                           |
 | `fme_segment_definition`            | x    | x   | x      | x      | x      | `list_keys`, `add_keys`, `remove_keys`    |
+| `fme_metric`                        | x    | x   | x      | x      | x      |                                           |
+| `fme_event_type`                    | x    | x   |        |        |        |                                           |
 
 
-**FME (Split.io) resources** — `fme_`* resources support **dual-mode scoping**: legacy calls pass `workspace_id` and hit the Split.io API (`api.split.io`); newer calls pass `org_id`+`project_id` together and hit Harness-native endpoints (standard `HARNESS_API_KEY`/`HARNESS_BASE_URL`, same auth as every other `harness_*` resource) instead. Passing both `workspace_id` and `org_id`/`project_id` on the same call, or mixing `org_id` with `project_id` alone, is an error — pick one mode per call. Every operation below is available in legacy mode, unchanged. Harness-native mode coverage is currently narrower:
+**FME (Split.io) resources** — `fme_`* resources support **dual-mode scoping**: legacy calls pass `workspace_id` and hit the Split.io API (`api.split.io`); newer calls pass `org_id`+`project_id` together and hit Harness-native endpoints (standard `HARNESS_API_KEY`/`HARNESS_BASE_URL`, same auth as every other `harness_*` resource) instead. Passing both `workspace_id` and `org_id`/`project_id` on the same call, or mixing `org_id` with `project_id` alone, is an error — pick one mode per call. Every operation below is available in legacy mode, unchanged, unless the resource is marked Harness-native only. Harness-native mode coverage is currently narrower:
 
 - **`fme_workspace`** — no Harness-native equivalent; legacy-only (used to discover `workspace_id` values).
 - **`fme_environment`** — dual-mode `list` (`workspace_id` or `org_id`+`project_id`). `get`/`create`/`update`/`delete` are Harness-native only (`/fme/api/v4/environments`) — MCP never had a `workspace_id` contract for those ops. Native list uses optional `offset`/`limit` (max 100; `harness_list` `size` maps to `limit`); envelope `{data, limit, offset, totalCount}` is promoted to `items`/`total`. Native create/update use `isProduction` (`production` accepted as an alias). Native update is JSON Merge Patch; `name` and `isProduction` are not clearable. Name max 15 characters.
@@ -1612,6 +1670,8 @@ Typical workflow:
 - **`fme_segment_keys`** — `list`/`update` remain legacy (`workspace_id` / `environment_id`+`segment_name`). Harness-native (`org_id`+`project_id`) is rejected — use `fme_segment_definition` execute `list_keys`/`add_keys`/`remove_keys`.
 - **`fme_segment`** — Native only (`org_id`+`project_id`). CRUD. `list`/`get`/`update`/`delete` require `segment_type`: `STANDARD` | `LARGE` | `RULE_BASED`. Create body: `name`, `trafficType`, `segmentType`; optional `description`, `tags`, `owners`.
 - **`fme_segment_definition`** — Native only. CRUD plus execute `list_keys`/`add_keys`/`remove_keys`. Update is description only. Delete fails with `hasDependents` while keys remain.
+- **`fme_metric`** — Harness-native only (no legacy `workspace_id` support). `list`/`get`/`create`/`update`/`delete` are wired to `/fme/api/v4/metrics` (`list`'s `harness_list` `size` maps to `limit`). `create` requires `spread` even though the backend `CreateMetricRequest` keeps it optional (default `PER`) — an MCP-side-only stricter contract, since omitting it silently changes a `RATE` metric's semantics. `update` is JSON Merge Patch; `name`/`trafficType` are immutable and not accepted. `delete` is a permanent hard delete (no archive/restore) — classified `destructive`.
+- **`fme_event_type`** — Harness-native only (no legacy `workspace_id` support). Read-only: `list`/`get` are wired to `/fme/api/v4/event-types`; `id` is the event name. Only event types with events in the last 30 days are visible; `get` returns a 404 for an event type outside the requesting workspace's traffic-type scope, or idle longer than 30 days. List filters: `name` (substring), `traffic_type` (by ID or name), `offset`/`limit` (`harness_list` `size` maps to `limit`). Use this to discover real event type IDs before referencing one in `fme_metric`'s `baseEventTypes`/`filterEventType` or `event_type_ids` filter, instead of guessing an ID.
 
 In single-user/self-hosted mode, legacy-mode auth uses a Bearer token from `HARNESS_FME_API_KEY`, falling back to a non-placeholder `HARNESS_API_KEY`. `HARNESS_FME_API_KEY` may be a legacy Split admin key or an FME-entitled Harness PAT/SAT, but it is rejected in `multi-user` mode so shared deployments cannot override each session user's credential. Hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate direct Split.io requests. `fme_feature_flag` supports full lifecycle management in legacy mode: create (requires `traffic_type_id`), list, get, update metadata, delete, and kill/restore/reallocate/archive/unarchive execute actions. Use `fme_traffic_type` to discover traffic type IDs, `fme_identity` to create/update identity attributes, and `fme_standard_segment` / `fme_segment_keys` to inspect standard segments and add member keys. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows.
 
@@ -1887,7 +1947,7 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 40 of 43 toolsets are enabled. Three toolsets are opt-in and excluded from the defaults:
+By default, 41 of 44 toolsets are enabled. Three toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
@@ -1950,7 +2010,7 @@ Available toolset names:
 | `dashboards`            | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
 | `idp`                   | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc                                                                                                                                                                           |
 | `pull-requests`         | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
-| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys, fme_segment, fme_segment_definition                       |
+| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys, fme_segment, fme_segment_definition, fme_metric, fme_event_type                       |
 | `gitops`                | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree                                               |
 | `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_enabled_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_service, chaos_application_map, discovered_agent, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk, chaos_dr_test, scanned_risk, chaos_risk_rule, chaos_risk_scan |
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
@@ -1971,6 +2031,7 @@ Available toolset names:
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
 | `registries-v3` *(opt-in)* | package_v3, version_v3, file_v3, registry_metadata_v3, package_metadata_v3, version_metadata_v3, file_metadata_v3, metadata_key_v3, metadata_value_v3, artifact_scan_v3, bulk_scan_evaluation_v3, firewall_exception_v3, firewall_exception_version_v3                                       |
 | `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
+| `vibe`                | vibe_project, vibe_app_lifecycle |
 
 
 ## Architecture
@@ -1988,8 +2049,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                |  40 Toolsets      |      (data files, not code)
-                |  243 Resource Types|
+                |  41 Toolsets      |      (data files, not code)
+                |  247 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+

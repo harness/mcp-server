@@ -1,0 +1,609 @@
+openapi: 3.0.3
+info:
+  title: Vibe Orchestrator BFF API
+  description: >
+    Hand-authored OpenAPI spec for the prepare, import, deploy, and
+    lifecycle endpoints of the BFF surface (mounted under /vibe/v1). The
+    full API is also auto-generated at runtime by FastAPI at /openapi.json;
+    this file covers a curated subset for external documentation/codegen
+    purposes.
+  version: "1.0.0"
+servers:
+  - url: /vibe/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: bff-projects
+    description: Orchestrator-compat endpoints (legacy snake_case /projects surface)
+  - name: bff-lifecycle
+    description: App lifecycle progress and streaming
+
+paths:
+  /projects/import:
+    post:
+      tags: [bff-projects]
+      summary: Import a project from a JSON-based source
+      description: >
+        Dispatches to a registered JSON import mode (e.g. github_link,
+        github_connector) which creates a Source + App. Zip uploads do not
+        use this endpoint — they go through /projects/prepare followed by a
+        direct presigned PUT. This endpoint only creates the Source/App; it
+        does not trigger a deployment. Call POST /projects/deploy with the
+        returned `id` (as `projectId`) next to actually ship it.
+      operationId: importProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImportRequest'
+      responses:
+        '201':
+          description: Project imported; App and Source were created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestratorProjectOut'
+        '415':
+          description: Content-Type was not application/json.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: Body was not valid JSON, or `mode` was missing/invalid, or the mode-specific fields failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /projects/prepare:
+    post:
+      tags: [bff-projects]
+      summary: Prepare a project for a direct file upload
+      description: >
+        Pre-signed URL intake: creates a Source + App and returns signed PUT
+        URL(s) for the client to upload file bytes directly to object
+        storage. After uploading, the client calls /projects/deploy to
+        trigger the ship flow.
+      operationId: prepareProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrepareRequest'
+      responses:
+        '201':
+          description: Source and App created; signed upload targets issued.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrepareProjectOut'
+        '422':
+          description: Request body failed schema validation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /projects/deploy:
+    post:
+      tags: [bff-projects]
+      summary: Trigger a deployment for a project
+      description: >
+        Trigger the ship flow for the project's latest source. This is the
+        step that actually kicks off a deployment — both /projects/import
+        and /projects/prepare only create the Source + App and must be
+        followed by a call here to deploy. Handles two source states: a
+        source already published via the legacy multipart path deploys
+        directly; a source still "receiving" (the pre-signed URL flow) is
+        published inline first, then triggered.
+      operationId: deployProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeployRequest'
+      responses:
+        '201':
+          description: Deployment triggered.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestratorExecutionOut'
+        '404':
+          description: Project not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Project has no source ready to deploy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: No upload session found for the source (pre-signed URL flow).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /apps/{app_id}/lifecycle:
+    get:
+      tags: [bff-lifecycle]
+      summary: Get an app's current lifecycle progress
+      description: >
+        Snapshot of the app's latest deployment execution, its stages, and
+        overall progress. Poll this endpoint, or use
+        /apps/{app_id}/lifecycle/events for a live SSE stream of diffs.
+      operationId: getAppLifecycle
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: Current lifecycle progress for the app.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppLifecycleProgressOut'
+        '404':
+          description: App not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /apps/{app_id}/lifecycle/events:
+    get:
+      tags: [bff-lifecycle]
+      summary: Stream live lifecycle progress updates (SSE)
+      description: >
+        Server-Sent Events stream. Polls the derive-on-read lifecycle
+        projection roughly once a second and emits diff-based typed events
+        (stage_updated, substep_updated, preview_ready, failed, heartbeat).
+        Each `data:` frame is a JSON-encoded AppLifecycleEventOut.
+      operationId: streamAppLifecycleEvents
+      parameters:
+        - $ref: '#/components/parameters/AppId'
+      responses:
+        '200':
+          description: text/event-stream of lifecycle events.
+          content:
+            text/event-stream:
+              schema:
+                $ref: '#/components/schemas/AppLifecycleEventOut'
+        '404':
+          description: App not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Auth is enforced globally by AuthMiddleware (not per-route
+        dependencies) via a bearer token or session cookie set by the
+        gateway; documented here as a bearer scheme for spec-completeness.
+  parameters:
+    AppId:
+      name: app_id
+      in: path
+      required: true
+      description: App UUID.
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+              additionalProperties: true
+          required: [code, message]
+      required: [error]
+
+    ImportRequest:
+      type: object
+      description: >
+        Envelope validation only — `mode` selects the registered import mode,
+        which then validates its own mode-specific extra fields (e.g.
+        github_link, github_connector). Additional properties are
+        mode-specific and passed through.
+      properties:
+        mode:
+          type: string
+          minLength: 1
+          description: Import mode identifier (e.g. "github_link", "github_connector").
+      required: [mode]
+      additionalProperties: true
+
+    OrchestratorProjectOut:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        source_type:
+          type: string
+          enum: [zip_upload, github]
+        source_path:
+          type: string
+        latest_execution_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+      required: [id, name, source_type, source_path, created_at]
+
+    DeployRequest:
+      type: object
+      properties:
+        project_id:
+          type: string
+          description: App id returned by /projects/import or /projects/prepare.
+      required: [project_id]
+
+    OrchestratorExecutionOut:
+      type: object
+      description: Response from POST /projects/deploy.
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, awaiting_approval, completed, failed]
+        error_message:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+      required: [id, project_id, status, created_at]
+
+    PrepareFileRequest:
+      type: object
+      properties:
+        path:
+          type: string
+        size_bytes:
+          type: integer
+          nullable: true
+        content_type:
+          type: string
+          nullable: true
+        md5:
+          type: string
+          nullable: true
+      required: [path]
+
+    PrepareRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        file:
+          $ref: '#/components/schemas/PrepareFileRequest'
+      required: [name, file]
+
+    SignedUploadFile:
+      type: object
+      properties:
+        path:
+          type: string
+        objectPath:
+          type: string
+        uploadUrl:
+          type: string
+        method:
+          type: string
+          default: PUT
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        expiresAt:
+          type: string
+          format: date-time
+      required: [path, objectPath, uploadUrl, method, expiresAt]
+
+    SignedUploadSession:
+      type: object
+      properties:
+        uploadId:
+          type: string
+          format: uuid
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/SignedUploadFile'
+        expiresAt:
+          type: string
+          format: date-time
+      required: [uploadId, files, expiresAt]
+
+    PrepareProjectOut:
+      type: object
+      description: camelCase on the wire (ContractModel).
+      properties:
+        projectId:
+          type: string
+        sourceId:
+          type: string
+        upload:
+          $ref: '#/components/schemas/SignedUploadSession'
+      required: [projectId, sourceId, upload]
+
+    StageSubStepOut:
+      type: object
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        state:
+          type: string
+          enum: [pending, active, done, failed]
+        durationLabel:
+          type: string
+          nullable: true
+        detail:
+          type: string
+          nullable: true
+        startedAt:
+          type: string
+          nullable: true
+        finishedAt:
+          type: string
+          nullable: true
+        href:
+          type: string
+          nullable: true
+        linkLabel:
+          type: string
+          nullable: true
+        kind:
+          type: string
+          nullable: true
+          enum: [static, dynamic]
+      required: [key, label, state]
+
+    StageFailurePrimaryErrorOut:
+      type: object
+      properties:
+        ref:
+          type: string
+        message:
+          type: string
+      required: [ref, message]
+
+    StageFailureAiReasonOut:
+      type: object
+      description: Build-stage only — populated when the "Vibe Build Analyzer" agent step ran.
+      properties:
+        rootCause:
+          type: string
+        primaryError:
+          $ref: '#/components/schemas/StageFailurePrimaryErrorOut'
+        suggestedFix:
+          type: string
+          nullable: true
+        fixPrompt:
+          type: string
+          nullable: true
+          description: Clipboard text for pasting into a coding agent.
+        generatedInMs:
+          type: integer
+          nullable: true
+      required: [rootCause]
+
+    StageFailureOut:
+      type: object
+      properties:
+        stageKey:
+          type: string
+        subStepKey:
+          type: string
+          nullable: true
+        summary:
+          type: string
+        file:
+          type: string
+          nullable: true
+        exitCode:
+          type: integer
+          nullable: true
+        logLines:
+          type: array
+          items:
+            type: string
+        suggestion:
+          type: string
+          nullable: true
+        patch:
+          type: string
+          nullable: true
+        attempt:
+          type: integer
+          nullable: true
+        maxAttempts:
+          type: integer
+          nullable: true
+        aiReason:
+          $ref: '#/components/schemas/StageFailureAiReasonOut'
+      required: [stageKey, summary]
+
+    AppStageExecutionOut:
+      type: object
+      properties:
+        id:
+          type: string
+        executionId:
+          type: string
+        appId:
+          type: string
+        stageKey:
+          type: string
+        order:
+          type: integer
+        status:
+          type: string
+          enum: [pending, processing, completed, failed, paused, skipped]
+        endUserMessage:
+          type: string
+        adminMessage:
+          type: string
+        detail:
+          type: string
+          nullable: true
+        subSteps:
+          type: array
+          items:
+            $ref: '#/components/schemas/StageSubStepOut'
+        failure:
+          $ref: '#/components/schemas/StageFailureOut'
+        startedAt:
+          type: string
+          nullable: true
+        finishedAt:
+          type: string
+          nullable: true
+        durationLabel:
+          type: string
+          nullable: true
+        harnessExecutionId:
+          type: string
+          nullable: true
+        harnessExecutionUrl:
+          type: string
+          nullable: true
+        artifactRefs:
+          type: array
+          items:
+            type: string
+        logs:
+          type: array
+          items:
+            type: string
+        origin:
+          type: string
+          default: real
+      required: [id, executionId, appId, stageKey, order, status, endUserMessage, adminMessage]
+
+    AppExecutionOut:
+      type: object
+      properties:
+        id:
+          type: string
+        appId:
+          type: string
+        type:
+          type: string
+          enum: [import_and_preview, production_approval, production_deploy, rollback]
+        status:
+          type: string
+          enum: [queued, running, paused, succeeded, failed, canceled]
+        startedAt:
+          type: string
+        finishedAt:
+          type: string
+          nullable: true
+        triggeredBy:
+          type: string
+        stages:
+          type: array
+          items:
+            $ref: '#/components/schemas/AppStageExecutionOut'
+        origin:
+          type: string
+          default: real
+      required: [id, appId, type, status, startedAt, triggeredBy, stages]
+
+    LifecycleAppOut:
+      type: object
+      description: AppOut restricted to the nine fields the lifecycle view needs.
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          type: string
+        approvalStatus:
+          type: string
+        previewUrl:
+          type: string
+          nullable: true
+        productionUrl:
+          type: string
+          nullable: true
+        repoUrl:
+          type: string
+          nullable: true
+        latestExecutionId:
+          type: string
+          nullable: true
+        isOnboarded:
+          type: boolean
+          default: false
+      required: [id, name, status, approvalStatus]
+
+    AppLifecycleProgressOut:
+      type: object
+      properties:
+        app:
+          $ref: '#/components/schemas/LifecycleAppOut'
+        execution:
+          $ref: '#/components/schemas/AppExecutionOut'
+        currentStageKey:
+          type: string
+          nullable: true
+        overallPercent:
+          type: number
+          format: float
+        elapsedSeconds:
+          type: integer
+          nullable: true
+        phase:
+          type: string
+          enum: [setting_up, live, failed]
+        failure:
+          $ref: '#/components/schemas/StageFailureOut'
+        harnessExecutionId:
+          type: string
+          nullable: true
+        harnessExecutionUrl:
+          type: string
+          nullable: true
+      required: [app, execution, overallPercent, phase]
+
+    AppLifecycleEventOut:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [stage_updated, substep_updated, preview_ready, failed, heartbeat]
+        payload:
+          type: object
+          additionalProperties: true
+        at:
+          type: string
+      required: [type, payload, at]

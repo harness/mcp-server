@@ -268,6 +268,19 @@ function coerceBody(input: Record<string, unknown>): Record<string, unknown> {
   return raw as Record<string, unknown>;
 }
 
+/**
+ * Detects whether a chaos experiment identifier looks like the internal UUID
+ * (e.g. "ef9199b6-0248-4c0b-9d63-9176bf2b7123") rather than a human-readable
+ * identity slug. Used to auto-default `is_identity` for chaos_experiment.run
+ * and chaos_experiment_variable.list so callers who only have the UUID
+ * (the only shape harness_list/harness_get ever return for chaos_experiment)
+ * don't need to know to pass is_identity=false explicitly.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function looksLikeExperimentUuid(id: unknown): boolean {
+  return typeof id === "string" && UUID_RE.test(id);
+}
+
 // ── Load test helpers ────────────────────────────────────────────────
 // Since the loadTestManager variables migration, all tunables and custom env
 // vars live under toolConfig.<tool>.tunables / toolConfig.<tool>.variables. The
@@ -725,6 +738,7 @@ export const chaosToolset: ToolsetDefinition = {
       scopeParams: CHAOS_SCOPE,
       identifierFields: ["experiment_id"],
       deepLinkTemplate: "/ng/account/{accountId}/module/chaos/orgs/{orgIdentifier}/projects/{projectIdentifier}/experiments/{experimentId}/chaos-studio",
+      diagnosticHint: "If run fails with \"mongo: no documents in result\", the auto-detected is_identity value may not match this experiment_id's shape (UUID vs. human-readable slug). Retry the same call with the opposite is_identity value (params={is_identity: true|false}).",
       searchAliases: [
         "chaos test", "fault injection", "fault injection experiment",
         "blast radius experiment", "resilience test", "chaos engineering test",
@@ -871,6 +885,18 @@ export const chaosToolset: ToolsetDefinition = {
             // conflict; we only hoist when top-level is unset.
             if (input.is_identity === undefined && b.is_identity !== undefined) {
               (input as Record<string, unknown>).is_identity = b.is_identity;
+            }
+
+            // Auto-detect UUID vs slug when the caller didn't explicitly set
+            // is_identity (top-level or body-nested, handled above). harness_list/
+            // harness_get for chaos_experiment only ever return the internal UUID
+            // (no `identity` field in the ExperimentV2 response shape), so a caller
+            // that just listed/got an experiment and passes that ID straight into
+            // run would otherwise silently get isIdentity=true (slug lookup) and
+            // fail with "mongo: no documents in result". Explicit is_identity always
+            // wins; this only fills the gap when it's omitted entirely.
+            if (input.is_identity === undefined && looksLikeExperimentUuid(input.experiment_id)) {
+              (input as Record<string, unknown>).is_identity = false;
             }
 
             if (b.inputset_identity) {
@@ -1735,6 +1761,16 @@ export const chaosToolset: ToolsetDefinition = {
           pathParams: { experiment_id: "experimentId" },
           queryParams: { is_identity: "isIdentity" },
           defaultQueryParams: { isIdentity: "true" },
+          // No request body for this GET — bodyBuilder is used purely to auto-detect
+          // UUID vs slug (same rationale as chaos_experiment.run above) before
+          // queryParams resolves is_identity from input. Runs regardless of HTTP
+          // method, so this is safe here.
+          bodyBuilder: (input) => {
+            if (input.is_identity === undefined && looksLikeExperimentUuid(input.experiment_id)) {
+              (input as Record<string, unknown>).is_identity = false;
+            }
+            return undefined;
+          },
           responseExtractor: chaosRunTimeInputsExtract,
           description: descListExperimentVariables,
         },

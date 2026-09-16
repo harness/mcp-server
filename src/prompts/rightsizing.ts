@@ -22,9 +22,9 @@ export function registerRightsizingPrompt(server: McpServer): void {
             text: `Review rightsizing recommendations and help take action on them.${savingsNote}
 
 Steps:
-1. **Get stats**: Call harness_get with resource_type="cost_recommendation_stats"${projectFilter} to get overall recommendation summary
+1. **Get stats**: Call harness_get with resource_type="cost_recommendation_stats"${projectFilter} for the Open-tab summary (days_back=4, min_saving=1, OPEN are defaults). Do not widen days_back to match a calendar.
 2. **By type**: Call harness_get with resource_type="cost_recommendation_stats"${projectFilter}, params={group_by: "type"} to see recommendations grouped by type (resize, terminate, etc.)
-3. **Full list**: Call harness_list with resource_type="cost_recommendation"${projectFilter} to get all individual recommendations
+3. **Full list**: Call harness_list with resource_type="cost_recommendation"${projectFilter} and compact=false (top-level argument, not inside params) to get individual recommendations including monthlySaving. For a team/BU, add cost_category + cost_buckets (discover via cost_recommendation_filter).
 4. **Rank and present**: Create a prioritized table sorted by monthly savings:
    - **Resource**: Name and type of the over-provisioned resource
    - **Current**: Current instance type/size

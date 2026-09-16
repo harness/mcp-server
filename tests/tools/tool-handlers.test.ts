@@ -312,6 +312,26 @@ describe("harness_get", () => {
     expect(call.params.orgIdentifier).toBeUndefined();
     expect(call.params.projectIdentifier).toBeUndefined();
   });
+
+  it("gets a branch from a files URL with a path when resource_type is branch", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    mockRequest = vi.fn().mockResolvedValue({ name: "feature/foo" });
+    client = makeClient(mockRequest);
+    const repoServer = makeMcpServer();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(repoServer, registry, client);
+
+    const result = await repoServer.call("harness_get", {
+      resource_type: "branch",
+      url: "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r/files/feature/foo/~/src/index.ts",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/repos/r/branches/feature/foo",
+    }));
+  });
 });
 
 describe("harness_get — execution_inputs", () => {
@@ -1608,14 +1628,14 @@ describe("harness_update — pull request", () => {
       resource_type: "pull_request",
       resource_id: "42",
       url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
-      body: { state: "closed" },
+      body: { state: "closed", is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();
     const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
-    expect(call.body).toEqual({ state: "closed" });
+    expect(call.body).toEqual({ state: "closed", is_draft: false });
   });
 
   it("rejects mixed state + metadata via harness_update", async () => {
@@ -1638,6 +1658,31 @@ describe("harness_update — pull request", () => {
       error: expect.stringContaining("Cannot combine state change"),
     });
     expect(prRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("harness_update — PR comment", () => {
+  it("maps resource_id to comment_id for comment updates", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ id: 123, text: "Updated comment" });
+    const prClient = makeClient(prRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(prServer, prRegistry, prClient, makeConfig());
+
+    const result = await prServer.call("harness_update", {
+      resource_type: "pr_comment",
+      resource_id: "123",
+      params: { repo_id: "my-repo", pr_number: "42" },
+      body: { text: "Updated comment" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(prRequest).toHaveBeenCalledOnce();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("PATCH");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/comments/123");
+    expect(call.body).toEqual({ text: "Updated comment" });
   });
 });
 
@@ -1816,6 +1861,32 @@ describe("harness_delete", () => {
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("deletes a branch from a files URL with a path when resource_type is branch", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS" });
+    client = makeClient(mockRequest);
+    const repoServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(repoServer, registry, client, makeConfig());
+
+    const result = await repoServer.call("harness_delete", {
+      resource_type: "branch",
+      url: "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r/files/feature/foo/~/src/index.ts",
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({
+      deleted: true,
+      resource_type: "branch",
+      resource_id: "feature/foo",
+    });
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "DELETE",
+      path: "/code/api/v1/repos/r/branches/feature/foo",
+    }));
   });
 });
 
@@ -2206,6 +2277,7 @@ pipeline:
     const result = await prServer.call("harness_execute", {
       url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
       action: "close",
+      body: { is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();
@@ -2213,7 +2285,7 @@ pipeline:
     const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
-    expect(call.body).toEqual({ state: "closed" });
+    expect(call.body).toEqual({ state: "closed", is_draft: false });
   });
 
   it("uses resource_id for the missing child identifier when parent params are provided", async () => {
@@ -2229,6 +2301,7 @@ pipeline:
       action: "close",
       resource_id: "42",
       params: { repo_id: "my-repo" },
+      body: { is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();
@@ -2248,6 +2321,7 @@ pipeline:
       url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
       resource_id: "43",
       action: "close",
+      body: { is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();

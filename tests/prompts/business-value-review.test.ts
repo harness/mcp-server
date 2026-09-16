@@ -377,6 +377,8 @@ describe("business-value-review prompt", () => {
     const text = (result.messages[0].content as { type: string; text: string }).text;
 
     expect(text).toContain("compact: false");
+    expect(text).toContain("top-level");
+    expect(text).not.toMatch(/params=\{[^}]*compact:\s*false/);
     // The recommendation list specifically must call out per-item monthlySaving.
     expect(text).toContain("required to get per-item `monthlySaving`");
   });

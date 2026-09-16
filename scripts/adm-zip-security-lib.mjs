@@ -4,8 +4,8 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 
-export const SECURE_ADM_ZIP_VERSION = "0.6.0";
-export const ADM_ZIP_CVE = "CVE-2026-39244";
+export const SECURE_ADM_ZIP_VERSION = "0.6.1";
+export const ADM_ZIP_ADVISORIES = "CVE-2026-39244 and CVE-2026-76845";
 
 /** @returns {string | null} */
 export function readAdmZipVersion(admZipDir) {
@@ -128,8 +128,8 @@ export function listInsecureAdmZipInstalls(
  * Upgrade adm-zip under packageRoot for npm consumers.
  * pnpm installs with pnpm.overrides should no-op when already secure.
  *
- * Nested adm-zip under onnxruntime-node is only upgraded when this runs (postinstall).
- * Consumers using `npm install --ignore-scripts` skip postinstall and remain exposed.
+ * The npm-native parent override protects normal packaged installs. This postinstall
+ * remains a fallback for consumers whose installer discards override or lock metadata.
  *
  * @param {string} packageRoot
  * @param {{ npmCommand?: string, target?: string, dryRun?: boolean, strict?: boolean }} [options]
@@ -209,7 +209,7 @@ export function ensureSecureAdmZip(
     const details = remaining
       .map(({ dir, version }) => `${dir}@${version ?? "missing"}`)
       .join(", ");
-    warnOrThrow(`insecure adm-zip remains after patch (${ADM_ZIP_CVE}): ${details}`);
+    warnOrThrow(`insecure adm-zip remains after patch (${ADM_ZIP_ADVISORIES}): ${details}`);
   }
 
   return { patched, skipped: false, warnings };

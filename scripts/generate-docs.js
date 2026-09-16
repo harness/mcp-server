@@ -21,6 +21,7 @@ const README_COVERAGE_TOOLSETS = new Map([
   ["file_store", { sectionTitle: "File Store" }],
   ["chaos", { sectionTitle: "Chaos Engineering" }],
   ["release-management", { sectionTitle: "Release Management" }],
+  ["vibe", { sectionTitle: "Vibe" }],
 ]);
 const CRUD_OPERATIONS = ["list", "get", "create", "update", "delete"];
 const CRUD_COLUMN_INDEX = { list: 1, get: 2, create: 3, update: 4, delete: 5 };
