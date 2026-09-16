@@ -166,6 +166,36 @@ async function validateLlmConfig(ctx: PreflightContext, field: string, value: un
   }
 }
 
+type MetricSetJudge =
+  | { field: "judge_llm_config"; value: unknown }
+  | { field: "judge_llm_connector_ref"; value: unknown }
+  | { field: "judge_model_id"; value: unknown };
+
+function selectMetricSetJudge(metricSet: JsonRecord): MetricSetJudge | undefined {
+  if (metricSet.judge_llm_config !== undefined && metricSet.judge_llm_config !== null) {
+    return { field: "judge_llm_config", value: metricSet.judge_llm_config };
+  }
+  if (metricSet.judge_llm_connector_ref !== undefined && metricSet.judge_llm_connector_ref !== null) {
+    return { field: "judge_llm_connector_ref", value: metricSet.judge_llm_connector_ref };
+  }
+  if (metricSet.judge_model_id !== undefined && metricSet.judge_model_id !== null) {
+    return { field: "judge_model_id", value: metricSet.judge_model_id };
+  }
+  return undefined;
+}
+
+async function validateMetricSetJudge(ctx: PreflightContext, judge: MetricSetJudge): Promise<void> {
+  if (judge.field === "judge_model_id") {
+    requireUuid(judge.value, judge.field);
+    return;
+  }
+  if (judge.field === "judge_llm_connector_ref") {
+    await validateLlmConfig(ctx, judge.field, { connector_ref: judge.value });
+    return;
+  }
+  await validateLlmConfig(ctx, judge.field, judge.value);
+}
+
 async function validateHttpConnector(ctx: PreflightContext, connectorRef: string): Promise<void> {
   const connector = await getConnector(ctx, connectorRef);
   const spec = asRecord(connector.spec);
@@ -367,9 +397,9 @@ async function validateMetricSet(ctx: PreflightContext, metricSet: JsonRecord, r
     throw new Error("Metric set has no entries. Add at least one metric before attaching it to an evaluation.");
   }
 
-  const setJudge = metricSet.judge_llm_config;
-  if (setJudge !== undefined && setJudge !== null) {
-    await validateLlmConfig(ctx, "judge_llm_config", setJudge);
+  const metricSetJudge = selectMetricSetJudge(metricSet);
+  if (metricSetJudge) {
+    await validateMetricSetJudge(ctx, metricSetJudge);
   }
 
   for (const entry of entries) {
@@ -377,21 +407,25 @@ async function validateMetricSet(ctx: PreflightContext, metricSet: JsonRecord, r
     if (!JUDGE_BACKED_METRIC_TYPES.has(metric.type as string)) continue;
     const entryConfig = asRecord(entry.config);
     const metricConfig = asRecord(metric.config);
-    const judge = entryConfig?.llm_config ?? metricConfig?.llm_config ?? setJudge;
-    if (!judge) {
+    const judge = entryConfig?.llm_config ?? metricConfig?.llm_config;
+    if (judge !== undefined && judge !== null) {
+      await validateLlmConfig(ctx, `metric entry ${String(entry.metric_id)} judge config`, judge);
+    } else if (metricSetJudge) {
+      await validateMetricSetJudge(ctx, metricSetJudge);
+    } else {
       throw new Error(
         `LLM metric ${String(metric.name ?? entry.metric_id)} has no judge configuration. ` +
         "Provide metric-set judge_llm_config as { connector_ref, model? }, or an entry config.llm_config.",
       );
     }
-    await validateLlmConfig(ctx, `metric entry ${String(entry.metric_id)} judge config`, judge);
   }
 }
 
 async function validateMetricSetWrite(ctx: PreflightContext, input: JsonRecord, requireExistingEntries: boolean): Promise<void> {
   const body = requireBody(input, "Metric set write");
-  if (body.judge_llm_config !== undefined && body.judge_llm_config !== null) {
-    await validateLlmConfig(ctx, "judge_llm_config", body.judge_llm_config);
+  const metricSetJudge = selectMetricSetJudge(body);
+  if (metricSetJudge) {
+    await validateMetricSetJudge(ctx, metricSetJudge);
   }
   if (body.entries !== undefined) {
     await validateMetricSet(ctx, body, false);
@@ -408,13 +442,17 @@ async function validateMetricSetEntryWrite(ctx: PreflightContext, isUpdate: bool
   const metricId = body.metric_id ?? (isUpdate ? ctx.input.metric_id : undefined);
   const metric = await getScopedResource(ctx, "eval_metric", "metric_id", metricId);
   if (!JUDGE_BACKED_METRIC_TYPES.has(metric.type as string)) return;
-  const judge = asRecord(body.config)?.llm_config ?? set.judge_llm_config;
-  if (!judge) {
+  const judge = asRecord(body.config)?.llm_config;
+  const metricSetJudge = selectMetricSetJudge(set);
+  if (judge !== undefined && judge !== null) {
+    await validateLlmConfig(ctx, "metric entry judge config", judge);
+  } else if (metricSetJudge) {
+    await validateMetricSetJudge(ctx, metricSetJudge);
+  } else {
     throw new Error(
       "Adding an LLM metric requires a metric-set judge_llm_config or entry config.llm_config with { connector_ref, model? }.",
     );
   }
-  await validateLlmConfig(ctx, "metric entry judge config", judge);
 }
 
 async function validateMetricSetReplacement(ctx: PreflightContext): Promise<void> {
@@ -422,7 +460,7 @@ async function validateMetricSetReplacement(ctx: PreflightContext): Promise<void
     throw new Error("replace_metrics requires body to be a JSON array of { metric_id, threshold, weight?, position? }.");
   }
   const set = await getScopedResource(ctx, "eval_metric_set", "set_id", ctx.input.set_id);
-  await validateMetricSet(ctx, { entries: ctx.input.body, judge_llm_config: set.judge_llm_config }, false);
+  await validateMetricSet(ctx, { ...set, entries: ctx.input.body }, false);
 }
 
 async function validateManagedEvalComposition(ctx: PreflightContext, input: JsonRecord, requireAll: boolean): Promise<void> {
