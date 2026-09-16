@@ -134791,6 +134791,22 @@ const schema: Record<string, any> = {
                         "minLength": 1
                       }
                     ]
+                  },
+                  "variables": {
+                    "description": "Optional Ansible extra-vars for this run. Runtime values override playbook variables, which override inventory variables.",
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
                   }
                 }
               }
@@ -134853,6 +134869,22 @@ const schema: Record<string, any> = {
                 "oneOf": [
                   {
                     "$ref": "#/definitions/pipeline/steps/iacm/AnsibleFilters"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "variables": {
+                "description": "Optional Ansible extra-vars for this run. Runtime values override playbook variables, which override inventory variables.",
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
                   },
                   {
                     "type": "string",
