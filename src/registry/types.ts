@@ -112,6 +112,12 @@ export interface PreflightContext {
   input: Record<string, unknown>;
   registry: RegistryDispatchInterface;
   signal?: AbortSignal;
+  /**
+   * Effective tenant for this dispatch (`registry.getAccountId()`).
+   * In chat MCP this is the per-request account, not `client.account`
+   * (the process-scoped placeholder).
+   */
+  accountId?: string;
 }
 
 export type ToolsetName =

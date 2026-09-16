@@ -590,7 +590,12 @@ async function perspectiveCreatePreflight(ctx: PreflightContext): Promise<void> 
   const input = ctx.input as { body?: Record<string, unknown> };
   if (!input.body) input.body = {};
 
-  const accountId = client.account;
+  // Publish defaults even when no tenant is resolved yet.
+  if (!input.body.viewState) input.body.viewState = "COMPLETED";
+  if (!input.body.viewType) input.body.viewType = "CUSTOMER";
+  if (!input.body.viewVersion) input.body.viewVersion = "v1";
+
+  const accountId = ctx.accountId || client.account;
   if (!accountId) return;
 
   // Fetch account preference defaults
@@ -617,13 +622,8 @@ async function perspectiveCreatePreflight(ctx: PreflightContext): Promise<void> 
       input.body.viewPreferences = deepMerge(defaults, agentPrefs);
     }
   } catch {
-    // Graceful degradation — proceed without defaults
+    // Graceful degradation — proceed without preference defaults
   }
-
-  // Set other defaults if absent
-  if (!input.body.viewState) input.body.viewState = "COMPLETED";
-  if (!input.body.viewType) input.body.viewType = "CUSTOMER";
-  if (!input.body.viewVersion) input.body.viewVersion = "v1";
 }
 
 function splitCsv(value: unknown): string[] {
