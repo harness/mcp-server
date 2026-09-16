@@ -491,6 +491,70 @@ describe("managed offline evaluation safety", () => {
     expect(findResource("eval_run").executeActions?.recommendations.preflight).toBeDefined();
     expect(findResource("eval_suite").executeActions?.run.preflight).toBeDefined();
   });
+
+  it("rejects an ai_judge metric-set entry without judge configuration before the write", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ type: "ai_judge", name: "Legacy judge" });
+    const client = makeClient(request);
+
+    await expect(
+      registry.dispatch(client, "eval_metric_set_entry", "create", {
+        set_id: "11111111-1111-4111-8111-111111111111",
+        body: { metric_id: "22222222-2222-4222-8222-222222222222" },
+      }),
+    ).rejects.toThrow(/requires a metric-set judge_llm_config/);
+
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects replacing metric-set entries with an ai_judge metric without a judge", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ type: "ai_judge", name: "Legacy judge" });
+    const client = makeClient(request);
+
+    await expect(
+      registry.dispatchExecute(client, "eval_metric_set", "replace_metrics", {
+        set_id: "11111111-1111-4111-8111-111111111111",
+        body: [{ metric_id: "22222222-2222-4222-8222-222222222222", threshold: 0.8 }],
+      }),
+    ).rejects.toThrow(/has no judge configuration/);
+
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves a valid ai_judge entry when sending the final write", async () => {
+    const registry = new Registry(makeConfig());
+    const entry = {
+      metric_id: "22222222-2222-4222-8222-222222222222",
+      threshold: 0.8,
+      weight: 0.5,
+    };
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        judge_llm_config: { connector_ref: "account.openai", model: "gpt-4.1-mini" },
+      })
+      .mockResolvedValueOnce({ type: "ai_judge", name: "Legacy judge" })
+      .mockResolvedValueOnce({ type: "OpenAI" })
+      .mockResolvedValueOnce({ metric_id: entry.metric_id });
+    const client = makeClient(request);
+
+    await registry.dispatch(client, "eval_metric_set_entry", "create", {
+      set_id: "11111111-1111-4111-8111-111111111111",
+      body: entry,
+    });
+
+    expect(request).toHaveBeenNthCalledWith(4, expect.objectContaining({
+      method: "POST",
+      body: entry,
+    }));
+  });
 });
 
 // ─── LLM connector ref in body schemas ─────────────────────────────────────

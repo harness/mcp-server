@@ -9,6 +9,7 @@ import { aiEvalsArrayExtract, aiEvalsListExtract, passthrough } from "../extract
 const AI = "/gateway/ai-evals/api/v1";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const LLM_CONNECTOR_TYPES = new Set(["OpenAi", "OpenAI", "Anthropic", "AzureOpenAI", "AzureOpenAi", "GoogleAI", "GoogleAi"]);
+const JUDGE_BACKED_METRIC_TYPES = new Set(["llm", "ai_judge"]);
 const TARGET_TYPES = new Set(["prompt", "agent", "precomputed"]);
 const AGENT_METHODS = new Set(["GET", "POST", "PUT"]);
 
@@ -373,7 +374,7 @@ async function validateMetricSet(ctx: PreflightContext, metricSet: JsonRecord, r
 
   for (const entry of entries) {
     const metric = await getScopedResource(ctx, "eval_metric", "metric_id", entry.metric_id);
-    if (metric.type !== "llm") continue;
+    if (!JUDGE_BACKED_METRIC_TYPES.has(metric.type as string)) continue;
     const entryConfig = asRecord(entry.config);
     const metricConfig = asRecord(metric.config);
     const judge = entryConfig?.llm_config ?? metricConfig?.llm_config ?? setJudge;
@@ -406,7 +407,7 @@ async function validateMetricSetEntryWrite(ctx: PreflightContext, isUpdate: bool
   const set = await getScopedResource(ctx, "eval_metric_set", "set_id", ctx.input.set_id);
   const metricId = body.metric_id ?? (isUpdate ? ctx.input.metric_id : undefined);
   const metric = await getScopedResource(ctx, "eval_metric", "metric_id", metricId);
-  if (metric.type !== "llm") return;
+  if (!JUDGE_BACKED_METRIC_TYPES.has(metric.type as string)) return;
   const judge = asRecord(body.config)?.llm_config ?? set.judge_llm_config;
   if (!judge) {
     throw new Error(
