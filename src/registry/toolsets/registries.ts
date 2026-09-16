@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, PathBuilderConfig, BodySchema } from "../types.js";
-import { ngExtract, harListExtract } from "../extractors.js";
+import { ngExtract, harListExtract, passthrough } from "../extractors.js";
 
 // Canonical PackageType enum — matches RegistryRequest.PackageType in the v1 OpenAPI spec.
 const PACKAGE_TYPES = [
@@ -239,6 +239,41 @@ export const registriesToolset: ToolsetDefinition = {
           },
           responseExtractor: harListExtract("files"),
           description: "List files in an artifact version",
+        },
+      },
+    },
+    {
+      resourceType: "quarantine",
+      displayName: "Quarantine",
+      description:
+        "Quarantine an artifact file path in a registry. Use update (PUT) to quarantine an artifact.",
+      toolset: "registries",
+      scope: "project",
+      identifierFields: ["registry_id"],
+      operations: {
+        // The HAR v1 quarantine endpoint is PUT (idempotent upsert), so it maps to update.
+        update: {
+          method: "PUT",
+          path: "/har/api/v1/registry",
+          pathBuilder: (input, config) =>
+            `/har/api/v1/registry/${harRegistryRef(input, config)}/+/quarantine`,
+          pathParams: { registry_id: "registryIdentifier" },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => input.body,
+          responseExtractor: ngExtract,
+          description: "Quarantine an artifact file path in a registry",
+          bodySchema: {
+            description: "Quarantine request. Marks a specific artifact (and optionally a file path) as quarantined.",
+            fields: [
+              { name: "artifact", type: "string", required: true, description: "Artifact name to quarantine" },
+              { name: "reason", type: "string", required: true, description: "Reason for quarantine" },
+              { name: "filePath", type: "string", required: false, description: "Specific file path within the artifact to quarantine" },
+              { name: "version", type: "string", required: false, description: "Artifact version to quarantine" },
+              { name: "artifactType", type: "string", required: false, description: "Artifact type (e.g. DOCKER, NPM)" },
+              { name: "artifactKeyFilters", type: "object", required: false, description: "Key-value filters to further scope the quarantine target" },
+            ],
+          },
         },
       },
     },

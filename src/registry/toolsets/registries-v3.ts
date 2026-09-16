@@ -1,10 +1,24 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ToolsetDefinition, BodySchema } from "../types.js";
 import {
   passthrough,
   harV3ListExtract,
   harV3DataArrayUnwrap,
   harV3DataObjectUnwrap,
 } from "../extractors.js";
+
+const firewallExceptionCreateSchema: BodySchema = {
+  description:
+    "Request to create a firewall exception for a policy-blocked artifact. " +
+    "The exception starts in PENDING status and requires approval before it takes effect.",
+  fields: [
+    { name: "registryId", type: "string", required: true, description: "UUID of the registry containing the artifact" },
+    { name: "packageName", type: "string", required: true, description: "Name of the package to except" },
+    { name: "businessJustification", type: "string", required: true, description: "Business justification for allowing the blocked artifact" },
+    { name: "versionList", type: "array", required: false, description: "Specific versions to except. Empty array means all versions.", itemType: "string" },
+    { name: "expireAfter", type: "number", required: false, description: "Days after approval when the exception expires. Omit for never-expires." },
+    { name: "remediationPlan", type: "string", required: false, description: "Plan for eventual remediation (optional)" },
+  ],
+};
 
 // Projects a raw v3 package list item down to the fields agents actually need.
 // The default `compactItems()` whitelist keeps `id`/`name`/timestamps but drops
@@ -515,6 +529,17 @@ export const registriesV3Toolset: ToolsetDefinition = {
           },
           responseExtractor: harV3ListExtract,
           description: "List firewall exceptions (v3)",
+        },
+        create: {
+          method: "POST",
+          path: "/har/api/v3/scans/exceptions",
+          // Account-scoped: CreateFirewallExceptionV3 only takes account_identifier (no org/project).
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => input.body,
+          responseExtractor: passthrough,
+          description: "Create a firewall exception for a policy-blocked artifact (starts in PENDING status, requires approval)",
+          bodySchema: firewallExceptionCreateSchema,
         },
       },
     },

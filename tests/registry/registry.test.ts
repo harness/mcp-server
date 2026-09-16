@@ -1755,6 +1755,103 @@ describe("Registry", () => {
     });
   });
 
+  describe("quarantine update (PUT)", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries" }));
+    });
+
+    it("exact path is PUT /har/api/v1/registry/{spaceRef}/{registryId}/+/quarantine", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { artifact: "nginx" } });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/har/api/v1/registry/test-account/default/test-project/my-reg/+/quarantine");
+    });
+
+    it("scope fields (orgIdentifier, projectIdentifier) are NOT injected into the body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("response is unwrapped from { status, data } envelope", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { artifact: "nginx", filePath: "/etc/passwd" },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      }) as Record<string, unknown>;
+
+      expect(result.artifact).toBe("nginx");
+      expect(result.status).toBeUndefined();
+    });
+  });
+
+  describe("firewall_exception_v3 create", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+    });
+
+    it("exact path is POST /har/api/v3/scans/exceptions", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ exceptionId: "exc-1", status: "PENDING" });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: {
+          registryId: "reg-uuid-123",
+          packageName: "lodash",
+          businessJustification: "Required for build process",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/har/api/v3/scans/exceptions");
+    });
+
+    it("scope fields (orgIdentifier, projectIdentifier) are NOT injected into the body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: { registryId: "reg-uuid-123", packageName: "lodash", businessJustification: "needed" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("bodySchema has registryId, packageName, businessJustification as required fields", () => {
+      const def = reg.getResource("firewall_exception_v3");
+      const fields = def.operations.create?.bodySchema?.fields ?? [];
+      const required = fields.filter(f => f.required).map(f => f.name);
+      expect(required).toContain("registryId");
+      expect(required).toContain("packageName");
+      expect(required).toContain("businessJustification");
+    });
+  });
+
   describe("ELK→Mongo fallback", () => {
     let registry: Registry;
     beforeEach(() => {
