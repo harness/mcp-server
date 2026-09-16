@@ -220,4 +220,25 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream Ansible extra-vars on IACMAnsiblePluginInfo in v0 pipeline and template", () => {
+    for (const bundleKey of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[bundleKey].definitions as Record<string, Record<string, unknown>>;
+      const iacmSteps = defs.pipeline.steps.iacm as Record<string, unknown>;
+      const ansibleInfo = iacmSteps.IACMAnsiblePluginInfo as {
+        properties: Record<
+          string,
+          { description?: string; oneOf?: Array<{ type?: string; additionalProperties?: unknown }> }
+        >;
+      };
+
+      expect(ansibleInfo.properties).toHaveProperty("variables");
+      const variables = ansibleInfo.properties.variables;
+      expect(variables.description).toContain("Ansible extra-vars");
+      expect(variables.oneOf).toHaveLength(2);
+      expect(variables.oneOf?.[0]?.type).toBe("object");
+      expect(variables.oneOf?.[0]?.additionalProperties).toEqual({ type: "string" });
+      expect(variables.oneOf?.[1]?.type).toBe("string");
+    }
+  });
 });
