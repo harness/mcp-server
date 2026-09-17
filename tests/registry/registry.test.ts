@@ -1805,6 +1805,33 @@ describe("Registry", () => {
       expect(result.artifact).toBe("nginx");
       expect(result.status).toBeUndefined();
     });
+
+    it("update risk is medium_write (quarantine blocks pulls immediately)", () => {
+      const def = reg.getResource("quarantine");
+      expect(def.operations.update?.operationPolicy?.risk).toBe("medium_write");
+    });
+
+    it("delete (unquarantine) sends DELETE to the quarantine path with artifact query param", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS" });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "delete", {
+        registry_id: "my-reg",
+        artifact: "nginx",
+        version: "1.25.0",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("DELETE");
+      expect(call.path).toBe("/har/api/v1/registry/test-account/default/test-project/my-reg/+/quarantine");
+      expect(call.params?.artifact).toBe("nginx");
+      expect(call.params?.version).toBe("1.25.0");
+    });
+
+    it("delete risk is destructive (per structural validation rule for all deletes)", () => {
+      const def = reg.getResource("quarantine");
+      expect(def.operations.delete?.operationPolicy?.risk).toBe("destructive");
+    });
   });
 
   describe("firewall_exception_v3 create", () => {
@@ -1830,7 +1857,7 @@ describe("Registry", () => {
       expect(call.path).toBe("/har/api/v3/scans/exceptions");
     });
 
-    it("scope fields (orgIdentifier, projectIdentifier) are NOT injected into the body", async () => {
+    it("org_identifier and project_identifier are NOT sent in body or query params", async () => {
       const mockRequest = vi.fn().mockResolvedValue({});
       const client = makeClient(mockRequest);
 
@@ -1839,8 +1866,12 @@ describe("Registry", () => {
       });
 
       const call = mockRequest.mock.calls[0][0];
+      // body must not carry scope fields
       expect(call.body.orgIdentifier).toBeUndefined();
       expect(call.body.projectIdentifier).toBeUndefined();
+      // query string must not carry org/project — create is account-scoped only
+      expect(call.params?.org_identifier).toBeUndefined();
+      expect(call.params?.project_identifier).toBeUndefined();
     });
 
     it("bodySchema has registryId, packageName, businessJustification as required fields", () => {

@@ -492,7 +492,9 @@ export const registriesV3Toolset: ToolsetDefinition = {
       displayName: "Firewall Exception (v3)",
       description: "Approved / pending exceptions that let a policy-blocked artifact through firewall.",
       toolset: "registries-v3",
-      scope: "project",
+      // account-scoped: CreateFirewallExceptionV3 only accepts account_identifier (no org/project).
+      // List accepts optional org/project for filtering — pass them explicitly via filter fields.
+      scope: "account",
       scopeParams: V3_SCOPE_PARAMS,
       identifierFields: ["exception_id"],
       compactItem: compactFirewallExceptionV3,
@@ -509,6 +511,8 @@ export const registriesV3Toolset: ToolsetDefinition = {
         { name: "registry_ids", description: "Comma-separated registry IDs" },
         { name: "exception_id", description: "Filter by exception ID" },
         { name: "sort", description: V3_SORT_DESC },
+        { name: "org_id", description: "Org identifier to narrow list scope (optional)" },
+        { name: "project_id", description: "Project identifier to narrow list scope (optional)" },
       ],
       operations: {
         list: {
@@ -526,6 +530,8 @@ export const registriesV3Toolset: ToolsetDefinition = {
             sort: "sort",
             page: "page",
             size: "size",
+            org_id: "org_identifier",
+            project_id: "project_identifier",
           },
           responseExtractor: harV3ListExtract,
           description: "List firewall exceptions (v3)",
@@ -533,7 +539,6 @@ export const registriesV3Toolset: ToolsetDefinition = {
         create: {
           method: "POST",
           path: "/har/api/v3/scans/exceptions",
-          // Account-scoped: CreateFirewallExceptionV3 only takes account_identifier (no org/project).
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           skipScopeBodyInjection: true,
           bodyBuilder: (input) => input.body,
