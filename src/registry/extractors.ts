@@ -143,6 +143,44 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
   };
 };
 
+function scalarString(value: unknown): string | undefined {
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+/**
+ * User list/get wrap identity under `user: { uuid, email, name, ... }`.
+ * Flatten so list/get expose `identifier`/`uuid` at the top level — compact mode
+ * otherwise drops the nested `user` object and follow-up gets fail.
+ */
+
+export function flattenUserAggregate(item: unknown): unknown {
+  if (!isRecord(item)) return item;
+  const nested = isRecord(item.user) ? item.user : undefined;
+  const uuid = scalarString(nested?.uuid ?? item.uuid ?? item.identifier);
+  const email = scalarString(nested?.email ?? item.email);
+  const name = scalarString(nested?.name ?? item.name);
+  const out: Record<string, unknown> = { ...item };
+  if (uuid) {
+    out.identifier = uuid;
+    out.uuid = uuid;
+  }
+  if (email) out.email = email;
+  if (name) out.name = name;
+  if (nested) {
+    for (const key of ["locked", "disabled", "externallyManaged", "twoFactorAuthenticationEnabled"] as const) {
+      if (out[key] === undefined && nested[key] !== undefined) out[key] = nested[key];
+    }
+  }
+  return out;
+}
+
+export const userAggregateExtract = (raw: unknown): unknown => flattenUserAggregate(ngExtract(raw));
+
+export const userAggregatePageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const paged = pageExtract(raw);
+  return { items: paged.items.map(flattenUserAggregate), total: paged.total };
+};
+
 /**
  * Spring Data page at the response root (no NG `{ data }` envelope):
  * `{ content, totalElements }`. Used by Release Management (RMG) list APIs.

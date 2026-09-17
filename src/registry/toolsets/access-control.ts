@@ -1,5 +1,126 @@
 import type { ToolsetDefinition } from "../types.js";
-import { ngExtract, pageExtract } from "../extractors.js";
+import { ngExtract, pageExtract, userAggregateExtract, userAggregatePageExtract } from "../extractors.js";
+
+function csvStrings(value: unknown): string[] | undefined {
+  if (value == null || value === "") return undefined;
+  const parts = Array.isArray(value)
+    ? value.map((item) => String(item).trim())
+    : String(value).split(",").map((item) => item.trim());
+  const out = parts.filter(Boolean);
+  return out.length > 0 ? out : undefined;
+}
+
+function asBoolean(value: unknown): boolean | undefined {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return undefined;
+}
+
+/** Keep email/uuid through harness_list compact mode (email is not in the global whitelist). */
+function compactUserListItem(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "identifier",
+    "uuid",
+    "name",
+    "email",
+    "locked",
+    "disabled",
+    "externallyManaged",
+    "openInHarness",
+  ] as const) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
+}
+
+function mapRoleBinding(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const r = raw as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  const roleIdentifier = r.roleIdentifier ?? r.role_identifier;
+  const resourceGroupIdentifier = r.resourceGroupIdentifier ?? r.resource_group_identifier;
+  const roleScopeLevel = r.roleScopeLevel ?? r.role_scope_level;
+  const roleName = r.roleName ?? r.role_name;
+  const resourceGroupName = r.resourceGroupName ?? r.resource_group_name;
+  if (typeof roleIdentifier === "string") out.roleIdentifier = roleIdentifier;
+  if (typeof resourceGroupIdentifier === "string") out.resourceGroupIdentifier = resourceGroupIdentifier;
+  if (typeof roleScopeLevel === "string") out.roleScopeLevel = roleScopeLevel;
+  if (typeof roleName === "string") out.roleName = roleName;
+  if (typeof resourceGroupName === "string") out.resourceGroupName = resourceGroupName;
+  const managed = asBoolean(r.managedRole ?? r.managed_role);
+  if (managed !== undefined) out.managedRole = managed;
+  return out;
+}
+
+function assertMemberUuids(value: unknown): string[] {
+  if (Array.isArray(value) && value.length === 0) return [];
+  const users = csvStrings(value);
+  if (!users) {
+    throw new Error("users must be an array or comma-separated list of user UUIDs");
+  }
+  const emailed = users.find((id) => id.includes("@"));
+  if (emailed) {
+    throw new Error(
+      `users must be Harness user UUIDs, not emails (${emailed}). Call harness_list resource_type=user and use identifier/uuid.`,
+    );
+  }
+  return users;
+}
+
+function userGroupWriteBody(
+  input: Record<string, unknown>,
+  opts: { requireUsers?: boolean } = {},
+): Record<string, unknown> {
+  const raw = input.body;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new Error("body is required and must be an object with identifier and name");
+  }
+  const b = { ...(raw as Record<string, unknown>) };
+  if (typeof b.identifier !== "string" || b.identifier === "") {
+    const fromField = input.user_group_id;
+    if (typeof fromField === "string" && fromField !== "") b.identifier = fromField;
+  }
+  if (opts.requireUsers && b.users === undefined) {
+    throw new Error(
+      "users is required on update (complete member UUID list). Omitting users would clear membership. Pass users: [] to clear explicitly.",
+    );
+  }
+  if (b.users !== undefined) {
+    b.users = assertMemberUuids(b.users);
+  }
+  return b;
+}
+
+const USER_GROUP_BASE_FIELDS = [
+  { name: "identifier", type: "string" as const, required: true, description: "Unique identifier" },
+  { name: "name", type: "string" as const, required: true, description: "Display name" },
+  { name: "description", type: "string" as const, required: false, description: "Group description" },
+];
+
+const USER_GROUP_CREATE_SCHEMA = {
+  description: "User group definition",
+  fields: [
+    ...USER_GROUP_BASE_FIELDS,
+    { name: "users", type: "array" as const, required: false, description: "Member user IDs (UUIDs). Optional on create.", itemType: "string" },
+  ],
+};
+
+const USER_GROUP_UPDATE_SCHEMA = {
+  description:
+    "User group update. PUT replaces the group. users is the complete membership list, not a patch.",
+  fields: [
+    ...USER_GROUP_BASE_FIELDS,
+    {
+      name: "users",
+      type: "array" as const,
+      required: true,
+      description:
+        "Complete member UUID list. Required on update — omitting users would wipe membership. Pass [] to clear.",
+      itemType: "string",
+    },
+  ],
+};
 
 export const accessControlToolset: ToolsetDefinition = {
   name: "access_control",
@@ -9,32 +130,54 @@ export const accessControlToolset: ToolsetDefinition = {
     {
       resourceType: "user",
       displayName: "User",
-      description: "Get details of all the USERS in the account. Supports list, get, and invite.",
+      description:
+        "Harness users. Supports list, get, and invite. Default list/get/invite scope is project — pass org_id and project_id (or a project URL) on the first call. Use resource_scope='account' only when the user asked for account-level users.",
       toolset: "access_control",
-      scope: "account",
+      scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["user_id"],
+      compactItem: compactUserListItem,
       listFilterFields: [
-        { name: "search_term", description: "Optional search term to filter users. Search by email ID or name." },
+        { name: "search_term", description: "Filter users by email or name" },
+        { name: "role_identifiers", description: "Filter by role identifiers (comma-separated)" },
+        { name: "resource_group_identifiers", description: "Filter by resource group identifiers (comma-separated)" },
       ],
-      deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/users",
+      diagnosticHint:
+        "If get returns 404, user_id must be the UUID from harness_list (identifier/uuid), not an email. Search with search_term=<email> and use the returned uuid. If list is empty, retry with resource_scope matching where the user lives (account, org, or project).",
+      deepLinkTemplate:
+        "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/access-control/users",
       operations: {
         list: {
           method: "POST",
           path: "/ng/api/user/aggregate",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { page: "pageIndex", size: "pageSize" },
-          bodyBuilder: (input) => ({
-            searchTerm: input.search_term ?? "",
-          }),
-          responseExtractor: pageExtract,
-          description: "Get details of all the USERS in the account",
+          skipScopeBodyInjection: true,
+          queryParams: {
+            search_term: "searchTerm",
+            page: "pageIndex",
+            size: "pageSize",
+          },
+          bodyBuilder: (input) => {
+            const roleIdentifiers = csvStrings(input.role_identifiers);
+            const resourceGroupIdentifiers = csvStrings(input.resource_group_identifiers);
+            // API returns 400 if searchTerm is combined with role/resource-group filters.
+            if ((roleIdentifiers || resourceGroupIdentifiers) && input.search_term) {
+              throw new Error("Search and Filter are not supported together");
+            }
+            const body: Record<string, unknown> = {};
+            if (roleIdentifiers) body.roleIdentifiers = roleIdentifiers;
+            if (resourceGroupIdentifiers) body.resourceGroupIdentifiers = resourceGroupIdentifiers;
+            return body;
+          },
+          responseExtractor: userAggregatePageExtract,
+          description: "List users",
         },
         get: {
           method: "GET",
           path: "/ng/api/user/aggregate/{userId}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { user_id: "userId" },
-          responseExtractor: ngExtract,
+          responseExtractor: userAggregateExtract,
           description: "Get user details by ID",
         },
       },
@@ -43,31 +186,45 @@ export const accessControlToolset: ToolsetDefinition = {
           method: "POST",
           path: "/ng/api/user/users",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
           bodyBuilder: (input) => {
             const b = input.body as Record<string, unknown> | undefined;
-            const emails = b?.emails ?? b?.email_ids;
-            const userGroups = b?.user_groups ?? b?.user_group_ids;
-            const roleBindings = b?.role_bindings;
+            const emails = csvStrings(b?.emails ?? b?.email_ids);
+            if (!emails) {
+              throw new Error(
+                'emails is required for user invite — pass body.emails as an array or comma-separated string.',
+              );
+            }
+            const userGroups = csvStrings(b?.user_groups ?? b?.user_group_ids);
+            const roleBindingsRaw = b?.role_bindings ?? b?.roleBindings;
+            const roleBindings = Array.isArray(roleBindingsRaw)
+              ? roleBindingsRaw.map(mapRoleBinding).filter((rb) => typeof rb.roleIdentifier === "string")
+              : [];
+            if (!userGroups && roleBindings.length === 0) {
+              throw new Error(
+                "Invite requires user_groups and/or role_bindings in addition to emails.",
+              );
+            }
             return {
-              emails: Array.isArray(emails) ? emails : typeof emails === "string" ? emails.split(",").map((s: string) => s.trim()) : [],
-              userGroups: Array.isArray(userGroups) ? userGroups : typeof userGroups === "string" ? userGroups.split(",").map((s: string) => s.trim()) : [],
-              roleBindings: Array.isArray(roleBindings) ? roleBindings : [],
+              emails,
+              ...(userGroups ? { userGroups } : {}),
+              ...(roleBindings.length > 0 ? { roleBindings } : {}),
             };
           },
           responseExtractor: ngExtract,
           actionDescription: "Invite users to Harness with specified role bindings and user groups.",
           bodySchema: {
-            description: "User invitation request",
+            description: "User invitation. emails plus user_groups and/or role_bindings.",
             fields: [
               { name: "emails", type: "array", required: true, description: "Email addresses of users to invite (array or comma-separated string)", itemType: "string" },
               { name: "user_groups", type: "array", required: false, description: "User group identifiers to add invited users to", itemType: "string" },
               { name: "role_bindings", type: "array", required: false, description: "Role bindings for invited users", itemType: "object", fields: [
                 { name: "roleIdentifier", type: "string", required: true, description: "Role identifier" },
-                { name: "resourceGroupIdentifier", type: "string", required: true, description: "Resource group identifier" },
-                { name: "roleScopeLevel", type: "string", required: true, description: "Role scope level" },
-                { name: "roleName", type: "string", required: true, description: "Role name" },
-                { name: "resourceGroupName", type: "string", required: true, description: "Resource group name" },
-                { name: "managedRole", type: "string", required: true, description: "Whether this is a managed role ('true' or 'false')" },
+                { name: "resourceGroupIdentifier", type: "string", required: false, description: "Resource group identifier" },
+                { name: "roleScopeLevel", type: "string", required: false, description: "Role scope level (account, organization, project)" },
+                { name: "roleName", type: "string", required: false, description: "Role display name" },
+                { name: "resourceGroupName", type: "string", required: false, description: "Resource group display name" },
+                { name: "managedRole", type: "boolean", required: false, description: "Whether this is a managed role" },
               ]},
             ],
           },
@@ -77,14 +234,29 @@ export const accessControlToolset: ToolsetDefinition = {
     {
       resourceType: "user_group",
       displayName: "User Group",
-      description: "User group for RBAC. Supports list, get, create, and delete.",
+      description:
+        "User group for RBAC. Supports list, get, create, update, and delete. Default list/get/create/update/delete scope is project — pass org_id and project_id (or a project URL) on the first call. Use resource_scope='account' only when the user asked for account-level groups.",
       toolset: "access_control",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: ["user_group_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter user groups by name or keyword" },
+        {
+          name: "filter_type",
+          description: "Which groups to include at this scope",
+          enum: [
+            "EXCLUDE_INHERITED_GROUPS",
+            "INCLUDE_INHERITED_GROUPS",
+            "INCLUDE_CHILD_SCOPE_GROUPS",
+            "INCLUDE_PARENT_SCOPE_GROUPS",
+          ],
+        },
       ],
-      deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/user-groups/{groupIdentifier}",
+      diagnosticHint:
+        "If get/update/delete returns 404, the group may live at another scope — use the item's org/project (or resource_scope=account). users must be user UUIDs from harness_list resource_type=user (identifier), not emails. Update replaces the whole group including membership.",
+      deepLinkTemplate:
+        "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/access-control/user-groups/{groupIdentifier}",
       operations: {
         list: {
           method: "GET",
@@ -92,6 +264,7 @@ export const accessControlToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
+            filter_type: "filterType",
             page: "pageIndex",
             size: "pageSize",
           },
@@ -110,18 +283,21 @@ export const accessControlToolset: ToolsetDefinition = {
           method: "POST",
           path: "/ng/api/user-groups",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          bodyBuilder: (input) => input.body,
+          injectAccountInBody: true,
+          bodyBuilder: (input) => userGroupWriteBody(input),
           responseExtractor: ngExtract,
           description: "Create a user group",
-          bodySchema: {
-            description: "User group definition",
-            fields: [
-              { name: "identifier", type: "string", required: true, description: "Unique identifier" },
-              { name: "name", type: "string", required: true, description: "Display name" },
-              { name: "description", type: "string", required: false, description: "Group description" },
-              { name: "users", type: "array", required: false, description: "User IDs to add to the group", itemType: "string" },
-            ],
-          },
+          bodySchema: USER_GROUP_CREATE_SCHEMA,
+        },
+        update: {
+          method: "PUT",
+          path: "/ng/api/user-groups",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          injectAccountInBody: true,
+          bodyBuilder: (input) => userGroupWriteBody(input, { requireUsers: true }),
+          responseExtractor: ngExtract,
+          description: "Update a user group",
+          bodySchema: USER_GROUP_UPDATE_SCHEMA,
         },
         delete: {
           method: "DELETE",
