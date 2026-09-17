@@ -131,11 +131,10 @@ export const accessControlToolset: ToolsetDefinition = {
       resourceType: "user",
       displayName: "User",
       description:
-        "Harness users. Supports list, get, and invite. Default list/get/invite scope is account. Pass org_id and project_id (or a project URL) for org/project membership. Configured HARNESS_ORG/HARNESS_PROJECT are not applied unless those fields are passed.",
+        "Harness users. Supports list, get, and invite. Default list/get/invite scope is project — pass org_id and project_id (or a project URL) on the first call. Use resource_scope='account' only when the user asked for account-level users.",
       toolset: "access_control",
-      scope: "account",
+      scope: "project",
       supportedScopes: ["account", "org", "project"],
-      scopeOptional: true,
       identifierFields: ["user_id"],
       compactItem: compactUserListItem,
       listFilterFields: [

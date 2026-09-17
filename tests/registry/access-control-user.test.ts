@@ -62,14 +62,14 @@ describe("user resource", () => {
     registry = new Registry(makeConfig());
   });
 
-  it("declares account default with optional org/project scopes", () => {
+  it("declares project default with account/org/project scopes", () => {
     const def = registry.getResource("user");
-    expect(def.scope).toBe("account");
-    expect(def.scopeOptional).toBe(true);
+    expect(def.scope).toBe("project");
+    expect(def.scopeOptional).toBeUndefined();
     expect(def.supportedScopes).toEqual(["account", "org", "project"]);
   });
 
-  it("list: searchTerm is a query param, not JSON body; config org/project are not injected", async () => {
+  it("list: searchTerm is a query param, not JSON body; injects org/project", async () => {
     const mockRequest = vi.fn().mockResolvedValue(listResponse);
     const client = makeClient(mockRequest);
 
@@ -85,8 +85,8 @@ describe("user resource", () => {
     expect(call.params.searchTerm).toBe("ada@example.com");
     expect(call.params.pageIndex).toBe(0);
     expect(call.params.pageSize).toBe(20);
-    expect(call.params.orgIdentifier).toBeUndefined();
-    expect(call.params.projectIdentifier).toBeUndefined();
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
     expect(call.body.searchTerm).toBeUndefined();
     expect(call.body).toEqual({});
 
@@ -161,7 +161,7 @@ describe("user resource", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("GET");
     expect(call.path).toBe("/ng/api/user/aggregate/uuid-ada");
-    expect(call.params.orgIdentifier).toBeUndefined();
+    expect(call.params.orgIdentifier).toBe("default");
     expect(result).toMatchObject({
       identifier: "uuid-ada",
       email: "ada@example.com",
@@ -190,8 +190,8 @@ describe("user resource", () => {
     const call = mockRequest.mock.calls[0][0];
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/ng/api/user/users");
-    expect(call.params.orgIdentifier).toBeUndefined();
-    expect(call.params.projectIdentifier).toBeUndefined();
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("test-project");
     expect(call.body).toEqual({
       emails: ["a@x.com", "b@x.com"],
       userGroups: ["g1"],

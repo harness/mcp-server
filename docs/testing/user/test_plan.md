@@ -5,7 +5,7 @@
 | **Resource Type** | `user` |
 | **Display Name** | User |
 | **Toolset** | access_control |
-| **Scope** | account (supported: account, org, project; org/project only when passed explicitly) |
+| **Scope** | project (supported: account, org, project) |
 | **Operations** | list, get |
 | **Execute Actions** | invite |
 | **Identifier Fields** | user_id |
@@ -16,7 +16,7 @@
 
 | Test ID | Category | Description | Prompt | Expected Result |
 |---------|----------|-------------|--------|-----------------|
-| TC-usr-001 | List | Basic list of users | `harness_list(resource_type="user")` | Returns paginated list of users at account scope (config org/project are not applied) |
+| TC-usr-001 | List | Basic list of users | `harness_list(resource_type="user")` | Returns paginated list of users at project scope (config org/project) |
 | TC-usr-002 | List | Pagination - page 0, size 5 | `harness_list(resource_type="user", page=0, size=5)` | Returns first 5 users |
 | TC-usr-003 | List | Pagination - page 1 | `harness_list(resource_type="user", page=1, size=5)` | Returns second page of users |
 | TC-usr-004 | List | Filter by search_term (name) | `harness_list(resource_type="user", search_term="John")` | Returns users matching name "John" |
@@ -33,6 +33,6 @@
 | TC-usr-015 | Describe | Resource metadata | `harness_describe(resource_type="user")` | Returns metadata with operations (list, get), execute actions (invite), and body schema |
 
 ## Notes
-- Default scope is account. Pass `org_id` / `project_id` for org or project membership. Config `HARNESS_ORG` / `HARNESS_PROJECT` are not applied unless those fields are passed.
+- Default scope is project (`org_id` + `project_id`, or config defaults). Use `resource_scope=account` or `org` for broader membership.
 - List with `search_term` to filter by email or name. Optional `role_identifiers` / `resource_group_identifiers` cannot be combined with `search_term`.
 - Invite via `harness_execute` action=invite. Body: `emails` plus `user_groups` and/or `role_bindings`.
