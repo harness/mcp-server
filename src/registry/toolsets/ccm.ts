@@ -429,9 +429,12 @@ function requireAiBudgetId(input: Record<string, unknown>, key: string, label: s
   return value.trim();
 }
 
-function aiGovernanceBase(input: Record<string, unknown>, config: PathBuilderConfig): string {
-  const accountId = (input.account_id as string) ?? config.HARNESS_ACCOUNT_ID ?? "";
-  input.account_id = accountId;
+function aiGovernanceBase(_input: Record<string, unknown>, config: PathBuilderConfig): string {
+  // Per-request account from registry dispatch (getAccountId / accountIdResolver), not static env.
+  const accountId = config.HARNESS_ACCOUNT_ID ?? "";
+  if (!accountId) {
+    throw new Error("Harness account ID is required for AI governance APIs");
+  }
   return `/lw/api/accounts/${accountId}/ai-governance`;
 }
 

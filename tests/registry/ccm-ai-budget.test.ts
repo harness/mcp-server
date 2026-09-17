@@ -1,7 +1,10 @@
 /**
  * Unit tests for CCM AI Budget (Lightwing AI governance) resource registration.
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { Registry } from "../../src/registry/index.js";
+import type { Config } from "../../src/config.js";
+import type { HarnessClient } from "../../src/client/harness-client.js";
 import { ccmToolset } from "../../src/registry/toolsets/ccm.js";
 import type { PathBuilderConfig } from "../../src/registry/types.js";
 import {
@@ -41,6 +44,15 @@ describe("ai_budget resource", () => {
 
     const getPath = aiBudget!.operations.get!.pathBuilder!({ budget_id: "bid-1" }, config);
     expect(getPath).toBe("/lw/api/accounts/acct-1/ai-governance/policies/bid-1");
+  });
+
+  it("pathBuilder ignores input.account_id and uses registry-resolved account", () => {
+    const listPath = aiBudget!.operations.list!.pathBuilder!(
+      { account_id: "wrong-from-ask-ai" },
+      { HARNESS_ACCOUNT_ID: "resolved-tenant" },
+    );
+    expect(listPath).toBe("/lw/api/accounts/resolved-tenant/ai-governance/policies/list");
+    expect(listPath).not.toContain("wrong-from-ask-ai");
   });
 
   it("list bodyBuilder maps search_term and folder_id", () => {
@@ -133,6 +145,50 @@ describe("ai_budget_override_request", () => {
     expect(aiOverride!.executeActions!.approve!.operationPolicy.risk).toBe("high_write");
     const path = aiOverride!.executeActions!.approve!.pathBuilder!({ budget_id: "p1" }, config);
     expect(path).toBe("/lw/api/accounts/acct-1/ai-governance/policies/p1/override/requests/review");
+  });
+});
+
+function makeConfig(overrides: Partial<Config> = {}): Config {
+  return {
+    HARNESS_API_KEY: "pat.internal.internal.dummy",
+    HARNESS_ACCOUNT_ID: "internal",
+    HARNESS_BASE_URL: "https://app.harness.io",
+    HARNESS_ORG: "default",
+    HARNESS_PROJECT: undefined as unknown as string,
+    HARNESS_API_TIMEOUT_MS: 30000,
+    HARNESS_MAX_RETRIES: 3,
+    LOG_LEVEL: "info",
+    HARNESS_MAX_BODY_SIZE_MB: 10,
+    HARNESS_RATE_LIMIT_RPS: 10,
+    HARNESS_READ_ONLY: false,
+    HARNESS_SKIP_ELICITATION: false,
+    HARNESS_ALLOW_HTTP: false,
+    HARNESS_FME_BASE_URL: "https://api.split.io",
+    HARNESS_TOOLSETS: "ccm",
+    ...overrides,
+  };
+}
+
+describe("ai_budget registry dispatch account ID", () => {
+  const REAL_ACCOUNT_ID = "l7B_kbSEQD2wjrM7PShm5w";
+
+  it("list uses accountIdResolver, not static config placeholder", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_ACCOUNT_ID: "internal" }), {
+      accountIdResolver: () => REAL_ACCOUNT_ID,
+    });
+
+    const mockClient = {
+      request: vi.fn().mockResolvedValue({
+        data: { response: { items: [], total: 0 } },
+        status: "SUCCESS",
+      }),
+    } as unknown as HarnessClient;
+
+    await registry.dispatch(mockClient, "ai_budget", "list", {});
+
+    const callArgs = (mockClient.request as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(callArgs.path).toBe(`/lw/api/accounts/${REAL_ACCOUNT_ID}/ai-governance/policies/list`);
+    expect(callArgs.path).not.toContain("/internal/");
   });
 });
 
