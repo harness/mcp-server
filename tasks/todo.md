@@ -1,5 +1,23 @@
 # Harness MCP Server — Task Tracking
 
+## Version Bump 3.2.28 (2026-09-16)
+
+- [x] Update package, shrinkwrap, and MCPB manifest versions to 3.2.28.
+- [x] Update release metadata and bundle filename expectations.
+- [x] Run focused release checks, typecheck, build, and diff validation.
+
+### Plan
+
+- Keep this a metadata-only patch release bump from current `origin/main` at `5d00649f`.
+- Synchronize `package.json`, both root version fields in `npm-shrinkwrap.json`, `manifest.json`, `mcp-directory/manifest.json`, and the pinned release test values.
+- Preserve the prior ChatGPT submission work in its named stash and leave publication for a separate explicit request.
+
+### Review
+
+- Fast-forwarded local `main` to current `origin/main` at `5d00649f` and created `chore/version-3.2.28` from that commit.
+- Updated all six release metadata surfaces from 3.2.27 to 3.2.28 without dependency or runtime changes.
+- Verification passed: 7 focused release tests, typecheck, build, shrinkwrap check, docs check, standards (79 tests), full suite (158 files / 3,650 tests), and `git diff --check`.
+
 ## Keep slashes in Code branch, tag, and diff paths (2026-09-16)
 
 - [x] Encode slash-containing branch/tag/diff values as path segments, not `%2F`.
