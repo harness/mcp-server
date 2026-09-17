@@ -48,6 +48,7 @@ import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
 import { aiEvalsToolset } from "./toolsets/ai-evals.js";
+import { observabilityEvaluationsToolset } from "./toolsets/observability-evaluations.js";
 import { iacmToolset } from "./toolsets/iacm.js";
 import { knowledgeGraphToolset } from "./toolsets/knowledge-graph.js";
 import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
@@ -168,6 +169,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   freezeToolset,
   overridesToolset,
   aiEvalsToolset,
+  observabilityEvaluationsToolset,
   iacmToolset,
   knowledgeGraphToolset,
   semanticLayerToolset,
@@ -623,8 +625,10 @@ export class Registry {
     const resolvedRoute = spec.routeResolver ? spec.routeResolver(input, resolvedConfig) : undefined;
 
     // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
+    // Pass registry-resolved accountId so hooks do not depend on client.account,
+    // which is the process placeholder in multi-tenant chat MCP.
     if (spec.preflight) {
-      await spec.preflight({ client, input, registry: this, signal });
+      await spec.preflight({ client, input, registry: this, signal, accountId: resolvedAccountId });
     }
 
     // When explicit resource_scope resolved org/project from config defaults,

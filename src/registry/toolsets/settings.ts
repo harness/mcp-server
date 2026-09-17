@@ -1,6 +1,33 @@
 import type { ToolsetDefinition } from "../types.js";
 import { ngExtract } from "../extractors.js";
 
+/** Category values accepted by GET /ng/api/settings. */
+export const SETTING_CATEGORIES = [
+  "CD",
+  "CI",
+  "CE",
+  "CV",
+  "CF",
+  "STO",
+  "CORE",
+  "PMS",
+  "TEMPLATESERVICE",
+  "GOVERNANCE",
+  "CHAOS",
+  "SCIM",
+  "GIT_EXPERIENCE",
+  "CONNECTORS",
+  "EULA",
+  "NOTIFICATIONS",
+  "SUPPLY_CHAIN_ASSURANCE",
+  "USER",
+  "MODULES_VISIBILITY",
+  "DBOPS",
+  "IR",
+  "AR",
+  "RELEASE",
+] as const;
+
 export const settingsToolset: ToolsetDefinition = {
   name: "settings",
   displayName: "Settings",
@@ -9,14 +36,26 @@ export const settingsToolset: ToolsetDefinition = {
     {
       resourceType: "setting",
       displayName: "Setting",
-      description: "Platform setting. Supports list with required 'category' filter. Optionally filter by 'group' and 'include_parent_scopes'.",
+      description:
+        "Platform setting. Supports list with a 'category' filter. Optionally filter by 'group' and 'include_parent_scopes'. " +
+        "Use resource_scope='account'|'org'|'project' to target account-, org-, or project-level settings. Default is project.",
       toolset: "settings",
       scope: "project",
+      supportedScopes: ["account", "org", "project"],
       identifierFields: [],
       listFilterFields: [
-        { name: "category", description: "Filter settings by category" },
+        {
+          name: "category",
+          required: true,
+          description: "Filter settings by category",
+          enum: [...SETTING_CATEGORIES],
+        },
         { name: "group", description: "Filter settings by group" },
-        { name: "include_parent_scopes", description: "Include parent scopes in settings", type: "boolean" },
+        {
+          name: "include_parent_scopes",
+          description: "Include settings that exist only at parent scopes",
+          type: "boolean",
+        },
       ],
       deepLinkTemplate: "/ng/account/{accountId}/settings",
       operations: {
@@ -30,7 +69,7 @@ export const settingsToolset: ToolsetDefinition = {
             include_parent_scopes: "includeParentScopes",
           },
           responseExtractor: ngExtract,
-          description: "List platform settings. 'category' is required (e.g. CE, CI, CD, CORE, PMS, NOTIFICATION).",
+          description: "List platform settings.",
         },
       },
     },

@@ -33,7 +33,7 @@ src/
 │   ├── types.ts        # Registry types: ResourceDefinition, EndpointSpec, OperationPolicy
 │   ├── extractors.ts   # Response shape extractors for all resource types
 │   ├── scope-utils.ts  # Scope resolution utilities
-│   └── toolsets/       # 41 declarative toolset definition files (pure data — add new resources here)
+│   └── toolsets/       # 45 declarative toolset definition files (pure data — add new resources here)
 ├── tools/              # 11 consolidated tool handlers
 ├── prompts/            # ~33 prompt templates (one per workflow)
 ├── resources/          # MCP resources (pipeline YAML, execution summary)
