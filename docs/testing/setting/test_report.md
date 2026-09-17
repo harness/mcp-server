@@ -18,7 +18,7 @@
 | TC-set-003 | List settings by category CE | `harness_list(resource_type="setting", category="CE")` | Returns CE settings | ⬜ Pending | | |
 | TC-set-004 | List settings by category CORE | `harness_list(resource_type="setting", category="CORE")` | Returns CORE settings | ⬜ Pending | | |
 | TC-set-005 | List settings by category PMS | `harness_list(resource_type="setting", category="PMS")` | Returns PMS settings | ⬜ Pending | | |
-| TC-set-006 | List settings by category NOTIFICATION | `harness_list(resource_type="setting", category="NOTIFICATION")` | Returns notification settings | ⬜ Pending | | |
+| TC-set-006 | List settings by category NOTIFICATIONS | `harness_list(resource_type="setting", category="NOTIFICATIONS")` | Returns notification settings | ⬜ Pending | | |
 | TC-set-007 | Filter by category and group | `harness_list(resource_type="setting", category="CD", group="pipeline")` | Returns filtered settings | ⬜ Pending | | |
 | TC-set-008 | Include parent scopes | `harness_list(resource_type="setting", category="CD", include_parent_scopes=true)` | Returns with parent scopes | ⬜ Pending | | |
 | TC-set-009 | Exclude parent scopes | `harness_list(resource_type="setting", category="CD", include_parent_scopes=false)` | Returns project-level only | ⬜ Pending | | |

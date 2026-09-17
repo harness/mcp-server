@@ -912,6 +912,9 @@ const schema: Record<string, any> = {
                   "$ref": "#/definitions/pipeline/steps/common/DBRollbackSchemaStepNode_template"
                 },
                 {
+                  "$ref": "#/definitions/pipeline/steps/common/GenerateChangelogStepNode_template"
+                },
+                {
                   "$ref": "#/definitions/pipeline/steps/common/AwsCdkDestroyStepNode_template"
                 },
                 {
@@ -6618,10 +6621,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -6643,20 +6655,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
@@ -6706,10 +6704,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -6731,20 +6738,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
@@ -6872,10 +6865,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -6897,20 +6899,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
@@ -6960,10 +6948,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -6985,20 +6982,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
@@ -7048,10 +7031,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -7073,20 +7065,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
@@ -7568,10 +7546,19 @@ const schema: Record<string, any> = {
                     "type": "string"
                   },
                   "gitFetchType": {
-                    "type": "string",
-                    "enum": [
-                      "Branch",
-                      "Commit"
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Branch",
+                          "Commit"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
                     ]
                   },
                   "paths": {
@@ -7593,20 +7580,6 @@ const schema: Record<string, any> = {
                     "type": "string"
                   }
                 }
-              },
-              {
-                "oneOf": [
-                  {
-                    "required": [
-                      "commitId"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "branch"
-                    ]
-                  }
-                ]
               },
               {
                 "oneOf": [
@@ -101864,6 +101837,205 @@ const schema: Record<string, any> = {
             ],
             "$schema": "http://json-schema.org/draft-07/schema#"
           },
+          "GenerateChangelogStepNode_template": {
+            "title": "GenerateChangelogStepNode_template",
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/DBDevOpsFailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "DBGenerateChangelog"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "DBGenerateChangelog"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/GenerateChangelogStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "GenerateChangelogStepInfo": {
+            "title": "GenerateChangelogStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "connectorRef",
+                  "dbSchema",
+                  "dbInstance"
+                ],
+                "properties": {
+                  "dbInstance": {
+                    "type": "string"
+                  },
+                  "dbSchema": {
+                    "type": "string"
+                  },
+                  "connectorRef": {
+                    "type": "string"
+                  },
+                  "settings": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/common/ParameterFieldMapStringJsonNode"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "delegateSelectors": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "envVariables": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "image": {
+                    "type": "string"
+                  },
+                  "imagePullPolicy": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "Always",
+                          "Never",
+                          "IfNotPresent"
+                        ]
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "privileged": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "reuse": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "runAsUser": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "description": {
+                    "desc": "This is the description for GenerateChangelogStepInfo"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "AwsCdkDestroyStepNode_template": {
             "title": "AwsCdkDestroyStepNode_template",
             "type": "object",
@@ -108789,6 +108961,100 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/steps/common/DBRollbackSchemaStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "GenerateChangelogStepNode": {
+            "title": "GenerateChangelogStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for GenerateChangelogStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/DBDevOpsFailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "DBGenerateChangelog"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "DBGenerateChangelog"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/GenerateChangelogStepInfo"
                     }
                   }
                 }
@@ -134821,6 +135087,38 @@ const schema: Record<string, any> = {
                         "minLength": 1
                       }
                     ]
+                  },
+                  "variables": {
+                    "description": "Optional Ansible extra-vars for this run. Runtime values override playbook variables, which override inventory variables.",
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "verbosity": {
+                    "description": "Optional Ansible verbosity (0-4). Omitted inherits any existing ANSIBLE_VERBOSITY; the plugin default is 0.",
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32",
+                        "minimum": 0,
+                        "maximum": 4
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
                   }
                 }
               }
@@ -134887,6 +135185,38 @@ const schema: Record<string, any> = {
                   {
                     "type": "string",
                     "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "variables": {
+                "description": "Optional Ansible extra-vars for this run. Runtime values override playbook variables, which override inventory variables.",
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "verbosity": {
+                "description": "Optional Ansible verbosity (0-4). Omitted inherits any existing ANSIBLE_VERBOSITY; the plugin default is 0.",
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 0,
+                    "maximum": 4
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
                     "minLength": 1
                   }
                 ]
@@ -138618,6 +138948,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/DBRollbackSchemaStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/GenerateChangelogStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/UpdateGitOpsAppStepNode"
@@ -148079,6 +148412,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/DBRollbackSchemaStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/GenerateChangelogStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/AwsCdkDestroyStepNode"
                   },
                   {
@@ -149238,6 +149574,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/DBRollbackSchemaStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/GenerateChangelogStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/LiquibaseCommandStepNode"

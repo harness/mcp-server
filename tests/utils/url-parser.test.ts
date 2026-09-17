@@ -687,6 +687,7 @@ describe("Harness Code file URLs", () => {
     expect(result.resource_type).toBe("file_content");
     expect(result.repo_id).toBe("my-repo");
     expect(result.git_ref).toBe("develop");
+    expect(result.branch_name).toBe("develop");
     expect(result.path).toBe("");
     expect(result.resource_id).toBeUndefined();
   });
@@ -704,6 +705,26 @@ describe("Harness Code file URLs", () => {
     expect(result.resource_type).toBe("branch");
     expect(result.repo_id).toBe("my-repo");
     expect(result.git_ref).toBe("develop");
+    expect(result.branch_name).toBe("develop");
+    expect(result.resource_id).toBeUndefined();
+  });
+
+  it("does not copy a files-URL file path onto resource_id when resource_type is overridden", () => {
+    const result = applyUrlDefaults({ resource_type: "branch" }, fileUrl);
+    expect(result.resource_type).toBe("branch");
+    expect(result.repo_id).toBe("my-repo");
+    expect(result.git_ref).toBe("main");
+    expect(result.branch_name).toBe("main");
+    expect(result.path).toBe("src/index.ts");
+    expect(result.resource_id).toBeUndefined();
+  });
+
+  it("still copies the file path onto resource_id for file_content", () => {
+    const result = applyUrlDefaults({ resource_type: "file_content" }, fileUrl);
+    expect(result.resource_type).toBe("file_content");
+    expect(result.resource_id).toBe("src/index.ts");
+    expect(result.path).toBe("src/index.ts");
+    expect(result.git_ref).toBe("main");
   });
 
   it("reads git_ref from gitRef query when the path has no /files/{ref}", () => {
@@ -712,6 +733,7 @@ describe("Harness Code file URLs", () => {
     );
     expect(result.repo_id).toBe("r");
     expect(result.git_ref).toBe("feature");
+    expect(result.branch_name).toBeUndefined();
     expect(result.resource_type).toBe("repository");
   });
 
@@ -721,6 +743,18 @@ describe("Harness Code file URLs", () => {
     );
     expect(result.resource_type).toBe("file_content");
     expect(result.git_ref).toBe("feature/foo");
+    expect(result.branch_name).toBe("feature/foo");
     expect(result.path).toBe("src/index.ts");
+  });
+
+  it("joins slash-containing branch names on /files/{ref} without ~/", () => {
+    const result = parseHarnessUrl(
+      "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r/files/feature/foo",
+    );
+    expect(result.resource_type).toBe("file_content");
+    expect(result.git_ref).toBe("feature/foo");
+    expect(result.branch_name).toBe("feature/foo");
+    expect(result.path).toBe("");
+    expect(result.resource_id).toBeUndefined();
   });
 });

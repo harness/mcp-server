@@ -84,6 +84,33 @@ export const ngExtract = (raw: unknown): unknown => {
 };
 
 /**
+ * Some Harness APIs wrap the payload as `{ resource }`; others use `{ data }`.
+ * Unwrap whichever is present so callers see the inner value.
+ */
+export const restResourceUnwrap = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  if (raw.resource !== undefined) return raw.resource;
+  if (raw.data !== undefined) return raw.data;
+  return raw;
+};
+
+/** List extract for `{ resource: T[] }` or `{ data: T[] }` envelopes. */
+export const restResourceListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const inner = restResourceUnwrap(raw);
+  const items = Array.isArray(inner) ? inner : inner == null ? [] : [inner];
+  return { items, total: items.length };
+};
+
+/** First item from a `{ resource: T[] }` / `{ data: T[] }` list envelope. */
+export const restResourceFirstExtract = (raw: unknown): unknown => {
+  const { items } = restResourceListExtract(raw);
+  if (items.length === 0) {
+    throw new HarnessApiError("No matching resource returned", 404);
+  }
+  return items[0];
+};
+
+/**
  * Extractor for CCM budget/budget-group writes (create, update, clone). These
  * endpoints return the new/affected entity ID as a BARE STRING under `data`:
  * `{ status: "SUCCESS", data: "<budgetId>" }`. The write tools (harness_create
