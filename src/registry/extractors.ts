@@ -107,6 +107,55 @@ export const ccmBudgetWriteExtract = (raw: unknown): unknown => {
   return r.data ?? raw;
 };
 
+/** Lightwing envelope `{ success, response }` — unwrap inner payload for MCP tools. */
+export const lwResponseExtract = (raw: unknown): unknown => {
+  if (raw === null || raw === undefined) return raw;
+  if (isRecord(raw) && "response" in raw) {
+    return raw.response;
+  }
+  return raw;
+};
+
+/** Lightwing paginated list inside LWResponse or at root (`items`, `total`). */
+export const lwPaginatedExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const inner = lwResponseExtract(raw);
+  if (isRecord(inner) && Array.isArray(inner.items)) {
+    return {
+      items: inner.items,
+      total: typeof inner.total === "number" ? inner.total : inner.items.length,
+    };
+  }
+  return { items: [], total: 0 };
+};
+
+/** Caller AI budget rows from ListMyBudgets (`budgets`, optional `warnings`). */
+export const aiBudgetConsumptionExtract = (raw: unknown): unknown => {
+  const inner = lwResponseExtract(raw);
+  if (!isRecord(inner)) return inner;
+  const budgets = Array.isArray(inner.budgets) ? inner.budgets : [];
+  return {
+    items: budgets,
+    total: budgets.length,
+    subjectId: inner.subjectId,
+    warnings: inner.warnings,
+  };
+};
+
+/** Admin override inbox (`requests`/`history`) or paginated `{ items, total }`. */
+export const aiBudgetOverrideRequestListExtract = (raw: unknown): unknown => {
+  const inner = lwResponseExtract(raw);
+  if (!isRecord(inner)) return inner;
+  if (Array.isArray(inner.requests)) {
+    return {
+      items: inner.requests,
+      total: typeof inner.total === "number" ? inner.total : inner.requests.length,
+      pages: inner.pages,
+      history: inner.history,
+    };
+  }
+  return lwPaginatedExtract(raw);
+};
+
 /** Extract paginated content from NG API responses: `{ data: { content, totalElements|totalItems } }` */
 export const pageExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as { data?: { content?: unknown[]; totalElements?: number; totalItems?: number } };
