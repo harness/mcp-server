@@ -37,4 +37,5 @@
 ## Notes
 - Default scope is project. Use `resource_scope=account` or `org` for groups at those levels.
 - List supports `search_term` and optional `filter_type`.
-- Create/update body: identifier, name (required), description, users (optional).
+- Create body: identifier, name (required), description, users (optional).
+- Update is a full replace; `users` is required (complete member list). Pass `users: []` to clear membership.

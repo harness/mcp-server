@@ -146,4 +146,16 @@ describe("user_group resource", () => {
       users: ["uuid-ada", "uuid-bob"],
     });
   });
+
+  it("update: omitting users fails locally", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+    await expect(
+      registry.dispatch(client, "user_group", "update", {
+        user_group_id: "g1",
+        body: { name: "G1" },
+      }),
+    ).rejects.toThrow(/users is required on update/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });

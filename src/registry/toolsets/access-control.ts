@@ -68,7 +68,10 @@ function assertMemberUuids(value: unknown): string[] {
   return users;
 }
 
-function userGroupWriteBody(input: Record<string, unknown>): Record<string, unknown> {
+function userGroupWriteBody(
+  input: Record<string, unknown>,
+  opts: { requireUsers?: boolean } = {},
+): Record<string, unknown> {
   const raw = input.body;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error("body is required and must be an object with identifier and name");
@@ -78,19 +81,44 @@ function userGroupWriteBody(input: Record<string, unknown>): Record<string, unkn
     const fromField = input.user_group_id;
     if (typeof fromField === "string" && fromField !== "") b.identifier = fromField;
   }
+  if (opts.requireUsers && b.users === undefined) {
+    throw new Error(
+      "users is required on update (complete member UUID list). Omitting users would clear membership. Pass users: [] to clear explicitly.",
+    );
+  }
   if (b.users !== undefined) {
     b.users = assertMemberUuids(b.users);
   }
   return b;
 }
 
-const USER_GROUP_WRITE_SCHEMA = {
+const USER_GROUP_BASE_FIELDS = [
+  { name: "identifier", type: "string" as const, required: true, description: "Unique identifier" },
+  { name: "name", type: "string" as const, required: true, description: "Display name" },
+  { name: "description", type: "string" as const, required: false, description: "Group description" },
+];
+
+const USER_GROUP_CREATE_SCHEMA = {
   description: "User group definition",
   fields: [
-    { name: "identifier", type: "string" as const, required: true, description: "Unique identifier" },
-    { name: "name", type: "string" as const, required: true, description: "Display name" },
-    { name: "description", type: "string" as const, required: false, description: "Group description" },
-    { name: "users", type: "array" as const, required: false, description: "User IDs to add to the group", itemType: "string" },
+    ...USER_GROUP_BASE_FIELDS,
+    { name: "users", type: "array" as const, required: false, description: "Member user IDs (UUIDs). Optional on create.", itemType: "string" },
+  ],
+};
+
+const USER_GROUP_UPDATE_SCHEMA = {
+  description:
+    "User group update. PUT replaces the group. users is the complete membership list, not a patch.",
+  fields: [
+    ...USER_GROUP_BASE_FIELDS,
+    {
+      name: "users",
+      type: "array" as const,
+      required: true,
+      description:
+        "Complete member UUID list. Required on update — omitting users would wipe membership. Pass [] to clear.",
+      itemType: "string",
+    },
   ],
 };
 
@@ -103,10 +131,11 @@ export const accessControlToolset: ToolsetDefinition = {
       resourceType: "user",
       displayName: "User",
       description:
-        "Harness users. Supports list, get, and invite. Default list/get/invite scope is project — pass org_id and project_id (or a project URL) on the first call. Use resource_scope='account' only when the user asked for account-level users.",
+        "Harness users. Supports list, get, and invite. Default list/get/invite scope is account. Pass org_id and project_id (or a project URL) for org/project membership. Configured HARNESS_ORG/HARNESS_PROJECT are not applied unless those fields are passed.",
       toolset: "access_control",
-      scope: "project",
+      scope: "account",
       supportedScopes: ["account", "org", "project"],
+      scopeOptional: true,
       identifierFields: ["user_id"],
       compactItem: compactUserListItem,
       listFilterFields: [
@@ -131,6 +160,7 @@ export const accessControlToolset: ToolsetDefinition = {
           bodyBuilder: (input) => {
             const roleIdentifiers = csvStrings(input.role_identifiers);
             const resourceGroupIdentifiers = csvStrings(input.resource_group_identifiers);
+            // API returns 400 if searchTerm is combined with role/resource-group filters.
             if ((roleIdentifiers || resourceGroupIdentifiers) && input.search_term) {
               throw new Error("Search and Filter are not supported together");
             }
@@ -168,8 +198,13 @@ export const accessControlToolset: ToolsetDefinition = {
             const userGroups = csvStrings(b?.user_groups ?? b?.user_group_ids);
             const roleBindingsRaw = b?.role_bindings ?? b?.roleBindings;
             const roleBindings = Array.isArray(roleBindingsRaw)
-              ? roleBindingsRaw.map(mapRoleBinding)
+              ? roleBindingsRaw.map(mapRoleBinding).filter((rb) => typeof rb.roleIdentifier === "string")
               : [];
+            if (!userGroups && roleBindings.length === 0) {
+              throw new Error(
+                "Invite requires user_groups and/or role_bindings in addition to emails.",
+              );
+            }
             return {
               emails,
               ...(userGroups ? { userGroups } : {}),
@@ -179,7 +214,7 @@ export const accessControlToolset: ToolsetDefinition = {
           responseExtractor: ngExtract,
           actionDescription: "Invite users to Harness with specified role bindings and user groups.",
           bodySchema: {
-            description: "User invitation request",
+            description: "User invitation. emails plus user_groups and/or role_bindings.",
             fields: [
               { name: "emails", type: "array", required: true, description: "Email addresses of users to invite (array or comma-separated string)", itemType: "string" },
               { name: "user_groups", type: "array", required: false, description: "User group identifiers to add invited users to", itemType: "string" },
@@ -248,20 +283,20 @@ export const accessControlToolset: ToolsetDefinition = {
           path: "/ng/api/user-groups",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: true,
-          bodyBuilder: userGroupWriteBody,
+          bodyBuilder: (input) => userGroupWriteBody(input),
           responseExtractor: ngExtract,
           description: "Create a user group",
-          bodySchema: USER_GROUP_WRITE_SCHEMA,
+          bodySchema: USER_GROUP_CREATE_SCHEMA,
         },
         update: {
           method: "PUT",
           path: "/ng/api/user-groups",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           injectAccountInBody: true,
-          bodyBuilder: userGroupWriteBody,
+          bodyBuilder: (input) => userGroupWriteBody(input, { requireUsers: true }),
           responseExtractor: ngExtract,
           description: "Update a user group",
-          bodySchema: USER_GROUP_WRITE_SCHEMA,
+          bodySchema: USER_GROUP_UPDATE_SCHEMA,
         },
         delete: {
           method: "DELETE",
