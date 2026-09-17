@@ -94,11 +94,17 @@ describe("user_group resource", () => {
     });
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "user_group", "get", { user_group_id: "admins" });
+    const result = (await registry.dispatch(client, "user_group", "get", { user_group_id: "admins" })) as Record<
+      string,
+      unknown
+    >;
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.path).toBe("/ng/api/user-groups/admins");
     expect(call.params.orgIdentifier).toBe("default");
+    expect(String(result.openInHarness)).toContain(
+      "/all/orgs/default/projects/test-project/settings/access-control/user-groups/admins",
+    );
   });
 
   it("create: injects account/org/project into body; rejects email members", async () => {

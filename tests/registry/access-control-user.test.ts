@@ -96,6 +96,9 @@ describe("user resource", () => {
       email: "ada@example.com",
       name: "Ada Lovelace",
     });
+    expect(String(result.items[0].openInHarness)).toContain(
+      "/all/orgs/default/projects/test-project/settings/access-control/users",
+    );
   });
 
   it("list compact keeps uuid and email for a follow-up get", async () => {
@@ -140,11 +143,15 @@ describe("user resource", () => {
     const mockRequest = vi.fn().mockResolvedValue(listResponse);
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "user", "list", { resource_scope: "account" });
+    const listed = (await registry.dispatch(client, "user", "list", { resource_scope: "account" })) as {
+      items: Record<string, unknown>[];
+    };
 
     const call = mockRequest.mock.calls[0][0];
     expect(call.params.orgIdentifier).toBeUndefined();
     expect(call.params.projectIdentifier).toBeUndefined();
+    expect(String(listed.items[0].openInHarness)).toContain("/all/settings/access-control/users");
+    expect(String(listed.items[0].openInHarness)).not.toContain("/orgs/");
   });
 
   it("get: user_id maps to aggregate path and flattens UUID", async () => {

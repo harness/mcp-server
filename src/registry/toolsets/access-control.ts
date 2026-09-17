@@ -144,7 +144,8 @@ export const accessControlToolset: ToolsetDefinition = {
       ],
       diagnosticHint:
         "If get returns 404, user_id must be the UUID from harness_list (identifier/uuid), not an email. Search with search_term=<email> and use the returned uuid. If list is empty, retry with resource_scope matching where the user lives (account, org, or project).",
-      deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/users",
+      deepLinkTemplate:
+        "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/access-control/users",
       operations: {
         list: {
           method: "POST",
@@ -254,7 +255,8 @@ export const accessControlToolset: ToolsetDefinition = {
       ],
       diagnosticHint:
         "If get/update/delete returns 404, the group may live at another scope — use the item's org/project (or resource_scope=account). users must be user UUIDs from harness_list resource_type=user (identifier), not emails. Update replaces the whole group including membership.",
-      deepLinkTemplate: "/ng/account/{accountId}/settings/access-control/user-groups/{groupIdentifier}",
+      deepLinkTemplate:
+        "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/access-control/user-groups/{groupIdentifier}",
       operations: {
         list: {
           method: "GET",
