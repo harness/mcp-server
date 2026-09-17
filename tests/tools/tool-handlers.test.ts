@@ -2606,21 +2606,204 @@ pipeline:
     expect(runCall.body).toContain("x");
   });
 
-  it("falls back to fresh run when retry returns 405", async () => {
-    // First call (retry) throws 405, second call (run) succeeds
-    mockRequest
-      .mockRejectedValueOnce(new HarnessApiError("Method not allowed", 405))
-      .mockResolvedValueOnce({ data: { planExecutionId: "exec-456" } }) // get execution
-      .mockResolvedValueOnce({ data: { planExecutionId: "exec-789" } }); // fresh run
+  it("retries a failed pipeline via POST retry/{pipelineIdentifier}", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-1" } });
 
     const result = await server.call("harness_execute", {
       resource_type: "pipeline",
       action: "retry",
-      params: { execution_id: "exec-123", pipeline_id: "my-pipe" },
+      resource_id: "my-pipe",
+      params: { execution_id: "exec-123", retry_stages: ["stage1"] },
     });
     expect(result.isError).toBeUndefined();
-    const data = parseResult(result) as { _note: string };
-    expect(data._note).toContain("fresh pipeline run");
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params: Record<string, unknown>;
+      body: unknown;
+    };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/pipeline/api/pipeline/execute/retry/my-pipe");
+    expect(callArgs.params.planExecutionId).toBe("exec-123");
+    expect(callArgs.params.retryStages).toEqual(["stage1"]);
+    expect(callArgs.params.runAllStages).toBe("true");
+    expect(callArgs.body).toBe("");
+  });
+
+  it("does not fall back to a fresh run when pipeline retry returns 405", async () => {
+    mockRequest.mockRejectedValueOnce(new HarnessApiError("Method not allowed", 405));
+
+    await expect(
+      server.call("harness_execute", {
+        resource_type: "pipeline",
+        action: "retry",
+        resource_id: "my-pipe",
+        params: { execution_id: "exec-123", retry_stages: ["stage1"] },
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining("Method not allowed") });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "POST",
+      path: "/pipeline/api/pipeline/execute/retry/my-pipe",
+    });
+  });
+
+  it("auto-fetches resumable stages when retry_stages is omitted", async () => {
+    mockRequest
+      .mockResolvedValueOnce({
+        data: {
+          isResumable: true,
+          groups: [{ info: [{ identifier: "deploy" }, { identifier: "verify" }] }],
+        },
+      })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-2" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry",
+      resource_id: "my-pipe",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "GET",
+      path: "/pipeline/api/pipeline/execute/exec-123/retryStages",
+    });
+    const retryCall = mockRequest.mock.calls[1]![0] as { params: Record<string, unknown> };
+    expect(retryCall.params.retryStages).toEqual(["deploy", "verify"]);
+  });
+
+  it("auto retry_stages uses only failed stages in the first failed group", async () => {
+    mockRequest
+      .mockResolvedValueOnce({
+        data: {
+          isResumable: true,
+          groups: [
+            { info: [{ identifier: "build", status: "Success" }] },
+            {
+              info: [
+                { identifier: "deploy", status: "Failed" },
+                { identifier: "verify", status: "Success" },
+              ],
+            },
+            { info: [{ identifier: "notify", status: "Failed" }] },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-failed" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry",
+      resource_id: "my-pipe",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    const retryCall = mockRequest.mock.calls[1]![0] as { params: Record<string, unknown> };
+    expect(retryCall.params.retryStages).toEqual(["deploy"]);
+  });
+
+  it("auto retry_stages stays inside one group when catalog omits status", async () => {
+    mockRequest
+      .mockResolvedValueOnce({
+        data: {
+          isResumable: true,
+          groups: [
+            { info: [{ identifier: "build" }] },
+            { info: [{ identifier: "deploy" }] },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-last-group" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry",
+      resource_id: "my-pipe",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    const retryCall = mockRequest.mock.calls[1]![0] as { params: Record<string, unknown> };
+    expect(retryCall.params.retryStages).toEqual(["deploy"]);
+  });
+
+  it("resolves pipeline_id from execution get when retry only has execution_id", async () => {
+    mockRequest
+      .mockResolvedValueOnce({
+        data: { pipelineExecutionSummary: { pipelineIdentifier: "resolved-pipe", planExecutionId: "exec-123" } },
+      })
+      .mockResolvedValueOnce({
+        data: { isResumable: true, groups: [{ info: [{ identifier: "s1" }] }] },
+      })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-3" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "GET",
+      path: "/pipeline/api/pipelines/execution/v2/exec-123",
+    });
+    expect(mockRequest.mock.calls[2]![0]).toMatchObject({
+      method: "POST",
+      path: "/pipeline/api/pipeline/execute/retry/resolved-pipe",
+    });
+  });
+
+  it("interrupts an execution with AbortAll as a query param", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { status: "SUCCESS" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "execution",
+      action: "interrupt",
+      resource_id: "exec-running",
+      params: { interrupt_type: "AbortAll" },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params: Record<string, unknown>;
+      body: unknown;
+    };
+    expect(callArgs.method).toBe("PUT");
+    expect(callArgs.path).toBe("/pipeline/api/pipeline/execute/interrupt/exec-running");
+    expect(callArgs.params.interruptType).toBe("AbortAll");
+    expect(callArgs.body).toEqual({});
+  });
+
+  it("aliases pipeline+interrupt to execution.interrupt", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { status: "SUCCESS" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "interrupt",
+      resource_id: "exec-running",
+      body: { interrupt_type: "usermarkedfailure" },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(callArgs.path).toBe("/pipeline/api/pipeline/execute/interrupt/exec-running");
+    expect(callArgs.params.interruptType).toBe("UserMarkedFailure");
+  });
+
+  it("rejects unsupported interrupt_type values", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "execution",
+      action: "interrupt",
+      resource_id: "exec-running",
+      params: { interrupt_type: "Pause" },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("AbortAll and UserMarkedFailure"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   // Single-poll wait tests verify the wiring (extract execution_id, poll once,
@@ -3273,6 +3456,45 @@ pipeline:
     expect(callArgs.body).toEqual({
       pipelineName: "My Imported Pipeline",
       pipelineDescription: "Imported from GitHub",
+      orgIdentifier: "default",
+      projectIdentifier: "test-project",
+    });
+  });
+
+  it("fails fast when pipeline import is missing Git params", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "import",
+      body: { pipelineName: "No Git" },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("repo_name, branch, and file_path"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("hoists Git import fields from body onto query params", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { identifier: "hoisted-pipe" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "import",
+      body: {
+        connector_ref: "my_github",
+        repo_name: "my-repo",
+        branch: "main",
+        file_path: ".harness/my-pipe.yaml",
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; body: unknown };
+    expect(callArgs.params.connectorRef).toBe("my_github");
+    expect(callArgs.params.repoName).toBe("my-repo");
+    expect(callArgs.params.filePath).toBe(".harness/my-pipe.yaml");
+    expect(callArgs.body).toEqual({
+      pipelineName: "",
+      pipelineDescription: "",
       orgIdentifier: "default",
       projectIdentifier: "test-project",
     });

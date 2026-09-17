@@ -3983,7 +3983,7 @@ export const chaosToolset: ToolsetDefinition = {
         {
           resourceType: "execution",
           relationship: "backed-by",
-          description: "To interrupt (abort/pause) a running DR test execution, use harness_execute with resource_type=execution, action=interrupt, execution_id=<planExecutionId from spec.pipeline.recentRuns>, interrupt_type=AbortAll (or Pause, Resume, StageRollback, Abort, ExpireAll, Retry). The active execution ID is available in spec.pipeline.recentRuns from the DR test response.",
+          description: "To interrupt a running DR test execution, use harness_execute with resource_type=execution, action=interrupt, resource_id=<planExecutionId from spec.pipeline.recentRuns>, interrupt_type=AbortAll or UserMarkedFailure. The active execution ID is available in spec.pipeline.recentRuns from the DR test response.",
         },
         {
           resourceType: "pipeline",

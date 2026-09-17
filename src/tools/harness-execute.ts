@@ -5,7 +5,7 @@ import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
 import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
-import { isUserError, isUserFixableApiError, toMcpError, HarnessApiError } from "../utils/errors.js";
+import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
 import { createLogger } from "../utils/logger.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
@@ -190,11 +190,19 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         const input = applyUrlDefaults(argsForUrlDefaults as Record<string, unknown>, args.url, { includeResourceScope: true });
         if (coercedParams) Object.assign(input, coercedParams);
         log.debug("Execute input after params merge", { input: JSON.stringify(input), params: JSON.stringify(params) });
-        const resourceType = asString(input.resource_type);
+        let resourceType = asString(input.resource_type);
         if (!resourceType) {
           return errorResult("resource_type is required. Provide it explicitly or via a Harness URL.");
         }
+        // Interrupt is registered on resource_type=execution; accept pipeline as an alias.
+        if (resourceType === "pipeline" && args.action === "interrupt") {
+          resourceType = "execution";
+          input.resource_type = "execution";
+        }
         const resourceId = asString(input.resource_id);
+        if (resourceType === "pipeline" && args.action === "retry" && !asString(input.execution_id) && resourceId) {
+          input.execution_id = resourceId;
+        }
 
         // Validate resource_type and action before asking user to confirm
         const def = registry.getResource(resourceType);
@@ -216,6 +224,15 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         // reading `input.exemption_id`) record an http_path with empty
         // placeholders ("/sto/api/v2/exemptions//approve").
         applyExecuteActionTargetRemap(input, def, actionSpec, resourceId);
+        if (
+          resourceType === "pipeline" &&
+          args.action === "retry" &&
+          asString(input.pipeline_id) &&
+          asString(input.execution_id) &&
+          input.pipeline_id === input.execution_id
+        ) {
+          delete input.pipeline_id;
+        }
 
         // Fail fast on HARNESS_READ_ONLY before elicitation. Mirrors
         // registry.dispatchExecute()'s gate (risk !== "read"): read-safe
@@ -466,47 +483,10 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
         let result: unknown;
         // Tracks supplementary fields to merge into the final response envelope
-        // (input resolution hints, retry-fallback notes, wait results).
+        // (input resolution hints, wait results).
         const envelope: Record<string, unknown> = {};
-        // Effective resource_type/action for the wait branch — may differ from
-        // the caller's request when retry falls back to a fresh run.
-        let effectiveResourceType = resourceType;
-        let effectiveAction = args.action;
 
-        try {
-          result = await registry.dispatchExecute(client, resourceType, args.action, input, auditCtx);
-        } catch (err) {
-          if (
-            args.action === "retry" &&
-            resourceType === "pipeline" &&
-            err instanceof HarnessApiError &&
-            err.statusCode === 405
-          ) {
-            log.info("Retry returned 405, falling back to fresh pipeline run");
-            let pipelineId = asString(input.pipeline_id);
-
-            if (!pipelineId && input.execution_id) {
-              try {
-                const exec = asRecord(await registry.dispatch(client, "execution", "get", input));
-                const pes = asRecord(exec?.pipelineExecutionSummary);
-                pipelineId = asString(pes?.pipelineIdentifier);
-              } catch {
-                // Fall through — will error below
-              }
-            }
-
-            if (!pipelineId) {
-              return errorResult("Retry is not available for this execution (405). Provide pipeline_id to run a fresh execution instead.");
-            }
-
-            input.pipeline_id = pipelineId;
-            result = await registry.dispatchExecute(client, "pipeline", "run", input, { ...auditCtx, action: "run (retry fallback)" });
-            envelope._note = "Retry was not available (405). Executed a fresh pipeline run instead.";
-            effectiveAction = "run";
-          } else {
-            throw err;
-          }
-        }
+        result = await registry.dispatchExecute(client, resourceType, args.action, input, auditCtx);
 
         if (resolved) {
           envelope._inputResolution = {
@@ -521,11 +501,11 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
         // terminal status.
         const isWaitable =
           wait === true &&
-          (effectiveResourceType === "pipeline" || effectiveResourceType === "pipeline_v1") &&
-          (effectiveAction === "run" || effectiveAction === "retry");
+          (resourceType === "pipeline" || resourceType === "pipeline_v1") &&
+          (args.action === "run" || args.action === "retry");
 
         if (isWaitable) {
-          const executionId = extractExecutionId(result, effectiveResourceType);
+          const executionId = extractExecutionId(result, resourceType);
           if (!executionId) {
             envelope._wait = {
               skipped: true,
@@ -540,7 +520,7 @@ export function registerExecuteTool(server: McpServer, registry: Registry, clien
 
             log.info("Waiting for execution to reach terminal status", {
               executionId,
-              resourceType: effectiveResourceType,
+              resourceType,
               timeoutMs,
               initialIntervalMs,
             });

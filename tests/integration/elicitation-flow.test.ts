@@ -273,6 +273,12 @@ describe("Elicitation flow: harness_execute", () => {
       resource_type: "pipeline",
       action: "import",
       resource_id: "my-pipe",
+      params: {
+        connector_ref: "git_conn",
+        repo_name: "my-repo",
+        branch: "main",
+        file_path: ".harness/pipeline.yaml",
+      },
       body: { pipelineName: "Test", pipelineDescription: "" },
     });
 
