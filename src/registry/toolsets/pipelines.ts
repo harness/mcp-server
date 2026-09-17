@@ -854,7 +854,6 @@ export const pipelinesToolset: ToolsetDefinition = {
             preparePipelineImport(input);
           },
           bodyBuilder: (input) => {
-            preparePipelineImport(input);
             const b = asRecord(input.body);
             return {
               pipelineName: b?.pipeline_name ?? b?.pipelineName ?? "",
@@ -1138,10 +1137,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           preflight: async ({ input }) => {
             normalizePipelineInterruptType(input);
           },
-          bodyBuilder: (input) => {
-            normalizePipelineInterruptType(input);
-            return {};
-          },
+          bodyBuilder: () => ({}),
           paramsSchema: {
             fields: [
               {
