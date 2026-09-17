@@ -5,11 +5,11 @@
 | **Resource Type** | `user_group` |
 | **Display Name** | User Group |
 | **Toolset** | access_control |
-| **Scope** | project |
-| **Operations** | list, get, create, delete |
+| **Scope** | project (supported: account, org, project) |
+| **Operations** | list, get, create, update, delete |
 | **Execute Actions** | None |
 | **Identifier Fields** | user_group_id |
-| **Filter Fields** | search_term |
+| **Filter Fields** | search_term, filter_type |
 | **Deep Link** | Yes |
 
 ## Test Cases
@@ -23,8 +23,10 @@
 | TC-ug-005 | Get | Get user group by ID | `harness_get(resource_type="user_group", user_group_id="<valid_group_id>")` | Returns full user group details |
 | TC-ug-006 | Create | Create user group | `harness_create(resource_type="user_group", body={identifier: "test_group", name: "Test Group", description: "A test group"})` | User group created successfully |
 | TC-ug-007 | Create | Create with users | `harness_create(resource_type="user_group", body={identifier: "test_group_users", name: "Test Group With Users", users: ["<user_id>"]})` | User group created with members |
+| TC-ug-007b | Update | Update user group | `harness_update(resource_type="user_group", user_group_id="test_group", body={identifier: "test_group", name: "Test Group", users: ["<user_id>"]})` | User group updated |
 | TC-ug-008 | Delete | Delete user group | `harness_delete(resource_type="user_group", user_group_id="test_group")` | User group deleted |
 | TC-ug-009 | Scope | Custom org and project | `harness_list(resource_type="user_group", org_id="custom_org", project_id="custom_project")` | Returns user groups for specified scope |
+| TC-ug-009b | Scope | Account-level list | `harness_list(resource_type="user_group", resource_scope="account")` | Lists account-scoped groups; omits org/project query params |
 | TC-ug-010 | Error | Get nonexistent group | `harness_get(resource_type="user_group", user_group_id="nonexistent")` | Returns not found error |
 | TC-ug-011 | Error | Create without identifier | `harness_create(resource_type="user_group", body={name: "No ID Group"})` | Returns validation error |
 | TC-ug-012 | Error | Create duplicate identifier | `harness_create(resource_type="user_group", body={identifier: "<existing_id>", name: "Duplicate"})` | Returns conflict error |
@@ -33,8 +35,6 @@
 | TC-ug-015 | Describe | Resource metadata | `harness_describe(resource_type="user_group")` | Returns full metadata including create body schema |
 
 ## Notes
-- List endpoint: GET `/ng/api/user-groups` with searchTerm query param
-- Get endpoint: GET `/ng/api/user-groups/{groupIdentifier}`
-- Create body: identifier (required), name (required), description (optional), users (optional array of user IDs)
-- Delete endpoint: DELETE `/ng/api/user-groups/{groupIdentifier}`
-- Deep link: `/ng/account/{accountId}/settings/access-control/user-groups/{groupIdentifier}`
+- Default scope is project. Use `resource_scope=account` or `org` for groups at those levels.
+- List supports `search_term` and optional `filter_type`.
+- Create/update body: identifier, name (required), description, users (optional).

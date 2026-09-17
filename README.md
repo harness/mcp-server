@@ -1828,7 +1828,7 @@ Security exemption execute workflow:
 | Resource Type     | List | Get | Create | Update | Delete | Execute Actions |
 | ----------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `user`            | x    | x   |        |        |        |                 |
-| `user_group`      | x    | x   | x      |        | x      |                 |
+| `user_group`      | x    | x   | x      | x      | x      |                 |
 | `service_account` | x    | x   | x      |        | x      |                 |
 | `role`            | x    | x   | x      |        | x      |                 |
 | `role_assignment` | x    |     | x      |        |        |                 |
