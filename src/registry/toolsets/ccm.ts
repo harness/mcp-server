@@ -1,6 +1,24 @@
-import type { ToolsetDefinition, PreflightContext, ParamsSchema, FilterFieldSpec } from "../types.js";
+import type { ToolsetDefinition, PreflightContext, ParamsSchema, FilterFieldSpec, BodySchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
-import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, anomalyListExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract, countExtract, ccmBudgetListCompactExtract, ccmBudgetDetailExtract, ccmBudgetWriteExtract } from "../extractors.js";
+import {
+  ngExtract,
+  passthrough,
+  gqlExtract,
+  ccmViewsExtract,
+  anomalyListExtract,
+  ccmBreakdownExtract,
+  ccmTimeseriesExtract,
+  ccmSummaryExtract,
+  ccmRecommendationsExtract,
+  countExtract,
+  ccmBudgetListCompactExtract,
+  ccmBudgetDetailExtract,
+  ccmBudgetWriteExtract,
+  lwResponseExtract,
+  lwPaginatedExtract,
+  aiBudgetConsumptionExtract,
+  aiBudgetOverrideRequestListExtract,
+} from "../extractors.js";
 
 // ---------------------------------------------------------------------------
 // GraphQL queries — ported from the official Go MCP server
@@ -397,6 +415,141 @@ function gqlPath(input: Record<string, unknown>): string {
   return "/ccm/api/graphql";
 }
 
+// ---------------------------------------------------------------------------
+// AI Budgets (Lightwing AI governance) — /lw/api/accounts/{accountId}/ai-governance
+// ---------------------------------------------------------------------------
+
+const AI_BUDGET_DEEP_LINK = "/ng/account/{accountId}/module/ce/user-budgets";
+
+function requireAiBudgetId(input: Record<string, unknown>, key: string, label: string): string {
+  const value = input[key];
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${key} is required — ${label}`);
+  }
+  return value.trim();
+}
+
+function aiGovernanceBase(_input: Record<string, unknown>, config: PathBuilderConfig): string {
+  // Per-request account from registry dispatch (getAccountId / accountIdResolver), not static env.
+  const accountId = config.HARNESS_ACCOUNT_ID ?? "";
+  if (!accountId) {
+    throw new Error("Harness account ID is required for AI governance APIs");
+  }
+  return `/lw/api/accounts/${accountId}/ai-governance`;
+}
+
+function aiBudgetPath(suffix: string | ((input: Record<string, unknown>) => string)) {
+  return (input: Record<string, unknown>, config: PathBuilderConfig): string => {
+    const base = aiGovernanceBase(input, config);
+    const tail = typeof suffix === "function" ? suffix(input) : suffix;
+    return `${base}${tail}`;
+  };
+}
+
+function buildLwPaginatedListBody(input: Record<string, unknown>): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  const query = input.search_term ?? input.query;
+  if (typeof query === "string" && query.trim()) {
+    body.query = query.trim();
+  }
+  if (input.page !== undefined && input.page !== "") {
+    body.page = input.page;
+  }
+  const limit = input.limit ?? input.size;
+  body.limit = typeof limit === "number" ? limit : 10;
+  if (input.sort && typeof input.sort === "object") {
+    body.sort = input.sort;
+  } else if (input.sort_field || input.sort_order) {
+    body.sort = {
+      field: input.sort_field ?? "name",
+      type: input.sort_order ?? "ASC",
+    };
+  }
+  if (input.filters !== undefined) {
+    body.filters = input.filters;
+  } else {
+    const filters: Array<{ field: string; operator: string; values: unknown[] }> = [];
+    if (input.folder_id !== undefined && input.folder_id !== "") {
+      filters.push({
+        field: "folder_id",
+        operator: "equals",
+        values: [input.folder_id],
+      });
+    }
+    if (input.status !== undefined && input.status !== "") {
+      const values = Array.isArray(input.status) ? input.status : [input.status];
+      filters.push({ field: "status", operator: "equals", values });
+    }
+    if (input.subject_id !== undefined && input.subject_id !== "") {
+      filters.push({
+        field: "subject_id",
+        operator: "equals",
+        values: [input.subject_id],
+      });
+    }
+    if (filters.length > 0) {
+      body.filters = filters;
+    }
+  }
+  return body;
+}
+
+function buildReviewOverrideBody(action: "approve" | "reject") {
+  return (input: Record<string, unknown>): Record<string, unknown> => {
+    const body = (input.body as Record<string, unknown> | undefined) ?? {};
+    if (Array.isArray(body.items)) {
+      return { items: body.items };
+    }
+    const requestId = input.override_request_id ?? body.request_id;
+    if (requestId === undefined || requestId === "") {
+      throw new Error("override_request_id is required for approve/reject (or pass body.items for batch review)");
+    }
+    const item: Record<string, unknown> = { request_id: requestId, action };
+    const approvedAmount = input.approved_amount ?? body.approved_amount;
+    if (approvedAmount !== undefined) {
+      item.approved_amount = approvedAmount;
+    }
+    return { items: [item] };
+  };
+}
+
+const aiBudgetUpsertBodySchema: BodySchema = {
+  description:
+    "AI budget definition upload. Provide exactly one of: rawYaml (YAML envelope) or policy (JSON budget-cap definition). Optional folderId assigns a CCM folder. Not cloud cost budgets (cost_budget).",
+  fields: [
+    {
+      name: "rawYaml",
+      type: "string",
+      required: false,
+      description: "Full AI budget YAML document (alternative to policy JSON object).",
+    },
+    {
+      name: "policy",
+      type: "object",
+      required: false,
+      description:
+        "Budget-cap definition: { name, beginsAt?, subjects: { account?, users?, userGroups?, perspective?, costCategory?, exclude? }, spec: { type: 'budget-cap', amount?, mode?, period, evaluationSchedule?, actions?, approvals?, approvalSettings? } }",
+    },
+    { name: "folderId", type: "string", required: false, description: "Optional CCM folder ID for the budget." },
+  ],
+};
+
+const aiBudgetReviewBodySchema: BodySchema = {
+  description:
+    "Review one or more override requests. Pass override_request_id (and optional approved_amount for approve), or body.items for batch review matching the API shape.",
+  fields: [
+    { name: "request_id", type: "string", required: false, description: "Override request UUID (alias: use override_request_id at top level)." },
+    { name: "approved_amount", type: "number", required: false, description: "Approved ceiling amount when action is approve." },
+    {
+      name: "items",
+      type: "array",
+      required: false,
+      description: "Batch review: [{ request_id, action: 'approve'|'reject', approved_amount? }]",
+      itemType: "{ request_id: string, action: string, approved_amount?: number }",
+    },
+  ],
+};
+
 /**
  * Normalizes REST cost_category responses into the same {values} shape
  * that perspectiveFilters returns, so callers get a uniform interface.
@@ -744,7 +897,7 @@ export const ccmToolset: ToolsetDefinition = {
   name: "ccm",
   displayName: "Cloud Cost Management",
   description:
-    "Cloud cost visibility, analysis, recommendations, and anomaly detection. Covers perspectives, cost breakdowns, time series, summaries, recommendations, and anomalies.",
+    "Cloud cost visibility, analysis, recommendations, anomaly detection, and AI/LLM spend budgets (ai_budget). Covers perspectives, cost breakdowns, time series, summaries, recommendations, anomalies, and Lightwing AI governance budgets.",
   resources: [
     // ------------------------------------------------------------------
     // 1. cost_perspective — REST CRUD for perspective management
@@ -2415,6 +2568,260 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
           },
           responseExtractor: ngExtract,
           description: "Delete unit metric records in a time range. NOTE: API parameter name is 'identifier' (not 'metricIdentifier'). Requires identifier, start_time (ISO 8601), and end_time (ISO 8601). Returns boolean success status.",
+        },
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 15. AI Budgets — Lightwing AI governance (LLM spend caps, not cost_budget)
+    // ------------------------------------------------------------------
+    {
+      resourceType: "ai_budget",
+      displayName: "AI Budget",
+      description:
+        "Account AI/LLM spend budgets (budget-cap rules): create and manage caps, subjects, alerts, and approval tiers. Not cloud CCM cost budgets (use cost_budget). Use harness_list to discover budgets, harness_get for one budget, harness_create/harness_update with body.policy or body.rawYaml.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["budget_id"],
+      deepLinkTemplate: AI_BUDGET_DEEP_LINK,
+      searchAliases: ["ai budget", "llm budget", "ai spend cap", "user budget", "governance budget"],
+      listFilterFields: [
+        { name: "search_term", description: "Search budgets by name (maps to query)" },
+        { name: "folder_id", description: "Filter by CCM folder ID" },
+        { name: "sort_field", description: "Sort field (e.g. name, created_at)" },
+        { name: "sort_order", description: "Sort direction", enum: ["ASC", "DESC"] },
+      ],
+      relatedResources: [
+        {
+          resourceType: "ai_budget_overview",
+          relationship: "related",
+          description: "Spend and approval summary for one budget",
+        },
+        {
+          resourceType: "ai_budget_consumption",
+          relationship: "related",
+          description: "Current user's applied budgets and spend",
+        },
+        {
+          resourceType: "ai_budget_override_request",
+          relationship: "related",
+          description: "Override requests and admin review for a budget",
+        },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/list",
+          pathBuilder: aiBudgetPath("/policies/list"),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pageOneIndexed: true,
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildLwPaginatedListBody,
+          responseExtractor: lwPaginatedExtract,
+          description: "List AI budgets in the account. Supports search_term, folder_id filter, pagination (page/limit), and sort.",
+        },
+        get: {
+          method: "GET",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}",
+          pathBuilder: aiBudgetPath((input) => `/policies/${requireAiBudgetId(input, "budget_id", "AI budget UUID")}`),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { budget_id: "policy_id" },
+          responseExtractor: lwResponseExtract,
+          description: "Get one AI budget by budget_id.",
+        },
+        create: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies",
+          pathBuilder: aiBudgetPath("/policies"),
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => input.body,
+          bodySchema: aiBudgetUpsertBodySchema,
+          responseExtractor: lwResponseExtract,
+          description: "Create an AI budget. Pass body with policy (JSON) or rawYaml.",
+        },
+        update: {
+          method: "PUT",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}",
+          pathBuilder: aiBudgetPath((input) => `/policies/${requireAiBudgetId(input, "budget_id", "AI budget UUID")}`),
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          pathParams: { budget_id: "policy_id" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => input.body,
+          bodySchema: aiBudgetUpsertBodySchema,
+          responseExtractor: lwResponseExtract,
+          description: "Replace an AI budget. Pass budget_id and full body (policy or rawYaml).",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}",
+          pathBuilder: aiBudgetPath((input) => `/policies/${requireAiBudgetId(input, "budget_id", "AI budget UUID")}`),
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { budget_id: "policy_id" },
+          responseExtractor: lwResponseExtract,
+          description: "Delete an AI budget by budget_id.",
+        },
+      },
+    },
+    {
+      resourceType: "ai_budget_overview",
+      displayName: "AI Budget Overview",
+      description:
+        "Read-only overview for one AI budget: spend, subjects, and approval state. Use harness_get with budget_id after harness_list on ai_budget.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["budget_id"],
+      deepLinkTemplate: AI_BUDGET_DEEP_LINK,
+      operations: {
+        get: {
+          method: "GET",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}/overview",
+          pathBuilder: aiBudgetPath(
+            (input) => `/policies/${requireAiBudgetId(input, "budget_id", "AI budget UUID")}/overview`,
+          ),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { budget_id: "policy_id" },
+          responseExtractor: lwResponseExtract,
+          description: "Get overview for one AI budget.",
+        },
+      },
+    },
+    {
+      resourceType: "ai_budget_consumption",
+      displayName: "My AI Budget Consumption",
+      description:
+        "Budget caps that apply to the authenticated user and current-period spend. Caller identity comes from the API token (no subject_id param). Not cost_budget.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: [],
+      deepLinkTemplate: AI_BUDGET_DEEP_LINK,
+      relatedResources: [
+        {
+          resourceType: "ai_budget_override_request",
+          relationship: "related",
+          description: "Request a temporary budget increase via harness_create on ai_budget_override_request",
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/lw/api/accounts/{accountId}/ai-governance/me/budgets",
+          pathBuilder: aiBudgetPath("/me/budgets"),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: aiBudgetConsumptionExtract,
+          description: "List AI budgets and consumption for the current user.",
+        },
+      },
+    },
+    {
+      resourceType: "ai_budget_override_request",
+      displayName: "AI Budget Override Request",
+      description:
+        "Request or review temporary AI budget increases. Users: harness_create to request; harness_list without budget_id for your requests. Admins: harness_list with budget_id for inbox; harness_get by override_request_id; harness_execute approve/reject (optional approved_amount).",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["budget_id", "override_request_id"],
+      deepLinkTemplate: AI_BUDGET_DEEP_LINK,
+      listFilterFields: [
+        { name: "status", description: "Filter by status (e.g. pending)" },
+        { name: "subject_id", description: "Admin inbox: filter by subject email or id" },
+        { name: "sort_field", description: "Sort field (e.g. created_at)" },
+        { name: "sort_order", description: "Sort direction", enum: ["ASC", "DESC"] },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/me/budgets/override/requests",
+          pathBuilder: (input, config) => {
+            const base = aiGovernanceBase(input, config);
+            const budgetId = input.budget_id;
+            if (typeof budgetId === "string" && budgetId.trim() !== "") {
+              return `${base}/policies/${budgetId.trim()}/override/requests`;
+            }
+            return `${base}/me/budgets/override/requests`;
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pageOneIndexed: true,
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildLwPaginatedListBody,
+          responseExtractor: aiBudgetOverrideRequestListExtract,
+          description:
+            "List override requests. Omit budget_id for your requests; pass budget_id for admin inbox on that budget.",
+        },
+        get: {
+          method: "GET",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}/override/requests/{request_id}",
+          pathBuilder: (input, config) => {
+            const base = aiGovernanceBase(input, config);
+            const budgetId = requireAiBudgetId(input, "budget_id", "AI budget UUID");
+            const requestId = requireAiBudgetId(input, "override_request_id", "override request UUID");
+            return `${base}/policies/${budgetId}/override/requests/${requestId}`;
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { budget_id: "policy_id", override_request_id: "request_id" },
+          responseExtractor: lwResponseExtract,
+          description: "Get one override request by budget_id and override_request_id.",
+        },
+        create: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/me/budgets/override/request",
+          pathBuilder: aiBudgetPath("/me/budgets/override/request"),
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            const budgetId = input.budget_id ?? body.budget_id ?? body.policy_id;
+            return {
+              policy_id: budgetId,
+              amount: input.amount ?? body.amount,
+              reason: input.reason ?? body.reason,
+            };
+          },
+          bodySchema: {
+            description: "Request a budget override for the current period.",
+            fields: [
+              { name: "budget_id", type: "string", required: true, description: "AI budget UUID to request an override for." },
+              { name: "amount", type: "number", required: true, description: "Requested ceiling amount." },
+              { name: "reason", type: "string", required: true, description: "Business justification." },
+            ],
+          },
+          responseExtractor: lwResponseExtract,
+          description: "Submit an override request (maps budget_id to API policy_id).",
+        },
+      },
+      executeActions: {
+        approve: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}/override/requests/review",
+          pathBuilder: (input, config) => {
+            const base = aiGovernanceBase(input, config);
+            const budgetId = requireAiBudgetId(input, "budget_id", "AI budget UUID");
+            return `${base}/policies/${budgetId}/override/requests/review`;
+          },
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          pathParams: { budget_id: "policy_id" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildReviewOverrideBody("approve"),
+          bodySchema: aiBudgetReviewBodySchema,
+          responseExtractor: lwResponseExtract,
+          actionDescription:
+            "Approve an override request for a budget. Requires budget_id and override_request_id; optional approved_amount.",
+        },
+        reject: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}/override/requests/review",
+          pathBuilder: (input, config) => {
+            const base = aiGovernanceBase(input, config);
+            const budgetId = requireAiBudgetId(input, "budget_id", "AI budget UUID");
+            return `${base}/policies/${budgetId}/override/requests/review`;
+          },
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          pathParams: { budget_id: "policy_id" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildReviewOverrideBody("reject"),
+          bodySchema: aiBudgetReviewBodySchema,
+          responseExtractor: lwResponseExtract,
+          actionDescription: "Reject an override request. Requires budget_id and override_request_id.",
         },
       },
     },
