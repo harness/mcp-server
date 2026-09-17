@@ -1,6 +1,6 @@
 import type { ToolsetDefinition, BodySchema, ParamsSchema, PreflightContext } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, runtimeInputV1Extract, runtimeInputTemplatePreflight, pipelineResolvedYamlExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
-import { asRecord } from "../../utils/type-guards.js";
+import { asRecord, asString } from "../../utils/type-guards.js";
 import { buildV1RuntimeInputsBody } from "../../utils/pipeline-v1-runtime-inputs.js";
 import YAML from "yaml";
 
@@ -243,6 +243,175 @@ function setIfMissing(input: Record<string, unknown>, key: string, value: unknow
   }
 }
 
+function hoistBodyFields(input: Record<string, unknown>, keys: readonly string[]): void {
+  const body = asRecord(input.body);
+  if (!body) return;
+  for (const key of keys) {
+    if ((input[key] === undefined || input[key] === "") && body[key] !== undefined && body[key] !== "") {
+      input[key] = body[key];
+    }
+  }
+}
+
+function pipelineExecuteYamlBody(input: Record<string, unknown>): string {
+  const inputs = input.inputs;
+  if (!inputs) return "";
+  if (typeof inputs === "string") return inputs;
+  return JSON.stringify(inputs);
+}
+
+const PIPELINE_INTERRUPT_TYPES = ["AbortAll", "UserMarkedFailure"] as const;
+const PIPELINE_IMPORT_GIT_KEYS = [
+  "connector_ref",
+  "repo_name",
+  "branch",
+  "file_path",
+  "is_force_import",
+  "is_harness_code_repo",
+] as const;
+
+function normalizePipelineInterruptType(input: Record<string, unknown>): void {
+  hoistBodyFields(input, ["interrupt_type"]);
+  const raw = asString(input.interrupt_type);
+  if (!raw) {
+    throw new Error(
+      'Missing required param interrupt_type. Pass params.interrupt_type="AbortAll" or "UserMarkedFailure".',
+    );
+  }
+  const match = PIPELINE_INTERRUPT_TYPES.find((t) => t.toLowerCase() === raw.toLowerCase());
+  if (!match) {
+    throw new Error(
+      `Invalid interrupt_type "${raw}". Supported values are AbortAll and UserMarkedFailure. Pass params.interrupt_type.`,
+    );
+  }
+  input.interrupt_type = match;
+}
+
+function preparePipelineImport(input: Record<string, unknown>): void {
+  hoistBodyFields(input, PIPELINE_IMPORT_GIT_KEYS);
+  const repoName = asString(input.repo_name);
+  const branch = asString(input.branch);
+  const filePath = asString(input.file_path);
+  if (!repoName || !branch || !filePath) {
+    throw new Error(
+      "Missing required Git params for pipeline.import: repo_name, branch, and file_path. " +
+        "Pass them via params (not body). For external Git also pass connector_ref; " +
+        "for Harness Code pass is_harness_code_repo=true instead.",
+    );
+  }
+  const harnessCode = input.is_harness_code_repo === true || input.is_harness_code_repo === "true";
+  if (!harnessCode && !asString(input.connector_ref)) {
+    throw new Error(
+      "pipeline.import requires connector_ref for external Git, or is_harness_code_repo=true for Harness Code.",
+    );
+  }
+}
+
+function coerceRetryStages(input: Record<string, unknown>): void {
+  const raw = input.retry_stages;
+  if (raw === undefined || raw === null || raw === "") return;
+  if (Array.isArray(raw)) {
+    input.retry_stages = raw.map(String).map((s) => s.trim()).filter(Boolean);
+    return;
+  }
+  if (typeof raw === "string") {
+    input.retry_stages = raw.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
+  }
+}
+
+function retryStageList(value: unknown): string[] {
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+function extractRetryStageIds(raw: unknown): string[] {
+  const envelope = asRecord(raw);
+  const data = asRecord(envelope?.data) ?? envelope;
+  if (!data) return [];
+  const resumable = data.isResumable ?? data.resumable;
+  if (resumable === false) {
+    throw new Error(
+      asString(data.errorMessage) ||
+        "This execution is not resumable. Pass params.retry_stages only for a failed, retryable run.",
+    );
+  }
+  const ids: string[] = [];
+  const groups = data.groups;
+  if (!Array.isArray(groups)) return ids;
+  for (const group of groups) {
+    const info = asRecord(group)?.info;
+    if (!Array.isArray(info)) continue;
+    for (const stage of info) {
+      const id = asString(asRecord(stage)?.identifier);
+      if (id) ids.push(id);
+    }
+  }
+  return ids;
+}
+
+async function preparePipelineRetry({ client, input, registry, signal }: PreflightContext): Promise<void> {
+  hoistBodyFields(input, ["execution_id", "retry_stages", "run_all_stages", "pipeline_id"]);
+  coerceRetryStages(input);
+
+  const executionId = asString(input.execution_id);
+  if (!executionId) {
+    throw new Error(
+      "Missing required param execution_id for pipeline.retry. Pass params.execution_id as the failed execution id. " +
+        "resource_id should be the pipeline identifier.",
+    );
+  }
+
+  if (asString(input.pipeline_id) === executionId) {
+    delete input.pipeline_id;
+  }
+
+  if (!asString(input.pipeline_id)) {
+    const exec = asRecord(
+      await registry.dispatch(
+        client,
+        "execution",
+        "get",
+        {
+          execution_id: executionId,
+          org_id: input.org_id,
+          project_id: input.project_id,
+        },
+        signal,
+      ),
+    );
+    const summary = asRecord(exec?.pipelineExecutionSummary) ?? exec;
+    const pipelineId = asString(summary?.pipelineIdentifier);
+    if (!pipelineId) {
+      throw new Error(
+        "Could not resolve pipeline_id from the execution. Pass resource_id or params.pipeline_id as the pipeline identifier.",
+      );
+    }
+    input.pipeline_id = pipelineId;
+  }
+
+  if (retryStageList(input.retry_stages).length === 0) {
+    const orgId = asString(input.org_id) ?? registry.orgId;
+    const projectId = asString(input.project_id) ?? registry.projectId;
+    const raw = await client.request<unknown>({
+      method: "GET",
+      path: `/pipeline/api/pipeline/execute/${executionId}/retryStages`,
+      params: {
+        pipelineIdentifier: String(input.pipeline_id),
+        ...(orgId ? { orgIdentifier: orgId } : {}),
+        ...(projectId ? { projectIdentifier: projectId } : {}),
+      },
+      signal,
+    });
+    const ids = extractRetryStageIds(raw);
+    if (ids.length === 0) {
+      throw new Error(
+        "No resumable stages returned for this execution. Pass params.retry_stages with stage identifiers, " +
+          "or confirm the run is failed and retryable.",
+      );
+    }
+    input.retry_stages = ids;
+  }
+}
+
 /**
  * Remote updates require Git location plus optimistic-lock SHAs. Agents commonly
  * send only the updated YAML, so hydrate missing Git context from the current
@@ -443,12 +612,12 @@ export const pipelinesToolset: ToolsetDefinition = {
     {
       resourceType: "pipeline",
       displayName: "Pipeline",
-      description: "CI/CD pipeline definition. Supports list, get, create, update, delete, and execute (run).",
+      description: "CI/CD pipeline definition. Supports list, get, create, update, delete, and execute (run, retry, import).",
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["pipeline_id"],
       diagnosticHint: "Use harness_diagnose with pipeline_id or execution_id to analyze failures — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
-      executeHint: "Before executing, check required inputs: harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID'). For simple variables, pass key-value pairs in inputs. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex template inputs, use input_set_ids — list available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}).",
+      executeHint: "Before run, check required inputs: harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID'). For simple variables, pass key-value pairs in inputs. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex template inputs, use input_set_ids — list available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}). To abort a running execution, use resource_type='execution', action='interrupt'.",
       listFilterFields: [
         { name: "search_term", description: "Filter pipelines by name or keyword" },
         { name: "module", description: "Harness module filter", enum: ["CD", "CI", "CV", "CF", "CE", "STO"] },
@@ -638,17 +807,35 @@ export const pipelinesToolset: ToolsetDefinition = {
           },
         },
         retry: {
-          method: "PUT",
-          path: "/pipeline/api/pipeline/execute/retry/{planExecutionId}",
+          method: "POST",
+          path: "/pipeline/api/pipeline/execute/retry/{pipelineIdentifier}",
           operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
-          pathParams: { execution_id: "planExecutionId" },
-          queryParams: { module: "module" },
-          bodyBuilder: () => ({}),
+          pathParams: { pipeline_id: "pipelineIdentifier" },
+          queryParams: {
+            module: "module",
+            execution_id: "planExecutionId",
+            retry_stages: "retryStages",
+            run_all_stages: "runAllStages",
+          },
+          defaultQueryParams: { runAllStages: "true" },
+          headers: { "Content-Type": "application/yaml" },
+          preflight: preparePipelineRetry,
+          bodyBuilder: (input) => pipelineExecuteYamlBody(input),
           responseExtractor: ngExtract,
-          actionDescription: "Retry a failed pipeline execution.",
+          actionDescription: "Retry a failed pipeline execution from selected stages.",
+          paramsSchema: {
+            fields: [
+              { name: "execution_id", required: true, description: "Failed execution id." },
+              { name: "retry_stages", required: false, description: "Stage identifiers to retry from. Omit to select resumable stages automatically." },
+              { name: "run_all_stages", required: false, description: "When false, retry only failed stages in a parallel group. Default true." },
+              { name: "module", required: false, description: "Harness module (CI, CD, …)." },
+            ],
+          },
           bodySchema: {
-            description: "No request body required. The retry re-executes the failed pipeline execution identified by execution_id.",
-            fields: [],
+            description: "Optional runtime inputs. Same shape as pipeline run; omit to reuse the previous execution's inputs.",
+            fields: [
+              { name: "inputs", type: "yaml", required: false, description: "Optional runtime inputs overlay, same as run." },
+            ],
           },
         },
         import: {
@@ -663,19 +850,33 @@ export const pipelinesToolset: ToolsetDefinition = {
             is_force_import: "isForceImport",
             is_harness_code_repo: "isHarnessCodeRepo",
           },
+          preflight: async ({ input }) => {
+            preparePipelineImport(input);
+          },
           bodyBuilder: (input) => {
-            const b = input.body as Record<string, unknown> | undefined;
+            preparePipelineImport(input);
+            const b = asRecord(input.body);
             return {
               pipelineName: b?.pipeline_name ?? b?.pipelineName ?? "",
               pipelineDescription: b?.pipeline_description ?? b?.pipelineDescription ?? "",
             };
           },
           responseExtractor: ngExtract,
-          actionDescription: "Import a pipeline from a Git repository into Harness. Fetches the pipeline YAML from the specified repo/branch/path and creates a Harness pipeline record for it. For external Git: provide connector_ref, repo_name, branch, file_path. For Harness Code repos: provide is_harness_code_repo=true, repo_name, branch, file_path (no connector_ref needed). Use is_force_import=true to overwrite if the pipeline already exists.",
-          bodySchema: {
-            description: "Pipeline import details. Provide the pipeline name and description for the imported pipeline. Git details (connector_ref, repo_name, branch, file_path) go in params.",
+          actionDescription: "Import a pipeline from a Git repository.",
+          paramsSchema: {
             fields: [
-              { name: "pipelineName", type: "string", required: true, description: "Display name for the imported pipeline" },
+              { name: "repo_name", required: true, description: "Git repository name." },
+              { name: "branch", required: true, description: "Git branch." },
+              { name: "file_path", required: true, description: "Path to the pipeline YAML in the repo." },
+              { name: "connector_ref", required: false, description: "Git connector for external Git. Required unless is_harness_code_repo=true." },
+              { name: "is_harness_code_repo", required: false, description: "Set true for Harness Code repos instead of connector_ref." },
+              { name: "is_force_import", required: false, description: "Overwrite if the pipeline identifier already exists." },
+            ],
+          },
+          bodySchema: {
+            description: "Optional display name and description.",
+            fields: [
+              { name: "pipelineName", type: "string", required: false, description: "Display name. Optional — defaults to the name in the Git YAML." },
               { name: "pipelineDescription", type: "string", required: false, description: "Description for the imported pipeline" },
             ],
           },
@@ -872,11 +1073,13 @@ export const pipelinesToolset: ToolsetDefinition = {
     {
       resourceType: "execution",
       displayName: "Pipeline Execution",
-      description: "Pipeline execution history and details. Supports list and get.",
+      description: "Pipeline execution history and details. Supports list, get, and interrupt.",
       toolset: "pipelines",
       scope: "project",
       identifierFields: ["execution_id"],
       diagnosticHint: "Use harness_diagnose with execution_id to analyze a failed execution — includes step-level error details, log snippets, delegate info, and chained pipeline traversal.",
+      executeHint:
+        "Abort a running execution with action=interrupt. Pass resource_id as the execution id.",
       relatedResources: [
         {
           resourceType: "execution_inputs",
@@ -931,10 +1134,30 @@ export const pipelinesToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { execution_id: "planExecutionId" },
           queryParams: { interrupt_type: "interruptType" },
-          bodyBuilder: () => ({}),
-          bodySchema: { description: "No body required. Interrupt type is specified via the interrupt_type query parameter (IMPORTANT: do not pass this as a body parameter, otherwise the request will fail)", fields: [] },
+          skipScopeBodyInjection: true,
+          preflight: async ({ input }) => {
+            normalizePipelineInterruptType(input);
+          },
+          bodyBuilder: (input) => {
+            normalizePipelineInterruptType(input);
+            return {};
+          },
+          paramsSchema: {
+            fields: [
+              {
+                name: "interrupt_type",
+                required: true,
+                description: "AbortAll or UserMarkedFailure. Prefer params.interrupt_type; body.interrupt_type is also accepted.",
+              },
+            ],
+          },
+          bodySchema: {
+            description: "No body is required.",
+            fields: [],
+          },
           responseExtractor: ngExtract,
-          actionDescription: "Interrupt a running execution. Pass interrupt_type as a param: AbortAll (abort all stages), Pause, Resume, StageRollback, Abort (abort current retry), ExpireAll, or Retry.",
+          actionDescription:
+            "Interrupt a running pipeline execution.",
         },
       },
     },
