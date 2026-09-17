@@ -2675,6 +2675,60 @@ pipeline:
     expect(retryCall.params.retryStages).toEqual(["deploy", "verify"]);
   });
 
+  it("auto retry_stages uses only failed stages in the first failed group", async () => {
+    mockRequest
+      .mockResolvedValueOnce({
+        data: {
+          isResumable: true,
+          groups: [
+            { info: [{ identifier: "build", status: "Success" }] },
+            {
+              info: [
+                { identifier: "deploy", status: "Failed" },
+                { identifier: "verify", status: "Success" },
+              ],
+            },
+            { info: [{ identifier: "notify", status: "Failed" }] },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-failed" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry",
+      resource_id: "my-pipe",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    const retryCall = mockRequest.mock.calls[1]![0] as { params: Record<string, unknown> };
+    expect(retryCall.params.retryStages).toEqual(["deploy"]);
+  });
+
+  it("auto retry_stages stays inside one group when catalog omits status", async () => {
+    mockRequest
+      .mockResolvedValueOnce({
+        data: {
+          isResumable: true,
+          groups: [
+            { info: [{ identifier: "build" }] },
+            { info: [{ identifier: "deploy" }] },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-last-group" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry",
+      resource_id: "my-pipe",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    const retryCall = mockRequest.mock.calls[1]![0] as { params: Record<string, unknown> };
+    expect(retryCall.params.retryStages).toEqual(["deploy"]);
+  });
+
   it("resolves pipeline_id from execution get when retry only has execution_id", async () => {
     mockRequest
       .mockResolvedValueOnce({

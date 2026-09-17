@@ -323,6 +323,26 @@ function retryStageList(value: unknown): string[] {
   return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
 }
 
+/** Stage statuses the retry catalog treats as failed / resumable. */
+const FAILED_RETRY_STATUSES = new Set([
+  "failed",
+  "errored",
+  "expired",
+  "aborted",
+  "abortedbyfreeze",
+  "approvalrejected",
+]);
+
+function isFailedRetryStatus(status: unknown): boolean {
+  if (typeof status !== "string") return false;
+  return FAILED_RETRY_STATUSES.has(status.replace(/[\s_-]/g, "").toLowerCase());
+}
+
+/**
+ * Retry accepts stage ids from a single catalog group ("retry from these stages").
+ * Flattening every groups[].info id is rejected for sequential pipelines and, with
+ * runAllStages=true, would restart from the first successful stage.
+ */
 function extractRetryStageIds(raw: unknown): string[] {
   const envelope = asRecord(raw);
   const data = asRecord(envelope?.data) ?? envelope;
@@ -334,18 +354,36 @@ function extractRetryStageIds(raw: unknown): string[] {
         "This execution is not resumable. Pass params.retry_stages only for a failed, retryable run.",
     );
   }
-  const ids: string[] = [];
   const groups = data.groups;
-  if (!Array.isArray(groups)) return ids;
+  if (!Array.isArray(groups)) return [];
+
+  const parsed: { ids: string[]; failedIds: string[]; hasStatus: boolean }[] = [];
   for (const group of groups) {
     const info = asRecord(group)?.info;
     if (!Array.isArray(info)) continue;
+    const ids: string[] = [];
+    const failedIds: string[] = [];
+    let hasStatus = false;
     for (const stage of info) {
-      const id = asString(asRecord(stage)?.identifier);
-      if (id) ids.push(id);
+      const rec = asRecord(stage);
+      const id = asString(rec?.identifier);
+      if (!id) continue;
+      ids.push(id);
+      if (rec?.status !== undefined && rec?.status !== null && rec?.status !== "") {
+        hasStatus = true;
+        if (isFailedRetryStatus(rec.status)) failedIds.push(id);
+      }
     }
+    if (ids.length > 0) parsed.push({ ids, failedIds, hasStatus });
   }
-  return ids;
+
+  const firstFailedGroup = parsed.find((group) => group.failedIds.length > 0);
+  if (firstFailedGroup) return firstFailedGroup.failedIds;
+
+  if (parsed.some((group) => group.hasStatus)) return [];
+
+  // Catalog omitted status: still must stay inside one group.
+  return parsed.at(-1)?.ids ?? [];
 }
 
 async function preparePipelineRetry({ client, input, registry, signal }: PreflightContext): Promise<void> {
@@ -826,7 +864,7 @@ export const pipelinesToolset: ToolsetDefinition = {
           paramsSchema: {
             fields: [
               { name: "execution_id", required: true, description: "Failed execution id." },
-              { name: "retry_stages", required: false, description: "Stage identifiers to retry from. Omit to select resumable stages automatically." },
+              { name: "retry_stages", required: false, description: "Stage identifiers to retry from. Must belong to one sequential or parallel group. Omit to retry from the first failed/resumable group." },
               { name: "run_all_stages", required: false, description: "When false, retry only failed stages in a parallel group. Default true." },
               { name: "module", required: false, description: "Harness module (CI, CD, …)." },
             ],
