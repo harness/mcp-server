@@ -270,7 +270,7 @@ export const registriesToolset: ToolsetDefinition = {
               { name: "reason", type: "string", required: true, description: "Reason for quarantine" },
               { name: "filePath", type: "string", required: false, description: "Specific file path within the artifact to quarantine" },
               { name: "version", type: "string", required: false, description: "Artifact version to quarantine" },
-              { name: "artifactType", type: "string", required: false, description: "Artifact type (e.g. DOCKER, NPM)" },
+              { name: "artifactType", type: "string", required: false, description: "Artifact type (e.g. model, dataset, module, provider)" },
               { name: "artifactKeyFilters", type: "object", required: false, description: "Key-value filters (format: key:value) to further scope the quarantine target" },
             ],
           },

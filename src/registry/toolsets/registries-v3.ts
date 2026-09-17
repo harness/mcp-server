@@ -86,7 +86,7 @@ const compactFirewallExceptionV3 = (item: Record<string, unknown>): Record<strin
 };
 
 /**
- * HAR v3 read-only toolset.
+ * HAR v3 toolset.
  *
  * v3 is the standardized surface described in the Artifact Registry
  * v3 API standardization guide. Unlike v1 (which uses path-based
@@ -96,10 +96,7 @@ const compactFirewallExceptionV3 = (item: Record<string, unknown>): Record<strin
  *
  * External gateway prefix: `/har/api/v3/…`.
  *
- * Scope: reads only. Writes (metadata upsert/save, firewall exception
- * create/update/status, tag add, bulk-evaluate, copy) and internal
- * operations (delete/restore/migrate, backfill, file preview/search)
- * are intentionally omitted — writes will land in a follow-up PR,
+ * Write operations included: firewall exception create (account-scoped).
  * `x-internal: true` operations are excluded on purpose.
  */
 
@@ -131,7 +128,7 @@ export const registriesV3Toolset: ToolsetDefinition = {
   name: "registries-v3",
   displayName: "Artifact Registries (v3)",
   description:
-    "Harness Artifact Registry v3 — packages, versions, files, metadata, scans, firewall exceptions (reads).",
+    "Harness Artifact Registry v3 — packages, versions, files, metadata, scans, firewall exceptions. Includes firewall exception create (account-scoped write).",
   // Opt-in until v3 writes and a v3 registry list land, so agents don't have to
   // disambiguate between v1 registries/artifacts and v3 packages/versions.
   optIn: true,

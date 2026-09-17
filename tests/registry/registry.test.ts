@@ -1869,7 +1869,8 @@ describe("Registry", () => {
       // body must not carry scope fields
       expect(call.body.orgIdentifier).toBeUndefined();
       expect(call.body.projectIdentifier).toBeUndefined();
-      // query string must not carry org/project — create is account-scoped only
+      // query string: only account_identifier — create is account-scoped only
+      expect(call.params?.account_identifier).toBe("test-account");
       expect(call.params?.org_identifier).toBeUndefined();
       expect(call.params?.project_identifier).toBeUndefined();
     });

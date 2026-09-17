@@ -1951,7 +1951,7 @@ By default, 41 of 44 toolsets are enabled. Three toolsets are opt-in and exclude
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
-- **`registries-v3`** — Harness Artifact Registry v3 (packages, versions, files, metadata, scans, firewall exceptions). Opt-in until v3 writes land, so agents don't have to disambiguate between v1 registries/artifacts and v3 packages/versions.
+- **`registries-v3`** — Harness Artifact Registry v3 (packages, versions, files, metadata, scans, firewall exceptions including create). Opt-in so agents don't have to disambiguate between v1 registries/artifacts and v3 packages/versions.
 
 ### Adding toolsets with `+` prefix
 
@@ -2004,7 +2004,7 @@ Available toolset names:
 | `audit`                 | audit_event                                                                                                                                                                                                                                                                                     |
 | `delegates`             | delegate, delegate_token                                                                                                                                                                                                                                                                        |
 | `repositories`          | repository, branch, commit, file_content, tag, repo_rule, space_rule                                                                                                                                                                                                                            |
-| `registries`            | registry, artifact, artifact_version, artifact_file                                                                                                                                                                                                                                             |
+| `registries`            | registry, artifact, artifact_version, artifact_file, quarantine                                                                                                                                                                                                                                 |
 | `file_store`            | file_store                                                                                                                                                                                                                                                                                      |
 | `templates`             | template                                                                                                                                                                                                                                                                                        |
 | `dashboards`            | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
