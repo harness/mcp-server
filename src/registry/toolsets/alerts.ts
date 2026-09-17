@@ -121,13 +121,16 @@ const alertUpdateSchema: BodySchema = {
 
 export const alertsToolset: ToolsetDefinition = {
   name: "alerts",
-  displayName: "Alerts",
-  description: "Harness alert management — list, inspect, update, and lifecycle actions for alerts",
+  displayName: "AI-SRE Alerts",
+  description: "Harness AI-SRE alert management — list, inspect, update, and lifecycle actions for alerts",
   resources: [
     {
       resourceType: "alert",
       displayName: "Alert",
-      description: "Mission Control alert entity. Supports list/get/update plus acknowledge, resolve, and dismiss actions. Creation is via webhooks and other external writers.",
+      description: "AI-SRE alert entity. Supports list/get/update plus acknowledge, resolve, and dismiss actions. "
+        + "Creation is via webhooks and other external writers. This entity carries current state only — the alert's "
+        + "history (pages, notes, status changes) is a separate resource: "
+        + "harness_list(resource_type='activity_timeline', filters={activity_id: <prettyId>}).",
       toolset: "alerts",
       scope: "project",
       scopeParams: MC_SCOPE,

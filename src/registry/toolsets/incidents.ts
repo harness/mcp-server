@@ -162,13 +162,16 @@ const incidentUpdateSchema: BodySchema = {
 
 export const incidentsToolset: ToolsetDefinition = {
   name: "incidents",
-  displayName: "Incidents",
-  description: "Harness incident-management — list, inspect, create, update, and close incidents",
+  displayName: "AI-SRE Incidents",
+  description: "Harness AI-SRE incident-management — list, inspect, create, update, and close incidents",
   resources: [
     {
       resourceType: "incident",
       displayName: "Incident",
-      description: "Incident-management entity. Supports list/get/create/update plus a close action.",
+      description: "AI-SRE incident-management entity. Supports list/get/create/update plus a close action. "
+        + "This entity carries current state only — the incident's history (runbook runs, pages, notes, status "
+        + "changes) is a separate resource: harness_list(resource_type='activity_timeline', "
+        + "filters={activity_id: <prettyId>}). An empty keyEvents here does not mean nothing happened.",
       toolset: "incidents",
       scope: "project",
       scopeParams: MC_SCOPE,

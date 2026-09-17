@@ -237,8 +237,16 @@ describe("activity_timeline — harness_list", () => {
     expect(data.pagination.has_more).toBe(true);
   });
 
-  it("reports has_more=false and no next_cursor on the last page", async () => {
-    mockRequest.mockResolvedValueOnce({ results: [], hasMoreResults: false });
+  // The live endpoint echoes the last event's cursor on the terminal page rather
+  // than omitting it, so nextPageCursor is set here even though hasMoreResults is
+  // false. Suppressing it is what stops a `while (next_cursor)` loop from
+  // re-requesting the final page forever.
+  it("suppresses next_cursor on the last page even when the backend still sends one", async () => {
+    mockRequest.mockResolvedValueOnce({
+      results: [RAW_TIMELINE.results[0]],
+      nextPageCursor: "cursor-2",
+      hasMoreResults: false,
+    });
     const result = await server.call("harness_list", {
       resource_type: "activity_timeline",
       filters: { activity_id: "INC-123" },

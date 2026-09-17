@@ -91,13 +91,18 @@ function projectTimelineEvent(e: unknown): unknown {
 function timelineListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
   if (!isRecord(raw)) return raw;
   const items = Array.isArray(raw.results) ? raw.results.map(projectTimelineEvent) : [];
+  const hasMore = raw.hasMoreResults === true;
   return {
     items,
     total: items.length,
     pagination: {
       cursor: typeof input?.cursor === "string" ? input.cursor : undefined,
-      next_cursor: typeof raw.nextPageCursor === "string" ? raw.nextPageCursor : undefined,
-      has_more: raw.hasMoreResults === true,
+      // Suppressed on the terminal page: the backend echoes the last event's
+      // cursor even when hasMoreResults is false, so surfacing it unconditionally
+      // makes an agent's `while (next_cursor)` loop re-request the final page
+      // forever. Only ever emit a cursor that has a page behind it.
+      next_cursor: hasMore && typeof raw.nextPageCursor === "string" ? raw.nextPageCursor : undefined,
+      has_more: hasMore,
     },
   };
 }
@@ -120,16 +125,19 @@ const postMessageSchema: BodySchema = {
 
 export const timelinesToolset: ToolsetDefinition = {
   name: "timelines",
-  displayName: "Activity Timelines",
-  description: "Mission Control activity timelines — read an incident, alert, or deploy timeline and post markdown notes to it",
+  displayName: "AI-SRE Activity Timelines",
+  description: "Harness AI-SRE activity timelines — read an incident, alert, or deploy timeline and post markdown notes to it",
   resources: [
     {
       resourceType: "activity_timeline",
       displayName: "Activity Timeline",
       description:
-        "The chronological event stream for one Mission Control activity (incident, alert, or deploy). "
+        "The chronological event stream for one AI-SRE activity (incident, alert, or deploy). "
         + "Read with harness_list and a required activity_id filter; append a note with "
-        + "harness_execute action='post_message'. There is no get operation — a timeline is a collection, not an entity.",
+        + "harness_execute action='post_message'. There is no get operation — a timeline is a collection, not an entity. "
+        + "Events are append-only and permanent: there is no update or delete, by design, because the timeline is an "
+        + "audit trail. In list responses `total` is this page's size, not the timeline length — page with "
+        + "pagination.has_more, never by comparing item count to the requested size.",
       toolset: "timelines",
       scope: "project",
       scopeParams: MC_SCOPE,
@@ -165,7 +173,9 @@ export const timelinesToolset: ToolsetDefinition = {
           name: "event_groups",
           description:
             "Event groups to include (multi-value, OR-combined). Omit for all named groups — which is not every event: "
-            + "script-execution and intermediate-reasoning event types belong to no group and stay excluded either way.",
+            + "raw action and webhook logs (ACTION_LOG, ACTION_EXECUTE, ACTION_END, ACTION_DEBUG_LOG, WEBHOOK_LOG) and "
+            + "intermediate AI reasoning traces belong to no group and stay excluded either way. Runbook execution is "
+            + "still visible: SCRIPTED_ACTION_START/DONE are in RUNBOOKS.",
           enum: [...EVENT_GROUPS],
         },
         {

@@ -80,13 +80,15 @@ function deployGetExtract(raw: unknown): unknown {
 
 export const deploysToolset: ToolsetDefinition = {
   name: "deploys",
-  displayName: "Deploys",
-  description: "Harness deployment history — list and inspect service deploys",
+  displayName: "AI-SRE Deploys",
+  description: "Harness AI-SRE deployment history — list and inspect service deploys",
   resources: [
     {
       resourceType: "deploy",
       displayName: "Deploy",
-      description: "Deployment activity for a project's services. Read-only: list and get.",
+      description: "AI-SRE deployment activity for a project's services. Read-only: list and get. "
+        + "This entity carries current state only — the deploy's history is a separate resource: "
+        + "harness_list(resource_type='activity_timeline', filters={activity_id: <deploy id>}).",
       toolset: "deploys",
       scope: "project",
       scopeParams: MC_SCOPE,
