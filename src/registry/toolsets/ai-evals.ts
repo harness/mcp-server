@@ -116,15 +116,23 @@ async function getScopedResource(
   }
 }
 
-async function getConnector(ctx: PreflightContext, connectorRef: string): Promise<JsonRecord> {
+export async function getConnector(ctx: PreflightContext, connectorRef: string): Promise<JsonRecord> {
+  const scopePrefix = connectorRef.split(".", 1)[0];
+  const scope = scopePrefix === "account" ? "account" : scopePrefix === "org" ? "org" : "project";
+  const { org_id, project_id } = scope === "account" ? {} : preflightScope(ctx);
+  const params = scope === "account"
+    ? {}
+    : scope === "org"
+      ? { orgIdentifier: org_id }
+      : { orgIdentifier: org_id, projectIdentifier: project_id };
   try {
-    const result = await ctx.registry.dispatch(
-      ctx.client,
-      "connector",
-      "get",
-      { ...preflightScope(ctx), connector_id: connectorRef },
-      ctx.signal,
-    );
+    const result = await ctx.client.request<unknown>({
+      method: "GET",
+      path: `/ng/api/connectors/${encodeURIComponent(connectorRef)}`,
+      params,
+      retryPolicy: "safe",
+      signal: ctx.signal,
+    });
     const record = unwrapRecord(result);
     return asRecord(record.connector) ?? record;
   } catch (error) {

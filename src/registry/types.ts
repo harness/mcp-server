@@ -153,6 +153,7 @@ export type ToolsetName =
   | "iacm"
   | "ansible"
   | "ai-evals"
+  | "observability-evaluations"
   | "incidents"
   | "alerts"
   | "deploys"
