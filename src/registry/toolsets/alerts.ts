@@ -133,6 +133,13 @@ export const alertsToolset: ToolsetDefinition = {
       scopeParams: MC_SCOPE,
       identifierFields: ["alert_id"],
       compactItem: compactAlert,
+      relatedResources: [
+        {
+          resourceType: "activity_timeline",
+          relationship: "child",
+          description: "Chronological event stream for this alert; list it with filters.activity_id = the alert prettyId",
+        },
+      ],
       deepLinkTemplate:
         "/ng/account/{accountId}/module/ir/orgs/{orgId}/projects/{projectId}/alerts/{prettyId}",
       diagnosticHint:

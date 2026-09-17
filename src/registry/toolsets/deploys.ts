@@ -92,6 +92,13 @@ export const deploysToolset: ToolsetDefinition = {
       scopeParams: MC_SCOPE,
       identifierFields: ["deploy_id"],
       compactItem: compactDeploy,
+      relatedResources: [
+        {
+          resourceType: "activity_timeline",
+          relationship: "child",
+          description: "Chronological event stream for this deploy; list it with filters.activity_id = the deploy id",
+        },
+      ],
       listFilterFields: [
         { name: "service", description: "Filter by service name (multi-value, OR-combined)" },
         { name: "environment", description: "Filter by environment label (multi-value, OR-combined)" },

@@ -174,6 +174,13 @@ export const incidentsToolset: ToolsetDefinition = {
       scopeParams: MC_SCOPE,
       identifierFields: ["incident_id"],
       compactItem: compactIncident,
+      relatedResources: [
+        {
+          resourceType: "activity_timeline",
+          relationship: "child",
+          description: "Chronological event stream for this incident; list it with filters.activity_id = the incident prettyId",
+        },
+      ],
       listFilterFields: [
         { name: "status", description: "Filter by incident status (multi-value). Matching is case-insensitive, but responses return status uppercase (e.g. CLOSED) — compare case-insensitively when post-filtering results", enum: ["new", "investigating", "fixing", "monitoring", "closed"] },
         { name: "severity", description: "Filter by severity option id (multi-value). 0 is the most severe (SEV0: Critical) through 4 (SEV4: Cosmetic)", enum: ["0", "1", "2", "3", "4"] },

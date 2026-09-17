@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 247 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 248 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,8 +10,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-- **11 tools, 247 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 41 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
+- **11 tools, 248 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 42 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **35 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -1261,7 +1261,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-247 resource types organized across 45 registered toolset definitions; 41 are default-enabled. Each resource type supports a subset of CRUD operations and optional execute actions.
+248 resource types organized across 46 registered toolset definitions; 42 are default-enabled. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1947,7 +1947,7 @@ Security exemption execute workflow:
 
 ## Toolset Filtering
 
-By default, 41 of 45 toolsets are enabled. Four toolsets are opt-in and excluded from the defaults:
+By default, 42 of 46 toolsets are enabled. Four toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
@@ -2052,8 +2052,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-                | 45 Toolsets (41 default) |
-                |  247 Resource Types|
+                | 46 Toolsets (42 default) |
+                |  248 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
