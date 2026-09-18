@@ -1,4 +1,4 @@
-import type { ParamsSchema, ToolsetDefinition } from "../types.js";
+import type { HarnessClientInterface, ParamsSchema, PreflightContext, ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
 
 const REPO_PARAMS: ParamsSchema = {
@@ -141,6 +141,139 @@ function pullRequestUpdateBody(input: Record<string, unknown>): unknown {
     );
   }
   return { state, is_draft: isDraft };
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function scalarString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : undefined;
+}
+
+/** Positive integer reviewer_id. Non-numeric identifiers are resolved separately. */
+function numericReviewerId(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) return value;
+  if (typeof value === "string" && /^\d+$/.test(value.trim())) {
+    const n = Number(value.trim());
+    if (Number.isInteger(n) && n > 0) return n;
+  }
+  return undefined;
+}
+
+interface ReviewerUserInfo {
+  id?: number;
+  uid?: string;
+  email?: string;
+  display_name?: string;
+}
+
+function reviewerUsersFromRaw(raw: unknown): ReviewerUserInfo[] {
+  return Array.isArray(raw) ? raw as ReviewerUserInfo[] : [];
+}
+
+function emailFromUserAggregateRaw(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const envelope = raw as Record<string, unknown>;
+  const data = envelope.data && typeof envelope.data === "object"
+    ? envelope.data as Record<string, unknown>
+    : envelope;
+  const user = data.user && typeof data.user === "object"
+    ? data.user as Record<string, unknown>
+    : data;
+  return scalarString(user.email ?? data.email);
+}
+
+async function lookupReviewerIdByEmail(
+  client: HarnessClientInterface,
+  email: string,
+  signal?: AbortSignal,
+): Promise<number> {
+  const raw = await client.request<unknown>({
+    method: "GET",
+    path: "/code/api/v1/principals",
+    params: { query: email, type: "user", limit: 50 },
+    signal,
+  });
+  const users = reviewerUsersFromRaw(raw);
+  const needle = email.toLowerCase();
+  const exactEmail = users.filter((p) => scalarString(p.email)?.toLowerCase() === needle);
+  const matches = exactEmail.length > 0
+    ? exactEmail
+    : users.filter((p) => scalarString(p.uid)?.toLowerCase() === needle);
+  if (matches.length === 0) {
+    throw new Error(
+      `No reviewer found for email "${email}". Confirm the address with harness_list(resource_type="user") and retry with body.reviewer_email.`,
+    );
+  }
+  if (matches.length > 1) {
+    const listed = matches
+      .map((p) => `${p.display_name ?? p.email} <${p.email}>`)
+      .join("; ");
+    throw new Error(
+      `Multiple users matched email "${email}": ${listed}. Pass reviewer_id from harness_list(resource_type="pr_reviewer") for the intended person.`,
+    );
+  }
+  const id = matches[0]?.id;
+  if (typeof id !== "number" || !Number.isInteger(id) || id <= 0) {
+    throw new Error(`Could not resolve a reviewer_id for "${email}".`);
+  }
+  return id;
+}
+
+/** Numeric reviewer_id wins; otherwise resolve reviewer_email or account user id to reviewer_id. */
+async function resolvePrReviewerCreate({ client, input, signal }: PreflightContext): Promise<void> {
+  const body = bodyRecord(input) ?? {};
+  const numericId = numericReviewerId(body.reviewer_id ?? input.reviewer_id);
+  if (numericId !== undefined) {
+    input.body = { reviewer_id: numericId };
+    return;
+  }
+
+  const email = scalarString(body.reviewer_email ?? input.reviewer_email);
+  const uidOrEmail = scalarString(
+    body.reviewer_uid ?? input.reviewer_uid ?? body.reviewer_id ?? input.reviewer_id,
+  );
+
+  let resolvedEmail = email;
+  if (!resolvedEmail && uidOrEmail && EMAIL_RE.test(uidOrEmail)) {
+    resolvedEmail = uidOrEmail;
+  }
+  if (!resolvedEmail && uidOrEmail) {
+    let raw: unknown;
+    try {
+      raw = await client.request<unknown>({
+        method: "GET",
+        path: `/ng/api/user/aggregate/${encodeURIComponent(uidOrEmail)}`,
+        signal,
+      });
+    } catch {
+      throw new Error(
+        `"${uidOrEmail}" is not a valid reviewer_id. Pass reviewer_email, or a numeric reviewer_id from harness_list(resource_type="pr_reviewer").`,
+      );
+    }
+    resolvedEmail = emailFromUserAggregateRaw(raw);
+    if (!resolvedEmail) {
+      throw new Error(
+        `User "${uidOrEmail}" has no email. Pass reviewer_email instead.`,
+      );
+    }
+  }
+
+  if (!resolvedEmail) {
+    throw new Error(
+      "pr_reviewer.create requires reviewer_email (preferred) or a numeric reviewer_id.",
+    );
+  }
+
+  const id = await lookupReviewerIdByEmail(client, resolvedEmail, signal);
+  input.body = { reviewer_id: id };
+}
+
+function prReviewerCreateBody(input: Record<string, unknown>): { reviewer_id: number } {
+  const id = numericReviewerId(bodyRecord(input)?.reviewer_id);
+  if (id === undefined) {
+    throw new Error("pr_reviewer.create is missing reviewer_id.");
+  }
+  return { reviewer_id: id };
 }
 
 export const pullRequestsToolset: ToolsetDefinition = {
@@ -309,11 +442,21 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_reviewer",
       displayName: "PR Reviewer",
       description:
-        "Reviewers on a pull request. Supports list and create (add reviewer). Use execute action 'submit_review' to approve or request changes. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
+        "Reviewers on a pull request. Supports list and create (add reviewer). Prefer body.reviewer_email from harness_list(user). Numeric reviewer_id from an existing reviewer list also works. Use execute action 'submit_review' to approve or request changes. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["repo_id", "pr_number"],
+      diagnosticHint:
+        "To add a reviewer, pass body.reviewer_email from harness_list(resource_type=\"user\"). harness_list(user) identifier/uuid is not reviewer_id. If you already listed reviewers on the PR, you may pass that numeric reviewer_id instead.",
+      relatedResources: [
+        {
+          resourceType: "user",
+          relationship: "identity",
+          description:
+            "Look up the reviewer with harness_list(resource_type=\"user\", search_term=<name or email>), then pass the returned email as pr_reviewer body.reviewer_email.",
+        },
+      ],
       operations: {
         list: {
           method: "GET",
@@ -335,15 +478,36 @@ export const pullRequestsToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
-          bodyBuilder: (input) => input.body,
+          skipScopeBodyInjection: true,
+          preflight: resolvePrReviewerCreate,
+          bodyBuilder: prReviewerCreateBody,
           responseExtractor: passthrough,
           description:
-            "Add a reviewer to a pull request. Body fields: reviewer_id (required).",
+            "Add a reviewer to a pull request. Prefer reviewer_email. Numeric reviewer_id from an existing reviewer list also works and wins if both are set.",
           paramsSchema: REPO_PR_PARAMS,
           bodySchema: {
-            description: "Reviewer to add",
+            description: "Reviewer to add. Provide reviewer_email (preferred) or numeric reviewer_id.",
             fields: [
-              { name: "reviewer_id", type: "number", required: true, description: "User ID of the reviewer to add" },
+              {
+                name: "reviewer_email",
+                type: "string",
+                required: false,
+                description: "Reviewer email from harness_list(user). Preferred.",
+              },
+              {
+                name: "reviewer_id",
+                type: "number",
+                required: false,
+                description:
+                  "Numeric reviewer id from harness_list(resource_type=\"pr_reviewer\"). Optional. Do not use harness_list(user) identifier/uuid here — use reviewer_email.",
+              },
+              {
+                name: "reviewer_uid",
+                type: "string",
+                required: false,
+                description:
+                  "Account user identifier from harness_list(user). Prefer reviewer_email when you have it.",
+              },
             ],
           },
         },
