@@ -782,3 +782,10 @@ Feature is **opt-in** (`include_visual` defaults to false) and the `visual_*` re
 - Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.2`.
 - Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.2` release.
 - Verification passed: `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, and `git diff --check`.
+## Version 3.2.29
+
+- [x] Create chore/version-3.2.29 from current origin/main.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release tests.
+- [x] Validate release metadata, build, types, docs, standards, and tests.
+
+Validation: build, typecheck, shrinkwrap, docs, standards (79 tests), and diff checks passed. Full suite: 3,708 passed; one schema-description import exceeded the default 5-second timeout. Release metadata and schema-description tests passed on focused rerun with --testTimeout=15000 (14 tests). No test configuration changed.
