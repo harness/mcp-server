@@ -135119,6 +135119,22 @@ const schema: Record<string, any> = {
                         "minLength": 1
                       }
                     ]
+                  },
+                  "forks": {
+                    "description": "Optional number of parallel Ansible forks (1-100). Omitted inherits any existing ANSIBLE_FORKS; the Ansible default is 5.",
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32",
+                        "minimum": 1,
+                        "maximum": 100
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
                   }
                 }
               }
@@ -135213,6 +135229,22 @@ const schema: Record<string, any> = {
                     "format": "int32",
                     "minimum": 0,
                     "maximum": 4
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "forks": {
+                "description": "Optional number of parallel Ansible forks (1-100). Omitted inherits any existing ANSIBLE_FORKS; the Ansible default is 5.",
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32",
+                    "minimum": 1,
+                    "maximum": 100
                   },
                   {
                     "type": "string",
