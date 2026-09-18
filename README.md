@@ -1549,6 +1549,8 @@ Use `harness_execute(resource_type="pull_request", action="close", ...)` for an 
 
 Use `harness_list(resource_type="pr_activity", filters={type: ["comment", "code-comment"]}, ...)` to read PR comments. Use `pr_comment` for comment write operations.
 
+To add a reviewer, prefer `harness_create(resource_type="pr_reviewer", body={ reviewer_email: "<email from harness_list user>" })`. A numeric `reviewer_id` from `harness_list(resource_type="pr_reviewer")` also works.
+
 
 ### Release Management
 
