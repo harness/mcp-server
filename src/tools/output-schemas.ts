@@ -30,6 +30,15 @@ export const deleteOutputSchema = z.object({
     .catchall(z.unknown())
     .describe("Optional API response payload (e.g. template-service delete body)")
     .optional(),
+  risk_assessment: z
+    .object({
+      blast_radius: z.number().optional(),
+      confidence: z.number().optional(),
+      rationale: z.string().optional(),
+      effective_risk: z.string(),
+    })
+    .describe("Present only when a dynamic risk scorer ran for this call (spec 007)")
+    .optional(),
 });
 
 // --- harness_execute ---

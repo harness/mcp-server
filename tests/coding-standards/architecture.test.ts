@@ -105,6 +105,7 @@ const ALLOWED_GLOBAL_FETCH_FILES = new Set([
   "src/utils/oauth-auth.ts",
   "src/audit/sinks/webhook.ts",
   "src/search/remote-provider.ts",
+  "src/client/typesafe-client.ts",
 ]);
 
 /** Only this file may instantiate HarnessClient in production src/. */
