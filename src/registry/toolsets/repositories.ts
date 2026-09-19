@@ -1,9 +1,75 @@
-import type { ParamsSchema, PreflightContext, ToolsetDefinition } from "../types.js";
+import type { ParamsSchema, PreflightContext, RiskScorer, RiskScoringContext, ToolsetDefinition } from "../types.js";
 import { fileContentGetExtract, fileContentListExtract, passthrough } from "../extractors.js";
 import { assertValidBase64 } from "../../utils/base64.js";
-import { isRecord } from "../../utils/type-guards.js";
+import { asString, isRecord } from "../../utils/type-guards.js";
+import { scoreQuestion, TypeSafeError } from "../../client/typesafe-client.js";
 
 const COMMIT_ACTIONS_NEEDING_FILE_BYTES = new Set(["CREATE", "UPDATE"]);
+
+/**
+ * Blast-radius scorer for `repo_rule.update`/`repo_rule.delete` (spec 008
+ * pilot 2). Fetches the rule's current state and a bounded recent-commit
+ * count — both cheap, already-exposed reads — and asks TypeSafe's Score
+ * primitive how consequential changing/removing this rule would be.
+ * Shared by both ops: same rubric, different riskFloor per operationPolicy.
+ */
+export const repoRuleWriteRiskScorer: RiskScorer = async (ctx: RiskScoringContext) => {
+  const apiKey = process.env.TYPESAFE_API_KEY;
+  if (!apiKey) {
+    throw new TypeSafeError("TYPESAFE_API_KEY is not set");
+  }
+
+  const repoId = asString(ctx.input.repo_id);
+  const ruleId = asString(ctx.input.rule_id);
+  const rule = await ctx.client.request<Record<string, unknown>>({
+    method: "GET",
+    path: `/code/api/v1/repos/${repoId}/rules/${ruleId}`,
+    signal: ctx.signal,
+  });
+
+  const ruleType = typeof rule.type === "string" ? rule.type : "unknown";
+  const ruleState = typeof rule.state === "string" ? rule.state : "unknown";
+  const pattern = isRecord(rule.pattern) ? rule.pattern : undefined;
+  const targetsDefaultBranch = pattern?.default === true;
+
+  const thirtyDaysAgoMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const commitsRaw = await ctx.client.request<unknown>({
+    method: "GET",
+    path: `/code/api/v1/repos/${repoId}/commits`,
+    params: { since: thirtyDaysAgoMs, page: 0, limit: 25 },
+    signal: ctx.signal,
+  });
+  const commits = Array.isArray(commitsRaw) ? commitsRaw : (isRecord(commitsRaw) && Array.isArray(commitsRaw.commits) ? commitsRaw.commits : []);
+
+  const state = {
+    rule_type: ruleType,
+    rule_state: ruleState,
+    targets_default_branch: targetsDefaultBranch,
+    recent_commits_last_30_days: commits.length,
+    recent_commits_is_capped_at_25: commits.length === 25,
+  };
+
+  const answer = await scoreQuestion(
+    { apiKey, baseUrl: process.env.TYPESAFE_BASE_URL },
+    {
+      state,
+      instructions: "How consequential would changing or removing this repository protection rule be, given its current enforcement state and recent repo activity?",
+      criteria: [
+        "Rule is disabled or monitor-only — not currently enforcing anything.",
+        "Active, but doesn't target the default branch, and low recent commit activity.",
+        "Active and targets the default branch, or the repo has frequent recent commits.",
+        "Active, targets the default branch, and the repo has frequent recent commits.",
+      ],
+    },
+    { signal: ctx.signal, timeoutMs: 400 },
+  );
+
+  return {
+    blastRadius: answer.score / 3,
+    confidence: answer.confidence,
+    rationale: `Rule is ${ruleState} (${ruleType})${targetsDefaultBranch ? ", targets the default branch" : ""}; ${state.recent_commits_last_30_days}${state.recent_commits_is_capped_at_25 ? "+" : ""} commit(s) in the last 30 days.`,
+  };
+};
 
 function commitActionType(actionType: unknown): string {
   return typeof actionType === "string" ? actionType.toUpperCase() : "";
@@ -829,7 +895,12 @@ export const repositoriesToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "/code/api/v1/repos/{repoIdentifier}/rules/{ruleIdentifier}",
-          operationPolicy: { risk: "high_write", retryPolicy: "safe" },
+          // riskFloor + riskScorer: spec 008 pilot 2. A confidently-scored
+          // disabled/non-default-branch rule can drop to medium_write;
+          // anything active on the default branch stays high_write —
+          // today's unaffected behavior.
+          operationPolicy: { risk: "high_write", riskFloor: "medium_write", retryPolicy: "safe" },
+          riskScorer: repoRuleWriteRiskScorer,
           pathParams: {
             repo_id: "repoIdentifier",
             rule_id: "ruleIdentifier",
@@ -850,7 +921,9 @@ export const repositoriesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/code/api/v1/repos/{repoIdentifier}/rules/{ruleIdentifier}",
-          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          // riskFloor + riskScorer: spec 008 pilot 2 (same scorer as update).
+          operationPolicy: { risk: "destructive", riskFloor: "high_write", retryPolicy: "do_not_retry" },
+          riskScorer: repoRuleWriteRiskScorer,
           pathParams: {
             repo_id: "repoIdentifier",
             rule_id: "ruleIdentifier",
