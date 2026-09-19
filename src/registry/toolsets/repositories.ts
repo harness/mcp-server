@@ -9,9 +9,11 @@ const COMMIT_ACTIONS_NEEDING_FILE_BYTES = new Set(["CREATE", "UPDATE"]);
 /**
  * Blast-radius scorer for `repo_rule.update`/`repo_rule.delete` (spec 008
  * pilot 2). Fetches the rule's current state and a bounded recent-commit
- * count — both cheap, already-exposed reads — and asks TypeSafe's Score
- * primitive how consequential changing/removing this rule would be.
- * Shared by both ops: same rubric, different riskFloor per operationPolicy.
+ * count concurrently — both cheap, already-exposed reads — and asks
+ * TypeSafe's Score primitive how consequential changing/removing this rule
+ * would be. For update, scores the *requested* state (PATCH body fields
+ * override the fetched rule), not just what's live today. Shared by both
+ * ops: same rubric, different riskFloor per operationPolicy.
  */
 export const repoRuleWriteRiskScorer: RiskScorer = async (ctx: RiskScoringContext) => {
   const apiKey = process.env.TYPESAFE_API_KEY;
@@ -21,24 +23,46 @@ export const repoRuleWriteRiskScorer: RiskScorer = async (ctx: RiskScoringContex
 
   const repoId = asString(ctx.input.repo_id);
   const ruleId = asString(ctx.input.rule_id);
-  const rule = await ctx.client.request<Record<string, unknown>>({
-    method: "GET",
-    path: `/code/api/v1/repos/${repoId}/rules/${ruleId}`,
-    signal: ctx.signal,
-  });
+  // repo_rule is scope: "account", scopeOptional: true — dispatch() injects
+  // orgIdentifier/projectIdentifier automatically for registry-routed calls,
+  // but these are raw client.request() calls that bypass dispatch, so the
+  // scope has to be passed explicitly or a project-scoped repo 404s.
+  const scopeParams = {
+    orgIdentifier: asString(ctx.input.org_id),
+    projectIdentifier: asString(ctx.input.project_id),
+  };
+  const thirtyDaysAgoSec = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+
+  // Both reads share one input state and don't depend on each other — run
+  // them concurrently so this costs one round-trip's worth of latency, not
+  // two, against the same timeout budget as the single-GET pilot 1 scorer.
+  const [rule, commitsRaw] = await Promise.all([
+    ctx.client.request<Record<string, unknown>>({
+      method: "GET",
+      path: `/code/api/v1/repos/${repoId}/rules/${ruleId}`,
+      params: scopeParams,
+      signal: ctx.signal,
+    }),
+    ctx.client.request<unknown>({
+      method: "GET",
+      path: `/code/api/v1/repos/${repoId}/commits`,
+      params: { ...scopeParams, since: thirtyDaysAgoSec, page: 0, limit: 25 },
+      signal: ctx.signal,
+    }),
+  ]);
 
   const ruleType = typeof rule.type === "string" ? rule.type : "unknown";
-  const ruleState = typeof rule.state === "string" ? rule.state : "unknown";
-  const pattern = isRecord(rule.pattern) ? rule.pattern : undefined;
-  const targetsDefaultBranch = pattern?.default === true;
+  // For update, score the *requested* state (what the PATCH body asks for),
+  // not just the rule's current state — a request to re-enable a disabled
+  // rule on the default branch is exactly the high-blast-radius case this
+  // scorer exists to catch, and it would be invisible if only the
+  // pre-change state were scored.
+  const requestedBody = isRecord(ctx.input.body) ? ctx.input.body : undefined;
+  const ruleState = typeof requestedBody?.state === "string" ? requestedBody.state : (typeof rule.state === "string" ? rule.state : "unknown");
+  const pattern = isRecord(requestedBody?.pattern) ? requestedBody.pattern : (isRecord(rule.pattern) ? rule.pattern : undefined);
+  const targetsDefaultBranch = pattern?.default === true
+    || (Array.isArray(pattern?.include) && pattern.include.some((p) => typeof p === "string" && /^(main|master)$/.test(p)));
 
-  const thirtyDaysAgoMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
-  const commitsRaw = await ctx.client.request<unknown>({
-    method: "GET",
-    path: `/code/api/v1/repos/${repoId}/commits`,
-    params: { since: thirtyDaysAgoMs, page: 0, limit: 25 },
-    signal: ctx.signal,
-  });
   const commits = Array.isArray(commitsRaw) ? commitsRaw : (isRecord(commitsRaw) && Array.isArray(commitsRaw.commits) ? commitsRaw.commits : []);
 
   const state = {

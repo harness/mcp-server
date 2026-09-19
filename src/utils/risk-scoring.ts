@@ -64,8 +64,13 @@ export async function scoreEffectiveRisk(
     return { effectiveRisk: policy.risk, scoring: { status: "skipped" } };
   }
 
+  // Own AbortController, not just a race: on timeout/error we abort the
+  // scorer's in-flight requests (HTTP GETs, the TypeSafe call) instead of
+  // letting them run to completion in the background after we've already
+  // fallen back to the static risk.
+  const controller = new AbortController();
   try {
-    const signal = await withTimeout(scorer(ctx), cfg.HARNESS_DYNAMIC_RISK_TIMEOUT_MS);
+    const signal = await withTimeout(scorer({ ...ctx, signal: controller.signal }), cfg.HARNESS_DYNAMIC_RISK_TIMEOUT_MS);
     if (signal.confidence < cfg.HARNESS_DYNAMIC_RISK_MIN_CONFIDENCE) {
       return {
         effectiveRisk: policy.risk,
@@ -79,6 +84,7 @@ export async function scoreEffectiveRisk(
       scoring: { status: "scored", blastRadius: signal.blastRadius, confidence: signal.confidence, rationale: signal.rationale },
     };
   } catch (err) {
+    controller.abort();
     log.warn("Risk scorer failed, falling back to static risk", { error: String(err) });
     return { effectiveRisk: policy.risk, scoring: { status: "error", error: String(err) } };
   }

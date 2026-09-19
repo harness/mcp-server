@@ -258,16 +258,24 @@ explicitly out of scope for this pilot, to keep blast radius of the
 `riskFloor: "high_write"`) — same one-level floor pattern as
 `pipeline.delete`.
 
-**Signal (one scorer, shared by both ops):**
+**Signal (one scorer, shared by both ops), fetched concurrently, not
+sequentially — see "review findings" below for why that matters:**
 1. `GET /code/api/v1/repos/{repoIdentifier}/rules/{ruleIdentifier}` — the
    rule's current `type` (branch/tag/push) and `state`
    (active/disabled/monitor), and whether its `pattern` targets the
    default branch. Cheap, already-exposed (same shape as `repo_rule.get`).
+   For `update`, the requested PATCH body's `state`/`pattern` (when
+   present) override the fetched values — the scorer rates the state
+   being asked for, not just the state that's live before the call.
 2. `GET /code/api/v1/repos/{repoIdentifier}/commits` (last 30 days,
    page size 25) — a bounded recent-activity proxy, same idea as
    `pipeline.delete`'s execution-history fetch. Not a total count (the list
    endpoint doesn't expose one plainly); capped at 25 and described to
-   TypeSafe as such.
+   TypeSafe as such. `since` is unix **seconds** (the Code API's convention),
+   not milliseconds.
+3. Both calls pass `orgIdentifier`/`projectIdentifier` explicitly — they're
+   raw `client.request()` calls that bypass the registry's automatic scope
+   injection, so a project-scoped repo would 404 without this.
 
 **Rubric (Score, 0-3):**
 0. Rule is disabled or monitor-only — not currently enforcing anything.
@@ -296,6 +304,30 @@ covers every branch of the fail-closed logic regardless of resource type;
 no resource-specific scorer unit test was added for `pipeline.delete`
 either, and this pilot follows the same scope decision rather than
 introducing a new testing bar for the second instance.
+
+**Review findings (fixed before merge):** an independent review of the
+first pass caught three bugs that would have made this pilot a silent
+no-op — worth recording because they're the kind of mistake this exact
+pattern (raw `client.request()` calls bypassing the registry's usual
+scope/param handling) will keep inviting at future sites:
+- Missing `orgIdentifier`/`projectIdentifier` on both GETs → 404 on any
+  project-scoped repo → fails closed on the common case, not just the edge
+  case. Pilot 1 got this right (it passes org/project explicitly); pilot 2
+  initially didn't.
+- `since` passed in milliseconds where the Code API expects seconds →
+  reads as a timestamp tens of thousands of years in the future → an empty
+  commit window → biases blast radius *downward* for busy repos, the wrong
+  direction for a safety mechanism.
+- Two sequential GETs plus the TypeSafe call, all inside the same 400ms
+  timeout budget pilot 1 uses for one GET plus one TypeSafe call — fixed by
+  running the two GETs concurrently (`Promise.all`), which returns the
+  latency shape to "two round trips," not three.
+
+Also fixed: the scorer originally rated the rule's state *before* the
+requested change, meaning a request to re-enable a disabled rule on the
+default branch — exactly the high-blast-radius case this exists to catch —
+would have scored the old, disabled state and confidently waved it
+through. It now scores the requested PATCH body's fields when present.
 
 ---
 
