@@ -25,6 +25,14 @@ export type RetryPolicy =
 export interface OperationPolicy {
   risk: RiskLevel;
   retryPolicy: RetryPolicy;
+  /**
+   * Optional lower bound for dynamic risk scoring. When set and below `risk`,
+   * a registered `riskScorer` may lower the effective risk for THIS CALL
+   * down to (but not below) `riskFloor`, if it confidently scores the call
+   * as low blast-radius. Defaults to `risk` (no band, no dynamic scoring
+   * possible) when omitted. See spec 007.
+   */
+  riskFloor?: RiskLevel;
 }
 
 /**
@@ -86,6 +94,31 @@ export interface HarnessClientInterface {
   /** Issue an authenticated Harness request. Used by preflight hooks that fetch defaults. */
   request<T>(options: RequestOptions): Promise<T>;
 }
+
+// ---------------------------------------------------------------------------
+// Dynamic risk scoring (spec 007) — narrow, opt-in per-call blast-radius
+// signal that can lower `effectiveRisk` toward `riskFloor`, never above `risk`.
+// ---------------------------------------------------------------------------
+
+export interface RiskScoringContext {
+  resourceType: string;
+  operation: "create" | "update" | "delete" | "execute";
+  input: Record<string, unknown>;
+  client: HarnessClientInterface;
+  accountId?: string;
+  signal?: AbortSignal;
+}
+
+export interface RiskSignal {
+  /** 0 (trivial to reverse / no real impact) .. 1 (severe, hard to reverse). */
+  blastRadius: number;
+  /** TypeSafe's own confidence in this Score answer, not a heuristic. */
+  confidence: number;
+  /** Short, human-readable justification — echoed to the user and the audit row. */
+  rationale: string;
+}
+
+export type RiskScorer = (ctx: RiskScoringContext) => Promise<RiskSignal>;
 
 export interface RegistryDispatchInterface {
   dispatch(
@@ -387,6 +420,13 @@ export interface EndpointSpec {
    * The runtime shape is `{ client: HarnessClient, input, registry: Registry, signal? }`.
    */
   preflight?: (ctx: PreflightContext) => Promise<void>;
+  /**
+   * Optional dynamic blast-radius scorer (spec 007). When `operationPolicy.riskFloor`
+   * is set below `risk` and `HARNESS_DYNAMIC_RISK_SCORING` is enabled, this runs
+   * before `confirmViaElicitation` in the tool handler — not inside dispatch/preflight,
+   * since preflight runs after the user has already confirmed.
+   */
+  riskScorer?: RiskScorer;
   /**
    * When true, the MCP layer controls ELK→Mongo fallback for this endpoint:
    *  1. First request sent with `enforce_elasticsearch=true` (ELK path).

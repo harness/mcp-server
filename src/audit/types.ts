@@ -64,6 +64,19 @@ export interface AuditEvent {
   http_status?: number;
   http_method?: string;
   http_path?: string;
+  /** Present only for calls where a dynamic risk scorer ran (spec 007). */
+  risk_scoring?: RiskScoringAudit;
+}
+
+/** Dynamic blast-radius scoring outcome for a single call, for the audit trail. */
+export interface RiskScoringAudit {
+  static_risk: RiskLevel;
+  risk_floor: RiskLevel;
+  status: "skipped" | "scored" | "low_confidence" | "error";
+  blast_radius?: number;
+  confidence?: number;
+  rationale?: string;
+  effective_risk: RiskLevel;
 }
 
 /**
@@ -75,6 +88,7 @@ export interface AuditContext {
   confirmation?: ConfirmationMethod;
   resource_id?: string;
   action?: string;
+  risk_scoring?: RiskScoringAudit;
 }
 
 /**

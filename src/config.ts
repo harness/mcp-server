@@ -163,6 +163,22 @@ const RawConfigSchema = z.object({
     emptyStringAsUndefined,
     z.string().default("/tmp/hf-cache"),
   ),
+  // Spec 007 — dynamic blast-radius risk scoring (opt-in, off by default).
+  TYPESAFE_API_KEY: optionalStringFromEnv,
+  TYPESAFE_BASE_URL: urlFromEnv("https://api.typesafe.ai"),
+  HARNESS_DYNAMIC_RISK_SCORING: booleanFromEnv.default(false),
+  HARNESS_DYNAMIC_RISK_THRESHOLD: z.preprocess(
+    emptyStringAsUndefined,
+    z.coerce.number().min(0).max(1).default(0.5),
+  ),
+  HARNESS_DYNAMIC_RISK_MIN_CONFIDENCE: z.preprocess(
+    emptyStringAsUndefined,
+    z.coerce.number().min(0).max(1).default(0.6),
+  ),
+  HARNESS_DYNAMIC_RISK_TIMEOUT_MS: z.preprocess(
+    emptyStringAsUndefined,
+    z.coerce.number().int().positive().default(400),
+  ),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {
@@ -281,6 +297,17 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     HARNESS_AUTO_APPROVE_RISK = "all";
   }
 
+  // Dynamic risk scoring requires a TypeSafe credential. Fail closed at
+  // startup (not per-call) if enabled without one — see spec 007.
+  let HARNESS_DYNAMIC_RISK_SCORING = data.HARNESS_DYNAMIC_RISK_SCORING;
+  if (HARNESS_DYNAMIC_RISK_SCORING && !data.TYPESAFE_API_KEY) {
+    console.error(
+      "[WARNING] HARNESS_DYNAMIC_RISK_SCORING=true but no TYPESAFE_API_KEY is set. " +
+      "Dynamic risk scoring is disabled; operations fall back to their static risk level.",
+    );
+    HARNESS_DYNAMIC_RISK_SCORING = false;
+  }
+
   // Remove deprecated keys from output, expose only the canonical names
   const { HARNESS_DEFAULT_ORG_ID: _oldOrg, HARNESS_DEFAULT_PROJECT_ID: _oldProject, ...rest } = data;
   const oauthIssuer = data.HARNESS_MCP_OAUTH_ISSUER;
@@ -297,6 +324,7 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     HARNESS_ORG,
     HARNESS_PROJECT,
     HARNESS_AUTO_APPROVE_RISK,
+    HARNESS_DYNAMIC_RISK_SCORING,
     HARNESS_MCP_OAUTH_ISSUER: oauthIssuer,
     HARNESS_MCP_OAUTH_JWKS_URI: oauthJwksUri,
   };

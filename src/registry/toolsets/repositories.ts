@@ -1,9 +1,99 @@
-import type { ParamsSchema, PreflightContext, ToolsetDefinition } from "../types.js";
+import type { ParamsSchema, PreflightContext, RiskScorer, RiskScoringContext, ToolsetDefinition } from "../types.js";
 import { fileContentGetExtract, fileContentListExtract, passthrough } from "../extractors.js";
 import { assertValidBase64 } from "../../utils/base64.js";
-import { isRecord } from "../../utils/type-guards.js";
+import { asString, isRecord } from "../../utils/type-guards.js";
+import { scoreQuestion, TypeSafeError } from "../../client/typesafe-client.js";
 
 const COMMIT_ACTIONS_NEEDING_FILE_BYTES = new Set(["CREATE", "UPDATE"]);
+
+/**
+ * Blast-radius scorer for `repo_rule.update`/`repo_rule.delete` (spec 008
+ * pilot 2). Fetches the rule's current state and a bounded recent-commit
+ * count concurrently — both cheap, already-exposed reads — and asks
+ * TypeSafe's Score primitive how consequential changing/removing this rule
+ * would be. For update, scores the *requested* state (PATCH body fields
+ * override the fetched rule), not just what's live today. Shared by both
+ * ops: same rubric, different riskFloor per operationPolicy.
+ */
+export const repoRuleWriteRiskScorer: RiskScorer = async (ctx: RiskScoringContext) => {
+  const apiKey = process.env.TYPESAFE_API_KEY;
+  if (!apiKey) {
+    throw new TypeSafeError("TYPESAFE_API_KEY is not set");
+  }
+
+  const repoId = asString(ctx.input.repo_id);
+  const ruleId = asString(ctx.input.rule_id);
+  // repo_rule is scope: "account", scopeOptional: true — dispatch() injects
+  // orgIdentifier/projectIdentifier automatically for registry-routed calls,
+  // but these are raw client.request() calls that bypass dispatch, so the
+  // scope has to be passed explicitly or a project-scoped repo 404s.
+  const scopeParams = {
+    orgIdentifier: asString(ctx.input.org_id),
+    projectIdentifier: asString(ctx.input.project_id),
+  };
+  const thirtyDaysAgoSec = Math.floor((Date.now() - 30 * 24 * 60 * 60 * 1000) / 1000);
+
+  // Both reads share one input state and don't depend on each other — run
+  // them concurrently so this costs one round-trip's worth of latency, not
+  // two, against the same timeout budget as the single-GET pilot 1 scorer.
+  const [rule, commitsRaw] = await Promise.all([
+    ctx.client.request<Record<string, unknown>>({
+      method: "GET",
+      path: `/code/api/v1/repos/${repoId}/rules/${ruleId}`,
+      params: scopeParams,
+      signal: ctx.signal,
+    }),
+    ctx.client.request<unknown>({
+      method: "GET",
+      path: `/code/api/v1/repos/${repoId}/commits`,
+      params: { ...scopeParams, since: thirtyDaysAgoSec, page: 0, limit: 25 },
+      signal: ctx.signal,
+    }),
+  ]);
+
+  const ruleType = typeof rule.type === "string" ? rule.type : "unknown";
+  // For update, score the *requested* state (what the PATCH body asks for),
+  // not just the rule's current state — a request to re-enable a disabled
+  // rule on the default branch is exactly the high-blast-radius case this
+  // scorer exists to catch, and it would be invisible if only the
+  // pre-change state were scored.
+  const requestedBody = isRecord(ctx.input.body) ? ctx.input.body : undefined;
+  const ruleState = typeof requestedBody?.state === "string" ? requestedBody.state : (typeof rule.state === "string" ? rule.state : "unknown");
+  const pattern = isRecord(requestedBody?.pattern) ? requestedBody.pattern : (isRecord(rule.pattern) ? rule.pattern : undefined);
+  const targetsDefaultBranch = pattern?.default === true
+    || (Array.isArray(pattern?.include) && pattern.include.some((p) => typeof p === "string" && /^(main|master)$/.test(p)));
+
+  const commits = Array.isArray(commitsRaw) ? commitsRaw : (isRecord(commitsRaw) && Array.isArray(commitsRaw.commits) ? commitsRaw.commits : []);
+
+  const state = {
+    rule_type: ruleType,
+    rule_state: ruleState,
+    targets_default_branch: targetsDefaultBranch,
+    recent_commits_last_30_days: commits.length,
+    recent_commits_is_capped_at_25: commits.length === 25,
+  };
+
+  const answer = await scoreQuestion(
+    { apiKey, baseUrl: process.env.TYPESAFE_BASE_URL },
+    {
+      state,
+      instructions: "How consequential would changing or removing this repository protection rule be, given its current enforcement state and recent repo activity?",
+      criteria: [
+        "Rule is disabled or monitor-only — not currently enforcing anything.",
+        "Active, but doesn't target the default branch, and low recent commit activity.",
+        "Active and targets the default branch, or the repo has frequent recent commits.",
+        "Active, targets the default branch, and the repo has frequent recent commits.",
+      ],
+    },
+    { signal: ctx.signal, timeoutMs: 400 },
+  );
+
+  return {
+    blastRadius: answer.score / 3,
+    confidence: answer.confidence,
+    rationale: `Rule is ${ruleState} (${ruleType})${targetsDefaultBranch ? ", targets the default branch" : ""}; ${state.recent_commits_last_30_days}${state.recent_commits_is_capped_at_25 ? "+" : ""} commit(s) in the last 30 days.`,
+  };
+};
 
 function commitActionType(actionType: unknown): string {
   return typeof actionType === "string" ? actionType.toUpperCase() : "";
@@ -829,7 +919,12 @@ export const repositoriesToolset: ToolsetDefinition = {
         update: {
           method: "PATCH",
           path: "/code/api/v1/repos/{repoIdentifier}/rules/{ruleIdentifier}",
-          operationPolicy: { risk: "high_write", retryPolicy: "safe" },
+          // riskFloor + riskScorer: spec 008 pilot 2. A confidently-scored
+          // disabled/non-default-branch rule can drop to medium_write;
+          // anything active on the default branch stays high_write —
+          // today's unaffected behavior.
+          operationPolicy: { risk: "high_write", riskFloor: "medium_write", retryPolicy: "safe" },
+          riskScorer: repoRuleWriteRiskScorer,
           pathParams: {
             repo_id: "repoIdentifier",
             rule_id: "ruleIdentifier",
@@ -850,7 +945,9 @@ export const repositoriesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/code/api/v1/repos/{repoIdentifier}/rules/{ruleIdentifier}",
-          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          // riskFloor + riskScorer: spec 008 pilot 2 (same scorer as update).
+          operationPolicy: { risk: "destructive", riskFloor: "high_write", retryPolicy: "do_not_retry" },
+          riskScorer: repoRuleWriteRiskScorer,
           pathParams: {
             repo_id: "repoIdentifier",
             rule_id: "ruleIdentifier",

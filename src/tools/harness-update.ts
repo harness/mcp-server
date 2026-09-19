@@ -6,6 +6,8 @@ import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
+import { scoreEffectiveRisk } from "../utils/risk-scoring.js";
+import type { RiskScoringAudit } from "../audit/types.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { asString, isRecord, coerceRecord } from "../utils/type-guards.js";
 import { formatBodyPreview } from "../utils/body-preview.js";
@@ -81,7 +83,6 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           input[primaryField] = resolvedResourceId;
         }
 
-        const risk = def.operations.update!.operationPolicy.risk;
         // Fail fast on HARNESS_READ_ONLY before elicitation — see
         // harness_create.ts for the rationale. Mirrors registry.dispatch().
         if (config.HARNESS_READ_ONLY) {
@@ -95,12 +96,31 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           );
           return errorResult(reason);
         }
+        const updateSpec = def.operations.update!;
+        const policy = updateSpec.operationPolicy;
+        const { effectiveRisk, scoring } = await scoreEffectiveRisk(
+          policy,
+          updateSpec.riskScorer,
+          { resourceType: args.resource_type, operation: "update", input, client, accountId: registry.getAccountId() },
+          config,
+        );
+        const riskScoringAudit: RiskScoringAudit | undefined = scoring.status === "skipped" ? undefined : {
+          static_risk: policy.risk,
+          risk_floor: policy.riskFloor ?? policy.risk,
+          status: scoring.status,
+          blast_radius: scoring.blastRadius,
+          confidence: scoring.confidence,
+          rationale: scoring.rationale,
+          effective_risk: effectiveRisk,
+        };
+        const rationaleSuffix = scoring.rationale ? `\n\nRisk assessment: ${scoring.rationale}` : "";
+
         const bodyPreview = formatBodyPreview(args.body);
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_update",
-          message: `Update ${args.resource_type} "${resolvedResourceId}"?\n\n${bodyPreview}`,
-          risk,
+          message: `Update ${args.resource_type} "${resolvedResourceId}"?\n\n${bodyPreview}${rationaleSuffix}`,
+          risk: effectiveRisk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
         });
@@ -109,7 +129,7 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
             args.resource_type,
             "update",
             input,
-            { tool: "harness_update", confirmation: elicit.method, resource_id: resolvedResourceId },
+            { tool: "harness_update", confirmation: elicit.method, resource_id: resolvedResourceId, risk_scoring: riskScoringAudit },
             describeBlockedAudit(elicit),
           );
           return errorResult(describeElicitationFailure(elicit));
@@ -122,7 +142,17 @@ export function registerUpdateTool(server: McpServer, registry: Registry, client
           input.version_label = args.body.version_label;
         }
 
-        const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation: elicit.method, resource_id: resolvedResourceId });
+        const result = await registry.dispatch(client, args.resource_type, "update", input, { tool: "harness_update", confirmation: elicit.method, resource_id: resolvedResourceId, risk_scoring: riskScoringAudit });
+        if (scoring.status === "scored" || scoring.status === "low_confidence") {
+          const payload: Record<string, unknown> = isRecord(result) ? { ...result } : { result };
+          payload.risk_assessment = {
+            blast_radius: scoring.blastRadius,
+            confidence: scoring.confidence,
+            rationale: scoring.rationale,
+            effective_risk: effectiveRisk,
+          };
+          return jsonResult(payload);
+        }
         return jsonResult(result);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);

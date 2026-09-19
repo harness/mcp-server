@@ -1,8 +1,79 @@
-import type { ToolsetDefinition, BodySchema, ParamsSchema, PreflightContext } from "../types.js";
+import type { ToolsetDefinition, BodySchema, ParamsSchema, PreflightContext, RiskScorer, RiskScoringContext } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract, runtimeInputExtract, runtimeInputV1Extract, runtimeInputTemplatePreflight, pipelineResolvedYamlExtract, executionInputsExtract, dynamicExecutionExtract, triggerListExtract } from "../extractors.js";
 import { asRecord, asString } from "../../utils/type-guards.js";
 import { buildV1RuntimeInputsBody } from "../../utils/pipeline-v1-runtime-inputs.js";
+import { scoreQuestion, TypeSafeError } from "../../client/typesafe-client.js";
 import YAML from "yaml";
+
+/**
+ * Blast-radius scorer for `pipeline.delete` (spec 007 pilot). Fetches the
+ * pipeline's last-30-days execution history — a single, cheap, already
+ * exposed read (the same endpoint backing `resource_type=execution` list) —
+ * and asks TypeSafe's Score primitive to rate how consequential deleting it
+ * would be. Reads TYPESAFE_API_KEY/TYPESAFE_BASE_URL directly from the
+ * environment, mirroring how `typesafe_sdk` itself resolves credentials
+ * (RiskScoringContext intentionally carries no config — see spec 007).
+ */
+export const pipelineDeleteRiskScorer: RiskScorer = async (ctx: RiskScoringContext) => {
+  const apiKey = process.env.TYPESAFE_API_KEY;
+  if (!apiKey) {
+    throw new TypeSafeError("TYPESAFE_API_KEY is not set");
+  }
+
+  const thirtyDaysAgoMs = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const raw = await ctx.client.request<{ data?: { content?: unknown[]; totalElements?: number } }>({
+    method: "POST",
+    path: "/pipeline/api/pipelines/execution/summary",
+    params: {
+      orgIdentifier: asString(ctx.input.org_id),
+      projectIdentifier: asString(ctx.input.project_id),
+      pipelineIdentifier: asString(ctx.input.pipeline_id),
+      page: 0,
+      size: 20,
+    },
+    body: { filterType: "PipelineExecution" },
+    signal: ctx.signal,
+  });
+
+  const executions = (raw.data?.content ?? []) as Array<Record<string, unknown>>;
+  const recentExecutions = executions.filter((e) => typeof e.startTs === "number" && (e.startTs as number) >= thirtyDaysAgoMs);
+  const mostRecent = executions[0];
+  const mostRecentStatus = typeof mostRecent?.status === "string" ? mostRecent.status : "none";
+  const mostRecentAgeHours = typeof mostRecent?.startTs === "number" ? Math.round((Date.now() - (mostRecent.startTs as number)) / 3_600_000) : undefined;
+  // Best-effort prod-environment detection from execution metadata; refine once
+  // a canonical "is this environment prod" signal exists on the summary payload.
+  const touchesProdEnv = JSON.stringify(executions.slice(0, 5)).toLowerCase().includes("prod");
+
+  const state = {
+    pipeline_id: ctx.input.pipeline_id,
+    total_executions_ever: raw.data?.totalElements ?? executions.length,
+    executions_last_30_days: recentExecutions.length,
+    most_recent_execution_status: mostRecentStatus,
+    most_recent_execution_age_hours: mostRecentAgeHours,
+    touches_prod_environment: touchesProdEnv,
+  };
+
+  const answer = await scoreQuestion(
+    { apiKey, baseUrl: process.env.TYPESAFE_BASE_URL },
+    {
+      state,
+      instructions: "How consequential would deleting this CI/CD pipeline be, given its recent execution history?",
+      criteria: [
+        "No executions ever, or created and never run — sandbox/scratch pipeline.",
+        "Some executions, none in the last 30 days, no production environment tag.",
+        "Active in the last 30 days, or touches a tagged production environment.",
+        "Frequent recent executions AND a tagged production environment.",
+      ],
+    },
+    { signal: ctx.signal, timeoutMs: 400 },
+  );
+
+  return {
+    blastRadius: answer.score / 3,
+    confidence: answer.confidence,
+    rationale: `${state.executions_last_30_days} execution(s) in the last 30 days (${state.total_executions_ever} total ever); most recent ${mostRecentStatus}${mostRecentAgeHours !== undefined ? ` ${mostRecentAgeHours}h ago` : ""}${touchesProdEnv ? "; touches a production-tagged environment" : ""}.`,
+  };
+};
 
 function coerceTriggerBodyRecord(body: unknown): Record<string, unknown> {
   if (body == null || body === "") {
@@ -778,7 +849,11 @@ export const pipelinesToolset: ToolsetDefinition = {
         delete: {
           method: "DELETE",
           path: "/pipeline/api/pipelines/{pipelineIdentifier}",
-          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          // riskFloor + riskScorer: spec 007 pilot. A confidently-scored,
+          // never-run pipeline can drop to high_write; anything active or
+          // prod-tagged stays destructive — today's unaffected behavior.
+          operationPolicy: { risk: "destructive", riskFloor: "high_write", retryPolicy: "do_not_retry" },
+          riskScorer: pipelineDeleteRiskScorer,
           pathParams: { pipeline_id: "pipelineIdentifier" },
           responseExtractor: ngExtract,
           description: "Delete a pipeline",

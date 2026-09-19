@@ -604,6 +604,7 @@ export class Registry {
       http_path: resolvedPath,
       ...(error ? { error } : {}),
       ...(httpStatus ? { http_status: httpStatus } : {}),
+      ...(auditCtx?.risk_scoring ? { risk_scoring: auditCtx.risk_scoring } : {}),
     };
 
     this.auditManager.emit(event);

@@ -6,6 +6,8 @@ import type { Config } from "../config.js";
 import { jsonResult, errorResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError } from "../utils/errors.js";
 import { confirmViaElicitation, describeElicitationFailure, describeBlockedAudit } from "../utils/elicitation.js";
+import { scoreEffectiveRisk } from "../utils/risk-scoring.js";
+import type { RiskScoringAudit } from "../audit/types.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
 import { coerceRecord, asString } from "../utils/type-guards.js";
 import { orgIdField, projectIdField, resourceScopeSchema, resourceTypeSchema } from "./input-schemas.js";
@@ -90,11 +92,30 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
           );
           return errorResult(reason);
         }
+        const deleteSpec = def.operations.delete!;
+        const policy = deleteSpec.operationPolicy;
+        const { effectiveRisk, scoring } = await scoreEffectiveRisk(
+          policy,
+          deleteSpec.riskScorer,
+          { resourceType: args.resource_type, operation: "delete", input, client, accountId: registry.getAccountId() },
+          config,
+        );
+        const riskScoringAudit: RiskScoringAudit | undefined = scoring.status === "skipped" ? undefined : {
+          static_risk: policy.risk,
+          risk_floor: policy.riskFloor ?? policy.risk,
+          status: scoring.status,
+          blast_radius: scoring.blastRadius,
+          confidence: scoring.confidence,
+          rationale: scoring.rationale,
+          effective_risk: effectiveRisk,
+        };
+        const rationaleSuffix = scoring.rationale ? `\n\nRisk assessment: ${scoring.rationale}` : "";
+
         const elicit = await confirmViaElicitation({
           server,
           toolName: "harness_delete",
-          message: `Delete ${args.resource_type} "${resolvedResourceId}"?\n\nThis is destructive and cannot be undone.`,
-          risk: "destructive",
+          message: `Delete ${args.resource_type} "${resolvedResourceId}"?\n\nThis is destructive and cannot be undone.${rationaleSuffix}`,
+          risk: effectiveRisk,
           autoApproveRisk: config.HARNESS_AUTO_APPROVE_RISK,
           callerConfirmed: args.confirm === true,
         });
@@ -103,13 +124,13 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
             args.resource_type,
             "delete",
             input,
-            { tool: "harness_delete", confirmation: elicit.method, resource_id: resolvedResourceId },
+            { tool: "harness_delete", confirmation: elicit.method, resource_id: resolvedResourceId, risk_scoring: riskScoringAudit },
             describeBlockedAudit(elicit),
           );
           return errorResult(describeElicitationFailure(elicit));
         }
 
-        const result = await registry.dispatch(client, args.resource_type, "delete", input, { tool: "harness_delete", confirmation: elicit.method, resource_id: resolvedResourceId });
+        const result = await registry.dispatch(client, args.resource_type, "delete", input, { tool: "harness_delete", confirmation: elicit.method, resource_id: resolvedResourceId, risk_scoring: riskScoringAudit });
 
         const payload: Record<string, unknown> = {
           deleted: true,
@@ -120,6 +141,14 @@ export function registerDeleteTool(server: McpServer, registry: Registry, client
         if (versionLabel) payload.version_label = versionLabel;
         if (typeof result === "object" && result !== null && !Array.isArray(result) && Object.keys(result).length > 0) {
           payload.details = result;
+        }
+        if (scoring.status === "scored" || scoring.status === "low_confidence") {
+          payload.risk_assessment = {
+            blast_radius: scoring.blastRadius,
+            confidence: scoring.confidence,
+            rationale: scoring.rationale,
+            effective_risk: effectiveRisk,
+          };
         }
         return jsonResult(payload);
       } catch (err) {
