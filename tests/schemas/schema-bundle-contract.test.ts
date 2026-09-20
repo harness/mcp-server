@@ -220,4 +220,30 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream IACMAnsiblePlugin with bounded forks in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const iacmSteps = defs.pipeline.steps.iacm as Record<string, unknown>;
+
+      expect(iacmSteps).toHaveProperty("IACMAnsiblePluginStepNode");
+      expect(iacmSteps).toHaveProperty("IACMAnsiblePluginInfo");
+
+      const stepNode = iacmSteps.IACMAnsiblePluginStepNode as {
+        properties: { type: { enum: string[] } };
+      };
+      expect(stepNode.properties.type.enum).toContain("IACMAnsiblePlugin");
+
+      const stepInfo = iacmSteps.IACMAnsiblePluginInfo as {
+        allOf: Array<{ properties?: { forks?: { oneOf: Array<{ minimum?: number; maximum?: number }> } } }>;
+      };
+      const forksSchema = stepInfo.allOf
+        .map((part) => part.properties?.forks)
+        .find((forks) => forks != null);
+      expect(forksSchema).toBeDefined();
+      const intBranch = forksSchema!.oneOf.find((branch) => branch.minimum !== undefined);
+      expect(intBranch?.minimum).toBe(1);
+      expect(intBranch?.maximum).toBe(100);
+    }
+  });
 });
