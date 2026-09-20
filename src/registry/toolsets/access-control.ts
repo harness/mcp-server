@@ -143,7 +143,7 @@ export const accessControlToolset: ToolsetDefinition = {
         { name: "resource_group_identifiers", description: "Filter by resource group identifiers (comma-separated)" },
       ],
       diagnosticHint:
-        "If get returns 404, user_id must be the UUID from harness_list (identifier/uuid), not an email. Search with search_term=<email> and use the returned uuid. If list is empty, retry with resource_scope matching where the user lives (account, org, or project).",
+        "If get returns 404, user_id must be the UUID from harness_list (identifier/uuid), not an email. Search with search_term=<email> and use the returned uuid. If list is empty, retry with resource_scope matching where the user lives (account, org, or project). To add a pull request reviewer, pass that user's email as pr_reviewer body.reviewer_email.",
       deepLinkTemplate:
         "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/access-control/users",
       operations: {

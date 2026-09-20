@@ -234,6 +234,159 @@ describe("pull_request registry mappings", () => {
       body: { reviewer_id: 123 },
     }));
   });
+
+  it("maps reviewer_email to reviewer_id before adding the reviewer", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce([
+        { id: 1642, uid: "hayagriv", email: "other@harness.io", display_name: "Other" },
+        { id: 2048, uid: "xzmcoXcmTlybTSR16lKXDw", email: "gaurav.sankhla@harness.io", display_name: "Gaurav Sankhla" },
+      ])
+      .mockResolvedValueOnce({ reviewer_id: 2048 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_reviewer", "create", {
+      repo_id: "ml-infra",
+      pr_number: "1502",
+      org_id: "PROD",
+      project_id: "Harness_Commons",
+      body: { reviewer_email: "gaurav.sankhla@harness.io" },
+    });
+
+    expect(mockRequest).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/principals",
+      params: { query: "gaurav.sankhla@harness.io", type: "user", limit: 50 },
+    }));
+    expect(mockRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      method: "PUT",
+      path: "/code/api/v1/repos/ml-infra/pullreq/1502/reviewers",
+      body: { reviewer_id: 2048 },
+    }));
+  });
+
+  it("does not inject org/project into the Code reviewer body", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ reviewer_id: 123 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_reviewer", "create", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      org_id: "PROD",
+      project_id: "Harness_Commons",
+      body: { reviewer_id: 123 },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: { reviewer_id: 123 },
+    }));
+    const body = mockRequest.mock.calls[0]![0] as { body: Record<string, unknown> };
+    expect(body.body).not.toHaveProperty("orgIdentifier");
+    expect(body.body).not.toHaveProperty("projectIdentifier");
+  });
+
+  it("maps an account user id via email then adds the reviewer", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        status: "SUCCESS",
+        data: { user: { uuid: "xzmcoXcmTlybTSR16lKXDw", email: "gaurav.sankhla@harness.io", name: "Gaurav Sankhla" } },
+      })
+      .mockResolvedValueOnce([
+        { id: 2048, uid: "xzmcoXcmTlybTSR16lKXDw", email: "gaurav.sankhla@harness.io" },
+      ])
+      .mockResolvedValueOnce({ reviewer_id: 2048 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_reviewer", "create", {
+      repo_id: "ml-infra",
+      pr_number: "1502",
+      body: { reviewer_uid: "xzmcoXcmTlybTSR16lKXDw" },
+    });
+
+    expect(mockRequest).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      method: "GET",
+      path: "/ng/api/user/aggregate/xzmcoXcmTlybTSR16lKXDw",
+    }));
+    expect(mockRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/principals",
+      params: { query: "gaurav.sankhla@harness.io", type: "user", limit: 50 },
+    }));
+    expect(mockRequest).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      method: "PUT",
+      body: { reviewer_id: 2048 },
+    }));
+  });
+
+  it("treats a non-numeric reviewer_id string as an account user id", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce({
+        data: { user: { email: "gaurav.sankhla@harness.io" } },
+      })
+      .mockResolvedValueOnce([{ id: 2048, email: "gaurav.sankhla@harness.io" }])
+      .mockResolvedValueOnce({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_reviewer", "create", {
+      repo_id: "ml-infra",
+      pr_number: "1502",
+      body: { reviewer_id: "xzmcoXcmTlybTSR16lKXDw" },
+    });
+
+    expect(mockRequest).toHaveBeenNthCalledWith(3, expect.objectContaining({
+      body: { reviewer_id: 2048 },
+    }));
+  });
+
+  it("prefers numeric reviewer_id over reviewer_email", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_reviewer", "create", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      body: { reviewer_id: 123, reviewer_email: "gaurav.sankhla@harness.io" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: { reviewer_id: 123 },
+    }));
+  });
+
+  it("rejects create when no reviewer identity is provided", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "pr_reviewer", "create", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        body: {},
+      }),
+    ).rejects.toThrow(/reviewer_email/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects email lookup when no reviewer matches", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValueOnce([]);
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "pr_reviewer", "create", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        body: { reviewer_email: "missing@harness.io" },
+      }),
+    ).rejects.toThrow(/No reviewer found/);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("pull_request list pagination and query mapping", () => {
