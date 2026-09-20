@@ -129,6 +129,12 @@ const RawConfigSchema = z.object({
   HARNESS_MCP_TRUST_PROXY: z.coerce.number().int().min(0).default(0),
   HARNESS_FME_API_KEY: optionalStringFromEnv,
   HARNESS_FME_BASE_URL: urlFromEnv("https://api.split.io"),
+  // TypeSafe API (https://typesafe.ai) — powers advisory diagnose triage
+  // (spec 010). Operator-configured credential, never session-supplied: it
+  // egresses failure messages/log snippets on behalf of every session, so it
+  // is rejected in multi-user/oauth modes like the FME key (see transform).
+  TYPESAFE_API_KEY: optionalStringFromEnv,
+  TYPESAFE_BASE_URL: urlFromEnv("https://api.typesafe.ai"),
   HARNESS_LOG_UNSAFE_BODIES: booleanFromEnv.default(false),
   HARNESS_PIPELINE_VERSION: z.enum(["0", "1"]).optional(),
   HARNESS_AUDIT_FILE: optionalStringFromEnv,
@@ -197,6 +203,13 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     );
   }
 
+  if (isMultiUser && data.TYPESAFE_API_KEY) {
+    throw new Error(
+      "TYPESAFE_API_KEY must not be set in multi-user mode. " +
+      "Failure triage egresses log snippets to the TypeSafe API and cannot be shared across session users.",
+    );
+  }
+
   if (isOAuth && data.HARNESS_API_KEY) {
     throw new Error(
       "HARNESS_API_KEY must not be set in oauth mode. " +
@@ -208,6 +221,13 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
     throw new Error(
       "HARNESS_FME_API_KEY must not be set in oauth mode. " +
       "FME calls must use the session user's HarnessID access token.",
+    );
+  }
+
+  if (isOAuth && data.TYPESAFE_API_KEY) {
+    throw new Error(
+      "TYPESAFE_API_KEY must not be set in oauth mode. " +
+      "Failure triage egresses log snippets to the TypeSafe API and cannot be shared across session users.",
     );
   }
 
@@ -262,6 +282,13 @@ export const ConfigSchema = RawConfigSchema.transform((data) => {
   if (data.HARNESS_FME_BASE_URL && !data.HARNESS_FME_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
     throw new Error(
       `HARNESS_FME_BASE_URL must use HTTPS (got "${data.HARNESS_FME_BASE_URL}"). ` +
+      "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
+    );
+  }
+
+  if (data.TYPESAFE_BASE_URL && !data.TYPESAFE_BASE_URL.startsWith("https://") && !data.HARNESS_ALLOW_HTTP) {
+    throw new Error(
+      `TYPESAFE_BASE_URL must use HTTPS (got "${data.TYPESAFE_BASE_URL}"). ` +
       "If you need HTTP for local development, set HARNESS_ALLOW_HTTP=true.",
     );
   }

@@ -104,6 +104,24 @@ describe("release metadata", () => {
     }
   });
 
+  it("exposes TypeSafe config in packaged manifests", () => {
+    for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
+      expect(manifest.server.mcp_config.env.TYPESAFE_API_KEY).toBe("${user_config.TYPESAFE_API_KEY}");
+      expect(manifest.user_config.TYPESAFE_API_KEY).toMatchObject({
+        required: false,
+        sensitive: true,
+      });
+      expect(manifest.server.mcp_config.env.TYPESAFE_BASE_URL).toBe(
+        "${user_config.TYPESAFE_BASE_URL}",
+      );
+      expect(manifest.user_config.TYPESAFE_BASE_URL).toMatchObject({
+        default: "https://api.typesafe.ai",
+        required: false,
+        sensitive: false,
+      });
+    }
+  });
+
   it("exposes HTTP session TTL config in packaged manifests", () => {
     for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
       expect(manifest.server.mcp_config.env.MCP_SESSION_TTL_MS).toBe("${user_config.MCP_SESSION_TTL_MS}");

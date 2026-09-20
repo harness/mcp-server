@@ -24,6 +24,10 @@ export interface ChoiceQuestionInput {
   instructions: string;
   /** Closed set of mutually exclusive named alternatives. */
   choices: readonly string[];
+  /** Optional rubric: one description per choice name, sent as the wire
+   * `criteria` values so the model sees definitions, not just labels.
+   * Choices without an entry are sent with a null description. */
+  descriptions?: Readonly<Record<string, string>>;
 }
 
 export interface ChoiceAnswer {
@@ -121,9 +125,11 @@ export async function classifyQuestion(
 ): Promise<ChoiceAnswer> {
   const questionName = "category";
   // Wire contract (typesafe_sdk._schemas.models.ChoiceQuestion): `criteria` is a
-  // dict of choice name -> description, not a flat `choices` array. Choices
-  // here carry no per-option description, so each maps to `null`.
-  const criteria = Object.fromEntries(question.choices.map((choice) => [choice, null]));
+  // dict of choice name -> description (null when a choice carries no
+  // description), not a flat `choices` array — the live API rejects the latter.
+  const criteria = Object.fromEntries(
+    question.choices.map((choice) => [choice, question.descriptions?.[choice] ?? null]),
+  );
   const answer = await postSystemOneQuestion(
     options,
     questionName,

@@ -31,14 +31,21 @@ ships as pure enrichment from day one — no gating design to retire later.
 
 ```
 1. harness_diagnose fetches step logs/errors/delegate info as it does today.
-2. If HARNESS_DIAGNOSE_TRIAGE is on and a TypeSafe key is configured:
+2. If HARNESS_DIAGNOSE_TRIAGE is on and a TYPESAFE_API_KEY is configured:
      category = await classifyFailure(logData)   // Choice, 6 categories
    else:
      category = undefined
-3. Response JSON gains `triage: { "stage/step": { category, confidence,
-   rationale } }` for each classified failed step. Every existing field is
-   unchanged either way.
+3. Response JSON gains `triage: { "stage/step": { category, confidence } }`
+   for each classified failed step. Every existing field is unchanged either
+   way. (No fabricated `rationale` — category and confidence are the honest
+   signal; the step's evidence is already in the response.)
 ```
+
+Classification runs whenever failed steps exist — it is NOT gated on
+`include_logs`, so the default summary call still gets `triage`. The log
+snippet is included in the classifier state only when one was fetched as a
+string. Classification is parallel across the capped failed-step list (at
+most `max_failed_steps`, default 5), each call under its own timeout.
 
 Nothing about the diagnose response's existing shape changes when the
 flag/key is absent — a pure addition (no key → identical to before;
@@ -68,6 +75,18 @@ absent, response identical to today. Timeout/error/low confidence → same.
 One dedicated flag — a read-tool enrichment is a structurally different
 site from any write path, so it gets its own flag, not a shared one.
 
+## Credentials and data egress
+
+`TYPESAFE_API_KEY` / `TYPESAFE_BASE_URL` live on `ConfigSchema` (not raw
+`process.env`), mirroring the FME pattern: parsed/validated by Zod, pinned
+by config tests, exposed in the packaged manifests' `user_config`. They are
+rejected in `multi-user` and `oauth` modes — triage egresses failure messages
+and fetched log snippets to the TypeSafe API on behalf of every session, so
+the key cannot be shared across users. The public contract (tool
+description, README env table, `debug-pipeline-failure` prompt) documents the
+`triage` field and this egress. The category rubric below is sent as the
+Choice `criteria` values so the classifier sees definitions, not just labels.
+
 ## Config
 
 ```typescript
@@ -85,11 +104,19 @@ each step independently in v1, no cross-step synthesis (that is closer to
 
 ## Test plan
 
+- Wire-contract tests for the TypeSafe client: POST body is
+  `{ state, model, questions: { category: { type: "choice", instructions,
+  criteria, state } } }` with Bearer auth — `criteria` is a dict of
+  name -> description, never a flat `choices` array; unrecognized choice,
+  non-2xx, and malformed answers throw `TypeSafeError`.
 - Unit tests for the classifier call: 6 categories return correctly shaped
-  responses; timeout/error/low-confidence → `triage` omitted, no exception
-  propagates to the tool's response.
-- Snapshot test: `HARNESS_DIAGNOSE_TRIAGE=false` → diagnose response
-  identical to pre-spec-010 output.
+  responses; the spec rubric is sent as `descriptions`; timeout/error/
+  low-confidence → `triage` omitted, no exception propagates.
+- Config tests: triage knob defaults, TYPESAFE key parse/unset handling,
+  multi-user/oauth rejection, HTTPS validation for the base URL.
+- Pipeline wiring tests with the real `classifyFailure` (only the TypeSafe
+  client is spied): flag off → client never called; default summary path →
+  `triage` attached with the rubric; `include_logs` skipped → still triaged.
 - No unit test for the rubric's category accuracy at ship time — validate
   the mechanism's fail-closed behavior exhaustively; validate the rubric's
   real-world accuracy via a live smoke test, not synthetic unit tests.

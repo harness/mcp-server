@@ -26,6 +26,18 @@ export const FAILURE_CATEGORIES = [
 
 type FailureCategory = (typeof FAILURE_CATEGORIES)[number];
 
+/** Spec 010's rubric — sent as the TypeSafe Choice `criteria` values so the
+ * classifier sees the category definitions, not just labels. Keep in sync
+ * with specs/010-diagnose-failure-triage.md. */
+export const CATEGORY_DESCRIPTIONS: Record<FailureCategory, string> = {
+  infra_flake: "Delegate/runner/network transient failure — no code or config at fault.",
+  test_failure: "The code under test genuinely failed its assertions.",
+  config_error: "Pipeline YAML, environment variable, or secret misconfiguration.",
+  dependency_failure: "A downstream service or dependency the step calls failed or was unavailable.",
+  permission_error: "Auth, RBAC, or scope failure calling an external system.",
+  timeout: "The step exceeded its time budget with no clear error beyond that.",
+};
+
 interface TriageInput {
   stage: string;
   step: string;
@@ -37,7 +49,6 @@ interface TriageInput {
 interface TriageSignal {
   category: FailureCategory;
   confidence: number;
-  rationale: string;
 }
 
 async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
@@ -60,10 +71,17 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
  */
 export async function classifyFailure(
   input: TriageInput,
-  cfg: Pick<Config, "HARNESS_DIAGNOSE_TRIAGE" | "HARNESS_DIAGNOSE_TRIAGE_MIN_CONFIDENCE" | "HARNESS_DIAGNOSE_TRIAGE_TIMEOUT_MS">,
+  cfg: Pick<
+    Config,
+    | "HARNESS_DIAGNOSE_TRIAGE"
+    | "HARNESS_DIAGNOSE_TRIAGE_MIN_CONFIDENCE"
+    | "HARNESS_DIAGNOSE_TRIAGE_TIMEOUT_MS"
+    | "TYPESAFE_API_KEY"
+    | "TYPESAFE_BASE_URL"
+  >,
   opts: { signal?: AbortSignal } = {},
 ): Promise<TriageSignal | undefined> {
-  const apiKey = process.env.TYPESAFE_API_KEY;
+  const apiKey = cfg.TYPESAFE_API_KEY;
   if (!cfg.HARNESS_DIAGNOSE_TRIAGE || !apiKey) {
     return undefined;
   }
@@ -81,12 +99,13 @@ export async function classifyFailure(
   try {
     const answer = await withTimeout(
       classifyQuestion(
-        { apiKey, baseUrl: process.env.TYPESAFE_BASE_URL },
+        { apiKey, baseUrl: cfg.TYPESAFE_BASE_URL },
         {
           state,
           instructions:
             "Classify why this CI/CD pipeline step failed, using its failure message, log snippet, and delegate info.",
           choices: FAILURE_CATEGORIES,
+          descriptions: CATEGORY_DESCRIPTIONS,
         },
         { signal: controller.signal, timeoutMs: cfg.HARNESS_DIAGNOSE_TRIAGE_TIMEOUT_MS },
       ),
@@ -100,8 +119,6 @@ export async function classifyFailure(
     return {
       category: answer.choice as FailureCategory,
       confidence: answer.confidence,
-      rationale: `${input.stage}/${input.step} failed: ${input.failure_message}` +
-        (input.delegate ? ` (delegate: ${input.delegate})` : ""),
     };
   } catch (err) {
     controller.abort();

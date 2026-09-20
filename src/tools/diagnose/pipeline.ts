@@ -621,10 +621,15 @@ export const pipelineHandler: DiagnoseHandler = {
     // so that truncated failures don't incorrectly block the requested_step_log fetch.
     let fetchedFailedLogKeys = new Set<string>();
 
+    // The capped subset of failed steps, shared by failed-step logs and triage
+    // (spec 010) — hoisted so triage runs even when log fetching is skipped.
+    const capped = maxFailedSteps > 0 ? failedNodes.slice(0, maxFailedSteps) : failedNodes;
+
+    let stepLogs: Record<string, unknown> = {};
+
     if (includeLogs && failedNodes.length > 0) {
       await sendProgress(extra, currentStep, totalSteps, "Fetching failed step logs...");
 
-      const capped = maxFailedSteps > 0 ? failedNodes.slice(0, maxFailedSteps) : failedNodes;
       if (capped.length < failedNodes.length) {
         diagnostic.failed_steps_truncated = { shown: capped.length, total: failedNodes.length };
       }
@@ -665,35 +670,49 @@ export const pipelineHandler: DiagnoseHandler = {
         logEntries.push(...batchResults);
       }
 
-      const stepLogs: Record<string, unknown> = {};
+      const stepLogsFromEntries: Record<string, unknown> = {};
       for (const entry of logEntries) {
-        stepLogs[entry.key] = entry.value;
+        stepLogsFromEntries[entry.key] = entry.value;
       }
+      stepLogs = stepLogsFromEntries;
       diagnostic.failed_step_logs = stepLogs;
+    }
 
-      // Spec 010: advisory-only failure-category triage, one category per
-      // failed step (no cross-step synthesis in this pilot). Reuses the log
-      // snippet/delegate/failure_message already fetched above — no new fetch.
+    // Spec 010: advisory-only failure-category triage, one category per failed
+    // step (no cross-step synthesis in this pilot). Runs whenever failed steps
+    // exist — NOT gated on include_logs — classifying from the failure message
+    // and delegate, plus the log snippet when one was fetched as a string
+    // (log download URLs and fetch errors are not useful classifier signal).
+    // Parallel and bounded: at most max_failed_steps (default 5) concurrent
+    // TypeSafe calls, each under HARNESS_DIAGNOSE_TRIAGE_TIMEOUT_MS.
+    // Fail-closed: any disabled/missing-key/timeout/error/low-confidence
+    // result omits that step's entry (classifyFailure never throws).
+    if (config.HARNESS_DIAGNOSE_TRIAGE && config.TYPESAFE_API_KEY && capped.length > 0) {
+      signal?.throwIfAborted();
+      const triageSignals = await Promise.all(
+        capped.map((fn) => {
+          const key = `${fn.stage}/${fn.step}`;
+          const logValue = stepLogs[key];
+          const logSnippet = typeof logValue === "string" ? logValue : undefined;
+          return classifyFailure(
+            {
+              stage: fn.stage,
+              step: fn.step,
+              failure_message: fn.failure_message,
+              delegate: fn.delegate,
+              log_snippet: logSnippet,
+            },
+            config,
+            { signal },
+          );
+        }),
+      );
       const triage: Record<string, unknown> = {};
-      for (const fn of capped) {
-        const key = `${fn.stage}/${fn.step}`;
-        const logValue = stepLogs[key];
-        const logSnippet = typeof logValue === "string" ? logValue : undefined;
-        const triageSignal = await classifyFailure(
-          {
-            stage: fn.stage,
-            step: fn.step,
-            failure_message: fn.failure_message,
-            delegate: fn.delegate,
-            log_snippet: logSnippet,
-          },
-          config,
-          { signal },
-        );
-        if (triageSignal) {
-          triage[key] = triageSignal;
+      capped.forEach((fn, i) => {
+        if (triageSignals[i]) {
+          triage[`${fn.stage}/${fn.step}`] = triageSignals[i];
         }
-      }
+      });
       if (Object.keys(triage).length > 0) {
         diagnostic.triage = triage;
       }
