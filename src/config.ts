@@ -163,6 +163,18 @@ const RawConfigSchema = z.object({
     emptyStringAsUndefined,
     z.string().default("/tmp/hf-cache"),
   ),
+  // Spec 010: advisory-only failure-category triage in harness_diagnose —
+  // a read-tool enrichment, not a write gate. Skips silently without
+  // TYPESAFE_API_KEY.
+  HARNESS_DIAGNOSE_TRIAGE: booleanFromEnv.default(true),
+  HARNESS_DIAGNOSE_TRIAGE_MIN_CONFIDENCE: z.preprocess(
+    emptyStringAsUndefined,
+    z.coerce.number().min(0).max(1).default(0.6),
+  ),
+  HARNESS_DIAGNOSE_TRIAGE_TIMEOUT_MS: z.preprocess(
+    emptyStringAsUndefined,
+    z.coerce.number().int().positive().default(400),
+  ),
 });
 
 export const ConfigSchema = RawConfigSchema.transform((data) => {

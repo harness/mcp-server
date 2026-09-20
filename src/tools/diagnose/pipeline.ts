@@ -6,6 +6,7 @@ import { sendProgress } from "../../utils/progress.js";
 import { isRecord, asRecord, asString, asNumber } from "../../utils/type-guards.js";
 import { resolveLogContent, resolveLogDownloadUrl } from "../../utils/log-resolver.js";
 import { TERMINAL_STATUSES } from "../../utils/poll-execution.js";
+import { classifyFailure } from "../../utils/diagnose-triage.js";
 
 const log = createLogger("diagnose:pipeline");
 const NON_TERMINAL_EXECUTION_ERROR_PREFIX = "Cannot diagnose execution with status";
@@ -669,6 +670,33 @@ export const pipelineHandler: DiagnoseHandler = {
         stepLogs[entry.key] = entry.value;
       }
       diagnostic.failed_step_logs = stepLogs;
+
+      // Spec 010: advisory-only failure-category triage, one category per
+      // failed step (no cross-step synthesis in this pilot). Reuses the log
+      // snippet/delegate/failure_message already fetched above — no new fetch.
+      const triage: Record<string, unknown> = {};
+      for (const fn of capped) {
+        const key = `${fn.stage}/${fn.step}`;
+        const logValue = stepLogs[key];
+        const logSnippet = typeof logValue === "string" ? logValue : undefined;
+        const triageSignal = await classifyFailure(
+          {
+            stage: fn.stage,
+            step: fn.step,
+            failure_message: fn.failure_message,
+            delegate: fn.delegate,
+            log_snippet: logSnippet,
+          },
+          config,
+          { signal },
+        );
+        if (triageSignal) {
+          triage[key] = triageSignal;
+        }
+      }
+      if (Object.keys(triage).length > 0) {
+        diagnostic.triage = triage;
+      }
     }
 
     // If a specific step was requested via the Harness URL (?step=<nodeExecutionId>),

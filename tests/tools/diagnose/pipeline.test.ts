@@ -3,11 +3,18 @@ import { pipelineHandler } from "../../../src/tools/diagnose/pipeline.js";
 import { makeContext, makeConfig, makeExtra } from "./helpers.js";
 import type { HarnessClient } from "../../../src/client/harness-client.js";
 import type { Registry } from "../../../src/registry/index.js";
+import { classifyFailure } from "../../../src/utils/diagnose-triage.js";
 
 // Mock resolveLogContent so diagnose tests don't depend on the full log pipeline
 vi.mock("../../../src/utils/log-resolver.js", () => ({
   resolveLogContent: vi.fn().mockResolvedValue("resolved log line 1\nresolved log line 2"),
   resolveLogDownloadUrl: vi.fn().mockResolvedValue("https://storage.example.com/logs.zip?signed=1"),
+}));
+
+// Spec 010: classifyFailure is exercised in isolation in diagnose-triage.test.ts.
+// Here it's mocked so pipeline tests stay focused on wiring, not classification.
+vi.mock("../../../src/utils/diagnose-triage.js", () => ({
+  classifyFailure: vi.fn().mockResolvedValue(undefined),
 }));
 
 const NOW = 1700000000000;
@@ -377,6 +384,118 @@ describe("pipelineHandler", () => {
     const logs = result.failed_step_logs as Record<string, unknown>;
     // resolveLogContent is mocked to return "resolved log line 1\nresolved log line 2"
     expect(logs["s1/step1"]).toBe("resolved log line 1\nresolved log line 2");
+    // Triage disabled by default (makeConfig doesn't set HARNESS_DIAGNOSE_TRIAGE) → omitted entirely.
+    expect(result.triage).toBeUndefined();
+  });
+
+  it("omits triage when HARNESS_DIAGNOSE_TRIAGE is false (default) — classifyFailure itself gates on the flag", async () => {
+    vi.mocked(classifyFailure).mockClear();
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "Stage1", status: "Failed", steps: [{ id: "step1", name: "Step1", status: "Failed" }] }],
+      nodeMapEntries: {
+        step1: {
+          uuid: "step1",
+          identifier: "step1",
+          name: "Step1",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step1",
+          status: "Failed",
+          failureInfo: { message: "Step1 error" },
+          logBaseKey: "log/step1",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      config: makeConfig({ HARNESS_DIAGNOSE_TRIAGE: false }),
+      args: { summary: false, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    // classifyFailure is called (it owns the flag check per the fail-closed pattern);
+    // the mock's default resolved value is undefined, so triage is omitted either way.
+    expect(result.triage).toBeUndefined();
+  });
+
+  it("populates triage from the failure classifier when HARNESS_DIAGNOSE_TRIAGE is true", async () => {
+    vi.mocked(classifyFailure).mockClear();
+    vi.mocked(classifyFailure).mockResolvedValueOnce({
+      category: "infra_flake",
+      confidence: 0.9,
+      rationale: "s1/step1 failed: Step1 error",
+    });
+
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "Stage1", status: "Failed", steps: [{ id: "step1", name: "Step1", status: "Failed" }] }],
+      nodeMapEntries: {
+        step1: {
+          uuid: "step1",
+          identifier: "step1",
+          name: "Step1",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step1",
+          status: "Failed",
+          failureInfo: { message: "Step1 error" },
+          logBaseKey: "log/step1",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      config: makeConfig({
+        HARNESS_DIAGNOSE_TRIAGE: true,
+        HARNESS_DIAGNOSE_TRIAGE_MIN_CONFIDENCE: 0.6,
+        HARNESS_DIAGNOSE_TRIAGE_TIMEOUT_MS: 400,
+      }),
+      args: { summary: false, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(classifyFailure).toHaveBeenCalledTimes(1);
+    expect(result.triage).toEqual({
+      "s1/step1": { category: "infra_flake", confidence: 0.9, rationale: "s1/step1 failed: Step1 error" },
+    });
+  });
+
+  it("omits triage when the classifier resolves undefined (disabled/timeout/error/low-confidence)", async () => {
+    vi.mocked(classifyFailure).mockClear();
+    vi.mocked(classifyFailure).mockResolvedValueOnce(undefined);
+
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "Stage1", status: "Failed", steps: [{ id: "step1", name: "Step1", status: "Failed" }] }],
+      nodeMapEntries: {
+        step1: {
+          uuid: "step1",
+          identifier: "step1",
+          name: "Step1",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step1",
+          status: "Failed",
+          failureInfo: { message: "Step1 error" },
+          logBaseKey: "log/step1",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      config: makeConfig({ HARNESS_DIAGNOSE_TRIAGE: true }),
+      args: { summary: false, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.triage).toBeUndefined();
   });
 
   it("returns download URLs for failed steps when return_download_url is true", async () => {
