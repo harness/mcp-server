@@ -387,6 +387,94 @@ describe("pull_request registry mappings", () => {
     ).rejects.toThrow(/No reviewer found/);
     expect(mockRequest).toHaveBeenCalledTimes(1);
   });
+
+  it("accepts reviewer_email on params when body is omitted", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce([{ id: 99, email: "ada@example.com" }])
+      .mockResolvedValueOnce({ reviewer_id: 99 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_reviewer", "create", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      reviewer_email: "ada@example.com",
+    });
+
+    expect(mockRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      body: { reviewer_id: 99 },
+    }));
+  });
+
+  it("resolves principals by uid when the query does not exact-match email", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn()
+      .mockResolvedValueOnce([
+        { id: 3001, uid: "svc-bot", email: "bot@harness.io" },
+      ])
+      .mockResolvedValueOnce({ reviewer_id: 3001 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pr_reviewer", "create", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      body: { reviewer_email: "svc-bot" },
+    });
+
+    expect(mockRequest).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      body: { reviewer_id: 3001 },
+    }));
+  });
+
+  it("rejects ambiguous principal matches for the same email", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValueOnce([
+      { id: 1, email: "dup@harness.io", display_name: "One" },
+      { id: 2, email: "dup@harness.io", display_name: "Two" },
+    ]);
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "pr_reviewer", "create", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        body: { reviewer_email: "dup@harness.io" },
+      }),
+    ).rejects.toThrow(/Multiple users matched/);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects account user lookup when aggregate has no email", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValueOnce({
+      data: { user: { uuid: "no-email-user", name: "No Email" } },
+    });
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "pr_reviewer", "create", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        body: { reviewer_uid: "no-email-user" },
+      }),
+    ).rejects.toThrow(/has no email/);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects non-numeric reviewer_id when account user lookup fails", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockRejectedValueOnce(new Error("404"));
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "pr_reviewer", "create", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        body: { reviewer_id: "not-a-code-user-id" },
+      }),
+    ).rejects.toThrow(/not a valid reviewer_id/);
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("pull_request list pagination and query mapping", () => {
