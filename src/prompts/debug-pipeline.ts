@@ -31,6 +31,7 @@ Start by calling harness_diagnose with ${idParam}${projectId ? `, project_id="${
 
 Then analyze the diagnostic payload:
 - **failure section**: failed stage, step, error message, and delegate
+- **triage section** (when present): advisory failure-category classification per failed step — a strong first signal for the root cause, but verify it against the logs before concluding
 - **child_pipeline section**: if present, the failure is in a chained pipeline — focus on the child's failure details
 - **failed_step_logs**: actual log output from the failed steps — look for error patterns, stack traces, and exit codes
 - **runtime input issues**: if the error mentions unresolved \`<+input>\` expressions or missing variables, check:
