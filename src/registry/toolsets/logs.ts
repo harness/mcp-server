@@ -29,7 +29,7 @@ export const logsToolset: ToolsetDefinition = {
               {
                 name: "prefix",
                 required: false,
-                description: "Log prefix. Use this or execution_id.",
+                description: "Raw Harness logBaseKey prefix. Use this or execution_id.",
               },
               {
                 name: "execution_id",

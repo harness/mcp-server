@@ -310,6 +310,54 @@ describe("buildLogPrefixFromExecution", () => {
     expect(result).toBe("acct1/stages/deploy");
   });
 
+  it("throws instead of returning another step's logs when step_id matches nothing", async () => {
+    dispatchMock.mockResolvedValue({
+      pipelineExecutionSummary: {
+        pipelineIdentifier: "pipe",
+        runSequence: 1,
+        shouldUseSimplifiedKey: true,
+      },
+      executionGraph: {
+        nodeMap: {
+          stepA: {
+            uuid: "step-a-uuid",
+            identifier: "step_a",
+            baseFqn: "pipeline.stages.build.spec.execution.steps.step_a",
+            logBaseKey: "acct1/stages/build/steps/step_a",
+          },
+        },
+      },
+    });
+
+    await expect(
+      buildLogPrefixFromExecution(mockClient, mockRegistry, "exec-1", { step_id: "typo_step" }),
+    ).rejects.toThrow(/No logs found for step\/stage "typo_step" in execution exec-1.*step_a/s);
+  });
+
+  it("throws when stage_id matches nothing rather than falling back to the whole run", async () => {
+    dispatchMock.mockResolvedValue({
+      pipelineExecutionSummary: {
+        pipelineIdentifier: "pipe",
+        runSequence: 1,
+        shouldUseSimplifiedKey: true,
+      },
+      executionGraph: {
+        nodeMap: {
+          pipelineNode: {
+            uuid: "pipeline-uuid",
+            identifier: "pipeline",
+            baseFqn: "pipeline",
+            logBaseKey: "acct1/pipeline-level-key",
+          },
+        },
+      },
+    });
+
+    await expect(
+      buildLogPrefixFromExecution(mockClient, mockRegistry, "exec-1", { stage_id: "missing_stage" }),
+    ).rejects.toThrow(/No logs found for step\/stage "missing_stage"/);
+  });
+
   it("fallback picks deepest key among multiple nodes with logBaseKeys", async () => {
     dispatchMock.mockResolvedValue({
       pipelineExecutionSummary: {
