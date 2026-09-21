@@ -1,22 +1,5 @@
 # Harness MCP Server — Task Tracking
 
-## harness_schema template oneOf summary (2026-09-18)
-
-- [x] Derive `yaml_kinds` from root `oneOf` `$ref`s / v1 `required` discriminators (no hardcoded kind list).
-- [x] v0 template no-path summary uses the first kind envelope (identifier, name, type, versionLabel) plus `type_enum`.
-- [x] Tests: bundled template / template_v1, synthetic additionalSchemas, pipeline hint ⊆ sections.
-
-## harness_schema static summary hint (2026-09-18)
-
-- [x] Derive no-path hint from this resource's `available_sections` instead of always citing trigger_source.
-- [x] Tests: pipeline/template hints omit trigger paths; trigger still cites trigger_source.
-
-## pipeline get query aliases (2026-09-18)
-
-- [x] Map v0 `harness_get` pipeline query aliases the GET already reads (`branch_name`, `load_from_fallback_branch`, `is_harness_code_repo`).
-- [x] Document those params on pipeline get `paramsSchema` / description only.
-- [x] Tests for dispatch query keys; leave list/update/`pipeline_resolved_yaml` get maps unchanged.
-
 ## Version Bump 3.2.28 (2026-09-16)
 
 - [x] Update package, shrinkwrap, and MCPB manifest versions to 3.2.28.
