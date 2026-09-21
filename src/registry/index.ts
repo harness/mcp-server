@@ -427,18 +427,7 @@ export class Registry {
       }
     }
 
-    if (spec.paramsSchema) {
-      const missingParams = spec.paramsSchema.fields
-        .filter(f => f.required && input[f.name] === undefined)
-        .map(f => f.name);
-      if (missingParams.length > 0) {
-        throw new Error(
-          `Missing required param(s) for ${resourceType}.${operation}: ${missingParams.join(", ")}. ` +
-          `Pass them via params (e.g. params: { ${missingParams.map(n => `${n}: "..."`).join(", ")} }). ` +
-          `Use harness_describe(resource_type="${resourceType}") to see valid values.`
-        );
-      }
-    }
+    this.assertRequiredParams(spec, input, resourceType, operation);
 
     return this.executeSpecWithAudit(client, def, spec, operation, resourceType, input, auditCtx, abortSignal);
   }
@@ -466,7 +455,29 @@ export class Registry {
       throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${action}" is not allowed.`);
     }
 
+    this.assertRequiredParams(actionSpec, input, resourceType, action);
+
     return this.executeSpecWithAudit(client, def, actionSpec, "execute", resourceType, input, { ...auditCtx, tool: auditCtx?.tool ?? "harness_execute", action }, abortSignal);
+  }
+
+  /** Fail-fast when paramsSchema marks a field required and the caller omitted it. */
+  private assertRequiredParams(
+    spec: EndpointSpec,
+    input: Record<string, unknown>,
+    resourceType: string,
+    operation: string,
+  ): void {
+    if (!spec.paramsSchema) return;
+    const missingParams = spec.paramsSchema.fields
+      .filter(f => f.required && input[f.name] === undefined)
+      .map(f => f.name);
+    if (missingParams.length > 0) {
+      throw new Error(
+        `Missing required param(s) for ${resourceType}.${operation}: ${missingParams.join(", ")}. ` +
+        `Pass them via params (e.g. params: { ${missingParams.map(n => `${n}: "..."`).join(", ")} }). ` +
+        `Use harness_describe(resource_type="${resourceType}") to see valid values.`
+      );
+    }
   }
 
   /**
@@ -820,10 +831,11 @@ export class Registry {
     // When the API body is transformed into a raw array, validate the caller's
     // canonical object-shaped input body so registry behavior matches harness_describe.
     // Multipart validation is enforced inside the resource bodyBuilder.
+    // Execute actions that send no JSON body still keep required fields on the tool input.
     if (spec.bodySchema && body && typeof body === "object" && !isFormDataBody(body)) {
       const payload = this.getBodySchemaValidationPayload(spec, input, body);
       const missing = spec.bodySchema.fields
-        .filter(f => f.required && payload[f.name] === undefined)
+        .filter(f => f.required && payload[f.name] === undefined && input[f.name] === undefined)
         .map(f => f.name);
       if (missing.length > 0) {
         throw new Error(
