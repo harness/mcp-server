@@ -1769,6 +1769,182 @@ describe("Registry", () => {
     });
   });
 
+  describe("quarantine update (PUT)", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries" }));
+    });
+
+    it("exact path is PUT /har/api/v1/registry/{spaceRef}/{registryId}/+/quarantine", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { artifact: "nginx" } });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/har/api/v1/registry/test-account/default/test-project/my-reg/+/quarantine");
+    });
+
+    it("scope fields (orgIdentifier, projectIdentifier) are NOT injected into the body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("response is unwrapped from { status, data } envelope", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { artifact: "nginx", filePath: "/etc/passwd" },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      }) as Record<string, unknown>;
+
+      expect(result.artifact).toBe("nginx");
+      expect(result.status).toBeUndefined();
+    });
+
+    it("update risk is medium_write with safe retry (PUT is idempotent)", () => {
+      const def = reg.getResource("quarantine");
+      expect(def.operations.update?.operationPolicy?.risk).toBe("medium_write");
+      expect(def.operations.update?.operationPolicy?.retryPolicy).toBe("safe");
+    });
+
+    it("delete (unquarantine) sends DELETE to the quarantine path with artifact query param", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS" });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "delete", {
+        registry_id: "my-reg",
+        artifact: "nginx",
+        version: "1.25.0",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("DELETE");
+      expect(call.path).toBe("/har/api/v1/registry/test-account/default/test-project/my-reg/+/quarantine");
+      expect(call.params?.artifact).toBe("nginx");
+      expect(call.params?.version).toBe("1.25.0");
+    });
+
+    it("delete risk is destructive (per structural validation rule for all deletes)", () => {
+      const def = reg.getResource("quarantine");
+      expect(def.operations.delete?.operationPolicy?.risk).toBe("destructive");
+    });
+  });
+
+  describe("firewall_exception_v3 create", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+    });
+
+    it("exact path is POST /har/api/v3/scans/exceptions", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ exceptionId: "exc-1", status: "PENDING" });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: {
+          registryId: "reg-uuid-123",
+          packageName: "lodash",
+          businessJustification: "Required for build process",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/har/api/v3/scans/exceptions");
+    });
+
+    it("org_identifier and project_identifier are NOT sent in body or query params", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: { registryId: "reg-uuid-123", packageName: "lodash", businessJustification: "needed" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      // body must not carry scope fields
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+      // query string: only account_identifier — create is account-scoped only
+      expect(call.params?.account_identifier).toBe("test-account");
+      expect(call.params?.org_identifier).toBeUndefined();
+      expect(call.params?.project_identifier).toBeUndefined();
+    });
+
+    it("bodySchema has registryId, packageName, businessJustification as required fields", () => {
+      const def = reg.getResource("firewall_exception_v3");
+      const fields = def.operations.create?.bodySchema?.fields ?? [];
+      const required = fields.filter(f => f.required).map(f => f.name);
+      expect(required).toContain("registryId");
+      expect(required).toContain("packageName");
+      expect(required).toContain("businessJustification");
+    });
+
+    it("response is passed through as-is (no data envelope unwrap)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        exceptionId: "exc-abc",
+        status: "PENDING",
+        packageName: "lodash",
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: { registryId: "reg-uuid-123", packageName: "lodash", businessJustification: "needed" },
+      }) as Record<string, unknown>;
+
+      expect(result.exceptionId).toBe("exc-abc");
+      expect(result.status).toBe("PENDING");
+    });
+  });
+
+  describe("firewall_exception_v3 list scope", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+    });
+
+    it("list does not leak org/project when neither is passed", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { exceptions: [], itemCount: 0 } });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "list", {});
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params?.org_identifier).toBeUndefined();
+      expect(call.params?.project_identifier).toBeUndefined();
+      expect(call.params?.account_identifier).toBe("test-account");
+    });
+
+    it("list forwards explicit org_id as org_identifier", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { exceptions: [], itemCount: 0 } });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "list", { org_id: "my-org", project_id: "my-proj" });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params?.org_identifier).toBe("my-org");
+      expect(call.params?.project_identifier).toBe("my-proj");
+    });
+  });
+
   describe("ELK→Mongo fallback", () => {
     let registry: Registry;
     beforeEach(() => {
