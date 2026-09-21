@@ -7,7 +7,7 @@ import type { AuditManager } from "../audit/manager.js";
 import type { AuditContext, AuditEvent, AuditOutcome } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType, appendAgentTypeQuery } from "../utils/deep-links.js";
-import { isFormDataBody } from "../utils/type-guards.js";
+import { isFormDataBody, isRecord } from "../utils/type-guards.js";
 import { canonicalizeListFilterEnums } from "./enum-utils.js";
 import { assertListScopeResolved } from "./list-filter-utils.js";
 
@@ -468,8 +468,10 @@ export class Registry {
     operation: string,
   ): void {
     if (!spec.paramsSchema) return;
+    const body = isRecord(input.body) ? input.body : undefined;
+    const nestedParams = isRecord(input.params) ? input.params : undefined;
     const missingParams = spec.paramsSchema.fields
-      .filter(f => f.required && input[f.name] === undefined)
+      .filter(f => f.required && input[f.name] === undefined && body?.[f.name] === undefined && nestedParams?.[f.name] === undefined)
       .map(f => f.name);
     if (missingParams.length > 0) {
       throw new Error(

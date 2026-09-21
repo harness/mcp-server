@@ -3507,7 +3507,7 @@ pipeline:
     });
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({
-      error: expect.stringContaining("repo_name, branch, and file_path"),
+      error: expect.stringMatching(/repo_name.*branch.*file_path/),
     });
     expect(mockRequest).not.toHaveBeenCalled();
   });
