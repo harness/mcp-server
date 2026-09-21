@@ -367,7 +367,7 @@ export const repositoriesToolset: ToolsetDefinition = {
             description: "Repository update fields",
             fields: [
               { name: "description", type: "string", required: false, description: "Repository description" },
-              { name: "state", type: "number", required: false, description: "Repository state as an integer: 0=active, 4=archived. Other values are internal transitional states not settable via this API." },
+              { name: "state", type: "number", required: false, description: "Repository state as an integer: 0=active, 1=git-import, 2=migrate-git-push, 3=migrate-data-import, 4=archived, 5=import-failed. Normal agent usage is 0 (active) <-> 4 (archived); other values are transitional migration states." },
               { name: "tags", type: "object", required: false, description: "Repository tags map" },
             ],
           },

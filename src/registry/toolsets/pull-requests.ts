@@ -425,7 +425,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             description: "Merge options",
             fields: [
               { name: "method", type: "string", required: false, description: "Merge method: merge, squash, rebase, or fast-forward" },
-              { name: "source_sha", type: "string", required: true, description: "Expected source SHA for optimistic locking. GET the PR first and pass its source_sha value." },
+              { name: "source_sha", type: "string", required: true, description: "Expected source SHA for optimistic locking. GET the PR first and pass its source_sha value — the backend rejects a stale value with 'A newer commit is available. Only the latest commit can be merged.'" },
               { name: "delete_source_branch", type: "boolean", required: false, description: "Delete source branch after merge" },
               { name: "dry_run", type: "boolean", required: false, description: "Simulate merge without executing" },
               { name: "dry_run_rules", type: "boolean", required: false, description: "Evaluate rules during a dry run" },
