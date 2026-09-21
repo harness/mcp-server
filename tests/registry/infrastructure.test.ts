@@ -321,6 +321,7 @@ describe("infrastructure environment_id fail-fast", () => {
           filePath: ".harness/infra.yaml",
           commitMsg: "Move infra to remote",
         }),
+        body: {},
       }),
     );
   });
@@ -371,6 +372,7 @@ describe("infrastructure environment_id fail-fast", () => {
           moveConfigType: "INLINE_TO_REMOTE",
           connectorRef: "git_connector",
         }),
+        body: {},
       }),
     );
   });

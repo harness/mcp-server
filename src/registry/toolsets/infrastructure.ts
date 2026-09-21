@@ -234,6 +234,7 @@ export const infrastructureToolset: ToolsetDefinition = {
             move_config_type: "moveConfigType",
           },
           paramsSchema: infrastructureMoveConfigsParams,
+          skipScopeBodyInjection: true,
           bodyBuilder: hoistInfrastructureMoveConfigParams,
           bodySchema: {
             description:
