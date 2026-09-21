@@ -1,6 +1,5 @@
 /**
- * Regression tests for repository.update field contracts and the
- * set_default_branch / set_public_access execute actions (PR #994 review).
+ * Regression test for repository.update field contracts (PR #994 review).
  */
 import { describe, expect, it, vi } from "vitest";
 import type { Config } from "../../src/config.js";
@@ -50,71 +49,5 @@ describe("repository.update field contract", () => {
       path: "/code/api/v1/repos/my-repo",
       body: { state: 4 },
     }));
-  });
-});
-
-describe("repository set_default_branch execute action", () => {
-  it("posts the branch name to the default-branch endpoint", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatchExecute(client, "repository", "set_default_branch", {
-      repo_id: "my-repo",
-      body: { name: "develop" },
-    });
-
-    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
-      method: "POST",
-      path: "/code/api/v1/repos/my-repo/default-branch",
-      body: { name: "develop" },
-    }));
-  });
-
-  it("rejects when name is omitted", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatchExecute(client, "repository", "set_default_branch", {
-        repo_id: "my-repo",
-        body: {},
-      }),
-    ).rejects.toThrow(/Missing required fields for repository: name/);
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-});
-
-describe("repository set_public_access execute action", () => {
-  it("posts is_public to the public-access endpoint", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatchExecute(client, "repository", "set_public_access", {
-      repo_id: "my-repo",
-      body: { is_public: true },
-    });
-
-    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
-      method: "POST",
-      path: "/code/api/v1/repos/my-repo/public-access",
-      body: { is_public: true },
-    }));
-  });
-
-  it("rejects when is_public is omitted", async () => {
-    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatchExecute(client, "repository", "set_public_access", {
-        repo_id: "my-repo",
-        body: {},
-      }),
-    ).rejects.toThrow(/Missing required fields for repository: is_public/);
-    expect(mockRequest).not.toHaveBeenCalled();
   });
 });

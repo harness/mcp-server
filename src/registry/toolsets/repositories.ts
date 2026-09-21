@@ -362,47 +362,13 @@ export const repositoriesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description:
-            "Update a repository. Body fields: description, state, tags. To change default_branch or is_public, use execute actions set_default_branch / set_public_access instead — this operation does not support them.",
+            "Update a repository. Body fields: description, state, tags. default_branch and is_public are not supported by this operation.",
           bodySchema: {
             description: "Repository update fields",
             fields: [
               { name: "description", type: "string", required: false, description: "Repository description" },
               { name: "state", type: "number", required: false, description: "Repository state as an integer: 0=active, 1=git-import, 2=migrate-git-push, 3=migrate-data-import, 4=archived, 5=import-failed. Normal agent usage is 0 (active) <-> 4 (archived); other values are transitional migration states." },
               { name: "tags", type: "object", required: false, description: "Repository tags map" },
-            ],
-          },
-        },
-      },
-      executeActions: {
-        set_default_branch: {
-          method: "POST",
-          path: "/code/api/v1/repos/{repoIdentifier}/default-branch",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          pathParams: { repo_id: "repoIdentifier" },
-          bodyBuilder: (input) => input.body,
-          responseExtractor: passthrough,
-          paramsSchema: REPO_ID_PARAMS,
-          actionDescription: "Change the repository's default branch. Body fields: name (required — the branch to make default).",
-          bodySchema: {
-            description: "Default branch change",
-            fields: [
-              { name: "name", type: "string", required: true, description: "Branch name to set as default" },
-            ],
-          },
-        },
-        set_public_access: {
-          method: "POST",
-          path: "/code/api/v1/repos/{repoIdentifier}/public-access",
-          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
-          pathParams: { repo_id: "repoIdentifier" },
-          bodyBuilder: (input) => input.body,
-          responseExtractor: passthrough,
-          paramsSchema: REPO_ID_PARAMS,
-          actionDescription: "Change whether the repository is publicly accessible. Body fields: is_public (required).",
-          bodySchema: {
-            description: "Public access change",
-            fields: [
-              { name: "is_public", type: "boolean", required: true, description: "Whether the repo should be public" },
             ],
           },
         },

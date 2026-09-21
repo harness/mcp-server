@@ -82,17 +82,27 @@ function fieldValue(
   return undefined;
 }
 
-function pullRequestMergeBody(input: Record<string, unknown>): Record<string, unknown> {
+/**
+ * harness_execute's `params` argument flattens onto the top-level input, while
+ * `body` stays nested — a bodyBuilder that only reads input.body misses fields
+ * an agent passed via params, and (since the required-field check is gated on
+ * a truthy body) silently sends an empty POST instead of erroring.
+ */
+function liftBodyFields(
+  input: Record<string, unknown>,
+  fields: readonly MergeBodyField[],
+  actionLabel: string,
+): Record<string, unknown> {
   const body = bodyRecord(input);
   const merged: Record<string, unknown> = {};
 
-  for (const field of PR_MERGE_BODY_FIELDS) {
+  for (const field of fields) {
     const names = [field.wire, ...(field.aliases ?? [])];
     const bodyValue = fieldValue(body, names);
     const inputValue = fieldValue(input, names);
     if (bodyValue && inputValue && !Object.is(bodyValue.value, inputValue.value)) {
       throw new Error(
-        `Conflicting pull_request.merge values for "${field.wire}" between ` +
+        `Conflicting ${actionLabel} values for "${field.wire}" between ` +
         `body.${bodyValue.key} and params/top-level ${inputValue.key}.`,
       );
     }
@@ -103,6 +113,19 @@ function pullRequestMergeBody(input: Record<string, unknown>): Record<string, un
   }
 
   return merged;
+}
+
+function pullRequestMergeBody(input: Record<string, unknown>): Record<string, unknown> {
+  return liftBodyFields(input, PR_MERGE_BODY_FIELDS, "pull_request.merge");
+}
+
+const PR_SUBMIT_REVIEW_BODY_FIELDS: readonly MergeBodyField[] = [
+  { wire: "decision" },
+  { wire: "commit_sha", aliases: ["commitSha"] },
+];
+
+function submitReviewBody(input: Record<string, unknown>): Record<string, unknown> {
+  return liftBodyFields(input, PR_SUBMIT_REVIEW_BODY_FIELDS, "pr_reviewer.submit_review");
 }
 
 function pullRequestUpdatePath(input: Record<string, unknown>): string {
@@ -521,7 +544,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: submitReviewBody,
           responseExtractor: passthrough,
           paramsSchema: REPO_PR_PARAMS,
           actionDescription:
