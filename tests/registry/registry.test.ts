@@ -646,17 +646,21 @@ describe("Registry", () => {
       });
       const client = makeClient(mockRequest);
 
+      const listInput = resourceType === "infrastructure" ? { environment_id: "my_env" } : {};
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "account",
+        ...listInput,
       });
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "org",
         org_id: "org-level",
+        ...listInput,
       });
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "project",
         org_id: "proj-org",
         project_id: "proj-level",
+        ...listInput,
       });
 
       const accountCall = mockRequest.mock.calls[0][0];
@@ -2620,6 +2624,94 @@ describe("Registry", () => {
       expect(result).toEqual({
         values: ["Product Management", "Security Engineering", "Software Development"],
       });
+    });
+  });
+
+  describe("required param enforcement", () => {
+    it("does not accept a nested params record — tools flatten params before dispatch", async () => {
+      const registry = new Registry(makeConfig());
+      const mockRequest = vi.fn();
+      const client = makeClient(mockRequest);
+
+      await expect(
+        registry.dispatch(client, "infrastructure", "get", {
+          infrastructure_id: "k8s",
+          org_id: "default",
+          project_id: "test-project",
+          params: { environment_id: "my_env" },
+        }),
+      ).rejects.toThrow(/Missing required param\(s\) for infrastructure\.get: environment_id/);
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  // Both move-config actions build an empty JSON body and send everything as query
+  // params, so their bodySchema is documentation only. A required flag there would
+  // reject every call.
+  describe("move_configs required fields live in paramsSchema", () => {
+    it("environment: fails locally without move_config_type", async () => {
+      const registry = new Registry(makeConfig());
+      const mockRequest = vi.fn();
+      const client = makeClient(mockRequest);
+
+      await expect(
+        registry.dispatchExecute(client, "environment", "move_configs", {
+          environment_id: "my_env",
+          org_id: "default",
+          project_id: "test-project",
+        }),
+      ).rejects.toThrow(/Missing required param\(s\) for environment\.move_configs: move_config_type/);
+      expect(mockRequest).not.toHaveBeenCalled();
+    });
+
+    it("environment: sends moveConfigType when supplied", async () => {
+      const registry = new Registry(makeConfig());
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "my_env" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatchExecute(client, "environment", "move_configs", {
+        environment_id: "my_env",
+        org_id: "default",
+        project_id: "test-project",
+        move_config_type: "INLINE_TO_REMOTE",
+        connector_ref: "git_connector",
+      });
+
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: "POST",
+          path: "/ng/api/environmentsV2/move-config/my_env",
+          params: expect.objectContaining({
+            moveConfigType: "INLINE_TO_REMOTE",
+            connectorRef: "git_connector",
+          }),
+        }),
+      );
+    });
+
+    it("infrastructure: sends moveConfigType when supplied", async () => {
+      const registry = new Registry(makeConfig());
+      const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "k8s" } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatchExecute(client, "infrastructure", "move_configs", {
+        infrastructure_id: "k8s",
+        org_id: "default",
+        project_id: "test-project",
+        environment_id: "my_env",
+        move_config_type: "REMOTE_TO_INLINE",
+      });
+
+      expect(mockRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: "POST",
+          path: "/ng/api/infrastructures/move-config/k8s",
+          params: expect.objectContaining({
+            environmentIdentifier: "my_env",
+            moveConfigType: "REMOTE_TO_INLINE",
+          }),
+        }),
+      );
     });
   });
 

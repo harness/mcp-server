@@ -3507,7 +3507,7 @@ pipeline:
     });
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({
-      error: expect.stringContaining("repo_name, branch, and file_path"),
+      error: expect.stringMatching(/repo_name.*branch.*file_path/),
     });
     expect(mockRequest).not.toHaveBeenCalled();
   });
@@ -4246,5 +4246,72 @@ describe("harness_diagnose", () => {
         expect(data.error).not.toContain("Cannot diagnose execution with status");
       }
     }
+  });
+});
+
+describe("harness_execute move_configs", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let registry: Registry;
+  let client: HarnessClient;
+  let mockRequest: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    server = makeMcpServer("accept");
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "infrastructure,environments" }));
+    mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "k8s" } });
+    client = makeClient(mockRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server, registry, client, makeConfig());
+  });
+
+  it("moves infrastructure config using the documented params shape", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "infrastructure",
+      action: "move_configs",
+      resource_id: "k8s",
+      params: {
+        environment_id: "my_env",
+        move_config_type: "INLINE_TO_REMOTE",
+        connector_ref: "git_connector",
+        repo_name: "my-repo",
+        branch: "main",
+        file_path: ".harness/infra.yaml",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(callArgs.path).toBe("/ng/api/infrastructures/move-config/k8s");
+    expect(callArgs.params.environmentIdentifier).toBe("my_env");
+    expect(callArgs.params.moveConfigType).toBe("INLINE_TO_REMOTE");
+  });
+
+  it("fails locally when infrastructure move_configs omits environment_id", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "infrastructure",
+      action: "move_configs",
+      resource_id: "k8s",
+      params: { move_config_type: "INLINE_TO_REMOTE" },
+    });
+
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("environment_id"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("moves environment config using the documented params shape", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "environment",
+      action: "move_configs",
+      resource_id: "my_env",
+      params: { move_config_type: "INLINE_TO_REMOTE", connector_ref: "git_connector" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(callArgs.path).toBe("/ng/api/environmentsV2/move-config/my_env");
+    expect(callArgs.params.moveConfigType).toBe("INLINE_TO_REMOTE");
   });
 });

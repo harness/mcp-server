@@ -1,4 +1,4 @@
-import type { ToolsetDefinition } from "../types.js";
+import type { ParamsSchema, ToolsetDefinition } from "../types.js";
 import { buildBodyNormalized } from "../../utils/body-normalizer.js";
 import { ngExtract, pageExtract } from "../extractors.js";
 import { isRecord } from "../../utils/type-guards.js";
@@ -54,6 +54,27 @@ const infrastructureUpdateBodyBuilder = buildBodyNormalized({
   injectFields: [...infrastructureScopeFields],
 });
 
+const ENVIRONMENT_ID_PARAM = {
+  name: "environment_id",
+  required: true,
+  description: "Environment identifier. Infrastructure is always scoped to an environment.",
+} as const;
+
+const infrastructureEnvironmentParams: ParamsSchema = {
+  fields: [{ ...ENVIRONMENT_ID_PARAM }],
+};
+
+const infrastructureMoveConfigsParams: ParamsSchema = {
+  fields: [
+    { ...ENVIRONMENT_ID_PARAM },
+    {
+      name: "move_config_type",
+      required: true,
+      description: "INLINE_TO_REMOTE or REMOTE_TO_INLINE. Pass via params.",
+    },
+  ],
+};
+
 export const infrastructureToolset: ToolsetDefinition = {
   name: "infrastructure",
   displayName: "Infrastructure",
@@ -67,8 +88,10 @@ export const infrastructureToolset: ToolsetDefinition = {
       scope: "project",
       supportedScopes: ["account", "org", "project"],
       identifierFields: ["infrastructure_id"],
+      executeHint:
+        "Move config with harness_execute(resource_type='infrastructure', action='move_configs', resource_id='<infrastructure_id>', params={ environment_id, move_config_type: 'INLINE_TO_REMOTE' | 'REMOTE_TO_INLINE' }). Optional Git fields (connector_ref, repo_name, branch, file_path, commit_msg) are also params.",
       listFilterFields: [
-        { name: "environment_id", description: "**Required.** Environment identifier — infrastructure is always scoped to an environment" },
+        { name: "environment_id", description: "Environment identifier. Infrastructure is always scoped to an environment.", required: true },
         { name: "search_term", description: "Search term to filter infrastructure definitions" },
         { name: "deployment_type", description: "Filter by deployment type (e.g. Kubernetes, ECS)" },
         { name: "sort", description: "Field to sort by (e.g. name, identifier)" },
@@ -98,6 +121,7 @@ export const infrastructureToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { infrastructure_id: "infraIdentifier" },
           queryParams: { environment_id: "environmentIdentifier" },
+          paramsSchema: infrastructureEnvironmentParams,
           responseExtractor: infrastructureExtract,
           description: "Get infrastructure definition details",
         },
@@ -160,6 +184,7 @@ export const infrastructureToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           pathParams: { infrastructure_id: "infraIdentifier" },
           queryParams: { environment_id: "environmentIdentifier" },
+          paramsSchema: infrastructureEnvironmentParams,
           responseExtractor: ngExtract,
           description: "Delete infrastructure definition",
         },
@@ -182,11 +207,14 @@ export const infrastructureToolset: ToolsetDefinition = {
             is_harness_code_repo: "isHarnessCodeRepo",
             move_config_type: "moveConfigType",
           },
+          paramsSchema: infrastructureMoveConfigsParams,
           bodyBuilder: () => ({}),
           bodySchema: {
+            // Documentation only — bodyBuilder sends `{}`, so requiredness lives in
+            // paramsSchema above. Marking a field required here would reject every call.
             description: "Move configuration request. All parameters are passed as query params.",
             fields: [
-              { name: "environment_id", type: "string", required: true, description: "Environment identifier" },
+              { name: "environment_id", type: "string", required: false, description: "Environment identifier" },
               { name: "connector_ref", type: "string", required: false, description: "Connector reference for remote storage" },
               { name: "repo_name", type: "string", required: false, description: "Repository name" },
               { name: "branch", type: "string", required: false, description: "Branch name" },
@@ -195,7 +223,7 @@ export const infrastructureToolset: ToolsetDefinition = {
               { name: "is_new_branch", type: "boolean", required: false, description: "Whether to create a new branch" },
               { name: "base_branch", type: "string", required: false, description: "Base branch if creating a new branch" },
               { name: "is_harness_code_repo", type: "boolean", required: false, description: "Whether the repo is a Harness Code repo" },
-              { name: "move_config_type", type: "string", required: true, description: "INLINE_TO_REMOTE or REMOTE_TO_INLINE" },
+              { name: "move_config_type", type: "string", required: false, description: "INLINE_TO_REMOTE or REMOTE_TO_INLINE" },
             ],
           },
           responseExtractor: ngExtract,

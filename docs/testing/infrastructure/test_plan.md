@@ -22,7 +22,7 @@
 | TC-infra-004 | List | Filter by deployment_type | `harness_list(resource_type="infrastructure", environment_id="my_env", deployment_type="Kubernetes")` | Returns only Kubernetes deployment type infrastructure |
 | TC-infra-005 | List | Sort by name descending | `harness_list(resource_type="infrastructure", environment_id="my_env", sort="name", order="desc")` | Returns infrastructure sorted by name Z-A |
 | TC-infra-006 | List | Combined filters: search + deployment_type + pagination | `harness_list(resource_type="infrastructure", environment_id="my_env", search_term="prod", deployment_type="Kubernetes", page=0, size=10)` | Returns filtered, paginated results |
-| TC-infra-007 | List | List without environment_id (required field) | `harness_list(resource_type="infrastructure")` | Error or empty result: environment_id is required for listing infrastructure |
+| TC-infra-007 | List | List without environment_id (required field) | `harness_list(resource_type="infrastructure")` | Local error: missing required filter `environment_id` (no API call) |
 | TC-infra-008 | Get | Get infrastructure by identifier | `harness_get(resource_type="infrastructure", infrastructure_id="my_infra", environment_id="my_env")` | Returns full infrastructure definition details |
 | TC-infra-009 | Get | Get infrastructure with scope overrides | `harness_get(resource_type="infrastructure", infrastructure_id="my_infra", environment_id="my_env", org_id="other_org", project_id="other_project")` | Returns infrastructure from specified org/project |
 | TC-infra-010 | Create | Create infrastructure with required fields (yaml auto-synthesized when omitted) | `harness_create(resource_type="infrastructure", org_id="default", project_id="my_project", body={identifier:"test_infra", name:"Test Infra", type:"KubernetesDirect", environmentRef:"my_env"})` | Infrastructure created — MCP synthesizes non-empty `body.yaml` (incl. org/project) before calling NG |
@@ -33,7 +33,10 @@
 | TC-infra-015 | Update | Update infrastructure with YAML | `harness_update(resource_type="infrastructure", infrastructure_id="my_infra", body={identifier:"my_infra", name:"My Infra", type:"KubernetesDirect", environmentRef:"my_env", yaml:"infrastructureDefinition:\n  ..."})` | Infrastructure updated with YAML |
 | TC-infra-016 | Update | Update infrastructure with missing required fields | `harness_update(resource_type="infrastructure", infrastructure_id="my_infra", body={name:"My Infra"})` | Error: type and environmentRef are required |
 | TC-infra-017 | Delete | Delete infrastructure by identifier | `harness_delete(resource_type="infrastructure", infrastructure_id="my_infra", environment_id="my_env")` | Infrastructure deleted successfully |
+| TC-infra-017b | Error | Get without environment_id | `harness_get(resource_type="infrastructure", infrastructure_id="my_infra")` | Local error: missing required param `environment_id` |
+| TC-infra-017c | Error | Delete without environment_id | `harness_delete(resource_type="infrastructure", infrastructure_id="my_infra")` | Local error: missing required param `environment_id` |
 | TC-infra-018 | Execute | Move config inline to remote | `harness_execute(resource_type="infrastructure", action="move_configs", infrastructure_id="my_infra", environment_id="my_env", move_config_type="INLINE_TO_REMOTE", connector_ref="git_connector", repo_name="my-repo", branch="main", file_path=".harness/infra.yaml", commit_msg="Move infra to remote")` | Infrastructure config moved to remote |
+| TC-infra-018b | Error | Move configs without required params | `harness_execute(resource_type="infrastructure", action="move_configs", resource_id="my_infra")` | Local error: missing `environment_id` and `move_config_type` |
 | TC-infra-019 | Execute | Move config remote to inline | `harness_execute(resource_type="infrastructure", action="move_configs", infrastructure_id="my_infra", environment_id="my_env", move_config_type="REMOTE_TO_INLINE")` | Infrastructure config moved to inline |
 | TC-infra-020 | Scope | List infrastructure with different org_id | `harness_list(resource_type="infrastructure", environment_id="my_env", org_id="custom_org")` | Returns infrastructure from specified org |
 | TC-infra-021 | Error | Get non-existent infrastructure | `harness_get(resource_type="infrastructure", infrastructure_id="nonexistent_xyz", environment_id="my_env")` | Error: not found (404) |
@@ -43,7 +46,7 @@
 | TC-infra-025 | Deep Link | Verify deep link in get response | `harness_get(resource_type="infrastructure", infrastructure_id="my_infra", environment_id="my_env")` | Response includes valid Harness UI deep link |
 
 ## Notes
-- Infrastructure is always scoped to an environment; `environment_id` is required for list, get, and delete operations.
+- Infrastructure is always scoped to an environment; `environment_id` is required for list, get, delete, and `move_configs`. Missing values fail locally before the API call.
 - Create/update mutation examples use the real tool contract: `body={...}` plus optional top-level `org_id`/`project_id`.
 - The create/update body is a flat JSON object (optionally unwrapped from `infrastructureDefinition`).
 - Both create and update require `identifier`, `name`, `type`, and `environmentRef`.

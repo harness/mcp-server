@@ -1,6 +1,16 @@
-import type { ToolsetDefinition, BodySchema } from "../types.js";
+import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
 import { buildBodyNormalized } from "../../utils/body-normalizer.js";
 import { ngExtract, pageExtract } from "../extractors.js";
+
+const environmentMoveConfigsParams: ParamsSchema = {
+  fields: [
+    {
+      name: "move_config_type",
+      required: true,
+      description: "INLINE_TO_REMOTE (REMOTE_TO_INLINE is not supported for environments). Pass via params.",
+    },
+  ],
+};
 
 const environmentCreateSchema: BodySchema = {
   description: "Environment definition",
@@ -117,9 +127,12 @@ export const environmentsToolset: ToolsetDefinition = {
             move_config_type: "moveConfigType",
           },
           bodyBuilder: () => ({}),
+          paramsSchema: environmentMoveConfigsParams,
           responseExtractor: ngExtract,
           actionDescription: "Move environment configuration (e.g., move inline config to remote or vice versa)",
           bodySchema: {
+            // Documentation only — bodyBuilder sends `{}`, so requiredness lives in
+            // paramsSchema above. Marking a field required here would reject every call.
             description: "Move configuration request. All parameters are passed as query params.",
             fields: [
               { name: "connector_ref", type: "string", required: false, description: "Connector reference for remote storage" },
@@ -130,7 +143,7 @@ export const environmentsToolset: ToolsetDefinition = {
               { name: "is_new_branch", type: "boolean", required: false, description: "Whether to create a new branch" },
               { name: "base_branch", type: "string", required: false, description: "Base branch if creating a new branch" },
               { name: "is_harness_code_repo", type: "boolean", required: false, description: "Whether the repo is a Harness Code repo" },
-              { name: "move_config_type", type: "string", required: true, description: "INLINE_TO_REMOTE (REMOTE_TO_INLINE not supported for environments)" },
+              { name: "move_config_type", type: "string", required: false, description: "INLINE_TO_REMOTE (REMOTE_TO_INLINE not supported for environments)" },
             ],
           },
         },
