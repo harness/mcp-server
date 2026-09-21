@@ -224,6 +224,17 @@ describe("harness_schema live entities", () => {
     expect(parsed.resource_type).toBe("pipeline");
   });
 
+  it("pipeline summary hint examples come from available_sections", async () => {
+    const result = await server.call("harness_schema", { resource_type: "pipeline" });
+    const parsed = parseResult(result) as { hint: string; available_sections: string[] };
+
+    expect(parsed.available_sections).toEqual(expect.arrayContaining(["stages", "steps"]));
+    const hinted = [...parsed.hint.matchAll(/path='([^']+)'/g)].map((m) => m[1]);
+    expect(hinted.length).toBeGreaterThan(0);
+    expect(parsed.available_sections).toEqual(expect.arrayContaining(hinted));
+    expect(hinted).not.toContain("trigger_source");
+  });
+
   it("rejects project scope without org_id before bundled or live fetch", async () => {
     vi.spyOn(
       await import("../../src/tools/entity-schema/bundled.js"),
@@ -329,6 +340,127 @@ describe("harness_schema RMG release definitions", () => {
     expect(parsed.source).toBe("rmg-yaml-schema");
     expect(parsed.path).toBe("phases");
     expect((parsed.schema as Record<string, unknown>).type).toBe("array");
+  });
+});
+
+describe("harness_schema static summary hints", () => {
+  it("hint example paths are keys from available_sections or yaml_kinds", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined);
+
+    for (const resource_type of ["pipeline", "pipeline_v1", "template", "trigger"] as const) {
+      const result = await server.call("harness_schema", { resource_type });
+      const parsed = parseResult(result) as {
+        hint: string;
+        available_sections: string[];
+        yaml_kinds?: string[];
+      };
+      const hinted = [...parsed.hint.matchAll(/path='([^']+)'/g)].map((m) => m[1]);
+      const allowed = [...parsed.available_sections, ...(parsed.yaml_kinds ?? [])];
+
+      expect(hinted.length, resource_type).toBeGreaterThan(0);
+      expect(allowed, resource_type).toEqual(expect.arrayContaining(hinted));
+    }
+  });
+});
+
+describe("harness_schema template oneOf summary", () => {
+  it("lists v0 template kinds and envelope fields instead of a single wrapper", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined);
+    const result = await server.call("harness_schema", { resource_type: "template" });
+    const parsed = parseResult(result) as {
+      fields: Array<{ name: string; required: boolean }>;
+      yaml_kinds: string[];
+      type_enum: string[];
+      available_sections: string[];
+      hint: string;
+    };
+
+    expect(parsed.yaml_kinds).toEqual(
+      expect.arrayContaining(["step", "stage", "pipeline", "stepgroup", "secretmanager"]),
+    );
+    expect(parsed.available_sections.slice(0, parsed.yaml_kinds.length)).toEqual(parsed.yaml_kinds);
+    expect(parsed.fields.map((f) => f.name)).toEqual(
+      expect.arrayContaining(["identifier", "name", "type", "versionLabel"]),
+    );
+    expect(parsed.fields.map((f) => f.name)).not.toEqual(["template"]);
+    expect(parsed.type_enum).toEqual(expect.arrayContaining(["Step", "Stage", "Pipeline"]));
+    expect(parsed.hint).toMatch(/path='step'/);
+    expect(parsed.hint).not.toMatch(/trigger_source/);
+  });
+
+  it("lists v1 template kinds without replacing id/name envelope fields", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined);
+    const result = await server.call("harness_schema", { resource_type: "template_v1" });
+    const parsed = parseResult(result) as {
+      fields: Array<{ name: string }>;
+      yaml_kinds: string[];
+    };
+
+    expect(parsed.yaml_kinds).toEqual(
+      expect.arrayContaining(["pipeline", "stage", "step", "group"]),
+    );
+    expect(parsed.fields.map((f) => f.name)).toEqual(expect.arrayContaining(["version", "template"]));
+  });
+
+  it("derives kinds from additionalSchemas oneOf $refs", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined, {
+      kind_demo: {
+        schema: {
+          properties: {
+            kind_demo: {
+              oneOf: [
+                { $ref: "#/definitions/kind_demo/alpha/template" },
+                { $ref: "#/definitions/kind_demo/beta/template" },
+              ],
+            },
+          },
+          definitions: {
+            kind_demo: {
+              alpha: {
+                template: {
+                  type: "object",
+                  required: ["identifier", "type"],
+                  properties: {
+                    identifier: { type: "string" },
+                    type: { type: "string", enum: ["Alpha"] },
+                  },
+                },
+              },
+              beta: {
+                template: {
+                  type: "object",
+                  properties: {
+                    type: { type: "string", enum: ["Beta"] },
+                  },
+                },
+              },
+            },
+          },
+        },
+        description: "oneOf kind summary test",
+        group: "test",
+      },
+    });
+
+    const result = await server.call("harness_schema", { resource_type: "kind_demo" });
+    const parsed = parseResult(result) as {
+      yaml_kinds: string[];
+      type_enum: string[];
+      fields: Array<{ name: string; required: boolean }>;
+    };
+
+    expect(parsed.yaml_kinds).toEqual(["alpha", "beta"]);
+    expect(parsed.type_enum).toEqual(["Alpha", "Beta"]);
+    expect(parsed.fields).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "identifier", required: true }),
+        expect.objectContaining({ name: "type", required: true }),
+      ]),
+    );
   });
 });
 
