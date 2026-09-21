@@ -147,6 +147,7 @@ describe("pull_request registry mappings", () => {
       project_id: "Sanity",
       body: {
         method: "squash",
+        source_sha: "abc123",
         delete_source_branch: false,
         dry_run: false,
       },
@@ -157,6 +158,7 @@ describe("pull_request registry mappings", () => {
       path: "/code/api/v1/repos/rc_tools/pullreq/42/merge",
       body: {
         method: "squash",
+        source_sha: "abc123",
         delete_source_branch: false,
         dry_run: false,
       },
@@ -172,6 +174,7 @@ describe("pull_request registry mappings", () => {
       repo_id: "rc_tools",
       pr_number: "42",
       method: "merge",
+      source_sha: "abc123",
       deleteSourceBranch: false,
       dryRun: false,
     });
@@ -179,6 +182,7 @@ describe("pull_request registry mappings", () => {
     expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
       body: {
         method: "merge",
+        source_sha: "abc123",
         delete_source_branch: false,
         dry_run: false,
       },
