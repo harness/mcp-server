@@ -185,6 +185,41 @@ export async function branchPreflight({ input }: PreflightContext): Promise<void
   aliasIfMissing(input, "branch_name", ["git_ref", "branch"]);
 }
 
+function asBoolean(value: unknown): boolean | undefined {
+  if (value === true || value === "true") return true;
+  if (value === false || value === "false") return false;
+  return undefined;
+}
+
+/**
+ * Default branch and visibility live on their own Code endpoints with a
+ * single-field body. harness_execute flattens params onto the input, so accept
+ * either shape, plus the repository-update field names agents reach for first.
+ * An absent value returns an empty body so the generic required-field check
+ * reports it instead of the API rejecting the request.
+ */
+function repositoryDefaultBranchBody(input: Record<string, unknown>): Record<string, unknown> {
+  const body = isRecord(input.body) ? input.body : undefined;
+  const name = nonEmptyString(body?.name)
+    ?? nonEmptyString(body?.default_branch)
+    ?? nonEmptyString(input.name)
+    ?? nonEmptyString(input.default_branch);
+  return name === undefined ? {} : { name };
+}
+
+function repositoryPublicAccessBody(input: Record<string, unknown>): Record<string, unknown> {
+  const body = isRecord(input.body) ? input.body : undefined;
+  const raw = body?.is_public ?? input.is_public;
+  if (raw === undefined) return {};
+  const isPublic = asBoolean(raw);
+  if (isPublic === undefined) {
+    throw new Error(
+      `is_public must be a boolean for repository.update_public_access (received ${JSON.stringify(raw)}).`,
+    );
+  }
+  return { is_public: isPublic };
+}
+
 const REPO_ID_PARAMS: ParamsSchema = {
   fields: [
     { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\")." },
@@ -362,13 +397,51 @@ export const repositoriesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description:
-            "Update a repository. Body fields: description, state, tags. default_branch and is_public are not supported by this operation.",
+            "Update a repository. Body fields: description, state, tags. For default_branch use execute action 'update_default_branch'; for is_public use execute action 'update_public_access'.",
           bodySchema: {
             description: "Repository update fields",
             fields: [
               { name: "description", type: "string", required: false, description: "Repository description" },
               { name: "state", type: "string", required: false, description: "Repository state (e.g. active, archived)" },
               { name: "tags", type: "object", required: false, description: "Repository tags map" },
+            ],
+          },
+        },
+      },
+      executeActions: {
+        update_default_branch: {
+          method: "POST",
+          path: "/code/api/v1/repos/{repoIdentifier}/default-branch",
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          pathParams: { repo_id: "repoIdentifier" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: repositoryDefaultBranchBody,
+          responseExtractor: passthrough,
+          paramsSchema: REPO_ID_PARAMS,
+          actionDescription:
+            "Change the repository default branch. Body field: name (required — an existing branch; default_branch is an alias). repository update does not accept this field.",
+          bodySchema: {
+            description: "New default branch",
+            fields: [
+              { name: "name", type: "string", required: true, description: "Existing branch to make the default (alias: default_branch)" },
+            ],
+          },
+        },
+        update_public_access: {
+          method: "POST",
+          path: "/code/api/v1/repos/{repoIdentifier}/public-access",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          pathParams: { repo_id: "repoIdentifier" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: repositoryPublicAccessBody,
+          responseExtractor: passthrough,
+          paramsSchema: REPO_ID_PARAMS,
+          actionDescription:
+            "Change repository visibility. Body field: is_public (required boolean — true makes the repository publicly readable). repository update does not accept this field.",
+          bodySchema: {
+            description: "Repository visibility",
+            fields: [
+              { name: "is_public", type: "boolean", required: true, description: "true makes the repository publicly readable, false makes it private" },
             ],
           },
         },

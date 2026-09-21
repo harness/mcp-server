@@ -1380,15 +1380,17 @@ Both pipeline YAML resource types are available when the pipelines toolset is en
 ### Code Repositories
 
 
-| Resource Type  | List | Get | Create | Update | Delete | Execute Actions      |
-| -------------- | ---- | --- | ------ | ------ | ------ | -------------------- |
-| `repository`   | x    | x   | x      | x      |        |                      |
-| `branch`       | x    | x   | x      |        | x      |                      |
-| `commit`       | x    | x   | x      |        |        | `diff`, `diff_stats` |
-| `file_content` | x    | x   |        |        |        | `blame`              |
-| `tag`          | x    |     | x      |        | x      |                      |
-| `repo_rule`    | x    | x   |        |        |        |                      |
-| `space_rule`   | x    | x   |        |        |        |                      |
+| Resource Type  | List | Get | Create | Update | Delete | Execute Actions                                 |
+| -------------- | ---- | --- | ------ | ------ | ------ | ----------------------------------------------- |
+| `repository`   | x    | x   | x      | x      |        | `update_default_branch`, `update_public_access`  |
+| `branch`       | x    | x   | x      |        | x      |                                                 |
+| `commit`       | x    | x   | x      |        |        | `diff`, `diff_stats`                            |
+| `file_content` | x    | x   |        |        |        | `blame`                                         |
+| `tag`          | x    |     | x      |        | x      |                                                 |
+| `repo_rule`    | x    | x   |        |        |        |                                                 |
+| `space_rule`   | x    | x   |        |        |        |                                                 |
+
+`repository` update accepts `description`, `state`, and `tags` only. Harness Code keeps the default branch and visibility on separate endpoints: use `harness_execute(resource_type="repository", action="update_default_branch", body={name: "develop"})` and `action="update_public_access"` with `body={is_public: false}`.
 
 `commit` creation commits one or more file actions directly through the Harness Code API without cloning. Pass `body.title`, `body.branch`, and `body.actions`; each action is `CREATE`, `UPDATE`, `DELETE`, or `MOVE`, and `UPDATE` requires the current blob SHA.
 
