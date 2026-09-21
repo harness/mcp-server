@@ -75,6 +75,32 @@ const infrastructureMoveConfigsParams: ParamsSchema = {
   ],
 };
 
+const MOVE_CONFIG_PARAM_KEYS = [
+  "environment_id",
+  "move_config_type",
+  "connector_ref",
+  "repo_name",
+  "branch",
+  "file_path",
+  "commit_msg",
+  "is_new_branch",
+  "base_branch",
+  "is_harness_code_repo",
+] as const;
+
+/** Copy body fields onto input so queryParams can bind them (same pattern as pipeline interrupt/import). */
+function hoistInfrastructureMoveConfigParams(input: Record<string, unknown>): Record<string, unknown> {
+  const body = isRecord(input.body) ? input.body : undefined;
+  if (body) {
+    for (const key of MOVE_CONFIG_PARAM_KEYS) {
+      if ((input[key] === undefined || input[key] === "") && body[key] !== undefined && body[key] !== "") {
+        input[key] = body[key];
+      }
+    }
+  }
+  return {};
+}
+
 export const infrastructureToolset: ToolsetDefinition = {
   name: "infrastructure",
   displayName: "Infrastructure",
@@ -208,21 +234,11 @@ export const infrastructureToolset: ToolsetDefinition = {
             move_config_type: "moveConfigType",
           },
           paramsSchema: infrastructureMoveConfigsParams,
-          bodyBuilder: () => ({}),
+          bodyBuilder: hoistInfrastructureMoveConfigParams,
           bodySchema: {
-            description: "Move configuration request. All parameters are passed as query params.",
-            fields: [
-              { name: "environment_id", type: "string", required: true, description: "Environment identifier" },
-              { name: "connector_ref", type: "string", required: false, description: "Connector reference for remote storage" },
-              { name: "repo_name", type: "string", required: false, description: "Repository name" },
-              { name: "branch", type: "string", required: false, description: "Branch name" },
-              { name: "file_path", type: "string", required: false, description: "File path in the repository" },
-              { name: "commit_msg", type: "string", required: false, description: "Commit message" },
-              { name: "is_new_branch", type: "boolean", required: false, description: "Whether to create a new branch" },
-              { name: "base_branch", type: "string", required: false, description: "Base branch if creating a new branch" },
-              { name: "is_harness_code_repo", type: "boolean", required: false, description: "Whether the repo is a Harness Code repo" },
-              { name: "move_config_type", type: "string", required: true, description: "INLINE_TO_REMOTE or REMOTE_TO_INLINE" },
-            ],
+            description:
+              "No JSON body is sent. Pass environment_id, move_config_type, and optional Git fields via params. Values supplied in body are copied onto params.",
+            fields: [],
           },
           responseExtractor: ngExtract,
           actionDescription: "Move infrastructure configuration (e.g., move inline config to remote or vice versa)",

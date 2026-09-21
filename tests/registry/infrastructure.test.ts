@@ -336,8 +336,42 @@ describe("infrastructure environment_id fail-fast", () => {
     );
     expect(
       def.executeActions?.move_configs?.paramsSchema?.fields.some(
+        (f) => f.name === "environment_id" && f.required,
+      ),
+    ).toBe(true);
+    expect(
+      def.executeActions?.move_configs?.paramsSchema?.fields.some(
         (f) => f.name === "move_config_type" && f.required,
       ),
     ).toBe(true);
+    expect(def.executeActions?.move_configs?.bodySchema?.fields.some((f) => f.required)).toBe(false);
+  });
+
+  it("move_configs: hoists required fields from body onto query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "k8s" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "infrastructure", "move_configs", {
+      infrastructure_id: "k8s",
+      org_id: "default",
+      project_id: "my_project",
+      body: {
+        environment_id: "my_env",
+        move_config_type: "INLINE_TO_REMOTE",
+        connector_ref: "git_connector",
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/ng/api/infrastructures/move-config/k8s",
+        params: expect.objectContaining({
+          environmentIdentifier: "my_env",
+          moveConfigType: "INLINE_TO_REMOTE",
+          connectorRef: "git_connector",
+        }),
+      }),
+    );
   });
 });
