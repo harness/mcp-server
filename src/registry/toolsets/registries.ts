@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, PathBuilderConfig, BodySchema } from "../types.js";
-import { ngExtract, harListExtract } from "../extractors.js";
+import { ngExtract, harListExtract, passthrough } from "../extractors.js";
 
 // Canonical PackageType enum — matches RegistryRequest.PackageType in the v1 OpenAPI spec.
 const PACKAGE_TYPES = [
@@ -239,6 +239,60 @@ export const registriesToolset: ToolsetDefinition = {
           },
           responseExtractor: harListExtract("files"),
           description: "List files in an artifact version",
+        },
+      },
+    },
+    {
+      resourceType: "quarantine",
+      displayName: "Quarantine",
+      description:
+        "Quarantine or unquarantine an artifact in a registry. Quarantine immediately blocks pulls — use update (PUT) to quarantine, delete (DELETE) to lift quarantine.",
+      toolset: "registries",
+      scope: "project",
+      // resource_id maps to "artifact" (last identifierField); registry_id is passed via params.
+      identifierFields: ["registry_id", "artifact"],
+      operations: {
+        // PUT is idempotent upsert — maps to update. Quarantine blocks artifact pulls immediately.
+        update: {
+          method: "PUT",
+          path: "/har/api/v1/registry",
+          pathBuilder: (input, config) =>
+            `/har/api/v1/registry/${harRegistryRef(input, config)}/+/quarantine`,
+          pathParams: { registry_id: "registryIdentifier" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => input.body,
+          responseExtractor: ngExtract,
+          description: "Quarantine an artifact in a registry — blocks pulls immediately",
+          bodySchema: {
+            description: "Quarantine request. Marks a specific artifact (and optionally a file path) as quarantined.",
+            fields: [
+              { name: "artifact", type: "string", required: true, description: "Artifact name to quarantine" },
+              { name: "reason", type: "string", required: true, description: "Reason for quarantine" },
+              { name: "filePath", type: "string", required: false, description: "Specific file path within the artifact to quarantine" },
+              { name: "version", type: "string", required: false, description: "Artifact version to quarantine" },
+              { name: "artifactType", type: "string", required: false, description: "Artifact type (e.g. model, dataset, module, provider)" },
+              { name: "artifactKeyFilters", type: "object", required: false, description: "Key-value filters (format: key:value) to further scope the quarantine target" },
+            ],
+          },
+        },
+        // DELETE removes quarantine — restores artifact availability.
+        delete: {
+          method: "DELETE",
+          path: "/har/api/v1/registry",
+          pathBuilder: (input, config) =>
+            `/har/api/v1/registry/${harRegistryRef(input, config)}/+/quarantine`,
+          pathParams: { registry_id: "registryIdentifier" },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          queryParams: {
+            artifact: "artifact",
+            version: "version",
+            file_path: "file_path",
+            artifact_type: "artifact_type",
+            filters: "filters",
+          },
+          responseExtractor: passthrough,
+          description: "Remove quarantine from an artifact — restores pull access",
         },
       },
     },
