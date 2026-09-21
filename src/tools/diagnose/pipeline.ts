@@ -10,6 +10,11 @@ import { classifyFailure } from "../../utils/diagnose-triage.js";
 
 const log = createLogger("diagnose:pipeline");
 const NON_TERMINAL_EXECUTION_ERROR_PREFIX = "Cannot diagnose execution with status";
+// Diagnose fetches up to max_all_step_logs (default 25) logs per call, batched
+// by HARNESS_DIAGNOSE_LOG_FETCH_CONCURRENCY. The longer resolver default suits a
+// single interactive harness_get; inheriting it here multiplies the wait across
+// every batch when a run's blobs are still being zipped.
+const DIAGNOSE_LOG_POLL_ATTEMPTS = 3;
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -462,10 +467,16 @@ async function resolveDiagnoseLog(
   },
 ): Promise<unknown> {
   if (options.returnDownloadUrl) {
-    const downloadUrl = await resolveLogDownloadUrl(client, prefix, { signal: options.signal });
+    const downloadUrl = await resolveLogDownloadUrl(client, prefix, {
+      signal: options.signal,
+      maxPollAttempts: DIAGNOSE_LOG_POLL_ATTEMPTS,
+    });
     return { download_url: downloadUrl };
   }
-  const logText = await resolveLogContent(client, prefix, { signal: options.signal });
+  const logText = await resolveLogContent(client, prefix, {
+    signal: options.signal,
+    maxPollAttempts: DIAGNOSE_LOG_POLL_ATTEMPTS,
+  });
   return truncateLog(logText, options.logSnippetLines);
 }
 

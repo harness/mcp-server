@@ -42,6 +42,20 @@ function isStageMatch(node: ExecGraphNode, stageCandidates: Set<string>): boolea
   return false;
 }
 
+function hasExplicitNodeTarget(input: Record<string, unknown>): boolean {
+  return Boolean(
+    asString(input.step_id) ?? asString(input.stage_id) ?? asString(input.stage_execution_id),
+  );
+}
+
+function describeAvailableSteps(nodeMap: Record<string, ExecGraphNode>): string {
+  const names = Object.values(nodeMap)
+    .filter((node) => node.logBaseKey && node.identifier)
+    .map((node) => node.identifier!)
+    .slice(0, 15);
+  return names.length ? ` Steps with logs in this execution: ${names.join(", ")}.` : "";
+}
+
 function findNodeLogBaseKey(
   nodeMap: Record<string, ExecGraphNode>,
   input: Record<string, unknown>,
@@ -63,6 +77,11 @@ function findNodeLogBaseKey(
       if (node.logBaseKey) return node.logBaseKey;
     }
   }
+
+  // An unresolved explicit target must not fall through to the pipeline-level or
+  // deepest-key heuristics below: those return some other step's logs under the
+  // step the caller asked for.
+  if (hasExplicitNodeTarget(input)) return undefined;
 
   for (const [nodeId, node] of Object.entries(nodeMap)) {
     if (!matchesTarget(nodeId, node, "pipeline")) continue;
@@ -114,6 +133,18 @@ export async function buildLogPrefixFromExecution(
   if (nodeMap) {
     const logBaseKey = findNodeLogBaseKey(nodeMap, input);
     if (logBaseKey) return logBaseKey;
+    if (hasExplicitNodeTarget(input)) {
+      const requested = [
+        asString(input.step_id),
+        asString(input.stage_id),
+        asString(input.stage_execution_id),
+      ].filter((value): value is string => Boolean(value)).join(", ");
+      throw new Error(
+        `No logs found for step/stage "${requested}" in execution ${executionId}.` +
+        `${describeAvailableSteps(nodeMap)} Omit step_id/stage_id to fetch the whole run, ` +
+        `or use harness_diagnose with include_logs=true.`,
+      );
+    }
   }
 
   if (!pipelineId || runSequence == null) {

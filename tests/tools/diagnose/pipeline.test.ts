@@ -593,6 +593,45 @@ describe("pipelineHandler", () => {
     });
   });
 
+  it("caps log poll attempts so bulk fetches do not inherit the single-get wait", async () => {
+    const { resolveLogContent, resolveLogDownloadUrl } = await import("../../../src/utils/log-resolver.js");
+    const contentMock = resolveLogContent as ReturnType<typeof vi.fn>;
+    const urlMock = resolveLogDownloadUrl as ReturnType<typeof vi.fn>;
+    contentMock.mockClear();
+    urlMock.mockClear();
+
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "Stage1", status: "Failed", steps: [{ id: "step1", name: "Step1", status: "Failed" }] }],
+      nodeMapEntries: {
+        step1: {
+          uuid: "step1",
+          identifier: "step1",
+          name: "Step1",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step1",
+          status: "Failed",
+          failureInfo: { message: "Step1 error" },
+          logBaseKey: "log/step1",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      args: { summary: false, include_logs: true },
+    });
+
+    await pipelineHandler.diagnose(ctx);
+
+    expect(contentMock).toHaveBeenCalledWith(
+      expect.anything(),
+      "log/step1",
+      expect.objectContaining({ maxPollAttempts: 3 }),
+    );
+  });
+
   it("returns download URL for explicitly requested passed step when return_download_url is true", async () => {
     const { resolveLogContent, resolveLogDownloadUrl } = await import("../../../src/utils/log-resolver.js");
     const contentMock = resolveLogContent as ReturnType<typeof vi.fn>;
