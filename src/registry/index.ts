@@ -460,7 +460,16 @@ export class Registry {
     return this.executeSpecWithAudit(client, def, actionSpec, "execute", resourceType, input, { ...auditCtx, tool: auditCtx?.tool ?? "harness_execute", action }, abortSignal);
   }
 
-  /** Fail-fast when paramsSchema marks a field required and the caller omitted it. */
+  /**
+   * Fail-fast when paramsSchema marks a field required and the caller omitted it.
+   *
+   * `input.body` counts as supplied because several specs hoist body fields onto
+   * the input in their preflight (pipeline.retry, pipeline.import,
+   * execution.interrupt), and preflight runs after this check. Nested
+   * `input.params` deliberately does not count: every tool flattens `params` into
+   * the input before dispatch, and nothing downstream reads `input.params`, so
+   * honoring it here would pass validation for a value that never reaches the request.
+   */
   private assertRequiredParams(
     spec: EndpointSpec,
     input: Record<string, unknown>,
@@ -469,9 +478,8 @@ export class Registry {
   ): void {
     if (!spec.paramsSchema) return;
     const body = isRecord(input.body) ? input.body : undefined;
-    const nestedParams = isRecord(input.params) ? input.params : undefined;
     const missingParams = spec.paramsSchema.fields
-      .filter(f => f.required && input[f.name] === undefined && body?.[f.name] === undefined && nestedParams?.[f.name] === undefined)
+      .filter(f => f.required && input[f.name] === undefined && body?.[f.name] === undefined)
       .map(f => f.name);
     if (missingParams.length > 0) {
       throw new Error(
@@ -833,11 +841,10 @@ export class Registry {
     // When the API body is transformed into a raw array, validate the caller's
     // canonical object-shaped input body so registry behavior matches harness_describe.
     // Multipart validation is enforced inside the resource bodyBuilder.
-    // Execute actions that send no JSON body still keep required fields on the tool input.
     if (spec.bodySchema && body && typeof body === "object" && !isFormDataBody(body)) {
       const payload = this.getBodySchemaValidationPayload(spec, input, body);
       const missing = spec.bodySchema.fields
-        .filter(f => f.required && payload[f.name] === undefined && input[f.name] === undefined)
+        .filter(f => f.required && payload[f.name] === undefined)
         .map(f => f.name);
       if (missing.length > 0) {
         throw new Error(
