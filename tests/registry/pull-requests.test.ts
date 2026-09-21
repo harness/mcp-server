@@ -377,6 +377,56 @@ describe("pull_request registry mappings", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("submits a review decision from the body", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ decision: "approved" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      body: { decision: "approved", commit_sha: "abc123" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/reviews",
+      body: { decision: "approved", commit_sha: "abc123" },
+    }));
+  });
+
+  it("accepts review options from params/top-level input", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ decision: "changereq" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      decision: "changereq",
+      source_sha: "abc123",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: { decision: "changereq", commit_sha: "abc123" },
+    }));
+  });
+
+  it("rejects submit_review without commit_sha before calling the API", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        decision: "approved",
+      }),
+    ).rejects.toThrow(/commit_sha/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("rejects email lookup when no reviewer matches", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
     const mockRequest = vi.fn().mockResolvedValueOnce([]);
