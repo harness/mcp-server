@@ -210,9 +210,11 @@ export const infrastructureToolset: ToolsetDefinition = {
           paramsSchema: infrastructureMoveConfigsParams,
           bodyBuilder: () => ({}),
           bodySchema: {
+            // Documentation only — bodyBuilder sends `{}`, so requiredness lives in
+            // paramsSchema above. Marking a field required here would reject every call.
             description: "Move configuration request. All parameters are passed as query params.",
             fields: [
-              { name: "environment_id", type: "string", required: true, description: "Environment identifier" },
+              { name: "environment_id", type: "string", required: false, description: "Environment identifier" },
               { name: "connector_ref", type: "string", required: false, description: "Connector reference for remote storage" },
               { name: "repo_name", type: "string", required: false, description: "Repository name" },
               { name: "branch", type: "string", required: false, description: "Branch name" },
@@ -221,7 +223,7 @@ export const infrastructureToolset: ToolsetDefinition = {
               { name: "is_new_branch", type: "boolean", required: false, description: "Whether to create a new branch" },
               { name: "base_branch", type: "string", required: false, description: "Base branch if creating a new branch" },
               { name: "is_harness_code_repo", type: "boolean", required: false, description: "Whether the repo is a Harness Code repo" },
-              { name: "move_config_type", type: "string", required: true, description: "INLINE_TO_REMOTE or REMOTE_TO_INLINE" },
+              { name: "move_config_type", type: "string", required: false, description: "INLINE_TO_REMOTE or REMOTE_TO_INLINE" },
             ],
           },
           responseExtractor: ngExtract,

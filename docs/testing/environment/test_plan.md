@@ -35,6 +35,7 @@
 | TC-env-017 | Delete | Delete environment by identifier | `harness_delete(resource_type="environment", environment_id="my_env")` | Environment deleted successfully |
 | TC-env-018 | Execute | Move config inline to remote | `harness_execute(resource_type="environment", action="move_configs", environment_id="my_env", move_config_type="INLINE_TO_REMOTE", connector_ref="git_connector", repo_name="my-repo", branch="main", file_path=".harness/env.yaml", commit_msg="Move env to remote")` | Environment config moved to remote repository |
 | TC-env-019 | Execute | Move config with new branch | `harness_execute(resource_type="environment", action="move_configs", environment_id="my_env", move_config_type="INLINE_TO_REMOTE", connector_ref="git_connector", repo_name="my-repo", branch="feature/env-config", file_path=".harness/env.yaml", commit_msg="Move env", is_new_branch=true, base_branch="main")` | Config moved to a new branch |
+| TC-env-019b | Error | Move config without move_config_type | `harness_execute(resource_type="environment", action="move_configs", environment_id="my_env")` | Local error: missing required param `move_config_type` (no API call) |
 | TC-env-020 | Scope | List environments with different org_id | `harness_list(resource_type="environment", org_id="custom_org")` | Returns environments from the specified organization |
 | TC-env-021 | Error | Get non-existent environment | `harness_get(resource_type="environment", environment_id="nonexistent_env_xyz")` | Error: environment not found (404) |
 | TC-env-022 | Error | Delete non-existent environment | `harness_delete(resource_type="environment", environment_id="nonexistent_env_xyz")` | Error: environment not found (404) |
@@ -48,5 +49,5 @@
 - The `type` field is required for both create and update; valid values are `Production` and `PreProduction`.
 - The create body is wrapped under an `environment` key by the bodyBuilder.
 - Update auto-injects `identifier` from `environment_id` if not provided in body.
-- The `move_configs` execute action uses query params (not body) for all parameters.
+- The `move_configs` execute action uses query params (not body) for all parameters. `move_config_type` is required and fails locally before the API call.
 - Deep link format: `/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/environments/{environmentIdentifier}/details`
