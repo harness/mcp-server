@@ -9,10 +9,11 @@ export const logsToolset: ToolsetDefinition = {
     {
       resourceType: "execution_log",
       displayName: "Execution Log",
-      description: "Pipeline execution logs. Returns readable log text by default for backward compatibility. Set return_download_url=true to return only a signed download URL without downloading log content. Accepts a raw Harness logBaseKey prefix, or an execution_id to auto-resolve the real log key from the execution graph. When a Harness execution URL includes step/stage query params, the MCP uses them to resolve the matching step log key. Use harness_diagnose with include_logs=true for the best failure analysis experience.",
+      description: "Pipeline execution logs. Log content is prepared asynchronously, then returned as readable text by default. Set return_download_url=true to get only a signed download URL. Pass prefix or execution_id; with execution_id, also pass step_id (and stage_id when known) so logs are scoped to one step. For failed-run analysis prefer harness_diagnose with include_logs=true.",
       toolset: "logs",
       scope: "project",
       identifierFields: ["prefix"],
+      diagnosticHint: "Logs may still be preparing after a run. Retry when the execution has finished, pass step_id with execution_id, or set return_download_url=true. For failures use harness_diagnose with include_logs=true.",
       operations: {
         get: {
           method: "POST",
@@ -22,13 +23,38 @@ export const logsToolset: ToolsetDefinition = {
             prefix: "prefix",
           },
           responseExtractor: passthrough,
-          description: "Download and return execution log content by prefix, or return a signed download URL when return_download_url=true",
+          description: "Fetch execution logs by prefix or execution_id. Returns log text, or a download URL when return_download_url=true.",
           paramsSchema: {
             fields: [
               {
+                name: "prefix",
+                required: false,
+                description: "Log prefix. Use this or execution_id.",
+              },
+              {
                 name: "execution_id",
                 required: false,
-                description: "Execution identifier — auto-builds log prefix from execution metadata",
+                description: "Execution identifier used to resolve the log prefix",
+              },
+              {
+                name: "step_id",
+                required: false,
+                description: "Step identifier. Prefer this with execution_id so logs cover one step, not the whole run.",
+              },
+              {
+                name: "stage_id",
+                required: false,
+                description: "Stage identifier used with step_id when the run has multiple stages",
+              },
+              {
+                name: "stage_execution_id",
+                required: false,
+                description: "Stage execution identifier when present on the execution URL",
+              },
+              {
+                name: "return_download_url",
+                required: false,
+                description: "When true, return a signed download URL instead of buffering log text",
               },
             ],
           } satisfies ParamsSchema,
