@@ -5,12 +5,14 @@ import { createLogger } from "./logger.js";
 
 const log = createLogger("log-resolver");
 
-const DEFAULT_POLL_ATTEMPTS = 3;
+// Log files are prepared asynchronously. Poll until they are ready or
+// maxPollAttempts is exhausted. Tests override maxPollAttempts.
+const DEFAULT_POLL_ATTEMPTS = 5;
 const DEFAULT_POLL_INTERVAL_MS = 3000;
 // Tightened from 10 MB to 2 MB. Diagnose callers truncate output to a few
 // hundred lines anyway; buffering 10 MB per concurrent log fetch into the V8
-// heap was a contributor to the prod2 mcp-server-internal cgroup OOMs
-// (AIDEVOPS-2200). Callers needing more can still pass maxLogSizeBytes.
+// heap contributed to production OOMs. Callers needing more can still pass
+// maxLogSizeBytes.
 const DEFAULT_MAX_LOG_BYTES = 2 * 1024 * 1024; // 2 MB
 const DEFAULT_DOWNLOAD_TIMEOUT_MS = 30_000;
 
@@ -24,6 +26,15 @@ export interface LogResolveOptions {
 interface BlobResponse {
   link?: string;
   status?: string;
+  error_msg?: string;
+  message?: string;
+}
+
+function zipErrorDetail(blob: BlobResponse | undefined): string | undefined {
+  const raw = blob?.error_msg ?? blob?.message;
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed || undefined;
 }
 
 /** Hosts that serve blob content directly — never rewrite. */
@@ -513,6 +524,13 @@ async function requestLogBlobLink(
       params: { prefix },
       signal,
     });
+
+    if (blob?.status === "error") {
+      const detail = zipErrorDetail(blob);
+      throw new Error(
+        detail ? `Log download failed: ${detail}` : "Log download failed.",
+      );
+    }
 
     if (blob?.status === "success" && blob.link) {
       return blob.link;

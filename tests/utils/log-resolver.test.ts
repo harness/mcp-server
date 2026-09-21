@@ -84,6 +84,71 @@ describe("resolveLogContent", () => {
     ).rejects.toThrow(/not ready after 2 attempts/);
   });
 
+  it("fails immediately on status error with error_msg", async () => {
+    const requestFn = vi.fn().mockResolvedValue({
+      status: "error",
+      error_msg: "No logs found for the specified prefix",
+    });
+    const client = makeClient(requestFn);
+
+    await expect(resolveLogContent(client, "prefix", { maxPollAttempts: 10, pollIntervalMs: 0 })).rejects.toThrow(
+      /Log download failed: No logs found for the specified prefix/,
+    );
+    expect(requestFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails immediately on status error with message when error_msg is absent", async () => {
+    const requestFn = vi.fn().mockResolvedValue({
+      status: "error",
+      message: "Too many log files to zip",
+    });
+    const client = makeClient(requestFn);
+
+    await expect(resolveLogContent(client, "prefix", { pollIntervalMs: 0 })).rejects.toThrow(
+      /Log download failed: Too many log files to zip/,
+    );
+    expect(requestFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("fails immediately on status error without a detail string", async () => {
+    const requestFn = vi.fn().mockResolvedValue({ status: "error" });
+    const client = makeClient(requestFn);
+
+    await expect(resolveLogContent(client, "prefix", { maxPollAttempts: 5, pollIntervalMs: 0 })).rejects.toThrow(
+      /Log download failed/,
+    );
+    expect(requestFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("prefers error_msg over message on status error", async () => {
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ status: "error", error_msg: "from error_msg", message: "from message" }),
+    );
+    await expect(resolveLogContent(client, "prefix", { pollIntervalMs: 0 })).rejects.toThrow(/from error_msg/);
+  });
+
+  it("polls queued then in_progress then success", async () => {
+    const requestFn = vi.fn()
+      .mockResolvedValueOnce({ status: "queued", link: null })
+      .mockResolvedValueOnce({ status: "in_progress", link: null })
+      .mockResolvedValueOnce({ status: "success", link: "https://logs.example.com/blob" });
+    const streamFn = vi.fn().mockResolvedValue(new Response("ready logs", { status: 200 }));
+    const client = makeClient(requestFn, { requestStream: streamFn });
+
+    const result = await resolveLogContent(client, "prefix", { pollIntervalMs: 0 });
+    expect(result).toContain("ready logs");
+    expect(requestFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("default poll cap is 5 when the zip stays queued", async () => {
+    const requestFn = vi.fn().mockResolvedValue({ status: "queued" });
+    const client = makeClient(requestFn);
+    const err = await resolveLogContent(client, "prefix", { pollIntervalMs: 0 }).catch((e: Error) => e);
+    expect((err as Error).message).toContain("5 attempts");
+    expect((err as Error).message).toContain("queued");
+    expect(requestFn).toHaveBeenCalledTimes(5);
+  });
+
   it("handles gzip-compressed log content", async () => {
     const logText = "gzipped log line 1\ngzipped log line 2";
     const gzipped = gzipSync(Buffer.from(logText));
