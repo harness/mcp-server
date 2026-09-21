@@ -291,10 +291,17 @@ function navigateStaticPath(
   return undefined;
 }
 
+function pickHintExamples(resourceType: string, sections: string[], kinds?: string[]): string[] {
+  if (kinds && kinds.length > 0) {
+    return kinds.filter((name) => name !== resourceType).slice(0, 2);
+  }
+  const preferred = ["stages", "steps"].filter((name) => sections.includes(name) && name !== resourceType);
+  const rest = sections.filter((name) => name !== resourceType && !preferred.includes(name));
+  return [...preferred, ...rest].slice(0, 2);
+}
+
 function staticSummaryHint(resourceType: string, sections: string[], kinds?: string[]): string {
-  const picks = (kinds && kinds.length > 0 ? kinds : sections)
-    .filter((name) => name !== resourceType)
-    .slice(0, 2);
+  const picks = pickHintExamples(resourceType, sections, kinds);
   if (picks.length === 0) {
     return "Use path to drill into a nested definition by name.";
   }

@@ -157,7 +157,7 @@ const PIPELINE_V0_GET_PARAMS: ParamsSchema = {
   ],
 };
 
-/** Query names the v0 pipeline GET reads. `branch_name` is an alias of `branch`. */
+/** Query names v0 pipeline GET and pipeline_resolved_yaml GET send. `branch_name` is an alias of `branch`. */
 const PIPELINE_V0_PIPELINE_GET_QUERY_PARAMS = {
   branch: "branch",
   branch_name: "branch",
@@ -1562,19 +1562,14 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/pipeline/api/pipelines/{pipelineIdentifier}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
-          queryParams: {
-            branch: "branch",
-            store_type: "storeType",
-            connector_ref: "connectorRef",
-            repo_name: "repoName",
-          },
-          paramsSchema: PIPELINE_V0_GET_PARAMS,
+          queryParams: { ...PIPELINE_V0_PIPELINE_GET_QUERY_PARAMS },
+          paramsSchema: PIPELINE_V0_PIPELINE_GET_PARAMS,
           staticQueryParams: {
             getTemplatesResolvedPipeline: "true",
           },
           responseExtractor: pipelineResolvedYamlExtract,
           description:
-            "Fetch resolved pipeline YAML with templates expanded. Returns stageMetadataMap for patching entity-type activity inputs (deploymentType, environmentRef).",
+            "Fetch resolved pipeline YAML with templates expanded. Requires pipeline_id (or resource_id). For remote/git-backed pipelines, pass branch (or branch_name). Optional: store_type, connector_ref, repo_name, load_from_fallback_branch, is_harness_code_repo. Returns stageMetadataMap for patching entity-type activity inputs (deploymentType, environmentRef).",
         },
       },
     },

@@ -86,7 +86,7 @@ describe("pipeline v0 get Git query mapping", () => {
     expect(call.params.branch).toBe("main");
   });
 
-  it("does not change pipeline_resolved_yaml get query keys", async () => {
+  it("maps branch_name and load_from_fallback_branch on pipeline_resolved_yaml get", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
     const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "ci_build" } });
     const client = makeClient(mockRequest);
@@ -95,11 +95,14 @@ describe("pipeline v0 get Git query mapping", () => {
       pipeline_id: "ci_build",
       branch_name: "feature/gitx",
       load_from_fallback_branch: true,
+      is_harness_code_repo: true,
     });
 
     const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
-    expect(call.params.branch).toBeUndefined();
-    expect(call.params.loadFromFallbackBranch).toBeUndefined();
+    expect(call.params.branch).toBe("feature/gitx");
+    expect(call.params.loadFromFallbackBranch).toBe(true);
+    expect(call.params.isHarnessCodeRepo).toBe(true);
+    expect(call.params).not.toHaveProperty("branch_name");
     expect(call.params.getTemplatesResolvedPipeline).toBe("true");
   });
 });
@@ -530,5 +533,11 @@ describe("pipeline_v1 Git Experience mapping", () => {
     expect(v0.operations.update!.paramsSchema!.fields.map((f) => f.name)).toEqual(
       expect.arrayContaining(["branch", "repo_name", "file_path", "last_object_id", "last_commit_id"]),
     );
+
+    const resolved = registry.getResource("pipeline_resolved_yaml");
+    expect(resolved.operations.get!.paramsSchema!.fields.map((f) => f.name)).toEqual(
+      v0.operations.get!.paramsSchema!.fields.map((f) => f.name),
+    );
+    expect(resolved.operations.get!.queryParams).toEqual(v0.operations.get!.queryParams);
   });
 });

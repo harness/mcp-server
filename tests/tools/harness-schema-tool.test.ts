@@ -230,9 +230,9 @@ describe("harness_schema live entities", () => {
 
     expect(parsed.available_sections).toEqual(expect.arrayContaining(["stages", "steps"]));
     const hinted = [...parsed.hint.matchAll(/path='([^']+)'/g)].map((m) => m[1]);
-    expect(hinted.length).toBeGreaterThan(0);
-    expect(parsed.available_sections).toEqual(expect.arrayContaining(hinted));
+    expect(hinted).toEqual(["stages", "steps"]);
     expect(hinted).not.toContain("trigger_source");
+    expect(hinted).not.toContain("flowControl");
   });
 
   it("rejects project scope without org_id before bundled or live fetch", async () => {
