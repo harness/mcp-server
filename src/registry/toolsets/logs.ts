@@ -9,7 +9,7 @@ export const logsToolset: ToolsetDefinition = {
     {
       resourceType: "execution_log",
       displayName: "Execution Log",
-      description: "Pipeline execution logs. Log content is prepared asynchronously, then returned as readable text by default. Set return_download_url=true to get only a signed download URL. Pass prefix or execution_id; with execution_id, also pass step_id (and stage_id when known) so logs are scoped to one step. For failed-run analysis prefer harness_diagnose with include_logs=true.",
+      description: "Pipeline execution logs. Log content is prepared asynchronously, then returned as readable text by default. Set return_download_url=true to get only a signed download URL. Pass prefix or execution_id; with execution_id, also pass step_id (and stage_id when known) so logs are scoped to one step. When a Harness execution URL includes step/stage query params, those values resolve the matching step log. For failed-run analysis prefer harness_diagnose with include_logs=true.",
       toolset: "logs",
       scope: "project",
       identifierFields: ["prefix"],

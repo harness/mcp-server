@@ -49,8 +49,8 @@ describe("execution_log registry contract", () => {
   it("describe copy tells agents logs are prepared asynchronously and to use step_id or diagnose", () => {
     expect(def.description).toMatch(/asynchronously/i);
     expect(def.description).toMatch(/step_id/);
-    expect(def.description).toMatch(/harness_diagnose/);
-    expect(def.description).toMatch(/return_download_url/);
+    expect(def.description).toMatch(/execution URL/i);
+    expect(def.description).toMatch(/step\/stage query params/);
     expect(def.diagnosticHint).toMatch(/step_id/);
     expect(def.diagnosticHint).toMatch(/harness_diagnose/);
   });
