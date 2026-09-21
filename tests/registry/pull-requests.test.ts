@@ -205,6 +205,21 @@ describe("pull_request registry mappings", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("rejects merge when source_sha is omitted", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pull_request", "merge", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        body: { method: "squash" },
+      }),
+    ).rejects.toThrow(/Missing required fields for pull_request: source_sha/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("requires repo_id for create instead of accepting repo_identifier", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
     const mockRequest = vi.fn().mockResolvedValue({ data: { number: 1 } });
@@ -390,6 +405,39 @@ describe("pull_request registry mappings", () => {
       }),
     ).rejects.toThrow(/No reviewer found/);
     expect(mockRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects submit_review when commit_sha is omitted", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+        body: { decision: "approved" },
+      }),
+    ).rejects.toThrow(/Missing required fields for pr_reviewer: commit_sha/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("submits a review decision with commit_sha", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      body: { decision: "reviewed", commit_sha: "abc123" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/reviews",
+      body: { decision: "reviewed", commit_sha: "abc123" },
+    }));
   });
 });
 
