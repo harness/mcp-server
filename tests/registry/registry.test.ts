@@ -646,17 +646,21 @@ describe("Registry", () => {
       });
       const client = makeClient(mockRequest);
 
+      const listInput = resourceType === "infrastructure" ? { environment_id: "my_env" } : {};
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "account",
+        ...listInput,
       });
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "org",
         org_id: "org-level",
+        ...listInput,
       });
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "project",
         org_id: "proj-org",
         project_id: "proj-level",
+        ...listInput,
       });
 
       const accountCall = mockRequest.mock.calls[0][0];
