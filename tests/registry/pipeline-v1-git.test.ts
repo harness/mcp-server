@@ -32,6 +32,78 @@ function makeClient(requestFn: (...args: unknown[]) => unknown): HarnessClient {
 
 const yaml = "pipeline:\n  id: ci_build\n  name: CI Build\n  stages: []\n";
 
+describe("pipeline v0 get Git query mapping", () => {
+  it("maps branch_name, load_from_fallback_branch, and is_harness_code_repo", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "ci_build" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pipeline", "get", {
+      pipeline_id: "ci_build",
+      org_id: "PROD",
+      project_id: "Traceable",
+      branch_name: "feature/gitx",
+      store_type: "REMOTE",
+      connector_ref: "git_conn",
+      repo_name: "Pipelines",
+      load_from_fallback_branch: true,
+      is_harness_code_repo: true,
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/pipeline/api/pipelines/ci_build",
+        params: expect.objectContaining({
+          branch: "feature/gitx",
+          storeType: "REMOTE",
+          connectorRef: "git_conn",
+          repoName: "Pipelines",
+          loadFromFallbackBranch: true,
+          isHarnessCodeRepo: true,
+          orgIdentifier: "PROD",
+          projectIdentifier: "Traceable",
+        }),
+      }),
+    );
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params).not.toHaveProperty("branch_name");
+    expect(call.params).not.toHaveProperty("load_from_fallback_branch");
+    expect(call.params).not.toHaveProperty("validateAsync");
+  });
+
+  it("still maps branch when branch_name is omitted", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "ci_build" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pipeline", "get", {
+      pipeline_id: "ci_build",
+      branch: "main",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.branch).toBe("main");
+  });
+
+  it("does not change pipeline_resolved_yaml get query keys", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "ci_build" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "pipeline_resolved_yaml", "get", {
+      pipeline_id: "ci_build",
+      branch_name: "feature/gitx",
+      load_from_fallback_branch: true,
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.branch).toBeUndefined();
+    expect(call.params.loadFromFallbackBranch).toBeUndefined();
+    expect(call.params.getTemplatesResolvedPipeline).toBe("true");
+  });
+});
+
 describe("pipeline_v1 Git Experience mapping", () => {
   it("maps get query params including repo_name and load_from_fallback_branch", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pipelines" }));
@@ -438,8 +510,23 @@ describe("pipeline_v1 Git Experience mapping", () => {
 
     const v0 = registry.getResource("pipeline");
     expect(v0.operations.get!.paramsSchema!.fields.map((f) => f.name)).toEqual(
-      expect.arrayContaining(["branch", "store_type", "connector_ref", "repo_name"]),
+      expect.arrayContaining([
+        "branch",
+        "branch_name",
+        "store_type",
+        "connector_ref",
+        "repo_name",
+        "load_from_fallback_branch",
+        "is_harness_code_repo",
+      ]),
     );
+    expect(v0.operations.get!.paramsSchema!.fields.map((f) => f.name)).not.toContain("validate_async");
+    expect(v0.operations.list!.queryParams).toEqual({
+      search_term: "searchTerm",
+      module: "module",
+      page: "page",
+      size: "size",
+    });
     expect(v0.operations.update!.paramsSchema!.fields.map((f) => f.name)).toEqual(
       expect.arrayContaining(["branch", "repo_name", "file_path", "last_object_id", "last_commit_id"]),
     );
