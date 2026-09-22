@@ -639,6 +639,10 @@ export class Registry {
       if (shouldUseProject(requestedScope) && explicitScopeValues.projectId && !input.project_id) input = { ...input, project_id: explicitScopeValues.projectId };
     }
 
+    if (spec.execute) {
+      return spec.execute({ client, input, registry: this, signal, accountId: resolvedAccountId });
+    }
+
     // Build path with substitutions (or pathBuilder when present)
     let path: string;
     if (resolvedRoute) {
