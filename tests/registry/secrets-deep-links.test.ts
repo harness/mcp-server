@@ -52,5 +52,30 @@ describe("secret openInHarness deep links", () => {
       "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/secrets/my_secret",
     );
     expect(String(result.openInHarness)).not.toContain("setup/resources");
+    expect(String(result.openInHarness)).not.toContain("/details");
+  });
+
+  it("list builds per-item /settings/secrets links from identifier", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: {
+        content: [{ identifier: "alpha" }, { identifier: "beta" }],
+        totalElements: 2,
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "secret", "list", {
+      org_id: "PROD",
+      project_id: "Traceable",
+    })) as { items: Array<Record<string, unknown>> };
+
+    expect(result.items.map((item) => item.openInHarness)).toEqual([
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/secrets/alpha",
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/secrets/beta",
+    ]);
+    for (const item of result.items) {
+      expect(String(item.openInHarness)).not.toContain("setup/resources");
+    }
   });
 });
