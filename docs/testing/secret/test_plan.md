@@ -47,4 +47,4 @@
 - The `type` filter maps to `secretTypes` array in the API body.
 - The `secret_manager_identifiers` filter accepts comma-separated values.
 - The `tags` filter accepts a JSON object of key-value pairs.
-- Deep link format: `/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/secrets/{secretIdentifier}`
+- Deep link format: `/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/secrets/{secretIdentifier}/details`

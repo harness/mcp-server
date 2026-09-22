@@ -390,3 +390,24 @@ describe("template_v1 create body builder", () => {
     ).rejects.toThrow(/identifier is required/i);
   });
 });
+
+describe("template openInHarness deep links", () => {
+  it("get uses /settings/templates/{id} (not /setup/resources/templates)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: { identifier: "Setup_Uv", name: "Setup Uv" },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "template", "get", {
+      org_id: "PROD",
+      project_id: "Traceable",
+      template_id: "Setup_Uv",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/Setup_Uv",
+    );
+    expect(String(result.openInHarness)).not.toContain("setup/resources");
+  });
+});

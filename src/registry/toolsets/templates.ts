@@ -397,7 +397,7 @@ const templateV1UpdateSchema: BodySchema = {
 };
 
 const templateDeepLink =
-  "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/templates/{templateIdentifier}";
+  "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/templates/{templateIdentifier}";
 
 export const templatesToolset: ToolsetDefinition = {
   name: "templates",
