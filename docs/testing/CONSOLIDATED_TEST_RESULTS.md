@@ -404,7 +404,7 @@ These resources' APIs return successfully but have no data in the test environme
 | Service links | 3+ | ✅ Valid (`/settings/services/{id}`) |
 | Environment links | 3+ | ✅ Valid (`/settings/environments/{id}/details`) |
 | Connector links | 3+ | ✅ Valid (`/settings/connectors/{id}`) |
-| Secret links | 3+ | ✅ Valid (`/settings/secrets/{id}/details`) |
+| Secret links | 3+ | ✅ Valid (`/settings/secrets/{id}`) |
 | Template links | 3+ | ✅ Valid (`/settings/templates/{id}`) |
 | Audit trail links | 3+ | ✅ Valid (`/settings/audit-trail`) |
 | Dashboard links | 20+ | ✅ Valid (`/dashboards`) |

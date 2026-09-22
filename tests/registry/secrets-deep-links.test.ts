@@ -1,6 +1,7 @@
 /**
  * Secret openInHarness must use the current Settings UI, not the retired
  * /setup/resources/secrets path (same class of bug as templates).
+ * Live UI: /settings/secrets/{id} (no /details suffix).
  */
 import { describe, it, expect, vi } from "vitest";
 import { Registry } from "../../src/registry/index.js";
@@ -34,7 +35,7 @@ function makeClient(requestFn: (...args: unknown[]) => unknown): HarnessClient {
 }
 
 describe("secret openInHarness deep links", () => {
-  it("get uses /settings/secrets/{id}/details (not /setup/resources/secrets)", async () => {
+  it("get uses /settings/secrets/{id} (not /setup/resources/secrets)", async () => {
     const registry = new Registry(makeConfig());
     const mockRequest = vi.fn().mockResolvedValue({
       data: { identifier: "my_secret", name: "My Secret" },
@@ -48,7 +49,7 @@ describe("secret openInHarness deep links", () => {
     })) as Record<string, unknown>;
 
     expect(result.openInHarness).toBe(
-      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/secrets/my_secret/details",
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/secrets/my_secret",
     );
     expect(String(result.openInHarness)).not.toContain("setup/resources");
   });

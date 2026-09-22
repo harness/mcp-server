@@ -24,7 +24,7 @@ export const secretsToolset: ToolsetDefinition = {
         { name: "tags", description: "Filter by tags as key:value pairs (JSON object)" },
         { name: "include_all_secrets_accessible_at_scope", type: "boolean", description: "When true, include secrets inherited from parent scopes (e.g. at project scope also return org- and account-scope secrets). Default: false." },
       ],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/secrets/{secretIdentifier}/details",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/secrets/{secretIdentifier}",
       operations: {
         list: {
           method: "POST",
