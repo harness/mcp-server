@@ -5,7 +5,6 @@ import type {
   RegistryDispatchInterface,
 } from "../types.js";
 import { passthrough, ngExtract, pageExtract } from "../extractors.js";
-import { AbortError } from "../../utils/poll-execution.js";
 
 function gitopsListBody(
   input: Record<string, unknown>,
@@ -268,177 +267,6 @@ function autoCreateLogExtract(raw: unknown): Record<string, unknown> {
     successClusterLinks: raw.successClusterLinks ?? 0,
     failedClusterLinks: raw.failedClusterLinks ?? 0,
   };
-}
-
-const AUTOCREATE_WAIT_TIMEOUT_MS = 120_000;
-const AUTOCREATE_WAIT_INTERVAL_MS = 10_000;
-const AUTOCREATE_WAIT_PAGE_SIZE = 100;
-const AUTOCREATE_WAIT_MAX_ERRORS = 5;
-
-function countOrZero(v: unknown): number {
-  return typeof v === "number" && Number.isFinite(v) ? v : 0;
-}
-
-/** Planned unique services + envs + cluster links from import autoCreateCounts. */
-export function sumAutoCreateCounts(counts: Record<string, unknown> | undefined): number {
-  if (!counts) return 0;
-  return countOrZero(counts.serviceCount)
-    + countOrZero(counts.environmentCount)
-    + countOrZero(counts.clusterLinkCount);
-}
-
-function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(new AbortError());
-      return;
-    }
-    const timer = setTimeout(() => {
-      if (signal) signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    const onAbort = (): void => {
-      clearTimeout(timer);
-      reject(new AbortError());
-    };
-    if (signal) signal.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
-interface AutoCreateWaitResult {
-  import_request_id: string;
-  planned: number;
-  total: number;
-  complete: boolean;
-  timed_out: boolean;
-  skipped: boolean;
-  elapsed_ms: number;
-  poll_count: number;
-  items: unknown;
-  successServices: number;
-  failedServices: number;
-  successEnvironments: number;
-  failedEnvironments: number;
-  successClusterLinks: number;
-  failedClusterLinks: number;
-}
-
-export type { AutoCreateWaitResult };
-
-function autoCreateWaitResult(
-  importRequestId: string,
-  planned: number,
-  page: Record<string, unknown>,
-  flags: { complete: boolean; timedOut: boolean; skipped: boolean },
-  elapsedMs: number,
-  pollCount: number,
-): AutoCreateWaitResult {
-  return {
-    import_request_id: importRequestId,
-    planned,
-    total: countOrZero(page.total),
-    complete: flags.complete,
-    timed_out: flags.timedOut,
-    skipped: flags.skipped,
-    elapsed_ms: elapsedMs,
-    poll_count: pollCount,
-    items: page.items ?? [],
-    successServices: countOrZero(page.successServices),
-    failedServices: countOrZero(page.failedServices),
-    successEnvironments: countOrZero(page.successEnvironments),
-    failedEnvironments: countOrZero(page.failedEnvironments),
-    successClusterLinks: countOrZero(page.successClusterLinks),
-    failedClusterLinks: countOrZero(page.failedClusterLinks),
-  };
-}
-
-/**
- * Poll list until total >= planned or timeout. planned <= 0 skips the API.
- * First poll is immediate; later polls wait AUTOCREATE_WAIT_INTERVAL_MS.
- */
-export async function pollAutoCreateLogs(
-  registry: RegistryDispatchInterface,
-  client: HarnessClientInterface,
-  opts: {
-    agentId: string;
-    importRequestId: string;
-    planned: number;
-    resourceScope?: string;
-    orgId?: string;
-    projectId?: string;
-    /** Defaults to AUTOCREATE_WAIT_TIMEOUT_MS (2 min). */
-    timeoutMs?: number;
-    /** Defaults to AUTOCREATE_WAIT_INTERVAL_MS (10s). */
-    intervalMs?: number;
-    signal?: AbortSignal;
-  },
-): Promise<AutoCreateWaitResult> {
-  if (opts.planned <= 0) {
-    return autoCreateWaitResult(
-      opts.importRequestId, 0, {}, { complete: true, timedOut: false, skipped: true }, 0, 0,
-    );
-  }
-
-  const timeoutMs = opts.timeoutMs ?? AUTOCREATE_WAIT_TIMEOUT_MS;
-  const intervalMs = opts.intervalMs ?? AUTOCREATE_WAIT_INTERVAL_MS;
-  const startedAt = Date.now();
-  let pollCount = 0;
-  let last: Record<string, unknown> = {};
-  let consecutiveErrors = 0;
-
-  while (true) {
-    if (opts.signal?.aborted) throw new AbortError();
-
-    const elapsedBefore = Date.now() - startedAt;
-    if (elapsedBefore >= timeoutMs) {
-      return autoCreateWaitResult(
-        opts.importRequestId, opts.planned, last,
-        { complete: false, timedOut: true, skipped: false }, elapsedBefore, pollCount,
-      );
-    }
-
-    pollCount++;
-    try {
-      const raw = await registry.dispatch(client, "gitops_autocreate_log", "list", {
-        agent_id: opts.agentId,
-        import_request_id: opts.importRequestId,
-        ...(opts.resourceScope ? { resource_scope: opts.resourceScope } : {}),
-        ...(opts.orgId ? { org_id: opts.orgId } : {}),
-        ...(opts.projectId ? { project_id: opts.projectId } : {}),
-        size: AUTOCREATE_WAIT_PAGE_SIZE,
-      }, opts.signal);
-      last = isRecord(raw) ? raw : {};
-      consecutiveErrors = 0;
-
-      const total = countOrZero(last.total);
-      const elapsed = Date.now() - startedAt;
-      if (total >= opts.planned) {
-        return autoCreateWaitResult(
-          opts.importRequestId, opts.planned, last,
-          { complete: true, timedOut: false, skipped: false }, elapsed, pollCount,
-        );
-      }
-    } catch (err) {
-      if (err instanceof AbortError) throw err;
-      consecutiveErrors++;
-      if (consecutiveErrors >= AUTOCREATE_WAIT_MAX_ERRORS) {
-        throw new Error(
-          `Polling auto-create logs for ${opts.importRequestId} failed after ` +
-          `${consecutiveErrors} consecutive attempts: ${String(err)}`,
-        );
-      }
-    }
-
-    const elapsed = Date.now() - startedAt;
-    const remaining = timeoutMs - elapsed;
-    if (remaining <= 0) {
-      return autoCreateWaitResult(
-        opts.importRequestId, opts.planned, last,
-        { complete: false, timedOut: true, skipped: false }, elapsed, pollCount,
-      );
-    }
-    await abortableSleep(Math.min(intervalMs, remaining), opts.signal);
-  }
 }
 
 /**
@@ -994,9 +822,8 @@ export const gitopsToolset: ToolsetDefinition = {
         "IMPORT: action='import' — resource_id is the scope-prefixed agent_id (not argoproject). " +
         "Body: { projectNames: ['argo-a', ...] } (required, non-empty). " +
         "Mappings must already exist. " +
-        "IMPORTANT: save importRequestId and reconcileAppResponse.autoCreateCounts, then " +
-        "harness_execute(resource_type='gitops_autocreate_log', action='wait', …) for Phase B. " +
-        "Skip wait when planned counts sum to 0.",
+        "IMPORTANT: save importRequestId and reconcileAppResponse.autoCreateCounts — " +
+        "see gitops_autocreate_log for how to poll them.",
       executeActions: {
         import: {
           method: "POST",
@@ -1015,14 +842,9 @@ export const gitopsToolset: ToolsetDefinition = {
             "resource_scope = agent registration scope (same as list/create — not mapping org/project).\n" +
             "Response: applicationCount, clusterCount, repositoryCount, …, importRequestId, " +
             "reconcileAppResponse.autoCreateCounts (planned). Hosted agents rejected.\n\n" +
-            "AFTER IMPORT — auto-create handoff:\n" +
-            "  1. Read importRequestId and reconcileAppResponse.autoCreateCounts from the response.\n" +
-            "  2. Tell the user the importRequestId.\n" +
-            "  3. If planned counts sum > 0: harness_execute(resource_type='gitops_autocreate_log', action='wait',\n" +
-            "       resource_id='<same agent>', resource_scope=same as import,\n" +
-            "       params={import_request_id:'<importRequestId>'},\n" +
-            "       body={autoCreateCounts:<from import>})\n" +
-            "  Optional: harness_list on gitops_autocreate_log to inspect rows without waiting.\n\n" +
+            "AFTER IMPORT — auto-create outcomes: if reconcileAppResponse.autoCreateCounts sums > 0, " +
+            "poll harness_list(resource_type='gitops_autocreate_log', filters={agent_id, import_request_id}) " +
+            "yourself — see that resource's description for the exact stop condition.\n\n" +
             "Example: harness_execute(resource_type='gitops_app_project_mapping', action='import',\n" +
             "  resource_id='account.myagent', resource_scope='account',\n" +
             "  body={projectNames:['team-a']})",
@@ -1044,8 +866,8 @@ export const gitopsToolset: ToolsetDefinition = {
           resourceType: "gitops_autocreate_log",
           relationship: "import produces importRequestId for",
           description:
-            "After import, harness_execute action='wait' on gitops_autocreate_log " +
-            "(importRequestId + autoCreateCounts). Use list to inspect rows.",
+            "After import, poll harness_list on gitops_autocreate_log with the returned " +
+            "importRequestId to observe auto-create outcomes.",
         },
         {
           resourceType: "gitops_argo_project",
@@ -1059,9 +881,16 @@ export const gitopsToolset: ToolsetDefinition = {
       displayName: "GitOps Auto-Create Log",
       description:
         "Logs for services / environments / cluster-links auto-created during GitOps import " +
-        "(when mappings had autoCreateServiceEnv=true).\n\n" +
+        "(when mappings had autoCreateServiceEnv=true). This is a snapshot endpoint, not a completion " +
+        "signal — there is no terminal status field.\n\n" +
         "PREREQUISITE: Run harness_execute(resource_type='gitops_app_project_mapping', action='import', …) first. " +
-        "Use the response field importRequestId as filters.import_request_id.\n\n" +
+        "Use the response fields importRequestId and reconcileAppResponse.autoCreateCounts.\n\n" +
+        "HOW TO POLL FOR COMPLETION:\n" +
+        "  1. If autoCreateCounts.serviceCount + environmentCount + clusterLinkCount == 0, skip " +
+        "— nothing was scheduled.\n" +
+        "  2. Otherwise call this list every ~10s with the same import_request_id.\n" +
+        "  3. Stop when the response's total >= that summed count, or after ~2 minutes " +
+        "(treat as done-enough).\n\n" +
         "SCOPE BEHAVIOR (agent registration scope — same as import):\n" +
         "- Account-level agent: resource_scope='account' — omit org_id and project_id\n" +
         "- Org-level agent: resource_scope='org' — pass org_id only\n" +
@@ -1075,9 +904,6 @@ export const gitopsToolset: ToolsetDefinition = {
       scopeOptional: true,
       supportedScopes: ["account", "org", "project"],
       identifierFields: ["agent_id"],
-      executeHint:
-        "WAIT: after import, action='wait' with params.import_request_id and " +
-        "body.autoCreateCounts from the import response. Polls until total >= planned or ~2 min.",
       listFilterFields: [
         {
           name: "agent_id",
@@ -1139,84 +965,10 @@ export const gitopsToolset: ToolsetDefinition = {
             "Returns items[] (logs) plus total and per-page success/failed aggregates " +
             "(successServices, failedServices, … — aggregates are for the returned page, not DB-wide).\n" +
             "Status values: SUCCESS, FAILED, WARNING. resourceType: service | environment | clusterLink.\n" +
-            "Logs TTL ~7 days. Poll until total stabilizes or planned autoCreateCounts are covered.\n\n" +
+            "Logs TTL ~7 days. Poll every ~10s using the same import_request_id; stop when total covers " +
+            "the planned autoCreateCounts sum, or after ~2 min.\n\n" +
             "Example: harness_list(resource_type='gitops_autocreate_log', resource_scope='account',\n" +
             "  filters={agent_id:'account.myagent', import_request_id:'507f1f77bcf86cd799439011'})",
-        },
-      },
-      executeActions: {
-        wait: {
-          method: "GET",
-          path: "/gitops/api/v1/agents/{agentIdentifier}/autocreate-logs",
-          operationPolicy: { risk: "read", retryPolicy: "safe" },
-          pathParams: {
-            agent_id: "agentIdentifier",
-          },
-          actionDescription:
-            "Wait for auto-create logs for one import (poll until planned count is in or timeout).",
-          description:
-            "Phase B after import. REQUIRED: resource_id = scope-prefixed agent_id; " +
-            "params.import_request_id; body.autoCreateCounts from import " +
-            "(serviceCount, environmentCount, clusterLinkCount) — validated by this action.\n" +
-            "Stops when list total >= planned sum, or after ~2 min (10s interval). " +
-            "planned sum 0 → skipped (no poll). resource_scope same as import.\n" +
-            "Result: total/complete/timed_out/skipped are authoritative; items is the last page only " +
-            "(re-list with skip if you need every row).\n\n" +
-            "Example: harness_execute(resource_type='gitops_autocreate_log', action='wait',\n" +
-            "  resource_id='account.myagent', resource_scope='account',\n" +
-            "  params={import_request_id:'507f1f77bcf86cd799439011'},\n" +
-            "  body={autoCreateCounts:{serviceCount:2, environmentCount:1, clusterLinkCount:1}})",
-          paramsSchema: {
-            fields: [
-              {
-                name: "import_request_id",
-                required: true,
-                description: "importRequestId from the import execute response.",
-              },
-            ],
-          },
-          bodySchema: {
-            description: "Planned counts from import reconcileAppResponse.autoCreateCounts.",
-            fields: [
-              {
-                name: "autoCreateCounts",
-                type: "object",
-                required: true,
-                description:
-                  "{ serviceCount, environmentCount, clusterLinkCount } from the import response.",
-              },
-            ],
-          },
-          execute: async ({ client, input, registry, signal }) => {
-            const agentId = String(input.agent_id ?? "").trim();
-            if (!agentId) {
-              throw new Error("resource_id (agent_id) is required for wait.");
-            }
-            const importRequestId = String(input.import_request_id ?? "").trim();
-            if (!importRequestId) {
-              throw new Error("params.import_request_id is required for wait.");
-            }
-            const body = isRecord(input.body) ? input.body : {};
-            const counts = isRecord(body.autoCreateCounts) ? body.autoCreateCounts : undefined;
-            if (!counts) {
-              throw new Error(
-                "body.autoCreateCounts is required — pass import reconcileAppResponse.autoCreateCounts " +
-                  "(or { serviceCount:0, environmentCount:0, clusterLinkCount:0 } when absent).",
-              );
-            }
-            return pollAutoCreateLogs(registry, client, {
-              agentId,
-              importRequestId,
-              planned: sumAutoCreateCounts(counts),
-              resourceScope: typeof input.resource_scope === "string" ? input.resource_scope : undefined,
-              orgId: typeof input.org_id === "string" ? input.org_id : undefined,
-              projectId: typeof input.project_id === "string" ? input.project_id : undefined,
-              signal,
-            });
-          },
-          // `execute` above short-circuits dispatch before this runs (index.ts).
-          // Satisfies structural-validation.test.ts's responseExtractor-presence check.
-          responseExtractor: passthrough,
         },
       },
     },
