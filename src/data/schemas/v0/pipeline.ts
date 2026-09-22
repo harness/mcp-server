@@ -37069,6 +37069,23 @@ const schema: Record<string, any> = {
                   "dbInstance",
                   "dbSchema"
                 ],
+                "oneOf": [
+                  {
+                    "required": [
+                      "tag"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "changeSetCount"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "changesetFQN"
+                    ]
+                  }
+                ],
                 "properties": {
                   "dbInstance": {
                     "type": "string"
@@ -37108,6 +37125,10 @@ const schema: Record<string, any> = {
                   "changeSetCount": {
                     "type": "integer",
                     "minimum": 1
+                  },
+                  "changesetFQN": {
+                    "type": "string",
+                    "minLength": 1
                   },
                   "delegateSelectors": {
                     "oneOf": [
@@ -38797,22 +38818,17 @@ const schema: Record<string, any> = {
                   {
                     "required": [
                       "tag"
-                    ],
-                    "not": {
-                      "required": [
-                        "changeSetCount"
-                      ]
-                    }
+                    ]
                   },
                   {
                     "required": [
                       "changeSetCount"
-                    ],
-                    "not": {
-                      "required": [
-                        "tag"
-                      ]
-                    }
+                    ]
+                  },
+                  {
+                    "required": [
+                      "changesetFQN"
+                    ]
                   }
                 ],
                 "properties": {
@@ -38851,6 +38867,10 @@ const schema: Record<string, any> = {
                   "changeSetCount": {
                     "type": "integer",
                     "minimum": 1
+                  },
+                  "changesetFQN": {
+                    "type": "string",
+                    "minLength": 1
                   },
                   "delegateSelectors": {
                     "oneOf": [
@@ -38944,22 +38964,17 @@ const schema: Record<string, any> = {
               {
                 "required": [
                   "tag"
-                ],
-                "not": {
-                  "required": [
-                    "changeSetCount"
-                  ]
-                }
+                ]
               },
               {
                 "required": [
                   "changeSetCount"
-                ],
-                "not": {
-                  "required": [
-                    "tag"
-                  ]
-                }
+                ]
+              },
+              {
+                "required": [
+                  "changesetFQN"
+                ]
               }
             ],
             "properties": {
@@ -38979,6 +38994,10 @@ const schema: Record<string, any> = {
               "changeSetCount": {
                 "type": "integer",
                 "minimum": 1
+              },
+              "changesetFQN": {
+                "type": "string",
+                "minLength": 1
               },
               "settings": {
                 "oneOf": [
@@ -65814,6 +65833,22 @@ const schema: Record<string, any> = {
               "degradedStateTimeout": {
                 "type": "string",
                 "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "successCriteria": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "syncInitiated",
+                      "syncSucceeded"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -65826,6 +65861,53 @@ const schema: Record<string, any> = {
                   "degradedStateTimeout": [
                     "waitTillHealthy"
                   ]
+                }
+              },
+              {
+                "if": {
+                  "required": [
+                    "successCriteria"
+                  ],
+                  "properties": {
+                    "successCriteria": {
+                      "const": "syncInitiated"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "waitTillHealthy": {
+                      "not": {
+                        "enum": [
+                          true,
+                          "true"
+                        ]
+                      }
+                    },
+                    "failOnTimeout": {
+                      "not": {
+                        "const": true
+                      }
+                    },
+                    "showResourceProgress": {
+                      "not": {
+                        "const": true
+                      }
+                    },
+                    "autoPromoteRolloutBehavior": {
+                      "not": {
+                        "enum": [
+                          "promote-full",
+                          "resume"
+                        ]
+                      }
+                    },
+                    "degradedStateTimeout": {
+                      "not": {
+                        "pattern": "^\\d"
+                      }
+                    }
+                  }
                 }
               },
               {
@@ -66298,6 +66380,22 @@ const schema: Record<string, any> = {
                     "minLength": 1
                   }
                 ]
+              },
+              "successCriteria": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "syncInitiated",
+                      "syncSucceeded"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#",
@@ -66307,6 +66405,35 @@ const schema: Record<string, any> = {
                   "failOnTimeout": [
                     "waitTillHealthy"
                   ]
+                }
+              },
+              {
+                "if": {
+                  "required": [
+                    "successCriteria"
+                  ],
+                  "properties": {
+                    "successCriteria": {
+                      "const": "syncInitiated"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "waitTillHealthy": {
+                      "not": {
+                        "enum": [
+                          true,
+                          "true"
+                        ]
+                      }
+                    },
+                    "failOnTimeout": {
+                      "not": {
+                        "const": true
+                      }
+                    }
+                  }
                 }
               }
             ],
@@ -107271,6 +107398,9 @@ const schema: Record<string, any> = {
               "type": "string",
               "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
             },
+            "identities": {
+              "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+            },
             "name": {
               "type": "string",
               "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
@@ -109313,6 +109443,9 @@ const schema: Record<string, any> = {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
               },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+              },
               "name": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
@@ -111342,6 +111475,9 @@ const schema: Record<string, any> = {
               "identifier": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
               },
               "name": {
                 "type": "string",
@@ -122022,6 +122158,9 @@ const schema: Record<string, any> = {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
               },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+              },
               "name": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
@@ -122659,6 +122798,9 @@ const schema: Record<string, any> = {
               "identifier": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
               },
               "name": {
                 "type": "string",
