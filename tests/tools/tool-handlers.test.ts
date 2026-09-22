@@ -2400,6 +2400,32 @@ pipeline:
     });
   });
 
+  it("passes pr_reviewer submit_review commit_sha and decision from params to the API body", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({});
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient, makeConfig());
+
+    const result = await prServer.call("harness_execute", {
+      resource_type: "pr_reviewer",
+      action: "submit_review",
+      resource_id: "42",
+      params: {
+        repo_id: "my-repo",
+        decision: "reviewed",
+        commit_sha: "abc123",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/reviews");
+    expect(call.body).toEqual({ decision: "reviewed", commit_sha: "abc123" });
+  });
+
   it("does not remap resource_id to child field when primary matches (GitOps contract)", async () => {
     const gitopsServer = makeMcpServer("accept");
     const gitopsRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
