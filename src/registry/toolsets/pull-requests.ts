@@ -82,17 +82,27 @@ function fieldValue(
   return undefined;
 }
 
-function pullRequestMergeBody(input: Record<string, unknown>): Record<string, unknown> {
+/**
+ * harness_execute's `params` argument flattens onto the top-level input, while
+ * `body` stays nested — a bodyBuilder that only reads input.body misses fields
+ * an agent passed via params, and (since the required-field check is gated on
+ * a truthy body) silently sends an empty POST instead of erroring.
+ */
+function liftBodyFields(
+  input: Record<string, unknown>,
+  fields: readonly MergeBodyField[],
+  actionLabel: string,
+): Record<string, unknown> {
   const body = bodyRecord(input);
   const merged: Record<string, unknown> = {};
 
-  for (const field of PR_MERGE_BODY_FIELDS) {
+  for (const field of fields) {
     const names = [field.wire, ...(field.aliases ?? [])];
     const bodyValue = fieldValue(body, names);
     const inputValue = fieldValue(input, names);
     if (bodyValue && inputValue && !Object.is(bodyValue.value, inputValue.value)) {
       throw new Error(
-        `Conflicting pull_request.merge values for "${field.wire}" between ` +
+        `Conflicting ${actionLabel} values for "${field.wire}" between ` +
         `body.${bodyValue.key} and params/top-level ${inputValue.key}.`,
       );
     }
@@ -103,6 +113,19 @@ function pullRequestMergeBody(input: Record<string, unknown>): Record<string, un
   }
 
   return merged;
+}
+
+function pullRequestMergeBody(input: Record<string, unknown>): Record<string, unknown> {
+  return liftBodyFields(input, PR_MERGE_BODY_FIELDS, "pull_request.merge");
+}
+
+const PR_SUBMIT_REVIEW_BODY_FIELDS: readonly MergeBodyField[] = [
+  { wire: "decision" },
+  { wire: "commit_sha", aliases: ["commitSha"] },
+];
+
+function submitReviewBody(input: Record<string, unknown>): Record<string, unknown> {
+  return liftBodyFields(input, PR_SUBMIT_REVIEW_BODY_FIELDS, "pr_reviewer.submit_review");
 }
 
 function pullRequestUpdatePath(input: Record<string, unknown>): string {
@@ -420,12 +443,12 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           paramsSchema: REPO_PR_PARAMS,
           actionDescription:
-            "Merge a pull request. Body fields: method (merge/squash/rebase/fast-forward), source_sha, delete_source_branch (boolean), dry_run (boolean), dry_run_rules (boolean), message, title, bypass_rules (boolean), bypass_message.",
+            "Merge a pull request. GET the PR first and pass its source_sha. Body fields: method (merge/squash/rebase/fast-forward), source_sha (required), delete_source_branch (boolean), dry_run (boolean), dry_run_rules (boolean), message, title, bypass_rules (boolean), bypass_message.",
           bodySchema: {
             description: "Merge options",
             fields: [
               { name: "method", type: "string", required: false, description: "Merge method: merge, squash, rebase, or fast-forward" },
-              { name: "source_sha", type: "string", required: false, description: "Expected source SHA for optimistic locking" },
+              { name: "source_sha", type: "string", required: true, description: "Expected source SHA for optimistic locking. GET the PR first and pass its source_sha value — the backend rejects a stale value with 'A newer commit is available. Only the latest commit can be merged.'" },
               { name: "delete_source_branch", type: "boolean", required: false, description: "Delete source branch after merge" },
               { name: "dry_run", type: "boolean", required: false, description: "Simulate merge without executing" },
               { name: "dry_run_rules", type: "boolean", required: false, description: "Evaluate rules during a dry run" },
@@ -521,16 +544,16 @@ export const pullRequestsToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             pr_number: "prNumber",
           },
-          bodyBuilder: (input) => input.body,
+          bodyBuilder: submitReviewBody,
           responseExtractor: passthrough,
           paramsSchema: REPO_PR_PARAMS,
           actionDescription:
-            "Submit a review decision. Body fields: decision (required — 'approved' or 'changereq'), commit_sha (optional — SHA reviewed against).",
+            "Submit a review decision. GET the PR first and pass its source_sha as commit_sha. Body fields: decision (required — 'approved', 'changereq', or 'reviewed'), commit_sha (required — SHA reviewed against).",
           bodySchema: {
             description: "Review decision",
             fields: [
-              { name: "decision", type: "string", required: true, description: "Review decision: approved or changereq" },
-              { name: "commit_sha", type: "string", required: false, description: "Commit SHA reviewed against" },
+              { name: "decision", type: "string", required: true, description: "Review decision: approved, changereq, or reviewed (comment-only, no approve/reject)" },
+              { name: "commit_sha", type: "string", required: true, description: "Commit SHA reviewed against. GET the PR first and pass its source_sha value here." },
             ],
           },
         },

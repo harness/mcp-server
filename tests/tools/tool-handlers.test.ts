@@ -2380,6 +2380,7 @@ pipeline:
       params: {
         repo_id: "my-repo",
         method: "squash",
+        source_sha: "abc123",
         delete_source_branch: false,
         dry_run: false,
       },
@@ -2393,6 +2394,7 @@ pipeline:
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/merge");
     expect(call.body).toEqual({
       method: "squash",
+      source_sha: "abc123",
       delete_source_branch: false,
       dry_run: false,
     });

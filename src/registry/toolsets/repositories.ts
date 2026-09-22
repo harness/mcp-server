@@ -362,13 +362,13 @@ export const repositoriesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description:
-            "Update a repository. Body fields: description, default_branch, is_public.",
+            "Update a repository. Body fields: description, state, tags. default_branch and is_public are not supported by this operation.",
           bodySchema: {
             description: "Repository update fields",
             fields: [
               { name: "description", type: "string", required: false, description: "Repository description" },
-              { name: "default_branch", type: "string", required: false, description: "Default branch name" },
-              { name: "is_public", type: "boolean", required: false, description: "Whether the repo is public" },
+              { name: "state", type: "number", required: false, description: "Repository state as an integer: 0=active, 1=git-import, 2=migrate-git-push, 3=migrate-data-import, 4=archived, 5=import-failed. Normal agent usage is 0 (active) <-> 4 (archived); other values are transitional migration states." },
+              { name: "tags", type: "object", required: false, description: "Repository tags map" },
             ],
           },
         },
@@ -476,8 +476,8 @@ export const repositoriesToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "git_ref", description: "Git reference (branch/tag) filter" },
         { name: "path", description: "File path filter" },
-        { name: "since", description: "Filter commits since date" },
-        { name: "until", description: "Filter commits until date" },
+        { name: "since", type: "number", description: "Filter commits since this Unix epoch timestamp (seconds, integer). Not a date string." },
+        { name: "until", type: "number", description: "Filter commits until this Unix epoch timestamp (seconds, integer). Not a date string." },
         { name: "committer", description: "Filter by committer" },
       ],
       operations: {
@@ -499,7 +499,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           },
           responseExtractor: passthrough,
           description:
-            "List commits in a repository. Filter by git_ref (branch/tag), path, date range, or committer.",
+            "List commits in a repository. Filter by git_ref (branch/tag), path, since/until (Unix epoch timestamps, not date strings), or committer.",
         },
         get: {
           method: "GET",
