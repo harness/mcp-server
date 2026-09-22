@@ -427,6 +427,29 @@ describe("template openInHarness deep links", () => {
     expect(result.openInHarness).toBe(
       "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/Setup_Uv",
     );
+    expect(String(result.openInHarness)).not.toContain("{templateIdentifier}");
+    expect(String(result.openInHarness)).not.toContain("{template_id}");
+  });
+
+  it("template_v1 update resolves the identifier from the input (pathBuilder ops)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "Setup_Uv" });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "template_v1", "update", {
+      org_id: "PROD",
+      project_id: "Traceable",
+      template_id: "Setup_Uv",
+      version_label: "v1",
+      body: {
+        template_yaml: "version: 1\ntemplate:\n  step: {}\n",
+      },
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/Setup_Uv",
+    );
+    expect(String(result.openInHarness)).not.toContain("{templateIdentifier}");
   });
 
   it("template_v1 list builds a per-item link from each item identifier", async () => {
@@ -443,6 +466,9 @@ describe("template openInHarness deep links", () => {
       "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/A",
       "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/B",
     ]);
+    for (const item of result.items) {
+      expect(String(item.openInHarness)).not.toContain("{templateIdentifier}");
+    }
   });
 
   it("template_v1 create resolves the identifier from the response body", async () => {
