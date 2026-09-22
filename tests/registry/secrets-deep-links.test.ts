@@ -76,6 +76,7 @@ describe("secret openInHarness deep links", () => {
     ]);
     for (const item of result.items) {
       expect(String(item.openInHarness)).not.toContain("setup/resources");
+      expect(String(item.openInHarness)).not.toContain("/details");
     }
   });
 });
