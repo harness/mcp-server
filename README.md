@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 249 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 252 resource types.
 
 ## Why Use This MCP Server
 
@@ -11,10 +11,10 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 This server is built differently:
 
 <<<<<<< Updated upstream
-- **11 tools, 249 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 252 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 41 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
 =======
-- **11 tools, 249 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **11 tools, 252 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
 - **Full platform coverage.** 41 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
 >>>>>>> Stashed changes
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
@@ -1267,9 +1267,9 @@ Harness pipelines can be stored in three ways:
 ## Resource Types
 
 <<<<<<< Updated upstream
-249 resource types organized across 41 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
+252 resource types organized across 41 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 =======
-249 resource types organized across 45 registered toolset definitions; 41 are default-enabled. Each resource type supports a subset of CRUD operations and optional execute actions.
+252 resource types organized across 45 registered toolset definitions; 41 are default-enabled. Each resource type supports a subset of CRUD operations and optional execute actions.
 >>>>>>> Stashed changes
 
 ### Platform
@@ -1651,8 +1651,11 @@ Read progress with `harness_get(resource_type="vibe_app_lifecycle", resource_id=
 | `fme_feature_flag`                  | x    | x   | x      | x      | x      | `kill`, `restore`, `reallocate`, `archive`, `unarchive` |
 | `fme_feature_flag_definition`       | x    | x   | x      | x      | x      | `kill`, `restore`, `reallocate`           |
 | `fme_rollout_status`                | x    |     |        |        |        |                                           |
+| `fme_rule_based_segment`            | x    | x   | x      |        | x      |                                           |
+| `fme_rule_based_segment_definition` | x    |     |        | x      |        | `enable`, `disable`, `change_request`     |
 | `fme_traffic_type`                  | x    |     |        |        |        |                                           |
 | `fme_identity`                      |      |     | x      | x      |        |                                           |
+| `fme_standard_segment`              | x    | x   |        |        |        |                                           |
 | `fme_segment_keys`                  | x    |     |        | x      |        |                                           |
 | `fme_segment`                       | x    | x   | x      | x      | x      |                                           |
 | `fme_segment_definition`            | x    | x   | x      | x      | x      | `list_keys`, `add_keys`, `remove_keys`    |
@@ -1667,17 +1670,18 @@ Read progress with `harness_get(resource_type="vibe_app_lifecycle", resource_id=
 - **`fme_feature_flag`** — Harness-native only (`org_id`+`project_id` required). A stray `workspace_id` is silently ignored. `list`/`get`/`create`/`delete` hit `/fme/api/v4/feature-flags` (body for `create`: `name`, `trafficType`, optional `description`/`tags`/`owners`, per `CreateFeatureFlagRequest`); `update` sends a merge-patch to `/fme/api/v4/feature-flags/{name}`; `archive`/`unarchive` hit `/fme/api/v4/feature-flags/{name}/archive|unarchive` (optional `comment` only — no `title`, per `ArchiveUnarchiveRequest`); `kill`/`restore`/`reallocate` hit `/fme/api/v4/feature-flag-definitions/{name}/kill|restore|reallocate` with `environment_id` as a query param (optional `comment`/`title`, per `FeatureFlagDefinitionActionRequest`).
 - **`fme_feature_flag_definition`** — Harness-native only (`org_id`+`project_id` required). A stray `workspace_id` is silently ignored. `list` requires `feature_flag_name` and uses `offset`/`limit` (default 100, max 100); it does not take `environment_id`. `delete` and the execute actions require `environment_id`. `kill`/`restore`/`reallocate` are the same actions as on `fme_feature_flag`. `get`/`create`/`update` body: `treatments`, `defaultTreatment`, `defaultRule`, optional `rules`/`baselineTreatment`/`trafficAllocation`/`comment`/`title`. `update` is JSON Merge Patch. No native equivalent exists for the retired `enable`/`disable`/`change_request` actions (see "Removed in this change" below).
 - **`fme_rollout_status`** — Harness-native only (`org_id`+`project_id` required). A stray `workspace_id` is silently ignored. Pagination uses `offset`/`limit` (max 100; `harness_list` `size` maps to `limit`); results are promoted to `items`/`total`. Each item has `id`, `name`, and optional `description`.
+- **`fme_rule_based_segment`** — (Deprecated — see `fme_segment`.) Harness-native mode is rejected on every operation (`list`/`get`/`create`/`delete`) — use `fme_segment` instead; this resource supports only the legacy `workspace_id` contract.
+- **`fme_rule_based_segment_definition`** — (Deprecated — see `fme_segment_definition`.) Harness-native mode is rejected on every operation/action (`list`/`update`/`enable`/`disable`/`change_request`) — use `fme_segment_definition` instead (no `enable`/`disable`/`change_request` equivalent there); this resource supports only the legacy `workspace_id`/`environment_id` contract.
 - **`fme_traffic_type`** — Harness-native only (`org_id`+`project_id` required). A stray `workspace_id` is silently ignored. Pagination uses `offset`/`limit` (max 100; `harness_list` `size` maps to `limit`); results are promoted to `items`/`total`. Each item has `id` and `name` (no `displayAttributeId`).
 - **`fme_identity`** — `create`/`update` are not yet implemented if `org_id`+`project_id` are passed together; otherwise proceeds as a normal legacy call.
+- **`fme_standard_segment`** — deprecated. Legacy `workspace_id` still hits Split v2. Harness-native is rejected — use `fme_segment`.
 - **`fme_segment_keys`** — `list`/`update` remain legacy (`workspace_id` / `environment_id`+`segment_name`). Harness-native (`org_id`+`project_id`) is rejected — use `fme_segment_definition` execute `list_keys`/`add_keys`/`remove_keys`.
 - **`fme_segment`** — Native only (`org_id`+`project_id`). CRUD. `list`/`get`/`update`/`delete` require `segment_type`: `STANDARD` | `LARGE` | `RULE_BASED`. Create body: `name`, `trafficType`, `segmentType`; optional `description`, `tags`, `owners`.
 - **`fme_segment_definition`** — Native only. CRUD plus execute `list_keys`/`add_keys`/`remove_keys`. Update is description only. Delete fails with `hasDependents` while keys remain. Has no `enable`/`disable`/`change_request` actions (see "Removed in this change" below).
 - **`fme_metric`** — Harness-native only (no legacy `workspace_id` support). `list`/`get`/`create`/`update`/`delete` are wired to `/fme/api/v4/metrics` (`list`'s `harness_list` `size` maps to `limit`). `create` requires `spread` even though the backend `CreateMetricRequest` keeps it optional (default `PER`) — an MCP-side-only stricter contract, since omitting it silently changes a `RATE` metric's semantics. `update` is JSON Merge Patch; `name`/`trafficType` are immutable and not accepted. `delete` is a permanent hard delete (no archive/restore) — classified `destructive`.
 - **`fme_event_type`** — Harness-native only (no legacy `workspace_id` support). Read-only: `list`/`get` are wired to `/fme/api/v4/event-types`; `id` is the event name. Only event types with events in the last 30 days are visible; `get` returns a 404 for an event type outside the requesting workspace's traffic-type scope, or idle longer than 30 days. List filters: `name` (substring), `traffic_type` (by ID or name), `offset`/`limit` (`harness_list` `size` maps to `limit`). Use this to discover real event type IDs before referencing one in `fme_metric`'s `baseEventTypes`/`filterEventType` or `event_type_ids` filter, instead of guessing an ID.
 
-**Removed in this change** — `fme_rule_based_segment` and `fme_standard_segment` (legacy-only shims; use `fme_segment` instead) and `fme_rule_based_segment_definition` (legacy-only shim; use `fme_segment_definition` instead) have been removed, along with the legacy `workspace_id` contract for `fme_feature_flag`, `fme_feature_flag_definition`, `fme_environment`, `fme_rollout_status`, and `fme_traffic_type` (all five are now Harness-native only). **Known gap:** `fme_rule_based_segment_definition` had `enable`/`disable`/`change_request` execute actions with no Harness-native equivalent on `fme_segment_definition` — that capability has no replacement after this removal.
-
-In single-user/self-hosted mode, legacy-mode auth (for `fme_workspace`/`fme_identity`/`fme_segment_keys`) uses a Bearer token from `HARNESS_FME_API_KEY`, falling back to a non-placeholder `HARNESS_API_KEY`. `HARNESS_FME_API_KEY` may be a legacy Split admin key or an FME-entitled Harness PAT/SAT, but it is rejected in `multi-user` mode so shared deployments cannot override each session user's credential. Hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate direct Split.io requests. Use `fme_traffic_type` to discover traffic type IDs, `fme_identity` to create/update identity attributes, and `fme_segment_keys` to add member keys to a segment.
+In single-user/self-hosted mode, legacy-mode auth (for `fme_workspace`/`fme_identity`/`fme_segment_keys`) uses a Bearer token from `HARNESS_FME_API_KEY`, falling back to a non-placeholder `HARNESS_API_KEY`. `HARNESS_FME_API_KEY` may be a legacy Split admin key or an FME-entitled Harness PAT/SAT, but it is rejected in `multi-user` mode so shared deployments cannot override each session user's credential. Hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate direct Split.io requests. Use `fme_traffic_type` to discover traffic type IDs, `fme_identity` to create/update identity attributes, and `fme_standard_segment`/`fme_segment_keys` to inspect standard segments and add member keys. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows.
 
 ### GitOps
 
@@ -2018,7 +2022,7 @@ Available toolset names:
 | `dashboards`            | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
 | `idp`                   | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc                                                                                                                                                                           |
 | `pull-requests`         | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
-| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_traffic_type, fme_identity, fme_segment_keys, fme_segment, fme_segment_definition, fme_metric, fme_event_type                       |
+| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys, fme_segment, fme_segment_definition, fme_metric, fme_event_type                       |
 | `gitops`                | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree                                               |
 | `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_enabled_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_service, chaos_application_map, discovered_agent, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk, chaos_dr_test, scanned_risk, chaos_risk_rule, chaos_risk_scan |
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
@@ -2059,10 +2063,10 @@ Available toolset names:
                 |    Registry       |  <-- Declarative resource definitions
 <<<<<<< Updated upstream
                 |  41 Toolsets      |      (data files, not code)
-                |  249 Resource Types|
+                |  252 Resource Types|
 =======
                 | 45 Toolsets (41 default) |
-                |  249 Resource Types|
+                |  252 Resource Types|
 >>>>>>> Stashed changes
                  +--------+---------+
                           |

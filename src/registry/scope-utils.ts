@@ -43,6 +43,48 @@ export function templateV1BasePathFromScope(
   return "/v1/templates";
 }
 
+export type FmeDualModeResult =
+  | { mode: "legacy"; workspaceId: string }
+  | { mode: "harness_native"; orgId: string; projectId: string };
+
+/**
+ * Detects whether FME call uses deprecated `workspace_id` contract or
+ * new Harness-native `org_id`+`project_id` contract. Used by the remaining
+ * dual-mode `fme_*` resources' `routeResolver`s in `feature-flags.ts`
+ * (`fme_rule_based_segment`, `fme_rule_based_segment_definition`, `fme_standard_segment`,
+ * `fme_traffic_type`).
+ */
+export function resolveFmeDualMode(input: Record<string, unknown>, resourceType: string): FmeDualModeResult {
+  const workspaceId = input.workspace_id as string | undefined;
+  const orgId = input.org_id as string | undefined;
+  const projectId = input.project_id as string | undefined;
+
+  // Check for mixing deprecated and new approaches
+  if (workspaceId && (orgId || projectId)) {
+    throw new Error(
+      `${resourceType}: pass either workspace_id (deprecated) OR org_id+project_id, not both.`,
+    );
+  }
+
+  // Handle legacy workspace_id mode
+  if (workspaceId) {
+    console.error(
+      `[DEPRECATION] ${resourceType}: workspace_id-based FME calls are deprecated — pass org_id+project_id instead.`,
+    );
+    return { mode: "legacy", workspaceId };
+  }
+
+  // Handle Harness-native mode
+  if (orgId && projectId) {
+    return { mode: "harness_native", orgId, projectId };
+  }
+
+  // If neither mode is satisfied, throw
+  throw new Error(
+    `${resourceType}: org_id and project_id are required (account is taken from config), or pass the deprecated workspace_id instead.`,
+  );
+}
+
 /**
  * Validates that an FME identifier the caller must supply is actually present.
  *
@@ -60,12 +102,13 @@ export function requireFmeIdentifier(input: Record<string, unknown>, field: stri
 }
 
 /**
- * Mode selector for the remaining dual-mode FME operations (`fme_workspace`,
- * `fme_identity`, `fme_segment_keys`) that have no Harness-native implementation
- * for some or all of their ops. Returns true when the caller selected the
- * Harness-native contract (org_id+project_id), false for the legacy contract.
- * A partial pair is rejected: half a scope would otherwise leak a stray
- * orgIdentifier/projectIdentifier query param onto a legacy Split.io API call.
+ * Mode selector for FME operations that have no Harness-native implementation
+ * (or, for `fme_rule_based_segment_definition`'s `enable`/`disable`, no
+ * `resolveFmeDualMode`-compatible path at all) and therefore cannot use
+ * `resolveFmeDualMode`. Returns true when the caller selected the Harness-native
+ * contract (org_id+project_id), false for the legacy contract. A partial pair is
+ * rejected: half a scope would otherwise leak a stray orgIdentifier/projectIdentifier
+ * query param onto a legacy Split.io API call.
  */
 export function isFmeHarnessNativeSelected(input: Record<string, unknown>, resourceType: string): boolean {
   const orgId = input.org_id;
@@ -82,9 +125,9 @@ export function isFmeHarnessNativeSelected(input: Record<string, unknown>, resou
 /**
  * Guards Harness-native-only operations that have no legacy Split.io fallback.
  * Rejects workspace_id (including mixed with org/project) so new ops cannot
- * dual-route. Missing org_id/project_id must throw rather than falling back to
- * config.HARNESS_ORG/HARNESS_PROJECT, and the error must not offer workspace_id
- * as an alternative.
+ * dual-route. Unlike `resolveFmeDualMode`, missing org_id/project_id must throw
+ * rather than falling back to config.HARNESS_ORG/HARNESS_PROJECT, and the error
+ * must not offer workspace_id as an alternative.
  */
 export function requireHarnessNativeSegmentScope(input: Record<string, unknown>, resourceType: string): void {
   if (input.workspace_id) {
@@ -115,7 +158,8 @@ export function requireFmeHarnessNativeScope(input: Record<string, unknown>, res
 /**
  * Toolset files may not call `console.*` directly (see architecture.test.ts —
  * logging belongs in handlers/registry, not toolsets). Route deprecation
- * logging for the remaining dual-mode FME resources through here instead.
+ * logging that doesn't go through `resolveFmeDualMode` (e.g. permissive
+ * mode-selector resolvers) through here instead.
  */
 export function logFmeDeprecation(message: string): void {
   console.error(message);
