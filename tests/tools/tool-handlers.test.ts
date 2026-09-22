@@ -293,7 +293,7 @@ describe("harness_get", () => {
     expect(call.params.versionLabel).toBe("1.0.8");
   });
 
-  it("does not infer resource_scope for account APIs with org/project UI URLs", async () => {
+  it("derives org/project from an org/project UI URL for the now Harness-native-only fme_feature_flag, ignoring a stray workspace_id", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
     mockRequest = vi.fn().mockResolvedValue({ id: "my_flag" });
     client = makeClient(mockRequest);
@@ -308,9 +308,9 @@ describe("harness_get", () => {
 
     expect(result.isError).toBeUndefined();
     const call = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
-    expect(call.path).toBe("/internal/api/v2/splits/ws/workspace-1/my_flag");
-    expect(call.params.orgIdentifier).toBeUndefined();
-    expect(call.params.projectIdentifier).toBeUndefined();
+    expect(call.path).toBe("/fme/api/v4/feature-flags/my_flag");
+    expect(call.params.organization_identifier).toBe("default");
+    expect(call.params.project_identifier).toBe("myProject");
   });
 
   it("gets a branch from a files URL with a path when resource_type is branch", async () => {
@@ -2505,32 +2505,6 @@ pipeline:
     expect(fileStoreRequest).not.toHaveBeenCalled();
   });
 
-  it.each([
-    { action: "enable", method: "POST", expectedBody: {} },
-    { action: "disable", method: "DELETE", expectedBody: undefined },
-  ])("maps resource_id to segment_name for FME rule-based segment $action", async ({ action, method, expectedBody }) => {
-    const fmeServer = makeMcpServer("accept");
-    const fmeRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
-    const fmeRequest = vi.fn().mockResolvedValue({});
-    const fmeClient = makeClient(fmeRequest);
-    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
-    registerExecuteTool(fmeServer, fmeRegistry, fmeClient, makeConfig());
-
-    const result = await fmeServer.call("harness_execute", {
-      resource_type: "fme_rule_based_segment_definition",
-      action,
-      resource_id: "beta_users",
-      params: { environment_id: "env-prod" },
-    });
-
-    expect(result.isError).toBeUndefined();
-    expect(fmeRequest).toHaveBeenCalledOnce();
-    const call = fmeRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
-    expect(call.method).toBe(method);
-    expect(call.path).toBe("/internal/api/v2/rule-based-segments/env-prod/beta_users");
-    expect(call.body).toEqual(expectedBody);
-  });
-
   it("maps resource_id to exemption_id for successful security_exemption approve", async () => {
     const stoServer = makeMcpServer("accept");
     const stoRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "sto" }));
@@ -2559,7 +2533,7 @@ pipeline:
     expect(call.body).not.toHaveProperty("scope");
   });
 
-  it("maps resource_id to feature_flag_name for successful FME kill and wraps primitive response", async () => {
+  it("maps resource_id to feature_flag_name for successful FME kill and wraps primitive response, ignoring a stray workspace_id", async () => {
     const fmeServer = makeMcpServer("accept");
     const fmeRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "feature-flags" }));
     const fmeRequest = vi.fn().mockResolvedValue(true);
@@ -2571,14 +2545,16 @@ pipeline:
       resource_type: "fme_feature_flag",
       action: "kill",
       resource_id: "my-flag",
+      org_id: "default",
+      project_id: "puthraya",
       params: { workspace_id: "ws-1", environment_id: "env-prod" },
     });
 
     expect(result.isError).toBeUndefined();
     expect(fmeRequest).toHaveBeenCalledOnce();
     const call = fmeRequest.mock.calls[0]![0] as { method?: string; path?: string };
-    expect(call.method).toBe("PUT");
-    expect(call.path).toBe("/internal/api/v2/splits/ws/ws-1/my-flag/environments/env-prod/kill");
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/fme/api/v4/feature-flag-definitions/my-flag/kill");
 
     const data = parseResult(result) as Record<string, unknown>;
     expect(data).toMatchObject({ success: true, result: true });

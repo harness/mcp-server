@@ -484,10 +484,11 @@ export interface ResourceDefinition {
   /**
    * Product backend for this resource. Defaults to "harness" (uses HARNESS_BASE_URL).
    * @deprecated The "fme" value (Split.io API at https://api.split.io) is legacy-only,
-   * used solely by FME resources' deprecated workspace_id-mode calls (see
-   * `routeResolver` on `EndpointSpec` and `resolveFmeDualMode` in scope-utils.ts).
-   * New code should not introduce new "fme"-product resources — FME itself is
-   * migrating to plain Harness-native ("harness") routing per-call.
+   * used solely by the remaining dual-mode FME resources' (`fme_workspace`,
+   * `fme_identity`, `fme_segment_keys`) deprecated workspace_id-mode calls (see
+   * `routeResolver` on `EndpointSpec` and `isFmeHarnessNativeSelected` in
+   * scope-utils.ts). New code should not introduce new "fme"-product resources —
+   * FME itself is migrating to plain Harness-native ("harness") routing per-call.
    */
   product?: ProductName;
   /**

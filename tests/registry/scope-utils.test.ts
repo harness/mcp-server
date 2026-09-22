@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { templateV1BasePathFromScope, resolveFmeDualMode, requireFmeIdentifier, isFmeHarnessNativeSelected, requireHarnessNativeSegmentScope } from "../../src/registry/scope-utils.js";
+import { describe, expect, it } from "vitest";
+import { templateV1BasePathFromScope, requireFmeIdentifier, isFmeHarnessNativeSelected, requireHarnessNativeSegmentScope, requireFmeHarnessNativeScope } from "../../src/registry/scope-utils.js";
 import type { PathBuilderConfig } from "../../src/registry/types.js";
 
 const config: PathBuilderConfig = {
@@ -65,49 +65,32 @@ describe("templateV1BasePathFromScope", () => {
   });
 });
 
-describe("resolveFmeDualMode", () => {
-  it("throws workspace_id mixed with org_id or project_id", () => {
-    expect(() => resolveFmeDualMode({ workspace_id: "ws1", org_id: "o1" }, "fme_feature_flag")).toThrow(
-      "fme_feature_flag: pass either workspace_id (deprecated) OR org_id+project_id, not both.",
-    );
+describe("requireFmeHarnessNativeScope", () => {
+  it("does not throw when org_id and project_id are both present", () => {
+    expect(() => requireFmeHarnessNativeScope({ org_id: "o1", project_id: "p1" }, "fme_feature_flag")).not.toThrow();
+  });
+
+  it("silently ignores a stray workspace_id when org_id and project_id are present", () => {
     expect(() =>
-      resolveFmeDualMode({ workspace_id: "ws1", project_id: "p1" }, "fme_feature_flag"),
-    ).toThrow("fme_feature_flag: pass either workspace_id (deprecated) OR org_id+project_id, not both.");
+      requireFmeHarnessNativeScope({ workspace_id: "ws1", org_id: "o1", project_id: "p1" }, "fme_feature_flag"),
+    ).not.toThrow();
   });
 
-  it("returns legacy mode and logs deprecation warning when workspace_id passed", () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const result = resolveFmeDualMode({ workspace_id: "ws1" }, "fme_feature_flag");
-    expect(result).toEqual({ mode: "legacy", workspaceId: "ws1" });
-    expect(spy).toHaveBeenCalledWith(
-      "[DEPRECATION] fme_feature_flag: workspace_id-based FME calls are deprecated — pass org_id+project_id instead.",
-    );
-    spy.mockRestore();
-  });
-
-  it("returns harness_native mode when org_id and project_id passed without workspace_id", () => {
-    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const result = resolveFmeDualMode({ org_id: "o1", project_id: "p1" }, "fme_feature_flag");
-    expect(result).toEqual({ mode: "harness_native", orgId: "o1", projectId: "p1" });
-    expect(spy).not.toHaveBeenCalled();
-    spy.mockRestore();
-  });
-
-  it("throws when only project_id is passed", () => {
-    expect(() => resolveFmeDualMode({ project_id: "p1" }, "fme_feature_flag")).toThrow(
-      "fme_feature_flag: org_id and project_id are required (account is taken from config), or pass the deprecated workspace_id instead.",
+  it("throws when org_id is missing", () => {
+    expect(() => requireFmeHarnessNativeScope({ project_id: "p1" }, "fme_feature_flag")).toThrow(
+      "fme_feature_flag: org_id and project_id are required (account is taken from config).",
     );
   });
 
-  it("throws when only org_id is passed", () => {
-    expect(() => resolveFmeDualMode({ org_id: "o1" }, "fme_feature_flag")).toThrow(
-      "fme_feature_flag: org_id and project_id are required (account is taken from config), or pass the deprecated workspace_id instead.",
+  it("throws when project_id is missing", () => {
+    expect(() => requireFmeHarnessNativeScope({ org_id: "o1" }, "fme_feature_flag")).toThrow(
+      "fme_feature_flag: org_id and project_id are required (account is taken from config).",
     );
   });
 
-  it("throws when neither workspace_id nor org_id/project_id are passed", () => {
-    expect(() => resolveFmeDualMode({}, "fme_feature_flag")).toThrow(
-      "fme_feature_flag: org_id and project_id are required (account is taken from config), or pass the deprecated workspace_id instead.",
+  it("throws when both are missing, even with a stray workspace_id", () => {
+    expect(() => requireFmeHarnessNativeScope({ workspace_id: "ws1" }, "fme_feature_flag")).toThrow(
+      "fme_feature_flag: org_id and project_id are required (account is taken from config).",
     );
   });
 });
@@ -149,8 +132,8 @@ describe("requireFmeIdentifier", () => {
   });
 
   it("throws when the field is absent entirely", () => {
-    expect(() => requireFmeIdentifier({}, "segment_name", "fme_standard_segment")).toThrow(
-      'fme_standard_segment: "segment_name" is required.',
+    expect(() => requireFmeIdentifier({}, "segment_name", "fme_segment")).toThrow(
+      'fme_segment: "segment_name" is required.',
     );
   });
 });

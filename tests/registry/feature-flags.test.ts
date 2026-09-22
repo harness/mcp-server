@@ -81,13 +81,10 @@ describe("FME registry metadata", () => {
     expect(createSpec.description).not.toContain("traffic_type_id (get from fme_workspace)");
   });
 
-  it("documents fme_traffic_type list workspace_id as a deprecated (non-required) filter", () => {
+  it("fme_traffic_type list no longer documents workspace_id as a filter (Harness-native only)", () => {
     const resource = findResource("fme_traffic_type");
 
-    expect(resource.listFilterFields).toContainEqual({
-      name: "workspace_id",
-      description: "FME workspace ID (get from fme_workspace). Deprecated — omit and pass org_id+project_id instead for Harness-native scoping.",
-    });
+    expect((resource.listFilterFields ?? []).some((field) => field.name === "workspace_id")).toBe(false);
   });
 
   it("documents every required FME list path parameter as a list filter", () => {
@@ -172,7 +169,8 @@ describe("FME execute action response projection", () => {
     const client = makeClient(mockRequest);
 
     const result = await registry.dispatchExecute(client, "fme_feature_flag", action, {
-      workspace_id: "ws-1",
+      org_id: "o1",
+      project_id: "p1",
       feature_flag_name: "my-flag",
       environment_id: "env-prod",
     });
@@ -186,7 +184,8 @@ describe("FME execute action response projection", () => {
     const client = makeClient(mockRequest);
 
     const result = await registry.dispatchExecute(client, "fme_feature_flag", "kill", {
-      workspace_id: "ws-1",
+      org_id: "o1",
+      project_id: "p1",
       feature_flag_name: "my-flag",
       environment_id: "env-prod",
     });
@@ -195,23 +194,36 @@ describe("FME execute action response projection", () => {
   });
 });
 
-describe("fme_feature_flag dual-mode routing", () => {
+describe("fme_feature_flag Harness-native-only routing", () => {
   let registry: Registry;
 
   beforeEach(() => {
     registry = new Registry(makeConfig());
   });
 
-  it("legacy mode: workspace_id routes to Split.io unchanged", async () => {
+  it("throws a clear error when org_id/project_id are missing", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "fme_feature_flag", "list", { workspace_id: "ws1" });
+    await expect(registry.dispatch(client, "fme_feature_flag", "list", { workspace_id: "ws1" })).rejects.toThrow(
+      "fme_feature_flag: org_id and project_id are required (account is taken from config).",
+    );
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("silently ignores a stray workspace_id when org_id+project_id are present", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_feature_flag", "list", {
+      workspace_id: "stale-ws",
+      org_id: "o1",
+      project_id: "p1",
+    });
 
     const req = firstRequest(mockRequest);
-    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1");
-    expect(req.product).toBe("fme");
-    expect(req.params?.orgIdentifier).toBeUndefined();
+    expect(req.path).toBe("/fme/api/v4/feature-flags");
+    expect(req.product).toBeUndefined();
   });
 
   it("new mode: org_id+project_id routes to the Harness-native feature-flags path", async () => {
@@ -348,37 +360,31 @@ describe("fme_feature_flag dual-mode routing", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("mixed params throws the shared error", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_feature_flag", "list", { workspace_id: "ws1", org_id: "o1" }),
-    ).rejects.toThrow("fme_feature_flag: pass either workspace_id (deprecated) OR org_id+project_id, not both.");
-  });
 });
 
-describe("fme_feature_flag kill/restore/reallocate/archive/unarchive dual-mode", () => {
+describe("fme_feature_flag kill/restore/reallocate/archive/unarchive Harness-native-only", () => {
   let registry: Registry;
 
   beforeEach(() => {
     registry = new Registry(makeConfig());
   });
 
-  it("legacy mode: kill uses PUT against the Split.io path and forwards comment/title", async () => {
+  it("silently ignores a stray workspace_id and routes kill by org_id+project_id", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await registry.dispatchExecute(client, "fme_feature_flag", "kill", {
-      workspace_id: "ws1",
+      workspace_id: "stale-ws",
+      org_id: "o1",
+      project_id: "p1",
       feature_flag_name: "my_flag",
       environment_id: "e1",
       body: { comment: "rolling back", title: "Incident 123" },
     });
 
     const req = firstRequest(mockRequest);
-    expect(req.method).toBe("PUT");
-    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/environments/e1/kill");
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/feature-flag-definitions/my_flag/kill");
     expect(req.body).toEqual({ comment: "rolling back", title: "Incident 123" });
   });
 
@@ -421,23 +427,6 @@ describe("fme_feature_flag kill/restore/reallocate/archive/unarchive dual-mode",
     expect(req.method).toBe("POST");
     expect(req.path).toBe("/fme/api/v4/feature-flag-definitions/my_flag/restore");
     expect(req.body).toEqual({});
-  });
-
-  it("legacy mode: reallocate posts to the Split.io environments path", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatchExecute(client, "fme_feature_flag", "reallocate", {
-      workspace_id: "ws1",
-      feature_flag_name: "my_flag",
-      environment_id: "e1",
-      body: { comment: "shifting traffic" },
-    });
-
-    const req = firstRequest(mockRequest);
-    expect(req.method).toBe("POST");
-    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/environments/e1/reallocate");
-    expect(req.body).toEqual({ comment: "shifting traffic" });
   });
 
   it("new mode: reallocate routes to the Harness-native feature-flag-definitions path", async () => {
@@ -500,21 +489,6 @@ describe("fme_feature_flag kill/restore/reallocate/archive/unarchive dual-mode",
     expect(req.body).toEqual({});
   });
 
-  it("legacy mode: archive still posts to the Split.io path and forwards comment/title", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatchExecute(client, "fme_feature_flag", "archive", {
-      workspace_id: "ws1",
-      feature_flag_name: "my_flag",
-      body: { comment: "no longer needed", title: "cleanup" },
-    });
-
-    const req = firstRequest(mockRequest);
-    expect(req.method).toBe("POST");
-    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/archive");
-    expect(req.body).toEqual({ comment: "no longer needed", title: "cleanup" });
-  });
 });
 
 describe("fme_feature_flag_definition", () => {
@@ -524,19 +498,21 @@ describe("fme_feature_flag_definition", () => {
     registry = new Registry(makeConfig());
   });
 
-  it("legacy mode: get routes to the Split.io path with environment_id in the URL", async () => {
+  it("silently ignores a stray workspace_id and routes get by org_id+project_id", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "fme_feature_flag_definition", "get", {
-      workspace_id: "ws1",
+      workspace_id: "stale-ws",
+      org_id: "o1",
+      project_id: "p1",
       feature_flag_name: "my_flag",
       environment_id: "e1",
     });
 
     const req = firstRequest(mockRequest);
-    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/environments/e1");
-    expect(req.product).toBe("fme");
+    expect(req.path).toBe("/fme/api/v4/feature-flag-definitions/my_flag");
+    expect(req.product).toBeUndefined();
   });
 
   it("new mode: get routes to the Harness-native feature-flag-definitions path with environment_id as a query param", async () => {
@@ -619,37 +595,18 @@ describe("fme_feature_flag_definition", () => {
     expect(req.body).toEqual(body);
   });
 
-  it("legacy mode: update still uses PUT (no merge-patch header) against the Split.io API", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_feature_flag_definition", "update", {
-      workspace_id: "ws1",
-      feature_flag_name: "my_flag",
-      environment_id: "e1",
-      body: { trafficAllocation: 50 },
-    });
-
-    const req = firstRequest(mockRequest);
-    expect(req.method).toBe("PUT");
-    expect(req.path).toBe("/internal/api/v2/splits/ws/ws1/my_flag/environments/e1");
-    expect(req.headers).toBeUndefined();
-  });
-
-  it("mixed params throws the shared error", async () => {
+  it("throws a clear error when org_id/project_id are missing", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await expect(
       registry.dispatch(client, "fme_feature_flag_definition", "get", {
         workspace_id: "ws1",
-        org_id: "o1",
         feature_flag_name: "my_flag",
         environment_id: "e1",
       }),
-    ).rejects.toThrow(
-      "fme_feature_flag_definition: pass either workspace_id (deprecated) OR org_id+project_id, not both.",
-    );
+    ).rejects.toThrow("fme_feature_flag_definition: org_id and project_id are required (account is taken from config).");
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 });
 
@@ -803,7 +760,7 @@ describe("fme_segment_keys update", () => {
   });
 });
 
-describe("fme_environment dual-mode routing", () => {
+describe("fme_environment Harness-native-only routing", () => {
   let registry: Registry;
 
   beforeEach(() => {
@@ -830,15 +787,27 @@ describe("fme_environment dual-mode routing", () => {
     expect(req.params?.projectIdentifier).toBeUndefined();
   });
 
-  it("legacy mode: list routes to /internal/api/v2/environments/ws/{wsId}", async () => {
+  it("throws a clear error when org_id/project_id are missing", async () => {
+    const client = makeClient();
+
+    await expect(
+      registry.dispatch(client, "fme_environment", "list", {
+        workspace_id: "ws1",
+      }),
+    ).rejects.toThrow("fme_environment: org_id and project_id are required (account is taken from config).");
+  });
+
+  it("silently ignores a stray workspace_id and routes list by org_id+project_id", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
     await registry.dispatch(client, "fme_environment", "list", {
-      workspace_id: "ws1",
+      workspace_id: "stale-ws",
+      org_id: "o1",
+      project_id: "p1",
     });
 
-    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/environments/ws/ws1");
+    expect(firstRequest(mockRequest).path).toBe("/fme/api/v4/environments");
   });
 
   it("native list forwards offset and limit as query params", async () => {
@@ -889,27 +858,9 @@ describe("fme_environment dual-mode routing", () => {
     });
   });
 
-  it("legacy list leaves objects envelopes unchanged", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({
-      objects: [{ id: "env1", name: "prod" }],
-      offset: 0,
-      limit: 20,
-    });
-    const client = makeClient(mockRequest);
-
-    const result = await registry.dispatch(client, "fme_environment", "list", {
-      workspace_id: "ws1",
-    });
-
-    expect(result).toEqual({
-      objects: [{ id: "env1", name: "prod" }],
-      offset: 0,
-      limit: 20,
-    });
-  });
 });
 
-describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
+describe("fme_traffic_type and fme_rollout_status Harness-native-only list", () => {
   let registry: Registry;
 
   beforeEach(() => {
@@ -932,14 +883,13 @@ describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
       expect(listDescription).not.toMatch(/\/internal\/api\//);
       expect(listDescription).not.toMatch(/Native results/i);
       expect(resource.description).toMatch(/org_id\+project_id/);
-      expect(resource.description).toMatch(/workspace_id/);
     },
   );
 
   it.each([
-    ["fme_traffic_type", "/fme/api/v4/traffic-types", "/internal/api/v2/trafficTypes/ws/ws1"],
-    ["fme_rollout_status", "/fme/api/v4/rollout-statuses", "/internal/api/v2/rolloutStatuses/ws/ws1"],
-  ] as const)("%s: native list uses v4 path and FME scope params", async (resourceType, nativePath, _legacyPath) => {
+    ["fme_traffic_type", "/fme/api/v4/traffic-types"],
+    ["fme_rollout_status", "/fme/api/v4/rollout-statuses"],
+  ] as const)("%s: native list uses v4 path and FME scope params", async (resourceType, nativePath) => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -957,19 +907,16 @@ describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
     expect(req.params?.projectIdentifier).toBeUndefined();
   });
 
-  it.each([
-    ["fme_traffic_type", "/internal/api/v2/trafficTypes/ws/ws1"],
-    ["fme_rollout_status", "/internal/api/v2/rolloutStatuses/ws/ws1"],
-  ] as const)("%s: legacy list keeps Split Admin path", async (resourceType, legacyPath) => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
+  it.each(["fme_traffic_type", "fme_rollout_status"] as const)(
+    "%s: throws a clear error when org_id/project_id are missing",
+    async (resourceType) => {
+      const client = makeClient();
 
-    await registry.dispatch(client, resourceType, "list", { workspace_id: "ws1" });
-
-    const req = firstRequest(mockRequest);
-    expect(req.path).toBe(legacyPath);
-    expect(req.product).toBe("fme");
-  });
+      await expect(registry.dispatch(client, resourceType, "list", { workspace_id: "ws1" })).rejects.toThrow(
+        `${resourceType}: org_id and project_id are required (account is taken from config).`,
+      );
+    },
+  );
 
   it("native list forwards offset and limit as query params", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
@@ -1033,122 +980,17 @@ describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
     });
   });
 
-  it("rejects mixed workspace_id and org/project", async () => {
+  it("silently ignores a stray workspace_id when org_id/project_id are present", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
-    await expect(
-      registry.dispatch(client, "fme_rollout_status", "list", {
-        workspace_id: "ws1",
-        org_id: "o1",
-        project_id: "p1",
-      }),
-    ).rejects.toThrow("fme_rollout_status: pass either workspace_id (deprecated) OR org_id+project_id, not both.");
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-});
-
-describe("fme_standard_segment — legacy only, Harness-native rejected in favor of fme_segment", () => {
-  let registry: Registry;
-
-  beforeEach(() => {
-    registry = new Registry(makeConfig());
-  });
-
-  it.each(["list", "get"])("new mode: %s is rejected — use fme_segment instead", async (operation) => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_standard_segment", operation as any, {
-        org_id: "o1",
-        project_id: "p1",
-        segment_name: "seg1",
-      }),
-    ).rejects.toThrow(/Harness-native.*not supported.*use fme_segment instead/i);
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("legacy mode: list routes to /internal/api/v2/segments/ws/{wsId}", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_standard_segment", "list", {
-      workspace_id: "ws1",
+    await registry.dispatch(client, "fme_rollout_status", "list", {
+      workspace_id: "stale-ws",
+      org_id: "o1",
+      project_id: "p1",
     });
 
-    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/ws/ws1");
-  });
-
-  it("legacy mode: get routes to /internal/api/v2/segments/ws/{wsId}/{segment_name}", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_standard_segment", "get", {
-      workspace_id: "ws1",
-      segment_name: "seg1",
-    });
-
-    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/segments/ws/ws1/seg1");
-  });
-});
-
-describe("fme_rule_based_segment — legacy only, Harness-native rejected in favor of fme_segment", () => {
-  let registry: Registry;
-
-  beforeEach(() => {
-    registry = new Registry(makeConfig());
-  });
-
-  it.each(["list", "get", "delete", "create"])("new mode: %s is rejected — use fme_segment instead", async (operation) => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_rule_based_segment", operation as any, {
-        org_id: "o1",
-        project_id: "p1",
-        segment_name: "seg1",
-        traffic_type_id: "tt1",
-        body: { name: "x" },
-      }),
-    ).rejects.toThrow(/Harness-native.*not supported.*use fme_segment instead/i);
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("legacy mode: list routes to /internal/api/v2/rule-based-segments/ws/{wsId}", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_rule_based_segment", "list", {
-      workspace_id: "ws1",
-    });
-
-    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/rule-based-segments/ws/ws1");
-  });
-
-  it("legacy mode: get routes to /internal/api/v2/rule-based-segments/ws/{wsId}/{segment_name}", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_rule_based_segment", "get", {
-      workspace_id: "ws1",
-      segment_name: "seg1",
-    });
-
-    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/rule-based-segments/ws/ws1/seg1");
-  });
-
-  it("legacy mode: delete routes to /internal/api/v2/rule-based-segments/ws/{wsId}/{segment_name}", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await registry.dispatch(client, "fme_rule_based_segment", "delete", {
-      workspace_id: "ws1",
-      segment_name: "seg1",
-    });
-
-    expect(firstRequest(mockRequest).path).toBe("/internal/api/v2/rule-based-segments/ws/ws1/seg1");
+    expect(firstRequest(mockRequest).path).toBe("/fme/api/v4/rollout-statuses");
   });
 });
 
@@ -1538,62 +1380,6 @@ describe("fme_segment", () => {
   });
 });
 
-describe("FME new-mode (NYI) resources", () => {
-  let registry: Registry;
-
-  beforeEach(() => {
-    registry = new Registry(makeConfig());
-  });
-
-  it.each([
-    ["list", { workspace_id: "ws1", environment_id: "e1" }],
-    ["update", { workspace_id: "ws1", segment_name: "seg1", environment_id: "e1", body: {} }],
-  ] as [string, Record<string, unknown>][])(
-    "fme_rule_based_segment_definition.%s: legacy mode still works, new mode rejected — use fme_segment_definition instead",
-    async (operation, legacyInput) => {
-      const mockRequest = vi.fn().mockResolvedValue({});
-      const client = makeClient(mockRequest);
-
-      await registry.dispatch(client, "fme_rule_based_segment_definition", operation as any, legacyInput);
-      expect(mockRequest).toHaveBeenCalledTimes(1);
-
-      const newModeInput = { ...legacyInput, workspace_id: undefined, org_id: "o1", project_id: "p1" };
-      await expect(
-        registry.dispatch(client, "fme_rule_based_segment_definition", operation as any, newModeInput),
-      ).rejects.toThrow(/Harness-native.*not supported on this deprecated resource/i);
-    },
-  );
-
-  it.each([
-    ["enable", { workspace_id: "ws1", environment_id: "e1", segment_name: "seg1" }],
-    ["disable", { workspace_id: "ws1", environment_id: "e1", segment_name: "seg1" }],
-    [
-      "change_request",
-      {
-        workspace_id: "ws1",
-        environment_id: "e1",
-        title: "t",
-        operationType: "UPDATE",
-        ruleBasedSegment: { title: "seg" },
-      },
-    ],
-  ] as [string, Record<string, unknown>][])(
-    "fme_rule_based_segment_definition.%s action: legacy mode still works, new mode rejected — use fme_segment_definition instead",
-    async (action, legacyInput) => {
-      const mockRequest = vi.fn().mockResolvedValue({});
-      const client = makeClient(mockRequest);
-
-      await registry.dispatchExecute(client, "fme_rule_based_segment_definition", action, legacyInput);
-      expect(mockRequest).toHaveBeenCalledTimes(1);
-
-      const newModeInput = { ...legacyInput, workspace_id: undefined, org_id: "o1", project_id: "p1" };
-      await expect(
-        registry.dispatchExecute(client, "fme_rule_based_segment_definition", action, newModeInput),
-      ).rejects.toThrow(/Harness-native.*not supported on this deprecated resource/i);
-    },
-  );
-});
-
 describe("fme_workspace permissive resolver", () => {
   let registry: Registry;
 
@@ -1771,7 +1557,7 @@ describe("FME required identifier validation", () => {
     const client = makeClient(mockRequest);
 
     await expect(
-      registry.dispatch(client, "fme_feature_flag", "get", { workspace_id: "ws1" }),
+      registry.dispatch(client, "fme_feature_flag", "get", { org_id: "o1", project_id: "p1" }),
     ).rejects.toThrow('fme_feature_flag: "feature_flag_name" is required.');
     expect(mockRequest).not.toHaveBeenCalled();
   });
@@ -1781,48 +1567,8 @@ describe("FME required identifier validation", () => {
     const client = makeClient(mockRequest);
 
     await expect(
-      registry.dispatch(client, "fme_feature_flag", "delete", { workspace_id: "ws1" }),
+      registry.dispatch(client, "fme_feature_flag", "delete", { org_id: "o1", project_id: "p1" }),
     ).rejects.toThrow('fme_feature_flag: "feature_flag_name" is required.');
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("fme_feature_flag get rejects a missing feature_flag_name in Harness-native mode too", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_feature_flag", "get", { org_id: "o1", project_id: "p1" }),
-    ).rejects.toThrow('fme_feature_flag: "feature_flag_name" is required.');
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("fme_rule_based_segment get rejects a missing segment_name", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_rule_based_segment", "get", { workspace_id: "ws1" }),
-    ).rejects.toThrow('fme_rule_based_segment: "segment_name" is required.');
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("fme_rule_based_segment delete rejects an empty segment_name", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_rule_based_segment", "delete", { workspace_id: "ws1", segment_name: "" }),
-    ).rejects.toThrow('fme_rule_based_segment: "segment_name" is required.');
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("fme_standard_segment get rejects a missing segment_name", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_standard_segment", "get", { workspace_id: "ws1" }),
-    ).rejects.toThrow('fme_standard_segment: "segment_name" is required.');
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
@@ -1831,7 +1577,11 @@ describe("FME required identifier validation", () => {
     const client = makeClient(mockRequest);
 
     await expect(
-      registry.dispatchExecute(client, "fme_feature_flag", "kill", { workspace_id: "ws1", feature_flag_name: "my_flag" }),
+      registry.dispatchExecute(client, "fme_feature_flag", "kill", {
+        org_id: "o1",
+        project_id: "p1",
+        feature_flag_name: "my_flag",
+      }),
     ).rejects.toThrow('fme_feature_flag: "environment_id" is required.');
     expect(mockRequest).not.toHaveBeenCalled();
   });
@@ -1912,20 +1662,6 @@ describe("FME permissive mode-selector partial scope pairs", () => {
         org_id: "o1",
       }),
     ).rejects.toThrow("fme_segment_keys.list: project_id is required when org_id is provided.");
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
-
-  it("fme_rule_based_segment_definition enable rejects a lone org_id", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatchExecute(client, "fme_rule_based_segment_definition", "enable", {
-        environment_id: "env-prod",
-        segment_name: "beta_users",
-        org_id: "o1",
-      }),
-    ).rejects.toThrow("fme_rule_based_segment_definition.enable: project_id is required when org_id is provided.");
     expect(mockRequest).not.toHaveBeenCalled();
   });
 

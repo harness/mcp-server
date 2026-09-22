@@ -8,23 +8,12 @@ export function registerFeatureFlagRolloutPrompt(server: McpServer): void {
       description: "Plan and execute a progressive FME feature flag rollout across environments",
       argsSchema: {
         featureFlagName: z.string().describe("Feature flag name to roll out"),
-        workspaceId: z.string().describe("FME workspace ID (deprecated — omit if passing orgId+projectId)").optional(),
-        orgId: z.string().describe("Harness org identifier (pass together with projectId)").optional(),
-        projectId: z.string().describe("Harness project identifier (pass together with orgId)").optional(),
+        orgId: z.string().describe("Harness org identifier"),
+        projectId: z.string().describe("Harness project identifier"),
       },
     },
-    async ({ featureFlagName, workspaceId, orgId, projectId }) => {
-      if (!workspaceId && !(orgId && projectId)) {
-        throw new Error("Provide either workspaceId (deprecated) or orgId + projectId.");
-      }
-
-      const scopeArgs = workspaceId
-        ? `workspace_id="${workspaceId}"`
-        : `org_id="${orgId}", project_id="${projectId}"`;
-
-      const nativeModeCaveat = workspaceId
-        ? ""
-        : "\n\nNote: in Harness-native mode (org_id/project_id), fme_rollout_status is not yet implemented server-side and will error — step 4 only works today with workspace_id (legacy mode). Steps 3 and 7 work with org_id+project_id.";
+    async ({ featureFlagName, orgId, projectId }) => {
+      const scopeArgs = `org_id="${orgId}", project_id="${projectId}"`;
 
       return {
         messages: [{

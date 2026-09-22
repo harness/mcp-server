@@ -1033,13 +1033,14 @@ async function main() {
       await runCase(tc);
     }
 
-    // FME feature flag kill/restore (requires workspace_id + environment_id)
-    if (discovered.fme_feature_flag && discovered.fme_workspace && shouldRunToolset("feature-flags")) {
-      // Discover an environment for this workspace
+    // FME feature flag kill/restore (requires org_id/project_id + environment_id)
+    if (discovered.fme_feature_flag && shouldRunToolset("feature-flags")) {
+      const fmeOrgId = envVars.HARNESS_ORG || "default";
+      // Discover an environment for this org/project
       let fmeEnvId = null;
       try {
         const envResult = await callTool(client, "harness_list", {
-          resource_type: "fme_environment", workspace_id: discovered.fme_workspace, size: 1,
+          resource_type: "fme_environment", org_id: fmeOrgId, project_id: PROJECT_ID, size: 1,
         });
         const envData = parse(envResult);
         const envItems = envData?.items || (Array.isArray(envData) ? envData : []);
@@ -1055,7 +1056,8 @@ async function main() {
             resource_type: "fme_feature_flag",
             action: "kill",
             feature_flag_name: discovered.fme_feature_flag,
-            workspace_id: discovered.fme_workspace,
+            org_id: fmeOrgId,
+            project_id: PROJECT_ID,
             environment_id: fmeEnvId,
             confirmation: true,
           },
@@ -1071,7 +1073,8 @@ async function main() {
             resource_type: "fme_feature_flag",
             action: "restore",
             feature_flag_name: discovered.fme_feature_flag,
-            workspace_id: discovered.fme_workspace,
+            org_id: fmeOrgId,
+            project_id: PROJECT_ID,
             environment_id: fmeEnvId,
             confirmation: true,
           },
