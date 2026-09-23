@@ -182,6 +182,35 @@ describe("schema bundle contract", () => {
     expect(cdSteps).toHaveProperty("DeployAwsAgentCoreRevisionStepInfo");
   });
 
+  it("includes upstream HelmDryRun step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("HelmDryRunStepNode");
+    expect(cdSteps).toHaveProperty("HelmDryRunStepInfo");
+
+    const stepNode = cdSteps.HelmDryRunStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("HelmDryRun");
+
+    const stepInfo = cdSteps.HelmDryRunStepInfo as {
+      properties: Record<string, unknown>;
+    };
+    expect(stepInfo.properties).toHaveProperty("commandFlags");
+    expect(stepInfo.properties).toHaveProperty("encryptYamlOutput");
+    expect(stepInfo.properties).toHaveProperty("environmentVariables");
+  });
+
+  it("includes upstream HelmDryRun step definitions in v0 template", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = templateDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("HelmDryRunStepNode");
+    expect(cdSteps).toHaveProperty("HelmDryRunStepNode_template");
+    expect(cdSteps).toHaveProperty("HelmDryRunStepInfo");
+  });
+
   it("includes upstream IdentitiesConfig and IdentitySpec in v0 pipeline common definitions", () => {
     const common = (SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>).pipeline
       .common as Record<string, unknown>;
