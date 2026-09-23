@@ -1620,6 +1620,30 @@ describe("gitops pagination", () => {
     expect(call.params.size).toBe(30);
   });
 
+  it("gitops_autocreate_log list: size drives the API limit param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ logs: [], total: 0 });
+    const client = makeClient(mockRequest);
+
+    // harness_list always supplies a size (Zod default 20), so any
+    // defaultQueryParams entry for `limit` is dead — the page size the agent
+    // gets is whatever `size` says, never an endpoint-local default.
+    await registry.dispatch(client, "gitops_autocreate_log", "list", {
+      agent_id: "account.myagent",
+      import_request_id: "507f1f77bcf86cd799439011",
+      size: 20,
+    });
+    expect(mockRequest.mock.calls[0][0].params.limit).toBe(20);
+
+    await registry.dispatch(client, "gitops_autocreate_log", "list", {
+      agent_id: "account.myagent",
+      import_request_id: "507f1f77bcf86cd799439011",
+      size: 100,
+      skip: 100,
+    });
+    expect(mockRequest.mock.calls[1][0].params.limit).toBe(100);
+    expect(mockRequest.mock.calls[1][0].params.skip).toBe(100);
+  });
+
   it("gitops_repository list: search_term forwarded in POST body as searchTerm", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ content: [] });
     const client = makeClient(mockRequest);

@@ -1,9 +1,4 @@
-import type {
-  ToolsetDefinition,
-  ParamsSchema,
-  HarnessClientInterface,
-  RegistryDispatchInterface,
-} from "../types.js";
+import type { ToolsetDefinition, ParamsSchema } from "../types.js";
 import { passthrough, ngExtract, pageExtract } from "../extractors.js";
 
 function gitopsListBody(
@@ -888,16 +883,19 @@ export const gitopsToolset: ToolsetDefinition = {
         "HOW TO POLL FOR COMPLETION:\n" +
         "  1. If autoCreateCounts.serviceCount + environmentCount + clusterLinkCount == 0, skip " +
         "— nothing was scheduled.\n" +
-        "  2. Otherwise call this list every ~10s with the same import_request_id.\n" +
+        "  2. Otherwise call this list every ~10s with the same import_request_id, " +
+        "passing size=100 so a single page covers most imports.\n" +
         "  3. Stop when the response's total >= that summed count, or after ~2 minutes " +
-        "(treat as done-enough).\n\n" +
+        "(treat as done-enough).\n" +
+        "  4. items[] holds one page. When total exceeds items.length, page through with " +
+        "skip=items already read.\n\n" +
         "SCOPE BEHAVIOR (agent registration scope — same as import):\n" +
         "- Account-level agent: resource_scope='account' — omit org_id and project_id\n" +
         "- Org-level agent: resource_scope='org' — pass org_id only\n" +
         "- Project-level agent: resource_scope='project' (default) — pass org_id and project_id\n\n" +
         "IDENTIFIERS: agent_id is scope-prefixed: 'account.myagent' | 'org.myagent' | 'myagent'\n\n" +
         "EXAMPLE:\n" +
-        "harness_list(resource_type='gitops_autocreate_log', resource_scope='account',\n" +
+        "harness_list(resource_type='gitops_autocreate_log', resource_scope='account', size=100,\n" +
         "  filters={agent_id:'account.myagent', import_request_id:'507f1f77bcf86cd799439011'})",
       toolset: "gitops",
       scope: "project",
@@ -927,7 +925,8 @@ export const gitopsToolset: ToolsetDefinition = {
         {
           name: "skip",
           description:
-            "Optional pagination offset (default 0). Pair with size (mapped to API limit; default 100, max 1000).",
+            "Optional pagination offset (default 0). Pair with harness_list's size, which maps to the " +
+            "API limit (default 20, max 100).",
           required: false,
         },
       ],
@@ -953,21 +952,19 @@ export const gitopsToolset: ToolsetDefinition = {
             size: "limit",
             skip: "skip",
           },
-          defaultQueryParams: {
-            limit: "100",
-          },
           skipCompact: true,
           responseExtractor: autoCreateLogExtract,
           description:
             "List auto-create logs for one import run.\n" +
             "REQUIRED filters: agent_id (scope-prefixed), import_request_id (from import response).\n" +
-            "Optional: since_time (ms), skip, size (→ API limit; default 100, server max 1000).\n" +
-            "Returns items[] (logs) plus total and per-page success/failed aggregates " +
+            "Optional: since_time (ms), skip, size (→ API limit; harness_list default 20, max 100).\n" +
+            "Returns items[] (one page of logs) plus total and per-page success/failed aggregates " +
             "(successServices, failedServices, … — aggregates are for the returned page, not DB-wide).\n" +
             "Status values: SUCCESS, FAILED, WARNING. resourceType: service | environment | clusterLink.\n" +
-            "Logs TTL ~7 days. Poll every ~10s using the same import_request_id; stop when total covers " +
-            "the planned autoCreateCounts sum, or after ~2 min.\n\n" +
-            "Example: harness_list(resource_type='gitops_autocreate_log', resource_scope='account',\n" +
+            "Logs TTL ~7 days. Poll every ~10s using the same import_request_id with size=100; stop when " +
+            "total covers the planned autoCreateCounts sum, or after ~2 min. Page with skip when total " +
+            "exceeds items.length.\n\n" +
+            "Example: harness_list(resource_type='gitops_autocreate_log', resource_scope='account', size=100,\n" +
             "  filters={agent_id:'account.myagent', import_request_id:'507f1f77bcf86cd799439011'})",
         },
       },
