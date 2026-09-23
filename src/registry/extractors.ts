@@ -1445,6 +1445,19 @@ export const fmeV4PaginatedListExtract = (raw: unknown): unknown => {
   return { ...r, items: r.data, total };
 };
 
+/**
+ * Public v4 mutation envelopes (`ExperimentResponse`, `ExperimentSettingsResponse`, and other
+ * `{ entity, governance }` shapes): flatten `entity`'s fields to the top level and keep
+ * `governance` alongside them, so callers get the resource directly instead of having to reach
+ * into `.entity` — mirrors how `fmeV4PaginatedListExtract` promotes `data`→`items`.
+ */
+export const fmeV4EntityExtract = (raw: unknown): unknown => {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const r = raw as Record<string, unknown>;
+  if (r.entity === null || typeof r.entity !== "object" || Array.isArray(r.entity)) return raw;
+  return { ...(r.entity as Record<string, unknown>), governance: r.governance };
+};
+
 /** Extract FME feature flag list — passthrough with trafficType.id flattened on each item. */
 export const fmeListExtract = (raw: unknown): unknown => {
   if (raw && typeof raw === "object") {

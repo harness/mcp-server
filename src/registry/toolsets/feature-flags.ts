@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract } from "../extractors.js";
+import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract, fmeV4EntityExtract } from "../extractors.js";
 import { isFmeHarnessNativeSelected, logFmeDeprecation, requireFmeIdentifier, requireHarnessNativeSegmentScope, resolveFmeDualMode } from "../scope-utils.js";
 
 const fmeActionExtract = (raw: unknown) => {
@@ -348,6 +348,53 @@ const fmeMetricUpdateSchema: BodySchema = {
     { name: "tags", type: "array", required: false, description: "Replacement tag list; null or [] clears all tags", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Replacement owner list; null or [] clears all owners", itemType: "object" },
     { name: "cap", type: "object", required: false, description: "Replacement cap configuration, or null to clear it" },
+  ],
+};
+
+const fmeExperimentCreateSchema: BodySchema = {
+  description:
+    "Create an Experiment. parent/name/startAt/endAt/baselineTreatment/comparisonTreatments are required by the backend. Requires environment_id as a param (the experiment is assigned in that environment). Do not send assignmentSource — the backend infers/creates the cloud assignment source (400 if present).",
+  fields: [
+    { name: "parent", type: "object", required: true, description: "{type: FEATURE_FLAG|AI_CONFIG|CONFIG, id?, name?} — at least one of id/name is required. CONFIG returns 404 in v1." },
+    { name: "name", type: "string", required: true, description: "Unique experiment name within the project (must start with a letter; letters, digits, '-', '_' only; 2-250 chars)." },
+    { name: "description", type: "string", required: false, description: "Optional human-readable description (max 250 chars)" },
+    { name: "hypothesis", type: "string", required: false, description: "Optional hypothesis this experiment is testing (max 500 chars)" },
+    { name: "startAt", type: "string", required: true, description: "ISO-8601 timestamp when the experiment starts" },
+    { name: "endAt", type: "string", required: true, description: "ISO-8601 timestamp when the experiment ends" },
+    { name: "baselineTreatment", type: "string", required: true, description: "Baseline treatment name" },
+    { name: "comparisonTreatments", type: "array", required: true, description: "Comparison treatment names, not including baselineTreatment (at least one)", itemType: "string" },
+    { name: "keyMetrics", type: "array", required: false, description: "Metric ids to set as key metrics. Omit for none.", itemType: "string" },
+    { name: "supportingMetrics", type: "array", required: false, description: "Metric ids to set as supporting metrics. Omit for none.", itemType: "string" },
+  ],
+};
+
+const fmeExperimentUpdateSchema: BodySchema = {
+  description:
+    "Partially update an Experiment via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name/startAt/endAt/baselineTreatment/comparisonTreatments/status cannot be cleared with null (comparisonTreatments also rejects []) — 400 if attempted. description/hypothesis/keyMetrics/supportingMetrics clear with null (or [] for the arrays). parent and environment cannot be changed.",
+  fields: [
+    { name: "name", type: "string", required: false, description: "Updated name; null not allowed" },
+    { name: "description", type: "string", required: false, description: "Updated description; null clears it" },
+    { name: "hypothesis", type: "string", required: false, description: "Updated hypothesis; null clears it" },
+    { name: "startAt", type: "string", required: false, description: "Updated start time (ISO-8601); null not allowed" },
+    { name: "endAt", type: "string", required: false, description: "Updated end time (ISO-8601); null not allowed" },
+    { name: "baselineTreatment", type: "string", required: false, description: "Updated baseline treatment; null not allowed" },
+    { name: "comparisonTreatments", type: "array", required: false, description: "Replacement comparison treatments (full replacement, at least one); null or [] returns 400", itemType: "string" },
+    { name: "keyMetrics", type: "array", required: false, description: "Replacement key metric ids; null or [] clears the list", itemType: "string" },
+    { name: "supportingMetrics", type: "array", required: false, description: "Replacement supporting metric ids; null or [] clears the list", itemType: "string" },
+    { name: "status", type: "string", required: false, description: "Updated lifecycle status (ACTIVE, PAUSED, ARCHIVED, COMPLETED); null not allowed. ARCHIVED is a status here, not a substitute for delete." },
+  ],
+};
+
+const fmeExperimentSettingsUpdateSchema: BodySchema = {
+  description:
+    "Partially update an Experiment's statistical & monitoring settings via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. Applying any patch implicitly creates/updates the experiment-level override (source becomes EXPERIMENT_OVERRIDE). statisticalTestType/significanceThreshold/multipleComparisonCorrection/minimumSampleSize/reviewPeriod cannot be cleared with null (400 if attempted). varianceReduction can be cleared with null (resets to method NONE).",
+  fields: [
+    { name: "statisticalTestType", type: "string", required: false, description: "FIXED_HORIZON or SEQUENTIAL; null not allowed" },
+    { name: "significanceThreshold", type: "number", required: false, description: "Between 0 and 1 inclusive; null not allowed" },
+    { name: "multipleComparisonCorrection", type: "string", required: false, description: "NONE or GROUPWISE_HOCHBERG; null not allowed" },
+    { name: "minimumSampleSize", type: "number", required: false, description: "Minimum per-treatment sample size; null not allowed" },
+    { name: "reviewPeriod", type: "string", required: false, description: "ISO-8601 duration (e.g. \"PT336H\"); null not allowed" },
+    { name: "varianceReduction", type: "object", required: false, description: "{method: NONE|CUPED}, or null to clear (resets to method NONE)" },
   ],
 };
 
@@ -1940,6 +1987,267 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
           description: "Delete a metric definition by ID. Hard delete — permanent, no archive/restore.",
+        },
+      },
+    },
+    {
+      resourceType: "fme_experiment",
+      displayName: "FME Experiment",
+      description:
+        "A workspace-scoped Experiment (A/B test) running on a Feature Flag, AI Config, or Config. Harness-native only " +
+        "(org_id + project_id; no legacy workspace_id support). Supports list, get, create, update, and delete. " +
+        "list requires parent_type; create requires environment_id (the experiment is assigned in one environment).",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["experiment_id"],
+      listFilterFields: [
+        { name: "parent_type", description: "Parent kind to list. Required. FEATURE_FLAG and AI_CONFIG are implemented; CONFIG returns 404.", enum: ["FEATURE_FLAG", "AI_CONFIG", "CONFIG"], required: true },
+        { name: "environment_id", description: "Filter to experiments assigned in this environment (get from fme_environment). Optional." },
+        { name: "parent_name", description: "Filter to this parent name (Feature Flag/AI Config/Config name matching parent_type). Unknown or mismatched name returns 404." },
+        { name: "name", description: "Filter by experiment title (used with match_type)." },
+        { name: "match_type", description: "How name is matched. Ignored when name is omitted.", enum: ["starts_with", "contains", "exact"] },
+        { name: "status", description: "Filter by lifecycle status. Defaults to [ACTIVE].", enum: ["ACTIVE", "PAUSED", "ARCHIVED", "COMPLETED"] },
+        { name: "offset", description: "Pagination offset", type: "number" },
+        { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment");
+            return { path: "/fme/api/v4/experiments" };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            parent_type: "parent_type",
+            environment_id: "environment_id",
+            parent_name: "parent_name",
+            name: "name",
+            match_type: "match_type",
+            status: "status",
+            offset: "offset",
+            size: "limit",
+            limit: "limit",
+          },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description:
+            "List experiments in a project, with pagination and filters (harness_list size maps to limit; pass offset directly " +
+            "via filters). parent_type is required. Defaults to ACTIVE experiments unless status is passed.",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
+            return { path: `/fme/api/v4/experiments/${id}` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description: "Get a single experiment by ID, regardless of lifecycle status. CONFIG and warehouse-native experiments return 404.",
+        },
+        create: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment");
+            requireFmeIdentifier(input, "environment_id", "fme_experiment");
+            return { path: "/fme/api/v4/experiments" };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return {
+              parent: body?.parent,
+              name: body?.name,
+              startAt: body?.startAt,
+              endAt: body?.endAt,
+              baselineTreatment: body?.baselineTreatment,
+              comparisonTreatments: body?.comparisonTreatments,
+              ...(body?.description !== undefined ? { description: body.description } : {}),
+              ...(body?.hypothesis !== undefined ? { hypothesis: body.hypothesis } : {}),
+              ...(body?.keyMetrics !== undefined ? { keyMetrics: body.keyMetrics } : {}),
+              ...(body?.supportingMetrics !== undefined ? { supportingMetrics: body.supportingMetrics } : {}),
+            };
+          },
+          responseExtractor: fmeV4EntityExtract,
+          bodySchema: fmeExperimentCreateSchema,
+          description:
+            "Create an experiment. Requires environment_id (param, the environment it's assigned in) plus " +
+            "parent/name/startAt/endAt/baselineTreatment/comparisonTreatments in the body. The parent must exist in " +
+            "that environment (404 if missing). Duplicate name returns 409.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
+            return { path: `/fme/api/v4/experiments/${id}` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body || typeof body !== "object" || Array.isArray(body)) return {};
+            const patchableFields = [
+              "name",
+              "description",
+              "hypothesis",
+              "startAt",
+              "endAt",
+              "baselineTreatment",
+              "comparisonTreatments",
+              "keyMetrics",
+              "supportingMetrics",
+              "status",
+            ] as const;
+            const patch: Record<string, unknown> = {};
+            for (const field of patchableFields) {
+              if (field in body) patch[field] = body[field];
+            }
+            return patch;
+          },
+          responseExtractor: fmeV4EntityExtract,
+          bodySchema: fmeExperimentUpdateSchema,
+          description:
+            "Partially update an experiment via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. " +
+            "Parent and environment cannot be changed. Renaming to a name already used in the project returns 409.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
+            return { path: `/fme/api/v4/experiments/${id}` };
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: passthrough,
+          description:
+            "Delete an experiment by ID. Hard delete — permanent, no archive/restore (does not set status: ARCHIVED). " +
+            "The parent Feature Flag/AI Config/Config is not deleted.",
+        },
+      },
+    },
+    {
+      resourceType: "fme_experiment_settings",
+      displayName: "FME Experiment Settings",
+      description:
+        "Statistical & monitoring settings for a single Experiment (test type, significance threshold, multiple comparison " +
+        "correction, minimum sample size, review period, variance reduction). Harness-native only (org_id + project_id). " +
+        "An experiment either has its own override, or inherits organization defaults — GET always returns the applied " +
+        "settings and never 404s except when the experiment itself doesn't exist. Supports get, update, and delete only " +
+        "(no list — settings are 1:1 with the experiment).",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["experiment_id"],
+      operations: {
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_settings");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
+            return { path: `/fme/api/v4/experiments/${id}/settings` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get the applied settings for an experiment — its own override if one exists, otherwise organization " +
+            "defaults. source distinguishes ORGANIZATION_DEFAULT from EXPERIMENT_OVERRIDE. Never 404s for missing " +
+            "settings; only 404s when the experiment itself doesn't exist.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_settings");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
+            return { path: `/fme/api/v4/experiments/${id}/settings` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            if (!body || typeof body !== "object" || Array.isArray(body)) return {};
+            const patchableFields = [
+              "statisticalTestType",
+              "significanceThreshold",
+              "multipleComparisonCorrection",
+              "minimumSampleSize",
+              "reviewPeriod",
+              "varianceReduction",
+            ] as const;
+            const patch: Record<string, unknown> = {};
+            for (const field of patchableFields) {
+              if (field in body) patch[field] = body[field];
+            }
+            return patch;
+          },
+          responseExtractor: fmeV4EntityExtract,
+          bodySchema: fmeExperimentSettingsUpdateSchema,
+          description:
+            "Partially update an experiment's settings via JSON Merge Patch (RFC 7396). Implicitly creates the " +
+            "experiment-level override if one doesn't already exist (source becomes EXPERIMENT_OVERRIDE).",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_settings");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
+            return { path: `/fme/api/v4/experiments/${id}/settings` };
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "safe" },
+          responseExtractor: fmeV4EntityExtract,
+          description:
+            "Revert an experiment's settings to organization defaults by removing the experiment-level override " +
+            "(source becomes ORGANIZATION_DEFAULT) — the override's values are lost. Idempotent — safe to call when " +
+            "no override exists (no-op, same response).",
+        },
+      },
+    },
+    {
+      resourceType: "fme_experiment_result",
+      displayName: "FME Experiment Result",
+      description:
+        "Evaluated (post-statistics) per-metric results for an Experiment's latest calculation run. Harness-native only " +
+        "(org_id + project_id). Read-only: list only (no get by id — results have no identifier of their own, and no " +
+        "environment_id filter — the experiment has exactly one environment, already embedded on the fme_experiment " +
+        "object). One row per (metric, comparison treatment) pair, flattened across all four metric categories " +
+        "(KEY, SUPPORTING, GUARDRAIL, ALERT) with a response-only category field. Reflects only the latest calculation " +
+        "run — no historical-run access.",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["experiment_id"],
+      listFilterFields: [
+        { name: "experiment_id", description: "Experiment ID (get from fme_experiment). Required.", required: true },
+        { name: "metric_ids", description: "Optional display filter to a subset of metrics. Never affects multiple comparison correction, which is always computed from the metric's real category membership. Unrecognized ids are silently dropped (200, not 400/404)." },
+        { name: "comparisons", description: "Optional filter to a subset of the experiment's comparison treatments. Defaults to all of the experiment's comparisonTreatments. The baseline treatment is always excluded." },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_result");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_result"));
+            return { path: `/fme/api/v4/experiments/${id}/metric-results` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { metric_ids: "metric_ids", comparisons: "comparisons" },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description:
+            "List evaluated metric results for an experiment's latest calculation run. One MetricResult per (metric, " +
+            "comparison treatment) pair. If the experiment has never been calculated, or a filtered metric id doesn't " +
+            "exist on the experiment, returns 200 with a partial/empty result. No environment_id filter — the " +
+            "experiment has exactly one environment (see fme_experiment.environment).",
         },
       },
     },
