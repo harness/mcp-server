@@ -14,6 +14,257 @@ function gitopsListBody(
 }
 
 /**
+ * v1 GetAppProjectMappingListByAgent returns `{ appProjMap: { <argoName>: Project } }`.
+ * harness_list expects `{ items, total }`. Flatten map keys into row objects.
+ */
+function appProjMapExtract(raw: unknown): { items: unknown[]; total: number } {
+  if (!isRecord(raw)) return { items: [], total: 0 };
+  const map = raw.appProjMap;
+  if (!isRecord(map)) return { items: [], total: 0 };
+
+  const items: unknown[] = [];
+  for (const [argoproject, value] of Object.entries(map)) {
+    const proj = isRecord(value) ? value : {};
+    items.push({
+      argoproject,
+      orgIdentifier: proj.orgIdentifier ?? "",
+      projectIdentifier: proj.projectIdentifier ?? "",
+      autoCreateServiceEnv: proj.autoCreateServiceEnv ?? false,
+    });
+  }
+  return { items, total: items.length };
+}
+
+/**
+ * AgentProjectService.List returns `{ items, metadata }` without `total`.
+ * Guarantee `items` + `total` so skipCompact survives harness_list normalization
+ * (normalizeHarnessListPayload clones when total is missing and drops __skipCompact).
+ */
+function argoProjectListExtract(raw: unknown): { items: unknown[]; total: number; metadata?: unknown } {
+  if (Array.isArray(raw)) return { items: raw, total: raw.length };
+  if (!isRecord(raw)) return { items: [], total: 0 };
+  const items = Array.isArray(raw.items) ? raw.items : [];
+  const total = typeof raw.total === "number" ? raw.total : items.length;
+  return raw.metadata !== undefined
+    ? { items, total, metadata: raw.metadata }
+    : { items, total };
+}
+
+/**
+ * Normalize create/update body into `{ appProjMap }` for AppProjectMappingService.
+ * Accepts native `appProjMap` or ergonomic `mappings: [{ argoproject, orgIdentifier, projectIdentifier, autoCreateServiceEnv }]`.
+ */
+function buildAppProjMapBody(input: Record<string, unknown>): { appProjMap: Record<string, unknown> } {
+  const body = isRecord(input.body) ? input.body : {};
+
+  if (isRecord(body.appProjMap) && Object.keys(body.appProjMap).length > 0) {
+    const appProjMap: Record<string, unknown> = {};
+    for (const [argoproject, value] of Object.entries(body.appProjMap)) {
+      const name = argoproject.trim();
+      if (!name) {
+        throw new Error("appProjMap keys must be non-empty Argo AppProject names.");
+      }
+      if (!isRecord(value)) {
+        throw new Error(`appProjMap['${name}'] must be an object with orgIdentifier and projectIdentifier.`);
+      }
+      const orgIdentifier = String(value.orgIdentifier ?? "").trim();
+      const projectIdentifier = String(value.projectIdentifier ?? "").trim();
+      if (!orgIdentifier || !projectIdentifier) {
+        throw new Error(
+          `appProjMap['${name}'] requires orgIdentifier and projectIdentifier.`,
+        );
+      }
+      appProjMap[name] = {
+        orgIdentifier,
+        projectIdentifier,
+        autoCreateServiceEnv: value.autoCreateServiceEnv ?? false,
+      };
+    }
+    return { appProjMap };
+  }
+
+  if (Array.isArray(body.mappings) && body.mappings.length > 0) {
+    const appProjMap: Record<string, unknown> = {};
+    for (const row of body.mappings) {
+      if (!isRecord(row)) {
+        throw new Error("Each mappings[] entry must be an object with argoproject, orgIdentifier, projectIdentifier.");
+      }
+      const argoproject = String(row.argoproject ?? "").trim();
+      const orgIdentifier = String(row.orgIdentifier ?? row.org ?? "").trim();
+      const projectIdentifier = String(row.projectIdentifier ?? row.project ?? "").trim();
+      if (!argoproject || !orgIdentifier || !projectIdentifier) {
+        throw new Error(
+          "Each mappings[] entry requires argoproject, orgIdentifier (or org), and projectIdentifier (or project).",
+        );
+      }
+      if (appProjMap[argoproject]) {
+        throw new Error(`Duplicate argoproject in mappings: ${argoproject}`);
+      }
+      appProjMap[argoproject] = {
+        orgIdentifier,
+        projectIdentifier,
+        autoCreateServiceEnv: row.autoCreateServiceEnv ?? false,
+      };
+    }
+    return { appProjMap };
+  }
+
+  throw new Error(
+    "body must include non-empty appProjMap OR mappings[]. " +
+      "Native: { appProjMap: { '<argo>': { orgIdentifier, projectIdentifier, autoCreateServiceEnv? } } }. " +
+      "Ergonomic: { mappings: [{ argoproject, orgIdentifier, projectIdentifier, autoCreateServiceEnv? }] }.",
+  );
+}
+
+/**
+ * Strict boolean for update — create may default missing autoCreateServiceEnv to false;
+ * update must not (would silently disable autocreate).
+ */
+function requireAutoCreateServiceEnv(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") {
+    throw new Error(
+      `${label} requires autoCreateServiceEnv as boolean true|false (not omitted). ` +
+        "Update must not silently default to false. " +
+        "Org/project in the body are lookup keys matching the existing mapping — v1 Update cannot retarget.",
+    );
+  }
+  return value;
+}
+
+/**
+ * Validates autoCreateServiceEnv and lookup keys on a raw Update input,
+ * before any transform. Used by the `update` op's preflight hook (so the
+ * registry's generic required-field check, which can't see into the
+ * dynamically-keyed appProjMap body, never runs) and by
+ * buildAppProjMapUpdateBody itself for direct/test callers.
+ */
+function validateAppProjMapUpdateBody(input: Record<string, unknown>): void {
+  const body = isRecord(input.body) ? input.body : {};
+  const hasMap = isRecord(body.appProjMap) && Object.keys(body.appProjMap).length > 0;
+  const hasMappings = Array.isArray(body.mappings) && body.mappings.length > 0;
+
+  if (!hasMap && !hasMappings) {
+    const argoproject = String(input.argoproject ?? input.resource_id ?? "").trim();
+    const orgIdentifier = String(body.orgIdentifier ?? body.org ?? "").trim();
+    const projectIdentifier = String(body.projectIdentifier ?? body.project ?? "").trim();
+    if (!argoproject || !orgIdentifier || !projectIdentifier) {
+      throw new Error(
+        "Update requires appProjMap/mappings[], OR resource_id (Argo AppProject name) plus " +
+          "body.orgIdentifier and body.projectIdentifier (must match the existing mapping). " +
+          "Also set body.autoCreateServiceEnv to true or false. " +
+          "resource_scope/org_id/project_id are for the agent registration scope only.",
+      );
+    }
+    requireAutoCreateServiceEnv(body.autoCreateServiceEnv, "body");
+    return;
+  }
+
+  if (hasMap) {
+    for (const [name, value] of Object.entries(body.appProjMap as Record<string, unknown>)) {
+      if (!isRecord(value)) {
+        throw new Error(`Update appProjMap['${name}'] must be an object.`);
+      }
+      requireAutoCreateServiceEnv(value.autoCreateServiceEnv, `appProjMap['${name}']`);
+    }
+  }
+  if (hasMappings) {
+    for (const [i, row] of (body.mappings as unknown[]).entries()) {
+      if (!isRecord(row)) {
+        throw new Error(`Update mappings[${i}] must be an object.`);
+      }
+      requireAutoCreateServiceEnv(row.autoCreateServiceEnv, `mappings[${i}]`);
+    }
+  }
+}
+
+/**
+ * Body for AppProjectMappingService.Update (PUT …/appprojectsmapping).
+ *
+ * Server semantics (handler/server/appprojectmapping.go Update):
+ * - Looks up each row by agent + Argo name + body orgIdentifier/projectIdentifier.
+ * - Wrong org/project → "mapping not found" (not a retarget).
+ * - Persists autoCreateServiceEnv on the existing Mongo identifier.
+ * - Agent scope query params must match how the agent was registered (account./org./project),
+ *   not the mapped Harness project (those belong in the body only).
+ *
+ * Shapes: flat single-row (resource_id/argoproject + body fields), or appProjMap / mappings[].
+ */
+function buildAppProjMapUpdateBody(input: Record<string, unknown>): { appProjMap: Record<string, unknown> } {
+  validateAppProjMapUpdateBody(input);
+  const body = isRecord(input.body) ? input.body : {};
+  const hasMap = isRecord(body.appProjMap) && Object.keys(body.appProjMap).length > 0;
+  const hasMappings = Array.isArray(body.mappings) && body.mappings.length > 0;
+
+  if (!hasMap && !hasMappings) {
+    const argoproject = String(input.argoproject ?? input.resource_id ?? "").trim();
+    const orgIdentifier = String(body.orgIdentifier ?? body.org ?? "").trim();
+    const projectIdentifier = String(body.projectIdentifier ?? body.project ?? "").trim();
+    return {
+      appProjMap: {
+        [argoproject]: {
+          orgIdentifier,
+          projectIdentifier,
+          autoCreateServiceEnv: body.autoCreateServiceEnv as boolean,
+        },
+      },
+    };
+  }
+
+  // After strict autocreate checks, reuse create fold for org/project/map validation.
+  return buildAppProjMapBody(input);
+}
+
+/**
+ * Body for ReconcilerService.ImportData.
+ * Gateway `body: "filter"` decodes the HTTP JSON into ReconcilerFilter, so the
+ * request body is `{ projectNames: string[] }` (not wrapped in a `filter` key).
+ * Names are Argo AppProject names; Harness org/project come from existing mappings.
+ */
+function buildImportFilterBody(input: Record<string, unknown>): { projectNames: string[] } {
+  const body = isRecord(input.body) ? input.body : {};
+  const raw = body.projectNames ?? body.project_names;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    throw new Error(
+      "body.projectNames is required — non-empty array of Argo AppProject names already mapped. " +
+        "Example: body={ projectNames: ['team-a', 'team-b'] }. " +
+        "Import does not create mappings; run harness_create on gitops_app_project_mapping first. " +
+        "Empty/omitted projectNames (import-all) is not allowed in MCP v1 (UI always sends explicit names).",
+    );
+  }
+  const projectNames: string[] = [];
+  for (const n of raw) {
+    const name = String(n ?? "").trim();
+    if (!name) {
+      throw new Error("body.projectNames entries must be non-empty Argo AppProject names.");
+    }
+    projectNames.push(name);
+  }
+  return { projectNames };
+}
+
+/**
+ * ListAutoCreateLogsResponse → harness_list shape.
+ * Preserves page aggregates (counted from returned logs, not DB-wide).
+ */
+function autoCreateLogExtract(raw: unknown): Record<string, unknown> {
+  if (!isRecord(raw)) {
+    return { items: [], total: 0 };
+  }
+  const logs = Array.isArray(raw.logs) ? raw.logs : [];
+  const total = typeof raw.total === "number" ? raw.total : logs.length;
+  return {
+    items: logs,
+    total,
+    successServices: raw.successServices ?? 0,
+    failedServices: raw.failedServices ?? 0,
+    successEnvironments: raw.successEnvironments ?? 0,
+    failedEnvironments: raw.failedEnvironments ?? 0,
+    successClusterLinks: raw.successClusterLinks ?? 0,
+    failedClusterLinks: raw.failedClusterLinks ?? 0,
+  };
+}
+
+/**
  * Build bulk operation targets from input.
  * Single app: resource_id (agent_id) + params.app_name
  * Multiple apps: body.targets [{agent_id, app_name}, ...]
@@ -259,6 +510,462 @@ export const gitopsToolset: ToolsetDefinition = {
               },
             ],
           } satisfies ParamsSchema,
+        },
+      },
+    },
+    {
+      resourceType: "gitops_argo_project",
+      displayName: "GitOps Argo AppProject",
+      description:
+        "Argo CD AppProjects visible to a GitOps agent — includes unmapped projects.\n" +
+        "Use for migration discovery before creating Harness app-project mappings.\n" +
+        "Do NOT confuse with mapped-only APIs: this hits GET /agents/{agent}/projects (AgentProjectService.List),\n" +
+        "which asks the agent for AppProjects from the cluster, not only rows already mapped in Mongo.\n\n" +
+        "SCOPE BEHAVIOR (caller Harness scope must match how the agent was registered):\n" +
+        "- Account-level agent: resource_scope='account' — omit org_id and project_id\n" +
+        "- Org-level agent: resource_scope='org' — pass org_id only\n" +
+        "- Project-level agent: resource_scope='project' (default) — pass org_id and project_id\n\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed (unlike harness_list/get on gitops_agent itself):\n" +
+        "- Account-scoped agent: 'account.myagent'\n" +
+        "- Org-scoped agent: 'org.myagent'\n" +
+        "- Project-scoped agent: 'myagent' (no prefix)\n\n" +
+        "EXAMPLE:\n" +
+        "harness_list(resource_type='gitops_argo_project', resource_scope='account', filters={agent_id:'account.myagent'})",
+      toolset: "gitops",
+      scope: "project",
+      scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
+      identifierFields: ["agent_id"],
+      listFilterFields: [
+        {
+          name: "agent_id",
+          description:
+            "Scope-prefixed GitOps agent identifier (required). " +
+            "E.g. 'account.myagent', 'org.myagent', or 'myagent' for project-level.",
+          required: true,
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/projects",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: {
+            agent_id: "agentIdentifier",
+          },
+          skipCompact: true,
+          responseExtractor: argoProjectListExtract,
+          emptyOnErrorPatterns: [/agent is not registered/, /never connected/, /Not Implemented/],
+          description:
+            "List Argo CD AppProjects for an agent (mapped and unmapped). " +
+            "Requires filters.agent_id (scope-prefixed). Response items use metadata.name as the Argo AppProject name.",
+        },
+      },
+    },
+    {
+      resourceType: "gitops_app_project_mapping",
+      displayName: "GitOps App Project Mapping",
+      description:
+        "Argo CD AppProject → Harness org/project mapping for a GitOps agent.\n" +
+        "Supports list, create, and update (v1 appProjMap). Update toggles autoCreateServiceEnv only — " +
+        "body org/project are lookup keys (must match the existing row); v1 cannot retarget (delete+create for that).\n" +
+        "Discover with gitops_argo_project, create mappings, update autocreate as needed, then import.\n\n" +
+        "SCOPE BEHAVIOR (resource_scope / org_id / project_id = agent registration scope, NOT the mapped Harness project):\n" +
+        "- Account-level agent: resource_scope='account' — omit org_id and project_id\n" +
+        "- Org-level agent: resource_scope='org' — pass org_id only (agent's org)\n" +
+        "- Project-level agent: resource_scope='project' (default) — pass org_id and project_id (agent's project)\n" +
+        "Mapped Harness org/project go in the body only.\n\n" +
+        "IDENTIFIERS:\n" +
+        "- agent_id is scope-prefixed: 'account.myagent' | 'org.myagent' | 'myagent'\n" +
+        "- For update/delete: resource_id is the Argo AppProject name (argoproject); pass agent_id in params\n\n" +
+        "EXAMPLES:\n" +
+        "harness_list(resource_type='gitops_app_project_mapping', resource_scope='account', filters={agent_id:'account.myagent'})\n" +
+        "harness_create(resource_type='gitops_app_project_mapping', resource_scope='account',\n" +
+        "  params={agent_id:'account.myagent'},\n" +
+        "  body={appProjMap:{'team-a':{orgIdentifier:'default', projectIdentifier:'team-a-proj', autoCreateServiceEnv:true}}})\n" +
+        "harness_update(resource_type='gitops_app_project_mapping', resource_id='team-a', resource_scope='account',\n" +
+        "  params={agent_id:'account.myagent'},\n" +
+        "  body={orgIdentifier:'default', projectIdentifier:'team-a-proj', autoCreateServiceEnv:true})",
+      toolset: "gitops",
+      scope: "project",
+      scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
+      identifierFields: ["agent_id", "argoproject"],
+      listFilterFields: [
+        {
+          name: "agent_id",
+          description:
+            "Scope-prefixed GitOps agent identifier (required). " +
+            "E.g. 'account.myagent', 'org.myagent', or 'myagent' for project-level.",
+          required: true,
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/appprojectsmapping",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: {
+            agent_id: "agentIdentifier",
+          },
+          skipCompact: true,
+          responseExtractor: appProjMapExtract,
+          description:
+            "List Argo↔Harness project mappings for an agent. " +
+            "Requires filters.agent_id (scope-prefixed). " +
+            "Each item: argoproject, orgIdentifier, projectIdentifier, autoCreateServiceEnv.",
+        },
+        create: {
+          method: "POST",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/appprojectsmapping",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: {
+            agent_id: "agentIdentifier",
+          },
+          bodyBuilder: (input) => buildAppProjMapBody(input),
+          responseExtractor: passthrough,
+          description:
+            "Create one or more Argo↔Harness project mappings (bulk, one HTTP call).\n" +
+            "REQUIRED: params.agent_id (scope-prefixed). No resource_id for create.\n" +
+            "Body: appProjMap (native) OR mappings[] (ergonomic). Harness org/project must already exist.\n" +
+            "All entries succeed or fail atomically. Hosted agents are rejected by the server.",
+          bodySchema: {
+            description:
+              "Provide exactly one of appProjMap or mappings[]. Empty body is rejected.",
+            fields: [
+              {
+                name: "appProjMap",
+                type: "object",
+                required: false,
+                description:
+                  "Map of Argo AppProject name → { orgIdentifier, projectIdentifier, autoCreateServiceEnv? }. " +
+                  "Example: { 'team-a': { orgIdentifier: 'default', projectIdentifier: 'team-a-proj', autoCreateServiceEnv: true } }",
+              },
+              {
+                name: "mappings",
+                type: "array",
+                required: false,
+                description:
+                  "Alternative to appProjMap: [{ argoproject, orgIdentifier|org, projectIdentifier|project, autoCreateServiceEnv? }, ...]",
+              },
+            ],
+          },
+          paramsSchema: {
+            fields: [
+              {
+                name: "agent_id",
+                required: true,
+                description:
+                  "Scope-prefixed GitOps agent identifier. E.g. 'account.myagent', 'org.myagent', or 'myagent' for project-level.",
+              },
+            ],
+          } satisfies ParamsSchema,
+        },
+        update: {
+          method: "PUT",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/appprojectsmapping",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          pathParams: {
+            agent_id: "agentIdentifier",
+          },
+          bodyBuilder: (input) => buildAppProjMapUpdateBody(input),
+          preflight: async ({ input }) => validateAppProjMapUpdateBody(input),
+          responseExtractor: passthrough,
+          description:
+            "Update mapping(s) — primarily toggle autoCreateServiceEnv (UI parity).\n" +
+            "REQUIRED: resource_id = Argo AppProject name; params.agent_id (scope-prefixed).\n" +
+            "Body orgIdentifier/projectIdentifier must match the existing mapping (server lookup keys).\n" +
+            "v1 Update cannot retarget Harness org/project — use delete + create for remapping.\n" +
+            "resource_scope/org_id/project_id = agent registration scope only (same as list/create).\n" +
+            "Example: harness_update(resource_type='gitops_app_project_mapping', resource_id='team-a', " +
+            "resource_scope='account', params={agent_id:'account.myagent'}, " +
+            "body={orgIdentifier:'default', projectIdentifier:'team-a-proj', autoCreateServiceEnv:true})",
+          bodySchema: {
+            description:
+              "Single-row: orgIdentifier, projectIdentifier, autoCreateServiceEnv (required boolean). " +
+              "Bulk: appProjMap or mappings[] with autoCreateServiceEnv required on every entry. " +
+              "Org/project must match existing rows. autoCreateServiceEnv is enforced by preflight " +
+              "(not the field-level `required` flag below — this body is folded into a dynamically " +
+              "keyed map before the generic required-field check runs).",
+            fields: [
+              {
+                name: "orgIdentifier",
+                type: "string",
+                required: false,
+                description:
+                  "Existing mapping's Harness org (lookup key). Required for flat single-row body. Alias: org.",
+              },
+              {
+                name: "projectIdentifier",
+                type: "string",
+                required: false,
+                description:
+                  "Existing mapping's Harness project (lookup key). Required for flat single-row body. Alias: project.",
+              },
+              {
+                name: "autoCreateServiceEnv",
+                type: "boolean",
+                required: false,
+                description:
+                  "Required boolean, enforced by preflight (see bodySchema.description). " +
+                  "Omitting is rejected — update must not default to false.",
+              },
+              {
+                name: "appProjMap",
+                type: "object",
+                required: false,
+                description:
+                  "Bulk native map. Each value needs orgIdentifier, projectIdentifier, autoCreateServiceEnv (boolean).",
+              },
+              {
+                name: "mappings",
+                type: "array",
+                required: false,
+                description:
+                  "Bulk ergonomic array. Each row needs argoproject, org/project, autoCreateServiceEnv (boolean).",
+              },
+            ],
+          },
+          paramsSchema: {
+            fields: [
+              {
+                name: "agent_id",
+                required: true,
+                description:
+                  "Scope-prefixed GitOps agent identifier. E.g. 'account.myagent', 'org.myagent', or 'myagent' for project-level.",
+              },
+            ],
+          } satisfies ParamsSchema,
+        },
+        delete: {
+          method: "DELETE",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/appprojectsmapping/{name}",
+          pathBuilder: (input) => {
+            const agentId = String(input.agent_id ?? "").trim();
+            const argoproject = String(input.argoproject ?? input.resource_id ?? "").trim();
+            const orgId = String(input.org_id ?? "").trim();
+            const projectId = String(input.project_id ?? "").trim();
+            if (!agentId) {
+              throw new Error(
+                "params.agent_id is required (scope-prefixed: 'account.myagent' | 'org.myagent' | 'myagent').",
+              );
+            }
+            if (!argoproject) {
+              throw new Error(
+                "resource_id is required — Argo AppProject name (argoproject). " +
+                  "Use harness_list(resource_type='gitops_app_project_mapping') to discover it.",
+              );
+            }
+            if (!orgId || !projectId) {
+              throw new Error(
+                "org_id and project_id are required for delete — pass the mapping's Harness org/project " +
+                  "from harness_list (orgIdentifier / projectIdentifier). " +
+                  "Required even when resource_scope='account': v1 Delete looks up by agent + Argo name + org + project " +
+                  "(not agent registration scope alone). resource_scope still controls agent Load.",
+              );
+            }
+            return (
+              `/gitops/api/v1/agents/${encodeURIComponent(agentId)}` +
+              `/appprojectsmapping/${encodeURIComponent(argoproject)}`
+            );
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          // Always send mapping org/project — resource_scope=account would otherwise omit them.
+          queryParams: {
+            org_id: "orgIdentifier",
+            project_id: "projectIdentifier",
+          },
+          responseExtractor: passthrough,
+          description:
+            "Delete an Argo↔Harness project mapping (v1). CASCADE: server also deletes apps, appsets, " +
+            "repos, and clusters under that Argo project for this mapping — irreversible.\n\n" +
+            "REQUIRED:\n" +
+            "  resource_id — Argo AppProject name (list field argoproject)\n" +
+            "  params.agent_id — scope-prefixed agent id\n" +
+            "  org_id + project_id — mapping's Harness org/project from list (always required)\n" +
+            "  resource_scope — agent registration scope (account|org|project)\n\n" +
+            "EXAMPLE:\n" +
+            "harness_delete(resource_type='gitops_app_project_mapping', resource_id='team-a',\n" +
+            "  resource_scope='account', params={agent_id:'account.myagent'},\n" +
+            "  org_id='default', project_id='team-a-proj')\n\n" +
+            "Hosted agents are rejected by the server.",
+          paramsSchema: {
+            fields: [
+              {
+                name: "agent_id",
+                required: true,
+                description:
+                  "Scope-prefixed GitOps agent identifier. E.g. 'account.myagent', 'org.myagent', or 'myagent' for project-level.",
+              },
+              {
+                name: "org_id",
+                required: true,
+                description:
+                  "Mapped Harness orgIdentifier from harness_list (not omitted for account-scoped agents).",
+              },
+              {
+                name: "project_id",
+                required: true,
+                description:
+                  "Mapped Harness projectIdentifier from harness_list (not omitted for account-scoped agents).",
+              },
+            ],
+          } satisfies ParamsSchema,
+        },
+      },
+      executeHint:
+        "IMPORT: action='import' — resource_id is the scope-prefixed agent_id (not argoproject). " +
+        "Body: { projectNames: ['argo-a', ...] } (required, non-empty). " +
+        "Mappings must already exist. " +
+        "IMPORTANT: save importRequestId and reconcileAppResponse.autoCreateCounts — " +
+        "see gitops_autocreate_log for how to poll them.",
+      executeActions: {
+        import: {
+          method: "POST",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/reconcile/import",
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          pathParams: {
+            agent_id: "agentIdentifier",
+          },
+          bodyBuilder: (input) => buildImportFilterBody(input),
+          responseExtractor: passthrough,
+          actionDescription:
+            "Import Argo CD objects into Harness for mapped AppProjects (sync HTTP — can take minutes).",
+          description:
+            "POST reconcile/import. Prerequisites: mappings exist for each name in body.projectNames.\n" +
+            "REQUIRED: resource_id = scope-prefixed agent_id; body.projectNames = non-empty Argo names.\n" +
+            "resource_scope = agent registration scope (same as list/create — not mapping org/project).\n" +
+            "Response: applicationCount, clusterCount, repositoryCount, …, importRequestId, " +
+            "reconcileAppResponse.autoCreateCounts (planned). Hosted agents rejected.\n\n" +
+            "AFTER IMPORT — auto-create outcomes: if reconcileAppResponse.autoCreateCounts sums > 0, " +
+            "poll harness_list(resource_type='gitops_autocreate_log', filters={agent_id, import_request_id}) " +
+            "yourself — see that resource's description for the exact stop condition.\n\n" +
+            "Example: harness_execute(resource_type='gitops_app_project_mapping', action='import',\n" +
+            "  resource_id='account.myagent', resource_scope='account',\n" +
+            "  body={projectNames:['team-a']})",
+          bodySchema: {
+            description: "ReconcilerFilter JSON (gateway body:\"filter\").",
+            fields: [
+              {
+                name: "projectNames",
+                type: "array",
+                required: true,
+                description: "Argo AppProject names to import (must already be mapped).",
+              },
+            ],
+          },
+        },
+      },
+      relatedResources: [
+        {
+          resourceType: "gitops_autocreate_log",
+          relationship: "import produces importRequestId for",
+          description:
+            "After import, poll harness_list on gitops_autocreate_log with the returned " +
+            "importRequestId to observe auto-create outcomes.",
+        },
+        {
+          resourceType: "gitops_argo_project",
+          relationship: "discover unmapped projects before",
+          description: "List Argo AppProjects on the agent before creating mappings.",
+        },
+      ],
+    },
+    {
+      resourceType: "gitops_autocreate_log",
+      displayName: "GitOps Auto-Create Log",
+      description:
+        "Logs for services / environments / cluster-links auto-created during GitOps import " +
+        "(when mappings had autoCreateServiceEnv=true). This is a snapshot endpoint, not a completion " +
+        "signal — there is no terminal status field.\n\n" +
+        "PREREQUISITE: Run harness_execute(resource_type='gitops_app_project_mapping', action='import', …) first. " +
+        "Use the response fields importRequestId and reconcileAppResponse.autoCreateCounts.\n\n" +
+        "HOW TO POLL FOR COMPLETION:\n" +
+        "  1. If autoCreateCounts.serviceCount + environmentCount + clusterLinkCount == 0, skip " +
+        "— nothing was scheduled.\n" +
+        "  2. Otherwise call this list every ~10s with the same import_request_id, " +
+        "passing size=100 so a single page covers most imports.\n" +
+        "  3. Stop when the response's total >= that summed count, or after ~2 minutes " +
+        "(treat as done-enough).\n" +
+        "  4. items[] holds one page. When total exceeds items.length, page through with " +
+        "skip=items already read.\n\n" +
+        "SCOPE BEHAVIOR (agent registration scope — same as import):\n" +
+        "- Account-level agent: resource_scope='account' — omit org_id and project_id\n" +
+        "- Org-level agent: resource_scope='org' — pass org_id only\n" +
+        "- Project-level agent: resource_scope='project' (default) — pass org_id and project_id\n\n" +
+        "IDENTIFIERS: agent_id is scope-prefixed: 'account.myagent' | 'org.myagent' | 'myagent'\n\n" +
+        "EXAMPLE:\n" +
+        "harness_list(resource_type='gitops_autocreate_log', resource_scope='account', size=100,\n" +
+        "  filters={agent_id:'account.myagent', import_request_id:'507f1f77bcf86cd799439011'})",
+      toolset: "gitops",
+      scope: "project",
+      scopeOptional: true,
+      supportedScopes: ["account", "org", "project"],
+      identifierFields: ["agent_id"],
+      listFilterFields: [
+        {
+          name: "agent_id",
+          description:
+            "Scope-prefixed GitOps agent identifier (required). Same agent used for import.",
+          required: true,
+        },
+        {
+          name: "import_request_id",
+          description:
+            "Required. importRequestId from the import execute response. " +
+            "Server filter mode (1): importRequestId alone — org/project query not used for this mode.",
+          required: true,
+        },
+        {
+          name: "since_time",
+          description:
+            "Optional Unix epoch milliseconds — only logs created after this time (delta polling).",
+          required: false,
+        },
+        {
+          name: "skip",
+          description:
+            "Optional pagination offset (default 0). Pair with harness_list's size, which maps to the " +
+            "API limit (default 20, max 100).",
+          required: false,
+        },
+      ],
+      relatedResources: [
+        {
+          resourceType: "gitops_app_project_mapping",
+          relationship: "importRequestId produced by",
+          description:
+            "harness_execute action='import' on gitops_app_project_mapping returns importRequestId.",
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/gitops/api/v1/agents/{agentIdentifier}/autocreate-logs",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: {
+            agent_id: "agentIdentifier",
+          },
+          queryParams: {
+            import_request_id: "importRequestId",
+            since_time: "sinceTime",
+            size: "limit",
+            skip: "skip",
+          },
+          skipCompact: true,
+          responseExtractor: autoCreateLogExtract,
+          description:
+            "List auto-create logs for one import run.\n" +
+            "REQUIRED filters: agent_id (scope-prefixed), import_request_id (from import response).\n" +
+            "Optional: since_time (ms), skip, size (→ API limit; harness_list default 20, max 100).\n" +
+            "Returns items[] (one page of logs) plus total and per-page success/failed aggregates " +
+            "(successServices, failedServices, … — aggregates are for the returned page, not DB-wide).\n" +
+            "Status values: SUCCESS, FAILED, WARNING. resourceType: service | environment | clusterLink.\n" +
+            "Logs TTL ~7 days. Poll every ~10s using the same import_request_id with size=100; stop when " +
+            "total covers the planned autoCreateCounts sum, or after ~2 min. Page with skip when total " +
+            "exceeds items.length.\n\n" +
+            "Example: harness_list(resource_type='gitops_autocreate_log', resource_scope='account', size=100,\n" +
+            "  filters={agent_id:'account.myagent', import_request_id:'507f1f77bcf86cd799439011'})",
         },
       },
     },

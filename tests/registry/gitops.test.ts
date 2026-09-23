@@ -1620,6 +1620,30 @@ describe("gitops pagination", () => {
     expect(call.params.size).toBe(30);
   });
 
+  it("gitops_autocreate_log list: size drives the API limit param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ logs: [], total: 0 });
+    const client = makeClient(mockRequest);
+
+    // harness_list always supplies a size (Zod default 20), so any
+    // defaultQueryParams entry for `limit` is dead — the page size the agent
+    // gets is whatever `size` says, never an endpoint-local default.
+    await registry.dispatch(client, "gitops_autocreate_log", "list", {
+      agent_id: "account.myagent",
+      import_request_id: "507f1f77bcf86cd799439011",
+      size: 20,
+    });
+    expect(mockRequest.mock.calls[0][0].params.limit).toBe(20);
+
+    await registry.dispatch(client, "gitops_autocreate_log", "list", {
+      agent_id: "account.myagent",
+      import_request_id: "507f1f77bcf86cd799439011",
+      size: 100,
+      skip: 100,
+    });
+    expect(mockRequest.mock.calls[1][0].params.limit).toBe(100);
+    expect(mockRequest.mock.calls[1][0].params.skip).toBe(100);
+  });
+
   it("gitops_repository list: search_term forwarded in POST body as searchTerm", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ content: [] });
     const client = makeClient(mockRequest);
@@ -1682,5 +1706,303 @@ describe("gitops supportedScopes", () => {
     await expect(
       registry.dispatch(client, "gitops_application", "list", { resource_scope: "account" }),
     ).rejects.toThrow(/gitops_application does not support account scope/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// skipCompact — compact footgun regression coverage
+//
+// gitops_app_project_mapping, gitops_argo_project, and gitops_autocreate_log
+// return payloads whose actionable fields (argoproject, autoCreateServiceEnv,
+// metadata.name, resourceType, resourceRef, failureReason, errorCode) are NOT
+// in utils/compact.ts's generic key-name whitelist. Without skipCompact:true,
+// harness_list's default compact:true pass silently strips them down to
+// near-empty rows (only *Identifier/status/createdAt survive) — verified live
+// against gitopsautomation.pr2.harness.io before this fix.
+//
+// registry.dispatch() stamps a non-enumerable `__skipCompact` marker on the
+// result (see index.ts) that harness_list checks to skip the whitelist pass.
+// That marker only survives if the extractor's result already has `total` —
+// normalizeHarnessListPayload clones (dropping non-enumerable props) when
+// `total` is missing. gitops_argo_project's raw API response has no `total`,
+// so its extractor must synthesize one; these tests guard both halves.
+// ---------------------------------------------------------------------------
+
+describe("gitops list skipCompact (compact footgun fix)", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it.each(["gitops_app_project_mapping", "gitops_argo_project", "gitops_autocreate_log"] as const)(
+    "%s.list declares skipCompact:true",
+    (resourceType) => {
+      expect(registry.getResource(resourceType).operations.list?.skipCompact).toBe(true);
+    },
+  );
+
+  it("gitops_app_project_mapping list: __skipCompact marker present, non-whitelisted fields intact", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      appProjMap: {
+        "team-a": { orgIdentifier: "default", projectIdentifier: "team-a-proj", autoCreateServiceEnv: true },
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "gitops_app_project_mapping", "list", {
+      agent_id: "account.myagent",
+    })) as Record<string, unknown> & { items: Array<Record<string, unknown>>; __skipCompact?: boolean };
+
+    expect(result.__skipCompact).toBe(true);
+    expect(result.total).toBe(1);
+    // argoproject/autoCreateServiceEnv are not in the generic compact whitelist —
+    // without skipCompact these would be silently dropped.
+    expect(result.items[0]).toEqual({
+      argoproject: "team-a",
+      orgIdentifier: "default",
+      projectIdentifier: "team-a-proj",
+      autoCreateServiceEnv: true,
+    });
+  });
+
+  it("gitops_argo_project list: synthesizes total so __skipCompact survives normalization", async () => {
+    // Real API response has no top-level `total` — normalizeHarnessListPayload
+    // clones (via `{...r, items, total}`) whenever `total` is absent, which
+    // drops non-enumerable properties like __skipCompact from the original
+    // object. The extractor must add `total` itself to prevent that clone.
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [
+        { metadata: { name: "team-a", namespace: "agent-ns" }, spec: { sourceRepos: ["*"] }, status: {} },
+      ],
+      metadata: { resourceVersion: "12345" },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "gitops_argo_project", "list", {
+      agent_id: "account.myagent",
+    })) as Record<string, unknown> & { items: Array<Record<string, unknown>>; __skipCompact?: boolean };
+
+    expect(result.__skipCompact).toBe(true);
+    expect(result.total).toBe(1);
+    // metadata.name is not in the generic compact whitelist (only top-level
+    // keys are checked; nested objects like `metadata`/`spec` are dropped
+    // wholesale by the whitelist pass) — this is the exact field the LLM
+    // needs to identify an Argo AppProject.
+    expect((result.items[0]!.metadata as Record<string, unknown>).name).toBe("team-a");
+    expect(result.metadata).toEqual({ resourceVersion: "12345" });
+  });
+
+  it("gitops_argo_project list: total passthrough when API does supply one", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [{ metadata: { name: "p1" }, spec: {}, status: {} }],
+      total: 5,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "gitops_argo_project", "list", {
+      agent_id: "account.myagent",
+    })) as Record<string, unknown> & { __skipCompact?: boolean };
+
+    expect(result.__skipCompact).toBe(true);
+    expect(result.total).toBe(5);
+  });
+
+  it("gitops_autocreate_log list: __skipCompact marker present, diagnostic fields intact", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      logs: [
+        {
+          resourceType: "service",
+          resourceRef: "pipelineservice",
+          status: "FAILED",
+          errorCode: "DUPLICATE_FIELD",
+          failureReason: "Service [pipelineservice] already exists",
+          application: { name: "app1" },
+        },
+      ],
+      total: 1,
+      successServices: 0,
+      failedServices: 1,
+      successEnvironments: 0,
+      failedEnvironments: 0,
+      successClusterLinks: 0,
+      failedClusterLinks: 0,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "gitops_autocreate_log", "list", {
+      agent_id: "account.myagent",
+      import_request_id: "507f1f77bcf86cd799439011",
+    })) as Record<string, unknown> & { items: Array<Record<string, unknown>>; __skipCompact?: boolean };
+
+    expect(result.__skipCompact).toBe(true);
+    expect(result.total).toBe(1);
+    expect(result.failedServices).toBe(1);
+    // resourceType/resourceRef/failureReason/errorCode/application are not in
+    // the generic compact whitelist — without skipCompact these would be
+    // stripped down to just {status, createdAt, *Identifier fields}, making
+    // the log useless for diagnosing which resource failed and why.
+    expect(result.items[0]).toMatchObject({
+      resourceType: "service",
+      resourceRef: "pipelineservice",
+      errorCode: "DUPLICATE_FIELD",
+      failureReason: "Service [pipelineservice] already exists",
+      application: { name: "app1" },
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// gitops_app_project_mapping update — preflight validation
+//
+// Update's body is folded into a dynamically-keyed map ({ appProjMap: {
+// [argoproject]: {...} } }) before the registry's generic bodySchema.required
+// check ever sees it, so that check can't find autoCreateServiceEnv at the
+// top level it's declared on. validateAppProjMapUpdateBody runs as a
+// `preflight` hook instead — pre-transform, on the raw input — so it can
+// name the actual field the caller passed. These tests assert the hook
+// blocks bad input *before* any HTTP request is made (mockRequest never
+// called), and lets valid input through for all three body shapes.
+// ---------------------------------------------------------------------------
+
+describe("gitops_app_project_mapping update preflight validation", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("flat shape: valid boolean passes preflight and reaches dispatch", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_app_project_mapping", "update", {
+      agent_id: "account.myagent",
+      resource_id: "team-a",
+      body: { orgIdentifier: "default", projectIdentifier: "team-a-proj", autoCreateServiceEnv: true },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("PUT");
+    expect(call.body.appProjMap["team-a"]).toEqual({
+      orgIdentifier: "default",
+      projectIdentifier: "team-a-proj",
+      autoCreateServiceEnv: true,
+    });
+  });
+
+  it("flat shape: missing autoCreateServiceEnv is rejected before any request is sent", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "update", {
+        agent_id: "account.myagent",
+        resource_id: "team-a",
+        body: { orgIdentifier: "default", projectIdentifier: "team-a-proj" },
+      }),
+    ).rejects.toThrow(/body requires autoCreateServiceEnv as boolean/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("flat shape: non-boolean autoCreateServiceEnv is rejected", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "update", {
+        agent_id: "account.myagent",
+        resource_id: "team-a",
+        body: { orgIdentifier: "default", projectIdentifier: "team-a-proj", autoCreateServiceEnv: "true" },
+      }),
+    ).rejects.toThrow(/body requires autoCreateServiceEnv as boolean/);
+  });
+
+  it("flat shape: missing org/project lookup keys is rejected", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "update", {
+        agent_id: "account.myagent",
+        resource_id: "team-a",
+        body: { autoCreateServiceEnv: true },
+      }),
+    ).rejects.toThrow(/Update requires appProjMap\/mappings\[\]/);
+  });
+
+  it("bulk appProjMap shape: valid entry passes preflight and reaches dispatch", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_app_project_mapping", "update", {
+      agent_id: "account.myagent",
+      resource_id: "team-a",
+      body: {
+        appProjMap: {
+          "team-a": { orgIdentifier: "default", projectIdentifier: "team-a-proj", autoCreateServiceEnv: false },
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.appProjMap["team-a"].autoCreateServiceEnv).toBe(false);
+  });
+
+  it("bulk appProjMap shape: entry missing autoCreateServiceEnv names the entry in the error", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "update", {
+        agent_id: "account.myagent",
+        resource_id: "team-a",
+        body: {
+          appProjMap: { "team-a": { orgIdentifier: "default", projectIdentifier: "team-a-proj" } },
+        },
+      }),
+    ).rejects.toThrow(/appProjMap\['team-a'\] requires autoCreateServiceEnv as boolean/);
+  });
+
+  it("bulk mappings[] shape: valid entry passes preflight and reaches dispatch", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_app_project_mapping", "update", {
+      agent_id: "account.myagent",
+      resource_id: "team-a",
+      body: {
+        mappings: [
+          { argoproject: "team-a", orgIdentifier: "default", projectIdentifier: "team-a-proj", autoCreateServiceEnv: true },
+        ],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.appProjMap["team-a"].autoCreateServiceEnv).toBe(true);
+  });
+
+  it("bulk mappings[] shape: entry missing autoCreateServiceEnv names the index in the error", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "update", {
+        agent_id: "account.myagent",
+        resource_id: "team-a",
+        body: {
+          mappings: [{ argoproject: "team-a", orgIdentifier: "default", projectIdentifier: "team-a-proj" }],
+        },
+      }),
+    ).rejects.toThrow(/mappings\[0\] requires autoCreateServiceEnv as boolean/);
+  });
+
+  it("preflight validates presence/type only — mismatched org/project still reaches dispatch (server's job to reject)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_app_project_mapping", "update", {
+      agent_id: "account.myagent",
+      resource_id: "team-a",
+      body: { orgIdentifier: "default", projectIdentifier: "wrong-project-xyz", autoCreateServiceEnv: true },
+    });
+
+    expect(mockRequest).toHaveBeenCalled();
   });
 });
