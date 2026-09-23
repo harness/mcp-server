@@ -390,3 +390,146 @@ describe("template_v1 create body builder", () => {
     ).rejects.toThrow(/identifier is required/i);
   });
 });
+
+describe("template openInHarness deep links", () => {
+  it("get uses /settings/templates/{id} (not /setup/resources/templates)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: { identifier: "Setup_Uv", name: "Setup Uv" },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "template", "get", {
+      org_id: "PROD",
+      project_id: "Traceable",
+      template_id: "Setup_Uv",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/Setup_Uv",
+    );
+    expect(String(result.openInHarness)).not.toContain("setup/resources");
+  });
+
+  // template_v1 builds every path with pathBuilder, so a deep link template
+  // keyed on the v0 {templateIdentifier} path param was emitted verbatim.
+  it("template_v1 get resolves the identifier instead of emitting a placeholder", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "Setup_Uv", name: "Setup Uv" });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "template_v1", "get", {
+      org_id: "PROD",
+      project_id: "Traceable",
+      template_id: "Setup_Uv",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/Setup_Uv",
+    );
+    expect(String(result.openInHarness)).not.toContain("{templateIdentifier}");
+    expect(String(result.openInHarness)).not.toContain("{template_id}");
+  });
+
+  it("template_v1 update resolves the identifier from the input (pathBuilder ops)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ identifier: "Setup_Uv" });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "template_v1", "update", {
+      org_id: "PROD",
+      project_id: "Traceable",
+      template_id: "Setup_Uv",
+      version_label: "v1",
+      body: {
+        template_yaml: "version: 1\ntemplate:\n  step: {}\n",
+      },
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/Setup_Uv",
+    );
+    expect(String(result.openInHarness)).not.toContain("{templateIdentifier}");
+  });
+
+  it("template_v1 list builds a per-item link from each item identifier", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue([{ identifier: "A" }, { identifier: "B" }]);
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "template_v1", "list", {
+      org_id: "PROD",
+      project_id: "Traceable",
+    })) as { items: Array<Record<string, unknown>> };
+
+    expect(result.items.map((item) => item.openInHarness)).toEqual([
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/A",
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/B",
+    ]);
+    for (const item of result.items) {
+      expect(String(item.openInHarness)).not.toContain("{templateIdentifier}");
+    }
+  });
+
+  it("template_v1 create resolves the identifier from the response body", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({ template: { identifier: "New_T" } });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "template_v1", "create", {
+      org_id: "PROD",
+      project_id: "Traceable",
+      body: {
+        identifier: "New_T",
+        name: "New T",
+        template_yaml: "version: 1\ntemplate:\n  step: {}\n",
+      },
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/New_T",
+    );
+  });
+
+  it("template_v1 delete resolves the identifier from the input (pathBuilder op)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "template_v1", "delete", {
+      org_id: "PROD",
+      project_id: "Traceable",
+      template_id: "Setup_Uv",
+      version_label: "v1",
+    })) as Record<string, unknown>;
+
+    expect(result.openInHarness).toBe(
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/Setup_Uv",
+    );
+    expect(String(result.openInHarness)).not.toContain("{template_id}");
+  });
+
+  it("template (v0) list builds per-item Settings links from identifier", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "templates" }));
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: {
+        content: [{ identifier: "Step_A" }, { identifier: "Step_B" }],
+        totalElements: 2,
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "template", "list", {
+      org_id: "PROD",
+      project_id: "Traceable",
+    })) as { items: Array<Record<string, unknown>> };
+
+    expect(result.items.map((item) => item.openInHarness)).toEqual([
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/Step_A",
+      "https://app.harness.io/ng/account/test-account/all/orgs/PROD/projects/Traceable/settings/templates/Step_B",
+    ]);
+    for (const item of result.items) {
+      expect(String(item.openInHarness)).not.toContain("setup/resources");
+    }
+  });
+});

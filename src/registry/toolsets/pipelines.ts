@@ -157,6 +157,29 @@ const PIPELINE_V0_GET_PARAMS: ParamsSchema = {
   ],
 };
 
+/** Query names v0 pipeline GET and pipeline_resolved_yaml GET send. `branch_name` is an alias of `branch`. */
+const PIPELINE_V0_PIPELINE_GET_QUERY_PARAMS = {
+  branch: "branch",
+  branch_name: "branch",
+  store_type: "storeType",
+  connector_ref: "connectorRef",
+  repo_name: "repoName",
+  load_from_fallback_branch: "loadFromFallbackBranch",
+  is_harness_code_repo: "isHarnessCodeRepo",
+} as const;
+
+const PIPELINE_V0_PIPELINE_GET_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "branch", required: false, description: "Git branch for a remote pipeline. Alias of branch_name. Pass via params." },
+    { name: "branch_name", required: false, description: "Git branch — sent as branch. Alias of branch. Pass via params." },
+    { name: "store_type", required: false, description: "INLINE or REMOTE. Pass via params." },
+    { name: "connector_ref", required: false, description: "Git connector ref for external Git. Pass via params." },
+    { name: "repo_name", required: false, description: "Git repository name. Pass via params." },
+    { name: "load_from_fallback_branch", required: false, description: "When true, load from the created non-default branch if the requested branch is empty. Pass via params." },
+    { name: "is_harness_code_repo", required: false, description: "Set true for Harness Code repositories. Pass via params." },
+  ],
+};
+
 const PIPELINE_V0_UPDATE_PARAMS: ParamsSchema = {
   fields: [
     { name: "store_type", required: false, description: "INLINE or REMOTE. Pass via params." },
@@ -696,15 +719,10 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/pipeline/api/pipelines/{pipelineIdentifier}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
-          queryParams: {
-            branch: "branch",
-            store_type: "storeType",
-            connector_ref: "connectorRef",
-            repo_name: "repoName",
-          },
+          queryParams: { ...PIPELINE_V0_PIPELINE_GET_QUERY_PARAMS },
           responseExtractor: ngExtract,
-          paramsSchema: PIPELINE_V0_GET_PARAMS,
-          description: "Get pipeline details including YAML definition. For remote/git-backed pipelines, pass branch to specify which branch to read from.",
+          paramsSchema: PIPELINE_V0_PIPELINE_GET_PARAMS,
+          description: "Get pipeline details including YAML definition. Requires pipeline_id (or resource_id). For remote/git-backed pipelines, pass branch (or branch_name). Optional: store_type, connector_ref, repo_name, load_from_fallback_branch, is_harness_code_repo.",
         },
         create: {
           method: "POST",
@@ -1544,19 +1562,14 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/pipeline/api/pipelines/{pipelineIdentifier}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
-          queryParams: {
-            branch: "branch",
-            store_type: "storeType",
-            connector_ref: "connectorRef",
-            repo_name: "repoName",
-          },
-          paramsSchema: PIPELINE_V0_GET_PARAMS,
+          queryParams: { ...PIPELINE_V0_PIPELINE_GET_QUERY_PARAMS },
+          paramsSchema: PIPELINE_V0_PIPELINE_GET_PARAMS,
           staticQueryParams: {
             getTemplatesResolvedPipeline: "true",
           },
           responseExtractor: pipelineResolvedYamlExtract,
           description:
-            "Fetch resolved pipeline YAML with templates expanded. Returns stageMetadataMap for patching entity-type activity inputs (deploymentType, environmentRef).",
+            "Fetch resolved pipeline YAML with templates expanded. Requires pipeline_id (or resource_id). For remote/git-backed pipelines, pass branch (or branch_name). Optional: store_type, connector_ref, repo_name, load_from_fallback_branch, is_harness_code_repo. Returns stageMetadataMap for patching entity-type activity inputs (deploymentType, environmentRef).",
         },
       },
     },

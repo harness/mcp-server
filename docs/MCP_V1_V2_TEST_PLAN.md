@@ -2133,8 +2133,8 @@ For each resource type, verify the `openInHarness` URL loads correctly in the br
 | DLP-404-002 | Service | `/settings/services/{id}` | Opens service page |
 | DLP-404-003 | Connector | `/settings/connectors/{id}` | Opens connector page |
 | DLP-404-004 | Pipeline | `/pipelines/{id}/pipeline-studio?storeType=...` | Opens pipeline studio |
-| DLP-404-005 | Secret | `/settings/secrets/{id}/details` | Opens secret details page |
-| DLP-404-006 | Template | `/settings/templates/{id}/...` | Opens template page |
+| DLP-404-005 | Secret | `/settings/secrets/{id}` | Opens secret details page |
+| DLP-404-006 | Template | `/settings/templates/{id}` | Opens template page |
 | DLP-404-007 | User Group | `/settings/access-control/user-groups/{id}` | Opens user group page |
 | DLP-404-008 | Role | `/settings/access-control/roles/{id}` | Opens role page |
 

@@ -334,6 +334,16 @@ describe("ConfigSchema", () => {
     ).toThrow("HARNESS_FME_API_KEY must not be set in multi-user mode");
   });
 
+  it("rejects multi-user mode when TYPESAFE_API_KEY is set", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        HARNESS_MCP_MODE: "multi-user",
+        HARNESS_ACCOUNT_ID: "acct123",
+        TYPESAFE_API_KEY: "shared-typesafe-key",
+      }),
+    ).toThrow("TYPESAFE_API_KEY must not be set in multi-user mode");
+  });
+
   it("requires HARNESS_API_KEY in single-user mode", () => {
     expect(() =>
       ConfigSchema.parse({
@@ -406,6 +416,15 @@ describe("ConfigSchema", () => {
         HARNESS_FME_API_KEY: "shared-fme-key",
       }),
     ).toThrow("HARNESS_FME_API_KEY must not be set in oauth mode");
+  });
+
+  it("rejects shared TypeSafe credentials in OAuth mode", () => {
+    expect(() =>
+      ConfigSchema.parse({
+        ...oauthConfig,
+        TYPESAFE_API_KEY: "shared-typesafe-key",
+      }),
+    ).toThrow("TYPESAFE_API_KEY must not be set in oauth mode");
   });
 
   it("requires HTTPS for OAuth URLs unless local HTTP is explicitly allowed", () => {
@@ -589,6 +608,65 @@ describe("ConfigSchema — HTTPS enforcement", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.HARNESS_FME_API_KEY).toBeUndefined();
+    }
+  });
+
+  it("parses explicit TYPESAFE_API_KEY config", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      TYPESAFE_API_KEY: "ts-admin-key",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.TYPESAFE_API_KEY).toBe("ts-admin-key");
+    }
+  });
+
+  it("treats empty TYPESAFE_API_KEY config as unset", () => {
+    const result = ConfigSchema.safeParse({
+      ...validConfig,
+      TYPESAFE_API_KEY: "",
+    });
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.TYPESAFE_API_KEY).toBeUndefined();
+    }
+  });
+
+  it("defaults TYPESAFE_BASE_URL to https://api.typesafe.ai and validates HTTPS", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.TYPESAFE_BASE_URL).toBe("https://api.typesafe.ai");
+    }
+
+    expect(() =>
+      ConfigSchema.parse({
+        ...validConfig,
+        TYPESAFE_BASE_URL: "http://localhost:9090",
+      }),
+    ).toThrow("TYPESAFE_BASE_URL must use HTTPS");
+
+    const allowed = ConfigSchema.safeParse({
+      ...validConfig,
+      TYPESAFE_BASE_URL: "http://localhost:9090",
+      HARNESS_ALLOW_HTTP: "true",
+    });
+    expect(allowed.success).toBe(true);
+    if (allowed.success) {
+      expect(allowed.data.TYPESAFE_BASE_URL).toBe("http://localhost:9090");
+    }
+  });
+
+  it("defaults the diagnose triage knobs (spec 010)", () => {
+    const result = ConfigSchema.safeParse(validConfig);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.HARNESS_DIAGNOSE_TRIAGE).toBe(true);
+      expect(result.data.HARNESS_DIAGNOSE_TRIAGE_MIN_CONFIDENCE).toBe(0.6);
+      expect(result.data.HARNESS_DIAGNOSE_TRIAGE_TIMEOUT_MS).toBe(400);
     }
   });
 

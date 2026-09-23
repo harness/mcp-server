@@ -32,7 +32,7 @@ describe("release metadata", () => {
     const rootManifest = readJson("manifest.json");
     const directoryManifest = readJson("mcp-directory/manifest.json");
 
-    expect(packageJson.version).toBe("3.2.29");
+    expect(packageJson.version).toBe("3.2.30");
     expect(rootManifest.version).toBe(packageJson.version);
     expect(directoryManifest.version).toBe(packageJson.version);
   });
@@ -52,9 +52,9 @@ describe("release metadata", () => {
     legacyManifest.server.entry_point = "build/index.js";
     legacyManifest.server.mcp_config.args[0] = "${__dirname}/build/index.js";
 
-    expect(assetNameForVersion("3.2.29")).toBe("harness-mcp-server-3.2.29.mcpb");
+    expect(assetNameForVersion("3.2.30")).toBe("harness-mcp-server-3.2.30.mcpb");
     expect(MCPB_CLI_PACKAGE).toBe("@anthropic-ai/mcpb@2.1.2");
-    expect(normalizeBundleManifest(legacyManifest, "3.2.29").server).toMatchObject({
+    expect(normalizeBundleManifest(legacyManifest, "3.2.30").server).toMatchObject({
       entry_point: "server/index.js",
       mcp_config: { args: ["${__dirname}/server/index.js", "stdio"] },
     });
@@ -98,6 +98,24 @@ describe("release metadata", () => {
       );
       expect(manifest.user_config.HARNESS_FME_BASE_URL).toMatchObject({
         default: "https://api.split.io",
+        required: false,
+        sensitive: false,
+      });
+    }
+  });
+
+  it("exposes TypeSafe config in packaged manifests", () => {
+    for (const manifest of [readJson("manifest.json"), readJson("mcp-directory/manifest.json")]) {
+      expect(manifest.server.mcp_config.env.TYPESAFE_API_KEY).toBe("${user_config.TYPESAFE_API_KEY}");
+      expect(manifest.user_config.TYPESAFE_API_KEY).toMatchObject({
+        required: false,
+        sensitive: true,
+      });
+      expect(manifest.server.mcp_config.env.TYPESAFE_BASE_URL).toBe(
+        "${user_config.TYPESAFE_BASE_URL}",
+      );
+      expect(manifest.user_config.TYPESAFE_BASE_URL).toMatchObject({
+        default: "https://api.typesafe.ai",
         required: false,
         sensitive: false,
       });
