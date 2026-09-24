@@ -317,6 +317,40 @@ function prReviewerCreateBody(input: Record<string, unknown>): { reviewer_id: nu
   return { reviewer_id: id };
 }
 
+/**
+ * Compact projection for pr_activity list items. The generic compactItems()
+ * whitelist keeps only id/*_id/type/kind/author, which drops the fields that
+ * make an activity readable and actionable: `text` (the comment itself),
+ * `resolved`/`resolver` (thread status for pr_comment.set_status), `sub_order`
+ * (0 = parent, >0 = reply — set_status rejects replies), `payload` (the detail
+ * of system activities, whose `text` is empty), and `code_comment` (inline
+ * location). Still drops the heavy fields: mentions, reactions, metadata.
+ */
+const PR_ACTIVITY_COMPACT_FIELDS = [
+  "id", "parent_id", "repo_id", "pullreq_id", "order", "sub_order",
+  "type", "kind", "text", "payload", "code_comment",
+  "resolved", "resolver", "author", "created", "edited", "deleted",
+  "openInHarness",
+];
+
+function compactPrActivity(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of PR_ACTIVITY_COMPACT_FIELDS) {
+    const value = item[key];
+    if (value === undefined) continue;
+    // Comment activities carry an empty payload object — keep the key out of the
+    // projection rather than spending tokens on `{}` for every comment row.
+    if (key === "payload" && isEmptyRecord(value)) continue;
+    slim[key] = value;
+  }
+  return slim;
+}
+
+function isEmptyRecord(value: unknown): boolean {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value as Record<string, unknown>).length === 0;
+}
+
 export const pullRequestsToolset: ToolsetDefinition = {
   name: "pull-requests",
   displayName: "Pull Requests",
@@ -734,6 +768,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       scope: "account",
       scopeOptional: true,
       identifierFields: ["repo_id", "pr_number"],
+      compactItem: compactPrActivity,
       listFilterFields: [
         { name: "kind", description: "Activity kind filter: change-comment, comment, system", enum: ["change-comment", "comment", "system"] },
         { name: "type", description: "Activity type filter: comment, code-comment, review-submit, reviewer-add, reviewer-delete, state-change, branch-update, branch-delete, branch-restore, merge, title-change, label-modify, target-branch-change, user-group-reviewer-add, user-group-reviewer-delete", enum: ["comment", "code-comment", "review-submit", "reviewer-add", "reviewer-delete", "state-change", "branch-update", "branch-delete", "branch-restore", "merge", "title-change", "label-modify", "target-branch-change", "user-group-reviewer-add", "user-group-reviewer-delete"] },
@@ -741,7 +776,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         { name: "before", description: "Only entries created before this timestamp (unix millis)", type: "number" },
       ],
       diagnosticHint:
-        "To list all PR comments, use filters: {type: ['comment', 'code-comment']}. For general comments only, use {type: 'comment'} or {kind: 'comment'}. For inline PR comments, use {type: 'code-comment'} or {kind: 'change-comment'}.",
+        "To list all PR comments, use filters: {type: ['comment', 'code-comment']}. For general comments only, use {type: 'comment'} or {kind: 'comment'}. For inline PR comments, use {type: 'code-comment'} or {kind: 'change-comment'}. Each item carries text, resolved (absent = thread still open), and sub_order (0 = parent comment, >0 = reply) — pass a parent id to harness_execute(resource_type='pr_comment', action='set_status') to resolve or reopen that thread.",
       operations: {
         list: {
           method: "GET",

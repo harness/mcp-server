@@ -155,6 +155,42 @@ describe("harness_list", () => {
     expect(schema.inputSchema.resource_scope?.description).toContain("do not use account to skip a known org/project");
   });
 
+  it("keeps PR comment text and thread status in compacted pr_activity items", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    mockRequest = vi.fn().mockResolvedValue([
+      {
+        id: 501,
+        parent_id: null,
+        sub_order: 0,
+        type: "comment",
+        kind: "comment",
+        text: "Needs a null check.",
+        resolved: 1_700_000_900_000,
+        author: { id: 9, display_name: "Ada" },
+        mentions: { 11: { id: 11, display_name: "Grace" } },
+      },
+    ]);
+    client = makeClient(mockRequest);
+    const prServer = makeMcpServer();
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(prServer, registry, client);
+
+    const result = await prServer.call("harness_list", {
+      resource_type: "pr_activity",
+      params: { repo_id: "my-repo", pr_number: "42" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const data = parseResult(result) as { items: Array<Record<string, unknown>> };
+    expect(data.items[0]).toMatchObject({
+      id: 501,
+      text: "Needs a null check.",
+      resolved: 1_700_000_900_000,
+      sub_order: 0,
+    });
+    expect(data.items[0]).not.toHaveProperty("mentions");
+  });
+
   it("uses account scope from account-level connector URLs instead of config defaults", async () => {
     registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "connectors" }));
     mockRequest = vi.fn().mockResolvedValue({ data: { content: [], totalElements: 0 } });

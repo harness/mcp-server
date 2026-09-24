@@ -1547,7 +1547,7 @@ IaCM list responses expose `page_count` as the count for the current page only (
 
 Use `harness_execute(resource_type="pull_request", action="close", ...)` for an explicit close operation. `harness_update` also accepts `body.state` (`open` or `closed`) and routes state changes to the dedicated Harness Code PR state endpoint; send title/description edits in a separate update call.
 
-Use `harness_list(resource_type="pr_activity", filters={type: ["comment", "code-comment"]}, ...)` to read PR comments. Use `pr_comment` for comment write operations. Resolve or reopen a thread with `harness_execute(resource_type="pr_comment", action="set_status", body={status: "resolved"} or {status: "active"})`; `comment_id` must be the parent comment, not a reply.
+Use `harness_list(resource_type="pr_activity", filters={type: ["comment", "code-comment"]}, ...)` to read PR comments. Each item keeps `text`, `resolved` (absent while the thread is open), and `sub_order` (`0` = parent comment, `>0` = reply). Use `pr_comment` for comment write operations. Resolve or reopen a thread with `harness_execute(resource_type="pr_comment", action="set_status", body={status: "resolved"} or {status: "active"})`; `comment_id` must be the parent comment, not a reply.
 
 
 ### Release Management
