@@ -864,6 +864,7 @@ export class Registry {
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
       ...(!spec.pathBuilder && !resolvedRoute ? { tracing: { route: spec.path } } : {}),
+      ...(spec.timeoutMs != null ? { timeoutMs: spec.timeoutMs } : {}),
       signal,
     };
 

@@ -2035,3 +2035,107 @@ export function yamlWriteBody(input: Record<string, unknown>): Record<string, un
   if (b.git_details !== undefined) out.git_details = b.git_details;
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// GitOps — AppProject mapping / Argo discovery / import / autocreate logs
+// ---------------------------------------------------------------------------
+
+/**
+ * v1 GetAppProjectMappingListByAgent returns `{ appProjMap: { <argoName>: Project } }`.
+ * harness_list expects `{ items, total }`. Flatten map keys into row objects.
+ */
+export function appProjMapExtract(raw: unknown): { items: unknown[]; total: number } {
+  if (!isRecord(raw)) return { items: [], total: 0 };
+  const map = raw.appProjMap;
+  if (!isRecord(map)) return { items: [], total: 0 };
+
+  const items: unknown[] = [];
+  for (const [argoproject, value] of Object.entries(map)) {
+    const proj = isRecord(value) ? value : {};
+    items.push({
+      argoproject,
+      orgIdentifier: proj.orgIdentifier ?? "",
+      projectIdentifier: proj.projectIdentifier ?? "",
+      autoCreateServiceEnv: proj.autoCreateServiceEnv ?? false,
+    });
+  }
+  return { items, total: items.length };
+}
+
+/** Flat discovery row — avoids forwarding the full AppProject proto. */
+function projectArgoProjectRow(item: unknown): Record<string, unknown> {
+  const rec = isRecord(item) ? item : {};
+  const meta = isRecord(rec.metadata) ? rec.metadata : {};
+  const spec = isRecord(rec.spec) ? rec.spec : {};
+  const row: Record<string, unknown> = {
+    name: String(meta.name ?? "").trim(),
+  };
+  const description = String(spec.description ?? "").trim();
+  if (description) row.description = description;
+  const createdAt = String(meta.creationTimestamp ?? "").trim();
+  if (createdAt) row.createdAt = createdAt;
+  return row;
+}
+
+/**
+ * AgentProjectService.List → harness_list discovery rows (name + light metadata).
+ * Always synthesize `total` (API often omits it).
+ */
+export function argoProjectListExtract(raw: unknown): { items: unknown[]; total: number; metadata?: unknown } {
+  if (Array.isArray(raw)) {
+    return { items: raw.map(projectArgoProjectRow), total: raw.length };
+  }
+  if (!isRecord(raw)) return { items: [], total: 0 };
+  const rawItems = Array.isArray(raw.items) ? raw.items : [];
+  const items = rawItems.map(projectArgoProjectRow);
+  const total = typeof raw.total === "number" ? raw.total : items.length;
+  return raw.metadata !== undefined
+    ? { items, total, metadata: raw.metadata }
+    : { items, total };
+}
+
+function countOrZero(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+/** Import response → flat MCP handoff (importRequestId + autoCreateCounts always present). */
+export function importReconcileExtract(raw: unknown): Record<string, unknown> {
+  const emptyCounts = { serviceCount: 0, environmentCount: 0, clusterLinkCount: 0 };
+  if (!isRecord(raw)) {
+    return { importRequestId: "", autoCreateCounts: emptyCounts };
+  }
+  const nested = isRecord(raw.reconcileAppResponse) ? raw.reconcileAppResponse : {};
+  const counts = isRecord(nested.autoCreateCounts) ? nested.autoCreateCounts : {};
+  const { reconcileAppResponse: _dropped, ...rest } = raw;
+  return {
+    ...rest,
+    importRequestId: String(raw.importRequestId ?? "").trim(),
+    autoCreateCounts: {
+      serviceCount: countOrZero(counts.serviceCount),
+      environmentCount: countOrZero(counts.environmentCount),
+      clusterLinkCount: countOrZero(counts.clusterLinkCount),
+    },
+  };
+}
+
+/**
+ * ListAutoCreateLogsResponse → harness_list shape.
+ * Preserves page aggregates (counted from returned logs, not DB-wide).
+ */
+export function autoCreateLogExtract(raw: unknown): Record<string, unknown> {
+  if (!isRecord(raw)) {
+    return { items: [], total: 0 };
+  }
+  const logs = Array.isArray(raw.logs) ? raw.logs : [];
+  const total = typeof raw.total === "number" ? raw.total : logs.length;
+  return {
+    items: logs,
+    total,
+    successServices: raw.successServices ?? 0,
+    failedServices: raw.failedServices ?? 0,
+    successEnvironments: raw.successEnvironments ?? 0,
+    failedEnvironments: raw.failedEnvironments ?? 0,
+    successClusterLinks: raw.successClusterLinks ?? 0,
+    failedClusterLinks: raw.failedClusterLinks ?? 0,
+  };
+}
