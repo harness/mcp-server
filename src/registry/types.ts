@@ -353,6 +353,8 @@ export interface EndpointSpec {
    * bodies. Some APIs take scope only in query/path and reject extra body fields.
    */
   skipScopeBodyInjection?: boolean;
+  /** Override HARNESS_API_TIMEOUT_MS for this endpoint only (milliseconds). */
+  timeoutMs?: number;
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**
