@@ -1261,6 +1261,14 @@ describe("gitops emptyOnErrorPatterns declarations", () => {
     expect(spec?.emptyOnErrorPatterns).toBeDefined();
     expect(spec!.emptyOnErrorPatterns!.some(p => p.test("never connected"))).toBe(true);
   });
+
+  it("gitops_argo_project list: has emptyOnErrorPatterns for disconnected agents", () => {
+    const def = registry.getResource("gitops_argo_project");
+    const spec = def.operations.list;
+    expect(spec?.emptyOnErrorPatterns).toBeDefined();
+    expect(spec!.emptyOnErrorPatterns!.some((p) => p.test("agent is not registered"))).toBe(true);
+    expect(spec!.emptyOnErrorPatterns!.some((p) => p.test("never connected"))).toBe(true);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -2271,6 +2279,33 @@ describe("gitops_app_project_mapping import execute dispatch", () => {
         body: { projectNames: [] },
       }),
     ).rejects.toThrow(/body\.projectNames is required/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("import: accepts project_names alias and trims entries", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ importRequestId: "x" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "gitops_app_project_mapping", "import", {
+      agent_id: "account.myagent",
+      resource_scope: "account",
+      body: { project_names: [" team-a ", "team-b"] },
+    });
+
+    expect(mockRequest.mock.calls[0][0].body).toEqual({ projectNames: ["team-a", "team-b"] });
+  });
+
+  it("import: blank projectNames entry is rejected before any request", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "gitops_app_project_mapping", "import", {
+        agent_id: "account.myagent",
+        resource_scope: "account",
+        body: { projectNames: ["team-a", "   "] },
+      }),
+    ).rejects.toThrow(/entries must be non-empty/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
