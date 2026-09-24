@@ -7,7 +7,7 @@
 | **Toolset** | pull-requests |
 | **Scope** | account |
 | **Operations** | create, update, delete |
-| **Execute Actions** | None |
+| **Execute Actions** | set_status |
 | **Identifier Fields** | repo_id, pr_number, comment_id |
 | **Filter Fields** | None |
 | **Deep Link** | No |
@@ -27,11 +27,16 @@
 | TC-prc-009 | Error | Create comment with empty text | `harness_create(resource_type="pr_comment", params={"repo_id":"my-repo", "pr_number":1}, body={"text": ""})` | Returns validation error for empty text |
 | TC-prc-010 | Error | Create comment missing text field | `harness_create(resource_type="pr_comment", params={"repo_id":"my-repo", "pr_number":1}, body={})` | Returns validation error for missing text |
 | TC-prc-011 | Edge | Create comment with very long text | `harness_create(resource_type="pr_comment", params={"repo_id":"my-repo", "pr_number":1}, body={"text": "A very long comment text..."})` | Handles long comment text appropriately |
+| TC-prc-012 | Execute | Resolve a comment thread | `harness_execute(resource_type="pr_comment", action="set_status", params={"repo_id":"my-repo", "pr_number":1, "comment_id":123}, body={"status":"resolved"})` | Sets the thread to resolved and returns the comment activity with a resolved timestamp |
+| TC-prc-013 | Execute | Reopen a resolved thread | `harness_execute(resource_type="pr_comment", action="set_status", params={"repo_id":"my-repo", "pr_number":1, "comment_id":123}, body={"status":"active"})` | Sets the thread back to active and returns the comment activity without a resolved timestamp |
+| TC-prc-014 | Error | Invalid comment status | `harness_execute(resource_type="pr_comment", action="set_status", params={"repo_id":"my-repo", "pr_number":1, "comment_id":123}, body={"status":"closed"})` | Returns a validation error before HTTP; status must be `resolved` or `active` |
+| TC-prc-015 | Error | Resolve a reply instead of the parent comment | `harness_execute(resource_type="pr_comment", action="set_status", params={"repo_id":"my-repo", "pr_number":1, "comment_id":<reply_id>}, body={"status":"resolved"})` | Returns 400; comment_id must be the parent comment, not a reply |
 
 ## Notes
-- `pr_comment` is write-only for comment create/update/delete. Read comments with `pr_activity`.
+- `pr_comment` is write-only for comment create/update/delete and thread status. Read comments with `pr_activity`.
 - To read all PR comments, use `harness_list(resource_type="pr_activity", params={"repo_id":"my-repo", "pr_number":1}, filters={"type":["comment","code-comment"]})`.
-- `pr_comment` create requires `repo_id` and `pr_number`; update/delete also require `comment_id` or `resource_id`
+- `pr_comment` create requires `repo_id` and `pr_number`; update/delete/set_status also require `comment_id` or `resource_id`
+- `set_status` `comment_id` must be the parent comment; replies return 400
 - General comments only need `text`; inline PR comments also need `path` and `line_new`/`line_old`
 - Inline comments can optionally include `source_commit_sha` and `target_commit_sha` for precise diff context
 - Text field supports markdown formatting
