@@ -673,7 +673,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         set_status: {
           method: "PUT",
           path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments/{pullreqCommentId}/status",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           skipScopeBodyInjection: true,
           pathParams: {
             repo_id: "repoIdentifier",

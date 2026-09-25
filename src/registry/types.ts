@@ -186,7 +186,11 @@ export interface BodyFieldSpec {
   required: boolean;
   /** Brief description (shown to agents) */
   description: string;
-  /** Allowed values, if the field is constrained to a known set. Surfaced by harness_describe. */
+  /**
+   * Allowed values, if the field is constrained to a known set.
+   * Surfaced by harness_describe. Advisory only — the registry does not reject other values.
+   * Enforce the set in the operation's bodyBuilder when the API requires it.
+   */
   enum?: string[];
   /** For "object" type: nested fields */
   fields?: BodyFieldSpec[];

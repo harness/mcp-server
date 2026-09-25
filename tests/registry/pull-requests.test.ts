@@ -822,6 +822,7 @@ describe("pr_comment set_status", () => {
       method: "PUT",
       path: "/code/api/v1/repos/my_repo/pullreq/5/comments/123/status",
       body: { status: "resolved" },
+      retryPolicy: "safe",
     }));
   });
 
@@ -897,7 +898,10 @@ describe("pr_comment set_status", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
     const commentDef = registry.getResource("pr_comment");
     const statusField = commentDef.executeActions?.set_status?.bodySchema?.fields.find((f) => f.name === "status");
-    expect(commentDef.executeActions?.set_status).toBeDefined();
+    expect(commentDef.executeActions?.set_status?.operationPolicy).toEqual({
+      risk: "low_write",
+      retryPolicy: "safe",
+    });
     expect(commentDef.executeHint).toContain("set_status");
     expect(commentDef.diagnosticHint).toContain("set_status");
     expect(statusField?.enum).toEqual(["resolved", "active"]);
