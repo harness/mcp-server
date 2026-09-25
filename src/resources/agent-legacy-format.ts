@@ -227,54 +227,6 @@ agent:
         - mcpConnectors
 \`\`\`
 
-## Using a Legacy Format Agent in a v0 Pipeline
-
-\`agentSettings\` is a **plain YAML map**. Use it to override \`llmConnector\`, \`modelName\`, and \`mcpConnectors\` as well as any custom inputs — check the agent's actual \`agent.inputs\` (via \`harness_get\`) rather than assuming all three connector/model fields exist on a given agent.
-
-\`\`\`yaml
-pipeline:
-  stages:
-    - stage:
-        type: Deployment
-        spec:
-          execution:
-            steps:
-              - stepGroup:
-                  stepGroupInfra:
-                    type: KubernetesDirect
-                  steps:
-                    - step:
-                        type: Agent
-                        name: ReviewPRAgent
-                        identifier: ReviewPRAgent
-                        spec:
-                          agentName: ca_code_review_agent
-                          agentSettings:
-                            repo_name: my-org/my-repo
-                            branch: feature/new-feature
-                            llmConnector: your_llm_connector_id
-                            modelName: your_model_arn_or_id
-                            mcpConnectors:
-                              - your_github_mcp_connector
-                              - your_slack_mcp_connector
-\`\`\`
-
-**Key fields explained:**
-
-- \`agentSettings\` (optional) - map containing whatever inputs the agent's spec declares:
-  - **Custom inputs**: Agent-specific fields like \`repo_name\`, \`branch\`, thresholds, etc.
-  - **llmConnector**: LLM connector ID
-  - **modelName**: Model ARN or ID — only present if the agent was created with a \`modelName\` input
-  - **mcpConnectors**: MCP connector ID(s) — a YAML list in map form
-
-Check the specific agent's \`agent.inputs\` before assuming all of the above are present — \`modelName\` in particular is optional, and the agent's custom inputs vary per agent.
-
-**Precedence rules:**
-1. Values in \`agentSettings\` have **highest precedence** - they override the agent's input defaults
-2. If not provided, the agent's default configuration from the template is used
-
-For v1 pipelines using a legacy-format agent: \`llmConnector\` and \`mcpConnectors\` are configured at the agent level by default, and \`modelName\` is present only if the agent was created with it. These may optionally be overridden at the pipeline level using the standard \`uses:\`/\`with:\` template mechanics.
-
 ## CRITICAL GUIDELINES (legacy format)
 
 | Guideline                  | Rule                                                                                                                                     |

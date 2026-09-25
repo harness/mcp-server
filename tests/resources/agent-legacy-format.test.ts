@@ -38,10 +38,8 @@ describe("agent-legacy-format resource", () => {
     expect(AGENT_LEGACY_FORMAT_CONTENT).toContain("${{inputs.fieldName}}".replace("fieldName", "llmConnector.id"));
   });
 
-  it("includes the legacy v0-pipeline agentSettings plain-YAML-map usage", () => {
-    expect(AGENT_LEGACY_FORMAT_CONTENT).toContain("agentSettings");
-    expect(AGENT_LEGACY_FORMAT_CONTENT).toContain("`agentSettings` is a **plain YAML map**");
-    expect(AGENT_LEGACY_FORMAT_CONTENT).toContain("llmConnector: your_llm_connector_id");
+  it("documents the legacy worked example with placeholder connector ids", () => {
+    expect(AGENT_LEGACY_FORMAT_CONTENT).toContain("default: your_llm_connector_id");
     expect(AGENT_LEGACY_FORMAT_CONTENT).not.toContain('"llmConnector": "your_llm_connector_id"');
   });
 
