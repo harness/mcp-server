@@ -53,38 +53,93 @@ describe("create-agent prompt", () => {
     expect(taskDescription.required).toBe(true);
   });
 
-  it("documents the allowedDomains network access contract", async () => {
+  it("documents the current-format allowed_domains network access contract", async () => {
     const text = await getPromptText({
       agent_name: "Network Agent",
       task_description: "Call external APIs",
     });
 
-    expect(text).toContain("PLUGIN_ALLOWED_DOMAINS: ${{inputs.allowedDomains}}");
-    expect(text).toContain("allowedDomains:");
-    expect(text).toContain('default: ""');
-    expect(text).toContain("regexes separated by `|`");
-    expect(text).toContain("| **Allowed domains**");
+    expect(text).toContain('allowed_domains: "github.com,api.github.com"');
+    expect(text).toContain("with.allowed_domains");
+    expect(text).toContain('default `"harness.io"`');
+    expect(text).toContain("comma-separated hosts/wildcards/regexes");
   });
 
-  it("includes allowedDomains in the layout block guidance", async () => {
+  it("uses agent.uses/agent.with structure with no layout block for current format", async () => {
     const text = await getPromptText({
-      agent_name: "Layout Agent",
-      task_description: "Verify layout fields",
+      agent_name: "Structure Agent",
+      task_description: "Verify current-format structure",
     });
 
-    expect(text).toContain("at most four items");
-    expect(text).toContain("`llmConnector`, `allowedDomains`, `modelName`, and `mcpConnectors`");
-    expect(text).toContain("- allowedDomains        # always present");
+    expect(text).toContain("agent.uses: harnessAI@1.0.0");
+    expect(text).toContain("agent.with");
+    expect(text).toContain("There is **no** per-agent `layout` block in Current Format");
   });
 
-  it("includes allowedDomains in the example agent YAML", async () => {
+  it("includes the current-format example agent YAML using uses/with, not step.group.steps", async () => {
     const text = await getPromptText({
       agent_name: "Example Agent",
       task_description: "Review pull requests",
     });
 
-    expect(text).toContain("## Example: Code Review Agent");
-    expect(text).toMatch(/allowedDomains:\s*\n\s+type: string/);
-    expect(text).toMatch(/layout:[\s\S]*- allowedDomains/);
+    expect(text).toContain("## Example: Code Review Agent (Current Format)");
+    expect(text).toMatch(/uses: harnessAI@1\.0\.0/);
+    expect(text).toMatch(/with:\s*\n\s+prompt: \|/);
+
+    // The example block itself (up to the next section) must be pure Current Format —
+    // legacy strings are allowed elsewhere in the prompt (detection logic, guidelines table).
+    const exampleSection = text.slice(
+      text.indexOf("## Example: Code Review Agent (Current Format)"),
+      text.indexOf("## CRITICAL GUIDELINES"),
+    );
+    expect(exampleSection).not.toContain("agent.step.group.steps");
+    expect(exampleSection).not.toContain("PLUGIN_TASK");
+  });
+
+  it("instructs the model to detect existing agent spec format before updating", async () => {
+    const text = await getPromptText({
+      agent_name: "Update Agent",
+      task_description: "Update an existing agent",
+    });
+
+    expect(text).toContain("Detect the spec format before doing anything else");
+    expect(text).toContain("`agent.uses` present (e.g. `uses: harnessAI@1.0.0`) → **Current Format**");
+    expect(text).toContain("**Anything else → Legacy Format.**");
+    expect(text).toContain("Never convert a Legacy Format agent to Current Format (or vice versa) during a routine update");
+  });
+
+  it("treats non-`agent.uses` specs as legacy, including the agent.step.run shape", async () => {
+    const text = await getPromptText({
+      agent_name: "Legacy Variant Agent",
+      task_description: "Update an agent that has no step group",
+    });
+
+    expect(text).toContain("`agent.step.run`");
+    expect(text).toContain("A `with:` block on its own is **not** a Current Format signal");
+  });
+
+  it("points to the agent-docs:///legacy-format resource for legacy-format details", async () => {
+    const text = await getPromptText({
+      agent_name: "Legacy Pointer Agent",
+      task_description: "Update a legacy agent",
+    });
+
+    expect(text).toContain("agent-docs:///legacy-format");
+    // The prompt itself should not need to inline the full legacy PLUGIN_TASK spec-generation steps —
+    // that content lives in the resource, only the pointer + syntax contrast should remain inline.
+    expect(text).toContain("PLUGIN_TASK");
+    expect(text).toContain("${{inputs.fieldName}}");
+  });
+
+  it("keeps legacy expression syntax guidance non-destructive", async () => {
+    const text = await getPromptText({
+      agent_name: "Syntax Agent",
+      task_description: "Check expression syntax guidance",
+    });
+
+    expect(text).toContain("Use `<+inputs.fieldName>` in Current Format");
+    expect(text).toContain("Legacy specs resolve both `${{inputs.fieldName}}` and `<+inputs.fieldName>`");
+    expect(text).toContain("instead of rewriting working expressions");
+    expect(text).not.toContain("never mix the two");
   });
 });

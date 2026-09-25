@@ -18,7 +18,7 @@ const agentCreateSchema: BodySchema = {
     { name: "uid", type: "string", required: true, description: "Unique identifier for the custom agent. This will be the agent's ID and must be unique within the scope (account/org/project). Use lowercase with underscores, no spaces or colons (e.g., 'code_reviewer', 'my_custom_agent'). Cannot conflict with system agent UIDs." },
     { name: "name", type: "string", required: true, description: "Display name of the custom agent (e.g., 'Code Reviewer', 'My Custom Agent')" },
     { name: "description", type: "string", required: false, description: "Brief description of the agent's purpose and capabilities" },
-    { name: "spec", type: "string", required: true, description: "Agent YAML specification. Defines step, container image, task, rules, MCP servers, and inputs. The API validates and converts this to step template and publishes it. The agent name in the spec cannot conflict with existing system agent UUIDs." },
+    { name: "spec", type: "string", required: true, description: "Agent YAML specification. New agents use the current format: 'agent.uses' referencing the shared base template (e.g. harnessAI@1.0.0) plus an 'agent.with' block holding prompt, connector, mcp, allowed_domains, and max_turns, and optional 'agent.inputs' for custom runtime parameters. The API validates and converts this to step template and publishes it. The agent name in the spec cannot conflict with existing system agent UUIDs." },
     { name: "wiki", type: "string", required: false, description: "URL to the agent's documentation or wiki" },
     { name: "logo", type: "string", required: false, description: "URL to the agent's logo image" },
   ],
@@ -29,7 +29,7 @@ const agentUpdateSchema: BodySchema = {
   fields: [
     { name: "name", type: "string", required: false, description: "Updated display name of the custom agent" },
     { name: "description", type: "string", required: false, description: "Updated description of the agent's purpose" },
-    { name: "spec", type: "string", required: false, description: "Updated agent YAML specification (full replacement). This will be validated and converted to step template and published" },
+    { name: "spec", type: "string", required: false, description: "Updated agent YAML specification (full replacement). Keep the format the agent already uses: current ('agent.uses' + 'agent.with') or legacy ('agent.step...' with PLUGIN_* env vars) — read the agent-docs:///legacy-format resource before editing a legacy spec. This will be validated and converted to step template and published" },
     { name: "wiki", type: "string", required: false, description: "Updated URL to the agent's documentation" },
     { name: "logo", type: "string", required: false, description: "Updated URL to the agent's logo" },
   ],
