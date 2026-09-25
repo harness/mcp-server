@@ -40,7 +40,9 @@ export function registerCreateAgentPrompt(server: McpServer): void {
    - Review the current \`spec\`, \`name\`, \`description\`, and other fields
    - **Detect the spec format before doing anything else** — this determines which path (Current Format or Legacy Format) the rest of Phase 2/3 must follow:
      - \`agent.uses\` present (e.g. \`uses: harnessAI@1.0.0\`) → **Current Format**
-     - \`agent.step.group.steps\` present → **Legacy Format** — if detected, read the \`agent-docs:///legacy-format\` MCP resource in full **now**, before proceeding to Phase 2. It is self-contained (structure, spec-generation steps, worked example, and v0-pipeline usage) — reading it once here covers the rest of this workflow, so you should not need to re-read it at later phases.
+     - **Anything else → Legacy Format.** \`agent.step.group.steps\` is the most common legacy shape, but legacy agents also appear as \`agent.step.run\` with the container step directly under \`step\`, and task config in either a \`run.env\` \`PLUGIN_*\` block or a \`run.with\` block (\`task\`, \`max_turns\`, \`mcp_format\`, \`mcp_servers\`). If the spec is not \`agent.uses\`, treat it as Legacy Format and edit it in place, preserving its existing shape.
+     - A \`with:\` block on its own is **not** a Current Format signal — legacy \`agent.step.run\` specs have one too. Only \`agent.uses\` at the top of \`agent\` means Current Format.
+     - When Legacy Format is detected, read the \`agent-docs:///legacy-format\` MCP resource in full **now**, before proceeding to Phase 2. It is self-contained (structure, spec-generation steps, worked example, and v0-pipeline usage) — reading it once here covers the rest of this workflow, so you should not need to re-read it at later phases.
    - Identify what needs to be changed (spec, name, description, wiki, logo)
    - Use \`harness_update\` (not \`harness_create\`) to update the agent with only the fields that need modification
    - **Never convert a Legacy Format agent to Current Format (or vice versa) during a routine update.** Keep editing in whatever format the agent already uses unless the user explicitly asks for a migration to the current format.
@@ -88,12 +90,12 @@ Based on requirements, recommend and verify with the user:
    - Break down the goal into detailed step-by-step instructions
    - Include specific commands, file paths, and expected outcomes
    - **Current Format**: put instructions in \`with.prompt\`; reference custom inputs using \`<+inputs.fieldName>\` syntax
-   - **Legacy Format**: put instructions in \`PLUGIN_TASK\` env var; reference inputs using \`\${{inputs.fieldName}}\` syntax
+   - **Legacy Format**: put instructions in \`PLUGIN_TASK\` env var (or \`with.task\` on \`agent.step.run\` specs); reference inputs using whichever of \`\${{inputs.fieldName}}\` or \`<+inputs.fieldName>\` the existing spec already uses
    - Add \`## RULES\` section at the end with constraints formatted as markdown bullet points (same convention in both formats)
 
 2. **Runtime inputs** (custom \`inputs\` declared on the agent, beyond what the base template/legacy structure already provides):
    - Only add if user confirms runtime parameters are needed (repo, branch, executionId, thresholds, etc.)
-   - **Always set a \`default\` value for every non-required input** — if it's referenced (\`<+inputs.x>\` in Current Format, \`\${{inputs.x}}\` in Legacy Format) and no value is supplied at runtime nor a default exists, the agent will error at execution time
+   - **Always set a \`default\` value for every non-required input** — if it's referenced from the spec at all and no value is supplied at runtime nor a default exists, the agent will error at execution time
    - **Current Format**: always confirm \`allowed_domains\` (comma-separated hosts/wildcards/regexes; default \`"harness.io"\`) so users understand and control non-LLM/non-MCP network access
    - **Legacy Format**: always confirm \`allowedDomains\` (regex patterns separated by \`|\`; default \`""\`)
 
@@ -330,15 +332,15 @@ For a worked example in Legacy Format (only for updating agents already on this 
 | Guideline                  | Rule                                                                                                                                     |
 | ----------------------------| ------------------------------------------------------------------------------------------------------------------------------------------|
 | **Check existing first**   | Always call \`harness_list(resource_type="agent")\` to see if an existing agent can solve the use case before creating new                                                     |
-| **Format detection**       | Before updating, detect the existing agent's format (\`agent.uses\` = Current, \`agent.step.group.steps\` = Legacy) and keep the update in that **same** format — never silently migrate. New agents always start in Current Format. Read \`agent-docs:///legacy-format\` in full when Legacy Format is detected. |
+| **Format detection**       | Before updating, detect the existing agent's format: \`agent.uses\` = Current, anything else (\`agent.step.group.steps\`, \`agent.step.run\`, …) = Legacy. Keep the update in that **same** format — never silently migrate. New agents always start in Current Format. Read \`agent-docs:///legacy-format\` in full when Legacy Format is detected. |
 | **Updating agents**        | Use \`harness_get\` to retrieve current config, then \`harness_update\` (not \`harness_create\`) to modify. Only custom agents can be updated.                                     |
 | **Generate UID**           | Always derive \`uid\` as \`ca_<slug>\` (e.g. "Code Coverage Agent" → \`ca_code_coverage_agent\`) — matches platform UI \`nameToUid()\`. Pass it explicitly; do not rely on create API fallback. |
 | **Agent spec format (Current)** | The \`spec\` field instantiates \`agent.uses: harnessAI@1.0.0\` with an \`agent.with\` block. There is no \`step\`, \`container\`, or \`layout\` in the per-agent spec — those live on the base template. |
 | **Task location**          | Current Format: task instructions go in \`with.prompt\` (multiline string), turn budget in \`with.max_turns\`. Legacy Format: task instructions go in \`PLUGIN_TASK\` env var, turn budget in \`PLUGIN_MAX_TURNS\`. |
-| **Expression syntax**      | Use \`<+inputs.fieldName>\` in Current Format and \`\${{inputs.fieldName}}\` in Legacy Format — never mix the two; the wrong syntax silently fails to resolve at runtime. |
+| **Expression syntax**      | Use \`<+inputs.fieldName>\` in Current Format. Legacy specs resolve both \`\${{inputs.fieldName}}\` and \`<+inputs.fieldName>\` (Harness's own legacy agent examples use \`<+…>\`, and MCP resolution is always \`<+connectorInputs.resolveList(<+inputs.mcpConnectors>)>\`) — match the syntax the existing spec already uses instead of rewriting working expressions. |
 | **Model override is optional & provider-dependent** | Do NOT add a model-override env var by default. When the user explicitly requests one: Current Format uses \`with.env.<PROVIDER>_MODEL\` where the key depends on the connector's provider (Anthropic → \`ANTHROPIC_MODEL\`, OpenAI → \`OPENAI_MODEL\`, Copilot → \`MODEL\`; ask if unsure, never guess). Legacy Format uses a \`modelName\` input plus a fixed \`ANTHROPIC_MODEL\` env var. |
 | **Allowed domains**       | Current Format: \`with.allowed_domains\` is comma-separated hosts/wildcards/regexes, default \`"harness.io"\`. Legacy Format: \`allowedDomains\` input is \`|\`-separated regexes, default \`""\`. Confirm the right convention for the detected format before writing it. |
-| **Input defaults**         | Every non-required input that is referenced (\`<+inputs.x>\` in Current Format, \`\${{inputs.x}}\` in Legacy Format) **must have a \`default\` value** — omitting it causes a runtime error if the caller does not supply the value  |
+| **Input defaults**         | Every non-required input that is referenced from the spec **must have a \`default\` value** — omitting it causes a runtime error if the caller does not supply the value  |
 | **Connector placeholders** | Always use placeholders like \`your_llm_connector_id\` and \`your_mcp_connector_id\` and notify users to replace both LLM and MCP connector IDs with actual values before running the agent |
 | **No clone/platform**      | Do NOT add \`clone\`, \`platform\`, \`os\`, or \`arch\` sections — agents are standalone with a simplified structure. (\`allowed_tools\` is a legitimate Current Format \`with:\` field — this rule does not apply to it.) |
 | **Quality first**          | Agent quality is paramount — verify YAML structure, validate all references, ensure complete task instructions before creating                                                |`

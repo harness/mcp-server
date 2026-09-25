@@ -104,8 +104,18 @@ describe("create-agent prompt", () => {
 
     expect(text).toContain("Detect the spec format before doing anything else");
     expect(text).toContain("`agent.uses` present (e.g. `uses: harnessAI@1.0.0`) → **Current Format**");
-    expect(text).toContain("`agent.step.group.steps` present → **Legacy Format**");
+    expect(text).toContain("**Anything else → Legacy Format.**");
     expect(text).toContain("Never convert a Legacy Format agent to Current Format (or vice versa) during a routine update");
+  });
+
+  it("treats non-`agent.uses` specs as legacy, including the agent.step.run shape", async () => {
+    const text = await getPromptText({
+      agent_name: "Legacy Variant Agent",
+      task_description: "Update an agent that has no step group",
+    });
+
+    expect(text).toContain("`agent.step.run`");
+    expect(text).toContain("A `with:` block on its own is **not** a Current Format signal");
   });
 
   it("points to the agent-docs:///legacy-format resource for legacy-format details", async () => {
@@ -121,13 +131,15 @@ describe("create-agent prompt", () => {
     expect(text).toContain("${{inputs.fieldName}}");
   });
 
-  it("documents that expression syntax differs by format and must not be mixed", async () => {
+  it("keeps legacy expression syntax guidance non-destructive", async () => {
     const text = await getPromptText({
       agent_name: "Syntax Agent",
       task_description: "Check expression syntax guidance",
     });
 
-    expect(text).toContain("Use `<+inputs.fieldName>` in Current Format and `${{inputs.fieldName}}` in Legacy Format");
-    expect(text).toContain("never mix the two");
+    expect(text).toContain("Use `<+inputs.fieldName>` in Current Format");
+    expect(text).toContain("Legacy specs resolve both `${{inputs.fieldName}}` and `<+inputs.fieldName>`");
+    expect(text).toContain("instead of rewriting working expressions");
+    expect(text).not.toContain("never mix the two");
   });
 });

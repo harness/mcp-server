@@ -48,4 +48,17 @@ describe("agent-legacy-format resource", () => {
   it("never instructs migrating a legacy agent automatically", () => {
     expect(AGENT_LEGACY_FORMAT_CONTENT).toContain("Never migrate silently");
   });
+
+  it("covers the agent.step.run and run.with legacy variants", () => {
+    expect(AGENT_LEGACY_FORMAT_CONTENT).toContain("`agent.step.run`");
+    expect(AGENT_LEGACY_FORMAT_CONTENT).toContain("`run.with` instead of `run.env`");
+    expect(AGENT_LEGACY_FORMAT_CONTENT).toContain("only `agent.uses` does");
+  });
+
+  it("does not forbid <+...> expressions that legacy specs legitimately use", () => {
+    expect(AGENT_LEGACY_FORMAT_CONTENT).toContain(
+      "Both `${{inputs.fieldName}}` and `<+inputs.fieldName>` resolve in legacy specs",
+    );
+    expect(AGENT_LEGACY_FORMAT_CONTENT).not.toContain("that syntax is current-format only");
+  });
 });

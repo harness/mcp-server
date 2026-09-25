@@ -10,11 +10,16 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
  */
 export const AGENT_LEGACY_FORMAT_CONTENT = `# Legacy Agent Spec Format Reference
 
-Use this reference only when updating an existing agent whose \`spec\` (from \`harness_get\` with \`resource_type="agent"\`) contains \`agent.step.group.steps\`. Never use this format for a new agent — new agents always use the current format (\`agent.uses: harnessAI@1.0.0\`, see the \`create-agent\` prompt for that flow).
+Use this reference when updating an existing agent whose \`spec\` (from \`harness_get\` with \`resource_type="agent"\`) does **not** start with \`agent.uses\`. Never use this format for a new agent — new agents always use the current format (\`agent.uses: harnessAI@1.0.0\`, see the \`create-agent\` prompt for that flow).
 
 ## Agent Structure
 
-Agents use \`agent.step.group.steps\` format — the run step is nested inside a named step group.
+The most common legacy shape nests the run step inside a named step group (\`agent.step.group.steps\`).
+
+Two other legacy shapes exist in the wild and are also legacy — edit them in place rather than restructuring them:
+
+- \`agent.step.run\` — the container step sits directly under \`step\`, with no group/steps wrapper.
+- \`run.with\` instead of \`run.env\` — task config as \`with.task\`, \`with.max_turns\`, \`with.mcp_format\`, \`with.mcp_servers\`, with only connector/model values left in \`run.env\`. A \`with:\` block here does **not** make the spec current format; only \`agent.uses\` does.
 
 **Default structure:**
 \`\`\`yaml
@@ -279,10 +284,10 @@ For v1 pipelines using a legacy-format agent: \`llmConnector\` and \`mcpConnecto
 
 | Guideline                  | Rule                                                                                                                                     |
 | ----------------------------| ------------------------------------------------------------------------------------------------------------------------------------------|
-| **Never migrate silently** | Keep the update in \`agent.step.group.steps\` format — never rewrite a legacy agent into the current format unless the user explicitly asks for a migration. |
+| **Never migrate silently** | Keep the update in the agent's existing legacy shape (\`agent.step.group.steps\` or \`agent.step.run\`, \`run.env\` or \`run.with\`) — never rewrite a legacy agent into the current format unless the user explicitly asks for a migration. |
 | **Agent spec format**      | The \`spec\` field uses \`agent.step.group.steps\` structure — the run step is nested inside a named group with \`name: Agent\`, \`if: <+Always>\`, \`id: agent\`                     |
 | **Task in env**            | Task instructions go in \`PLUGIN_TASK\` env var (multiline string). Max turns in \`PLUGIN_MAX_TURNS\`. There is no \`with:\` block.                                                |
-| **Expression syntax**      | Use \`\${{inputs.fieldName}}\` inside env values — never \`<+inputs.fieldName>\` (that syntax is current-format only). Use \`<+connectorInputs.resolveList(...)>\` for MCP server resolution. |
+| **Expression syntax**      | Both \`\${{inputs.fieldName}}\` and \`<+inputs.fieldName>\` resolve in legacy specs — keep whichever the agent already uses rather than rewriting working expressions. MCP server resolution is always \`<+connectorInputs.resolveList(<+inputs.mcpConnectors>)>\`. |
 | **modelName is optional**  | Do NOT add \`modelName\` input or \`ANTHROPIC_MODEL\` env var by default — only add when the user explicitly requests it                                                         |
 | **Allowed domains**       | Always include \`PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}\`, an \`allowedDomains\` string input with default \`""\`, and \`allowedDomains\` in layout. If the user specifies domains, help build the regex. |
 | **Input defaults**         | Every non-required input that is referenced via \`\${{inputs.fieldName}}\` **must have a \`default\` value** — omitting it causes a runtime error if the caller does not supply the value  |
