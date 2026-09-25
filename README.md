@@ -1951,6 +1951,7 @@ Security exemption execute workflow:
 | `schema:///trigger`                            | Harness trigger JSON Schema                                      | `application/schema+json` |
 | `schema:///pipeline_v1` **(Alpha)**            | Harness V1 pipeline JSON Schema (simplified stages/steps format) | `application/schema+json` |
 | `schema:///agent-pipeline`                     | Harness AI agent pipeline JSON Schema                            | `application/schema+json` |
+| `agent-docs:///legacy-format`                  | Legacy custom-agent spec format reference (read when updating an agent that is not on the current `agent.uses` format) | `text/markdown`           |
 
 
 ## Toolset Filtering
