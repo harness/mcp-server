@@ -101,6 +101,7 @@ Based on requirements, recommend and verify with the user:
    - LLM connector for model access (required for all agents) - User must create via Harness UI or MCP
    - MCP connectors for external services (GitHub, Slack, Harness platform, etc.) - only if needed
    - All authentication and secrets are managed within the connectors
+   - **If the user wants to pin a specific model** (Current Format only): ask which provider the LLM connector uses (Anthropic, OpenAI, Copilot, etc.) — the model-override env var key depends on it and cannot be inferred from a placeholder connector ID. See "Model override" below.
 
 **Present this recommended configuration to the user and iterate until confirmed.**
 
@@ -137,12 +138,22 @@ with:
   max_turns: "150"                                 # Adjust based on task complexity; default "150"
 \`\`\`
 
-**Model override (only if user explicitly requests a specific model):**
+**Model override (only if user explicitly requests a specific model):** the env var key depends on the connector's underlying provider — this cannot be inferred from a placeholder connector ID, so ask the user which provider their connector uses:
+
+| Connector provider | env var key |
+|---|---|
+| Anthropic | \`ANTHROPIC_MODEL\` |
+| OpenAI | \`OPENAI_MODEL\` |
+| Copilot | \`MODEL\` |
+| Anything else, or unsure | **Ask the user to confirm the correct key — do not guess** |
+
 \`\`\`yaml
 with:
   env:
-    ANTHROPIC_MODEL: your-model-name     # Only add when user insists on pinning a model
+    ANTHROPIC_MODEL: your-model-name     # Example for an Anthropic connector; swap the key per the table above
 \`\`\`
+
+This mapping may collapse to a single generic \`MODEL\` key across all connectors in a future platform update — if the user's environment has already migrated, confirm with them before assuming this table still applies.
 
 **Advanced \`with:\` fields (ask before adding — only if the use case calls for them; do not include any of these by default):**
 - \`docker_connector\` — custom image/registry connector, only if needed (default \`account.harnessImage\`)
@@ -151,7 +162,6 @@ with:
 - \`allowed_tools\` — comma-separated tool allowlist (empty = default allowlist)
 - \`output\` — path to a file the agent must produce; verified after the run
 - \`workdir\` — working directory (default \`/harness\`, the CI workspace)
-- \`yaml_version\` — \`v0\` or \`v1\`, which pipeline dialect the agent's system prompt should target (default \`v1\`)
 - \`backend\` — \`claude | deepagent | openai | codex | copilot\` (empty = runner default)
 
 **Custom inputs (only if the use case needs runtime parameters beyond the fields above):**
@@ -194,8 +204,8 @@ Assemble the complete agent YAML specification (\`spec\` field). **Use Current F
    - \`mcp:\` (only if MCPs needed) — array of MCP connector refs
    - \`allowed_domains:\` (only if the use case needs extra network access) — comma-separated hosts/wildcards/regexes
    - \`max_turns:\` (only if a non-default turn budget is needed) — string, default \`"150"\`
-   - \`env.ANTHROPIC_MODEL:\` (**only** if user explicitly requests a specific model)
-   - Advanced fields (\`docker_connector\`, \`image\`, \`skill\`, \`allowed_tools\`, \`output\`, \`workdir\`, \`yaml_version\`, \`backend\`) — **only** if the use case calls for them
+   - \`env.<PROVIDER>_MODEL\` or \`env.MODEL\` (**only** if user explicitly requests a specific model) — pick the key from the "Model override" table in Phase 2 §4 based on the connector's provider; ask the user if the provider isn't clear, never guess
+   - Advanced fields (\`docker_connector\`, \`image\`, \`skill\`, \`allowed_tools\`, \`output\`, \`workdir\`, \`backend\`) — **only** if the use case calls for them
 4. Add \`agent.inputs\` section **only** for custom, agent-specific runtime parameters not covered by \`with:\` fields above (e.g. \`repo_name\`, \`branch\`) — reference them from \`with:\` values using \`<+inputs.fieldName>\`
 5. Do **not** add an \`agent.layout\` block — layout is owned by the \`harnessAI\` base template, not the per-agent spec
 
@@ -305,7 +315,7 @@ agent:
 
 Notes:
 - \`max_turns\` is shown here for reference — omit it when the default (\`"150"\`) is fine
-- \`env.ANTHROPIC_MODEL\` is deliberately **not** shown here — only add it (see the "Model override" snippet above) when the user explicitly requests a pinned model. Do not copy it into every agent by default.
+- A model-override \`env\` entry is deliberately **not** shown here — only add one (see the "Model override" table above) when the user explicitly requests a pinned model, using the key that matches the connector's provider (\`ANTHROPIC_MODEL\`, \`OPENAI_MODEL\`, \`MODEL\`, etc.). Never default to \`ANTHROPIC_MODEL\` regardless of connector.
 - \`repo_name\` and \`branch\` are custom inputs, referenced from \`with.prompt\` via \`<+inputs.fieldName>\`
 - No \`version:\`, \`layout:\`, or \`step:\` blocks — those either don't exist in Current Format or are owned by the \`harnessAI\` base template
 
@@ -326,7 +336,7 @@ For a worked example in Legacy Format (only for updating agents already on this 
 | **Agent spec format (Current)** | The \`spec\` field instantiates \`agent.uses: harnessAI@1.0.0\` with an \`agent.with\` block. There is no \`step\`, \`container\`, or \`layout\` in the per-agent spec — those live on the base template. |
 | **Task location**          | Current Format: task instructions go in \`with.prompt\` (multiline string), turn budget in \`with.max_turns\`. Legacy Format: task instructions go in \`PLUGIN_TASK\` env var, turn budget in \`PLUGIN_MAX_TURNS\`. |
 | **Expression syntax**      | Use \`<+inputs.fieldName>\` in Current Format and \`\${{inputs.fieldName}}\` in Legacy Format — never mix the two; the wrong syntax silently fails to resolve at runtime. |
-| **Model override is optional** | Do NOT add \`with.env.ANTHROPIC_MODEL\` (Current) or \`modelName\`/\`ANTHROPIC_MODEL\` (Legacy) by default — only add when the user explicitly requests it |
+| **Model override is optional & provider-dependent** | Do NOT add a model-override env var by default. When the user explicitly requests one: Current Format uses \`with.env.<PROVIDER>_MODEL\` where the key depends on the connector's provider (Anthropic → \`ANTHROPIC_MODEL\`, OpenAI → \`OPENAI_MODEL\`, Copilot → \`MODEL\`; ask if unsure, never guess). Legacy Format uses a \`modelName\` input plus a fixed \`ANTHROPIC_MODEL\` env var. |
 | **Allowed domains**       | Current Format: \`with.allowed_domains\` is comma-separated hosts/wildcards/regexes, default \`"harness.io"\`. Legacy Format: \`allowedDomains\` input is \`|\`-separated regexes, default \`""\`. Confirm the right convention for the detected format before writing it. |
 | **Input defaults**         | Every non-required input that is referenced (\`<+inputs.x>\` in Current Format, \`\${{inputs.x}}\` in Legacy Format) **must have a \`default\` value** — omitting it causes a runtime error if the caller does not supply the value  |
 | **Connector placeholders** | Always use placeholders like \`your_llm_connector_id\` and \`your_mcp_connector_id\` and notify users to replace both LLM and MCP connector IDs with actual values before running the agent |
