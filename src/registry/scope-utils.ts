@@ -49,8 +49,10 @@ export type FmeDualModeResult =
 
 /**
  * Detects whether FME call uses deprecated `workspace_id` contract or
- * new Harness-native `org_id`+`project_id` contract. Shared by every
- * `fme_*` resource's `routeResolver` in `feature-flags.ts`.
+ * new Harness-native `org_id`+`project_id` contract. Used by the remaining
+ * dual-mode `fme_*` resources' `routeResolver`s in `feature-flags.ts`
+ * (`fme_rule_based_segment`, `fme_rule_based_segment_definition`, `fme_standard_segment`,
+ * `fme_traffic_type`).
  */
 export function resolveFmeDualMode(input: Record<string, unknown>, resourceType: string): FmeDualModeResult {
   const workspaceId = input.workspace_id as string | undefined;
@@ -100,11 +102,13 @@ export function requireFmeIdentifier(input: Record<string, unknown>, field: stri
 }
 
 /**
- * Mode selector for FME operations that have no Harness-native implementation yet
- * and therefore cannot use `resolveFmeDualMode`. Returns true when the caller
- * selected the Harness-native contract (org_id+project_id), false for the legacy
- * contract. A partial pair is rejected: half a scope would otherwise leak a stray
- * orgIdentifier/projectIdentifier query param onto a legacy Split.io API call.
+ * Mode selector for FME operations that have no Harness-native implementation
+ * (or, for `fme_rule_based_segment_definition`'s `enable`/`disable`, no
+ * `resolveFmeDualMode`-compatible path at all) and therefore cannot use
+ * `resolveFmeDualMode`. Returns true when the caller selected the Harness-native
+ * contract (org_id+project_id), false for the legacy contract. A partial pair is
+ * rejected: half a scope would otherwise leak a stray orgIdentifier/projectIdentifier
+ * query param onto a legacy Split.io API call.
  */
 export function isFmeHarnessNativeSelected(input: Record<string, unknown>, resourceType: string): boolean {
   const orgId = input.org_id;
@@ -131,6 +135,21 @@ export function requireHarnessNativeSegmentScope(input: Record<string, unknown>,
       `${resourceType}: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.`,
     );
   }
+  if (!input.org_id || !input.project_id) {
+    throw new Error(`${resourceType}: org_id and project_id are required (account is taken from config).`);
+  }
+}
+
+/**
+ * Guards Harness-native-only FME operations that used to be dual-mode. Unlike
+ * `requireHarnessNativeSegmentScope`, a stray `workspace_id` is silently ignored
+ * rather than rejected — callers migrating off the legacy contract shouldn't hit
+ * a hard error just for leaving the old field in place. Missing org_id/project_id
+ * still throws rather than falling back to config.HARNESS_ORG/HARNESS_PROJECT.
+ * Used by `fme_feature_flag`, `fme_feature_flag_definition`, `fme_environment`,
+ * `fme_rollout_status`, and `fme_traffic_type`.
+ */
+export function requireFmeHarnessNativeScope(input: Record<string, unknown>, resourceType: string): void {
   if (!input.org_id || !input.project_id) {
     throw new Error(`${resourceType}: org_id and project_id are required (account is taken from config).`);
   }

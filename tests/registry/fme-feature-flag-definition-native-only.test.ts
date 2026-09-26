@@ -88,7 +88,7 @@ describe("fme_feature_flag_definition native-only operations", () => {
     });
   });
 
-  it("rejects workspace_id for native-only lists", async () => {
+  it("rejects a lone workspace_id for lists since org_id/project_id are still required", async () => {
     const client = makeClient();
 
     await expect(
@@ -97,22 +97,23 @@ describe("fme_feature_flag_definition native-only operations", () => {
         feature_flag_name: "my_flag",
       }),
     ).rejects.toThrow(
-      "fme_feature_flag_definition.list: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.",
+      "fme_feature_flag_definition: org_id and project_id are required (account is taken from config).",
     );
   });
 
-  it("rejects mixed workspace and native list scope", async () => {
-    const client = makeClient();
+  it("silently ignores a stray workspace_id for lists when org_id/project_id are present", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
 
-    await expect(
-      registry.dispatch(client, "fme_feature_flag_definition", "list", {
-        workspace_id: "ws1",
-        ...nativeScope,
-        feature_flag_name: "my_flag",
-      }),
-    ).rejects.toThrow(
-      "fme_feature_flag_definition: pass either workspace_id (deprecated) OR org_id+project_id, not both.",
-    );
+    await registry.dispatch(client, "fme_feature_flag_definition", "list", {
+      workspace_id: "ws1",
+      ...nativeScope,
+      feature_flag_name: "my_flag",
+    });
+
+    const request = firstRequest(mockRequest);
+    expect(request.method).toBe("GET");
+    expect(request.path).toBe("/fme/api/v4/feature-flag-definitions");
   });
 
   it("deletes a native definition with environment_id as a query parameter", async () => {
@@ -128,7 +129,7 @@ describe("fme_feature_flag_definition native-only operations", () => {
     expect(request.params).toMatchObject({ environment_id: "env1" });
   });
 
-  it("rejects workspace_id for native-only deletes", async () => {
+  it("rejects a lone workspace_id for deletes since org_id/project_id are still required", async () => {
     const client = makeClient();
 
     await expect(
@@ -138,7 +139,7 @@ describe("fme_feature_flag_definition native-only operations", () => {
         environment_id: "env1",
       }),
     ).rejects.toThrow(
-      "fme_feature_flag_definition.delete: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.",
+      "fme_feature_flag_definition: org_id and project_id are required (account is taken from config).",
     );
   });
 
@@ -162,7 +163,7 @@ describe("fme_feature_flag_definition native-only operations", () => {
     },
   );
 
-  it("rejects workspace_id for native-only execute actions", async () => {
+  it("rejects a lone workspace_id for execute actions since org_id/project_id are still required", async () => {
     const client = makeClient();
 
     await expect(
@@ -172,7 +173,7 @@ describe("fme_feature_flag_definition native-only operations", () => {
         environment_id: "env1",
       }),
     ).rejects.toThrow(
-      "fme_feature_flag_definition.kill: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.",
+      "fme_feature_flag_definition: org_id and project_id are required (account is taken from config).",
     );
   });
 
