@@ -220,4 +220,37 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("types template_v1 inputs with NGVariableV1Wrapper instead of an open object", () => {
+    const templateWrapper = SCHEMAS.template_v1.properties as {
+      template: { properties: Record<string, { $ref?: string; additionalProperties?: unknown }> };
+    };
+
+    expect(templateWrapper.template.properties.inputs.$ref).toBe(
+      "#/definitions/template_v1/common/NGVariableV1Wrapper",
+    );
+    expect(templateWrapper.template.properties.inputs.additionalProperties).toBeUndefined();
+
+    const pipelineTemplate = (
+      SCHEMAS.template_v1.definitions as Record<string, Record<string, Record<string, unknown>>>
+    ).template_v1.pipeline as {
+      properties: Record<string, { $ref?: string }>;
+    };
+    expect(pipelineTemplate.properties.inputs.$ref).toBe(
+      "#/definitions/template_v1/common/NGVariableV1Wrapper",
+    );
+  });
+
+  it("includes upstream StepNodeV1 identifier patterns in template_v1 unified steps", () => {
+    const steps = (
+      (SCHEMAS.template_v1.definitions as Record<string, Record<string, unknown>>).template_v1
+        .steps as Record<string, Record<string, unknown>>
+    ).unified as Record<string, { properties: Record<string, { pattern?: string; minLength?: number; maxLength?: number }> }>;
+
+    const stepNode = steps.StepNodeV1;
+    expect(stepNode.properties.id.pattern).toBe("^[a-zA-Z_][0-9a-zA-Z_$]{0,127}$");
+    expect(stepNode.properties.name.pattern).toBe("^[a-zA-Z_][0-9a-zA-Z-_ ]{0,127}$");
+    expect(stepNode.properties.name.minLength).toBe(1);
+    expect(stepNode.properties.name.maxLength).toBe(128);
+  });
 });
