@@ -29,6 +29,7 @@
 | TC-pra-008 | Error | List activity for non-existent PR | `harness_list(resource_type="pr_activity", repo_id="my-repo", pr_number=99999)` | Returns 404 error for PR not found |
 | TC-pra-009 | Error | List activity for non-existent repo | `harness_list(resource_type="pr_activity", repo_id="nonexistent-repo", pr_number=1)` | Returns 404 error for repository not found |
 | TC-pra-010 | Edge | List activity on PR with many events | `harness_list(resource_type="pr_activity", repo_id="my-repo", pr_number=7)` | Returns activities for a PR with extensive activity history |
+| TC-pra-014 | List | Read comment bodies and thread status in compact mode | `harness_list(resource_type="pr_activity", params={"repo_id":"my-repo", "pr_number":3}, filters={"type":["comment","code-comment"]})` | Each item keeps `text`, `sub_order`, `parent_id`, and `resolved` when the thread is resolved |
 
 ## Notes
 - `pr_activity` is a read-only resource — only supports the `list` operation
@@ -36,3 +37,5 @@
 - Activity types include: comments, reviews, status changes, merge events, push events
 - Returns a chronological timeline of all PR events
 - To read all PR comments, filter by `type=["comment","code-comment"]`; `kind="comment"` returns only general comments
+- Compact mode (the default) projects each item down to id/threading/status fields plus `text`, `payload` (system activities), `resolved`, `resolver`, and `code_comment`; pass `compact=false` for the raw activity payload
+- `sub_order=0` marks a parent comment — `harness_execute(resource_type="pr_comment", action="set_status")` rejects replies

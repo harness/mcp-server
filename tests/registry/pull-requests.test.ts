@@ -3,6 +3,7 @@ import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
 import { Registry } from "../../src/registry/index.js";
 import type { EndpointSpec } from "../../src/registry/types.js";
+import { compactItems } from "../../src/utils/compact.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -799,5 +800,174 @@ describe("pr_comment bodyBuilder translation", () => {
         target_commit_sha: "def",
       },
     }));
+  });
+});
+
+describe("pr_comment set_status", () => {
+  it("resolves a comment thread with PUT /status and body { status: \"resolved\" } only", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ id: 123, resolved: 1_700_000_000_000 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_comment", "set_status", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      comment_id: "123",
+      org_id: "custom-org",
+      project_id: "custom-project",
+      body: { status: "resolved", extra: "ignored" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "PUT",
+      path: "/code/api/v1/repos/my_repo/pullreq/5/comments/123/status",
+      body: { status: "resolved" },
+    }));
+  });
+
+  it("reopens a comment thread with status active", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ id: 123 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_comment", "set_status", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      comment_id: "123",
+      body: { status: "active" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "PUT",
+      path: "/code/api/v1/repos/my_repo/pullreq/5/comments/123/status",
+      body: { status: "active" },
+    }));
+  });
+
+  it("rejects a missing status before HTTP", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pr_comment", "set_status", {
+        repo_id: "my_repo",
+        pr_number: "5",
+        comment_id: "123",
+        body: {},
+      }),
+    ).rejects.toThrow(/status is required for pr_comment.set_status/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown status before HTTP", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pr_comment", "set_status", {
+        repo_id: "my_repo",
+        pr_number: "5",
+        comment_id: "123",
+        body: { status: "closed" },
+      }),
+    ).rejects.toThrow(/must be "resolved" or "active"/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("canonicalizes mixed-case status to the declared enum", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ id: 123, resolved: 1_700_000_000_000 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_comment", "set_status", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      comment_id: "123",
+      body: { status: "Resolved" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: { status: "resolved" },
+    }));
+  });
+
+  it("documents set_status on pr_comment execute actions", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const commentDef = registry.getResource("pr_comment");
+    const statusField = commentDef.executeActions?.set_status?.bodySchema?.fields.find((f) => f.name === "status");
+    expect(commentDef.executeActions?.set_status).toBeDefined();
+    expect(commentDef.executeHint).toContain("set_status");
+    expect(commentDef.diagnosticHint).toContain("set_status");
+    expect(statusField?.enum).toEqual(["resolved", "active"]);
+    expect(statusField?.required).toBe(true);
+  });
+});
+
+describe("pr_activity compact projection", () => {
+  const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+  const compactFn = registry.getResource("pr_activity").compactItem;
+
+  const comment = {
+    id: 501,
+    created: 1_700_000_000_000,
+    updated: 1_700_000_000_000,
+    edited: 1_700_000_000_000,
+    parent_id: null,
+    repo_id: 7,
+    pullreq_id: 42,
+    order: 3,
+    sub_order: 0,
+    type: "comment",
+    kind: "comment",
+    text: "This needs a null check before the cast.",
+    payload: {},
+    resolved: 1_700_000_900_000,
+    author: { id: 9, display_name: "Ada" },
+    resolver: { id: 11, display_name: "Grace" },
+    code_comment: { path: "src/a.ts", line_new: 12, outdated: false },
+    mentions: { 11: { id: 11, display_name: "Grace" } },
+    reactions: [{ type: "+1", count: 2 }],
+    metadata: { suggestions: { check_sums: ["abc"] } },
+  };
+
+  it("keeps the fields the set_status workflow depends on", () => {
+    const [slim] = compactItems([comment], compactFn) as Array<Record<string, unknown>>;
+    // Without this projection the generic whitelist drops every one of these.
+    expect(slim!.text).toBe("This needs a null check before the cast.");
+    expect(slim!.resolved).toBe(1_700_000_900_000);
+    expect(slim!.resolver).toEqual({ id: 11, display_name: "Grace" });
+    expect(slim!.sub_order).toBe(0);
+    expect(slim!.created).toBe(1_700_000_000_000);
+    expect(slim!.code_comment).toEqual({ path: "src/a.ts", line_new: 12, outdated: false });
+  });
+
+  it("still drops verbose fields and empty comment payloads", () => {
+    const [slim] = compactItems([comment], compactFn) as Array<Record<string, unknown>>;
+    expect(slim).not.toHaveProperty("mentions");
+    expect(slim).not.toHaveProperty("reactions");
+    expect(slim).not.toHaveProperty("metadata");
+    expect(slim).not.toHaveProperty("updated");
+    expect(slim).not.toHaveProperty("payload");
+  });
+
+  it("keeps the payload of system activities, whose text is empty", () => {
+    const [slim] = compactItems([{
+      id: 600,
+      parent_id: null,
+      type: "state-change",
+      kind: "system",
+      text: "",
+      payload: { old: "open", new: "closed" },
+    }], compactFn) as Array<Record<string, unknown>>;
+    expect(slim!.payload).toEqual({ old: "open", new: "closed" });
+  });
+
+  it("marks replies with sub_order so agents do not call set_status on them", () => {
+    const [slim] = compactItems([{ ...comment, id: 502, parent_id: 501, sub_order: 1 }], compactFn) as Array<Record<string, unknown>>;
+    expect(slim!.parent_id).toBe(501);
+    expect(slim!.sub_order).toBe(1);
   });
 });

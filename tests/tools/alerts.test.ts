@@ -79,7 +79,7 @@ describe("alert resource definition", () => {
     const registry = new Registry(makeConfig());
     const def = registry.getResource("alert");
     const priorityField = def.operations.update?.bodySchema?.fields.find((f) => f.name === "priority");
-    // BodyFieldSpec has no enum support, so the values must live in the description.
+    // Priority ids are documented in the description until this body field grows an enum.
     for (const id of ["p1_critical", "p2_error", "p3_warning", "p4_info"]) {
       expect(priorityField?.description).toContain(id);
     }
