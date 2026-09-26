@@ -1543,7 +1543,7 @@ const schema: Record<string, any> = {
             "idp": {
               "$ref": "#/definitions/pipeline_v1/common/TemplateRef"
             },
-            "iacm": {
+            "infrastructure": {
               "$ref": "#/definitions/pipeline_v1/common/TemplateRef"
             },
             "sto": {
@@ -2280,7 +2280,7 @@ const schema: Record<string, any> = {
                 },
                 {
                   "required": [
-                    "iacm"
+                    "infrastructure"
                   ]
                 },
                 {
@@ -2387,7 +2387,7 @@ const schema: Record<string, any> = {
                       },
                       {
                         "required": [
-                          "iacm"
+                          "infrastructure"
                         ]
                       },
                       {
@@ -2611,7 +2611,8 @@ const schema: Record<string, any> = {
                   "cloud",
                   "shell",
                   "vm",
-                  "k8"
+                  "k8",
+                  "delegate"
                 ]
               },
               {
@@ -3472,7 +3473,14 @@ const schema: Record<string, any> = {
                   },
                   "all-infra": {
                     "description": "Deploy to all infrastructures in the environment. With a `deploy-to` runtime input sibling, every infrastructure is preselected in the run form; with no `deploy-to` sibling, deploys to all without prompting.",
-                    "type": "boolean"
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline_v1/common/Expression"
+                      }
+                    ]
                   },
                   "deploy-to": {
                     "description": "Infrastructure(s) to deploy to.",
@@ -3641,7 +3649,14 @@ const schema: Record<string, any> = {
               },
               "all-infra": {
                 "description": "Deploy to all infrastructures in the environment. With a `deploy-to` runtime input sibling, every infrastructure is preselected in the run form; with no `deploy-to` sibling, deploys to all without prompting.",
-                "type": "boolean"
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline_v1/common/Expression"
+                  }
+                ]
               },
               "deploy-to": {
                 "description": "Infrastructure(s) to deploy to.",
@@ -3812,7 +3827,14 @@ const schema: Record<string, any> = {
                   },
                   "all-env": {
                     "description": "Deploy to all environments in the group. With an `items` runtime input sibling, every environment is preselected in the run form; with no `items` sibling, deploys to all without prompting.",
-                    "type": "boolean"
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline_v1/common/Expression"
+                      }
+                    ]
                   },
                   "parallel": {
                     "description": "Execute environments in parallel (all at once). Defaults to false, so environments run one at a time (serially) unless set to true.",
@@ -4359,7 +4381,7 @@ const schema: Record<string, any> = {
                 },
                 {
                   "required": [
-                    "iacm"
+                    "infrastructure"
                   ]
                 },
                 {
@@ -4530,7 +4552,7 @@ const schema: Record<string, any> = {
                       },
                       {
                         "required": [
-                          "iacm"
+                          "infrastructure"
                         ]
                       },
                       {
