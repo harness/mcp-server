@@ -510,6 +510,24 @@ describe("managed offline evaluation safety", () => {
     expect(request).toHaveBeenCalledTimes(2);
   });
 
+  it("rejects a type=llm metric-set entry without judge configuration before the write", async () => {
+    const registry = new Registry(makeConfig());
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({})
+      .mockResolvedValueOnce({ type: "llm", name: "GEval correctness", kind: "geval" });
+    const client = makeClient(request);
+
+    await expect(
+      registry.dispatch(client, "eval_metric_set_entry", "create", {
+        set_id: "11111111-1111-4111-8111-111111111111",
+        body: { metric_id: "22222222-2222-4222-8222-222222222222" },
+      }),
+    ).rejects.toThrow(/requires a metric-set judge_llm_config/);
+
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects replacing metric-set entries with an ai_judge metric without a judge", async () => {
     const registry = new Registry(makeConfig());
     const request = vi
