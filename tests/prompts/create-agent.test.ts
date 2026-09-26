@@ -130,4 +130,28 @@ describe("create-agent prompt", () => {
     expect(text).toContain("Use `<+inputs.fieldName>` in Current Format and `${{inputs.fieldName}}` in Legacy Format");
     expect(text).toContain("never mix the two");
   });
+
+  it("documents ca_ uid generation from agent name with concrete examples", async () => {
+    const text = await getPromptText({
+      agent_name: "Code Coverage Agent",
+      task_description: "Measure coverage",
+    });
+
+    expect(text).toContain('prefix with `ca_`');
+    expect(text).toContain('"Code Coverage Agent" → `ca_code_coverage_agent`');
+    expect(text).toContain('"PR Reviewer" → `ca_pr_reviewer`');
+    expect(text).toContain("Do not omit it or rely on API-side auto-generation");
+  });
+
+  it("forbids rewriting legacy spec when agent-docs resource cannot be read", async () => {
+    const text = await getPromptText({
+      agent_name: "Legacy Guard Agent",
+      task_description: "Update legacy agent safely",
+    });
+
+    expect(text).toContain("If you cannot read MCP resources");
+    expect(text).toContain("do not rewrite or modify the `spec` at all");
+    expect(text).toContain("Do not guess the Legacy Format structure from memory");
+    expect(text).toContain("non-spec field updates (`name`, `description`, `wiki`)");
+  });
 });
