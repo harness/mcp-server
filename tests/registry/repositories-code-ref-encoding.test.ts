@@ -122,6 +122,20 @@ describe("branch path encoding", () => {
     ).rejects.toThrow(/branch_name/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
+
+  it("coerces string page to number before applying +1 offset on list", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    const mockRequest = vi.fn().mockResolvedValue([]);
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "branch", "list", {
+      repo_id: "my-repo",
+      page: "2" as unknown as number,
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params.page).toBe(3);
+  });
 });
 
 describe("tag path encoding", () => {
