@@ -2269,6 +2269,40 @@ pipeline:
     });
   });
 
+  it("infers REMOTE store type from runtime YAML codebase repoName without a branch", async () => {
+    mockRequest.mockImplementation((request: { method?: string }) => {
+      if (request.method === "GET") {
+        throw new Error("pipeline.get read-cache preflight should not run");
+      }
+      return Promise.resolve({ data: { planExecutionId: "exec-repo-only" } });
+    });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      inputs: `
+pipeline:
+  identifier: my-pipe
+  properties:
+    ci:
+      codebase:
+        repoName: testdataserv
+`,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledOnce();
+
+    const postCall = mockRequest.mock.calls[0]![0] as { method?: string; params?: Record<string, unknown> };
+    expect(postCall.method).toBe("POST");
+    expect(postCall.params).toMatchObject({
+      storeType: "REMOTE",
+      repoName: "testdataserv",
+    });
+    expect(postCall.params?.branch).toBeUndefined();
+  });
+
   it.each([
     { name: "pipeline_branch", params: { pipeline_branch: "feature/definition" } },
     { name: "branch alias", params: { branch: "feature/definition" } },

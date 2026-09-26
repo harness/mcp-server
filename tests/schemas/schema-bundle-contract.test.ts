@@ -220,4 +220,33 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream IACMAnsiblePluginInfo forks field in v0 pipeline and template", () => {
+    for (const key of ["pipeline", "template"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const iacm = defs.pipeline.steps.iacm as Record<string, unknown>;
+
+      expect(iacm).toHaveProperty("IACMAnsiblePluginStepNode");
+      expect(iacm).toHaveProperty("IACMAnsiblePluginInfo");
+
+      const stepNode = iacm.IACMAnsiblePluginStepNode as {
+        properties: { type: { enum: string[] } };
+      };
+      expect(stepNode.properties.type.enum).toContain("IACMAnsiblePlugin");
+
+      const info = iacm.IACMAnsiblePluginInfo as {
+        properties: Record<string, {
+          description?: string;
+          oneOf?: Array<{ type?: string; minimum?: number; maximum?: number }>;
+        }>;
+      };
+      expect(info.properties).toHaveProperty("forks");
+
+      const forks = info.properties.forks;
+      expect(forks.description).toContain("1-100");
+      const integerForks = forks.oneOf?.find((variant) => variant.type === "integer");
+      expect(integerForks?.minimum).toBe(1);
+      expect(integerForks?.maximum).toBe(100);
+    }
+  });
 });
