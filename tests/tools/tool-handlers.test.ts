@@ -3155,6 +3155,44 @@ pipeline:
     expect(getCall.params?.storeType).toBe("REMOTE");
   });
 
+  it("forwards pipeline_branch alone to the input set GET for a remote pipeline run", async () => {
+    const inputSetYaml = `inputSet:
+  pipeline:
+    identifier: "remote_pipe"
+    variables:
+      - name: "env"
+        type: "String"
+        value: "prod"
+`;
+    mockRequest
+      .mockResolvedValueOnce({ status: "SUCCESS", data: { inputSetYaml } })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-pipeline-branch-only" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "remote_pipe",
+      input_set_ids: ["remote-set"],
+      params: {
+        store_type: "REMOTE",
+        connector_ref: "gh_conn",
+        repo_name: "my-repo",
+        pipeline_branch: "feature/definition-only",
+      },
+    });
+
+    expect(result.isError).toBeUndefined();
+    const getCall = mockRequest.mock.calls[0]![0] as {
+      method?: string;
+      params?: Record<string, string | undefined>;
+    };
+    expect(getCall.method).toBe("GET");
+    expect(getCall.params?.branch).toBe("feature/definition-only");
+    expect(getCall.params?.repoName).toBe("my-repo");
+    expect(getCall.params?.connectorRef).toBe("gh_conn");
+    expect(getCall.params?.storeType).toBe("REMOTE");
+  });
+
   it("materializes input_set_ids before applying inline input overrides", async () => {
     const inputSetYaml = `inputSet:
   pipeline:
