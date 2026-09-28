@@ -570,7 +570,13 @@ describe("applyUrlDefaults", () => {
     expect(result.project_id).toBe("myProject");
   });
 
-  it.each(["fme_metric", "fme_event_type"])(
+  it.each([
+    "fme_metric",
+    "fme_event_type",
+    "fme_experiment",
+    "fme_experiment_settings",
+    "fme_experiment_result",
+  ])(
     "still merges URL org/project for Harness-native-only %s even with a stray workspace_id",
     (resourceType) => {
       const result = applyUrlDefaults(

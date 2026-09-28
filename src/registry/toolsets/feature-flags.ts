@@ -2246,6 +2246,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { metric_ids: "metric_ids", comparisons: "comparisons" },
+          // List-only: there is no get. Default harness_list compact keeps metricId/category
+          // and drops the statistics (value, pvalue, comparison, sample sizes, impact).
+          skipCompact: true,
           responseExtractor: fmeV4PaginatedListExtract,
           description:
             "List evaluated metric results for an experiment's latest calculation run. One MetricResult per (metric, " +

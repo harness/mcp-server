@@ -2904,6 +2904,36 @@ describe("fme_experiment_result", () => {
     expect(resource.operations.update).toBeUndefined();
     expect(resource.operations.delete).toBeUndefined();
   });
+
+  it("list opts out of default compact so metric statistics survive harness_list", async () => {
+    const resource = findResource("fme_experiment_result");
+    expect(resource.operations.list?.skipCompact).toBe(true);
+
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: [
+        {
+          metricId: { id: "m1", name: null },
+          category: "KEY",
+          comparison: "on",
+          value: 1.5,
+          pvalue: 0.04,
+          baselineSampleSize: 16,
+          comparisonSampleSize: 14,
+        },
+      ],
+      calculatedAt: "2025-06-01T00:00:00Z",
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "fme_experiment_result", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+    })) as { items: Array<Record<string, unknown>>; __skipCompact?: boolean };
+
+    expect(result.__skipCompact).toBe(true);
+    expect(result.items[0]).toMatchObject({ value: 1.5, pvalue: 0.04, comparison: "on" });
+  });
 });
 
 describe("fme_event_type", () => {
