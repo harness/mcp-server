@@ -417,6 +417,9 @@ const FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES = new Set([
   "fme_segment_definition",
   "fme_metric",
   "fme_event_type",
+  "fme_experiment",
+  "fme_experiment_settings",
+  "fme_experiment_result",
 ]);
 
 /**
@@ -452,9 +455,9 @@ export function applyUrlDefaults(
   // exclusive scoping modes for FME resources (see resolveFmeDualMode).
   // Use the caller's declared resource_type when present — the URL's own parsed
   // type may be absent or non-FME even when the call itself targets an FME resource.
-  // Harness-native-only resources (fme_segment/fme_segment_definition/fme_metric/
-  // fme_event_type) are excluded: they have no workspace_id contract, so a stray
-  // value must not suppress org/project.
+  // Harness-native-only resources (FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES) are
+  // excluded: they have no workspace_id contract, so a stray value must not
+  // suppress org/project.
   const declaredResourceType = (args.resource_type as string | undefined) ?? parsed.resource_type;
   const hasWorkspaceId = typeof args.workspace_id === "string" && args.workspace_id !== "";
   const skipOrgProjectFromUrl =
