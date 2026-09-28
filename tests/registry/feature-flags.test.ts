@@ -5,6 +5,7 @@ import type { RequestOptions } from "../../src/client/types.js";
 import { Registry } from "../../src/registry/index.js";
 import { featureFlagsToolset } from "../../src/registry/toolsets/feature-flags.js";
 import type { EndpointSpec, ResourceDefinition } from "../../src/registry/types.js";
+import { compactItems } from "../../src/utils/compact.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -882,10 +883,9 @@ describe("fme_environment dual-mode routing", () => {
       project_id: "p1",
     });
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       items: [{ id: "env1", name: "prod" }],
       total: 3,
-      totalCount: 3,
     });
   });
 
@@ -1026,10 +1026,9 @@ describe("fme_traffic_type and fme_rollout_status dual-mode list", () => {
       project_id: "p1",
     });
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       items: [{ type: "TRAFFIC_TYPE", id: "tt1", name: "user" }],
       total: 3,
-      totalCount: 3,
     });
   });
 
@@ -2592,6 +2591,75 @@ describe("fme_experiment", () => {
     expect(result.total).toBe(1);
   });
 
+  it("list: result is a closed {items, total} — no raw data/limit/offset/totalCount envelope survives", async () => {
+    const experiments = [{ id: "e1", name: "checkout-experiment" }];
+    const mockRequest = vi.fn().mockResolvedValue({ data: experiments, limit: 100, offset: 0, totalCount: 1 });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+    });
+
+    expect(result).toEqual({ items: experiments, total: 1 });
+  });
+
+  it("list: compactItem keeps parent/environmentId/treatments/owners/status that the generic whitelist would drop", async () => {
+    const resource = findResource("fme_experiment");
+    const item = {
+      id: "e1",
+      name: "checkout-experiment",
+      description: "d",
+      hypothesis: "h",
+      status: "ACTIVE",
+      parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+      environmentId: "env1",
+      startAt: "2025-06-01T12:00:00Z",
+      endAt: "2025-07-01T12:00:00Z",
+      baselineTreatment: "off",
+      comparisonTreatments: ["on"],
+      keyMetrics: ["m1"],
+      supportingMetrics: ["m2"],
+      owners: [{ type: "USER", id: "u1" }],
+    };
+
+    const [compacted] = compactItems([item], resource.compactItem) as Record<string, unknown>[];
+
+    expect(compacted).toEqual({
+      id: "e1",
+      name: "checkout-experiment",
+      description: "d",
+      status: "ACTIVE",
+      parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+      environmentId: "env1",
+      startAt: "2025-06-01T12:00:00Z",
+      endAt: "2025-07-01T12:00:00Z",
+      baselineTreatment: "off",
+      comparisonTreatments: ["on"],
+      owners: [{ type: "USER", id: "u1" }],
+    });
+  });
+
+  it("list: without compactItem the generic whitelist would drop parent/treatments/owners (documents why it's needed)", async () => {
+    const item = {
+      id: "e1",
+      name: "checkout-experiment",
+      status: "ACTIVE",
+      parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+      baselineTreatment: "off",
+      comparisonTreatments: ["on"],
+      owners: [{ type: "USER", id: "u1" }],
+    };
+
+    const [stripped] = compactItems([item]) as Record<string, unknown>[];
+
+    expect(stripped).not.toHaveProperty("parent");
+    expect(stripped).not.toHaveProperty("baselineTreatment");
+    expect(stripped).not.toHaveProperty("comparisonTreatments");
+    expect(stripped).not.toHaveProperty("owners");
+  });
+
   it("list: harness_list size maps to limit", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 5, offset: 0, totalCount: 0 });
     const client = makeClient(mockRequest);
@@ -2670,6 +2738,57 @@ describe("fme_experiment", () => {
     expect(result).toEqual({ id: "e1", name: "checkout-experiment", governance: { status: "NONE", details: [] } });
   });
 
+  it("create: forwards owners when present in body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", name: "checkout-experiment" },
+      governance: { status: "NONE", details: [] },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "env1",
+      body: {
+        parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+        name: "checkout-experiment",
+        startAt: "2025-06-01T12:00:00Z",
+        endAt: "2025-07-01T12:00:00Z",
+        baselineTreatment: "off",
+        comparisonTreatments: ["on"],
+        owners: [{ type: "USER", id: "u1" }],
+      },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toMatchObject({ owners: [{ type: "USER", id: "u1" }] });
+  });
+
+  it("create: omits the owners key entirely (not owners: undefined) when absent from body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", name: "checkout-experiment" },
+      governance: { status: "NONE", details: [] },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "env1",
+      body: {
+        parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+        name: "checkout-experiment",
+        startAt: "2025-06-01T12:00:00Z",
+        endAt: "2025-07-01T12:00:00Z",
+        baselineTreatment: "off",
+        comparisonTreatments: ["on"],
+      },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).not.toHaveProperty("owners");
+  });
+
   it("create: throws when environment_id missing", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
@@ -2717,11 +2836,59 @@ describe("fme_experiment", () => {
     expect(req.body).toEqual({ endAt: "2025-08-01T12:00:00Z" });
   });
 
-  it("delete: DELETEs to /fme/api/v4/experiments/{experiment_id} and is classified as destructive risk", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({ governance: { status: "NONE", details: [] } });
+  it("update: replaces owners when present in body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
     const client = makeClient(mockRequest);
 
-    await registry.dispatch(client, "fme_experiment", "delete", {
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { owners: [{ type: "GROUP", identifier: "g1" }] },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ owners: [{ type: "GROUP", identifier: "g1" }] });
+  });
+
+  it("update: sends owners: null through as a clear", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { owners: null },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ owners: null });
+  });
+
+  it("update: sends owners: [] through as a clear", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { owners: [] },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ owners: [] });
+  });
+
+  it("delete: DELETEs to /fme/api/v4/experiments/{experiment_id}, is classified as destructive risk, and flattens an entity/governance envelope", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", name: "checkout-experiment", status: "ARCHIVED" },
+      governance: { status: "NONE", details: [] },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment", "delete", {
       org_id: "o1",
       project_id: "p1",
       experiment_id: "e1/with slash",
@@ -2730,6 +2897,10 @@ describe("fme_experiment", () => {
     const req = firstRequest(mockRequest);
     expect(req.method).toBe("DELETE");
     expect(req.path).toBe("/fme/api/v4/experiments/e1%2Fwith%20slash");
+    // fmeV4EntityExtract flattens {entity, governance} to the entity's own fields + governance,
+    // matching every other FME v4 mutation (create/update/fme_experiment_settings.delete) — a bare
+    // passthrough here would leak the {entity, governance} wrapper if the live response has one.
+    expect(result).toEqual({ id: "e1", name: "checkout-experiment", status: "ARCHIVED", governance: { status: "NONE", details: [] } });
 
     const resource = findResource("fme_experiment");
     expect(resource.operations.list).toBeDefined();
@@ -2738,6 +2909,19 @@ describe("fme_experiment", () => {
     expect(resource.operations.update).toBeDefined();
     expect(resource.operations.delete).toBeDefined();
     expect(resource.operations.delete?.operationPolicy?.risk).toBe("destructive");
+  });
+
+  it("delete: returns a governance-only response unchanged when the live API has no entity to flatten", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment", "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+    });
+
+    expect(result).toEqual({ governance: { status: "NONE", details: [] } });
   });
 });
 
@@ -2952,6 +3136,41 @@ describe("fme_experiment_result", () => {
     expect(result.items).toEqual(results);
     expect(result.total).toBe(1);
     expect(result.calculatedAt).toBeNull();
+  });
+
+  it("list: result is a closed {items, total, calculatedAt} — no raw data envelope survives", async () => {
+    const results = [{ metricId: { id: "m1", name: null }, category: "KEY", value: 0.5 }];
+    const mockRequest = vi.fn().mockResolvedValue({ data: results, calculatedAt: "2025-06-01T12:00:00Z" });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment_result", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+    });
+
+    expect(result).toEqual({ items: results, total: 1, calculatedAt: "2025-06-01T12:00:00Z" });
+  });
+
+  it("list: skips compaction so stat fields (value, pvalue, impact, sample sizes) survive harness_list's default compact", async () => {
+    const resource = findResource("fme_experiment_result");
+    expect(resource.operations.list?.skipCompact).toBe(true);
+
+    // Documents why: the generic compact whitelist would strip everything but metricId/category.
+    const row = {
+      metricId: { id: "m1", name: null },
+      category: "KEY",
+      comparison: "off",
+      value: 0.12,
+      pvalue: 0.03,
+      impactLower: 0.01,
+      impactUpper: 0.2,
+      baselineSampleSize: 16,
+      comparisonSampleSize: 14,
+    };
+    const [stripped] = compactItems([row]) as Record<string, unknown>[];
+    expect(stripped).not.toHaveProperty("value");
+    expect(stripped).not.toHaveProperty("pvalue");
   });
 
   it("is list-only: no get, create, update, or delete", () => {

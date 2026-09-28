@@ -1548,15 +1548,27 @@ export function flattenTrafficType(item: Record<string, unknown>): void {
 
 /**
  * Public v4 paginated lists (`EnvironmentListResponse`, `TrafficTypeListResponse` / `RolloutStatusListResponse`):
- * `{ data, limit, offset, totalCount }`. Promote `data`→`items` and `totalCount`→`total`
- * so harness_list compact/output schema see a full total, not the current page length.
+ * `{ data, limit, offset, totalCount }`. Promote `data`→`items` and `totalCount`→`total`, and drop the rest of
+ * the raw envelope (`data`/`limit`/`offset`/`totalCount`) — otherwise it survives on the result alongside `items`
+ * and crosses the tool boundary uncompacted (harness_list's compact pass only touches `items`).
  */
 export const fmeV4PaginatedListExtract = (raw: unknown): unknown => {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const r = raw as Record<string, unknown>;
   if (!Array.isArray(r.data)) return raw;
   const total = typeof r.totalCount === "number" ? r.totalCount : r.data.length;
-  return { ...r, items: r.data, total };
+  return { items: r.data, total };
+};
+
+/**
+ * FME experiment metric-results (`{ data, calculatedAt }`) — not a normal pagination page, no
+ * `totalCount`. Promote `data`→`items`, drop `data` itself, and keep `calculatedAt` alongside.
+ */
+export const fmeExperimentResultExtract = (raw: unknown): unknown => {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const r = raw as Record<string, unknown>;
+  if (!Array.isArray(r.data)) return raw;
+  return { items: r.data, total: r.data.length, calculatedAt: r.calculatedAt ?? null };
 };
 
 /**

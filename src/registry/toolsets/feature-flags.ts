@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract, fmeV4EntityExtract } from "../extractors.js";
+import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract, fmeV4EntityExtract, fmeExperimentResultExtract } from "../extractors.js";
 import { isFmeHarnessNativeSelected, logFmeDeprecation, requireFmeIdentifier, requireHarnessNativeSegmentScope, resolveFmeDualMode } from "../scope-utils.js";
 
 const fmeActionExtract = (raw: unknown) => {
@@ -142,6 +142,32 @@ function buildFmeMergePatch(
     patch[field] = transform ? transform(field, value) : value;
   }
   return patch;
+}
+
+// fme_experiment list items: the generic compactItems() whitelist keeps id/name/description/status/
+// *At timestamps but drops parent, environmentId, and the treatment/ownership fields an agent needs
+// to pick an experiment (see fmeExperimentCreateSchema/fmeExperimentUpdateSchema for the full shape).
+function compactFmeExperiment(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "id",
+    "name",
+    "description",
+    "status",
+    "parent",
+    "environmentId",
+    "startAt",
+    "endAt",
+    "baselineTreatment",
+    "comparisonTreatments",
+    "owners",
+    "createdAt",
+    "updatedAt",
+    "openInHarness",
+  ]) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
 }
 
 function resolveFmeCreateSegmentType(body: Record<string, unknown> | undefined): FmeSegmentKind {
@@ -2045,6 +2071,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
       identifierFields: ["experiment_id"],
+      compactItem: compactFmeExperiment,
       listFilterFields: [
         { name: "parent_type", description: "Parent kind to list. Required. FEATURE_FLAG and AI_CONFIG are implemented; CONFIG returns 404.", enum: ["FEATURE_FLAG", "AI_CONFIG", "CONFIG"], required: true },
         { name: "environment_id", description: "Filter to experiments assigned in this environment (get from fme_environment). Optional." },
@@ -2167,7 +2194,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             return { path: `/fme/api/v4/experiments/${id}` };
           },
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
-          responseExtractor: passthrough,
+          responseExtractor: fmeV4EntityExtract,
           description:
             "Delete an experiment by ID. Hard delete — permanent, no archive/restore (does not set status: ARCHIVED). " +
             "The parent Feature Flag/AI Config/Config is not deleted.",
@@ -2277,7 +2304,11 @@ export const featureFlagsToolset: ToolsetDefinition = {
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { metric_ids: "metric_ids", comparisons: "comparisons" },
-          responseExtractor: fmeV4PaginatedListExtract,
+          responseExtractor: fmeExperimentResultExtract,
+          // Every field on a MetricResult row is the answer this resource exists to return (value,
+          // pvalue, impactLower/Upper, sample sizes, varianceReduction) — none of it fits the generic
+          // compact whitelist, so skip compaction rather than gutting the row to {metricId, category}.
+          skipCompact: true,
           description:
             "List evaluated metric results for an experiment's latest calculation run. One MetricResult per (metric, " +
             "comparison treatment) pair. If the experiment has never been calculated, or a filtered metric id doesn't " +
