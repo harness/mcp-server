@@ -5,7 +5,7 @@ export function registerCreateAgentPrompt(server: McpServer): void {
   server.registerPrompt(
     "create-agent",
     {
-      description: "Create and update Harness AI agent instances - standalone templates used as building blocks in pipelines. Agents contain a single agent step with connector-driven architecture requiring llmConnector (LLM access) and optional mcpConnectors (GitHub, Slack, Harness platform). Supports runtime inputs and task/rules-based instruction.",
+      description: "Create and update Harness AI agent instances - standalone templates used as building blocks in pipelines. New agents instantiate the shared harnessAI@1.0.0 base template via agent.uses/agent.with, requiring a connector (LLM access) and optional mcp connectors (GitHub, Slack, Harness platform). Updating an existing agent detects and preserves its current spec format (current agent.uses format, or legacy agent.step.group.steps format) rather than migrating it. Supports runtime inputs and task/rules-based instruction.",
       argsSchema: {
         agent_name: z.string().describe("Name for the custom agent"),
         task_description: z.string().describe("What the agent should do"),
@@ -38,14 +38,21 @@ export function registerCreateAgentPrompt(server: McpServer): void {
 
 2. **For updating existing agents** — Use \`harness_get\` with \`resource_type="agent"\` and \`agent_id\` to retrieve the current agent configuration
    - Review the current \`spec\`, \`name\`, \`description\`, and other fields
+   - **Detect the spec format before doing anything else** — this determines which path (Current Format or Legacy Format) the rest of Phase 2/3 must follow:
+     - \`agent.uses\` present (e.g. \`uses: harnessAI@1.0.0\`) → **Current Format**
+     - \`agent.step.group.steps\` present → **Legacy Format** — if detected, read the \`agent-docs:///legacy-format\` MCP resource in full **now**, before proceeding to Phase 2. It is self-contained (structure, spec-generation steps, and worked example) — reading it once here covers the rest of this workflow, so you should not need to re-read it at later phases.
+     - **If you cannot read MCP resources, or the \`agent-docs:///legacy-format\` read fails/returns nothing: do not rewrite or modify the \`spec\` at all.** Do not guess the Legacy Format structure from memory, and do not fall back to Current Format. Stop, tell the user this client can't fetch the reference needed to safely edit a legacy-format agent's spec, and either proceed only with non-spec field updates (\`name\`, \`description\`, \`wiki\`) or ask them how they'd like to proceed.
    - Identify what needs to be changed (spec, name, description, wiki, logo)
    - Use \`harness_update\` (not \`harness_create\`) to update the agent with only the fields that need modification
+   - **Never convert a Legacy Format agent to Current Format (or vice versa) during a routine update.** Keep editing in whatever format the agent already uses unless the user explicitly asks for a migration to the current format.
 
 ---
 
 ## Phase 2: Requirements Gathering
 
-If creating a new agent or updating an existing one, collect the following before generating YAML:
+If creating a new agent or updating an existing one, collect the following before generating YAML.
+
+**Format applies throughout Phase 2 §3–4 and Phase 3: creating a new agent always targets Current Format. Updating an existing agent targets whichever format Phase 1 detected for that agent — Current Format or Legacy Format.**
 
 ### 1. Agent Metadata
 - **Name**: Display name for the agent (e.g. "Code Coverage Agent", "PR Reviewer")
@@ -78,133 +85,107 @@ Ask and clarify the following with the user:
 
 Based on requirements, recommend and verify with the user:
 
-1. **Task instructions** (\`PLUGIN_TASK\` env var):
+1. **Task instructions**:
    - Break down the goal into detailed step-by-step instructions
    - Include specific commands, file paths, and expected outcomes
-   - Reference inputs using \`\${{inputs.fieldName}}\` syntax inside \`PLUGIN_TASK\` and other env vars
-   - Add \`## RULES\` section at the end with constraints formatted as markdown bullet points
+   - **Current Format**: put instructions in \`with.prompt\`; reference custom inputs using \`<+inputs.fieldName>\` syntax
+   - **Legacy Format**: put instructions in \`PLUGIN_TASK\` env var; reference inputs using \`\${{inputs.fieldName}}\` syntax
+   - Add \`## RULES\` section at the end with constraints formatted as markdown bullet points (same convention in both formats)
 
-2. **Runtime inputs** (\`inputs\` section in spec):
-   - Only add if user confirms runtime parameters are needed
-   - Map each input to what the agent needs (repo, branch, executionId, thresholds, etc.)
-   - **Always set a \`default\` value for every non-required input** — if \`\${{inputs.fieldName}}\` is referenced in \`PLUGIN_TASK\` or any env var and no value is supplied at runtime nor a default exists, the agent will error at execution time
-   - Always include \`allowedDomains\` so users understand and control non-LLM/non-MCP network access
+2. **Runtime inputs** (custom \`inputs\` declared on the agent, beyond what the base template/legacy structure already provides):
+   - Only add if user confirms runtime parameters are needed (repo, branch, executionId, thresholds, etc.)
+   - **Always set a \`default\` value for every non-required input** — if it's referenced (\`<+inputs.x>\` in Current Format, \`\${{inputs.x}}\` in Legacy Format) and no value is supplied at runtime nor a default exists, the agent will error at execution time
+   - **Current Format**: always confirm \`allowed_domains\` (comma-separated hosts/wildcards/regexes; default \`"harness.io"\`) so users understand and control non-LLM/non-MCP network access
+   - **Legacy Format**: always confirm \`allowedDomains\` (regex patterns separated by \`|\`; default \`""\`)
 
 3. **Connectors**:
    - LLM connector for model access (required for all agents) - User must create via Harness UI or MCP
    - MCP connectors for external services (GitHub, Slack, Harness platform, etc.) - only if needed
    - All authentication and secrets are managed within the connectors
+   - **If the user wants to pin a specific model** (Current Format only): ask which provider the LLM connector uses (Anthropic, OpenAI, Copilot, etc.) — the model-override env var key depends on it and cannot be inferred from a placeholder connector ID. See "Model override" below.
 
 **Present this recommended configuration to the user and iterate until confirmed.**
 
 ### 4. Default Configuration & Inputs
 
-**Agent Structure:** Agents use \`agent.step.group.steps\` format — the run step is nested inside a named step group.
+**Use Current Format for every new agent, and for updates to an agent Phase 1 detected as Current Format. Use Legacy Format only when updating an agent Phase 1 detected as Legacy Format (see \`agent-docs:///legacy-format\`, already read in Phase 1).**
+
+**Agent structure (Current Format):** the spec instantiates the shared \`harnessAI@1.0.0\` base template via \`uses:\` / \`with:\`. It does **not** redeclare a container, step, or layout — those live on the base template itself.
 
 **Default structure:**
 \`\`\`yaml
-version: 1
 agent:
-  step:
-    group:
-      steps:
-        - name: Agent
-          if: <+Always>
-          id: agent
-          run:
-            container:
-              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent:latest
-            env:
-              PLUGIN_TASK: |
-                <step-by-step task instructions>
-              PLUGIN_MAX_TURNS: 150
-              PLUGIN_HARNESS_CONNECTOR: \${{inputs.llmConnector.id}}
-              PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}
+  uses: harnessAI@1.0.0
+  with:
+    prompt: |
+      <step-by-step task instructions>
+    connector: your_llm_connector_id
 \`\`\`
 
-**Required environment variables:**
+**Core \`with:\` fields (always present):**
 \`\`\`yaml
-env:
-  PLUGIN_TASK: |                                   # Task instructions go here as a multiline string
+with:
+  prompt: |                              # Task instructions, multiline string, ends with a ## RULES section
     <step-by-step instructions>
-  PLUGIN_MAX_TURNS: 150                            # Adjust 100-200 based on task complexity
-  PLUGIN_HARNESS_CONNECTOR: \${{inputs.llmConnector.id}}  # References llmConnector input's id property
-  PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}      # Regexes for additional network access
+  connector: your_llm_connector_id       # LLM connector ref — user must replace with actual connector ID
 \`\`\`
 
-**MCP configuration (only if external services needed):**
+**Commonly added \`with:\` fields (include only if the use case needs them):**
 \`\`\`yaml
-env:
-  PLUGIN_MCP_FORMAT: harness
-  PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>  # References mcpConnectors input
+with:
+  mcp:                                             # Only if external services (GitHub, Slack, etc.) are needed
+    - your_mcp_connector_id                        # User must replace
+  allowed_domains: "github.com,api.github.com"     # Comma-separated hosts/wildcards/regexes; default "harness.io"
+  max_turns: "150"                                 # Adjust based on task complexity; default "150"
 \`\`\`
 
-**Optional model override (only if user explicitly requests it):**
+**Model override (only if user explicitly requests a specific model):** the env var key depends on the connector's underlying provider — this cannot be inferred from a placeholder connector ID, so ask the user which provider their connector uses:
+
+| Connector provider | env var key |
+|---|---|
+| Anthropic | \`ANTHROPIC_MODEL\` |
+| OpenAI | \`OPENAI_MODEL\` |
+| Copilot | \`MODEL\` |
+| Anything else, or unsure | **Ask the user to confirm the correct key — do not guess** |
+
 \`\`\`yaml
-env:
-  ANTHROPIC_MODEL: \${{inputs.modelName}}  # Only add when user insists on a modelName input
+with:
+  env:
+    ANTHROPIC_MODEL: your-model-name     # Example for an Anthropic connector; swap the key per the table above
 \`\`\`
 
-**Required inputs (always include):**
+This mapping may collapse to a single generic \`MODEL\` key across all connectors in a future platform update — if the user's environment has already migrated, confirm with them before assuming this table still applies.
+
+**Advanced \`with:\` fields (ask before adding — only if the use case calls for them; do not include any of these by default):**
+- \`docker_connector\` — custom image/registry connector, only if needed (default \`account.harnessImage\`)
+- \`image\` — non-default runner image, only if needed (default \`harness/harness-ai-agent:latest\`)
+- \`skill\` — path to a \`SKILL.md\` to install before the run
+- \`allowed_tools\` — comma-separated tool allowlist (empty = default allowlist)
+- \`output\` — path to a file the agent must produce; verified after the run
+- \`workdir\` — working directory (default \`/harness\`, the CI workspace)
+- \`backend\` — \`claude | deepagent | openai | codex | copilot\` (empty = runner default)
+
+**Custom inputs (only if the use case needs runtime parameters beyond the fields above):**
 \`\`\`yaml
 agent:
+  uses: harnessAI@1.0.0
+  with:
+    prompt: |
+      Review the pull request for repository <+inputs.repo_name> on branch <+inputs.branch>.
+    connector: your_llm_connector_id
   inputs:
-    llmConnector:
-      type: connector
-      required: true
-      default: your_llm_connector_id  # User must replace with actual connector ID
-      ui:
-        connectorCategories:
-          - AI
-
-    allowedDomains:
-      type: string
-      default: ""
-\`\`\`
-
-**Network access:** Agent network access is limited to the LLM connector, configured MCP connectors, and domains matching \`allowedDomains\`. \`allowedDomains\` accepts regexes separated by \`|\`. Default to an empty string if the user does not specify domains; if they do specify domains, work with them to build the right regex.
-
-**Optional inputs (add as needed):**
-\`\`\`yaml
-    # MCP connectors - only if agent needs external services
-    mcpConnectors:
-      type: array
-      default:
-        - your_github_mcp_connector  # User must replace
-        - your_slack_mcp_connector   # User must replace
-      ui:
-        component: array
-        input:
-          inputType: connector
-          inputConfig:
-            connectorTypes:
-              - Mcp
-
-    # Model name override - ONLY add if user explicitly requests it
-    modelName:
-      type: string
-      default: your_model_arn_or_id  # User must replace with their model ARN or ID
-
-    # Custom parameters
     repo_name:
       type: string
       default: my-org/my-repo
+    branch:
+      type: string
+      default: main
 \`\`\`
+- Declare custom inputs under \`agent.inputs\` (same \`type\` / \`default\` / \`ui\` shape as before)
+- Reference them inside any \`with:\` value using \`<+inputs.fieldName>\` — **not** \`\${{inputs.fieldName}}\` (that syntax is Legacy Format only)
+- There is **no** per-agent \`layout\` block in Current Format — layout is owned entirely by the \`harnessAI\` base template
 
-**\`layout\` block (always include, only list fields that are present as inputs):**
-
-The \`layout\` block controls what appears in the agent configuration UI. It contains **at most four items** — \`llmConnector\`, \`allowedDomains\`, \`modelName\`, and \`mcpConnectors\` — and only those that exist as first-class input fields in the \`inputs\` section. Never include any other fields (e.g. custom inputs like \`repo_name\`) in the layout block:
-
-\`\`\`yaml
-agent:
-  layout:
-    - title: Agent Configuration
-      items:
-        - llmConnector          # always present
-        - allowedDomains        # always present
-        - modelName             # only if modelName input exists
-        - mcpConnectors         # only if mcpConnectors input exists
-\`\`\`
+**Network access:** \`allowed_domains\` controls additional non-LLM/non-MCP network access. Current Format accepts comma-separated exact hosts, \`*.\` wildcards, or regexes — this replaces the old pipe-\`|\`-separated regex-only convention.
 
 **Supported input types:** \`string\`, \`secret\`, \`boolean\`, \`connector\`, \`array\`
 
@@ -214,31 +195,20 @@ agent:
 
 ## Phase 3: Generate Agent Spec
 
-Assemble the complete agent YAML specification (\`spec\` field):
+Assemble the complete agent YAML specification (\`spec\` field). **Use Current Format when creating a new agent, or updating an agent Phase 1 detected as Current Format. Use Legacy Format only when updating an agent Phase 1 detected as Legacy Format (\`agent-docs:///legacy-format\`).**
 
-1. Start with \`version: 1\` and \`agent:\` structure
-2. Create \`agent.step.group.steps\` block with a single step entry:
-   - \`name: Agent\`, \`if: <+Always>\`, \`id: agent\`
-   - \`run.container.image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent:latest\`
-   - \`run.env\` section (all task config lives here as env vars):
-     - \`PLUGIN_TASK:\` — multiline string with step-by-step instructions and \`## RULES\` section
-     - \`PLUGIN_MAX_TURNS: 150\` (adjust 100-200 based on complexity)
-     - \`PLUGIN_HARNESS_CONNECTOR: \${{inputs.llmConnector.id}}\`
-     - \`PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}\`
-     - \`PLUGIN_MCP_FORMAT: harness\` (only if MCPs needed)
-     - \`PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>\` (only if MCPs needed)
-     - \`ANTHROPIC_MODEL: \${{inputs.modelName}}\` (**only** if user explicitly requests a \`modelName\` input)
-3. Add \`agent.inputs\` section with:
-   - \`llmConnector\` (required) with \`ui.connectorCategories: [AI]\`
-   - \`allowedDomains\` (default \`""\`) to allow additional network domains using regexes
-   - \`mcpConnectors\` (optional - only if needed) with \`ui.component: array\`, \`ui.input.inputType: connector\`, and \`ui.input.inputConfig.connectorTypes: [Mcp]\`
-   - \`modelName\` (optional - **only** if user explicitly requests it)
-   - Custom inputs (as needed)
-4. Add \`agent.layout\` block — only include items that are present as inputs:
-   - Always include \`llmConnector\`
-   - Always include \`allowedDomains\`
-   - Include \`modelName\` only if that input exists
-   - Include \`mcpConnectors\` only if that input exists
+1. Start directly with \`agent:\` — there is no top-level \`version:\` key in the spec itself
+2. Add \`agent.uses: harnessAI@1.0.0\`
+3. Add \`agent.with\` section (all task config lives here):
+   - \`prompt:\` — multiline string with step-by-step instructions and \`## RULES\` section
+   - \`connector: your_llm_connector_id\` (always required)
+   - \`mcp:\` (only if MCPs needed) — array of MCP connector refs
+   - \`allowed_domains:\` (only if the use case needs extra network access) — comma-separated hosts/wildcards/regexes
+   - \`max_turns:\` (only if a non-default turn budget is needed) — string, default \`"150"\`
+   - \`env.<PROVIDER>_MODEL\` or \`env.MODEL\` (**only** if user explicitly requests a specific model) — pick the key from the "Model override" table in Phase 2 §4 based on the connector's provider; ask the user if the provider isn't clear, never guess
+   - Advanced fields (\`docker_connector\`, \`image\`, \`skill\`, \`allowed_tools\`, \`output\`, \`workdir\`, \`backend\`) — **only** if the use case calls for them
+4. Add \`agent.inputs\` section **only** for custom, agent-specific runtime parameters not covered by \`with:\` fields above (e.g. \`repo_name\`, \`branch\`) — reference them from \`with:\` values using \`<+inputs.fieldName>\`
+5. Do **not** add an \`agent.layout\` block — layout is owned by the \`harnessAI\` base template, not the per-agent spec
 
 **Always notify users to create connectors and replace placeholder IDs before running the agent.**
 
@@ -280,7 +250,7 @@ Parameters:
 - \`uid\` (required): Unique identifier. Always generate from \`name\` as \`ca_<slug>\` and send explicitly (e.g. "Code Coverage Agent" → \`ca_code_coverage_agent\`). Do not omit it or rely on API-side auto-generation.
 - \`name\` (required): Display name for the agent
 - \`description\` (optional): Brief description
-- \`spec\` (required): The full agent YAML specification as a string (includes \`version: 1\`, \`agent:\`, \`agent.step.group.steps\`, \`agent.inputs\`, and \`agent.layout\`)
+- \`spec\` (required): The full agent YAML specification as a string. New agents always use Current Format (\`agent:\`, \`agent.uses: harnessAI@1.0.0\`, \`agent.with\`, optional \`agent.inputs\` — see Phase 3)
 - \`wiki\` (optional): Markdown documentation for the agent
 
 ### Updating an Existing Agent
@@ -304,68 +274,37 @@ Parameters:
 - All fields in the body are optional — only provide fields you want to update
 - Only custom agents (role='custom') can be updated; system agents cannot be modified
 - The \`spec\` field replaces the entire agent specification when provided
-- Use \`harness_get\` first to retrieve the current agent configuration before updating
+- Use \`harness_get\` first to retrieve the current agent configuration before updating, and detect its format (Current vs Legacy — see Phase 1) before generating the updated \`spec\`
+- The updated \`spec\` must stay in the **same format** the agent already uses (Current Format in, Current Format out; Legacy Format in, Legacy Format out) unless the user explicitly asked for a migration
 
 ---
 
-## Example: Code Review Agent
+## Example: Code Review Agent (Current Format)
+
+Use this example for all new agents, and for updates to any agent already on Current Format.
 
 \`\`\`yaml
-version: 1
 agent:
-  step:
-    group:
-      steps:
-        - name: Agent
-          if: <+Always>
-          id: agent
-          run:
-            container:
-              image: pkg.harness.io/vrvdt5ius7uwygso8s0bia/harness-agents/harness-ai-agent:latest
-            env:
-              PLUGIN_TASK: |
-                Review the pull request for repository \${{inputs.repo_name}} on branch \${{inputs.branch}}.
+  uses: harnessAI@1.0.0
+  with:
+    prompt: |
+      Review the pull request for repository <+inputs.repo_name> on branch <+inputs.branch>.
 
-                1. Analyze code changes for security vulnerabilities
-                2. Check for code quality issues
-                3. Verify test coverage
-                4. Post review comments using GitHub MCP tools
+      1. Analyze code changes for security vulnerabilities
+      2. Check for code quality issues
+      3. Verify test coverage
+      4. Post review comments using GitHub MCP tools
 
-                ## RULES
-                - Focus on critical security issues first
-                - Be constructive in feedback
-                - Suggest specific code improvements
-              PLUGIN_MAX_TURNS: 150
-              PLUGIN_HARNESS_CONNECTOR: \${{inputs.llmConnector.id}}
-              PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}
-              PLUGIN_MCP_FORMAT: harness
-              PLUGIN_MCP_SERVERS: <+connectorInputs.resolveList(<+inputs.mcpConnectors>)>
-
+      ## RULES
+      - Focus on critical security issues first
+      - Be constructive in feedback
+      - Suggest specific code improvements
+    connector: your_llm_connector_id  # User must replace with actual connector ID
+    allowed_domains: "github.com,api.github.com"
+    max_turns: "150"
+    mcp:
+      - your_github_mcp_connector  # User must replace with actual connector ID
   inputs:
-    llmConnector:
-      type: connector
-      required: true
-      default: your_llm_connector_id  # User must replace with actual connector ID
-      ui:
-        connectorCategories:
-          - AI
-
-    allowedDomains:
-      type: string
-      default: ""
-
-    mcpConnectors:
-      type: array
-      default:
-        - your_github_mcp_connector  # User must replace with actual connector ID
-      ui:
-        component: array
-        input:
-          inputType: connector
-          inputConfig:
-            connectorTypes:
-              - Mcp
-
     repo_name:
       type: string
       default: my-org/my-repo
@@ -373,14 +312,15 @@ agent:
     branch:
       type: string
       default: main
-
-  layout:
-    - title: Agent Configuration
-      items:
-        - llmConnector
-        - allowedDomains
-        - mcpConnectors
 \`\`\`
+
+Notes:
+- \`max_turns\` is shown here for reference — omit it when the default (\`"150"\`) is fine
+- A model-override \`env\` entry is deliberately **not** shown here — only add one (see the "Model override" table above) when the user explicitly requests a pinned model, using the key that matches the connector's provider (\`ANTHROPIC_MODEL\`, \`OPENAI_MODEL\`, \`MODEL\`, etc.). Never default to \`ANTHROPIC_MODEL\` regardless of connector.
+- \`repo_name\` and \`branch\` are custom inputs, referenced from \`with.prompt\` via \`<+inputs.fieldName>\`
+- No \`version:\`, \`layout:\`, or \`step:\` blocks — those either don't exist in Current Format or are owned by the \`harnessAI\` base template
+
+For a worked example in Legacy Format (only for updating agents already on this format), read the "Worked Example: Code Review Agent" section of the \`agent-docs:///legacy-format\` resource (already read in Phase 1 if detected).
 
 ---
 
@@ -391,16 +331,17 @@ agent:
 | Guideline                  | Rule                                                                                                                                     |
 | ----------------------------| ------------------------------------------------------------------------------------------------------------------------------------------|
 | **Check existing first**   | Always call \`harness_list(resource_type="agent")\` to see if an existing agent can solve the use case before creating new                                                     |
+| **Format detection**       | Before updating, detect the existing agent's format (\`agent.uses\` = Current, \`agent.step.group.steps\` = Legacy) and keep the update in that **same** format — never silently migrate. New agents always start in Current Format. Read \`agent-docs:///legacy-format\` in full when Legacy Format is detected. |
 | **Updating agents**        | Use \`harness_get\` to retrieve current config, then \`harness_update\` (not \`harness_create\`) to modify. Only custom agents can be updated.                                     |
 | **Generate UID**           | Always derive \`uid\` as \`ca_<slug>\` (e.g. "Code Coverage Agent" → \`ca_code_coverage_agent\`) — matches platform UI \`nameToUid()\`. Pass it explicitly; do not rely on create API fallback. |
-| **Agent spec format**      | The \`spec\` field uses \`agent.step.group.steps\` structure — the run step is nested inside a named group with \`name: Agent\`, \`if: <+Always>\`, \`id: agent\`                     |
-| **Task in env**            | Task instructions go in \`PLUGIN_TASK\` env var (multiline string). Max turns in \`PLUGIN_MAX_TURNS\`. There is no \`with:\` block.                                                |
-| **Expression syntax**      | Use \`\${{inputs.fieldName}}\` inside env values. Use \`<+connectorInputs.resolveList(...)>\` for MCP server resolution.                                                          |
-| **modelName is optional**  | Do NOT add \`modelName\` input or \`ANTHROPIC_MODEL\` env var by default — only add when the user explicitly requests it                                                         |
-| **Allowed domains**       | Always include \`PLUGIN_ALLOWED_DOMAINS: \${{inputs.allowedDomains}}\`, an \`allowedDomains\` string input with default \`""\`, and \`allowedDomains\` in layout. If the user specifies domains, help build the regex. |
-| **Input defaults**         | Every non-required input that is referenced via \`\${{inputs.fieldName}}\` **must have a \`default\` value** — omitting it causes a runtime error if the caller does not supply the value  |
+| **Agent spec format (Current)** | The \`spec\` field instantiates \`agent.uses: harnessAI@1.0.0\` with an \`agent.with\` block. There is no \`step\`, \`container\`, or \`layout\` in the per-agent spec — those live on the base template. |
+| **Task location**          | Current Format: task instructions go in \`with.prompt\` (multiline string), turn budget in \`with.max_turns\`. Legacy Format: task instructions go in \`PLUGIN_TASK\` env var, turn budget in \`PLUGIN_MAX_TURNS\`. |
+| **Expression syntax**      | Use \`<+inputs.fieldName>\` in Current Format and \`\${{inputs.fieldName}}\` in Legacy Format — never mix the two; the wrong syntax silently fails to resolve at runtime. |
+| **Model override is optional & provider-dependent** | Do NOT add a model-override env var by default. When the user explicitly requests one: Current Format uses \`with.env.<PROVIDER>_MODEL\` where the key depends on the connector's provider (Anthropic → \`ANTHROPIC_MODEL\`, OpenAI → \`OPENAI_MODEL\`, Copilot → \`MODEL\`; ask if unsure, never guess). Legacy Format uses a \`modelName\` input plus a fixed \`ANTHROPIC_MODEL\` env var. |
+| **Allowed domains**       | Current Format: \`with.allowed_domains\` is comma-separated hosts/wildcards/regexes, default \`"harness.io"\`. Legacy Format: \`allowedDomains\` input is \`|\`-separated regexes, default \`""\`. Confirm the right convention for the detected format before writing it. |
+| **Input defaults**         | Every non-required input that is referenced (\`<+inputs.x>\` in Current Format, \`\${{inputs.x}}\` in Legacy Format) **must have a \`default\` value** — omitting it causes a runtime error if the caller does not supply the value  |
 | **Connector placeholders** | Always use placeholders like \`your_llm_connector_id\` and \`your_mcp_connector_id\` and notify users to replace both LLM and MCP connector IDs with actual values before running the agent |
-| **No clone/platform**      | Do NOT add \`clone\`, \`platform\`, \`os\`, \`arch\`, or \`allowed_tools\` sections — agents are standalone with simplified structure                                                  |
+| **No clone/platform**      | Do NOT add \`clone\`, \`platform\`, \`os\`, or \`arch\` sections — agents are standalone with a simplified structure. (\`allowed_tools\` is a legitimate Current Format \`with:\` field — this rule does not apply to it.) |
 | **Quality first**          | Agent quality is paramount — verify YAML structure, validate all references, ensure complete task instructions before creating                                                |`
         }
       }]

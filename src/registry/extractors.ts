@@ -84,6 +84,33 @@ export const ngExtract = (raw: unknown): unknown => {
 };
 
 /**
+ * Some Harness APIs wrap the payload as `{ resource }`; others use `{ data }`.
+ * Unwrap whichever is present so callers see the inner value.
+ */
+export const restResourceUnwrap = (raw: unknown): unknown => {
+  if (!isRecord(raw)) return raw;
+  if (raw.resource !== undefined) return raw.resource;
+  if (raw.data !== undefined) return raw.data;
+  return raw;
+};
+
+/** List extract for `{ resource: T[] }` or `{ data: T[] }` envelopes. */
+export const restResourceListExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const inner = restResourceUnwrap(raw);
+  const items = Array.isArray(inner) ? inner : inner == null ? [] : [inner];
+  return { items, total: items.length };
+};
+
+/** First item from a `{ resource: T[] }` / `{ data: T[] }` list envelope. */
+export const restResourceFirstExtract = (raw: unknown): unknown => {
+  const { items } = restResourceListExtract(raw);
+  if (items.length === 0) {
+    throw new HarnessApiError("No matching resource returned", 404);
+  }
+  return items[0];
+};
+
+/**
  * Extractor for CCM budget/budget-group writes (create, update, clone). These
  * endpoints return the new/affected entity ID as a BARE STRING under `data`:
  * `{ status: "SUCCESS", data: "<budgetId>" }`. The write tools (harness_create
@@ -107,6 +134,55 @@ export const ccmBudgetWriteExtract = (raw: unknown): unknown => {
   return r.data ?? raw;
 };
 
+/** Lightwing envelope `{ success, response }` — unwrap inner payload for MCP tools. */
+export const lwResponseExtract = (raw: unknown): unknown => {
+  if (raw === null || raw === undefined) return raw;
+  if (isRecord(raw) && "response" in raw) {
+    return raw.response;
+  }
+  return raw;
+};
+
+/** Lightwing paginated list inside LWResponse or at root (`items`, `total`). */
+export const lwPaginatedExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const inner = lwResponseExtract(raw);
+  if (isRecord(inner) && Array.isArray(inner.items)) {
+    return {
+      items: inner.items,
+      total: typeof inner.total === "number" ? inner.total : inner.items.length,
+    };
+  }
+  return { items: [], total: 0 };
+};
+
+/** Caller AI budget rows from ListMyBudgets (`budgets`, optional `warnings`). */
+export const aiBudgetConsumptionExtract = (raw: unknown): unknown => {
+  const inner = lwResponseExtract(raw);
+  if (!isRecord(inner)) return inner;
+  const budgets = Array.isArray(inner.budgets) ? inner.budgets : [];
+  return {
+    items: budgets,
+    total: budgets.length,
+    subjectId: inner.subjectId,
+    warnings: inner.warnings,
+  };
+};
+
+/** Admin override inbox (`requests`/`history`) or paginated `{ items, total }`. */
+export const aiBudgetOverrideRequestListExtract = (raw: unknown): unknown => {
+  const inner = lwResponseExtract(raw);
+  if (!isRecord(inner)) return inner;
+  if (Array.isArray(inner.requests)) {
+    return {
+      items: inner.requests,
+      total: typeof inner.total === "number" ? inner.total : inner.requests.length,
+      pages: inner.pages,
+      history: inner.history,
+    };
+  }
+  return lwPaginatedExtract(raw);
+};
+
 /** Extract paginated content from NG API responses: `{ data: { content, totalElements|totalItems } }` */
 export const pageExtract = (raw: unknown): { items: unknown[]; total: number } => {
   const r = raw as { data?: { content?: unknown[]; totalElements?: number; totalItems?: number } };
@@ -114,6 +190,44 @@ export const pageExtract = (raw: unknown): { items: unknown[]; total: number } =
     items: r.data?.content ?? [],
     total: r.data?.totalElements ?? r.data?.totalItems ?? 0,
   };
+};
+
+function scalarString(value: unknown): string | undefined {
+  return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+/**
+ * User list/get wrap identity under `user: { uuid, email, name, ... }`.
+ * Flatten so list/get expose `identifier`/`uuid` at the top level — compact mode
+ * otherwise drops the nested `user` object and follow-up gets fail.
+ */
+
+export function flattenUserAggregate(item: unknown): unknown {
+  if (!isRecord(item)) return item;
+  const nested = isRecord(item.user) ? item.user : undefined;
+  const uuid = scalarString(nested?.uuid ?? item.uuid ?? item.identifier);
+  const email = scalarString(nested?.email ?? item.email);
+  const name = scalarString(nested?.name ?? item.name);
+  const out: Record<string, unknown> = { ...item };
+  if (uuid) {
+    out.identifier = uuid;
+    out.uuid = uuid;
+  }
+  if (email) out.email = email;
+  if (name) out.name = name;
+  if (nested) {
+    for (const key of ["locked", "disabled", "externallyManaged", "twoFactorAuthenticationEnabled"] as const) {
+      if (out[key] === undefined && nested[key] !== undefined) out[key] = nested[key];
+    }
+  }
+  return out;
+}
+
+export const userAggregateExtract = (raw: unknown): unknown => flattenUserAggregate(ngExtract(raw));
+
+export const userAggregatePageExtract = (raw: unknown): { items: unknown[]; total: number } => {
+  const paged = pageExtract(raw);
+  return { items: paged.items.map(flattenUserAggregate), total: paged.total };
 };
 
 /**
@@ -1555,6 +1669,33 @@ export const fileContentGetExtract = (raw: unknown): unknown => {
   return { ...raw, content: decodedContent };
 };
 
+/**
+ * File-path listings return `{ files, directories }`. Normalize to
+ * `{ items: [{ path, filePath, type, git_ref? }], total }` so harness_list
+ * compact/search work and deep-link `{filePath}` / `{git_ref}` placeholders resolve.
+ */
+export function fileContentListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  if (!isRecord(raw)) return raw;
+  const files = Array.isArray(raw.files)
+    ? raw.files.filter((value): value is string => typeof value === "string")
+    : [];
+  const directories = Array.isArray(raw.directories)
+    ? raw.directories.filter((value): value is string => typeof value === "string")
+    : [];
+  const gitRef = typeof input?.git_ref === "string" && input.git_ref ? input.git_ref : undefined;
+  const toItem = (path: string, type: "file" | "directory") => ({
+    path,
+    filePath: path,
+    type,
+    ...(gitRef ? { git_ref: gitRef } : {}),
+  });
+  const items = [
+    ...files.map((path) => toItem(path, "file")),
+    ...directories.map((path) => toItem(path, "directory")),
+  ];
+  return { items, total: items.length, files, directories };
+}
+
 // ── Release Management (RMG) ──────────────────────────────────────────────
 
 const RMG_API_PREFIX = "/gateway/rmg/api";
@@ -1906,4 +2047,108 @@ export function yamlWriteBody(input: Record<string, unknown>): Record<string, un
   const out: Record<string, unknown> = { yaml: b.yaml };
   if (b.git_details !== undefined) out.git_details = b.git_details;
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// GitOps — AppProject mapping / Argo discovery / import / autocreate logs
+// ---------------------------------------------------------------------------
+
+/**
+ * v1 GetAppProjectMappingListByAgent returns `{ appProjMap: { <argoName>: Project } }`.
+ * harness_list expects `{ items, total }`. Flatten map keys into row objects.
+ */
+export function appProjMapExtract(raw: unknown): { items: unknown[]; total: number } {
+  if (!isRecord(raw)) return { items: [], total: 0 };
+  const map = raw.appProjMap;
+  if (!isRecord(map)) return { items: [], total: 0 };
+
+  const items: unknown[] = [];
+  for (const [argoproject, value] of Object.entries(map)) {
+    const proj = isRecord(value) ? value : {};
+    items.push({
+      argoproject,
+      orgIdentifier: proj.orgIdentifier ?? "",
+      projectIdentifier: proj.projectIdentifier ?? "",
+      autoCreateServiceEnv: proj.autoCreateServiceEnv ?? false,
+    });
+  }
+  return { items, total: items.length };
+}
+
+/** Flat discovery row — avoids forwarding the full AppProject proto. */
+function projectArgoProjectRow(item: unknown): Record<string, unknown> {
+  const rec = isRecord(item) ? item : {};
+  const meta = isRecord(rec.metadata) ? rec.metadata : {};
+  const spec = isRecord(rec.spec) ? rec.spec : {};
+  const row: Record<string, unknown> = {
+    name: String(meta.name ?? "").trim(),
+  };
+  const description = String(spec.description ?? "").trim();
+  if (description) row.description = description;
+  const createdAt = String(meta.creationTimestamp ?? "").trim();
+  if (createdAt) row.createdAt = createdAt;
+  return row;
+}
+
+/**
+ * AgentProjectService.List → harness_list discovery rows (name + light metadata).
+ * Always synthesize `total` (API often omits it).
+ */
+export function argoProjectListExtract(raw: unknown): { items: unknown[]; total: number; metadata?: unknown } {
+  if (Array.isArray(raw)) {
+    return { items: raw.map(projectArgoProjectRow), total: raw.length };
+  }
+  if (!isRecord(raw)) return { items: [], total: 0 };
+  const rawItems = Array.isArray(raw.items) ? raw.items : [];
+  const items = rawItems.map(projectArgoProjectRow);
+  const total = typeof raw.total === "number" ? raw.total : items.length;
+  return raw.metadata !== undefined
+    ? { items, total, metadata: raw.metadata }
+    : { items, total };
+}
+
+function countOrZero(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+/** Import response → flat MCP handoff (importRequestId + autoCreateCounts always present). */
+export function importReconcileExtract(raw: unknown): Record<string, unknown> {
+  const emptyCounts = { serviceCount: 0, environmentCount: 0, clusterLinkCount: 0 };
+  if (!isRecord(raw)) {
+    return { importRequestId: "", autoCreateCounts: emptyCounts };
+  }
+  const nested = isRecord(raw.reconcileAppResponse) ? raw.reconcileAppResponse : {};
+  const counts = isRecord(nested.autoCreateCounts) ? nested.autoCreateCounts : {};
+  const { reconcileAppResponse: _dropped, ...rest } = raw;
+  return {
+    ...rest,
+    importRequestId: String(raw.importRequestId ?? "").trim(),
+    autoCreateCounts: {
+      serviceCount: countOrZero(counts.serviceCount),
+      environmentCount: countOrZero(counts.environmentCount),
+      clusterLinkCount: countOrZero(counts.clusterLinkCount),
+    },
+  };
+}
+
+/**
+ * ListAutoCreateLogsResponse → harness_list shape.
+ * Preserves page aggregates (counted from returned logs, not DB-wide).
+ */
+export function autoCreateLogExtract(raw: unknown): Record<string, unknown> {
+  if (!isRecord(raw)) {
+    return { items: [], total: 0 };
+  }
+  const logs = Array.isArray(raw.logs) ? raw.logs : [];
+  const total = typeof raw.total === "number" ? raw.total : logs.length;
+  return {
+    items: logs,
+    total,
+    successServices: raw.successServices ?? 0,
+    failedServices: raw.failedServices ?? 0,
+    successEnvironments: raw.successEnvironments ?? 0,
+    failedEnvironments: raw.failedEnvironments ?? 0,
+    successClusterLinks: raw.successClusterLinks ?? 0,
+    failedClusterLinks: raw.failedClusterLinks ?? 0,
+  };
 }

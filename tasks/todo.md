@@ -1,5 +1,90 @@
 # Harness MCP Server — Task Tracking
 
+## Version Bump 3.2.28 (2026-09-16)
+
+- [x] Update package, shrinkwrap, and MCPB manifest versions to 3.2.28.
+- [x] Update release metadata and bundle filename expectations.
+- [x] Run focused release checks, typecheck, build, and diff validation.
+
+### Plan
+
+- Keep this a metadata-only patch release bump from current `origin/main` at `5d00649f`.
+- Synchronize `package.json`, both root version fields in `npm-shrinkwrap.json`, `manifest.json`, `mcp-directory/manifest.json`, and the pinned release test values.
+- Preserve the prior ChatGPT submission work in its named stash and leave publication for a separate explicit request.
+
+### Review
+
+- Fast-forwarded local `main` to current `origin/main` at `5d00649f` and created `chore/version-3.2.28` from that commit.
+- Updated all six release metadata surfaces from 3.2.27 to 3.2.28 without dependency or runtime changes.
+- Verification passed: 7 focused release tests, typecheck, build, shrinkwrap check, docs check, standards (79 tests), full suite (158 files / 3,650 tests), and `git diff --check`.
+
+## Keep slashes in Code branch, tag, and diff paths (2026-09-16)
+
+- [x] Encode slash-containing branch/tag/diff values as path segments, not `%2F`.
+- [x] Share one path builder with `file_content` (empty path only for repo-root content).
+- [x] Alias `git_ref`/`branch` onto `branch_name`; populate `branch_name` from Code files URLs.
+- [x] Tests for get/delete/diff dispatch, URL parsing, typecheck.
+- [x] Diff-range regressions for slash-containing refs on both sides (`feature/a..feature/b`, `feature/a...feature/b`).
+- [x] Do not copy files-URL file-path `resource_id` onto an overridden `resource_type` (branch get/delete).
+- [x] Stamp `branch_name` from `/files/{ref}` only, not from `gitRef` query.
+
+### Plan
+
+- Reuse `file_content` per-segment encoding for branch, tag, and diff paths.
+- Keep files URLs typed as `file_content`; still stamp `branch_name` so explicit `resource_type=branch` works.
+
+## file_content read-path bugs and Code API drift (2026-09-15)
+
+- [x] Encode nested file paths as slash-separated segments; allow empty path for repo root; strip leading slashes.
+- [x] Expose Code GET /paths as `file_content` list; add flatten_directories; describe metadata.
+- [x] Parse Code UI `.../repos/{repo}/files/{ref}/~/{path}` URLs; alias `branch` → `git_ref`.
+- [x] Stop mapping `resource_id` onto an explicit empty `path`.
+- [x] Tests, typecheck, docs:generate.
+
+## Observability Evaluations MCP Toolset (2026-09-16)
+
+- [x] Add a separate observability-evaluations toolset without changing the offline AI Evals registry.
+- [x] Expose only scheduled config CRUD; model disable as `enabled: false` update and delete as destructive.
+- [x] Preflight every config write against the selected metric set, supported trace-only runtime, direct LLM judge connector, selector contract, and scorer-valid sampling range.
+- [x] Add isolated registry tests for paths, lifecycle risk policies, rejected unsupported runtime configuration.
+- [x] Run focused and full verification.
+
+### Review
+
+- Corrected rule preflight so omitted optional selectors and sampling use their documented defaults.
+- Require UUID config IDs before constructing scheduled-config get, update, or delete paths.
+- Rejected direct LLM connectors without a secret reference or effective model, because the scoring snapshot would silently omit them.
+- Documented the public `observability-evaluations` toolset and its rule resource in the toolset table.
+- Verification passed: focused tests (14), `pnpm typecheck`, `pnpm build`, generated-doc check, standards (77), and full tests (3,558).
+
+### Follow-up review
+
+- Reused the AI Evals scoped connector lookup so `account.` and `org.` references preserve their declared scope.
+- Accepted the supported `judge_llm_connector_ref` fallback and made immutable-version PATCH requests non-retryable.
+- Made the specialized toolset opt-in and documented it in `.env.example`.
+- Added account- and org-scoped connector lookups plus non-disable update coverage; synced README toolset filtering metadata.
+## PR Comment Read Guidance and PR Tool Drift (2026-09-14)
+
+- [x] Fix pull request registry drift against the public resource contract.
+- [x] Update agent-facing guidance so PR comments are fetched through `pr_activity`, not `pr_comment`.
+- [x] Align README and PR comment test docs with the implemented read/write split.
+- [x] Add focused regression coverage for PR comment/reviewer metadata.
+- [x] Run focused verification and lint checks for touched files.
+
+### Plan
+
+- Keep comment reads on `pr_activity`; `pr_comment` is only for comment write operations.
+- Keep `pr_comment` for comment writes, and document `comment_id` where update/delete require it.
+- Align `pr_reviewer.create` with the configured API method.
+- Avoid public tool-name/schema churn beyond corrected resource metadata; do not broaden activity type metadata.
+
+### Review
+
+- Server instructions, code-review prompt, README, and PR testing docs now direct comment reads through `pr_activity` with `type=["comment","code-comment"]`.
+- `pr_comment` remains the write surface and now advertises `comment_id` for update/delete; generic `resource_id` maps to that field.
+- `pr_reviewer.create` now uses the configured API method.
+- Verification passed: focused PR registry/tool-handler tests, `pnpm typecheck`, `pnpm build && pnpm docs:generate && pnpm docs:check`, lints, and `git diff --check`.
+
 ## HarnessID OAuth for self-hosted HTTP MCP (2026-09-07)
 
 - [x] Clone current `harness/mcp-server` main and inspect HTTP authentication/session paths.
@@ -697,3 +782,10 @@ Feature is **opt-in** (`include_visual` defaults to false) and the `visual_*` re
 - Updated `package.json`, root `manifest.json`, and `mcp-directory/manifest.json` to `3.1.2`.
 - Updated `tests/release-metadata.test.ts` so package and bundle manifest versions remain locked together for the `3.1.2` release.
 - Verification passed: `pnpm vitest run tests/release-metadata.test.ts`, `pnpm typecheck`, and `git diff --check`.
+## Version 3.2.29
+
+- [x] Create chore/version-3.2.29 from current origin/main.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release tests.
+- [x] Validate release metadata, build, types, docs, standards, and tests.
+
+Validation: build, typecheck, shrinkwrap, docs, standards (79 tests), and diff checks passed. Full suite: 3,708 passed; one schema-description import exceeded the default 5-second timeout. Release metadata and schema-description tests passed on focused rerun with --testTimeout=15000 (14 tests). No test configuration changed.

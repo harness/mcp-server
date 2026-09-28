@@ -112,6 +112,12 @@ export interface PreflightContext {
   input: Record<string, unknown>;
   registry: RegistryDispatchInterface;
   signal?: AbortSignal;
+  /**
+   * Effective tenant for this dispatch (`registry.getAccountId()`).
+   * In chat MCP this is the per-request account, not `client.account`
+   * (the process-scoped placeholder).
+   */
+  accountId?: string;
 }
 
 export type ToolsetName =
@@ -153,6 +159,7 @@ export type ToolsetName =
   | "iacm"
   | "ansible"
   | "ai-evals"
+  | "observability-evaluations"
   | "incidents"
   | "alerts"
   | "deploys"
@@ -311,7 +318,7 @@ export interface EndpointSpec {
   /** Override default scope query param names (e.g. for APIs using snake_case) */
   scopeParams?: { account?: string; org?: string; project?: string };
   /** For POST/PUT: how to build the request body from tool input */
-  bodyBuilder?: (input: Record<string, unknown>) => unknown;
+  bodyBuilder?: (input: Record<string, unknown>, config: PathBuilderConfig) => unknown;
   /**
    * Static headers to merge into the request (e.g. Content-Type override). For dual-mode
    * resources whose branches need different headers on the same operation, set the per-route
@@ -346,6 +353,8 @@ export interface EndpointSpec {
    * bodies. Some APIs take scope only in query/path and reject extra body fields.
    */
   skipScopeBodyInjection?: boolean;
+  /** Override HARNESS_API_TIMEOUT_MS for this endpoint only (milliseconds). */
+  timeoutMs?: number;
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**

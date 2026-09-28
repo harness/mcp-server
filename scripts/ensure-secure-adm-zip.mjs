@@ -3,17 +3,17 @@
 /**
  * Postinstall security patch for npm consumers.
  *
- * pnpm.overrides already pins adm-zip for pnpm installs, but `npm install -g`
- * ignores pnpm overrides and npm-shrinkwrap does not reliably override nested
- * optional adm-zip under onnxruntime-node. Upgrade in-place on install.
+ * pnpm.overrides pins adm-zip for pnpm installs, while the npm-native parent
+ * override and shrinkwrap pin the optional onnxruntime-node copy. Verify and
+ * repair any insecure copy left by an installer that discards that metadata.
  *
- * Requires install scripts to run — `npm install --ignore-scripts` skips this
- * patch and leaves nested adm-zip vulnerable to CVE-2026-39244.
+ * `npm install --ignore-scripts` skips this fallback, so the packaged overrides
+ * and shrinkwrap must remain independently secure.
  */
 
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { ensureSecureAdmZip, ADM_ZIP_CVE } from "./adm-zip-security-lib.mjs";
+import { ensureSecureAdmZip, ADM_ZIP_ADVISORIES } from "./adm-zip-security-lib.mjs";
 
 const packageRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -25,7 +25,7 @@ const { patched, skipped, warnings } = ensureSecureAdmZip(packageRoot);
 
 if (!skipped && patched.length > 0) {
   console.error(
-    `[harness-mcp-v2] upgraded adm-zip to fix ${ADM_ZIP_CVE} (${patched.length} prefix(es))`,
+    `[harness-mcp-v2] upgraded adm-zip to fix ${ADM_ZIP_ADVISORIES} (${patched.length} prefix(es))`,
   );
 }
 

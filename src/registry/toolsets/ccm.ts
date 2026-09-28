@@ -1,6 +1,24 @@
-import type { ToolsetDefinition, PreflightContext, ParamsSchema } from "../types.js";
+import type { ToolsetDefinition, PreflightContext, ParamsSchema, FilterFieldSpec, BodySchema } from "../types.js";
 import type { PathBuilderConfig } from "../types.js";
-import { ngExtract, passthrough, gqlExtract, ccmViewsExtract, anomalyListExtract, ccmBreakdownExtract, ccmTimeseriesExtract, ccmSummaryExtract, ccmRecommendationsExtract, countExtract, ccmBudgetListCompactExtract, ccmBudgetDetailExtract, ccmBudgetWriteExtract } from "../extractors.js";
+import {
+  ngExtract,
+  passthrough,
+  gqlExtract,
+  ccmViewsExtract,
+  anomalyListExtract,
+  ccmBreakdownExtract,
+  ccmTimeseriesExtract,
+  ccmSummaryExtract,
+  ccmRecommendationsExtract,
+  countExtract,
+  ccmBudgetListCompactExtract,
+  ccmBudgetDetailExtract,
+  ccmBudgetWriteExtract,
+  lwResponseExtract,
+  lwPaginatedExtract,
+  aiBudgetConsumptionExtract,
+  aiBudgetOverrideRequestListExtract,
+} from "../extractors.js";
 
 // ---------------------------------------------------------------------------
 // GraphQL queries — ported from the official Go MCP server
@@ -397,6 +415,141 @@ function gqlPath(input: Record<string, unknown>): string {
   return "/ccm/api/graphql";
 }
 
+// ---------------------------------------------------------------------------
+// AI Budgets (Lightwing AI governance) — /lw/api/accounts/{accountId}/ai-governance
+// ---------------------------------------------------------------------------
+
+const AI_BUDGET_DEEP_LINK = "/ng/account/{accountId}/module/ce/user-budgets";
+
+function requireAiBudgetId(input: Record<string, unknown>, key: string, label: string): string {
+  const value = input[key];
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`${key} is required — ${label}`);
+  }
+  return value.trim();
+}
+
+function aiGovernanceBase(_input: Record<string, unknown>, config: PathBuilderConfig): string {
+  // Per-request account from registry dispatch (getAccountId / accountIdResolver), not static env.
+  const accountId = config.HARNESS_ACCOUNT_ID ?? "";
+  if (!accountId) {
+    throw new Error("Harness account ID is required for AI governance APIs");
+  }
+  return `/lw/api/accounts/${accountId}/ai-governance`;
+}
+
+function aiBudgetPath(suffix: string | ((input: Record<string, unknown>) => string)) {
+  return (input: Record<string, unknown>, config: PathBuilderConfig): string => {
+    const base = aiGovernanceBase(input, config);
+    const tail = typeof suffix === "function" ? suffix(input) : suffix;
+    return `${base}${tail}`;
+  };
+}
+
+function buildLwPaginatedListBody(input: Record<string, unknown>): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  const query = input.search_term ?? input.query;
+  if (typeof query === "string" && query.trim()) {
+    body.query = query.trim();
+  }
+  if (input.page !== undefined && input.page !== "") {
+    body.page = input.page;
+  }
+  const limit = input.limit ?? input.size;
+  body.limit = typeof limit === "number" ? limit : 10;
+  if (input.sort && typeof input.sort === "object") {
+    body.sort = input.sort;
+  } else if (input.sort_field || input.sort_order) {
+    body.sort = {
+      field: input.sort_field ?? "name",
+      type: input.sort_order ?? "ASC",
+    };
+  }
+  if (input.filters !== undefined) {
+    body.filters = input.filters;
+  } else {
+    const filters: Array<{ field: string; operator: string; values: unknown[] }> = [];
+    if (input.folder_id !== undefined && input.folder_id !== "") {
+      filters.push({
+        field: "folder_id",
+        operator: "equals",
+        values: [input.folder_id],
+      });
+    }
+    if (input.status !== undefined && input.status !== "") {
+      const values = Array.isArray(input.status) ? input.status : [input.status];
+      filters.push({ field: "status", operator: "equals", values });
+    }
+    if (input.subject_id !== undefined && input.subject_id !== "") {
+      filters.push({
+        field: "subject_id",
+        operator: "equals",
+        values: [input.subject_id],
+      });
+    }
+    if (filters.length > 0) {
+      body.filters = filters;
+    }
+  }
+  return body;
+}
+
+function buildReviewOverrideBody(action: "approve" | "reject") {
+  return (input: Record<string, unknown>): Record<string, unknown> => {
+    const body = (input.body as Record<string, unknown> | undefined) ?? {};
+    if (Array.isArray(body.items)) {
+      return { items: body.items };
+    }
+    const requestId = input.override_request_id ?? body.request_id;
+    if (requestId === undefined || requestId === "") {
+      throw new Error("override_request_id is required for approve/reject (or pass body.items for batch review)");
+    }
+    const item: Record<string, unknown> = { request_id: requestId, action };
+    const approvedAmount = input.approved_amount ?? body.approved_amount;
+    if (approvedAmount !== undefined) {
+      item.approved_amount = approvedAmount;
+    }
+    return { items: [item] };
+  };
+}
+
+const aiBudgetUpsertBodySchema: BodySchema = {
+  description:
+    "AI budget definition upload. Provide exactly one of: rawYaml (YAML envelope) or policy (JSON budget-cap definition). Optional folderId assigns a CCM folder. Not cloud cost budgets (cost_budget).",
+  fields: [
+    {
+      name: "rawYaml",
+      type: "string",
+      required: false,
+      description: "Full AI budget YAML document (alternative to policy JSON object).",
+    },
+    {
+      name: "policy",
+      type: "object",
+      required: false,
+      description:
+        "Budget-cap definition: { name, beginsAt?, subjects: { account?, users?, userGroups?, perspective?, costCategory?, exclude? }, spec: { type: 'budget-cap', amount?, mode?, period, evaluationSchedule?, actions?, approvals?, approvalSettings? } }",
+    },
+    { name: "folderId", type: "string", required: false, description: "Optional CCM folder ID for the budget." },
+  ],
+};
+
+const aiBudgetReviewBodySchema: BodySchema = {
+  description:
+    "Review one or more override requests. Pass override_request_id (and optional approved_amount for approve), or body.items for batch review matching the API shape.",
+  fields: [
+    { name: "request_id", type: "string", required: false, description: "Override request UUID (alias: use override_request_id at top level)." },
+    { name: "approved_amount", type: "number", required: false, description: "Approved ceiling amount when action is approve." },
+    {
+      name: "items",
+      type: "array",
+      required: false,
+      description: "Batch review: [{ request_id, action: 'approve'|'reject', approved_amount? }]",
+      itemType: "{ request_id: string, action: string, approved_amount?: number }",
+    },
+  ],
+};
+
 /**
  * Normalizes REST cost_category responses into the same {values} shape
  * that perspectiveFilters returns, so callers get a uniform interface.
@@ -590,7 +743,12 @@ async function perspectiveCreatePreflight(ctx: PreflightContext): Promise<void> 
   const input = ctx.input as { body?: Record<string, unknown> };
   if (!input.body) input.body = {};
 
-  const accountId = client.account;
+  // Publish defaults even when no tenant is resolved yet.
+  if (!input.body.viewState) input.body.viewState = "COMPLETED";
+  if (!input.body.viewType) input.body.viewType = "CUSTOMER";
+  if (!input.body.viewVersion) input.body.viewVersion = "v1";
+
+  const accountId = ctx.accountId || client.account;
   if (!accountId) return;
 
   // Fetch account preference defaults
@@ -617,14 +775,119 @@ async function perspectiveCreatePreflight(ctx: PreflightContext): Promise<void> 
       input.body.viewPreferences = deepMerge(defaults, agentPrefs);
     }
   } catch {
-    // Graceful degradation — proceed without defaults
+    // Graceful degradation — proceed without preference defaults
+  }
+}
+
+function splitCsv(value: unknown): string[] {
+  if (typeof value !== "string") {
+    return [];
+  }
+  return value.split(",").map((part) => part.trim()).filter((part) => part.length > 0);
+}
+
+function normalizeRecommendationStates(input: unknown): string[] {
+  const states = splitCsv(input);
+  const normalized = states.length > 0 ? [...states] : ["OPEN"];
+  if (normalized.includes("IGNORED") && !normalized.includes("TEMPORARILY_IGNORED")) {
+    normalized.push("TEMPORARILY_IGNORED");
+  }
+  return normalized;
+}
+
+function isAppliedOnlyStates(states: string[]): boolean {
+  return states.length === 1 && states[0] === "APPLIED";
+}
+
+/**
+ * REST overview body shared by cost_recommendation list, stats, and count.
+ * Defaults match the CCM Recommendations Open tab: daysBack 4 (last-processed
+ * freshness), minSaving 1, OPEN. Applied-only omits daysBack and may send
+ * appliedAt* (the UI date picker). costCategoryDTOs are unchanged.
+ */
+function buildRecommendationOverviewBody(
+  input: Record<string, unknown>,
+  options: { includePaging?: boolean } = {},
+): Record<string, unknown> {
+  const states = normalizeRecommendationStates(input.recommendation_states);
+  const appliedOnly = isAppliedOnlyStates(states);
+  const minSaving = input.min_saving != null
+    ? (input.min_saving as number)
+    : appliedOnly ? 0 : 1;
+
+  const body: Record<string, unknown> = {
+    filterType: "CCMRecommendation",
+    minSaving,
+  };
+
+  if (!appliedOnly) {
+    body.daysBack = (input.days_back as number) ?? 4;
   }
 
-  // Set other defaults if absent
-  if (!input.body.viewState) input.body.viewState = "COMPLETED";
-  if (!input.body.viewType) input.body.viewType = "CUSTOMER";
-  if (!input.body.viewVersion) input.body.viewVersion = "v1";
+  if (options.includePaging) {
+    const limit = (input.limit as number) ?? (input.size as number) ?? 10;
+    body.limit = limit;
+    body.offset = input.offset != null
+      ? (input.offset as number)
+      : typeof input.page === "number"
+        ? input.page * limit
+        : 0;
+    body.sortBy = (input.sort_by as string) ?? "MONTHLY_SAVING";
+    body.sortOrder = (input.sort_order as string) ?? "DESCENDING";
+  }
+
+  if (input.cost_category && input.cost_buckets) {
+    const buckets = splitCsv(input.cost_buckets);
+    if (buckets.length > 0) {
+      body.costCategoryDTOs = buckets.map((costBucket) => ({
+        costCategory: input.cost_category as string,
+        costBucket,
+      }));
+    }
+  }
+
+  const k8s: Record<string, unknown> = { recommendationStates: states };
+  const resourceTypes = splitCsv(input.resource_types);
+  if (resourceTypes.length > 0) {
+    k8s.resourceTypes = resourceTypes;
+  }
+  body.k8sRecommendationFilterPropertiesDTO = k8s;
+
+  if (appliedOnly && (input.applied_at_start != null || input.applied_at_end != null)) {
+    const applied: Record<string, unknown> = {};
+    if (input.applied_at_start != null) {
+      applied.appliedAtStartTime = input.applied_at_start;
+    }
+    if (input.applied_at_end != null) {
+      applied.appliedAtEndTime = input.applied_at_end;
+    }
+    body.baseRecommendationFilterPropertiesDTO = applied;
+  }
+
+  return body;
 }
+
+const RECOMMENDATION_OVERVIEW_FILTER_FIELDS: FilterFieldSpec[] = [
+  { name: "min_saving", description: "Minimum monthly savings. Default 1 (Open/Ignored tabs). Default 0 when recommendation_states is APPLIED only. Pass 0 to include sub-$1 recs.", type: "number" },
+  { name: "days_back", description: "OPEN/IGNORED freshness window: lastProcessedAt within this many UTC days (CCM default 4). Do NOT map the UI date picker here — that picker is appliedAt for APPLIED recs. Omitted automatically when recommendation_states is APPLIED only.", type: "number" },
+  { name: "recommendation_states", description: "OPEN (default, matches Open tab), APPLIED, or IGNORED (expands to IGNORED+TEMPORARILY_IGNORED). Comma-separated.", type: "string" },
+  { name: "cost_category", description: "Cost category name to filter by (must pair with cost_buckets). Use with cost_recommendation_filter to list teams/buckets.", type: "string" },
+  { name: "cost_buckets", description: "Cost bucket(s) within the cost category. Comma-separated for multiple (e.g. 'Autostopping,BARG')", type: "string" },
+  { name: "applied_at_start", description: "APPLIED-tab only: appliedAtStartTime epoch ms. Ignored for OPEN. Do not send the Open-tab calendar as days_back.", type: "number" },
+  { name: "applied_at_end", description: "APPLIED-tab only: appliedAtEndTime epoch ms. Ignored for OPEN.", type: "number" },
+  { name: "resource_types", description: "Optional resource type filter (e.g. NODE_POOL, WORKLOAD). Comma-separated.", type: "string" },
+];
+
+const RECOMMENDATION_OVERVIEW_PARAM_FIELDS: ParamsSchema["fields"] = [
+  { name: "cost_category", required: false, description: "Cost category name to filter by (must pair with cost_buckets)" },
+  { name: "cost_buckets", required: false, description: "Comma-separated list of cost bucket names within the category" },
+  { name: "min_saving", required: false, description: "Minimum savings threshold (default 1 for Open; default 0 for Applied-only)" },
+  { name: "days_back", required: false, description: "Last-processed freshness in days for OPEN/IGNORED (default 4). Not the UI date picker. Omitted for Applied-only." },
+  { name: "recommendation_states", required: false, description: "OPEN (default), APPLIED, or IGNORED. Comma-separated. IGNORED expands to include TEMPORARILY_IGNORED." },
+  { name: "applied_at_start", required: false, description: "Applied-tab window start (epoch ms). Sent only when recommendation_states is APPLIED." },
+  { name: "applied_at_end", required: false, description: "Applied-tab window end (epoch ms). Sent only when recommendation_states is APPLIED." },
+  { name: "resource_types", required: false, description: "Optional resource type filter (e.g. NODE_POOL). Comma-separated." },
+];
 
 // ---------------------------------------------------------------------------
 // Toolset definition: 6 resource types covering REST + GraphQL
@@ -634,7 +897,7 @@ export const ccmToolset: ToolsetDefinition = {
   name: "ccm",
   displayName: "Cloud Cost Management",
   description:
-    "Cloud cost visibility, analysis, recommendations, and anomaly detection. Covers perspectives, cost breakdowns, time series, summaries, recommendations, and anomalies.",
+    "Cloud cost visibility, analysis, recommendations, anomaly detection, and AI/LLM spend budgets (ai_budget). Covers perspectives, cost breakdowns, time series, summaries, recommendations, anomalies, and Lightwing AI governance budgets.",
   resources: [
     // ------------------------------------------------------------------
     // 1. cost_perspective — REST CRUD for perspective management
@@ -1061,60 +1324,28 @@ Use with no perspective_id to get CCM metadata (available connectors, default pe
       displayName: "Cost Recommendation",
       description: `Cloud cost optimization recommendations. Answers "how do I reduce my cloud bill?"
 
-harness_list: General recommendations across the account. Supports filters: min_saving, days_back, recommendation_states (OPEN, APPLIED, IGNORED), cost_category + cost_buckets (pair), sort_by (MONTHLY_SAVING, MONTHLY_COST, RESOURCE_NAME), sort_order.
-harness_get: Perspective-scoped recommendations — pass perspective_id to get recs for a specific perspective with savings stats. Optionally pass min_saving, time_filter (${VALID_TIME_FILTERS.join(", ")}), limit, offset.
+harness_list: Matches the CCM Recommendations Open tab by default (days_back=4 last-processed freshness, min_saving=1, recommendation_states=OPEN, sort monthly saving desc, limit 10). Do not map the UI date picker to days_back — that picker is appliedAt and only applies when recommendation_states=APPLIED. Per-team/BU filtering: cost_category + cost_buckets (discover via cost_recommendation_filter). Also: resource_types, applied_at_start/end (Applied tab), sort_by, sort_order, limit, offset.
+harness_get: Perspective-scoped recommendations — pass perspective_id. Optionally min_saving, time_filter (${VALID_TIME_FILTERS.join(", ")}), days_back (default 4), limit, offset.
 
 Replaces the 5 separate resource-type tools from the official server (EC2, Azure VM, ECS, Node Pool, Workload) — all resource types are returned in a single list.`,
       toolset: "ccm",
       scope: "account",
       identifierFields: ["perspective_id"],
-      diagnosticHint: "To fetch recommendations for a specific team, business unit, or any custom grouping, use the cost_category + cost_buckets filters. Cost categories are user-defined groupings (e.g. by team, environment, project). Discover available values with: harness_list(resource_type='cost_recommendation_filter') for category names, then harness_get(resource_type='cost_recommendation_filter', cost_category='<name>') for bucket names within that category.",
+      diagnosticHint: "To fetch recommendations for a specific team, business unit, or any custom grouping, use the cost_category + cost_buckets filters. Cost categories are user-defined groupings (e.g. by team, environment, project). Discover available values with: harness_list(resource_type='cost_recommendation_filter') for category names, then harness_get(resource_type='cost_recommendation_filter', cost_category='<name>') for bucket names within that category. Open-tab freshness is days_back=4 (lastProcessedAt), not the recommendations calendar.",
       listFilterFields: [
-        { name: "min_saving", description: "Minimum savings threshold", type: "number" },
-        { name: "time_filter", description: "Time range filter", enum: [...VALID_TIME_FILTERS] },
-        { name: "days_back", description: "Number of days to look back (default 4)", type: "number" },
-        { name: "recommendation_states", description: "Filter by state(s): OPEN, APPLIED, IGNORED. Comma-separated or single value.", type: "string" },
-        { name: "cost_category", description: "Cost category name to filter by (must pair with cost_buckets)", type: "string" },
-        { name: "cost_buckets", description: "Cost bucket(s) within the cost category. Comma-separated for multiple (e.g. 'Autostopping,BARG')", type: "string" },
-        { name: "sort_by", description: "Sort field", enum: ["MONTHLY_SAVING", "MONTHLY_COST", "RESOURCE_NAME"] },
-        { name: "sort_order", description: "Sort direction", enum: ["ASCENDING", "DESCENDING"] },
-        { name: "limit", description: "Result limit", type: "number" },
-        { name: "offset", description: "Pagination offset", type: "number" },
+        ...RECOMMENDATION_OVERVIEW_FILTER_FIELDS,
+        { name: "time_filter", description: "Perspective GraphQL get only. REST list ignores this. Do not map this (or the UI date picker) to days_back.", enum: [...VALID_TIME_FILTERS] },
+        { name: "sort_by", description: "Sort field (list default MONTHLY_SAVING)", enum: ["MONTHLY_SAVING", "MONTHLY_COST", "RESOURCE_NAME"] },
+        { name: "sort_order", description: "Sort direction (list default DESCENDING)", enum: ["ASCENDING", "DESCENDING"] },
+        { name: "limit", description: "Result limit (default 10). harness_list size is honored when limit is omitted.", type: "number" },
+        { name: "offset", description: "Pagination offset. If omitted, harness_list page * limit/size is used.", type: "number" },
       ],
       operations: {
         list: {
           method: "POST",
           path: "/ccm/api/recommendation/overview/list",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          bodyBuilder: (input) => {
-            const body: Record<string, unknown> = {
-              filterType: "CCMRecommendation",
-              minSaving: (input.min_saving as number) ?? 0,
-              daysBack: (input.days_back as number) ?? 4,
-              offset: (input.offset as number) ?? 0,
-              limit: (input.limit as number) ?? 20,
-            };
-
-            if (input.sort_by) {
-              body.sortBy = input.sort_by as string;
-              body.sortOrder = (input.sort_order as string) ?? "DESCENDING";
-            }
-
-            if (input.cost_category && input.cost_buckets) {
-              const buckets = (input.cost_buckets as string).split(",").map(b => b.trim());
-              body.costCategoryDTOs = buckets.map(bucket => ({
-                costCategory: input.cost_category as string,
-                costBucket: bucket,
-              }));
-            }
-
-            if (input.recommendation_states) {
-              const states = (input.recommendation_states as string).split(",").map(s => s.trim());
-              body.k8sRecommendationFilterPropertiesDTO = { recommendationStates: states };
-            }
-
-            return body;
-          },
+          bodyBuilder: (input) => buildRecommendationOverviewBody(input, { includePaging: true }),
           responseExtractor: ngExtract,
           description:
             "List all cost optimization recommendations across the account. Returns recommendations for all resource types (EC2, Azure VM, ECS, Node Pool, Workload) in a single response.",
@@ -1134,7 +1365,8 @@ Replaces the 5 separate resource-type tools from the official server (EC2, Azure
                 ),
                 limit: (input.limit as number) ?? 25,
                 offset: (input.offset as number) ?? 0,
-                minSaving: (input.min_saving as number) ?? 0,
+                minSaving: (input.min_saving as number) ?? 1,
+                daysBack: (input.days_back as number) ?? 4,
               },
             },
           }),
@@ -2097,7 +2329,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
     {
       resourceType: "cost_recommendation_count",
       displayName: "Cost Recommendation Count",
-      description: "Get total count of recommendations. Supports same filters as cost_recommendation (cost_category + cost_buckets, recommendation_states, min_saving, days_back). Use this to get the accurate total before fetching paginated results.",
+      description: "Get total count of recommendations. Same Open-tab defaults and filters as cost_recommendation list (including cost_category + cost_buckets for per-team totals). Use this to get the accurate total before fetching paginated results.",
       toolset: "ccm",
       scope: "account",
       identifierFields: [],
@@ -2106,38 +2338,11 @@ For cost time-series data, use harness_get with start_time and end_time.`,
           method: "POST",
           path: "/ccm/api/recommendation/overview/count",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          bodyBuilder: (input) => {
-            const body: Record<string, unknown> = {
-              filterType: "CCMRecommendation",
-              minSaving: (input.min_saving as number) ?? 0,
-              daysBack: (input.days_back as number) ?? 4,
-            };
-
-            if (input.cost_category && input.cost_buckets) {
-              const buckets = (input.cost_buckets as string).split(",").map(b => b.trim());
-              body.costCategoryDTOs = buckets.map(bucket => ({
-                costCategory: input.cost_category as string,
-                costBucket: bucket,
-              }));
-            }
-
-            if (input.recommendation_states) {
-              const states = (input.recommendation_states as string).split(",").map(s => s.trim());
-              body.k8sRecommendationFilterPropertiesDTO = { recommendationStates: states };
-            }
-
-            return body;
-          },
+          bodyBuilder: (input) => buildRecommendationOverviewBody(input),
           responseExtractor: countExtract,
           description: "Get total recommendation count with optional filters.",
           paramsSchema: {
-            fields: [
-              { name: "cost_category", required: false, description: "Cost category name to filter by" },
-              { name: "cost_buckets", required: false, description: "Comma-separated list of cost bucket names within the category" },
-              { name: "min_saving", required: false, description: "Minimum savings threshold (default 0)" },
-              { name: "days_back", required: false, description: "Number of days to look back (default 4)" },
-              { name: "recommendation_states", required: false, description: "Filter by state(s): OPEN, APPLIED, IGNORED. Comma-separated." },
-            ],
+            fields: RECOMMENDATION_OVERVIEW_PARAM_FIELDS,
           } satisfies ParamsSchema,
         },
       },
@@ -2149,7 +2354,7 @@ For cost time-series data, use harness_get with start_time and end_time.`,
     {
       resourceType: "cost_recommendation_stats",
       displayName: "Cost Recommendation Stats",
-      description: "Cost recommendation statistics. harness_get: aggregate stats. harness_get with group_by=type: stats grouped by resource type (resize, terminate, etc.). Supports cost_category filtering — pass cost_category name and cost_buckets (comma-separated) to scope stats to a specific category. Both fields are required to apply category filtering; discover bucket names with harness_get(resource_type='cost_recommendation_filter', cost_category='<name>').",
+      description: "Cost recommendation statistics. harness_get: aggregate stats matching the Open tab by default (days_back=4, min_saving=1, OPEN). harness_get with group_by=type: stats grouped by resource type (resize, terminate, etc.). Supports cost_category + cost_buckets for per-team stats; discover buckets with harness_get(resource_type='cost_recommendation_filter', cost_category='<name>'). For Applied-tab realized savings, pass recommendation_states=APPLIED plus applied_at_start/applied_at_end — not days_back.",
       toolset: "ccm",
       scope: "account",
       identifierFields: [],
@@ -2163,39 +2368,14 @@ For cost time-series data, use harness_get with start_time and end_time.`,
               ? "/ccm/api/recommendation/overview/resource-type/stats"
               : "/ccm/api/recommendation/overview/stats",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          bodyBuilder: (input) => {
-            const body: Record<string, unknown> = {
-              filterType: "CCMRecommendation",
-              minSaving: (input.min_saving as number) ?? 0,
-              daysBack: (input.days_back as number) ?? 4,
-            };
-
-            if (input.cost_category && input.cost_buckets) {
-              const buckets = (input.cost_buckets as string).split(",").map(b => b.trim());
-              body.costCategoryDTOs = buckets.map(bucket => ({
-                costCategory: input.cost_category as string,
-                costBucket: bucket,
-              }));
-            }
-
-            if (input.recommendation_states) {
-              const states = (input.recommendation_states as string).split(",").map(s => s.trim());
-              body.k8sRecommendationFilterPropertiesDTO = { recommendationStates: states };
-            }
-
-            return body;
-          },
+          bodyBuilder: (input) => buildRecommendationOverviewBody(input),
           responseExtractor: ngExtract,
           description:
             "Get aggregate stats, or stats by resource type when group_by=type. Pass cost_category and cost_buckets to filter by cost category.",
           paramsSchema: {
             fields: [
               { name: "group_by", required: false, description: "Group by resource type (type)" },
-              { name: "cost_category", required: false, description: "Cost category name to filter stats by" },
-              { name: "cost_buckets", required: false, description: "Comma-separated list of cost bucket names within the category. If omitted when cost_category is set, pass all buckets from harness_get(resource_type='cost_recommendation_filter', cost_category='<name>')." },
-              { name: "min_saving", required: false, description: "Minimum savings threshold (default 0)" },
-              { name: "days_back", required: false, description: "Number of days to look back (default 4)" },
-              { name: "recommendation_states", required: false, description: "Filter by state(s): OPEN, APPLIED, IGNORED. Comma-separated." },
+              ...RECOMMENDATION_OVERVIEW_PARAM_FIELDS,
             ],
           } satisfies ParamsSchema,
         },
@@ -2388,6 +2568,260 @@ Requires CCM_UNIT_COST_METRICS feature flag.`,
           },
           responseExtractor: ngExtract,
           description: "Delete unit metric records in a time range. NOTE: API parameter name is 'identifier' (not 'metricIdentifier'). Requires identifier, start_time (ISO 8601), and end_time (ISO 8601). Returns boolean success status.",
+        },
+      },
+    },
+
+    // ------------------------------------------------------------------
+    // 15. AI Budgets — Lightwing AI governance (LLM spend caps, not cost_budget)
+    // ------------------------------------------------------------------
+    {
+      resourceType: "ai_budget",
+      displayName: "AI Budget",
+      description:
+        "Account AI/LLM spend budgets (budget-cap rules): create and manage caps, subjects, alerts, and approval tiers. Not cloud CCM cost budgets (use cost_budget). Use harness_list to discover budgets, harness_get for one budget, harness_create/harness_update with body.policy or body.rawYaml.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["budget_id"],
+      deepLinkTemplate: AI_BUDGET_DEEP_LINK,
+      searchAliases: ["ai budget", "llm budget", "ai spend cap", "user budget", "governance budget"],
+      listFilterFields: [
+        { name: "search_term", description: "Search budgets by name (maps to query)" },
+        { name: "folder_id", description: "Filter by CCM folder ID" },
+        { name: "sort_field", description: "Sort field (e.g. name, created_at)" },
+        { name: "sort_order", description: "Sort direction", enum: ["ASC", "DESC"] },
+      ],
+      relatedResources: [
+        {
+          resourceType: "ai_budget_overview",
+          relationship: "related",
+          description: "Spend and approval summary for one budget",
+        },
+        {
+          resourceType: "ai_budget_consumption",
+          relationship: "related",
+          description: "Current user's applied budgets and spend",
+        },
+        {
+          resourceType: "ai_budget_override_request",
+          relationship: "related",
+          description: "Override requests and admin review for a budget",
+        },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/list",
+          pathBuilder: aiBudgetPath("/policies/list"),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pageOneIndexed: true,
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildLwPaginatedListBody,
+          responseExtractor: lwPaginatedExtract,
+          description: "List AI budgets in the account. Supports search_term, folder_id filter, pagination (page/limit), and sort.",
+        },
+        get: {
+          method: "GET",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}",
+          pathBuilder: aiBudgetPath((input) => `/policies/${requireAiBudgetId(input, "budget_id", "AI budget UUID")}`),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { budget_id: "policy_id" },
+          responseExtractor: lwResponseExtract,
+          description: "Get one AI budget by budget_id.",
+        },
+        create: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies",
+          pathBuilder: aiBudgetPath("/policies"),
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => input.body,
+          bodySchema: aiBudgetUpsertBodySchema,
+          responseExtractor: lwResponseExtract,
+          description: "Create an AI budget. Pass body with policy (JSON) or rawYaml.",
+        },
+        update: {
+          method: "PUT",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}",
+          pathBuilder: aiBudgetPath((input) => `/policies/${requireAiBudgetId(input, "budget_id", "AI budget UUID")}`),
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          pathParams: { budget_id: "policy_id" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => input.body,
+          bodySchema: aiBudgetUpsertBodySchema,
+          responseExtractor: lwResponseExtract,
+          description: "Replace an AI budget. Pass budget_id and full body (policy or rawYaml).",
+        },
+        delete: {
+          method: "DELETE",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}",
+          pathBuilder: aiBudgetPath((input) => `/policies/${requireAiBudgetId(input, "budget_id", "AI budget UUID")}`),
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          pathParams: { budget_id: "policy_id" },
+          responseExtractor: lwResponseExtract,
+          description: "Delete an AI budget by budget_id.",
+        },
+      },
+    },
+    {
+      resourceType: "ai_budget_overview",
+      displayName: "AI Budget Overview",
+      description:
+        "Read-only overview for one AI budget: spend, subjects, and approval state. Use harness_get with budget_id after harness_list on ai_budget.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["budget_id"],
+      deepLinkTemplate: AI_BUDGET_DEEP_LINK,
+      operations: {
+        get: {
+          method: "GET",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}/overview",
+          pathBuilder: aiBudgetPath(
+            (input) => `/policies/${requireAiBudgetId(input, "budget_id", "AI budget UUID")}/overview`,
+          ),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { budget_id: "policy_id" },
+          responseExtractor: lwResponseExtract,
+          description: "Get overview for one AI budget.",
+        },
+      },
+    },
+    {
+      resourceType: "ai_budget_consumption",
+      displayName: "My AI Budget Consumption",
+      description:
+        "Budget caps that apply to the authenticated user and current-period spend. Caller identity comes from the API token (no subject_id param). Not cost_budget.",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: [],
+      deepLinkTemplate: AI_BUDGET_DEEP_LINK,
+      relatedResources: [
+        {
+          resourceType: "ai_budget_override_request",
+          relationship: "related",
+          description: "Request a temporary budget increase via harness_create on ai_budget_override_request",
+        },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "/lw/api/accounts/{accountId}/ai-governance/me/budgets",
+          pathBuilder: aiBudgetPath("/me/budgets"),
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: aiBudgetConsumptionExtract,
+          description: "List AI budgets and consumption for the current user.",
+        },
+      },
+    },
+    {
+      resourceType: "ai_budget_override_request",
+      displayName: "AI Budget Override Request",
+      description:
+        "Request or review temporary AI budget increases. Users: harness_create to request; harness_list without budget_id for your requests. Admins: harness_list with budget_id for inbox; harness_get by override_request_id; harness_execute approve/reject (optional approved_amount).",
+      toolset: "ccm",
+      scope: "account",
+      identifierFields: ["budget_id", "override_request_id"],
+      deepLinkTemplate: AI_BUDGET_DEEP_LINK,
+      listFilterFields: [
+        { name: "status", description: "Filter by status (e.g. pending)" },
+        { name: "subject_id", description: "Admin inbox: filter by subject email or id" },
+        { name: "sort_field", description: "Sort field (e.g. created_at)" },
+        { name: "sort_order", description: "Sort direction", enum: ["ASC", "DESC"] },
+      ],
+      operations: {
+        list: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/me/budgets/override/requests",
+          pathBuilder: (input, config) => {
+            const base = aiGovernanceBase(input, config);
+            const budgetId = input.budget_id;
+            if (typeof budgetId === "string" && budgetId.trim() !== "") {
+              return `${base}/policies/${budgetId.trim()}/override/requests`;
+            }
+            return `${base}/me/budgets/override/requests`;
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pageOneIndexed: true,
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildLwPaginatedListBody,
+          responseExtractor: aiBudgetOverrideRequestListExtract,
+          description:
+            "List override requests. Omit budget_id for your requests; pass budget_id for admin inbox on that budget.",
+        },
+        get: {
+          method: "GET",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}/override/requests/{request_id}",
+          pathBuilder: (input, config) => {
+            const base = aiGovernanceBase(input, config);
+            const budgetId = requireAiBudgetId(input, "budget_id", "AI budget UUID");
+            const requestId = requireAiBudgetId(input, "override_request_id", "override request UUID");
+            return `${base}/policies/${budgetId}/override/requests/${requestId}`;
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { budget_id: "policy_id", override_request_id: "request_id" },
+          responseExtractor: lwResponseExtract,
+          description: "Get one override request by budget_id and override_request_id.",
+        },
+        create: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/me/budgets/override/request",
+          pathBuilder: aiBudgetPath("/me/budgets/override/request"),
+          operationPolicy: { risk: "medium_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => {
+            const body = (input.body as Record<string, unknown> | undefined) ?? {};
+            const budgetId = input.budget_id ?? body.budget_id ?? body.policy_id;
+            return {
+              policy_id: budgetId,
+              amount: input.amount ?? body.amount,
+              reason: input.reason ?? body.reason,
+            };
+          },
+          bodySchema: {
+            description: "Request a budget override for the current period.",
+            fields: [
+              { name: "budget_id", type: "string", required: true, description: "AI budget UUID to request an override for." },
+              { name: "amount", type: "number", required: true, description: "Requested ceiling amount." },
+              { name: "reason", type: "string", required: true, description: "Business justification." },
+            ],
+          },
+          responseExtractor: lwResponseExtract,
+          description: "Submit an override request (maps budget_id to API policy_id).",
+        },
+      },
+      executeActions: {
+        approve: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}/override/requests/review",
+          pathBuilder: (input, config) => {
+            const base = aiGovernanceBase(input, config);
+            const budgetId = requireAiBudgetId(input, "budget_id", "AI budget UUID");
+            return `${base}/policies/${budgetId}/override/requests/review`;
+          },
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          pathParams: { budget_id: "policy_id" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildReviewOverrideBody("approve"),
+          bodySchema: aiBudgetReviewBodySchema,
+          responseExtractor: lwResponseExtract,
+          actionDescription:
+            "Approve an override request for a budget. Requires budget_id and override_request_id; optional approved_amount.",
+        },
+        reject: {
+          method: "POST",
+          path: "/lw/api/accounts/{accountId}/ai-governance/policies/{policy_id}/override/requests/review",
+          pathBuilder: (input, config) => {
+            const base = aiGovernanceBase(input, config);
+            const budgetId = requireAiBudgetId(input, "budget_id", "AI budget UUID");
+            return `${base}/policies/${budgetId}/override/requests/review`;
+          },
+          operationPolicy: { risk: "high_write", retryPolicy: "do_not_retry" },
+          pathParams: { budget_id: "policy_id" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: buildReviewOverrideBody("reject"),
+          bodySchema: aiBudgetReviewBodySchema,
+          responseExtractor: lwResponseExtract,
+          actionDescription: "Reject an override request. Requires budget_id and override_request_id.",
         },
       },
     },

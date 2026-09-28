@@ -30,12 +30,12 @@
 | TC-exec-012 | List | List executions with scope override | `harness_list(resource_type="execution", org_id="custom_org", project_id="custom_project")` | Returns executions from the specified org/project |
 | TC-exec-013 | Get | Get execution by identifier | `harness_get(resource_type="execution", resource_id="exec_abc123")` | Returns full execution details including stage/step status |
 | TC-exec-014 | Get | Get execution with scope override | `harness_get(resource_type="execution", resource_id="exec_abc123", org_id="other_org", project_id="other_project")` | Returns execution from specified org/project |
-| TC-exec-015 | Execute | Interrupt a running execution with AbortAll | `harness_execute(resource_type="execution", action="interrupt", execution_id="exec_running", body={interrupt_type: "AbortAll"})` | Execution interrupted with AbortAll type |
-| TC-exec-016 | Execute | Interrupt a running execution with Pause | `harness_execute(resource_type="execution", action="interrupt", execution_id="exec_running", body={interrupt_type: "Pause"})` | Execution paused |
-| TC-exec-017 | Execute | Resume a paused execution | `harness_execute(resource_type="execution", action="interrupt", execution_id="exec_paused", body={interrupt_type: "Resume"})` | Execution resumed |
-| TC-exec-018 | Execute | Interrupt with StageRollback | `harness_execute(resource_type="execution", action="interrupt", execution_id="exec_running", body={interrupt_type: "StageRollback"})` | Stage rollback initiated |
+| TC-exec-015 | Execute | Interrupt a running execution with AbortAll | `harness_execute(resource_type="execution", action="interrupt", resource_id="exec_running", params={interrupt_type: "AbortAll"})` | Execution interrupted with AbortAll type |
+| TC-exec-016 | Error | Interrupt with unsupported type Pause | `harness_execute(resource_type="execution", action="interrupt", resource_id="exec_running", params={interrupt_type: "Pause"})` | Error: interrupt_type must be AbortAll or UserMarkedFailure |
+| TC-exec-017 | Error | Interrupt with unsupported type Resume | `harness_execute(resource_type="execution", action="interrupt", resource_id="exec_paused", params={interrupt_type: "Resume"})` | Error: interrupt_type must be AbortAll or UserMarkedFailure |
+| TC-exec-018 | Error | Interrupt with unsupported type | `harness_execute(resource_type="execution", action="interrupt", resource_id="exec_running", params={interrupt_type: "invalid"})` | Error: interrupt_type must be AbortAll or UserMarkedFailure |
 | TC-exec-019 | Error | Get execution with invalid identifier | `harness_get(resource_type="execution", resource_id="nonexistent_exec")` | Error: Execution not found (404) |
-| TC-exec-020 | Error | Interrupt with missing interrupt_type | `harness_execute(resource_type="execution", action="interrupt", execution_id="exec_running", body={})` | Error: interrupt_type is required |
+| TC-exec-020 | Error | Interrupt with missing interrupt_type | `harness_execute(resource_type="execution", action="interrupt", resource_id="exec_running")` | Error: interrupt_type is required |
 | TC-exec-021 | Error | List executions with invalid status | `harness_list(resource_type="execution", filters={status: "INVALID_STATUS"})` | Error or empty results for invalid status |
 | TC-exec-022 | Edge | List executions with empty results | `harness_list(resource_type="execution", filters={pipeline_id: "nonexistent_pipeline"})` | Returns empty items array with total=0 |
 | TC-exec-023 | Edge | List executions with max pagination | `harness_list(resource_type="execution", page=0, size=100)` | Returns up to 100 executions in single page |
@@ -44,6 +44,6 @@
 ## Notes
 - Execution list uses POST method with `filterType: "PipelineExecution"` body
 - The `status` filter supports: Success, Failed, Running, Aborted, Expired, AbortedByFreeze, NotStarted, Paused, Queued, Waiting
-- The `interrupt` execute action requires `interrupt_type` as a required body field
-- Valid interrupt types: AbortAll, Pause, Resume, StageRollback, Abort, ExpireAll, Retry
+- The `interrupt` execute action requires `params.interrupt_type`
+- Supported interrupt types: AbortAll, UserMarkedFailure
 - Execution summary API has a hard limit of 10,000 records

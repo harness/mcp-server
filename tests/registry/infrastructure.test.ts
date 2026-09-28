@@ -99,7 +99,7 @@ function makeConfig(overrides: Partial<Config> = {}): Config {
     HARNESS_ACCOUNT_ID: "test-account",
     HARNESS_BASE_URL: "https://app.harness.io",
     HARNESS_ORG: "default",
-    HARNESS_PROJECT: "avi",
+    HARNESS_PROJECT: "my_project",
     HARNESS_API_TIMEOUT_MS: 30000,
     HARNESS_MAX_RETRIES: 3,
     HARNESS_MAX_BODY_SIZE_MB: 10,
@@ -121,7 +121,7 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
 }
 
 const INFRA_DEEP_LINK =
-  "https://app.harness.io/ng/account/test-account/all/orgs/default/projects/avi/settings/environments/preprod/details?sectionId=INFRASTRUCTURE";
+  "https://app.harness.io/ng/account/test-account/all/orgs/default/projects/my_project/settings/environments/my_env/details?sectionId=INFRASTRUCTURE";
 
 describe("infrastructure deep links", () => {
   let registry: Registry;
@@ -138,9 +138,9 @@ describe("infrastructure deep links", () => {
             {
               identifier: "k8s",
               name: "k8s",
-              environmentRef: "preprod",
+              environmentRef: "my_env",
               orgIdentifier: "default",
-              projectIdentifier: "avi",
+              projectIdentifier: "my_project",
             },
           ],
           totalElements: 1,
@@ -149,8 +149,8 @@ describe("infrastructure deep links", () => {
     );
     const result = (await registry.dispatch(client, "infrastructure", "list", {
       org_id: "default",
-      project_id: "avi",
-      environment_id: "preprod",
+      project_id: "my_project",
+      environment_id: "my_env",
     })) as { items: Array<Record<string, unknown>> };
 
     expect(result.items[0]!.openInHarness).toBe(INFRA_DEEP_LINK);
@@ -162,17 +162,17 @@ describe("infrastructure deep links", () => {
         data: {
           identifier: "k8s",
           name: "k8s",
-          environmentRef: "preprod",
+          environmentRef: "my_env",
           orgIdentifier: "default",
-          projectIdentifier: "avi",
+          projectIdentifier: "my_project",
         },
       }),
     );
     const result = (await registry.dispatch(client, "infrastructure", "get", {
       infrastructure_id: "k8s",
       org_id: "default",
-      project_id: "avi",
-      environment_id: "preprod",
+      project_id: "my_project",
+      environment_id: "my_env",
     })) as Record<string, unknown>;
 
     expect(result.openInHarness).toBe(INFRA_DEEP_LINK);
@@ -184,23 +184,196 @@ describe("infrastructure deep links", () => {
         data: {
           identifier: "k8s",
           name: "k8s",
-          environmentRef: "preprod",
+          environmentRef: "my_env",
           orgIdentifier: "default",
-          projectIdentifier: "avi",
+          projectIdentifier: "my_project",
         },
       }),
     );
     const result = (await registry.dispatch(client, "infrastructure", "create", {
       org_id: "default",
-      project_id: "avi",
+      project_id: "my_project",
       body: {
         identifier: "k8s",
         name: "k8s",
         type: "KubernetesDirect",
-        environmentRef: "preprod",
+        environmentRef: "my_env",
       },
     })) as Record<string, unknown>;
 
     expect(result.openInHarness).toBe(INFRA_DEEP_LINK);
+  });
+});
+
+describe("infrastructure environment_id fail-fast", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "infrastructure" }));
+  });
+
+  it("list: throws locally when environment_id is omitted", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "infrastructure", "list", {
+        org_id: "default",
+        project_id: "my_project",
+      }),
+    ).rejects.toThrow(/Missing required filter\(s\) for listing infrastructure: environment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: throws locally when environment_id is omitted", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "infrastructure", "get", {
+        infrastructure_id: "k8s",
+        org_id: "default",
+        project_id: "my_project",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for infrastructure\.get: environment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("delete: throws locally when environment_id is omitted", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "infrastructure", "delete", {
+        infrastructure_id: "k8s",
+        org_id: "default",
+        project_id: "my_project",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\) for infrastructure\.delete: environment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: sends environmentIdentifier when environment_id is present", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: { identifier: "k8s", environmentRef: "my_env" },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "infrastructure", "get", {
+      infrastructure_id: "k8s",
+      org_id: "default",
+      project_id: "my_project",
+      environment_id: "my_env",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        path: "/ng/api/infrastructures/k8s",
+        params: expect.objectContaining({ environmentIdentifier: "my_env" }),
+      }),
+    );
+  });
+
+  it("move_configs: throws locally when environment_id and move_config_type are omitted", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "infrastructure", "move_configs", {
+        infrastructure_id: "k8s",
+        org_id: "default",
+        project_id: "my_project",
+      }),
+    ).rejects.toThrow(
+      /Missing required param\(s\) for infrastructure\.move_configs: environment_id, move_config_type/,
+    );
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("move_configs: maps required params from the execute call", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "k8s" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "infrastructure", "move_configs", {
+      infrastructure_id: "k8s",
+      org_id: "default",
+      project_id: "my_project",
+      environment_id: "my_env",
+      move_config_type: "INLINE_TO_REMOTE",
+      connector_ref: "git_connector",
+      repo_name: "my-repo",
+      branch: "main",
+      file_path: ".harness/infra.yaml",
+      commit_msg: "Move infra to remote",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/ng/api/infrastructures/move-config/k8s",
+        params: expect.objectContaining({
+          environmentIdentifier: "my_env",
+          moveConfigType: "INLINE_TO_REMOTE",
+          connectorRef: "git_connector",
+          repoName: "my-repo",
+          branch: "main",
+          filePath: ".harness/infra.yaml",
+          commitMsg: "Move infra to remote",
+        }),
+        body: {},
+      }),
+    );
+  });
+
+  it("describe metadata marks environment_id required on list/get/delete/move_configs", () => {
+    const def = registry.getResource("infrastructure");
+    expect(def.listFilterFields?.find((f) => f.name === "environment_id")?.required).toBe(true);
+    expect(def.operations.get?.paramsSchema?.fields.some((f) => f.name === "environment_id" && f.required)).toBe(
+      true,
+    );
+    expect(def.operations.delete?.paramsSchema?.fields.some((f) => f.name === "environment_id" && f.required)).toBe(
+      true,
+    );
+    expect(
+      def.executeActions?.move_configs?.paramsSchema?.fields.some(
+        (f) => f.name === "environment_id" && f.required,
+      ),
+    ).toBe(true);
+    expect(
+      def.executeActions?.move_configs?.paramsSchema?.fields.some(
+        (f) => f.name === "move_config_type" && f.required,
+      ),
+    ).toBe(true);
+    expect(def.executeActions?.move_configs?.bodySchema?.fields.some((f) => f.required)).toBe(false);
+  });
+
+  it("move_configs: hoists required fields from body onto query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: { identifier: "k8s" } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "infrastructure", "move_configs", {
+      infrastructure_id: "k8s",
+      org_id: "default",
+      project_id: "my_project",
+      body: {
+        environment_id: "my_env",
+        move_config_type: "INLINE_TO_REMOTE",
+        connector_ref: "git_connector",
+      },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        path: "/ng/api/infrastructures/move-config/k8s",
+        params: expect.objectContaining({
+          environmentIdentifier: "my_env",
+          moveConfigType: "INLINE_TO_REMOTE",
+          connectorRef: "git_connector",
+        }),
+        body: {},
+      }),
+    );
   });
 });

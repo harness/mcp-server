@@ -33,7 +33,7 @@ export function registerDiagnoseTool(server: McpServer, registry: Registry, clie
   server.registerTool(
     "harness_diagnose",
     {
-      description: `Diagnose a Harness resource — analyze failures, test connectivity, check health, or troubleshoot GitOps sync issues. Defaults to pipeline execution diagnosis. Accepts a Harness URL to auto-detect the resource type.`,
+      description: `Diagnose a Harness resource — analyze failures, test connectivity, check health, or troubleshoot GitOps sync issues. Defaults to pipeline execution diagnosis. Accepts a Harness URL to auto-detect the resource type. When a TYPESAFE_API_KEY is configured, pipeline failures additionally include an advisory "triage" field classifying each failed step (category: infra_flake, test_failure, config_error, dependency_failure, permission_error, timeout; plus confidence) — failure messages, delegate info, and fetched log snippets are sent to the configured TypeSafe API to produce it; the field is omitted when the key is absent, triage is disabled, or classification times out or is low-confidence.`,
       inputSchema: {
         resource_type: z.enum(DIAGNOSE_TYPES).optional().describe("Resource type to diagnose. Auto-detected from url if provided. Defaults to pipeline."),
         resource_id: z.string().optional().describe("Primary identifier of the resource (connector ID, delegate name). Auto-detected from url if provided."),

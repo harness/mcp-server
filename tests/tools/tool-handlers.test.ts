@@ -312,6 +312,26 @@ describe("harness_get", () => {
     expect(call.params.orgIdentifier).toBeUndefined();
     expect(call.params.projectIdentifier).toBeUndefined();
   });
+
+  it("gets a branch from a files URL with a path when resource_type is branch", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    mockRequest = vi.fn().mockResolvedValue({ name: "feature/foo" });
+    client = makeClient(mockRequest);
+    const repoServer = makeMcpServer();
+    const { registerGetTool } = await import("../../src/tools/harness-get.js");
+    registerGetTool(repoServer, registry, client);
+
+    const result = await repoServer.call("harness_get", {
+      resource_type: "branch",
+      url: "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r/files/feature/foo/~/src/index.ts",
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "GET",
+      path: "/code/api/v1/repos/r/branches/feature/foo",
+    }));
+  });
 });
 
 describe("harness_get — execution_inputs", () => {
@@ -1608,14 +1628,14 @@ describe("harness_update — pull request", () => {
       resource_type: "pull_request",
       resource_id: "42",
       url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
-      body: { state: "closed" },
+      body: { state: "closed", is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();
     const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
-    expect(call.body).toEqual({ state: "closed" });
+    expect(call.body).toEqual({ state: "closed", is_draft: false });
   });
 
   it("rejects mixed state + metadata via harness_update", async () => {
@@ -1638,6 +1658,31 @@ describe("harness_update — pull request", () => {
       error: expect.stringContaining("Cannot combine state change"),
     });
     expect(prRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("harness_update — PR comment", () => {
+  it("maps resource_id to comment_id for comment updates", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ id: 123, text: "Updated comment" });
+    const prClient = makeClient(prRequest);
+    const { registerUpdateTool } = await import("../../src/tools/harness-update.js");
+    registerUpdateTool(prServer, prRegistry, prClient, makeConfig());
+
+    const result = await prServer.call("harness_update", {
+      resource_type: "pr_comment",
+      resource_id: "123",
+      params: { repo_id: "my-repo", pr_number: "42" },
+      body: { text: "Updated comment" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(prRequest).toHaveBeenCalledOnce();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("PATCH");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/comments/123");
+    expect(call.body).toEqual({ text: "Updated comment" });
   });
 });
 
@@ -1816,6 +1861,32 @@ describe("harness_delete", () => {
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({ error: expect.stringContaining("Conflicting identifiers") });
     expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("deletes a branch from a files URL with a path when resource_type is branch", async () => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "repositories" }));
+    mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS" });
+    client = makeClient(mockRequest);
+    const repoServer = makeMcpServer("accept");
+    const { registerDeleteTool } = await import("../../src/tools/harness-delete.js");
+    registerDeleteTool(repoServer, registry, client, makeConfig());
+
+    const result = await repoServer.call("harness_delete", {
+      resource_type: "branch",
+      url: "https://app.harness.io/ng/account/acc/module/code/orgs/o/projects/p/repos/r/files/feature/foo/~/src/index.ts",
+      confirm: true,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(parseResult(result)).toMatchObject({
+      deleted: true,
+      resource_type: "branch",
+      resource_id: "feature/foo",
+    });
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "DELETE",
+      path: "/code/api/v1/repos/r/branches/feature/foo",
+    }));
   });
 });
 
@@ -2096,18 +2167,23 @@ describe("harness_execute", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("passes pipeline_branch from params as ?pipelineBranchName= query param", async () => {
+  it("passes pipeline_branch from params as ?branch= query param", async () => {
     await server.call("harness_execute", {
       resource_type: "pipeline",
       action: "run",
       resource_id: "my-pipe",
       params: { pipeline_branch: "feature/my-fix" },
     });
-    expect(mockRequest).toHaveBeenCalled();
-    // Find the POST execute call.
-    const postCall = mockRequest.mock.calls.find((c) => c[0].method === "POST");
-    expect(postCall).toBeDefined();
-    expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const request = mockRequest.mock.calls[0][0];
+    expect(request).toMatchObject({
+      method: "POST",
+      path: "/pipeline/api/pipeline/execute/my-pipe",
+      params: { branch: "feature/my-fix" },
+      headers: { "Content-Type": "application/yaml" },
+      body: "",
+    });
+    expect(request.params).not.toHaveProperty("pipelineBranchName");
   });
 
   it("pipeline_branch coexists with other params without clobbering", async () => {
@@ -2119,7 +2195,7 @@ describe("harness_execute", () => {
     });
     const postCall = mockRequest.mock.calls.find((c) => c[0].method === "POST");
     expect(postCall).toBeDefined();
-    expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix", module: "ci" });
+    expect(postCall![0].params).toMatchObject({ branch: "feature/my-fix", module: "ci" });
   });
 
   it("defaults remote pipeline_branch from branch and runs without read-cache preflight", async () => {
@@ -2149,7 +2225,6 @@ describe("harness_execute", () => {
     expect(postCall.method).toBe("POST");
     expect(postCall.params).toMatchObject({
       branch: "feature/my-fix",
-      pipelineBranchName: "feature/my-fix",
       storeType: "REMOTE",
       connectorRef: "account.github",
       repoName: "testdataserv",
@@ -2189,10 +2264,42 @@ pipeline:
     expect(postCall.method).toBe("POST");
     expect(postCall.params).toMatchObject({
       branch: "feature/from-yaml",
-      pipelineBranchName: "feature/from-yaml",
       storeType: "REMOTE",
       repoName: "testdataserv",
     });
+  });
+
+  it.each([
+    { name: "pipeline_branch", params: { pipeline_branch: "feature/definition" } },
+    { name: "branch alias", params: { branch: "feature/definition" } },
+    { name: "explicit pipeline_branch over alias", params: { pipeline_branch: "feature/definition", branch: "feature/alias" } },
+  ])("preserves $name independently of the runtime YAML codebase branch", async ({ params }) => {
+    const inputs = YAML.stringify({
+      pipeline: {
+        identifier: "my-pipe",
+        properties: {
+          ci: {
+            codebase: {
+              build: { type: "branch", spec: { branch: "feature/application-code" } },
+            },
+          },
+        },
+      },
+    });
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      params,
+      inputs,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const request = mockRequest.mock.calls[0][0];
+    expect(request.params).toMatchObject({ branch: "feature/definition" });
+    expect(request.params).not.toHaveProperty("pipelineBranchName");
+    expect(request.body).toBe(inputs);
   });
 
   it("closes a pull request from a Harness PR URL", async () => {
@@ -2206,6 +2313,7 @@ pipeline:
     const result = await prServer.call("harness_execute", {
       url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
       action: "close",
+      body: { is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();
@@ -2213,7 +2321,7 @@ pipeline:
     const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
     expect(call.method).toBe("POST");
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
-    expect(call.body).toEqual({ state: "closed" });
+    expect(call.body).toEqual({ state: "closed", is_draft: false });
   });
 
   it("uses resource_id for the missing child identifier when parent params are provided", async () => {
@@ -2229,6 +2337,7 @@ pipeline:
       action: "close",
       resource_id: "42",
       params: { repo_id: "my-repo" },
+      body: { is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();
@@ -2248,6 +2357,7 @@ pipeline:
       url: "https://app.harness.io/ng/account/test-account/module/code/orgs/default/projects/test-project/repos/my-repo/pull-requests/42",
       resource_id: "43",
       action: "close",
+      body: { is_draft: false },
     });
 
     expect(result.isError).toBeUndefined();
@@ -2270,6 +2380,7 @@ pipeline:
       params: {
         repo_id: "my-repo",
         method: "squash",
+        source_sha: "abc123",
         delete_source_branch: false,
         dry_run: false,
       },
@@ -2283,6 +2394,7 @@ pipeline:
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/merge");
     expect(call.body).toEqual({
       method: "squash",
+      source_sha: "abc123",
       delete_source_branch: false,
       dry_run: false,
     });
@@ -2532,21 +2644,204 @@ pipeline:
     expect(runCall.body).toContain("x");
   });
 
-  it("falls back to fresh run when retry returns 405", async () => {
-    // First call (retry) throws 405, second call (run) succeeds
-    mockRequest
-      .mockRejectedValueOnce(new HarnessApiError("Method not allowed", 405))
-      .mockResolvedValueOnce({ data: { planExecutionId: "exec-456" } }) // get execution
-      .mockResolvedValueOnce({ data: { planExecutionId: "exec-789" } }); // fresh run
+  it("retries a failed pipeline via POST retry/{pipelineIdentifier}", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-1" } });
 
     const result = await server.call("harness_execute", {
       resource_type: "pipeline",
       action: "retry",
-      params: { execution_id: "exec-123", pipeline_id: "my-pipe" },
+      resource_id: "my-pipe",
+      params: { execution_id: "exec-123", retry_stages: ["stage1"] },
     });
     expect(result.isError).toBeUndefined();
-    const data = parseResult(result) as { _note: string };
-    expect(data._note).toContain("fresh pipeline run");
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params: Record<string, unknown>;
+      body: unknown;
+    };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/pipeline/api/pipeline/execute/retry/my-pipe");
+    expect(callArgs.params.planExecutionId).toBe("exec-123");
+    expect(callArgs.params.retryStages).toEqual(["stage1"]);
+    expect(callArgs.params.runAllStages).toBe("true");
+    expect(callArgs.body).toBe("");
+  });
+
+  it("does not fall back to a fresh run when pipeline retry returns 405", async () => {
+    mockRequest.mockRejectedValueOnce(new HarnessApiError("Method not allowed", 405));
+
+    await expect(
+      server.call("harness_execute", {
+        resource_type: "pipeline",
+        action: "retry",
+        resource_id: "my-pipe",
+        params: { execution_id: "exec-123", retry_stages: ["stage1"] },
+      }),
+    ).rejects.toMatchObject({ message: expect.stringContaining("Method not allowed") });
+    expect(mockRequest).toHaveBeenCalledTimes(1);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "POST",
+      path: "/pipeline/api/pipeline/execute/retry/my-pipe",
+    });
+  });
+
+  it("auto-fetches resumable stages when retry_stages is omitted", async () => {
+    mockRequest
+      .mockResolvedValueOnce({
+        data: {
+          isResumable: true,
+          groups: [{ info: [{ identifier: "deploy" }, { identifier: "verify" }] }],
+        },
+      })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-2" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry",
+      resource_id: "my-pipe",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledTimes(2);
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "GET",
+      path: "/pipeline/api/pipeline/execute/exec-123/retryStages",
+    });
+    const retryCall = mockRequest.mock.calls[1]![0] as { params: Record<string, unknown> };
+    expect(retryCall.params.retryStages).toEqual(["deploy", "verify"]);
+  });
+
+  it("auto retry_stages uses only failed stages in the first failed group", async () => {
+    mockRequest
+      .mockResolvedValueOnce({
+        data: {
+          isResumable: true,
+          groups: [
+            { info: [{ identifier: "build", status: "Success" }] },
+            {
+              info: [
+                { identifier: "deploy", status: "Failed" },
+                { identifier: "verify", status: "Success" },
+              ],
+            },
+            { info: [{ identifier: "notify", status: "Failed" }] },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-failed" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry",
+      resource_id: "my-pipe",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    const retryCall = mockRequest.mock.calls[1]![0] as { params: Record<string, unknown> };
+    expect(retryCall.params.retryStages).toEqual(["deploy"]);
+  });
+
+  it("auto retry_stages stays inside one group when catalog omits status", async () => {
+    mockRequest
+      .mockResolvedValueOnce({
+        data: {
+          isResumable: true,
+          groups: [
+            { info: [{ identifier: "build" }] },
+            { info: [{ identifier: "deploy" }] },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-last-group" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry",
+      resource_id: "my-pipe",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    const retryCall = mockRequest.mock.calls[1]![0] as { params: Record<string, unknown> };
+    expect(retryCall.params.retryStages).toEqual(["deploy"]);
+  });
+
+  it("resolves pipeline_id from execution get when retry only has execution_id", async () => {
+    mockRequest
+      .mockResolvedValueOnce({
+        data: { pipelineExecutionSummary: { pipelineIdentifier: "resolved-pipe", planExecutionId: "exec-123" } },
+      })
+      .mockResolvedValueOnce({
+        data: { isResumable: true, groups: [{ info: [{ identifier: "s1" }] }] },
+      })
+      .mockResolvedValueOnce({ data: { planExecutionId: "exec-retry-3" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "retry",
+      params: { execution_id: "exec-123" },
+    });
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "GET",
+      path: "/pipeline/api/pipelines/execution/v2/exec-123",
+    });
+    expect(mockRequest.mock.calls[2]![0]).toMatchObject({
+      method: "POST",
+      path: "/pipeline/api/pipeline/execute/retry/resolved-pipe",
+    });
+  });
+
+  it("interrupts an execution with AbortAll as a query param", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { status: "SUCCESS" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "execution",
+      action: "interrupt",
+      resource_id: "exec-running",
+      params: { interrupt_type: "AbortAll" },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as {
+      method: string;
+      path: string;
+      params: Record<string, unknown>;
+      body: unknown;
+    };
+    expect(callArgs.method).toBe("PUT");
+    expect(callArgs.path).toBe("/pipeline/api/pipeline/execute/interrupt/exec-running");
+    expect(callArgs.params.interruptType).toBe("AbortAll");
+    expect(callArgs.body).toEqual({});
+  });
+
+  it("aliases pipeline+interrupt to execution.interrupt", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { status: "SUCCESS" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "interrupt",
+      resource_id: "exec-running",
+      body: { interrupt_type: "usermarkedfailure" },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string; params: Record<string, unknown> };
+    expect(callArgs.path).toBe("/pipeline/api/pipeline/execute/interrupt/exec-running");
+    expect(callArgs.params.interruptType).toBe("UserMarkedFailure");
+  });
+
+  it("rejects unsupported interrupt_type values", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "execution",
+      action: "interrupt",
+      resource_id: "exec-running",
+      params: { interrupt_type: "Pause" },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringContaining("AbortAll and UserMarkedFailure"),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
   });
 
   // Single-poll wait tests verify the wiring (extract execution_id, poll once,
@@ -2959,6 +3254,7 @@ pipeline:
         connector_ref: "gh_conn",
         repo_name: "my-repo",
         pipeline_branch: "feature/x",
+        branch: "feature/alias",
       },
     });
 
@@ -2994,7 +3290,8 @@ pipeline:
     expect(runCall.body).toContain("staging");
     expect(runCall.body).toContain("branch");
     expect(runCall.body).toContain("main");
-    expect(runCall.params?.pipelineBranchName).toBe("feature/x");
+    expect(runCall.params?.branch).toBe("feature/x");
+    expect(runCall.params).not.toHaveProperty("pipelineBranchName");
     expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
   });
 
@@ -3199,6 +3496,45 @@ pipeline:
     expect(callArgs.body).toEqual({
       pipelineName: "My Imported Pipeline",
       pipelineDescription: "Imported from GitHub",
+      orgIdentifier: "default",
+      projectIdentifier: "test-project",
+    });
+  });
+
+  it("fails fast when pipeline import is missing Git params", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "import",
+      body: { pipelineName: "No Git" },
+    });
+    expect(result.isError).toBe(true);
+    expect(parseResult(result)).toMatchObject({
+      error: expect.stringMatching(/repo_name.*branch.*file_path/),
+    });
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("hoists Git import fields from body onto query params", async () => {
+    mockRequest.mockResolvedValueOnce({ data: { identifier: "hoisted-pipe" } });
+
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "import",
+      body: {
+        connector_ref: "my_github",
+        repo_name: "my-repo",
+        branch: "main",
+        file_path: ".harness/my-pipe.yaml",
+      },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown>; body: unknown };
+    expect(callArgs.params.connectorRef).toBe("my_github");
+    expect(callArgs.params.repoName).toBe("my-repo");
+    expect(callArgs.params.filePath).toBe(".harness/my-pipe.yaml");
+    expect(callArgs.body).toEqual({
+      pipelineName: "",
+      pipelineDescription: "",
       orgIdentifier: "default",
       projectIdentifier: "test-project",
     });

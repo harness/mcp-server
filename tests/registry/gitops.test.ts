@@ -10,6 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Registry } from "../../src/registry/index.js";
 import type { Config } from "../../src/config.js";
 import type { HarnessClient } from "../../src/client/harness-client.js";
+import { compactItems } from "../../src/utils/compact.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -1682,5 +1683,599 @@ describe("gitops supportedScopes", () => {
     await expect(
       registry.dispatch(client, "gitops_application", "list", { resource_scope: "account" }),
     ).rejects.toThrow(/gitops_application does not support account scope/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Compact footgun regression coverage
+//
+// Mapping and autocreate log use compactItem for fields outside the global
+// whitelist. Argo project list projects whitelist-safe rows in the extractor.
+// ---------------------------------------------------------------------------
+
+describe("gitops list compact footgun fix", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("gitops_autocreate_log.list uses compactItem, not skipCompact", () => {
+    const resource = registry.getResource("gitops_autocreate_log");
+    expect(resource.operations.list?.skipCompact).toBeFalsy();
+    expect(resource.compactItem).toBeTypeOf("function");
+  });
+
+  it("gitops_autocreate_log compactItem keeps diagnostic fields and drops extras", () => {
+    const compactFn = registry.getResource("gitops_autocreate_log").compactItem;
+    const [slim] = compactItems(
+      [
+        {
+          resourceType: "service",
+          resourceRef: "pipelineservice",
+          status: "FAILED",
+          errorCode: "DUPLICATE_FIELD",
+          failureReason: "Service [pipelineservice] already exists",
+          createdAt: 1710000000000,
+          orgIdentifier: "default",
+          projectIdentifier: "proj",
+          agentIdentifier: "account.myagent",
+          application: { name: "app1" },
+          accountIdentifier: "acct",
+          junk: true,
+        },
+      ],
+      compactFn,
+    ) as Array<Record<string, unknown>>;
+
+    expect(slim).toEqual({
+      resourceType: "service",
+      resourceRef: "pipelineservice",
+      status: "FAILED",
+      errorCode: "DUPLICATE_FIELD",
+      failureReason: "Service [pipelineservice] already exists",
+      createdAt: 1710000000000,
+      orgIdentifier: "default",
+      projectIdentifier: "proj",
+      agentIdentifier: "account.myagent",
+      application: { name: "app1" },
+    });
+  });
+
+  it("gitops_app_project_mapping.list uses compactItem, not skipCompact", () => {
+    const resource = registry.getResource("gitops_app_project_mapping");
+    expect(resource.operations.list?.skipCompact).toBeFalsy();
+    expect(resource.compactItem).toBeTypeOf("function");
+  });
+
+  it("gitops_app_project_mapping compactItem keeps mapping fields and drops extras", () => {
+    const compactFn = registry.getResource("gitops_app_project_mapping").compactItem;
+    const [slim] = compactItems(
+      [
+        {
+          argoproject: "team-a",
+          orgIdentifier: "default",
+          projectIdentifier: "team-a-proj",
+          autoCreateServiceEnv: true,
+          managedFields: [{ huge: true }],
+        },
+      ],
+      compactFn,
+    ) as Array<Record<string, unknown>>;
+
+    expect(slim).toEqual({
+      argoproject: "team-a",
+      orgIdentifier: "default",
+      projectIdentifier: "team-a-proj",
+      autoCreateServiceEnv: true,
+    });
+  });
+
+  it("gitops_argo_project.list does not use skipCompact (projected whitelist-safe rows)", () => {
+    expect(registry.getResource("gitops_argo_project").operations.list?.skipCompact).toBeFalsy();
+  });
+
+  it("gitops_app_project_mapping list: extract row intact without skipCompact marker", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      appProjMap: {
+        "team-a": { orgIdentifier: "default", projectIdentifier: "team-a-proj", autoCreateServiceEnv: true },
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "gitops_app_project_mapping", "list", {
+      agent_id: "account.myagent",
+    })) as Record<string, unknown> & { items: Array<Record<string, unknown>>; __skipCompact?: boolean };
+
+    expect(result.__skipCompact).toBeUndefined();
+    expect(result.total).toBe(1);
+    expect(result.items[0]).toEqual({
+      argoproject: "team-a",
+      orgIdentifier: "default",
+      projectIdentifier: "team-a-proj",
+      autoCreateServiceEnv: true,
+    });
+  });
+
+  it("gitops_argo_project list: projects small rows and synthesizes total", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [
+        {
+          metadata: { name: "team-a", namespace: "agent-ns", creationTimestamp: "2026-03-23T08:33:26Z" },
+          spec: { description: "Team A", sourceRepos: ["*"] },
+          status: {},
+        },
+      ],
+      metadata: { resourceVersion: "12345" },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "gitops_argo_project", "list", {
+      agent_id: "account.myagent",
+    })) as Record<string, unknown> & { items: Array<Record<string, unknown>>; __skipCompact?: boolean };
+
+    expect(result.total).toBe(1);
+    expect(result.items[0]).toEqual({
+      name: "team-a",
+      description: "Team A",
+      createdAt: "2026-03-23T08:33:26Z",
+    });
+    expect(result.metadata).toEqual({ resourceVersion: "12345" });
+  });
+
+  it("gitops_argo_project list: total passthrough when API does supply one", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      items: [{ metadata: { name: "p1" }, spec: {}, status: {} }],
+      total: 5,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "gitops_argo_project", "list", {
+      agent_id: "account.myagent",
+    })) as Record<string, unknown> & { items: Array<Record<string, unknown>>; __skipCompact?: boolean };
+
+    expect(result.total).toBe(5);
+    expect(result.items[0]).toEqual({ name: "p1" });
+  });
+
+  it("gitops_autocreate_log list: extract intact without skipCompact marker", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      logs: [
+        {
+          resourceType: "service",
+          resourceRef: "pipelineservice",
+          status: "FAILED",
+          errorCode: "DUPLICATE_FIELD",
+          failureReason: "Service [pipelineservice] already exists",
+          application: { name: "app1" },
+        },
+      ],
+      total: 1,
+      successServices: 0,
+      failedServices: 1,
+      successEnvironments: 0,
+      failedEnvironments: 0,
+      successClusterLinks: 0,
+      failedClusterLinks: 0,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "gitops_autocreate_log", "list", {
+      agent_id: "account.myagent",
+      import_request_id: "507f1f77bcf86cd799439011",
+    })) as Record<string, unknown> & { items: Array<Record<string, unknown>>; __skipCompact?: boolean };
+
+    expect(result.__skipCompact).toBeUndefined();
+    expect(result.total).toBe(1);
+    expect(result.failedServices).toBe(1);
+    expect(result.items[0]).toMatchObject({
+      resourceType: "service",
+      resourceRef: "pipelineservice",
+      errorCode: "DUPLICATE_FIELD",
+      failureReason: "Service [pipelineservice] already exists",
+      application: { name: "app1" },
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// gitops_app_project_mapping update — preflight validation
+//
+// Update's body is folded into a dynamically-keyed map ({ appProjMap: {
+// [argoproject]: {...} } }) before the registry's generic bodySchema.required
+// check ever sees it, so that check can't find autoCreateServiceEnv at the
+// top level it's declared on. validateAppProjMapUpdateBody runs as a
+// `preflight` hook instead — pre-transform, on the raw input — so it can
+// name the actual field the caller passed. These tests assert the hook
+// blocks bad input *before* any HTTP request is made (mockRequest never
+// called), and lets valid input through for all three body shapes.
+// ---------------------------------------------------------------------------
+
+describe("gitops_app_project_mapping update preflight validation", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("flat shape: valid boolean passes preflight and reaches dispatch", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_app_project_mapping", "update", {
+      agent_id: "account.myagent",
+      resource_id: "team-a",
+      body: { orgIdentifier: "default", projectIdentifier: "team-a-proj", autoCreateServiceEnv: true },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("PUT");
+    expect(call.body.appProjMap["team-a"]).toEqual({
+      orgIdentifier: "default",
+      projectIdentifier: "team-a-proj",
+      autoCreateServiceEnv: true,
+    });
+  });
+
+  it("flat shape: missing autoCreateServiceEnv is rejected before any request is sent", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "update", {
+        agent_id: "account.myagent",
+        resource_id: "team-a",
+        body: { orgIdentifier: "default", projectIdentifier: "team-a-proj" },
+      }),
+    ).rejects.toThrow(/body requires autoCreateServiceEnv as boolean/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("flat shape: non-boolean autoCreateServiceEnv is rejected", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "update", {
+        agent_id: "account.myagent",
+        resource_id: "team-a",
+        body: { orgIdentifier: "default", projectIdentifier: "team-a-proj", autoCreateServiceEnv: "true" },
+      }),
+    ).rejects.toThrow(/body requires autoCreateServiceEnv as boolean/);
+  });
+
+  it("flat shape: missing org/project lookup keys is rejected", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "update", {
+        agent_id: "account.myagent",
+        resource_id: "team-a",
+        body: { autoCreateServiceEnv: true },
+      }),
+    ).rejects.toThrow(/Update requires appProjMap\/mappings\[\]/);
+  });
+
+  it("bulk appProjMap shape: valid entry passes preflight and reaches dispatch", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_app_project_mapping", "update", {
+      agent_id: "account.myagent",
+      resource_id: "team-a",
+      body: {
+        appProjMap: {
+          "team-a": { orgIdentifier: "default", projectIdentifier: "team-a-proj", autoCreateServiceEnv: false },
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.appProjMap["team-a"].autoCreateServiceEnv).toBe(false);
+  });
+
+  it("bulk appProjMap shape: entry missing autoCreateServiceEnv names the entry in the error", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "update", {
+        agent_id: "account.myagent",
+        resource_id: "team-a",
+        body: {
+          appProjMap: { "team-a": { orgIdentifier: "default", projectIdentifier: "team-a-proj" } },
+        },
+      }),
+    ).rejects.toThrow(/appProjMap\['team-a'\] requires autoCreateServiceEnv as boolean/);
+  });
+
+  it("bulk mappings[] shape: valid entry passes preflight and reaches dispatch", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_app_project_mapping", "update", {
+      agent_id: "account.myagent",
+      resource_id: "team-a",
+      body: {
+        mappings: [
+          { argoproject: "team-a", orgIdentifier: "default", projectIdentifier: "team-a-proj", autoCreateServiceEnv: true },
+        ],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.body.appProjMap["team-a"].autoCreateServiceEnv).toBe(true);
+  });
+
+  it("bulk mappings[] shape: entry missing autoCreateServiceEnv names the index in the error", async () => {
+    const client = makeClient(vi.fn());
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "update", {
+        agent_id: "account.myagent",
+        resource_id: "team-a",
+        body: {
+          mappings: [{ argoproject: "team-a", orgIdentifier: "default", projectIdentifier: "team-a-proj" }],
+        },
+      }),
+    ).rejects.toThrow(/mappings\[0\] requires autoCreateServiceEnv as boolean/);
+  });
+
+  it("preflight validates presence/type only — mismatched org/project still reaches dispatch (server's job to reject)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_app_project_mapping", "update", {
+      agent_id: "account.myagent",
+      resource_id: "team-a",
+      body: { orgIdentifier: "default", projectIdentifier: "wrong-project-xyz", autoCreateServiceEnv: true },
+    });
+
+    expect(mockRequest).toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// gitops_app_project_mapping create / delete / import dispatch
+//
+// Write/import HTTP shapes: assert path, body, and (for delete) always-on
+// mapping org/project query params; for import, per-call timeoutMs plumbing.
+// Thin client.request mocks — no server I/O.
+// ---------------------------------------------------------------------------
+
+describe("gitops_app_project_mapping create dispatch", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("create: POST .../appprojectsmapping with native appProjMap body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_app_project_mapping", "create", {
+      agent_id: "account.myagent",
+      resource_scope: "account",
+      body: {
+        appProjMap: {
+          "team-a": {
+            orgIdentifier: "default",
+            projectIdentifier: "team-a-proj",
+            autoCreateServiceEnv: true,
+          },
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/gitops/api/v1/agents/account.myagent/appprojectsmapping");
+    expect(call.body).toEqual({
+      appProjMap: {
+        "team-a": {
+          orgIdentifier: "default",
+          projectIdentifier: "team-a-proj",
+          autoCreateServiceEnv: true,
+        },
+      },
+    });
+  });
+
+  it("create: mappings[] ergonomic shape folds into appProjMap", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_app_project_mapping", "create", {
+      agent_id: "account.myagent",
+      resource_scope: "account",
+      body: {
+        mappings: [
+          {
+            argoproject: "team-b",
+            org: "default",
+            project: "team-b-proj",
+            autoCreateServiceEnv: false,
+          },
+        ],
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/gitops/api/v1/agents/account.myagent/appprojectsmapping");
+    expect(call.body.appProjMap).toEqual({
+      "team-b": {
+        orgIdentifier: "default",
+        projectIdentifier: "team-b-proj",
+        autoCreateServiceEnv: false,
+      },
+    });
+  });
+
+  it("create: empty body is rejected before any request is sent", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "create", {
+        agent_id: "account.myagent",
+        resource_scope: "account",
+        body: {},
+      }),
+    ).rejects.toThrow(/appProjMap OR mappings\[\]/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: project scope keeps agent org/project on query only, not mapping body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "gitops_app_project_mapping", "create", {
+      agent_id: "myagent",
+      resource_scope: "project",
+      org_id: "agent-org",
+      project_id: "agent-proj",
+      body: {
+        appProjMap: {
+          "team-a": { orgIdentifier: "mapped-org", projectIdentifier: "mapped-proj", autoCreateServiceEnv: true },
+        },
+      },
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params.orgIdentifier).toBe("agent-org");
+    expect(call.params.projectIdentifier).toBe("agent-proj");
+    expect(call.body).toEqual({
+      appProjMap: {
+        "team-a": {
+          orgIdentifier: "mapped-org",
+          projectIdentifier: "mapped-proj",
+          autoCreateServiceEnv: true,
+        },
+      },
+    });
+    expect(call.body.orgIdentifier).toBeUndefined();
+    expect(call.body.projectIdentifier).toBeUndefined();
+  });
+});
+
+describe("gitops_app_project_mapping delete dispatch", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("delete: path uses Argo name; query always carries mapping org/project", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    // resource_scope=account would normally omit org/project for agent Load —
+    // delete still must send the *mapping's* Harness org/project as query params.
+    await registry.dispatch(client, "gitops_app_project_mapping", "delete", {
+      agent_id: "account.myagent",
+      resource_id: "team-a",
+      resource_scope: "account",
+      org_id: "default",
+      project_id: "team-a-proj",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("DELETE");
+    expect(call.path).toBe("/gitops/api/v1/agents/account.myagent/appprojectsmapping/team-a");
+    expect(call.params.orgIdentifier).toBe("default");
+    expect(call.params.projectIdentifier).toBe("team-a-proj");
+  });
+
+  it("delete: missing mapping org/project is rejected before any request", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "gitops_app_project_mapping", "delete", {
+        agent_id: "account.myagent",
+        resource_id: "team-a",
+        resource_scope: "account",
+      }),
+    ).rejects.toThrow(/Missing required param\(s\).*org_id.*project_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("gitops_app_project_mapping import execute dispatch", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "gitops" }));
+  });
+
+  it("import: POST reconcile/import with projectNames and timeoutMs 120s", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      importRequestId: "507f1f77bcf86cd799439011",
+      applicationCount: 1,
+      reconcileAppResponse: {
+        autoCreateCounts: { serviceCount: 2, environmentCount: 1, clusterLinkCount: 0 },
+      },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatchExecute(client, "gitops_app_project_mapping", "import", {
+      agent_id: "account.myagent",
+      resource_scope: "account",
+      body: { projectNames: ["team-a", "team-b"] },
+    })) as Record<string, unknown>;
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("POST");
+    expect(call.path).toBe("/gitops/api/v1/agents/account.myagent/reconcile/import");
+    expect(call.body).toEqual({ projectNames: ["team-a", "team-b"] });
+    expect(call.timeoutMs).toBe(120_000);
+    expect(result.importRequestId).toBe("507f1f77bcf86cd799439011");
+    expect(result.applicationCount).toBe(1);
+    expect(result.autoCreateCounts).toEqual({
+      serviceCount: 2,
+      environmentCount: 1,
+      clusterLinkCount: 0,
+    });
+    expect(result.reconcileAppResponse).toBeUndefined();
+  });
+
+  it("import: omitted reconcileAppResponse yields zero autoCreateCounts", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      importRequestId: "abc",
+      applicationCount: 3,
+    });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatchExecute(client, "gitops_app_project_mapping", "import", {
+      agent_id: "account.myagent",
+      resource_scope: "account",
+      body: { projectNames: ["team-a"] },
+    })) as Record<string, unknown>;
+
+    expect(result.importRequestId).toBe("abc");
+    expect(result.autoCreateCounts).toEqual({
+      serviceCount: 0,
+      environmentCount: 0,
+      clusterLinkCount: 0,
+    });
+  });
+
+  it("import: empty projectNames is rejected before any request", async () => {
+    const mockRequest = vi.fn();
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "gitops_app_project_mapping", "import", {
+        agent_id: "account.myagent",
+        resource_scope: "account",
+        body: { projectNames: [] },
+      }),
+    ).rejects.toThrow(/body\.projectNames is required/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("import: EndpointSpec declares timeoutMs 120_000", () => {
+    const action = registry.getResource("gitops_app_project_mapping").executeActions?.import;
+    expect(action?.timeoutMs).toBe(120_000);
   });
 });

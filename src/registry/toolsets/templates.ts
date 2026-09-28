@@ -396,8 +396,15 @@ const templateV1UpdateSchema: BodySchema = {
   ],
 };
 
-const templateDeepLink =
-  "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/templates/{templateIdentifier}";
+const templateDeepLinkPrefix =
+  "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/templates";
+
+const templateDeepLink = `${templateDeepLinkPrefix}/{templateIdentifier}`;
+
+// v1 operations build their paths with pathBuilder, so the registry never sees a
+// `templateIdentifier` path param and resolves the identifier under the input
+// field name instead.
+const templateV1DeepLink = `${templateDeepLinkPrefix}/{template_id}`;
 
 export const templatesToolset: ToolsetDefinition = {
   name: "templates",
@@ -544,7 +551,7 @@ export const templatesToolset: ToolsetDefinition = {
       identifierFields: ["template_id"],
       searchAliases: ["v1 template", "unified template", "agent template", "template v1"],
       listFilterFields: templateV1ListFilterFields,
-      deepLinkTemplate: templateDeepLink,
+      deepLinkTemplate: templateV1DeepLink,
       operations: {
         list: {
           method: "GET",

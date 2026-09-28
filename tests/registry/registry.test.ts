@@ -646,17 +646,21 @@ describe("Registry", () => {
       });
       const client = makeClient(mockRequest);
 
+      const listInput = resourceType === "infrastructure" ? { environment_id: "my_env" } : {};
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "account",
+        ...listInput,
       });
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "org",
         org_id: "org-level",
+        ...listInput,
       });
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "project",
         org_id: "proj-org",
         project_id: "proj-level",
+        ...listInput,
       });
 
       const accountCall = mockRequest.mock.calls[0][0];
@@ -987,16 +991,17 @@ describe("Registry", () => {
       await prRegistry.dispatchExecute(client, "pull_request", "close", {
         repo_id: "my-repo",
         pr_number: "42",
+        body: { is_draft: false },
       });
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
       expect(call.method).toBe("POST");
       expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
-      expect(call.body).toEqual({ state: "closed" });
+      expect(call.body).toEqual({ state: "closed", is_draft: false });
     });
 
-    it("pipeline execute sends pipeline_branch as ?pipelineBranchName= query param", async () => {
+    it("pipeline execute sends pipeline_branch as ?branch= query param", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-123" } });
       const client = makeClient(mockRequest);
 
@@ -1009,10 +1014,23 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.method).toBe("POST");
       expect(call.path).toContain("/pipeline/api/pipeline/execute/my-pipeline");
-      expect(call.params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+      expect(call.params).toMatchObject({ branch: "feature/my-fix" });
     });
 
-    it("pipeline execute omits pipelineBranchName when pipeline_branch not provided", async () => {
+    it("pipeline execute gives pipeline_branch precedence over the branch alias", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-123" } });
+      await registry.dispatchExecute(makeClient(mockRequest), "pipeline", "run", {
+        pipeline_id: "my-pipeline",
+        branch: "feature/alias",
+        pipeline_branch: "feature/definition",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params).toMatchObject({ branch: "feature/definition" });
+      expect(call.params).not.toHaveProperty("pipelineBranchName");
+    });
+
+    it("pipeline execute omits branch when pipeline_branch not provided", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-456" } });
       const client = makeClient(mockRequest);
 
@@ -1022,10 +1040,10 @@ describe("Registry", () => {
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
-      expect(call.params?.pipelineBranchName).toBeUndefined();
+      expect(call.params?.branch).toBeUndefined();
     });
 
-    it("pipeline execute omits pipelineBranchName when pipeline_branch is empty string", async () => {
+    it("pipeline execute omits branch when pipeline_branch is empty string", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-789" } });
       const client = makeClient(mockRequest);
 
@@ -1036,7 +1054,7 @@ describe("Registry", () => {
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
-      expect(call.params?.pipelineBranchName).toBeUndefined();
+      expect(call.params?.branch).toBeUndefined();
     });
 
     it("pipeline execute sends both pipeline_branch and inputs.branch independently", async () => {
@@ -1046,15 +1064,15 @@ describe("Registry", () => {
       await registry.dispatchExecute(client, "pipeline", "run", {
         pipeline_id: "my-pipeline",
         pipeline_branch: "feature/my-fix",
-        inputs: { branch: "feature/my-fix" },
+        inputs: { branch: "feature/application-code" },
       });
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
       // pipeline_branch → URL query param (which git branch loads the pipeline YAML)
-      expect(call.params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+      expect(call.params).toMatchObject({ branch: "feature/my-fix" });
       // inputs.branch → body build structure (which code branch the CI job checks out)
-      expect(JSON.stringify(call.body)).toContain("feature/my-fix");
+      expect(JSON.parse(call.body)).toEqual({ branch: "feature/application-code" });
     });
 
     it("pipeline update with yamlPipeline sends raw YAML string as body with Content-Type header and returns openInHarness", async () => {
@@ -1566,6 +1584,371 @@ describe("Registry", () => {
     });
   });
 
+  describe("registry create and update", () => {
+    let registriesRegistry: Registry;
+    beforeEach(() => {
+      registriesRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries" }));
+    });
+
+    it("create: exact path is POST /har/api/v1/registry?space_ref=test-account%2Fdefault%2Ftest-project%2F%2B", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "my-docker" } });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "create", {
+        body: {
+          identifier: "my-docker",
+          packageType: "DOCKER",
+          isPublic: false,
+          config: { type: "VIRTUAL", upstreamProxies: [] },
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      // space_ref must include the trailing /+ sentinel
+      expect(call.path).toBe("/har/api/v1/registry?space_ref=test-account%2Fdefault%2Ftest-project%2F%2B");
+    });
+
+    it("create: parentRef is auto-derived from config scope and not required from agent", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "r1" } });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "create", {
+        body: { identifier: "r1", packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      // parentRef must be auto-filled, not missing
+      expect(call.body.parentRef).toBe("test-account/default/test-project");
+    });
+
+    it("create: org_id/project_id inputs flow into both space_ref and parentRef", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "r1" } });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "create", {
+        org_id: "custom-org",
+        project_id: "custom-proj",
+        body: { identifier: "r1", packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toContain("custom-org");
+      expect(call.path).toContain("custom-proj");
+      expect(call.body.parentRef).toBe("test-account/custom-org/custom-proj");
+    });
+
+    it("create: scope fields (orgIdentifier, projectIdentifier) are NOT injected into the body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "create", {
+        body: { identifier: "r1", packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("create: response is unwrapped from { status, data } envelope", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { identifier: "r1", packageType: "NPM", isPublic: false },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registriesRegistry.dispatch(client, "registry", "create", {
+        body: { identifier: "r1", packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } },
+      }) as Record<string, unknown>;
+
+      // ngExtract must unwrap data — the outer `status` key must not appear
+      expect(result.identifier).toBe("r1");
+      expect(result.status).toBeUndefined();
+    });
+
+    it("update: exact path is PUT /har/api/v1/registry/{spaceRef}/{registryId}/+", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { identifier: "my-docker" } });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "update", {
+        registry_id: "my-docker",
+        body: { identifier: "my-docker", packageType: "DOCKER", isPublic: true, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/har/api/v1/registry/test-account/default/test-project/my-docker/+");
+    });
+
+    it("update: scope fields (orgIdentifier, projectIdentifier) are NOT injected into the body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "update", {
+        registry_id: "my-docker",
+        body: { identifier: "my-docker", packageType: "DOCKER", isPublic: true, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("update: parentRef is auto-derived when not provided", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await registriesRegistry.dispatch(client, "registry", "update", {
+        registry_id: "my-docker",
+        body: { identifier: "my-docker", packageType: "DOCKER", isPublic: true, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.parentRef).toBe("test-account/default/test-project");
+    });
+
+    it("update: response is unwrapped from { status, data } envelope", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { identifier: "my-docker", packageType: "DOCKER" },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registriesRegistry.dispatch(client, "registry", "update", {
+        registry_id: "my-docker",
+        body: { identifier: "my-docker", packageType: "DOCKER", isPublic: true, config: { type: "VIRTUAL" } },
+      }) as Record<string, unknown>;
+
+      expect(result.identifier).toBe("my-docker");
+      expect(result.status).toBeUndefined();
+    });
+
+    it("create: parentRef uses accountIdResolver-resolved account, not static config", async () => {
+      // Simulate a multi-tenant deployment where the effective account ID differs per request.
+      const dynamicRegistry = new Registry(
+        makeConfig({ HARNESS_ACCOUNT_ID: "static-account" }),
+        { accountIdResolver: () => "resolved-account" },
+      );
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await dynamicRegistry.dispatch(client, "registry", "create", {
+        body: { identifier: "r1", packageType: "NPM", isPublic: false, config: { type: "VIRTUAL" } },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      // parentRef must use the resolved account, not the static config account
+      expect(call.body.parentRef).toMatch(/^resolved-account\//);
+      expect(call.body.parentRef).not.toMatch(/^static-account\//);
+    });
+
+    it("get: response is unwrapped from { status, data } envelope", async () => {
+      const registriesRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries" }));
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { identifier: "my-reg", packageType: "DOCKER", isPublic: false },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await registriesRegistry.dispatch(client, "registry", "get", {
+        registry_id: "my-reg",
+      }) as Record<string, unknown>;
+
+      // ngExtract must unwrap — identifier should be at top level, status must not appear
+      expect(result.identifier).toBe("my-reg");
+      expect(result.status).toBeUndefined();
+    });
+
+    it("bodySchema enforcement: create and update both have bodySchema with required fields", () => {
+      const def = registriesRegistry.getResource("registry");
+      const createFields = def.operations.create?.bodySchema?.fields ?? [];
+      const updateFields = def.operations.update?.bodySchema?.fields ?? [];
+      expect(createFields.length).toBeGreaterThan(0);
+      expect(updateFields.length).toBeGreaterThan(0);
+      // No top-level `type` field — registry kind lives in config.type
+      expect(createFields.map(f => f.name)).not.toContain("type");
+      // config must be present (drives VIRTUAL/UPSTREAM)
+      expect(createFields.map(f => f.name)).toContain("config");
+    });
+  });
+
+  describe("quarantine update (PUT)", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries" }));
+    });
+
+    it("exact path is PUT /har/api/v1/registry/{spaceRef}/{registryId}/+/quarantine", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { artifact: "nginx" } });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/har/api/v1/registry/test-account/default/test-project/my-reg/+/quarantine");
+    });
+
+    it("scope fields (orgIdentifier, projectIdentifier) are NOT injected into the body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("response is unwrapped from { status, data } envelope", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { artifact: "nginx", filePath: "/etc/passwd" },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      }) as Record<string, unknown>;
+
+      expect(result.artifact).toBe("nginx");
+      expect(result.status).toBeUndefined();
+    });
+
+    it("update risk is medium_write with safe retry (PUT is idempotent)", () => {
+      const def = reg.getResource("quarantine");
+      expect(def.operations.update?.operationPolicy?.risk).toBe("medium_write");
+      expect(def.operations.update?.operationPolicy?.retryPolicy).toBe("safe");
+    });
+
+    it("delete (unquarantine) sends DELETE to the quarantine path with artifact query param", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS" });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "delete", {
+        registry_id: "my-reg",
+        artifact: "nginx",
+        version: "1.25.0",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("DELETE");
+      expect(call.path).toBe("/har/api/v1/registry/test-account/default/test-project/my-reg/+/quarantine");
+      expect(call.params?.artifact).toBe("nginx");
+      expect(call.params?.version).toBe("1.25.0");
+    });
+
+    it("delete risk is destructive (per structural validation rule for all deletes)", () => {
+      const def = reg.getResource("quarantine");
+      expect(def.operations.delete?.operationPolicy?.risk).toBe("destructive");
+    });
+  });
+
+  describe("firewall_exception_v3 create", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+    });
+
+    it("exact path is POST /har/api/v3/scans/exceptions", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ exceptionId: "exc-1", status: "PENDING" });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: {
+          registryId: "reg-uuid-123",
+          packageName: "lodash",
+          businessJustification: "Required for build process",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/har/api/v3/scans/exceptions");
+    });
+
+    it("org_identifier and project_identifier are NOT sent in body or query params", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: { registryId: "reg-uuid-123", packageName: "lodash", businessJustification: "needed" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      // body must not carry scope fields
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+      // query string: only account_identifier — create is account-scoped only
+      expect(call.params?.account_identifier).toBe("test-account");
+      expect(call.params?.org_identifier).toBeUndefined();
+      expect(call.params?.project_identifier).toBeUndefined();
+    });
+
+    it("bodySchema has registryId, packageName, businessJustification as required fields", () => {
+      const def = reg.getResource("firewall_exception_v3");
+      const fields = def.operations.create?.bodySchema?.fields ?? [];
+      const required = fields.filter(f => f.required).map(f => f.name);
+      expect(required).toContain("registryId");
+      expect(required).toContain("packageName");
+      expect(required).toContain("businessJustification");
+    });
+
+    it("response is passed through as-is (no data envelope unwrap)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        exceptionId: "exc-abc",
+        status: "PENDING",
+        packageName: "lodash",
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: { registryId: "reg-uuid-123", packageName: "lodash", businessJustification: "needed" },
+      }) as Record<string, unknown>;
+
+      expect(result.exceptionId).toBe("exc-abc");
+      expect(result.status).toBe("PENDING");
+    });
+  });
+
+  describe("firewall_exception_v3 list scope", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+    });
+
+    it("list does not leak org/project when neither is passed", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { exceptions: [], itemCount: 0 } });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "list", {});
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params?.org_identifier).toBeUndefined();
+      expect(call.params?.project_identifier).toBeUndefined();
+      expect(call.params?.account_identifier).toBe("test-account");
+    });
+
+    it("list forwards explicit org_id as org_identifier", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { exceptions: [], itemCount: 0 } });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "list", { org_id: "my-org", project_id: "my-proj" });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params?.org_identifier).toBe("my-org");
+      expect(call.params?.project_identifier).toBe("my-proj");
+    });
+  });
+
   describe("ELK→Mongo fallback", () => {
     let registry: Registry;
     beforeEach(() => {
@@ -1868,7 +2251,7 @@ describe("Registry", () => {
       expect(call.path).toBe("/ccm/api/business-mapping/cat-uuid-123");
     });
 
-    it("cost_recommendation list sends default body when no filters provided", async () => {
+    it("cost_recommendation list sends Open-tab default body when no filters provided", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
       const client = makeClient(mockRequest);
 
@@ -1878,14 +2261,17 @@ describe("Registry", () => {
       expect(call.path).toBe("/ccm/api/recommendation/overview/list");
       expect(call.body).toEqual({
         filterType: "CCMRecommendation",
-        minSaving: 0,
+        minSaving: 1,
         daysBack: 4,
         offset: 0,
-        limit: 20,
+        limit: 10,
+        sortBy: "MONTHLY_SAVING",
+        sortOrder: "DESCENDING",
+        k8sRecommendationFilterPropertiesDTO: { recommendationStates: ["OPEN"] },
       });
     });
 
-    it("cost_recommendation list passes cost_category and cost_buckets as costCategoryDTOs", async () => {
+    it("cost_recommendation list passes cost_category and cost_buckets as costCategoryDTOs alongside Open defaults", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
       const client = makeClient(mockRequest);
 
@@ -1898,6 +2284,11 @@ describe("Registry", () => {
       expect(call.body.costCategoryDTOs).toEqual([
         { costCategory: "AI Platform team", costBucket: "GCP QA" },
       ]);
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["OPEN"],
+      });
+      expect(call.body.minSaving).toBe(1);
+      expect(call.body.daysBack).toBe(4);
     });
 
     it("cost_recommendation list passes recommendation_states as k8sRecommendationFilterPropertiesDTO", async () => {
@@ -1928,6 +2319,46 @@ describe("Registry", () => {
       expect(call.body.sortOrder).toBe("DESCENDING");
     });
 
+    it("cost_recommendation list maps harness_list size onto body limit", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        size: 50,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.limit).toBe(50);
+      expect(call.body.offset).toBe(0);
+    });
+
+    it("cost_recommendation list prefers explicit limit over size", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        size: 50,
+        limit: 25,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.limit).toBe(25);
+    });
+
+    it("cost_recommendation list maps harness_list page onto offset using limit", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        size: 50,
+        page: 2,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.limit).toBe(50);
+      expect(call.body.offset).toBe(100);
+    });
+
     it("cost_recommendation list uses days_back override", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
       const client = makeClient(mockRequest);
@@ -1952,6 +2383,99 @@ describe("Registry", () => {
       expect(call.body.costCategoryDTOs).toBeUndefined();
     });
 
+    it("cost_recommendation list ignores applied_at filters on OPEN", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        applied_at_start: 1786386600000,
+        applied_at_end: 1789064999999,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.baseRecommendationFilterPropertiesDTO).toBeUndefined();
+      expect(call.body.daysBack).toBe(4);
+    });
+
+    it("cost_recommendation list Applied-only omits daysBack and sends appliedAt window", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        recommendation_states: "APPLIED",
+        applied_at_start: 1786386600000,
+        applied_at_end: 1789064999999,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.daysBack).toBeUndefined();
+      expect(call.body.minSaving).toBe(0);
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["APPLIED"],
+      });
+      expect(call.body.baseRecommendationFilterPropertiesDTO).toEqual({
+        appliedAtStartTime: 1786386600000,
+        appliedAtEndTime: 1789064999999,
+      });
+    });
+
+    it("cost_recommendation list expands IGNORED to include TEMPORARILY_IGNORED", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        recommendation_states: "IGNORED",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.daysBack).toBe(4);
+      expect(call.body.minSaving).toBe(1);
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["IGNORED", "TEMPORARILY_IGNORED"],
+      });
+    });
+
+    it("cost_recommendation list passes resource_types on the k8s filter DTO", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        resource_types: "NODE_POOL",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
+        recommendationStates: ["OPEN"],
+        resourceTypes: ["NODE_POOL"],
+      });
+    });
+
+    it("cost_recommendation list honors min_saving 0 override", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { items: [] } });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "list", {
+        min_saving: 0,
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.minSaving).toBe(0);
+    });
+
+    it("cost_recommendation get includes daysBack 4 on the GraphQL filter", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation", "get", {
+        perspective_id: "view-1",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.path).toBe("/ccm/api/graphql");
+      expect(call.body.variables.filter.daysBack).toBe(4);
+      expect(call.body.variables.filter.minSaving).toBe(1);
+    });
+
     it("cost_recommendation_count get sends default body when no filters provided", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ data: 42 });
       const client = makeClient(mockRequest);
@@ -1962,8 +2486,9 @@ describe("Registry", () => {
       expect(call.path).toBe("/ccm/api/recommendation/overview/count");
       expect(call.body).toEqual({
         filterType: "CCMRecommendation",
-        minSaving: 0,
+        minSaving: 1,
         daysBack: 4,
+        k8sRecommendationFilterPropertiesDTO: { recommendationStates: ["OPEN"] },
       });
     });
 
@@ -1997,8 +2522,9 @@ describe("Registry", () => {
       expect(call.path).toBe("/ccm/api/recommendation/overview/stats");
       expect(call.body).toEqual({
         filterType: "CCMRecommendation",
-        minSaving: 0,
+        minSaving: 1,
         daysBack: 4,
+        k8sRecommendationFilterPropertiesDTO: { recommendationStates: ["OPEN"] },
       });
     });
 
@@ -2041,6 +2567,30 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.body.k8sRecommendationFilterPropertiesDTO).toEqual({
         recommendationStates: ["OPEN"],
+      });
+    });
+
+    it("cost_recommendation_stats Applied-only omits daysBack and keeps cost category filters", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: {} });
+      const client = makeClient(mockRequest);
+
+      await registry.dispatch(client, "cost_recommendation_stats", "get", {
+        recommendation_states: "APPLIED",
+        applied_at_start: 1786386600000,
+        applied_at_end: 1789064999999,
+        cost_category: "Teams",
+        cost_buckets: "Engineering",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.daysBack).toBeUndefined();
+      expect(call.body.minSaving).toBe(0);
+      expect(call.body.costCategoryDTOs).toEqual([
+        { costCategory: "Teams", costBucket: "Engineering" },
+      ]);
+      expect(call.body.baseRecommendationFilterPropertiesDTO).toEqual({
+        appliedAtStartTime: 1786386600000,
+        appliedAtEndTime: 1789064999999,
       });
     });
 

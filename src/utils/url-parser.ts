@@ -27,6 +27,12 @@ export interface ParsedHarnessUrl {
   store_type?: string;
   connector_ref?: string;
   repo_name?: string;
+  /** File path inside a Harness Code repo (from `.../files/{ref}/~/{path}`). */
+  path?: string;
+  /** Git ref for Code file/content URLs (from `.../files/{ref}/` or `git_ref`/`gitRef` query). */
+  git_ref?: string;
+  /** Branch name from a Code files URL (`.../files/{ref}`), for resource_type=branch. */
+  branch_name?: string;
   /** RMG release id — UUID from search or UI URL slug (identifier-version hash). */
   release_id?: string;
 }
@@ -104,6 +110,8 @@ const URL_RESOURCE_SCOPE_TYPES = new Set([
   "secret",
   "template",
   "file_store",
+  "user",
+  "user_group",
 ]);
 
 /** Structural segments that should never be treated as resource IDs */
@@ -116,10 +124,40 @@ const STRUCTURAL = new Set([
  * string like `/ng/account/<id>/...`. parseHarnessUrl never reads `url.host` /
  * `url.origin` / `url.protocol`; it walks `url.pathname` and `url.searchParams`
  * only. Using an explicitly fake host makes it clear in code review that the
- * host is not consulted and the parser is cluster-agnostic (prod0 / eu1 /
- * harness0 / self-managed / vanity hosts all parse identically).
+ * host is not consulted and the parser is host-agnostic (SaaS, vanity, and
+ * self-managed hosts all parse identically).
  */
 const PLACEHOLDER_BASE = "https://harness.invalid";
+
+function applyCodeFileUrl(segments: string[], result: ParsedHarnessUrl): void {
+  const reposIdx = Math.max(segments.lastIndexOf("repos"), segments.lastIndexOf("repositories"));
+  if (reposIdx < 0) return;
+  const filesIdx = segments.indexOf("files", reposIdx + 1);
+  if (filesIdx < 0 || filesIdx + 1 >= segments.length) return;
+
+  const tildeIdx = segments.indexOf("~", filesIdx + 1);
+  const refEnd = tildeIdx >= 0 ? tildeIdx : segments.length;
+  const gitRef = segments
+    .slice(filesIdx + 1, refEnd)
+    .map((segment) => decodeURIComponent(segment))
+    .filter(Boolean)
+    .join("/");
+  if (!gitRef || STRUCTURAL.has(gitRef) || RESOURCE_SEGMENTS[gitRef]) return;
+
+  const path = tildeIdx >= 0
+    ? segments.slice(tildeIdx + 1).map((segment) => decodeURIComponent(segment)).filter(Boolean).join("/")
+    : "";
+
+  result.resource_type = "file_content";
+  result.git_ref = gitRef;
+  result.branch_name = gitRef;
+  result.path = path;
+  if (path) {
+    result.resource_id = path;
+  } else {
+    delete result.resource_id;
+  }
+}
 
 /**
  * Parse a Harness UI URL and extract identifiers.
@@ -222,6 +260,9 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
     }
   }
 
+  // Code file browser: .../repos/{repo}/files/{gitRef} and .../files/{gitRef}/~/{path}
+  applyCodeFileUrl(segments, result);
+
   // 7. AI Worker Agents (ai-agents module):
   // List:  .../all/ai-agents/orgs/{org}/projects/{project}/worker-agents
   // Detail: .../worker-agents/{agentId}
@@ -317,6 +358,9 @@ export function parseHarnessUrl(urlStr: string): ParsedHarnessUrl {
   const branch = url.searchParams.get("branch");
   if (branch) result.branch = branch;
 
+  const gitRefQuery = url.searchParams.get("git_ref") ?? url.searchParams.get("gitRef");
+  if (gitRefQuery && !result.git_ref) result.git_ref = gitRefQuery;
+
   const storeType = url.searchParams.get("storeType");
   if (storeType) result.store_type = storeType;
 
@@ -352,6 +396,9 @@ const MERGEABLE_FIELDS: (keyof ParsedHarnessUrl)[] = [
   "store_type",
   "connector_ref",
   "repo_name",
+  "path",
+  "git_ref",
+  "branch_name",
   "release_id",
 ];
 
@@ -414,8 +461,17 @@ export function applyUrlDefaults(
     hasWorkspaceId &&
     declaredResourceType?.startsWith("fme_") === true &&
     !FME_HARNESS_NATIVE_ONLY_RESOURCE_TYPES.has(declaredResourceType);
+  // Files URLs set resource_id to the file path. That is only the identifier for
+  // file_content — copying it onto an overridden type (e.g. branch) collides with
+  // branch_name in harness_delete / harness_update.
+  const callerResourceType = typeof args.resource_type === "string" ? args.resource_type : "";
+  const skipFilePathResourceId =
+    parsed.resource_type === "file_content" &&
+    callerResourceType !== "" &&
+    callerResourceType !== "file_content";
   for (const field of MERGEABLE_FIELDS) {
     if (skipOrgProjectFromUrl && (field === "org_id" || field === "project_id")) continue;
+    if (skipFilePathResourceId && field === "resource_id") continue;
     if ((merged[field] === undefined || merged[field] === "") && parsed[field] !== undefined) {
       merged[field] = parsed[field];
     }

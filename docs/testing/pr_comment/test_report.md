@@ -11,18 +11,18 @@
 
 ## Important Note
 
-**The `list` operation was removed from `pr_comment`.** The Harness Code API does not have a GET endpoint for listing comments directly. To list comments, use `pr_activity` with `kind='comment'` filter:
+**The `list` operation was removed from `pr_comment`.** Use `pr_activity` with a `type` filter to list both general comments and inline PR comments:
 
 ```
-harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_number":4, "kind":"comment"}, org_id="AI_Devops", project_id="Sanity")
+harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_number":4, "type":["comment","code-comment"]}, org_id="AI_Devops", project_id="Sanity")
 ```
 
 ## Test Results
 
 | Test ID | Description | Prompt | Expected Result | Status | Actual Result | Notes |
 |---------|-------------|--------|-----------------|--------|---------------|-------|
-| TC-prc-001 | List all comments on a PR | Use `pr_activity` with `kind="comment"` | Returns list of comments via activities | ✅ Passed | 2 comments returned via pr_activity | Re-tested 2026-03-23 |
-| TC-prc-002 | List comments on PR with no comments | Use `pr_activity` with `kind="comment"` | Returns empty list | ⬜ Pending | | See pr_activity |
+| TC-prc-001 | List all comments on a PR | Use `pr_activity` with `type=["comment","code-comment"]` | Returns list of comments via activities | ⬜ Pending | | See pr_activity |
+| TC-prc-002 | List comments on PR with no comments | Use `pr_activity` with `type=["comment","code-comment"]` | Returns empty list | ⬜ Pending | | See pr_activity |
 | TC-prc-003 | Add a general comment | `harness_create(resource_type="pr_comment", params={"repo_id":"test-mcp", "pr_number":1}, body={"text":"Looks good!"}, org_id="AI_Devops", project_id="Sanity")` | Creates general PR comment, returns comment details | ⬜ Pending | | |
 | TC-prc-004 | Add a markdown comment | `harness_create(resource_type="pr_comment", params={"repo_id":"test-mcp", "pr_number":1}, body={"text":"## Review\n- Fix typo"}, org_id="AI_Devops", project_id="Sanity")` | Creates comment with markdown formatting | ⬜ Pending | | |
 | TC-prc-005 | Add an inline code comment | `harness_create(resource_type="pr_comment", params={"repo_id":"test-mcp", "pr_number":1}, body={"text":"Use constant", "path":"src/utils.ts", "line_new":42}, org_id="AI_Devops", project_id="Sanity")` | Creates inline code comment on specific file and line | ⬜ Pending | | |
@@ -50,13 +50,13 @@ harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_num
 
 ## Fixes Applied
 
-1. **Removed `list` operation** - The Harness Code API doesn't have a GET endpoint for `/comments`. Comments must be listed via `pr_activity` with `kind='comment'` filter.
+1. **Removed `list` operation** - Comments are listed via `pr_activity` with `type=["comment","code-comment"]` filter.
 
 ## Sample Responses
 
 ### List Comments via pr_activity
 ```
-harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_number":4, "kind":"comment"}, org_id="AI_Devops", project_id="Sanity")
+harness_list(resource_type="pr_activity", params={"repo_id":"test-mcp", "pr_number":4}, filters={"type":["comment","code-comment"]}, org_id="AI_Devops", project_id="Sanity")
 ```
 ```json
 [{

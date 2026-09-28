@@ -49,11 +49,12 @@ export function bundlePackageJson(packageJson) {
     ...Object.keys(packageJson.dependencies ?? {}),
     ...Object.keys(packageJson.optionalDependencies ?? {}),
   ]);
-  const overrides = Object.fromEntries(
+  const transitiveOverrides = Object.fromEntries(
     Object.entries(packageJson.pnpm?.overrides ?? {}).filter(
       ([name]) => !directDependencies.has(name),
     ),
   );
+  const overrides = { ...transitiveOverrides, ...(packageJson.overrides ?? {}) };
 
   return {
     name: packageJson.name,

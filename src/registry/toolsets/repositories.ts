@@ -1,15 +1,60 @@
-import type { ToolsetDefinition } from "../types.js";
-import { fileContentGetExtract, passthrough } from "../extractors.js";
+import type { ParamsSchema, PreflightContext, ToolsetDefinition } from "../types.js";
+import { fileContentGetExtract, fileContentListExtract, passthrough } from "../extractors.js";
 import { assertValidBase64 } from "../../utils/base64.js";
 import { isRecord } from "../../utils/type-guards.js";
 
+const COMMIT_ACTIONS_NEEDING_FILE_BYTES = new Set(["CREATE", "UPDATE"]);
+
+function commitActionType(actionType: unknown): string {
+  return typeof actionType === "string" ? actionType.toUpperCase() : "";
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+type ResolvedCommitPayload = { payload: string; encoding?: string };
+
 /**
- * Validate base64-declared commit file payloads client-side, and normalize
- * away embedded whitespace. Harness Code's commit-files endpoint rejects
- * embedded whitespace/newlines in `encoding: "base64"` payloads outright,
- * with an opaque Internal (500-style) error rather than a clean 400 — so
- * payload whitespace must be stripped here too, or a payload that validates
- * fine client-side would still fail server-side.
+ * Agents often put file bytes on `content` / `text` because
+ * `file_content` GET returns `content.text` / `content.data`. Harness Code
+ * only persists `payload` — a missing UPDATE payload writes Git's empty blob
+ * and wipes the file. Empty `payload` must not shadow those aliases.
+ *
+ * Not used for MOVE: Code treats MOVE payload as the destination path
+ * (new path, optionally followed by NUL and replacement bytes), not file bytes.
+ */
+function resolveCommitActionPayload(action: Record<string, unknown>): ResolvedCommitPayload | undefined {
+  const payload = nonEmptyString(action.payload);
+  if (payload !== undefined) return { payload };
+
+  const content = nonEmptyString(action.content);
+  if (content !== undefined) return { payload: content };
+
+  const text = nonEmptyString(action.text);
+  if (text !== undefined) return { payload: text };
+
+  const nested = isRecord(action.content) ? action.content : undefined;
+  if (!nested) return undefined;
+
+  const nestedText = nonEmptyString(nested.text);
+  if (nestedText !== undefined) {
+    return { payload: nestedText, encoding: nonEmptyString(nested.encoding) };
+  }
+
+  const nestedData = nonEmptyString(nested.data);
+  if (nestedData !== undefined) {
+    return { payload: nestedData, encoding: nonEmptyString(nested.encoding) ?? "base64" };
+  }
+  return undefined;
+}
+
+/**
+ * Shape commit-file actions for Harness Code:
+ * - copy `content`/`text` onto payload for CREATE/UPDATE when payload is empty
+ * - reject omitted CREATE payload and empty UPDATE payload (that would wipe)
+ * - leave MOVE/DELETE payload alone (MOVE payload is the destination path)
+ * - validate and strip whitespace from `encoding: "base64"` payloads
  */
 function buildCommitFilesBody(input: Record<string, unknown>): unknown {
   const body = input.body;
@@ -18,14 +63,229 @@ function buildCommitFilesBody(input: Record<string, unknown>): unknown {
   if (!Array.isArray(actions)) return body;
 
   const normalizedActions = actions.map((action, index) => {
-    if (!isRecord(action) || action.encoding !== "base64" || typeof action.payload !== "string") {
-      return action;
+    if (!isRecord(action)) return action;
+
+    const field = `body.actions[${index}]`;
+    const actionType = commitActionType(action.action);
+    const next: Record<string, unknown> = { ...action };
+
+    if (COMMIT_ACTIONS_NEEDING_FILE_BYTES.has(actionType)) {
+      const resolved = resolveCommitActionPayload(action);
+      delete next.content;
+      delete next.text;
+      if (resolved) {
+        next.payload = resolved.payload;
+        if (resolved.encoding !== undefined && nonEmptyString(next.encoding) === undefined) {
+          next.encoding = resolved.encoding;
+        }
+      }
+
+      if (actionType === "UPDATE" && (typeof next.payload !== "string" || next.payload.length === 0)) {
+        throw new Error(
+          `${field}.payload is required for UPDATE (file content). ` +
+            `Pass payload, or content/text (aliases). An omitted payload commits an empty file.`,
+        );
+      }
+      if (actionType === "CREATE" && typeof next.payload !== "string") {
+        throw new Error(
+          `${field}.payload is required for CREATE (file content). ` +
+            `Pass payload, or content/text (aliases). An omitted payload commits an empty file.`,
+        );
+      }
     }
-    const normalizedPayload = assertValidBase64(action.payload, `body.actions[${index}].payload`);
-    return { ...action, payload: normalizedPayload };
+
+    if (next.encoding !== "base64" || typeof next.payload !== "string") {
+      return next;
+    }
+    next.payload = assertValidBase64(next.payload, `${field}.payload`);
+    return next;
   });
 
   return { ...body, actions: normalizedActions };
+}
+
+/**
+ * Content, blame, branch, tag, and diff URLs use a multi-segment path after
+ * /content/, /blame/, /branches/, /tags/, or /diff/. Encoding the whole value
+ * with encodeURIComponent turns feature/foo into feature%2Ffoo, which the API
+ * treats as one segment and 404s. Encode each segment instead. Empty path is
+ * the repo root (`/content`).
+ */
+export function normalizeCodeFilePath(path: string): string {
+  const trimmed = path.trim().replaceAll("\\", "/");
+  if (trimmed === "" || trimmed === "." || trimmed === "./") return "";
+  return trimmed.replace(/^\/+/u, "").replace(/\/+$/u, "").replace(/\/{2,}/gu, "/");
+}
+
+function encodeCodePathSegments(path: string): string {
+  const normalized = normalizeCodeFilePath(path);
+  if (normalized === "") return "";
+  return normalized.split("/").map((segment) => encodeURIComponent(segment)).join("/");
+}
+
+function requireCodeRepoId(input: Record<string, unknown>, resourceType: string): string {
+  const repoId = nonEmptyString(input.repo_id);
+  if (!repoId) {
+    throw new Error(
+      `Missing required field "repo_id" for ${resourceType}. Pass params.repo_id or a Harness Code URL.`,
+    );
+  }
+  return repoId;
+}
+
+function aliasIfMissing(input: Record<string, unknown>, target: string, sources: readonly string[]): void {
+  if (nonEmptyString(input[target])) return;
+  for (const source of sources) {
+    const value = nonEmptyString(input[source]);
+    if (value) {
+      input[target] = value;
+      return;
+    }
+  }
+}
+
+/**
+ * Build `/code/api/v1/repos/{repo}/{collection}[/{path}]`.
+ * Empty path is allowed only when `allowEmptyPath` is true (repo-root content).
+ */
+function buildCodeRepoPath(
+  input: Record<string, unknown>,
+  opts: {
+    resourceType: string;
+    collection: string;
+    pathField: string;
+    allowEmptyPath?: boolean;
+    emptyPathError?: string;
+  },
+): string {
+  const repoId = encodeURIComponent(requireCodeRepoId(input, opts.resourceType));
+  const value = input[opts.pathField];
+  const raw = typeof value === "string" ? value : "";
+  const encodedPath = encodeCodePathSegments(raw);
+  if (encodedPath === "" && !opts.allowEmptyPath) {
+    throw new Error(
+      opts.emptyPathError ??
+        `Missing required field "${opts.pathField}" for ${opts.resourceType}.`,
+    );
+  }
+  const base = `/code/api/v1/repos/${repoId}/${opts.collection}`;
+  return encodedPath ? `${base}/${encodedPath}` : base;
+}
+
+/** Alias URL `branch` onto Code's `git_ref` and normalize `path` before dispatch. */
+export async function fileContentPreflight({ input }: PreflightContext): Promise<void> {
+  aliasIfMissing(input, "git_ref", ["branch"]);
+  if (typeof input.path === "string") {
+    input.path = normalizeCodeFilePath(input.path);
+  }
+}
+
+/** Alias Code files-URL `git_ref` / `branch` onto `branch_name` before get/delete. */
+export async function branchPreflight({ input }: PreflightContext): Promise<void> {
+  aliasIfMissing(input, "branch_name", ["git_ref", "branch"]);
+}
+
+const REPO_ID_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "repo_id", required: true, description: "Repository slug (e.g. \"my-repo\")." },
+  ],
+};
+
+const REPO_BRANCH_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_ID_PARAMS.fields,
+    {
+      name: "branch_name",
+      required: false,
+      description:
+        "Branch name. Required unless git_ref or branch is set (those alias onto this field).",
+    },
+  ],
+};
+
+const REPO_TAG_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_ID_PARAMS.fields,
+    {
+      name: "tag_name",
+      required: true,
+      description: "Tag name.",
+    },
+  ],
+};
+
+const COMMIT_DIFF_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_ID_PARAMS.fields,
+    {
+      name: "range",
+      required: true,
+      description: "Diff range as 'base..head' (e.g. main..feature-branch).",
+    },
+  ],
+};
+
+const FILE_CONTENT_GET_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_ID_PARAMS.fields,
+    {
+      name: "path",
+      required: false,
+      description:
+        "File or directory path relative to the repo root. Omit or pass empty for the root listing. No leading slash. Nested paths use slashes (src/index.ts).",
+    },
+    {
+      name: "git_ref",
+      required: false,
+      description:
+        "Branch, tag, or commit SHA. Omit to use the repository default branch — do not guess main.",
+    },
+    { name: "include_commit", required: false, description: "If true, include latest_commit on the tree node." },
+    {
+      name: "flatten_directories",
+      required: false,
+      description: "If true, flatten directories that contain a single subdirectory.",
+    },
+  ],
+};
+
+const FILE_CONTENT_LIST_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_ID_PARAMS.fields,
+    {
+      name: "git_ref",
+      required: false,
+      description:
+        "Branch, tag, or commit SHA. Omit to use the repository default branch — do not guess main.",
+    },
+    {
+      name: "include_directories",
+      required: false,
+      description: "If true, include directories in the listing as well as files.",
+    },
+  ],
+};
+
+const FILE_CONTENT_BLAME_PARAMS: ParamsSchema = {
+  fields: [
+    ...REPO_ID_PARAMS.fields,
+    { name: "path", required: true, description: "File path relative to the repo root (no leading slash)." },
+    {
+      name: "git_ref",
+      required: false,
+      description:
+        "Branch, tag, or commit SHA. Omit to use the repository default branch — do not guess main.",
+    },
+    { name: "line_from", required: false, description: "First line to include (1-based, inclusive)." },
+    { name: "line_to", required: false, description: "Last line to include (1-based, inclusive)." },
+  ],
+};
+
+function compactFileContentListItem(item: Record<string, unknown>): Record<string, unknown> {
+  const compact: Record<string, unknown> = { path: item.path, type: item.type };
+  if (typeof item.openInHarness === "string") compact.openInHarness = item.openInHarness;
+  if (typeof item.git_ref === "string" && item.git_ref) compact.git_ref = item.git_ref;
+  return compact;
 }
 
 export const repositoriesToolset: ToolsetDefinition = {
@@ -53,12 +313,14 @@ export const repositoriesToolset: ToolsetDefinition = {
           method: "GET",
           path: "/code/api/v1/repos",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pageOneIndexed: true,
           queryParams: {
             query: "query",
             search_term: "query",
             sort: "sort",
             page: "page",
             limit: "limit",
+            size: "limit",
           },
           responseExtractor: passthrough,
           description: "List code repositories",
@@ -100,13 +362,13 @@ export const repositoriesToolset: ToolsetDefinition = {
           bodyBuilder: (input) => input.body,
           responseExtractor: passthrough,
           description:
-            "Update a repository. Body fields: description, default_branch, is_public.",
+            "Update a repository. Body fields: description, state, tags. default_branch and is_public are not supported by this operation.",
           bodySchema: {
             description: "Repository update fields",
             fields: [
               { name: "description", type: "string", required: false, description: "Repository description" },
-              { name: "default_branch", type: "string", required: false, description: "Default branch name" },
-              { name: "is_public", type: "boolean", required: false, description: "Whether the repo is public" },
+              { name: "state", type: "number", required: false, description: "Repository state as an integer: 0=active, 1=git-import, 2=migrate-git-push, 3=migrate-data-import, 4=archived, 5=import-failed. Normal agent usage is 0 (active) <-> 4 (archived); other values are transitional migration states." },
+              { name: "tags", type: "object", required: false, description: "Repository tags map" },
             ],
           },
         },
@@ -134,12 +396,15 @@ export const repositoriesToolset: ToolsetDefinition = {
           path: "/code/api/v1/repos/{repoIdentifier}/branches",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
+          pageOneIndexed: true,
           queryParams: {
             query: "query",
+            search_term: "query",
             sort: "sort",
             order: "order",
             page: "page",
             limit: "limit",
+            size: "limit",
           },
           responseExtractor: passthrough,
           description: "List branches in a repository",
@@ -152,6 +417,13 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             branch_name: "branchName",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "branch",
+            collection: "branches",
+            pathField: "branch_name",
+          }),
+          paramsSchema: REPO_BRANCH_PARAMS,
+          preflight: branchPreflight,
           responseExtractor: passthrough,
           description: "Get branch details including latest commit",
         },
@@ -180,6 +452,13 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             branch_name: "branchName",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "branch",
+            collection: "branches",
+            pathField: "branch_name",
+          }),
+          paramsSchema: REPO_BRANCH_PARAMS,
+          preflight: branchPreflight,
           responseExtractor: passthrough,
           description: "Delete a branch from the repository",
         },
@@ -197,8 +476,8 @@ export const repositoriesToolset: ToolsetDefinition = {
       listFilterFields: [
         { name: "git_ref", description: "Git reference (branch/tag) filter" },
         { name: "path", description: "File path filter" },
-        { name: "since", description: "Filter commits since date" },
-        { name: "until", description: "Filter commits until date" },
+        { name: "since", type: "number", description: "Filter commits since this Unix epoch timestamp (seconds, integer). Not a date string." },
+        { name: "until", type: "number", description: "Filter commits until this Unix epoch timestamp (seconds, integer). Not a date string." },
         { name: "committer", description: "Filter by committer" },
       ],
       operations: {
@@ -207,6 +486,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           path: "/code/api/v1/repos/{repoIdentifier}/commits",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
+          pageOneIndexed: true,
           queryParams: {
             git_ref: "git_ref",
             path: "path",
@@ -215,10 +495,11 @@ export const repositoriesToolset: ToolsetDefinition = {
             committer: "committer",
             page: "page",
             limit: "limit",
+            size: "limit",
           },
           responseExtractor: passthrough,
           description:
-            "List commits in a repository. Filter by git_ref (branch/tag), path, date range, or committer.",
+            "List commits in a repository. Filter by git_ref (branch/tag), path, since/until (Unix epoch timestamps, not date strings), or committer.",
         },
         get: {
           method: "GET",
@@ -240,7 +521,7 @@ export const repositoriesToolset: ToolsetDefinition = {
           bodyBuilder: buildCommitFilesBody,
           responseExtractor: passthrough,
           description:
-            "Commit file changes to a repository. Each action specifies a file operation (CREATE, UPDATE, DELETE, MOVE). Payload is the file content (utf8 or base64). For UPDATE, include the current blob sha. Returns the new commit_id and list of changed files.",
+            "Commit file changes to a repository. Each action is CREATE, UPDATE, DELETE, or MOVE. For CREATE/UPDATE, file bytes go in payload (utf8 or base64); content/text and file_content GET content.text/content.data are aliases. CREATE and UPDATE require payload (omitted UPDATE is rejected because Code would write an empty file; CREATE may pass payload: '' for an empty file). MOVE payload is the destination path, not file bytes. For UPDATE, include the current blob sha. Returns the new commit_id and list of changed files.",
           bodySchema: {
             description:
               "Commit with one or more file actions. branch is the target branch, message is the commit message, actions is the list of file operations.",
@@ -249,7 +530,7 @@ export const repositoriesToolset: ToolsetDefinition = {
               { name: "message", type: "string", required: false, description: "Extended commit message body" },
               { name: "branch", type: "string", required: true, description: "Target branch to commit to (e.g. 'main')" },
               { name: "new_branch", type: "string", required: false, description: "If set, creates a new branch from 'branch' and commits there instead" },
-              { name: "actions", type: "array", required: true, description: "File operations. Each action: {action: 'CREATE'|'UPDATE'|'DELETE'|'MOVE', path: 'file/path', payload: 'content', encoding: 'utf8'|'base64' (default utf8 — set explicitly for binary content, payload must then be valid base64), sha: 'blob_sha (required for UPDATE)'}." },
+              { name: "actions", type: "array", required: true, description: "File operations. Each action: {action: 'CREATE'|'UPDATE'|'DELETE'|'MOVE', path: 'file/path', payload: 'CREATE/UPDATE: file bytes (required; content or text aliases are copied onto payload; empty string allowed only for CREATE). MOVE: destination path. DELETE: omit.', encoding: 'utf8'|'base64' (default utf8 — set explicitly for binary content, payload must then be valid base64), sha: 'blob_sha (required for UPDATE)'}." },
               { name: "bypass_rules", type: "boolean", required: false, description: "Bypass branch protection rules (requires permission)" },
               { name: "dry_run_rules", type: "boolean", required: false, description: "Check rules without committing" },
             ],
@@ -265,6 +546,12 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             range: "range",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "commit.diff",
+            collection: "diff",
+            pathField: "range",
+          }),
+          paramsSchema: COMMIT_DIFF_PARAMS,
           responseExtractor: passthrough,
           actionDescription:
             "Get the raw diff between two refs. Set range to 'base..head' (e.g., 'main..feature-branch').",
@@ -278,6 +565,12 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             range: "range",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "commit.diff_stats",
+            collection: "diff-stats",
+            pathField: "range",
+          }),
+          paramsSchema: COMMIT_DIFF_PARAMS,
           responseExtractor: passthrough,
           actionDescription:
             "Get diff stats (files changed, additions, deletions) between two refs. Set range to 'base..head'.",
@@ -289,13 +582,51 @@ export const repositoriesToolset: ToolsetDefinition = {
       resourceType: "file_content",
       displayName: "File Content",
       description:
-        "File or directory content from a Harness Code repository. Supports get. Use execute action 'blame' for git blame.",
+        "File or directory content from a Harness Code repository. Get a path (omit path for repo root), list all paths at a ref, or execute action 'blame'. Omit git_ref to use the repository default branch.",
       toolset: "repositories",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["repo_id", "path"],
-      listFilterFields: [],
+      listFilterFields: [
+        {
+          name: "git_ref",
+          description: "Git ref (branch/tag/SHA). Omit to use the repository default branch — do not guess main.",
+        },
+        {
+          name: "include_directories",
+          description: "If true, include directories in the listing as well as files.",
+          type: "boolean",
+        },
+      ],
+      deepLinkTemplate:
+        "/ng/account/{accountId}/module/code/orgs/{orgIdentifier}/projects/{projectIdentifier}/repos/{repoIdentifier}/files/{git_ref}/~/{filePath}",
+      searchAliases: ["file", "blob", "blame", "repo file", "source file", "file content"],
+      relatedResources: [
+        { resourceType: "repository", relationship: "parent", description: "Repository that contains this file" },
+        { resourceType: "branch", relationship: "related", description: "List branches when git_ref is unknown" },
+        { resourceType: "commit", relationship: "related", description: "Commit file changes after reading content" },
+      ],
+      diagnosticHint:
+        "A 404 usually means the path, git_ref, or repo scope is wrong: (1) omit git_ref to use the repository default branch — do not guess main; (2) pass org_id and project_id for project-scoped repos; (3) use harness_list(resource_type=\"file_content\") to discover paths before get. Paths are relative with no leading slash.",
+      compactItem: compactFileContentListItem,
       operations: {
+        list: {
+          method: "GET",
+          path: "/code/api/v1/repos/{repoIdentifier}/paths",
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pathParams: { repo_id: "repoIdentifier" },
+          queryParams: {
+            org_id: "orgIdentifier",
+            project_id: "projectIdentifier",
+            git_ref: "git_ref",
+            include_directories: "include_directories",
+          },
+          paramsSchema: FILE_CONTENT_LIST_PARAMS,
+          preflight: fileContentPreflight,
+          responseExtractor: fileContentListExtract,
+          description:
+            "List every file path at a git ref. Pass repo_id. Omit git_ref to use the default branch. Set include_directories=true to also return directories.",
+        },
         get: {
           method: "GET",
           path: "/code/api/v1/repos/{repoIdentifier}/content/{filePath}",
@@ -304,15 +635,24 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             path: "filePath",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "file_content",
+            collection: "content",
+            pathField: "path",
+            allowEmptyPath: true,
+          }),
           queryParams: {
             org_id: "orgIdentifier",
             project_id: "projectIdentifier",
             git_ref: "git_ref",
             include_commit: "include_commit",
+            flatten_directories: "flatten_directories",
           },
+          paramsSchema: FILE_CONTENT_GET_PARAMS,
+          preflight: fileContentPreflight,
           responseExtractor: fileContentGetExtract,
           description:
-            "Get file or directory content. Specify path and optional git_ref (branch/tag/SHA). Returns file content or directory listing. For files, content.text holds the decoded text and content.encoding is set to 'utf8' when decoding succeeds; content.data (raw base64) and encoding 'base64' are kept only for binary/undecodable content. content._truncated is set if the server's 10 MB cap cut off the file; content._hint explains truncation, binary content, or Git LFS pointers.",
+            "Get file or directory content. path is relative to the repo root (src/index.ts); omit or pass empty for the root listing. Omit git_ref to use the repository default branch. Returns file content or a directory listing. For files, content.text holds the decoded text and content.encoding is set to 'utf8' when decoding succeeds; content.data (raw base64) and encoding 'base64' are kept only for binary/undecodable content. content._truncated is set if the server's 10 MB cap cut off the file; content._hint explains truncation, binary content, or Git LFS pointers.",
         },
       },
       executeActions: {
@@ -324,6 +664,13 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             path: "filePath",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "file_content.blame",
+            collection: "blame",
+            pathField: "path",
+            emptyPathError:
+              'Missing required field "path" for file_content.blame. Blame a file path, not the repo root.',
+          }),
           queryParams: {
             org_id: "orgIdentifier",
             project_id: "projectIdentifier",
@@ -331,9 +678,11 @@ export const repositoriesToolset: ToolsetDefinition = {
             line_from: "line_from",
             line_to: "line_to",
           },
+          paramsSchema: FILE_CONTENT_BLAME_PARAMS,
+          preflight: fileContentPreflight,
           responseExtractor: passthrough,
           actionDescription:
-            "Get git blame for a file. Optional line_from/line_to to restrict range.",
+            "Get git blame for a file. Optional line_from/line_to to restrict range. Omit git_ref to use the repository default branch.",
           bodySchema: { description: "No body required. File path and optional line range specified via path/query parameters.", fields: [] },
         },
       },
@@ -358,12 +707,15 @@ export const repositoriesToolset: ToolsetDefinition = {
           path: "/code/api/v1/repos/{repoIdentifier}/tags",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
+          pageOneIndexed: true,
           queryParams: {
             query: "query",
+            search_term: "query",
             sort: "sort",
             order: "order",
             page: "page",
             limit: "limit",
+            size: "limit",
           },
           responseExtractor: passthrough,
           description: "List tags in a repository",
@@ -394,6 +746,12 @@ export const repositoriesToolset: ToolsetDefinition = {
             repo_id: "repoIdentifier",
             tag_name: "tagName",
           },
+          pathBuilder: (input) => buildCodeRepoPath(input, {
+            resourceType: "tag",
+            collection: "tags",
+            pathField: "tag_name",
+          }),
+          paramsSchema: REPO_TAG_PARAMS,
           responseExtractor: passthrough,
           description: "Delete a tag from the repository",
         },
@@ -421,14 +779,17 @@ export const repositoriesToolset: ToolsetDefinition = {
           path: "/code/api/v1/repos/{repoIdentifier}/rules",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { repo_id: "repoIdentifier" },
+          pageOneIndexed: true,
           queryParams: {
             query: "query",
+            search_term: "query",
             sort: "sort",
             order: "order",
             type: "type",
             inherited: "inherited",
             page: "page",
             limit: "limit",
+            size: "limit",
           },
           responseExtractor: passthrough,
           description:
@@ -520,14 +881,17 @@ export const repositoriesToolset: ToolsetDefinition = {
           method: "GET",
           path: "/code/api/v1/rules",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
+          pageOneIndexed: true,
           queryParams: {
             query: "query",
+            search_term: "query",
             sort: "sort",
             order: "order",
             type: "type",
             inherited: "inherited",
             page: "page",
             limit: "limit",
+            size: "limit",
           },
           responseExtractor: passthrough,
           description:

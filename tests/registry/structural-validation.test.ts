@@ -181,20 +181,27 @@ describe("Toolset structural validation", () => {
       ).toEqual([]);
     });
 
-    it("identifierFields referenced in get pathParams exist", () => {
+    it("identifierFields on get are in pathParams, queryParams, or paramsSchema", () => {
       const issues: string[] = [];
       for (const type of allFullTypes) {
         const def = fullRegistry.getResource(type);
         const getSpec = def.operations.get;
-        if (!getSpec?.pathParams) continue;
+        if (!getSpec) continue;
 
-        // The primary identifier field should be in pathParams
         const primaryField = def.identifierFields[0];
-        if (primaryField && !getSpec.pathParams[primaryField]) {
-          // Check queryParams as fallback (some resources use query params for IDs)
-          if (!getSpec.queryParams?.[primaryField]) {
-            issues.push(`${type}: primary identifierField "${primaryField}" not in get.pathParams or get.queryParams`);
-          }
+        if (!primaryField) continue;
+
+        const inPath = getSpec.pathParams?.[primaryField] !== undefined;
+        const inQuery = getSpec.queryParams?.[primaryField] !== undefined;
+        const inParamsSchema = getSpec.paramsSchema?.fields.some((f) => f.name === primaryField) === true;
+
+        // Many gets map resource_id onto identifierFields only in the tool layer.
+        if (!getSpec.pathParams && !inQuery && !inParamsSchema) continue;
+
+        if (!inPath && !inQuery && !inParamsSchema) {
+          issues.push(
+            `${type}: primary identifierField "${primaryField}" not in get.pathParams, get.queryParams, or get.paramsSchema`,
+          );
         }
       }
       expect(issues, `identifierField/pathParam mismatches:\n${issues.join("\n")}`).toEqual([]);
@@ -232,12 +239,16 @@ describe("Toolset structural validation", () => {
       expect(issues).toEqual([]);
     });
 
-    it("create operations use POST", () => {
+    it("create operations use POST unless explicitly allowed", () => {
+      const allowedNonPostCreates = new Map<string, EndpointSpec["method"]>([
+        ["pr_reviewer", "PUT"],
+      ]);
       const issues: string[] = [];
       for (const type of allFullTypes) {
         const def = fullRegistry.getResource(type);
         const createSpec = def.operations.create;
-        if (createSpec && createSpec.method !== "POST") {
+        const allowedMethod = allowedNonPostCreates.get(type);
+        if (createSpec && createSpec.method !== "POST" && createSpec.method !== allowedMethod) {
           issues.push(`${type}.create: unexpected method ${createSpec.method}`);
         }
       }
@@ -607,6 +618,41 @@ describe("Toolset structural validation", () => {
       const unexpectedlyExposed = optInTypes.filter((type) => defaultTypes.has(type));
 
       expect(unexpectedlyExposed).toEqual([]);
+    });
+  });
+
+  describe("Code API paginated list ops require pageOneIndexed and size→limit alias", () => {
+    const CODE_API_PREFIX = "/code/api/v1/";
+
+    function codeListSpecs(): { type: string; spec: EndpointSpec }[] {
+      const results: { type: string; spec: EndpointSpec }[] = [];
+      for (const type of allFullTypes) {
+        const def = fullRegistry.getResource(type);
+        const listSpec = def.operations.list;
+        if (!listSpec) continue;
+        if (!listSpec.path.startsWith(CODE_API_PREFIX)) continue;
+        if (!listSpec.queryParams?.limit) continue;
+        results.push({ type, spec: listSpec });
+      }
+      return results;
+    }
+
+    it("every page-based Code API list endpoint has pageOneIndexed: true", () => {
+      const specs = codeListSpecs().filter(({ spec }) => spec.queryParams?.page);
+      expect(specs.length).toBeGreaterThan(0);
+      const missing = specs
+        .filter(({ spec }) => !spec.pageOneIndexed)
+        .map(({ type, spec }) => `${type}.list (${spec.path})`);
+      expect(missing).toEqual([]);
+    });
+
+    it("every paginated Code API list endpoint maps size→limit", () => {
+      const specs = codeListSpecs();
+      expect(specs.length).toBeGreaterThan(0);
+      const missing = specs
+        .filter(({ spec }) => spec.queryParams?.size !== "limit")
+        .map(({ type, spec }) => `${type}.list (${spec.path})`);
+      expect(missing).toEqual([]);
     });
   });
 });

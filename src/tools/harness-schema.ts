@@ -70,19 +70,136 @@ function inlineRefs(schema: Record<string, unknown>, node: unknown, depth = 0): 
   return result;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
 function isSchemaNode(value: unknown): boolean {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-  const v = value as Record<string, unknown>;
+  if (!isRecord(value)) return false;
   return (
-    "title" in v ||
-    "type" in v ||
-    "$ref" in v ||
-    "properties" in v ||
-    "oneOf" in v ||
-    "anyOf" in v ||
-    "allOf" in v ||
-    "enum" in v
+    "title" in value ||
+    "type" in value ||
+    "$ref" in value ||
+    "properties" in value ||
+    "oneOf" in value ||
+    "anyOf" in value ||
+    "allOf" in value ||
+    "enum" in value
   );
+}
+
+/** Kind segment from `#/definitions/{resourceType}/{kind}/...`. */
+function parseDefinitionKind(ref: string, resourceType: string): string | undefined {
+  const prefix = `#/definitions/${resourceType}/`;
+  if (!ref.startsWith(prefix)) return undefined;
+  const kind = ref.slice(prefix.length).split("/")[0];
+  return kind || undefined;
+}
+
+/** Kinds from the bundled JSON Schema root `oneOf` (`$ref` or single `required` key). */
+function collectYamlOneOfKinds(
+  schema: Record<string, unknown>,
+  resourceType: string,
+): { kinds: string[]; source: "ref" | "required" } | undefined {
+  const properties = schema.properties;
+  if (!isRecord(properties)) return undefined;
+
+  const yamlRoot = resourceType.replace(/_v\d+$/, "");
+  const ordered = [properties[resourceType], properties[yamlRoot], ...Object.values(properties)];
+  const seen = new Set<unknown>();
+
+  for (const spec of ordered) {
+    if (seen.has(spec) || !isRecord(spec) || !Array.isArray(spec.oneOf) || spec.oneOf.length < 2) {
+      continue;
+    }
+    seen.add(spec);
+
+    const refKinds: string[] = [];
+    const requiredKinds: string[] = [];
+    for (const entry of spec.oneOf) {
+      if (!isRecord(entry)) continue;
+      if (typeof entry["$ref"] === "string") {
+        const kind = parseDefinitionKind(entry["$ref"], resourceType);
+        if (kind) refKinds.push(kind);
+      } else if (
+        Array.isArray(entry.required) &&
+        entry.required.length === 1 &&
+        typeof entry.required[0] === "string"
+      ) {
+        requiredKinds.push(entry.required[0]);
+      }
+    }
+
+    if (refKinds.length === spec.oneOf.length) {
+      return { kinds: uniqueStrings(refKinds), source: "ref" };
+    }
+    if (requiredKinds.length === spec.oneOf.length) {
+      return { kinds: uniqueStrings(requiredKinds), source: "required" };
+    }
+  }
+  return undefined;
+}
+
+function resolveKindEnvelope(
+  schema: Record<string, unknown>,
+  resourceType: string,
+  kind: string,
+): Record<string, unknown> | undefined {
+  const definitions = schema.definitions;
+  if (!isRecord(definitions)) return undefined;
+  const resourceDefs = definitions[resourceType];
+  if (!isRecord(resourceDefs)) return undefined;
+  const group = resourceDefs[kind];
+  if (isRecord(group) && isSchemaNode(group.template)) {
+    return group.template as Record<string, unknown>;
+  }
+  if (isSchemaNode(group)) return group as Record<string, unknown>;
+  return undefined;
+}
+
+function collectKindTypeEnums(
+  schema: Record<string, unknown>,
+  resourceType: string,
+  kinds: string[],
+): string[] {
+  const enums: string[] = [];
+  for (const kind of kinds) {
+    const envelope = resolveKindEnvelope(schema, resourceType, kind);
+    const properties = envelope?.properties;
+    if (!isRecord(properties) || !isRecord(properties.type)) continue;
+    const typeEnum = properties.type.enum;
+    if (!Array.isArray(typeEnum)) continue;
+    for (const value of typeEnum) {
+      if (typeof value === "string") enums.push(value);
+    }
+  }
+  return uniqueStrings(enums);
+}
+
+function summarizeRootFields(rootDef: Record<string, unknown> | undefined): Array<{
+  name: string;
+  type: string;
+  required: boolean;
+  ref?: string;
+}> {
+  const properties = rootDef?.properties as Record<string, unknown> | undefined;
+  const required = rootDef?.required as string[] | undefined;
+  const fields: Array<{ name: string; type: string; required: boolean; ref?: string }> = [];
+  if (!properties) return fields;
+  for (const [name, spec] of Object.entries(properties)) {
+    const s = spec as Record<string, unknown>;
+    fields.push({
+      name,
+      type: (s.type as string) ?? (s["$ref"] ? "object ($ref)" : "unknown"),
+      required: required?.includes(name) ?? false,
+      ...(s["$ref"] ? { ref: (s["$ref"] as string).split("/").pop() } : {}),
+    });
+  }
+  return fields;
 }
 
 /**
@@ -174,34 +291,54 @@ function navigateStaticPath(
   return undefined;
 }
 
+function pickHintExamples(resourceType: string, sections: string[], kinds?: string[]): string[] {
+  if (kinds && kinds.length > 0) {
+    return kinds.filter((name) => name !== resourceType).slice(0, 2);
+  }
+  const preferred = ["stages", "steps"].filter((name) => sections.includes(name) && name !== resourceType);
+  const rest = sections.filter((name) => name !== resourceType && !preferred.includes(name));
+  return [...preferred, ...rest].slice(0, 2);
+}
+
+function staticSummaryHint(resourceType: string, sections: string[], kinds?: string[]): string {
+  const picks = pickHintExamples(resourceType, sections, kinds);
+  if (picks.length === 0) {
+    return "Use path to drill into a nested definition by name.";
+  }
+  return (
+    "Use path with a name from available_sections" +
+    (kinds && kinds.length > 0 ? " or yaml_kinds" : "") +
+    `. E.g. ${picks.map((p) => `path='${p}'`).join(", ")}.`
+  );
+}
+
 function getStaticSummary(schema: Record<string, unknown>, resourceType: string): Record<string, unknown> {
   const definitions = schema.definitions as Record<string, Record<string, unknown>> | undefined;
   const harnessRootDef = definitions?.[resourceType]?.[resourceType] as Record<string, unknown> | undefined;
-  const rootDef = harnessRootDef ?? (schema.properties ? schema : undefined) as Record<string, unknown> | undefined;
+  let rootDef = (harnessRootDef ?? (schema.properties ? schema : undefined)) as Record<string, unknown> | undefined;
 
-  const sections = definitions ? Object.keys(definitions[resourceType] ?? {}) : [];
-  const properties = rootDef?.properties as Record<string, unknown> | undefined;
-  const required = rootDef?.required as string[] | undefined;
-
-  const fields: Array<{ name: string; type: string; required: boolean; ref?: string }> = [];
-  if (properties) {
-    for (const [name, spec] of Object.entries(properties)) {
-      const s = spec as Record<string, unknown>;
-      fields.push({
-        name,
-        type: (s.type as string) ?? (s["$ref"] ? "object ($ref)" : "unknown"),
-        required: required?.includes(name) ?? false,
-        ...(s["$ref"] ? { ref: (s["$ref"] as string).split("/").pop() } : {}),
-      });
-    }
+  const oneOfKinds = collectYamlOneOfKinds(schema, resourceType);
+  const kinds = oneOfKinds?.kinds;
+  if (oneOfKinds?.source === "ref" && kinds?.[0]) {
+    const envelope = resolveKindEnvelope(schema, resourceType, kinds[0]);
+    if (envelope) rootDef = envelope;
   }
+
+  const definitionKeys = definitions ? Object.keys(definitions[resourceType] ?? {}) : [];
+  const sections =
+    kinds && kinds.length > 0
+      ? [...kinds, ...definitionKeys.filter((key) => !kinds.includes(key))]
+      : definitionKeys;
+  const typeEnum = kinds ? collectKindTypeEnums(schema, resourceType, kinds) : [];
 
   return {
     resource_type: resourceType,
     source: "harness-schema",
-    fields,
+    fields: summarizeRootFields(rootDef),
     available_sections: sections,
-    hint: "Use path parameter to drill into a section. E.g. path='trigger_source' for source structure, path='scheduled_trigger' for cron spec.",
+    ...(kinds && kinds.length > 0 ? { yaml_kinds: kinds } : {}),
+    ...(typeEnum.length > 0 ? { type_enum: typeEnum } : {}),
+    hint: staticSummaryHint(resourceType, sections, kinds),
   };
 }
 

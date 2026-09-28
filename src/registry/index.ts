@@ -7,7 +7,7 @@ import type { AuditManager } from "../audit/manager.js";
 import type { AuditContext, AuditEvent, AuditOutcome } from "../audit/types.js";
 import { createLogger } from "../utils/logger.js";
 import { buildDeepLink, appendStoreType, appendAgentTypeQuery } from "../utils/deep-links.js";
-import { isFormDataBody } from "../utils/type-guards.js";
+import { isFormDataBody, isRecord } from "../utils/type-guards.js";
 import { canonicalizeListFilterEnums } from "./enum-utils.js";
 import { assertListScopeResolved } from "./list-filter-utils.js";
 
@@ -48,6 +48,7 @@ import { governanceToolset } from "./toolsets/governance.js";
 import { freezeToolset } from "./toolsets/freeze.js";
 import { overridesToolset } from "./toolsets/overrides.js";
 import { aiEvalsToolset } from "./toolsets/ai-evals.js";
+import { observabilityEvaluationsToolset } from "./toolsets/observability-evaluations.js";
 import { iacmToolset } from "./toolsets/iacm.js";
 import { knowledgeGraphToolset } from "./toolsets/knowledge-graph.js";
 import { semanticLayerToolset } from "./toolsets/semantic-layer.js";
@@ -168,6 +169,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   freezeToolset,
   overridesToolset,
   aiEvalsToolset,
+  observabilityEvaluationsToolset,
   iacmToolset,
   knowledgeGraphToolset,
   semanticLayerToolset,
@@ -425,18 +427,7 @@ export class Registry {
       }
     }
 
-    if (spec.paramsSchema) {
-      const missingParams = spec.paramsSchema.fields
-        .filter(f => f.required && input[f.name] === undefined)
-        .map(f => f.name);
-      if (missingParams.length > 0) {
-        throw new Error(
-          `Missing required param(s) for ${resourceType}.${operation}: ${missingParams.join(", ")}. ` +
-          `Pass them via params (e.g. params: { ${missingParams.map(n => `${n}: "..."`).join(", ")} }). ` +
-          `Use harness_describe(resource_type="${resourceType}") to see valid values.`
-        );
-      }
-    }
+    this.assertRequiredParams(spec, input, resourceType, operation);
 
     return this.executeSpecWithAudit(client, def, spec, operation, resourceType, input, auditCtx, abortSignal);
   }
@@ -464,7 +455,31 @@ export class Registry {
       throw new Error(`Read-only mode is enabled (HARNESS_READ_ONLY=true). Execute action "${action}" is not allowed.`);
     }
 
+    this.assertRequiredParams(actionSpec, input, resourceType, action);
+
     return this.executeSpecWithAudit(client, def, actionSpec, "execute", resourceType, input, { ...auditCtx, tool: auditCtx?.tool ?? "harness_execute", action }, abortSignal);
+  }
+
+  /** Fail-fast when paramsSchema marks a field required and the caller omitted it. */
+  private assertRequiredParams(
+    spec: EndpointSpec,
+    input: Record<string, unknown>,
+    resourceType: string,
+    operation: string,
+  ): void {
+    if (!spec.paramsSchema) return;
+    const body = isRecord(input.body) ? input.body : undefined;
+    const nestedParams = isRecord(input.params) ? input.params : undefined;
+    const missingParams = spec.paramsSchema.fields
+      .filter(f => f.required && input[f.name] === undefined && body?.[f.name] === undefined && nestedParams?.[f.name] === undefined)
+      .map(f => f.name);
+    if (missingParams.length > 0) {
+      throw new Error(
+        `Missing required param(s) for ${resourceType}.${operation}: ${missingParams.join(", ")}. ` +
+        `Pass them via params (e.g. params: { ${missingParams.map(n => `${n}: "..."`).join(", ")} }). ` +
+        `Use harness_describe(resource_type="${resourceType}") to see valid values.`
+      );
+    }
   }
 
   /**
@@ -623,8 +638,10 @@ export class Registry {
     const resolvedRoute = spec.routeResolver ? spec.routeResolver(input, resolvedConfig) : undefined;
 
     // Run preflight hook (e.g. duplicate-check before create) before hitting the API.
+    // Pass registry-resolved accountId so hooks do not depend on client.account,
+    // which is the process placeholder in multi-tenant chat MCP.
     if (spec.preflight) {
-      await spec.preflight({ client, input, registry: this, signal });
+      await spec.preflight({ client, input, registry: this, signal, accountId: resolvedAccountId });
     }
 
     // When explicit resource_scope resolved org/project from config defaults,
@@ -745,15 +762,18 @@ export class Registry {
     // Build body BEFORE mapping input→queryParams so that bodyBuilders that
     // hoist fields onto input (e.g. trigger's pipelineIdentifier → pipeline_id)
     // take effect before query params are resolved.
-    const body = spec.bodyBuilder ? spec.bodyBuilder(input) : undefined;
+    const body = spec.bodyBuilder ? spec.bodyBuilder(input, resolvedConfig) : undefined;
 
     // Map input fields to query params (overrides defaults)
     if (spec.queryParams) {
       for (const [inputKey, queryKey] of Object.entries(spec.queryParams)) {
         let value = input[inputKey];
         // Convert 0-indexed page to 1-indexed when the API requires it
-        if (spec.pageOneIndexed && inputKey === "page" && typeof value === "number") {
-          value = value + 1;
+        if (spec.pageOneIndexed && inputKey === "page" && value !== undefined && value !== "") {
+          const n = Number(value);
+          if (Number.isFinite(n)) {
+            value = n + 1;
+          }
         }
         if (Array.isArray(value)) {
           const parts = value.filter(
@@ -844,6 +864,7 @@ export class Registry {
       ...(spec.headerBasedScoping || def.headerBasedScoping ? { headerBasedScoping: true } : {}),
       ...(spec.operationPolicy?.retryPolicy ? { retryPolicy: spec.operationPolicy.retryPolicy } : {}),
       ...(!spec.pathBuilder && !resolvedRoute ? { tracing: { route: spec.path } } : {}),
+      ...(spec.timeoutMs != null ? { timeoutMs: spec.timeoutMs } : {}),
       signal,
     };
 

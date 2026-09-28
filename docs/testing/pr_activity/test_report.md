@@ -14,7 +14,7 @@
 | Test ID | Description | Prompt | Expected Result | Status | Actual Result | Notes |
 |---------|-------------|--------|-----------------|--------|---------------|-------|
 | TC-pra-001 | List all activity on a PR | `harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_number":4}, org_id="AI_Devops", project_id="Sanity")` | Returns chronological list of activities | ✅ Passed | 3 activities: 2 comments, 1 title-change | Re-tested 2026-03-23 |
-| TC-pra-002 | Filter by kind=comment | `harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_number":4, "kind":"comment"}, org_id="AI_Devops", project_id="Sanity")` | Returns only comment activities | ✅ Passed | Returns 1 comment: "looks good" | |
+| TC-pra-002 | Filter by type=[comment, code-comment] | `harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_number":4, "type":["comment","code-comment"]}, org_id="AI_Devops", project_id="Sanity")` | Returns general and code comment activities | ⬜ Pending | | Replaces kind-only comment read path |
 | TC-pra-003 | Filter by kind=system | `harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_number":4, "kind":"system"}, org_id="AI_Devops", project_id="Sanity")` | Returns only system activities | ⬜ Pending | | |
 | TC-pra-004 | Filter by type=review-submit | `harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_number":4, "type":"review-submit"}, org_id="AI_Devops", project_id="Sanity")` | Returns only review submission events | ⬜ Pending | | |
 | TC-pra-005 | Filter by type=state-change | `harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_number":4, "type":"state-change"}, org_id="AI_Devops", project_id="Sanity")` | Returns only state change events | ⬜ Pending | | |
@@ -49,7 +49,7 @@
 | Filter | Type | Description | Values |
 |--------|------|-------------|--------|
 | `kind` | string | Activity kind | `change-comment`, `comment`, `system` |
-| `type` | string | Activity type | `branch-delete`, `branch-restore`, `branch-update`, `code-comment`, `comment`, `label-modify`, `merge`, `review-submit`, `reviewer-add`, `reviewer-delete`, `state-change`, `target-branch-change`, `title-change` |
+| `type` | string or string[] | Activity type | `branch-delete`, `branch-restore`, `branch-update`, `code-comment`, `comment`, `label-modify`, `merge`, `review-submit`, `reviewer-add`, `reviewer-delete`, `state-change`, `target-branch-change`, `title-change` |
 | `after` | number | Unix timestamp (millis) | Activities created at or after |
 | `before` | number | Unix timestamp (millis) | Activities created before |
 
@@ -64,8 +64,8 @@
 ]
 ```
 
-### List Only Comments (kind=comment)
-Use this to list PR comments since `pr_comment` doesn't have a `list` operation:
+### List PR Comments
+Use this to list both general comments and inline PR comments since `pr_comment` doesn't have a `list` operation:
 ```
-harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_number":4, "kind":"comment"}, org_id="AI_Devops", project_id="Sanity")
+harness_list(resource_type="pr_activity", filters={"repo_id":"test-mcp", "pr_number":4, "type":["comment","code-comment"]}, org_id="AI_Devops", project_id="Sanity")
 ```
