@@ -317,7 +317,7 @@ const fmeSegmentDefinitionUpdateSchema: BodySchema = {
 
 const fmeMetricCreateSchema: BodySchema = {
   description:
-    "Create a new metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required by the backend. owners is optional, but the backend currently rejects an empty/missing owners list with a 400 (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one owner until that ships.",
+    "Create a new metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required by the backend. owners is optional, but the backend currently rejects an empty/missing owners list with a 400 (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one owner until that ships. The backend also rejects creation with a 409 'Duplicate Definition' when another metric already has the same (trafficType, aggregation, spread, baseEventTypes, filterEventType) combination — this check is independent of name, so a differently-named metric with an identical shape still collides; use fme_metric list/get to check for an existing equivalent metric before retrying with a different base/filter event type.",
   fields: [
     { name: "name", type: "string", required: true, description: "Unique metric name within the project (must start with a letter; letters, digits, '-', '_' only; max 100 chars). Immutable after creation." },
     { name: "description", type: "string", required: false, description: "Optional human-readable description" },
