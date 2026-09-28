@@ -5,6 +5,7 @@ import type { RequestOptions } from "../../src/client/types.js";
 import { Registry } from "../../src/registry/index.js";
 import { featureFlagsToolset } from "../../src/registry/toolsets/feature-flags.js";
 import type { EndpointSpec, ResourceDefinition } from "../../src/registry/types.js";
+import { compactItems } from "../../src/utils/compact.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -2296,7 +2297,6 @@ describe("fme_metric", () => {
         format: "PERCENTAGE",
         aggregation: "COUNT",
         isPositive: true,
-        spread: "PER",
         baseEventTypes: [{ eventTypeId: "e1" }],
         triggerEventType: { eventTypeId: "e0" },
         tags: ["checkout"],
@@ -2313,7 +2313,6 @@ describe("fme_metric", () => {
       format: "PERCENTAGE",
       aggregation: "COUNT",
       isPositive: true,
-      spread: "PER",
       baseEventTypes: [{ eventTypeId: "e1", propertyFilters: [], propertyForValue: null }],
       triggerEventType: { eventTypeId: "e0" },
       tags: [{ name: "checkout" }],
@@ -2321,8 +2320,30 @@ describe("fme_metric", () => {
     });
   });
 
-  it("create: throws when spread is missing (MCP-only stricter contract)", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
+  it("create: omits spread when the caller passes PER", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "m1" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      body: {
+        name: "checkout-conversion",
+        trafficType: "user",
+        format: "PERCENTAGE",
+        aggregation: "COUNT",
+        isPositive: true,
+        spread: "PER",
+        baseEventTypes: [{ eventTypeId: "e1" }],
+      },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).not.toHaveProperty("spread");
+  });
+
+  it("create: rejects spread other than PER instead of dropping it", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "m1" });
     const client = makeClient(mockRequest);
 
     await expect(
@@ -2335,33 +2356,55 @@ describe("fme_metric", () => {
           format: "PERCENTAGE",
           aggregation: "COUNT",
           isPositive: true,
+          spread: "ACROSS",
           baseEventTypes: [{ eventTypeId: "e1" }],
         },
       }),
-    ).rejects.toThrow(/spread is required/);
+    ).rejects.toThrow(/spread must be omitted or "PER"/);
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("create: throws when spread is explicitly null", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_metric", "create", {
-        org_id: "o1",
-        project_id: "p1",
-        body: {
+  it("list: default compaction keeps the duplicate-definition shape and drops owners/cap", () => {
+    const compactFn = findResource("fme_metric").compactItem;
+    const [slim] = compactItems(
+      [
+        {
+          id: "m1",
           name: "checkout-conversion",
+          description: "ratio",
           trafficType: "user",
           format: "PERCENTAGE",
           aggregation: "COUNT",
           isPositive: true,
-          spread: null,
-          baseEventTypes: [{ eventTypeId: "e1" }],
+          spread: "PER",
+          baseEventTypes: [{ eventTypeId: "numerator", propertyFilters: [], propertyForValue: null }],
+          filterEventType: { eventTypeId: "denominator", filterAggregation: "COUNT", propertyFilters: [] },
+          triggerEventType: { eventTypeId: "e0" },
+          tags: [{ name: "checkout" }],
+          owners: [{ type: "USER", id: "u1" }],
+          cap: { metricValueCap: 1 },
+          openInHarness: "https://app.harness.io/metrics/m1",
         },
-      }),
-    ).rejects.toThrow(/spread is required/);
-    expect(mockRequest).not.toHaveBeenCalled();
+      ],
+      compactFn,
+    ) as Record<string, unknown>[];
+
+    expect(slim).toEqual({
+      id: "m1",
+      name: "[checkout-conversion](https://app.harness.io/metrics/m1)",
+      description: "ratio",
+      trafficType: "user",
+      format: "PERCENTAGE",
+      aggregation: "COUNT",
+      isPositive: true,
+      spread: "PER",
+      baseEventTypes: [{ eventTypeId: "numerator", propertyFilters: [], propertyForValue: null }],
+      filterEventType: { eventTypeId: "denominator", filterAggregation: "COUNT", propertyFilters: [] },
+      triggerEventType: { eventTypeId: "e0" },
+      tags: [{ name: "checkout" }],
+    });
+    expect(slim).not.toHaveProperty("owners");
+    expect(slim).not.toHaveProperty("cap");
   });
 
   it("update: PATCHes with merge-patch content type and only the fields present in body", async () => {

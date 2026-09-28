@@ -42,6 +42,46 @@ function normalizeFmeFilterEventType(entry: unknown): unknown {
   return { propertyFilters: [], ...(entry as Record<string, unknown>) };
 }
 
+// New metrics are always PER. Omitting spread (or passing PER) lets the backend
+// default to PER. Any other value, including the deprecated ACROSS, must fail
+// here — dropping it would create a PER metric while the caller asked for ACROSS.
+function assertFmeMetricCreateSpread(body: Record<string, unknown> | undefined): void {
+  const spread = body?.spread;
+  if (spread === undefined || spread === null || spread === "PER") return;
+  throw new Error(
+    "fme_metric.create: spread must be omitted or \"PER\". New metrics are always PER " +
+      "(backend default). \"ACROSS\" is a deprecated legacy value with no p-value and is rejected " +
+      "instead of being silently dropped. Use fme_metric.update to patch an existing metric.",
+  );
+}
+
+// Default harness_list compaction keeps id/name/tags and drops the fields that
+// identify a metric's Measure-as shape. Those fields are exactly the 409
+// Duplicate Definition key, so a compact list has to retain them.
+const FME_METRIC_LIST_FIELDS = [
+  "id",
+  "name",
+  "description",
+  "trafficType",
+  "format",
+  "aggregation",
+  "isPositive",
+  "spread",
+  "baseEventTypes",
+  "filterEventType",
+  "triggerEventType",
+  "tags",
+  "openInHarness",
+] as const;
+
+function compactFmeMetric(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of FME_METRIC_LIST_FIELDS) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
+}
+
 const FME_SEGMENT_KINDS = ["STANDARD", "LARGE", "RULE_BASED"] as const;
 type FmeSegmentKind = (typeof FME_SEGMENT_KINDS)[number];
 
@@ -317,17 +357,16 @@ const fmeSegmentDefinitionUpdateSchema: BodySchema = {
 
 const fmeMetricCreateSchema: BodySchema = {
   description:
-    "Create a new metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required by the backend. spread is also required here — an MCP-only stricter contract: the backend silently defaults it to 'PER' when omitted, changing semantics for RATE metrics with no warning. owners is optional, but the backend currently rejects an empty/missing owners list with a 400 (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one owner until that ships.",
+    "Create a new metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required by the backend. owners is optional, but the backend currently rejects an empty/missing owners list with a 400 (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one owner until that ships. The backend also rejects creation with a 409 'Duplicate Definition' when another metric already has the same (trafficType, aggregation, spread, baseEventTypes, filterEventType) combination — this check is independent of name, so a differently-named metric with an identical shape still collides. Default fme_metric list keeps those fields so you can find the collision before retrying with a different base/filter event type (get, or list with compact:false, for owners/cap). Do not send spread unless it is 'PER'; omitted and 'PER' both create a PER metric, and any other value including 'ACROSS' is rejected.",
   fields: [
     { name: "name", type: "string", required: true, description: "Unique metric name within the project (must start with a letter; letters, digits, '-', '_' only; max 100 chars). Immutable after creation." },
     { name: "description", type: "string", required: false, description: "Optional human-readable description" },
     { name: "trafficType", type: "string", required: true, description: "Traffic type name (get from fme_traffic_type). Immutable after creation." },
     { name: "format", type: "string", required: true, description: "Display format. One of: NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES." },
-    { name: "aggregation", type: "string", required: true, description: "How individual event values are aggregated per unit. One of: TOTAL, COUNT, RATE, AVERAGE." },
+    { name: "aggregation", type: "string", required: true, description: "How individual event values are aggregated per unit. One of: TOTAL, COUNT, RATE, AVERAGE. Matches the webconsole 'Measure as' dropdown: COUNT = 'Count of events per <traffic type>' (baseEventTypes only, no propertyForValue); TOTAL = 'Sum of event values per <traffic type>' (baseEventTypes with propertyForValue set to the event property to sum, or omitted to sum the raw event value); AVERAGE = 'Average of event values per <traffic type>' (same shape as TOTAL); RATE = 'Percent of unique <traffic type>s' (baseEventTypes only, no propertyForValue). There is no RATIO value: 'Ratio of two events per <traffic type>' is built as aggregation COUNT with baseEventTypes set to the numerator event and filterEventType set to the denominator event with filterAggregation 'COUNT' — see filterEventType." },
     { name: "isPositive", type: "boolean", required: true, description: "true when an increase in this metric is a good outcome" },
-    { name: "spread", type: "string", required: true, description: "PER (per-unit) or ACROSS (population). Required here even though the backend accepts omitting it (defaults to PER) — set it explicitly, especially for RATE metrics where PER vs ACROSS changes what is measured." },
-    { name: "baseEventTypes", type: "array", required: true, description: "The base event type(s) this metric measures (at least one). Each entry: {eventTypeId, propertyFilters?, propertyForValue?} — propertyFilters/propertyForValue default to []/null when omitted. Get event type IDs from fme_event_type.", itemType: "object" },
-    { name: "filterEventType", type: "object", required: false, description: "Optional filter event that scopes which units are counted: {eventTypeId, filterAggregation?, propertyFilters?} — propertyFilters defaults to [] when omitted." },
+    { name: "baseEventTypes", type: "array", required: true, description: "The base event type(s) this metric measures (at least one; the numerator event for a ratio metric). Each entry: {eventTypeId, propertyFilters?, propertyForValue?} — propertyFilters/propertyForValue default to []/null when omitted. propertyForValue is only meaningful for aggregation TOTAL/AVERAGE (the event property to sum/average); leave it unset for COUNT/RATE and for ratio metrics. Get event type IDs from fme_event_type.", itemType: "object" },
+    { name: "filterEventType", type: "object", required: false, description: "Optional filter event that scopes which units are counted: {eventTypeId, filterAggregation?, propertyFilters?} — propertyFilters defaults to [] when omitted. Dual purpose: (1) 'has done' filtering for COUNT/TOTAL/AVERAGE/RATE metrics, or (2) the denominator event of a ratio metric — set aggregation: 'COUNT', baseEventTypes to the numerator event, and filterEventType to {eventTypeId: <denominator>, filterAggregation: 'COUNT'} to build the webconsole's 'Ratio of two events per <traffic type>' type." },
     { name: "triggerEventType", type: "object", required: false, description: "Optional trigger event (HAS_DONE_BEFORE): the unit must have done this event before the base event to be counted. Shape: {eventTypeId}." },
     { name: "tags", type: "array", required: false, description: "Initial tags. Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}. For now the backend rejects an empty or missing list with 400 \"Owners cannot be empty\" (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one until it ships.", itemType: "object" },
@@ -1796,6 +1835,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
       identifierFields: ["metric_id"],
+      compactItem: compactFmeMetric,
       listFilterFields: [
         { name: "name", description: "Filter by name (substring, case-insensitive)" },
         { name: "traffic_type_id", description: "Filter by traffic type ID (get from fme_traffic_type)" },
@@ -1830,7 +1870,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
           description:
             "List metric definitions in a project, with pagination and filters (harness_list size maps to limit; " +
             "pass offset directly via filters — harness_list's page is not honored here, same as the other FME " +
-            "v4 list resources).",
+            "v4 list resources). Default compaction keeps trafficType, aggregation, spread, baseEventTypes, " +
+            "filterEventType, and triggerEventType so a 409 Duplicate Definition can be matched; owners and cap " +
+            "need compact:false or get.",
         },
         get: {
           method: "GET",
@@ -1854,20 +1896,13 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
-            if (body?.spread === undefined || body?.spread === null) {
-              throw new Error(
-                "fme_metric.create: spread is required (MCP-only stricter contract — the backend " +
-                  "silently defaults to 'PER' when omitted, changing metric semantics for RATE " +
-                  "metrics). Pass 'PER' or 'ACROSS'.",
-              );
-            }
+            assertFmeMetricCreateSpread(body);
             return {
               name: body?.name,
               trafficType: body?.trafficType,
               format: body?.format,
               aggregation: body?.aggregation,
               isPositive: body?.isPositive,
-              spread: body.spread,
               baseEventTypes: normalizeFmeBaseEventTypes(body?.baseEventTypes),
               ...(body?.description !== undefined ? { description: body.description } : {}),
               ...(body?.owners !== undefined ? { owners: body.owners } : {}),
@@ -1880,7 +1915,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           bodySchema: fmeMetricCreateSchema,
           description:
-            "Create a metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes/spread are required (spread required is an MCP-only stricter contract; the backend otherwise defaults it to PER). Get event type IDs from fme_event_type first.",
+            "Create a metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required. Every new metric is PER-unit: omit spread or pass 'PER'. Any other value, including the deprecated 'ACROSS', is rejected rather than silently dropped. Use fme_metric.update to patch an existing ACROSS metric. Get event type IDs from fme_event_type first.",
         },
         update: {
           method: "PATCH",
