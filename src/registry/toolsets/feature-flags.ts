@@ -101,6 +101,49 @@ function applyFmeOptionalStatusQuery(input: Record<string, unknown>, resource: s
   input.status = status;
 }
 
+const FME_EXPERIMENT_PARENT_TYPES = ["FEATURE_FLAG", "AI_CONFIG", "CONFIG"] as const;
+type FmeExperimentParentType = (typeof FME_EXPERIMENT_PARENT_TYPES)[number];
+
+function canonicalizeFmeExperimentParentType(raw: unknown): FmeExperimentParentType | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  return FME_EXPERIMENT_PARENT_TYPES.find((type) => type.toLowerCase() === trimmed.toLowerCase());
+}
+
+function applyFmeExperimentParentTypeQuery(input: Record<string, unknown>, operation: string): void {
+  const raw = input.parent_type;
+  if (raw === undefined || raw === null || raw === "") {
+    throw new Error(
+      `fme_experiment.${operation}: parent_type is required (${FME_EXPERIMENT_PARENT_TYPES.join(" | ")}).`,
+    );
+  }
+  const parentType = canonicalizeFmeExperimentParentType(raw);
+  if (parentType === undefined) {
+    throw new Error(
+      `fme_experiment.${operation}: invalid parent_type '${String(raw)}'. Must be one of: ${FME_EXPERIMENT_PARENT_TYPES.join(", ")}.`,
+    );
+  }
+  input.parent_type = parentType;
+}
+
+// Shared by fme_metric/fme_experiment/fme_experiment_settings .update — all three
+// send JSON Merge Patch (RFC 7396) bodies built from the same whitelist-and-copy shape.
+function buildFmeMergePatch(
+  body: Record<string, unknown> | undefined,
+  patchableFields: readonly string[],
+  transform?: (field: string, value: unknown) => unknown,
+): Record<string, unknown> {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return {};
+  const patch: Record<string, unknown> = {};
+  for (const field of patchableFields) {
+    if (!(field in body)) continue;
+    const value = body[field];
+    patch[field] = transform ? transform(field, value) : value;
+  }
+  return patch;
+}
+
 function resolveFmeCreateSegmentType(body: Record<string, unknown> | undefined): FmeSegmentKind {
   const primary = body?.segmentType;
   if (primary === undefined || primary === null || primary === "") {
@@ -1943,39 +1986,34 @@ export const featureFlagsToolset: ToolsetDefinition = {
           headers: { "Content-Type": "application/merge-patch+json" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
-            if (!body || typeof body !== "object" || Array.isArray(body)) return {};
-            const patchableFields = [
-              "description",
-              "format",
-              "aggregation",
-              "isPositive",
-              "spread",
-              "baseEventTypes",
-              "filterEventType",
-              "triggerEventType",
-              "tags",
-              "owners",
-              "cap",
-            ] as const;
-            const patch: Record<string, unknown> = {};
-            for (const field of patchableFields) {
-              if (!(field in body)) continue;
-              const value = body[field];
-              switch (field) {
-                case "tags":
-                  patch[field] = normalizeFmeTags(value);
-                  break;
-                case "baseEventTypes":
-                  patch[field] = value === null ? null : normalizeFmeBaseEventTypes(value);
-                  break;
-                case "filterEventType":
-                  patch[field] = value === null ? null : normalizeFmeFilterEventType(value);
-                  break;
-                default:
-                  patch[field] = value;
-              }
-            }
-            return patch;
+            return buildFmeMergePatch(
+              body,
+              [
+                "description",
+                "format",
+                "aggregation",
+                "isPositive",
+                "spread",
+                "baseEventTypes",
+                "filterEventType",
+                "triggerEventType",
+                "tags",
+                "owners",
+                "cap",
+              ],
+              (field, value) => {
+                switch (field) {
+                  case "tags":
+                    return normalizeFmeTags(value);
+                  case "baseEventTypes":
+                    return value === null ? null : normalizeFmeBaseEventTypes(value);
+                  case "filterEventType":
+                    return value === null ? null : normalizeFmeFilterEventType(value);
+                  default:
+                    return value;
+                }
+              },
+            );
           },
           responseExtractor: passthrough,
           bodySchema: fmeMetricUpdateSchema,
@@ -2023,6 +2061,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           path: "",
           routeResolver: (input) => {
             requireHarnessNativeSegmentScope(input, "fme_experiment");
+            applyFmeExperimentParentTypeQuery(input, "list");
             return { path: "/fme/api/v4/experiments" };
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
@@ -2099,8 +2138,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           headers: { "Content-Type": "application/merge-patch+json" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
-            if (!body || typeof body !== "object" || Array.isArray(body)) return {};
-            const patchableFields = [
+            return buildFmeMergePatch(body, [
               "name",
               "description",
               "hypothesis",
@@ -2112,12 +2150,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
               "supportingMetrics",
               "status",
               "owners",
-            ] as const;
-            const patch: Record<string, unknown> = {};
-            for (const field of patchableFields) {
-              if (field in body) patch[field] = body[field];
-            }
-            return patch;
+            ]);
           },
           responseExtractor: fmeV4EntityExtract,
           bodySchema: fmeExperimentUpdateSchema,
@@ -2182,20 +2215,14 @@ export const featureFlagsToolset: ToolsetDefinition = {
           headers: { "Content-Type": "application/merge-patch+json" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
-            if (!body || typeof body !== "object" || Array.isArray(body)) return {};
-            const patchableFields = [
+            return buildFmeMergePatch(body, [
               "statisticalTestType",
               "significanceThreshold",
               "multipleComparisonCorrection",
               "minimumSampleSize",
               "reviewPeriod",
               "varianceReduction",
-            ] as const;
-            const patch: Record<string, unknown> = {};
-            for (const field of patchableFields) {
-              if (field in body) patch[field] = body[field];
-            }
-            return patch;
+            ]);
           },
           responseExtractor: fmeV4EntityExtract,
           bodySchema: fmeExperimentSettingsUpdateSchema,
@@ -2211,7 +2238,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
             return { path: `/fme/api/v4/experiments/${id}/settings` };
           },
-          operationPolicy: { risk: "destructive", retryPolicy: "safe" },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: fmeV4EntityExtract,
           description:
             "Revert an experiment's settings to organization defaults by removing the experiment-level override " +

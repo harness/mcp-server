@@ -2542,6 +2542,41 @@ describe("fme_experiment", () => {
     });
   });
 
+  it("list: canonicalizes lowercase status array entries", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+      status: ["active", "paused"],
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({ status: ["ACTIVE", "PAUSED"] });
+  });
+
+  it("list: rejects an empty parent_type without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment", "list", { org_id: "o1", project_id: "p1", parent_type: "" }),
+    ).rejects.toThrow(/parent_type is required/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: rejects an invalid parent_type without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment", "list", { org_id: "o1", project_id: "p1", parent_type: "WIDGET" }),
+    ).rejects.toThrow(/invalid parent_type 'WIDGET'/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("list: extractor maps {data, totalCount} to {items, total}", async () => {
     const experiments = [{ id: "e1", name: "checkout-experiment" }];
     const mockRequest = vi.fn().mockResolvedValue({ data: experiments, limit: 100, offset: 0, totalCount: 1 });
