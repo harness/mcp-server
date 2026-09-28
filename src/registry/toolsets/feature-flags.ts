@@ -365,6 +365,7 @@ const fmeExperimentCreateSchema: BodySchema = {
     { name: "comparisonTreatments", type: "array", required: true, description: "Comparison treatment names, not including baselineTreatment (at least one)", itemType: "string" },
     { name: "keyMetrics", type: "array", required: false, description: "Metric ids to set as key metrics. Omit for none.", itemType: "string" },
     { name: "supportingMetrics", type: "array", required: false, description: "Metric ids to set as supporting metrics. Omit for none.", itemType: "string" },
+    { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}. Omit for none.", itemType: "object" },
   ],
 };
 
@@ -381,6 +382,7 @@ const fmeExperimentUpdateSchema: BodySchema = {
     { name: "comparisonTreatments", type: "array", required: false, description: "Replacement comparison treatments (full replacement, at least one); null or [] returns 400", itemType: "string" },
     { name: "keyMetrics", type: "array", required: false, description: "Replacement key metric ids; null or [] clears the list", itemType: "string" },
     { name: "supportingMetrics", type: "array", required: false, description: "Replacement supporting metric ids; null or [] clears the list", itemType: "string" },
+    { name: "owners", type: "array", required: false, description: "Replacement owner list — {type: \"USER\", id or email} or {type: \"GROUP\", identifier}; null or [] clears", itemType: "object" },
     { name: "status", type: "string", required: false, description: "Updated lifecycle status (ACTIVE, PAUSED, ARCHIVED, COMPLETED); null not allowed. ARCHIVED is a status here, not a substitute for delete." },
   ],
 };
@@ -2071,6 +2073,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
               ...(body?.hypothesis !== undefined ? { hypothesis: body.hypothesis } : {}),
               ...(body?.keyMetrics !== undefined ? { keyMetrics: body.keyMetrics } : {}),
               ...(body?.supportingMetrics !== undefined ? { supportingMetrics: body.supportingMetrics } : {}),
+              ...(body?.owners !== undefined ? { owners: body.owners } : {}),
             };
           },
           responseExtractor: fmeV4EntityExtract,
@@ -2104,6 +2107,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
               "keyMetrics",
               "supportingMetrics",
               "status",
+              "owners",
             ] as const;
             const patch: Record<string, unknown> = {};
             for (const field of patchableFields) {
