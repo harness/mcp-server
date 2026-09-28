@@ -327,7 +327,8 @@ const fmeMetricCreateSchema: BodySchema = {
     { name: "isPositive", type: "boolean", required: true, description: "true when an increase in this metric is a good outcome" },
     { name: "spread", type: "string", required: true, description: "PER (per-unit) or ACROSS (population). Required here even though the backend accepts omitting it (defaults to PER) — set it explicitly, especially for RATE metrics where PER vs ACROSS changes what is measured." },
     { name: "baseEventTypes", type: "array", required: true, description: "The base event type(s) this metric measures (at least one). Each entry: {eventTypeId, propertyFilters?, propertyForValue?} — propertyFilters/propertyForValue default to []/null when omitted. Get event type IDs from fme_event_type.", itemType: "object" },
-    { name: "filterEventType", type: "object", required: false, description: "Optional filter/trigger event that scopes which units are counted: {eventTypeId, filterAggregation?, propertyFilters?} — propertyFilters defaults to [] when omitted." },
+    { name: "filterEventType", type: "object", required: false, description: "Optional filter event that scopes which units are counted: {eventTypeId, filterAggregation?, propertyFilters?} — propertyFilters defaults to [] when omitted." },
+    { name: "triggerEventType", type: "object", required: false, description: "Optional trigger event (HAS_DONE_BEFORE): the unit must have done this event before the base event to be counted. Shape: {eventTypeId}." },
     { name: "tags", type: "array", required: false, description: "Initial tags. Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}. For now the backend rejects an empty or missing list with 400 \"Owners cannot be empty\" (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one until it ships.", itemType: "object" },
     { name: "cap", type: "object", required: false, description: "Optional outlier/cap configuration: baseEventCountCap/baseEventSumCap/baseEventValueCap/filterEventCountCap/filterEventSumCap/filterEventValueCap/metricValueCap (all default 0 = no cap), plus granularity (MINUTES|HOURS|DAYS|WEEKS, default DAYS)" },
@@ -336,7 +337,7 @@ const fmeMetricCreateSchema: BodySchema = {
 
 const fmeMetricUpdateSchema: BodySchema = {
   description:
-    "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name and trafficType are immutable and not accepted here. format/aggregation/isPositive/spread cannot be cleared with null (rejected with 400). baseEventTypes/filterEventType/tags/owners/cap are full replacements when provided; null (or [] for arrays) clears filterEventType/tags/owners/cap.",
+    "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name and trafficType are immutable and not accepted here. format/aggregation/isPositive/spread cannot be cleared with null (rejected with 400). baseEventTypes/filterEventType/triggerEventType/tags/owners/cap are full replacements when provided; null (or [] for arrays) clears filterEventType/triggerEventType/tags/owners/cap.",
   fields: [
     { name: "description", type: "string", required: false, description: "Updated description; null clears it" },
     { name: "format", type: "string", required: false, description: "Updated format (NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES); cannot be cleared with null" },
@@ -345,6 +346,7 @@ const fmeMetricUpdateSchema: BodySchema = {
     { name: "spread", type: "string", required: false, description: "Updated spread (PER or ACROSS); cannot be cleared with null" },
     { name: "baseEventTypes", type: "array", required: false, description: "Replacement base-event list (full replacement, at least one entry required when provided). Each entry's propertyFilters/propertyForValue default to []/null when omitted.", itemType: "object" },
     { name: "filterEventType", type: "object", required: false, description: "Replacement filter event, or null to clear it. propertyFilters defaults to [] when omitted." },
+    { name: "triggerEventType", type: "object", required: false, description: "Replacement trigger event (HAS_DONE_BEFORE), or null to clear it. Shape: {eventTypeId}." },
     { name: "tags", type: "array", required: false, description: "Replacement tag list; null or [] clears all tags", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Replacement owner list; null or [] clears all owners", itemType: "object" },
     { name: "cap", type: "object", required: false, description: "Replacement cap configuration, or null to clear it" },
@@ -1870,6 +1872,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
               ...(body?.description !== undefined ? { description: body.description } : {}),
               ...(body?.owners !== undefined ? { owners: body.owners } : {}),
               ...(body?.filterEventType !== undefined ? { filterEventType: normalizeFmeFilterEventType(body.filterEventType) } : {}),
+              ...(body?.triggerEventType !== undefined ? { triggerEventType: body.triggerEventType } : {}),
               ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
               ...(body?.cap !== undefined ? { cap: body.cap } : {}),
             };
@@ -1900,6 +1903,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
               "spread",
               "baseEventTypes",
               "filterEventType",
+              "triggerEventType",
               "tags",
               "owners",
               "cap",
@@ -1927,7 +1931,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           bodySchema: fmeMetricUpdateSchema,
           description:
-            "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged; format/aggregation/isPositive/spread cannot be cleared with null. baseEventTypes/filterEventType/tags/owners/cap are full replacements when provided. name and trafficType are immutable and not accepted here.",
+            "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged; format/aggregation/isPositive/spread cannot be cleared with null. baseEventTypes/filterEventType/triggerEventType/tags/owners/cap are full replacements when provided. name and trafficType are immutable and not accepted here.",
         },
         delete: {
           method: "DELETE",
@@ -1945,8 +1949,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
     },
     // ── FME Event Type (Harness-native only; read-only — no create/update/delete) ──
     // Discovery endpoint for fme_metric: use list/get here to resolve real event type IDs
-    // before referencing one in a metric's baseEventTypes/filterEventType or the
-    // event_type_ids list filter, instead of guessing an ID.
+    // before referencing one in a metric's baseEventTypes/filterEventType/triggerEventType or
+    // the event_type_ids list filter, instead of guessing an ID.
     {
       resourceType: "fme_event_type",
       displayName: "FME Event Type",
@@ -1956,7 +1960,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "supports list and get. Only event types with events received in the last 30 days are " +
         "visible; get returns 404 for an event type with no traffic type in the requesting " +
         "workspace's scope, or idle longer than 30 days. Use to discover event type IDs before " +
-        "referencing one in fme_metric's baseEventTypes/filterEventType or event_type_ids filter. " +
+        "referencing one in fme_metric's baseEventTypes/filterEventType/triggerEventType or " +
+        "event_type_ids filter. " +
         "Backed by /fme/api/v4/event-types.",
       toolset: "feature-flags",
       scope: "project",

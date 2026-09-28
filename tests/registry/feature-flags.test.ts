@@ -2298,6 +2298,7 @@ describe("fme_metric", () => {
         isPositive: true,
         spread: "PER",
         baseEventTypes: [{ eventTypeId: "e1" }],
+        triggerEventType: { eventTypeId: "e0" },
         tags: ["checkout"],
         owners: [{ type: "USER", id: "u1" }],
       },
@@ -2314,6 +2315,7 @@ describe("fme_metric", () => {
       isPositive: true,
       spread: "PER",
       baseEventTypes: [{ eventTypeId: "e1", propertyFilters: [], propertyForValue: null }],
+      triggerEventType: { eventTypeId: "e0" },
       tags: [{ name: "checkout" }],
       owners: [{ type: "USER", id: "u1" }],
     });
@@ -2395,7 +2397,7 @@ describe("fme_metric", () => {
     expect(req.body).toEqual({ spread: "ACROSS" });
   });
 
-  it("update: null clears filterEventType/tags/owners/cap", async () => {
+  it("update: null clears filterEventType/triggerEventType/tags/owners/cap", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -2403,11 +2405,32 @@ describe("fme_metric", () => {
       org_id: "o1",
       project_id: "p1",
       metric_id: "m1",
-      body: { filterEventType: null, tags: null, owners: null, cap: null },
+      body: { filterEventType: null, triggerEventType: null, tags: null, owners: null, cap: null },
     });
 
     const req = firstRequest(mockRequest);
-    expect(req.body).toEqual({ filterEventType: null, tags: null, owners: null, cap: null });
+    expect(req.body).toEqual({
+      filterEventType: null,
+      triggerEventType: null,
+      tags: null,
+      owners: null,
+      cap: null,
+    });
+  });
+
+  it("update: sets triggerEventType", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "m1",
+      body: { triggerEventType: { eventTypeId: "e0" } },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ triggerEventType: { eventTypeId: "e0" } });
   });
 
   it("update: does not crash when body is a non-object (e.g. a raw string)", async () => {
