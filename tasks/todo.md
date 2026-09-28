@@ -1,5 +1,12 @@
 # Harness MCP Server — Task Tracking
 
+## PR 1024 fme_metric create review (2026-09-28)
+
+- [x] Merge PR branch and reject non-PER `spread` on `fme_metric.create` (do not silently drop ACROSS).
+- [x] Keep duplicate-definition fields on default `fme_metric` list compaction.
+- [x] Align README create guidance with the PER-only create contract.
+- [x] Focused tests, then typecheck. Feature-flags suite 167 passed; `pnpm typecheck` passed.
+
 ## Version Bump 3.2.28 (2026-09-16)
 
 - [x] Update package, shrinkwrap, and MCPB manifest versions to 3.2.28.
