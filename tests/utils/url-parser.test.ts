@@ -521,7 +521,7 @@ describe("applyUrlDefaults", () => {
 
   it("skips URL org/project for an FME legacy workspace_id call whose URL carries no FME resource type", () => {
     const result = applyUrlDefaults(
-      { resource_type: "fme_feature_flag", workspace_id: "ws1" } as Record<string, unknown>,
+      { resource_type: "fme_identity", workspace_id: "ws1" } as Record<string, unknown>,
       "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/services",
     );
 
@@ -542,7 +542,7 @@ describe("applyUrlDefaults", () => {
 
   it("still merges URL org/project when workspace_id is an empty string", () => {
     const result = applyUrlDefaults(
-      { resource_type: "fme_feature_flag", workspace_id: "" } as Record<string, unknown>,
+      { resource_type: "fme_identity", workspace_id: "" } as Record<string, unknown>,
       "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/services",
     );
 
@@ -552,7 +552,7 @@ describe("applyUrlDefaults", () => {
 
   it("still merges URL org/project when workspace_id is null", () => {
     const result = applyUrlDefaults(
-      { resource_type: "fme_feature_flag", workspace_id: null } as Record<string, unknown>,
+      { resource_type: "fme_identity", workspace_id: null } as Record<string, unknown>,
       "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/services",
     );
 
@@ -560,17 +560,16 @@ describe("applyUrlDefaults", () => {
     expect(result.project_id).toBe("myProject");
   });
 
-  it("still merges URL org/project for Harness-native-only fme_segment even with a stray workspace_id", () => {
-    const result = applyUrlDefaults(
-      { resource_type: "fme_segment", workspace_id: "stale-ws" } as Record<string, unknown>,
-      "https://app.harness.io/ng/account/abc/all/orgs/myOrg/projects/myProject/services",
-    );
-
-    expect(result.org_id).toBe("myOrg");
-    expect(result.project_id).toBe("myProject");
-  });
-
-  it.each(["fme_metric", "fme_event_type"])(
+  it.each([
+    "fme_segment",
+    "fme_metric",
+    "fme_event_type",
+    "fme_feature_flag",
+    "fme_feature_flag_definition",
+    "fme_environment",
+    "fme_rollout_status",
+    "fme_traffic_type",
+  ])(
     "still merges URL org/project for Harness-native-only %s even with a stray workspace_id",
     (resourceType) => {
       const result = applyUrlDefaults(
@@ -583,14 +582,14 @@ describe("applyUrlDefaults", () => {
     },
   );
 
-  it("falls back to the URL-parsed resource type when the caller declares none", () => {
+  it("falls back to the URL-parsed resource type when the caller declares none, merging org/project even with a stray workspace_id since fme_feature_flag is Harness-native only", () => {
     const result = applyUrlDefaults(
       { workspace_id: "ws1" } as Record<string, unknown>,
       "https://app.harness.io/ng/account/abc/cf/orgs/myOrg/projects/myProject/feature-flags/my_flag",
     );
 
-    expect(result.org_id).toBeUndefined();
-    expect(result.project_id).toBeUndefined();
+    expect(result.org_id).toBe("myOrg");
+    expect(result.project_id).toBe("myProject");
   });
 
   it("parses RMG release phases URL into release_execution_phase + release_id slug", () => {
