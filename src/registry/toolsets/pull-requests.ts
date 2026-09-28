@@ -563,7 +563,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_comment",
       displayName: "PR Comment",
       description:
-        "Create, update, or delete comments on a pull request. To READ/LIST comments, use pr_activity with kind=comment. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
+        "Create, update, or delete comments on a pull request. Use execute actions 'resolve' and 'unresolve' to change a comment thread's status. To READ/LIST comments, use pr_activity with kind=comment. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
@@ -647,6 +647,48 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: "Delete a pull request comment",
           paramsSchema: PR_COMMENT_PARAMS,
+        },
+      },
+      executeActions: {
+        resolve: {
+          method: "PUT",
+          path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments/{pullreqCommentId}/status",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          pathParams: {
+            repo_id: "repoIdentifier",
+            pr_number: "prNumber",
+            comment_id: "pullreqCommentId",
+          },
+          bodyBuilder: () => ({ status: "resolved" }),
+          responseExtractor: passthrough,
+          paramsSchema: PR_COMMENT_PARAMS,
+          actionDescription:
+            "Resolve a pull request comment thread. comment_id must be a top-level comment id from harness_list(resource_type=\"pr_activity\") — the backend rejects reply ids with \"Can't change status of replies.\" Takes no body.",
+          bodySchema: {
+            description: "No body required — the action sends the resolved status itself.",
+            fields: [],
+          },
+        },
+        unresolve: {
+          method: "PUT",
+          path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments/{pullreqCommentId}/status",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          pathParams: {
+            repo_id: "repoIdentifier",
+            pr_number: "prNumber",
+            comment_id: "pullreqCommentId",
+          },
+          bodyBuilder: () => ({ status: "active" }),
+          responseExtractor: passthrough,
+          paramsSchema: PR_COMMENT_PARAMS,
+          actionDescription:
+            "Reopen (unresolve) a previously resolved pull request comment thread. comment_id must be a top-level comment id from harness_list(resource_type=\"pr_activity\"). Takes no body.",
+          bodySchema: {
+            description: "No body required — the action sends the active status itself.",
+            fields: [],
+          },
         },
       },
     },

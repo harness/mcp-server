@@ -1541,13 +1541,15 @@ IaCM list responses expose `page_count` as the count for the current page only (
 | -------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `pull_request` | x    | x   | x      | x      |        | `close`, `merge` |
 | `pr_reviewer`  | x    |     | x      |        |        | `submit_review` |
-| `pr_comment`   |      |     | x      | x      | x      |                 |
+| `pr_comment`   |      |     | x      | x      | x      | `resolve`, `unresolve` |
 | `pr_check`     | x    |     |        |        |        |                 |
 | `pr_activity`  | x    |     |        |        |        |                 |
 
 Use `harness_execute(resource_type="pull_request", action="close", ...)` for an explicit close operation. `harness_update` also accepts `body.state` (`open` or `closed`) and routes state changes to the dedicated Harness Code PR state endpoint; send title/description edits in a separate update call.
 
 Use `harness_list(resource_type="pr_activity", filters={type: ["comment", "code-comment"]}, ...)` to read PR comments. Use `pr_comment` for comment write operations.
+
+Use `harness_execute(resource_type="pr_comment", action="resolve", ...)` to resolve a comment thread and `action="unresolve"` to reopen it. Neither takes a body. `comment_id` must be a top-level comment id from `pr_activity`; the backend rejects reply ids.
 
 
 ### Release Management

@@ -801,3 +801,86 @@ describe("pr_comment bodyBuilder translation", () => {
     }));
   });
 });
+
+describe("pr_comment resolve and unresolve execute actions", () => {
+  it("resolves a comment thread with the resolved status body", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { id: 123, resolved: 1700000000 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_comment", "resolve", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      comment_id: "123",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "PUT",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/comments/123/status",
+      body: { status: "resolved" },
+    }));
+  });
+
+  it("unresolves a comment thread with the active status body", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ data: { id: 123 } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_comment", "unresolve", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      comment_id: "123",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "PUT",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/comments/123/status",
+      body: { status: "active" },
+    }));
+  });
+
+  it("does not inject scope identifiers into the status body", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_comment", "resolve", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      comment_id: "123",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as Record<string, unknown>;
+    expect(call.body).toEqual({ status: "resolved" });
+  });
+
+  it("rejects resolve when comment_id is missing", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pr_comment", "resolve", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+      }),
+    ).rejects.toThrow(/comment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("declares both status actions with a low_write, retry-safe policy", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const def = registry.getResource("pr_comment");
+
+    for (const action of ["resolve", "unresolve"]) {
+      const spec = def.executeActions?.[action];
+      expect(spec, `pr_comment is missing the ${action} action`).toBeDefined();
+      expect(spec!.operationPolicy).toEqual({ risk: "low_write", retryPolicy: "safe" });
+      expect(spec!.paramsSchema?.fields.map((f) => f.name)).toContain("comment_id");
+    }
+  });
+});

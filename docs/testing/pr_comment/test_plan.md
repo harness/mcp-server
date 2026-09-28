@@ -7,7 +7,7 @@
 | **Toolset** | pull-requests |
 | **Scope** | account |
 | **Operations** | create, update, delete |
-| **Execute Actions** | None |
+| **Execute Actions** | resolve, unresolve |
 | **Identifier Fields** | repo_id, pr_number, comment_id |
 | **Filter Fields** | None |
 | **Deep Link** | No |
@@ -27,6 +27,11 @@
 | TC-prc-009 | Error | Create comment with empty text | `harness_create(resource_type="pr_comment", params={"repo_id":"my-repo", "pr_number":1}, body={"text": ""})` | Returns validation error for empty text |
 | TC-prc-010 | Error | Create comment missing text field | `harness_create(resource_type="pr_comment", params={"repo_id":"my-repo", "pr_number":1}, body={})` | Returns validation error for missing text |
 | TC-prc-011 | Edge | Create comment with very long text | `harness_create(resource_type="pr_comment", params={"repo_id":"my-repo", "pr_number":1}, body={"text": "A very long comment text..."})` | Handles long comment text appropriately |
+| TC-prc-012 | Execute | Resolve a comment thread | `harness_execute(resource_type="pr_comment", action="resolve", params={"repo_id":"my-repo", "pr_number":1, "comment_id":"123"})` | Thread marked resolved; response returns the activity with a `resolved` timestamp and a `resolver` user |
+| TC-prc-013 | Execute | Reopen a resolved thread | `harness_execute(resource_type="pr_comment", action="unresolve", params={"repo_id":"my-repo", "pr_number":1, "comment_id":"123"})` | Thread returns to active; `resolved` and `resolver` drop off the activity |
+| TC-prc-014 | Error | Resolve a reply rather than the thread root | `harness_execute(resource_type="pr_comment", action="resolve", params={"repo_id":"my-repo", "pr_number":1, "comment_id":"<reply id>"})` | Backend 400 `Can't change status of replies.` surfaces as a readable error |
+| TC-prc-015 | Error | Resolve a comment id from a different PR | `harness_execute(resource_type="pr_comment", action="resolve", params={"repo_id":"my-repo", "pr_number":2, "comment_id":"123"})` | Returns 404 |
+| TC-prc-016 | Edge | Resolve an already-resolved thread | repeat TC-prc-012 | Idempotent success |
 
 ## Notes
 - `pr_comment` is write-only for comment create/update/delete. Read comments with `pr_activity`.
@@ -35,3 +40,6 @@
 - General comments only need `text`; inline PR comments also need `path` and `line_new`/`line_old`
 - Inline comments can optionally include `source_commit_sha` and `target_commit_sha` for precise diff context
 - Text field supports markdown formatting
+- Execute actions `resolve` and `unresolve` change a thread's status; neither takes a body
+- Only top-level comments carry a status. `comment_id` must be the thread root from `pr_activity` — the backend rejects reply ids with `Can't change status of replies.`
+- `unresolve` maps to the backend's `active` status; there is no separate un-resolve endpoint
