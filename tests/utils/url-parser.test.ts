@@ -426,6 +426,24 @@ describe("applyUrlDefaults", () => {
     expect(result.resource_scope).toBe("account");
   });
 
+  it("injects resource_scope='account' for account-level user-group URLs", () => {
+    const parsed = parseHarnessUrl(
+      "https://app.harness.io/ng/account/abc/settings/access-control/user-groups/all_account_users",
+    );
+    expect(parsed.resource_type).toBe("user_group");
+    expect(parsed.resource_id).toBe("all_account_users");
+    expect(parsed.resource_scope).toBe("account");
+
+    const result = applyUrlDefaults(
+      {},
+      "https://app.harness.io/ng/account/abc/settings/access-control/user-groups/all_account_users",
+      { includeResourceScope: true },
+    );
+    expect(result.resource_type).toBe("user_group");
+    expect(result.resource_id).toBe("all_account_users");
+    expect(result.resource_scope).toBe("account");
+  });
+
   it("injects resource_scope='account' for account-level File Store URLs", () => {
     const result = applyUrlDefaults(
       {},

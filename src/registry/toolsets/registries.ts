@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, PathBuilderConfig, BodySchema } from "../types.js";
-import { ngExtract, harListExtract } from "../extractors.js";
+import { ngExtract, harListExtract, passthrough } from "../extractors.js";
 
 // Canonical PackageType enum — matches RegistryRequest.PackageType in the v1 OpenAPI spec.
 const PACKAGE_TYPES = [
@@ -26,7 +26,9 @@ const registryCreateSchema: BodySchema = {
         "VIRTUAL: `{ type: 'VIRTUAL', upstreamProxies: ['<spaceRef>/<registryName>', ...] }`. " +
         "UPSTREAM: `{ type: 'UPSTREAM', source: 'Dockerhub|PyPi|NpmJs|MavenCentral|NugetOrg|Crates|" +
         "RubyGems|GoProxy|HuggingFace|Anaconda|Pubdev|Packagist|PuppetForge|HelmChartRepo|" +
-        "ConanCenter|TerraformRegistry|CRAN|Wolfi|Alpine|Custom', url: '<url>' }` (url required for Custom source).",
+        "ConanCenter|TerraformRegistry|CRAN|Wolfi|Alpine|Custom', authType: 'AccessKeySecretKey|Anonymous|" +
+        "UserPassword|BearerToken', url: '<url>' }` (`authType` is required for UPSTREAM — use 'Anonymous' " +
+        "when no credentials are needed; url required for Custom source).",
     },
     { name: "parentRef", type: "string", required: false, description: "Scope ref accountId/orgId/projectId — auto-filled from scope; override only when creating in a different scope" },
     { name: "description", type: "string", required: false, description: "Human-readable description" },
@@ -87,7 +89,7 @@ export const registriesToolset: ToolsetDefinition = {
             `/har/api/v1/spaces/${harSpaceRef(input, config)}/+/registries`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
-            search: "search_term",
+            search_term: "search_term",
             type: "type",
             package_type: "package_type",
             page: "page",
@@ -163,10 +165,10 @@ export const registriesToolset: ToolsetDefinition = {
           path: "/har/api/v1/registry",
           pathBuilder: (input, config) =>
             `/har/api/v1/registry/${harRegistryRef(input, config)}/+/artifacts`,
-          pathParams: { registry_id: "registryIdentifier" },
+          pathParams: { registry_id: "registryIdentifier", artifact_id: "artifactIdentifier" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
-            search: "search_term",
+            search_term: "search_term",
             page: "page",
             size: "size",
           },
@@ -199,7 +201,7 @@ export const registriesToolset: ToolsetDefinition = {
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
-            search: "search_term",
+            search_term: "search_term",
             page: "page",
             size: "size",
           },
@@ -233,12 +235,66 @@ export const registriesToolset: ToolsetDefinition = {
           queryParams: {
             sort_order: "sort_order",
             sort_field: "sort_field",
-            search: "search_term",
+            search_term: "search_term",
             page: "page",
             size: "size",
           },
           responseExtractor: harListExtract("files"),
           description: "List files in an artifact version",
+        },
+      },
+    },
+    {
+      resourceType: "quarantine",
+      displayName: "Quarantine",
+      description:
+        "Quarantine or unquarantine an artifact in a registry. Quarantine immediately blocks pulls — use update (PUT) to quarantine, delete (DELETE) to lift quarantine.",
+      toolset: "registries",
+      scope: "project",
+      // resource_id maps to "artifact" (last identifierField); registry_id is passed via params.
+      identifierFields: ["registry_id", "artifact"],
+      operations: {
+        // PUT is idempotent upsert — maps to update. Quarantine blocks artifact pulls immediately.
+        update: {
+          method: "PUT",
+          path: "/har/api/v1/registry",
+          pathBuilder: (input, config) =>
+            `/har/api/v1/registry/${harRegistryRef(input, config)}/+/quarantine`,
+          pathParams: { registry_id: "registryIdentifier" },
+          operationPolicy: { risk: "medium_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          bodyBuilder: (input) => input.body,
+          responseExtractor: ngExtract,
+          description: "Quarantine an artifact in a registry — blocks pulls immediately",
+          bodySchema: {
+            description: "Quarantine request. Marks a specific artifact (and optionally a file path) as quarantined.",
+            fields: [
+              { name: "artifact", type: "string", required: true, description: "Artifact name to quarantine" },
+              { name: "reason", type: "string", required: true, description: "Reason for quarantine" },
+              { name: "filePath", type: "string", required: false, description: "Specific file path within the artifact to quarantine" },
+              { name: "version", type: "string", required: false, description: "Artifact version to quarantine" },
+              { name: "artifactType", type: "string", required: false, description: "Artifact type (e.g. model, dataset, module, provider)" },
+              { name: "artifactKeyFilters", type: "object", required: false, description: "Key-value filters (format: key:value) to further scope the quarantine target" },
+            ],
+          },
+        },
+        // DELETE removes quarantine — restores artifact availability.
+        delete: {
+          method: "DELETE",
+          path: "/har/api/v1/registry",
+          pathBuilder: (input, config) =>
+            `/har/api/v1/registry/${harRegistryRef(input, config)}/+/quarantine`,
+          pathParams: { registry_id: "registryIdentifier" },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          queryParams: {
+            artifact: "artifact",
+            version: "version",
+            file_path: "file_path",
+            artifact_type: "artifact_type",
+            filters: "filters",
+          },
+          responseExtractor: passthrough,
+          description: "Remove quarantine from an artifact — restores pull access",
         },
       },
     },

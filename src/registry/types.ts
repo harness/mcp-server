@@ -187,6 +187,12 @@ export interface BodyFieldSpec {
   required: boolean;
   /** Brief description (shown to agents) */
   description: string;
+  /**
+   * Allowed values, if the field is constrained to a known set.
+   * Surfaced by harness_describe. Advisory only — the registry does not reject other values.
+   * Enforce the set in the operation's bodyBuilder when the API requires it.
+   */
+  enum?: string[];
   /** For "object" type: nested fields */
   fields?: BodyFieldSpec[];
   /** For "array" type: item type description */
@@ -354,6 +360,8 @@ export interface EndpointSpec {
    * bodies. Some APIs take scope only in query/path and reject extra body fields.
    */
   skipScopeBodyInjection?: boolean;
+  /** Override HARNESS_API_TIMEOUT_MS for this endpoint only (milliseconds). */
+  timeoutMs?: number;
   /** Declares the risk level and retry behavior for this operation. */
   operationPolicy: OperationPolicy;
   /**

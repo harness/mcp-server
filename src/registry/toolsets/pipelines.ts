@@ -157,6 +157,29 @@ const PIPELINE_V0_GET_PARAMS: ParamsSchema = {
   ],
 };
 
+/** Query names v0 pipeline GET and pipeline_resolved_yaml GET send. `branch_name` is an alias of `branch`. */
+const PIPELINE_V0_PIPELINE_GET_QUERY_PARAMS = {
+  branch: "branch",
+  branch_name: "branch",
+  store_type: "storeType",
+  connector_ref: "connectorRef",
+  repo_name: "repoName",
+  load_from_fallback_branch: "loadFromFallbackBranch",
+  is_harness_code_repo: "isHarnessCodeRepo",
+} as const;
+
+const PIPELINE_V0_PIPELINE_GET_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "branch", required: false, description: "Git branch for a remote pipeline. Alias of branch_name. Pass via params." },
+    { name: "branch_name", required: false, description: "Git branch — sent as branch. Alias of branch. Pass via params." },
+    { name: "store_type", required: false, description: "INLINE or REMOTE. Pass via params." },
+    { name: "connector_ref", required: false, description: "Git connector ref for external Git. Pass via params." },
+    { name: "repo_name", required: false, description: "Git repository name. Pass via params." },
+    { name: "load_from_fallback_branch", required: false, description: "When true, load from the created non-default branch if the requested branch is empty. Pass via params." },
+    { name: "is_harness_code_repo", required: false, description: "Set true for Harness Code repositories. Pass via params." },
+  ],
+};
+
 const PIPELINE_V0_UPDATE_PARAMS: ParamsSchema = {
   fields: [
     { name: "store_type", required: false, description: "INLINE or REMOTE. Pass via params." },
@@ -696,15 +719,10 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/pipeline/api/pipelines/{pipelineIdentifier}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
-          queryParams: {
-            branch: "branch",
-            store_type: "storeType",
-            connector_ref: "connectorRef",
-            repo_name: "repoName",
-          },
+          queryParams: { ...PIPELINE_V0_PIPELINE_GET_QUERY_PARAMS },
           responseExtractor: ngExtract,
-          paramsSchema: PIPELINE_V0_GET_PARAMS,
-          description: "Get pipeline details including YAML definition. For remote/git-backed pipelines, pass branch to specify which branch to read from.",
+          paramsSchema: PIPELINE_V0_PIPELINE_GET_PARAMS,
+          description: "Get pipeline details including YAML definition. Requires pipeline_id (or resource_id). For remote/git-backed pipelines, pass branch (or branch_name). Optional: store_type, connector_ref, repo_name, load_from_fallback_branch, is_harness_code_repo.",
         },
         create: {
           method: "POST",
@@ -794,7 +812,8 @@ export const pipelinesToolset: ToolsetDefinition = {
             module: "module",
             input_set_ids: "inputSetIdentifiers",
             branch: "branch",
-            pipeline_branch: "pipelineBranchName",
+            // Keep pipeline_branch after branch: later entries overwrite the same query key.
+            pipeline_branch: "branch",
             store_type: "storeType",
             connector_ref: "connectorRef",
             repo_name: "repoName",
@@ -834,13 +853,13 @@ export const pipelinesToolset: ToolsetDefinition = {
               skipIfPresent: "build",
             },
           ],
-          actionDescription: "Execute/run a pipeline. RECOMMENDED: first check harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID') to see required inputs. For simple variable inputs: pass key-value pairs in inputs (e.g. {branch: 'main'}) — auto-resolved. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex pipelines with template inputs: use input_set_ids to reference a saved input set. List available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}). To load the pipeline YAML from a specific git branch (e.g. a feature branch): pass params={pipeline_branch: 'feature/my-fix'} — sent as ?pipelineBranchName= on the API call.",
+          actionDescription: "Execute/run a pipeline. RECOMMENDED: first check harness_get(resource_type='runtime_input_template', resource_id='PIPELINE_ID') to see required inputs. For simple variable inputs: pass key-value pairs in inputs (e.g. {branch: 'main'}) — auto-resolved. For CI pipelines with codebase: pass {branch: 'main'}, {tag: 'v1.0'}, {pr_number: '42'}, or {commit_sha: 'abc123'} — auto-expanded to the full build structure. For complex pipelines with template inputs: use input_set_ids to reference a saved input set. List available sets with harness_list(resource_type='input_set', filters={pipeline_id: '...'}). To load the pipeline YAML from a specific git branch (e.g. a feature branch): pass params={pipeline_branch: 'feature/my-fix'} — sent as ?branch= on the API call. pipeline_branch takes precedence over params.branch; inputs.branch independently selects the CI codebase branch.",
           bodySchema: {
             description: "Runtime inputs for pipeline execution. For simple variables: pass key-value pairs in inputs like {branch: 'main', env: 'prod'}, auto-resolved against the pipeline's runtime input template. CI codebase shorthands (branch, tag, pr_number, commit_sha) are auto-expanded to full build structures. For complex pipelines with template inputs, use input_set_ids to reference saved input sets. You can combine both: input_set_ids for the base config + inputs for simple overrides. Check runtime_input_template first to see what the pipeline expects.",
             fields: [
               { name: "inputs", type: "yaml", required: false, description: "Key-value pairs (e.g. {branch: 'main', env: 'prod'}) — auto-resolved to full YAML. CI codebase shorthands (branch, tag, pr_number, commit_sha) are auto-expanded. For template inputs, use input_set_ids instead." },
               { name: "input_set_ids", type: "array", required: false, description: "Input set identifiers to apply. Recommended for complex pipelines with template inputs. List available: harness_list(resource_type='input_set', filters={pipeline_id: '...'})." },
-              { name: "pipeline_branch", type: "string", required: false, description: "Git branch to load the pipeline YAML from (sent as ?pipelineBranchName= on the API). Use when the pipeline definition lives on a feature branch rather than the default branch." },
+              { name: "pipeline_branch", type: "string", required: false, description: "Git branch to load the pipeline YAML from (sent as ?branch= on the API). Takes precedence over params.branch. The CI codebase branch is selected independently through inputs." },
             ],
           },
         },
@@ -1543,19 +1562,14 @@ export const pipelinesToolset: ToolsetDefinition = {
           path: "/pipeline/api/pipelines/{pipelineIdentifier}",
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           pathParams: { pipeline_id: "pipelineIdentifier" },
-          queryParams: {
-            branch: "branch",
-            store_type: "storeType",
-            connector_ref: "connectorRef",
-            repo_name: "repoName",
-          },
-          paramsSchema: PIPELINE_V0_GET_PARAMS,
+          queryParams: { ...PIPELINE_V0_PIPELINE_GET_QUERY_PARAMS },
+          paramsSchema: PIPELINE_V0_PIPELINE_GET_PARAMS,
           staticQueryParams: {
             getTemplatesResolvedPipeline: "true",
           },
           responseExtractor: pipelineResolvedYamlExtract,
           description:
-            "Fetch resolved pipeline YAML with templates expanded. Returns stageMetadataMap for patching entity-type activity inputs (deploymentType, environmentRef).",
+            "Fetch resolved pipeline YAML with templates expanded. Requires pipeline_id (or resource_id). For remote/git-backed pipelines, pass branch (or branch_name). Optional: store_type, connector_ref, repo_name, load_from_fallback_branch, is_harness_code_repo. Returns stageMetadataMap for patching entity-type activity inputs (deploymentType, environmentRef).",
         },
       },
     },

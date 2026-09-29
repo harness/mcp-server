@@ -646,17 +646,21 @@ describe("Registry", () => {
       });
       const client = makeClient(mockRequest);
 
+      const listInput = resourceType === "infrastructure" ? { environment_id: "my_env" } : {};
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "account",
+        ...listInput,
       });
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "org",
         org_id: "org-level",
+        ...listInput,
       });
       await scopedRegistry.dispatch(client, resourceType, "list", {
         resource_scope: "project",
         org_id: "proj-org",
         project_id: "proj-level",
+        ...listInput,
       });
 
       const accountCall = mockRequest.mock.calls[0][0];
@@ -997,7 +1001,7 @@ describe("Registry", () => {
       expect(call.body).toEqual({ state: "closed", is_draft: false });
     });
 
-    it("pipeline execute sends pipeline_branch as ?pipelineBranchName= query param", async () => {
+    it("pipeline execute sends pipeline_branch as ?branch= query param", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-123" } });
       const client = makeClient(mockRequest);
 
@@ -1010,10 +1014,23 @@ describe("Registry", () => {
       const call = mockRequest.mock.calls[0][0];
       expect(call.method).toBe("POST");
       expect(call.path).toContain("/pipeline/api/pipeline/execute/my-pipeline");
-      expect(call.params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+      expect(call.params).toMatchObject({ branch: "feature/my-fix" });
     });
 
-    it("pipeline execute omits pipelineBranchName when pipeline_branch not provided", async () => {
+    it("pipeline execute gives pipeline_branch precedence over the branch alias", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-123" } });
+      await registry.dispatchExecute(makeClient(mockRequest), "pipeline", "run", {
+        pipeline_id: "my-pipeline",
+        branch: "feature/alias",
+        pipeline_branch: "feature/definition",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params).toMatchObject({ branch: "feature/definition" });
+      expect(call.params).not.toHaveProperty("pipelineBranchName");
+    });
+
+    it("pipeline execute omits branch when pipeline_branch not provided", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-456" } });
       const client = makeClient(mockRequest);
 
@@ -1023,10 +1040,10 @@ describe("Registry", () => {
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
-      expect(call.params?.pipelineBranchName).toBeUndefined();
+      expect(call.params?.branch).toBeUndefined();
     });
 
-    it("pipeline execute omits pipelineBranchName when pipeline_branch is empty string", async () => {
+    it("pipeline execute omits branch when pipeline_branch is empty string", async () => {
       const mockRequest = vi.fn().mockResolvedValue({ planExecution: { uuid: "exec-789" } });
       const client = makeClient(mockRequest);
 
@@ -1037,7 +1054,7 @@ describe("Registry", () => {
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
-      expect(call.params?.pipelineBranchName).toBeUndefined();
+      expect(call.params?.branch).toBeUndefined();
     });
 
     it("pipeline execute sends both pipeline_branch and inputs.branch independently", async () => {
@@ -1047,15 +1064,15 @@ describe("Registry", () => {
       await registry.dispatchExecute(client, "pipeline", "run", {
         pipeline_id: "my-pipeline",
         pipeline_branch: "feature/my-fix",
-        inputs: { branch: "feature/my-fix" },
+        inputs: { branch: "feature/application-code" },
       });
 
       expect(mockRequest).toHaveBeenCalledOnce();
       const call = mockRequest.mock.calls[0][0];
       // pipeline_branch → URL query param (which git branch loads the pipeline YAML)
-      expect(call.params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+      expect(call.params).toMatchObject({ branch: "feature/my-fix" });
       // inputs.branch → body build structure (which code branch the CI job checks out)
-      expect(JSON.stringify(call.body)).toContain("feature/my-fix");
+      expect(JSON.parse(call.body)).toEqual({ branch: "feature/application-code" });
     });
 
     it("pipeline update with yamlPipeline sends raw YAML string as body with Content-Type header and returns openInHarness", async () => {
@@ -1753,6 +1770,182 @@ describe("Registry", () => {
       expect(createFields.map(f => f.name)).not.toContain("type");
       // config must be present (drives VIRTUAL/UPSTREAM)
       expect(createFields.map(f => f.name)).toContain("config");
+    });
+  });
+
+  describe("quarantine update (PUT)", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries" }));
+    });
+
+    it("exact path is PUT /har/api/v1/registry/{spaceRef}/{registryId}/+/quarantine", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: { artifact: "nginx" } });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("PUT");
+      expect(call.path).toBe("/har/api/v1/registry/test-account/default/test-project/my-reg/+/quarantine");
+    });
+
+    it("scope fields (orgIdentifier, projectIdentifier) are NOT injected into the body", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS", data: {} });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+    });
+
+    it("response is unwrapped from { status, data } envelope", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        status: "SUCCESS",
+        data: { artifact: "nginx", filePath: "/etc/passwd" },
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await reg.dispatch(client, "quarantine", "update", {
+        registry_id: "my-reg",
+        body: { artifact: "nginx", reason: "malicious" },
+      }) as Record<string, unknown>;
+
+      expect(result.artifact).toBe("nginx");
+      expect(result.status).toBeUndefined();
+    });
+
+    it("update risk is medium_write with safe retry (PUT is idempotent)", () => {
+      const def = reg.getResource("quarantine");
+      expect(def.operations.update?.operationPolicy?.risk).toBe("medium_write");
+      expect(def.operations.update?.operationPolicy?.retryPolicy).toBe("safe");
+    });
+
+    it("delete (unquarantine) sends DELETE to the quarantine path with artifact query param", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ status: "SUCCESS" });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "quarantine", "delete", {
+        registry_id: "my-reg",
+        artifact: "nginx",
+        version: "1.25.0",
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("DELETE");
+      expect(call.path).toBe("/har/api/v1/registry/test-account/default/test-project/my-reg/+/quarantine");
+      expect(call.params?.artifact).toBe("nginx");
+      expect(call.params?.version).toBe("1.25.0");
+    });
+
+    it("delete risk is destructive (per structural validation rule for all deletes)", () => {
+      const def = reg.getResource("quarantine");
+      expect(def.operations.delete?.operationPolicy?.risk).toBe("destructive");
+    });
+  });
+
+  describe("firewall_exception_v3 create", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+    });
+
+    it("exact path is POST /har/api/v3/scans/exceptions", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ exceptionId: "exc-1", status: "PENDING" });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: {
+          registryId: "reg-uuid-123",
+          packageName: "lodash",
+          businessJustification: "Required for build process",
+        },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.method).toBe("POST");
+      expect(call.path).toBe("/har/api/v3/scans/exceptions");
+    });
+
+    it("org_identifier and project_identifier are NOT sent in body or query params", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({});
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: { registryId: "reg-uuid-123", packageName: "lodash", businessJustification: "needed" },
+      });
+
+      const call = mockRequest.mock.calls[0][0];
+      // body must not carry scope fields
+      expect(call.body.orgIdentifier).toBeUndefined();
+      expect(call.body.projectIdentifier).toBeUndefined();
+      // query string: only account_identifier — create is account-scoped only
+      expect(call.params?.account_identifier).toBe("test-account");
+      expect(call.params?.org_identifier).toBeUndefined();
+      expect(call.params?.project_identifier).toBeUndefined();
+    });
+
+    it("bodySchema has registryId, packageName, businessJustification as required fields", () => {
+      const def = reg.getResource("firewall_exception_v3");
+      const fields = def.operations.create?.bodySchema?.fields ?? [];
+      const required = fields.filter(f => f.required).map(f => f.name);
+      expect(required).toContain("registryId");
+      expect(required).toContain("packageName");
+      expect(required).toContain("businessJustification");
+    });
+
+    it("response is passed through as-is (no data envelope unwrap)", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({
+        exceptionId: "exc-abc",
+        status: "PENDING",
+        packageName: "lodash",
+      });
+      const client = makeClient(mockRequest);
+
+      const result = await reg.dispatch(client, "firewall_exception_v3", "create", {
+        body: { registryId: "reg-uuid-123", packageName: "lodash", businessJustification: "needed" },
+      }) as Record<string, unknown>;
+
+      expect(result.exceptionId).toBe("exc-abc");
+      expect(result.status).toBe("PENDING");
+    });
+  });
+
+  describe("firewall_exception_v3 list scope", () => {
+    let reg: Registry;
+    beforeEach(() => {
+      reg = new Registry(makeConfig({ HARNESS_TOOLSETS: "registries-v3" }));
+    });
+
+    it("list does not leak org/project when neither is passed", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { exceptions: [], itemCount: 0 } });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "list", {});
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params?.org_identifier).toBeUndefined();
+      expect(call.params?.project_identifier).toBeUndefined();
+      expect(call.params?.account_identifier).toBe("test-account");
+    });
+
+    it("list forwards explicit org_id as org_identifier", async () => {
+      const mockRequest = vi.fn().mockResolvedValue({ data: { exceptions: [], itemCount: 0 } });
+      const client = makeClient(mockRequest);
+
+      await reg.dispatch(client, "firewall_exception_v3", "list", { org_id: "my-org", project_id: "my-proj" });
+
+      const call = mockRequest.mock.calls[0][0];
+      expect(call.params?.org_identifier).toBe("my-org");
+      expect(call.params?.project_identifier).toBe("my-proj");
     });
   });
 

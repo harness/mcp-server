@@ -71,8 +71,8 @@ describe("incident resource definition", () => {
     const registry = new Registry(makeConfig());
     const def = registry.getResource("incident");
     const severityField = def.operations[op]?.bodySchema?.fields.find((f) => f.name === "severity");
-    // BodyFieldSpec has no enum support, so the values must live in the description.
-    // SEV0 is Critical, not the lowest severity — spelled out to prevent the off-by-one read.
+    // Severity ids are documented in the description with labels. SEV0 is Critical,
+    // not the lowest severity — spelled out to prevent the off-by-one read.
     for (const label of ["0 (SEV0: Critical)", "1 (SEV1: Major)", "2 (SEV2: Moderate)", "3 (SEV3: Minor)", "4 (SEV4: Cosmetic)"]) {
       expect(severityField?.description).toContain(label);
     }

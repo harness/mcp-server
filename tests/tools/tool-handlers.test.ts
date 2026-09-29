@@ -2167,18 +2167,23 @@ describe("harness_execute", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
-  it("passes pipeline_branch from params as ?pipelineBranchName= query param", async () => {
+  it("passes pipeline_branch from params as ?branch= query param", async () => {
     await server.call("harness_execute", {
       resource_type: "pipeline",
       action: "run",
       resource_id: "my-pipe",
       params: { pipeline_branch: "feature/my-fix" },
     });
-    expect(mockRequest).toHaveBeenCalled();
-    // Find the POST execute call.
-    const postCall = mockRequest.mock.calls.find((c) => c[0].method === "POST");
-    expect(postCall).toBeDefined();
-    expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix" });
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const request = mockRequest.mock.calls[0][0];
+    expect(request).toMatchObject({
+      method: "POST",
+      path: "/pipeline/api/pipeline/execute/my-pipe",
+      params: { branch: "feature/my-fix" },
+      headers: { "Content-Type": "application/yaml" },
+      body: "",
+    });
+    expect(request.params).not.toHaveProperty("pipelineBranchName");
   });
 
   it("pipeline_branch coexists with other params without clobbering", async () => {
@@ -2190,7 +2195,7 @@ describe("harness_execute", () => {
     });
     const postCall = mockRequest.mock.calls.find((c) => c[0].method === "POST");
     expect(postCall).toBeDefined();
-    expect(postCall![0].params).toMatchObject({ pipelineBranchName: "feature/my-fix", module: "ci" });
+    expect(postCall![0].params).toMatchObject({ branch: "feature/my-fix", module: "ci" });
   });
 
   it("defaults remote pipeline_branch from branch and runs without read-cache preflight", async () => {
@@ -2220,7 +2225,6 @@ describe("harness_execute", () => {
     expect(postCall.method).toBe("POST");
     expect(postCall.params).toMatchObject({
       branch: "feature/my-fix",
-      pipelineBranchName: "feature/my-fix",
       storeType: "REMOTE",
       connectorRef: "account.github",
       repoName: "testdataserv",
@@ -2260,10 +2264,42 @@ pipeline:
     expect(postCall.method).toBe("POST");
     expect(postCall.params).toMatchObject({
       branch: "feature/from-yaml",
-      pipelineBranchName: "feature/from-yaml",
       storeType: "REMOTE",
       repoName: "testdataserv",
     });
+  });
+
+  it.each([
+    { name: "pipeline_branch", params: { pipeline_branch: "feature/definition" } },
+    { name: "branch alias", params: { branch: "feature/definition" } },
+    { name: "explicit pipeline_branch over alias", params: { pipeline_branch: "feature/definition", branch: "feature/alias" } },
+  ])("preserves $name independently of the runtime YAML codebase branch", async ({ params }) => {
+    const inputs = YAML.stringify({
+      pipeline: {
+        identifier: "my-pipe",
+        properties: {
+          ci: {
+            codebase: {
+              build: { type: "branch", spec: { branch: "feature/application-code" } },
+            },
+          },
+        },
+      },
+    });
+    const result = await server.call("harness_execute", {
+      resource_type: "pipeline",
+      action: "run",
+      resource_id: "my-pipe",
+      params,
+      inputs,
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(mockRequest).toHaveBeenCalledOnce();
+    const request = mockRequest.mock.calls[0][0];
+    expect(request.params).toMatchObject({ branch: "feature/definition" });
+    expect(request.params).not.toHaveProperty("pipelineBranchName");
+    expect(request.body).toBe(inputs);
   });
 
   it("closes a pull request from a Harness PR URL", async () => {
@@ -2309,6 +2345,30 @@ pipeline:
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
   });
 
+  it("maps resource_id to comment_id for pr_comment set_status", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ id: 123, resolved: 1_700_000_000_000 });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient, makeConfig());
+
+    const result = await prServer.call("harness_execute", {
+      resource_type: "pr_comment",
+      action: "set_status",
+      resource_id: "123",
+      params: { repo_id: "my-repo", pr_number: "42" },
+      body: { status: "resolved" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(prRequest).toHaveBeenCalledOnce();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/comments/123/status");
+    expect(call.body).toEqual({ status: "resolved" });
+  });
+
   it("explicit resource_id overrides URL-derived pr_number", async () => {
     const prServer = makeMcpServer("accept");
     const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
@@ -2344,6 +2404,7 @@ pipeline:
       params: {
         repo_id: "my-repo",
         method: "squash",
+        source_sha: "abc123",
         delete_source_branch: false,
         dry_run: false,
       },
@@ -2357,6 +2418,7 @@ pipeline:
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/merge");
     expect(call.body).toEqual({
       method: "squash",
+      source_sha: "abc123",
       delete_source_branch: false,
       dry_run: false,
     });
@@ -3216,6 +3278,7 @@ pipeline:
         connector_ref: "gh_conn",
         repo_name: "my-repo",
         pipeline_branch: "feature/x",
+        branch: "feature/alias",
       },
     });
 
@@ -3251,7 +3314,8 @@ pipeline:
     expect(runCall.body).toContain("staging");
     expect(runCall.body).toContain("branch");
     expect(runCall.body).toContain("main");
-    expect(runCall.params?.pipelineBranchName).toBe("feature/x");
+    expect(runCall.params?.branch).toBe("feature/x");
+    expect(runCall.params).not.toHaveProperty("pipelineBranchName");
     expect(runCall.params?.inputSetIdentifiers).toBeUndefined();
   });
 
@@ -3469,7 +3533,7 @@ pipeline:
     });
     expect(result.isError).toBe(true);
     expect(parseResult(result)).toMatchObject({
-      error: expect.stringContaining("repo_name, branch, and file_path"),
+      error: expect.stringMatching(/repo_name.*branch.*file_path/),
     });
     expect(mockRequest).not.toHaveBeenCalled();
   });

@@ -3,12 +3,22 @@ import { pipelineHandler } from "../../../src/tools/diagnose/pipeline.js";
 import { makeContext, makeConfig, makeExtra } from "./helpers.js";
 import type { HarnessClient } from "../../../src/client/harness-client.js";
 import type { Registry } from "../../../src/registry/index.js";
+import { classifyFailure } from "../../../src/utils/diagnose-triage.js";
 
 // Mock resolveLogContent so diagnose tests don't depend on the full log pipeline
 vi.mock("../../../src/utils/log-resolver.js", () => ({
   resolveLogContent: vi.fn().mockResolvedValue("resolved log line 1\nresolved log line 2"),
   resolveLogDownloadUrl: vi.fn().mockResolvedValue("https://storage.example.com/logs.zip?signed=1"),
 }));
+
+// Spec 010: classifyFailure is backed by its REAL implementation via a
+// passthrough mock — tests can still override with mockResolvedValueOnce, but
+// by default the genuine flag/key gate runs, so wiring tests can spy on the
+// TypeSafe client (classifyQuestion) and pin the fail-closed contract.
+vi.mock("../../../src/utils/diagnose-triage.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/utils/diagnose-triage.js")>();
+  return { ...actual, classifyFailure: vi.fn(actual.classifyFailure) };
+});
 
 const NOW = 1700000000000;
 
@@ -377,6 +387,178 @@ describe("pipelineHandler", () => {
     const logs = result.failed_step_logs as Record<string, unknown>;
     // resolveLogContent is mocked to return "resolved log line 1\nresolved log line 2"
     expect(logs["s1/step1"]).toBe("resolved log line 1\nresolved log line 2");
+    // Triage disabled by default (makeConfig doesn't set HARNESS_DIAGNOSE_TRIAGE) → omitted entirely.
+    expect(result.triage).toBeUndefined();
+  });
+
+  it("omits triage when HARNESS_DIAGNOSE_TRIAGE is false — real gate: TypeSafe client never called", async () => {
+    vi.mocked(classifyFailure).mockClear();
+    const typesafeClient = await import("../../../src/client/typesafe-client.js");
+    const classifySpy = vi.spyOn(typesafeClient, "classifyQuestion");
+
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "Stage1", status: "Failed", steps: [{ id: "step1", name: "Step1", status: "Failed" }] }],
+      nodeMapEntries: {
+        step1: {
+          uuid: "step1",
+          identifier: "step1",
+          name: "Step1",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step1",
+          status: "Failed",
+          failureInfo: { message: "Step1 error" },
+          logBaseKey: "log/step1",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      config: makeConfig({ HARNESS_DIAGNOSE_TRIAGE: false, TYPESAFE_API_KEY: "ts-key" }),
+      args: { summary: false, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.triage).toBeUndefined();
+    // The wiring gate short-circuits before classifyFailure (flag off), and
+    // classifyFailure itself would also gate (unit-tested in diagnose-triage.test.ts).
+    // Either way the TypeSafe client is never reached.
+    expect(classifyFailure).not.toHaveBeenCalled();
+    expect(classifySpy).not.toHaveBeenCalled();
+    classifySpy.mockRestore();
+  });
+
+  it("populates triage from the failure classifier when HARNESS_DIAGNOSE_TRIAGE is true", async () => {
+    vi.mocked(classifyFailure).mockClear();
+    vi.mocked(classifyFailure).mockResolvedValueOnce({
+      category: "infra_flake",
+      confidence: 0.9,
+    });
+
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "Stage1", status: "Failed", steps: [{ id: "step1", name: "Step1", status: "Failed" }] }],
+      nodeMapEntries: {
+        step1: {
+          uuid: "step1",
+          identifier: "step1",
+          name: "Step1",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step1",
+          status: "Failed",
+          failureInfo: { message: "Step1 error" },
+          logBaseKey: "log/step1",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      config: makeConfig({
+        HARNESS_DIAGNOSE_TRIAGE: true,
+        HARNESS_DIAGNOSE_TRIAGE_MIN_CONFIDENCE: 0.6,
+        HARNESS_DIAGNOSE_TRIAGE_TIMEOUT_MS: 400,
+        TYPESAFE_API_KEY: "ts-key",
+      }),
+      args: { summary: false, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(classifyFailure).toHaveBeenCalledTimes(1);
+    expect(result.triage).toEqual({
+      "s1/step1": { category: "infra_flake", confidence: 0.9 },
+    });
+  });
+
+  it("attaches triage on the default summary path (no include_logs) via the real classifier, sending the spec rubric", async () => {
+    vi.mocked(classifyFailure).mockClear();
+    const typesafeClient = await import("../../../src/client/typesafe-client.js");
+    const { CATEGORY_DESCRIPTIONS } = await import("../../../src/utils/diagnose-triage.js");
+    const classifySpy = vi.spyOn(typesafeClient, "classifyQuestion").mockResolvedValue({
+      choice: "config_error",
+      confidence: 0.9,
+      legend: {},
+    });
+
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "Stage1", status: "Failed", steps: [{ id: "step1", name: "Step1", status: "Failed" }] }],
+      nodeMapEntries: {
+        step1: {
+          uuid: "step1",
+          identifier: "step1",
+          name: "Step1",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step1",
+          status: "Failed",
+          failureInfo: { message: "Step1 error" },
+          logBaseKey: "log/step1",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    // No args: summary defaults true, include_logs defaults false — triage must
+    // still run because failed steps exist (spec 010 gates on failures, not logs).
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      config: makeConfig({
+        HARNESS_DIAGNOSE_TRIAGE: true,
+        HARNESS_DIAGNOSE_TRIAGE_MIN_CONFIDENCE: 0.6,
+        HARNESS_DIAGNOSE_TRIAGE_TIMEOUT_MS: 400,
+        TYPESAFE_API_KEY: "ts-key",
+      }),
+      args: {},
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.failed_step_logs).toBeUndefined();
+    expect(classifySpy).toHaveBeenCalledTimes(1);
+    // The classifier received the spec-010 rubric, not bare labels.
+    expect(classifySpy.mock.calls[0]![1].descriptions).toEqual(CATEGORY_DESCRIPTIONS);
+    expect(result.triage).toEqual({
+      "s1/step1": { category: "config_error", confidence: 0.9 },
+    });
+    classifySpy.mockRestore();
+  });
+
+  it("omits triage when the classifier resolves undefined (disabled/timeout/error/low-confidence)", async () => {
+    vi.mocked(classifyFailure).mockClear();
+    vi.mocked(classifyFailure).mockResolvedValueOnce(undefined);
+
+    const exec = makeExecution({
+      status: "Failed",
+      stages: [{ id: "s1", name: "Stage1", status: "Failed", steps: [{ id: "step1", name: "Step1", status: "Failed" }] }],
+      nodeMapEntries: {
+        step1: {
+          uuid: "step1",
+          identifier: "step1",
+          name: "Step1",
+          baseFqn: "pipeline.stages.s1.spec.execution.steps.step1",
+          status: "Failed",
+          failureInfo: { message: "Step1 error" },
+          logBaseKey: "log/step1",
+        },
+      },
+    });
+
+    const registry = makePipelineRegistry(exec);
+    const ctx = makeContext({
+      input: { execution_id: "exec-001" },
+      registry,
+      config: makeConfig({ HARNESS_DIAGNOSE_TRIAGE: true }),
+      args: { summary: false, include_logs: true },
+    });
+
+    const result = await pipelineHandler.diagnose(ctx);
+
+    expect(result.triage).toBeUndefined();
   });
 
   it("returns download URLs for failed steps when return_download_url is true", async () => {

@@ -58,4 +58,4 @@
 - **template_v1 scope inference** (account ID always from config): `org_id` + `project_id` → project; `org_id` only → org; omit both → account. Override with `resource_scope` when needed.
 - Delete without `version_label` deletes all versions; with `version_label` deletes only that version.
 - The `template_yaml` field can alternatively be provided as `yaml` in the body.
-- Deep link format: `/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/setup/resources/templates/{templateIdentifier}`
+- Deep link format: `/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/settings/templates/{templateIdentifier}`
