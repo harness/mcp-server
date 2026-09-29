@@ -233,7 +233,9 @@ export class HarnessClient {
     const isFme = options.product === "fme";
     const accountId = this.resolveAccountId();
     const headers: Record<string, string> = {
-      ...(isFme ? {} : { "Harness-Account": accountId }),
+      ...(isFme
+        ? { "Harness-Client": "fme-mcp-server" }
+        : { "Harness-Account": accountId }),
       ...options.headers,
     };
     // gRPC-proxy services (query-service, schema-service, config-service) require x-tenant-id,

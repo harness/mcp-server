@@ -488,6 +488,30 @@ describe("HarnessClient", () => {
       expect(headers["Harness-Account"]).toBe("resolved-account");
     });
 
+    it("sets Harness-Client header for FME requests", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/internal/api/v2/workspaces",
+        product: "fme",
+        baseUrl: "https://api.split.io",
+      });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["Harness-Client"]).toBe("fme-mcp-server");
+    });
+
+    it("does not set Harness-Client header for non-FME requests", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ path: "/test" });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["Harness-Client"]).toBeUndefined();
+    });
+
     it.each([
       "/query-service/grpc/io.harness.platform.query.service.api.v1.QueryServiceGrpc/getGrammar",
       "/schema-service/grpc/io.harness.platform.schema.service.api.v1.SchemaServiceGrpc/getType",
