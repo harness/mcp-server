@@ -234,13 +234,10 @@ export class HarnessClient {
 
   private buildHeaders(options: RequestOptions): Record<string, string> {
     const isFme = options.product === "fme";
-    // Native v4 FME routes are routed as product "harness" (registry/index.ts drops
-    // `product` for "harness"), so they're identified by path instead of `options.product`.
-    const isFmeV4Native = options.path.startsWith("/fme/api/v4/");
     const accountId = this.resolveAccountId();
     const headers: Record<string, string> = {
       ...(isFme ? {} : { "Harness-Account": accountId }),
-      ...(isFme || isFmeV4Native ? { "User-Agent": HARNESS_MCP_USER_AGENT } : {}),
+      "User-Agent": HARNESS_MCP_USER_AGENT,
       ...options.headers,
     };
     // gRPC-proxy services (query-service, schema-service, config-service) require x-tenant-id,
