@@ -56,6 +56,7 @@ import { ansibleToolset } from "./toolsets/ansible.js";
 import { incidentsToolset } from "./toolsets/incidents.js";
 import { alertsToolset } from "./toolsets/alerts.js";
 import { deploysToolset } from "./toolsets/deploys.js";
+import { timelinesToolset } from "./toolsets/timelines.js";
 import { releaseManagementToolset } from "./toolsets/release-management.js";
 import { vibeToolset } from "./toolsets/vibe.js";
 
@@ -177,6 +178,7 @@ const ALL_TOOLSETS: ToolsetDefinition[] = [
   incidentsToolset,
   alertsToolset,
   deploysToolset,
+  timelinesToolset,
   releaseManagementToolset,
   vibeToolset,
 ];

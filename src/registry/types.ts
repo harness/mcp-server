@@ -163,6 +163,7 @@ export type ToolsetName =
   | "incidents"
   | "alerts"
   | "deploys"
+  | "timelines"
   | "release-management"
   | "vibe"
   | "knowledge-graph"

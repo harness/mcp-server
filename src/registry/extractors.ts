@@ -2164,3 +2164,57 @@ export function autoCreateLogExtract(raw: unknown): Record<string, unknown> {
     failedClusterLinks: raw.failedClusterLinks ?? 0,
   };
 }
+
+/**
+ * Project a `TimelineEventResponse` to its five documented fields, dropping the
+ * empty `actor` the backend emits for system-generated events.
+ *
+ * `message` is never truncated: there is no per-event get endpoint, so a trimmed
+ * message is unrecoverable (unlike an incident summary, which `harness_get`
+ * restores). Agents bound volume with `event_groups` and `size` instead.
+ */
+export function projectTimelineEvent(e: unknown): unknown {
+  if (!isRecord(e)) return e;
+  const out: Record<string, unknown> = {};
+  if (typeof e.eventId === "string") out.eventId = e.eventId;
+  if (typeof e.eventType === "string") out.eventType = e.eventType;
+  if (typeof e.timestamp === "number") out.timestamp = e.timestamp;
+  if (typeof e.actor === "string" && e.actor.length > 0) out.actor = e.actor;
+  if (typeof e.message === "string") out.message = e.message;
+  return out;
+}
+
+/**
+ * Map `CursorPaginatedResult<String, TimelineEventResponse>` onto the canonical
+ * list envelope.
+ *
+ * `total` can only be the page length — this endpoint builds the result with the
+ * 3-arg constructor, so `totalCount` is always null. `has_more` is therefore the
+ * only correct stop signal: the backend drops unrenderable events *after* the
+ * underlying query paged, so a page shorter than `pageSize` with more results
+ * pending is normal.
+ *
+ * Paired with `skipCompact: true` — the generic key whitelist keeps only
+ * `eventId` and `message`, dropping `eventType`, `actor`, and `timestamp` (which
+ * misses the case-sensitive timestamp-suffix pattern). Projecting here instead of
+ * via `compactItem` also makes compact and non-compact responses identical, which
+ * is right when there is nothing verbose to withhold.
+ */
+export function timelineListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  if (!isRecord(raw)) return raw;
+  const items = Array.isArray(raw.results) ? raw.results.map(projectTimelineEvent) : [];
+  const hasMore = raw.hasMoreResults === true;
+  return {
+    items,
+    total: items.length,
+    pagination: {
+      cursor: typeof input?.cursor === "string" ? input.cursor : undefined,
+      // Suppressed on the terminal page: the backend echoes the last event's
+      // cursor even when hasMoreResults is false, so surfacing it unconditionally
+      // makes an agent's `while (next_cursor)` loop re-request the final page
+      // forever. Only ever emit a cursor that has a page behind it.
+      next_cursor: hasMore && typeof raw.nextPageCursor === "string" ? raw.nextPageCursor : undefined,
+      has_more: hasMore,
+    },
+  };
+}
