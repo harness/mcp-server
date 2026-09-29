@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HarnessClient } from "../../src/client/harness-client.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import type { Config } from "../../src/config.js";
+import { getVersion } from "../../src/utils/cli.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -486,6 +487,81 @@ describe("HarnessClient", () => {
 
       const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
       expect(headers["Harness-Account"]).toBe("resolved-account");
+    });
+
+    it("sets User-Agent header for FME requests", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/internal/api/v2/workspaces",
+        product: "fme",
+        baseUrl: "https://api.split.io",
+      });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["User-Agent"]).toBe(`harness-mcp-server/${getVersion()}`);
+    });
+
+    it("does not override User-Agent header for non-FME requests", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ path: "/test" });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["User-Agent"]).toBeUndefined();
+    });
+
+    it("lets caller-provided User-Agent override the default for FME requests", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/internal/api/v2/workspaces",
+        product: "fme",
+        baseUrl: "https://api.split.io",
+        headers: { "User-Agent": "caller-provided-agent" },
+      });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["User-Agent"]).toBe("caller-provided-agent");
+    });
+
+    it("sets User-Agent on Harness-native FME v4 requests and keeps Harness-Account", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ path: "/fme/api/v4/feature-flags" });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["User-Agent"]).toBe(`harness-mcp-server/${getVersion()}`);
+      expect(headers["Harness-Account"]).toBe("test-account");
+      expect(headers["x-api-key"]).toBe("pat.test-account.token.secret");
+    });
+
+    it("lets a differently cased caller User-Agent override the FME v4 default", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/fme/api/v4/environments",
+        headers: { "user-agent": "caller-provided-agent" },
+      });
+
+      const headers = new Headers(fetchSpy.mock.calls[0][1]?.headers);
+      expect(headers.get("user-agent")).toBe("caller-provided-agent");
+    });
+
+    it("does not treat a non-prefix lookalike as an FME v4 path", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({ path: "/other/fme/api/v4/feature-flags" });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["User-Agent"]).toBeUndefined();
+      expect(headers["Harness-Account"]).toBe("test-account");
     });
 
     it.each([
