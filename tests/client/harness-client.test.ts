@@ -513,6 +513,20 @@ describe("HarnessClient", () => {
       expect(headers["User-Agent"]).toBeUndefined();
     });
 
+    it("sets User-Agent header for native v4 FME routes (product: harness)", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/fme/api/v4/environments",
+        product: "harness",
+      });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["User-Agent"]).toBe(`harness-mcp-server/${getVersion()}`);
+      expect(headers["Harness-Account"]).toBeDefined();
+    });
+
     it("lets caller-provided User-Agent override the default for FME requests", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());
