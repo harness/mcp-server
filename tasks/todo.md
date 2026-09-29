@@ -797,3 +797,11 @@ Validation: build, typecheck, shrinkwrap, docs, standards (79 tests), and diff c
 - [x] Verify NAT64 classification, build, shrinkwrap consistency, and tests.
 
 Validation: installed SDK dependency-chain checks passed for NAT64 local-use examples and range boundaries, with well-known loopback and public IPv6 controls. Build, frozen offline install, shrinkwrap consistency, and diff checks passed. Full suite outside the sandbox: 169 files / 3,880 tests passed; initial sandbox failures were localhost listen EPERM.
+
+## Version 3.2.31
+
+- [x] Pull latest main and create chore/version-3.2.31.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release metadata, shrinkwrap consistency, and build.
+
+Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, build, docs check, and git diff --check passed.
