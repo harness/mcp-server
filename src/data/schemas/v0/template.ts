@@ -939,6 +939,9 @@ const schema: Record<string, any> = {
                   "$ref": "#/definitions/pipeline/steps/cd/DownloadGcsStepNode_template"
                 },
                 {
+                  "$ref": "#/definitions/pipeline/steps/cd/DownloadNexusArtifactStepNode_template"
+                },
+                {
                   "$ref": "#/definitions/pipeline/steps/cd/DownloadHarnessStoreStepNode_template"
                 },
                 {
@@ -33786,6 +33789,327 @@ const schema: Record<string, any> = {
             },
             "description": "Downloads files from Google Cloud Storage (GCS) bucket.\n\nExample YAML:\n```yaml\n- step:\n    type: DownloadGcs\n    name: DownloadGcs_1\n    identifier: DownloadGcs_1\n    spec:\n      connectorRef: account.GcpConnector\n      bucketName: my-gcs-bucket\n      filePath: path/to/file.yaml\n      downloadPath: /harness/manifests\n    description: Downloads manifest from GCS bucket\n    timeout: 10m\n```\n"
           },
+          "DownloadNexusArtifactStepNode_template": {
+            "title": "DownloadNexusArtifactStepNode_template",
+            "type": "object",
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "DownloadNexusArtifact"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "DownloadNexusArtifact"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/DownloadNexusArtifactStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "DownloadNexusArtifactStepInfo": {
+            "title": "DownloadNexusArtifactStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "connectorRef": {
+                    "type": "string"
+                  },
+                  "delegateSelectors": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "resources": {
+                    "$ref": "#/definitions/pipeline/common/ContainerResource"
+                  },
+                  "runAsUser": {
+                    "oneOf": [
+                      {
+                        "type": "integer",
+                        "format": "int32"
+                      },
+                      {
+                        "type": "string"
+                      }
+                    ]
+                  },
+                  "repository": {
+                    "type": "string"
+                  },
+                  "repositoryFormat": {
+                    "type": "string",
+                    "enum": [
+                      "raw",
+                      "maven",
+                      "npm",
+                      "nuget"
+                    ]
+                  },
+                  "downloadPath": {
+                    "type": "string"
+                  },
+                  "validateChecksum": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "outputFilePathsContent": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "privileged": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                        "minLength": 1
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "connectorRef",
+                  "repository",
+                  "repositoryFormat",
+                  "spec"
+                ]
+              },
+              {
+                "if": {
+                  "properties": {
+                    "repositoryFormat": {
+                      "const": "raw"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/NexusDownloadRawSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "repositoryFormat": {
+                      "const": "maven"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/NexusDownloadMavenSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "repositoryFormat": {
+                      "const": "npm"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/NexusDownloadNpmSpec"
+                    }
+                  }
+                }
+              },
+              {
+                "if": {
+                  "properties": {
+                    "repositoryFormat": {
+                      "const": "nuget"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/NexusDownloadNugetSpec"
+                    }
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "description": "Downloads an artifact from a Sonatype Nexus 3 repository using a Nexus connector.\n\nExample YAML:\n```yaml\n- step:\n    type: DownloadNexusArtifact\n    name: DownloadNexusArtifact_1\n    identifier: DownloadNexusArtifact_1\n    spec:\n      connectorRef: account.NexusConnector\n      repository: sdf-releases\n      repositoryFormat: raw\n      spec:\n        group: /com/example/sdf/1.4.2\n        artifactPath: sdf-bundle-1.4.2.zip\n      downloadPath: /harness/sdf\n      validateChecksum: true\n    timeout: 10m\n```\n"
+          },
+          "NexusDownloadRawSpec": {
+            "title": "NexusDownloadRawSpec",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "artifactPath",
+              "group"
+            ],
+            "properties": {
+              "artifactPath": {
+                "type": "string"
+              },
+              "group": {
+                "type": "string"
+              }
+            }
+          },
+          "NexusDownloadMavenSpec": {
+            "title": "NexusDownloadMavenSpec",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "artifactId",
+              "groupId",
+              "version"
+            ],
+            "properties": {
+              "artifactId": {
+                "type": "string"
+              },
+              "classifier": {
+                "type": "string"
+              },
+              "extension": {
+                "type": "string"
+              },
+              "groupId": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          },
+          "NexusDownloadNpmSpec": {
+            "title": "NexusDownloadNpmSpec",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "packageName",
+              "version"
+            ],
+            "properties": {
+              "packageName": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          },
+          "NexusDownloadNugetSpec": {
+            "title": "NexusDownloadNugetSpec",
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "type": "object",
+            "required": [
+              "packageName",
+              "version"
+            ],
+            "properties": {
+              "packageName": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          },
           "DownloadHarnessStoreStepNode_template": {
             "title": "DownloadHarnessStoreStepNode_template",
             "type": "object",
@@ -42488,6 +42812,100 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/steps/cd/DownloadGcsStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "DownloadNexusArtifactStepNode": {
+            "title": "DownloadNexusArtifactStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for DownloadNexusArtifactStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "DownloadNexusArtifact"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "DownloadNexusArtifact"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/cd/DownloadNexusArtifactStepInfo"
                     }
                   }
                 }
@@ -137618,6 +138036,9 @@ const schema: Record<string, any> = {
               "type": "string",
               "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
             },
+            "identities": {
+              "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+            },
             "name": {
               "type": "string",
               "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
@@ -138198,6 +138619,9 @@ const schema: Record<string, any> = {
                     "minLength": 1
                   }
                 ]
+              },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
               },
               "skipInstances": {
                 "oneOf": [
@@ -139551,6 +139975,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/cd/DownloadGcsStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/cd/DownloadNexusArtifactStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/cd/DownloadHarnessStoreStepNode"
                   },
                   {
@@ -139946,6 +140373,9 @@ const schema: Record<string, any> = {
               "identifier": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
               },
               "name": {
                 "type": "string",
@@ -148156,6 +148586,9 @@ const schema: Record<string, any> = {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
               },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
+              },
               "name": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
@@ -149016,6 +149449,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/cd/DownloadGcsStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/cd/DownloadNexusArtifactStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/cd/DownloadHarnessStoreStepNode"
                   },
                   {
@@ -149310,6 +149746,9 @@ const schema: Record<string, any> = {
               "identifier": {
                 "type": "string",
                 "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "identities": {
+                "$ref": "#/definitions/pipeline/common/IdentitiesConfig"
               },
               "name": {
                 "type": "string",
@@ -152138,6 +152577,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/DownloadGcsStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/cd/DownloadNexusArtifactStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/DownloadHarnessStoreStepNode"
