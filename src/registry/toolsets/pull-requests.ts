@@ -754,7 +754,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           paramsSchema: PR_COMMENT_PARAMS,
           actionDescription:
-            "Set a comment thread to resolved or active when the status is itself a variable; otherwise prefer the zero-body 'resolve' and 'unresolve' actions. comment_id must be the parent comment, not a reply. Body fields: status (required — 'resolved' to close the thread, 'active' to reopen it).",
+            "Set a comment thread to resolved or active. comment_id must be the parent comment, not a reply. Body fields: status (required — 'resolved' to close the thread, 'active' to reopen it).",
           bodySchema: {
             description: "Comment thread status",
             fields: [
