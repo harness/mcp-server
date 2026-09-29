@@ -789,3 +789,11 @@ Feature is **opt-in** (`include_visual` defaults to false) and the `visual_*` re
 - [x] Validate release metadata, build, types, docs, standards, and tests.
 
 Validation: build, typecheck, shrinkwrap, docs, standards (79 tests), and diff checks passed. Full suite: 3,708 passed; one schema-description import exceeded the default 5-second timeout. Release metadata and schema-description tests passed on focused rerun with --testTimeout=15000 (14 tests). No test configuration changed.
+
+## ip-address NAT64 security fix (2026-09-29)
+
+- [x] Create a dedicated branch and inspect dependency constraints.
+- [x] Raise the ip-address security minimum to 10.5.1; update pnpm-lock.yaml to 10.7.2 and confirm npm-shrinkwrap.json already uses patched 10.7.0.
+- [x] Verify NAT64 classification, build, shrinkwrap consistency, and tests.
+
+Validation: installed SDK dependency-chain checks passed for NAT64 local-use examples and range boundaries, with well-known loopback and public IPv6 controls. Build, frozen offline install, shrinkwrap consistency, and diff checks passed. Full suite outside the sandbox: 169 files / 3,880 tests passed; initial sandbox failures were localhost listen EPERM.
