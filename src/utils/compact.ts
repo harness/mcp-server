@@ -37,7 +37,23 @@ const COST_FIELDS = new Set([
   "totalMonthlyCost", "totalMonthlySaving",
 ]);
 
-const ALWAYS_KEEP = new Set(["openInHarness", "_summary", "_message", "_result"]);
+/**
+ * Extractor-injected agent hints. These are sometimes their own list row
+ * (`{ _summary }`, `{ _next_step }`), so dropping the key compacts the row to
+ * `{}`. Do not keep every `_` key — GraphQL `__typename` must still be stripped.
+ */
+const ALWAYS_KEEP = new Set([
+  "openInHarness",
+  "_summary",
+  "_message",
+  "_result",
+  "_next_step",
+  "_reminder",
+  "_total",
+  "_total_cves",
+  "_violation_types_found",
+  "_note",
+]);
 
 /** Identifier-like key pattern: pipelineIdentifier, projectId, env_id, etc. */
 const IDENTIFIER_PATTERN = /(?:Identifier|Id|_id)$/;

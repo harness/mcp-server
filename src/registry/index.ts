@@ -1068,7 +1068,15 @@ export class Registry {
                 itemLinkParams[pathParamName] = String(rawValue);
               } else if (itemRecord.identifier !== undefined && typeof itemRecord.identifier !== "object") {
                 itemLinkParams[pathParamName] = String(itemRecord.identifier);
-              } else if (itemRecord.name !== undefined && typeof itemRecord.name !== "object") {
+              } else if (
+                !itemLinkParams[pathParamName] &&
+                itemRecord.name !== undefined &&
+                typeof itemRecord.name !== "object"
+              ) {
+                // `name` fills placeholders only when the item has no id field
+                // (HAR artifacts identify by name). Do not replace an id already
+                // taken from the request — chain-of-custody events have their
+                // own `name`, which is not the artifact id.
                 itemLinkParams[pathParamName] = String(itemRecord.name);
               } else {
                 // Check for nested wrapper objects (e.g., connector.identifier, service.identifier)
