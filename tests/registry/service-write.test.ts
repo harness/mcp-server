@@ -123,6 +123,53 @@ function makeClient(requestFn?: (...args: unknown[]) => unknown): HarnessClient 
   } as unknown as HarnessClient;
 }
 
+describe("service list dispatch", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "services" }));
+  });
+
+  it("maps deployment_type to the Next Gen type query param", async () => {
+    const field = registry.getResource("service").listFilterFields?.find((f) => f.name === "deployment_type");
+    expect(field).toBeDefined();
+    expect(field?.enum).toBeUndefined();
+
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [], totalElements: 0 },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "service", "list", {
+      org_id: "default",
+      project_id: "avi",
+      deployment_type: "Kubernetes",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.method).toBe("GET");
+    expect(call.path).toBe("/ng/api/servicesV2");
+    expect(call.params).toMatchObject({ type: "Kubernetes" });
+    expect(call.params).not.toHaveProperty("deploymentType");
+  });
+
+  it("omits type when deployment_type is not passed", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      data: { content: [], totalElements: 0 },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "service", "list", {
+      org_id: "default",
+      project_id: "avi",
+    });
+
+    const call = mockRequest.mock.calls[0][0];
+    expect(call.params).not.toHaveProperty("type");
+    expect(call.params).not.toHaveProperty("deploymentType");
+  });
+});
+
 describe("service create dispatch", () => {
   let registry: Registry;
 

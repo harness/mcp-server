@@ -7,7 +7,7 @@
 | **Toolset** | pull-requests |
 | **Scope** | account, org, or project (scopeOptional) |
 | **Operations** | create, update, delete |
-| **Execute Actions** | resolve, unresolve |
+| **Execute Actions** | resolve, unresolve, set_status |
 | **Identifier Fields** | repo_id, pr_number, comment_id |
 | **Filter Fields** | None |
 | **Deep Link** | No |
@@ -32,11 +32,16 @@
 | TC-prc-014 | Error | Resolve a reply rather than the thread root | `harness_execute(resource_type="pr_comment", action="resolve", params={"repo_id":"my-repo", "pr_number":1, "comment_id":"<reply id>"})` | Backend 400 `Can't change status of replies.` surfaces as a readable error |
 | TC-prc-015 | Error | Resolve a comment id from a different PR | `harness_execute(resource_type="pr_comment", action="resolve", params={"repo_id":"my-repo", "pr_number":2, "comment_id":"123"})` | Returns 404 |
 | TC-prc-016 | Edge | Resolve an already-resolved thread | repeat TC-prc-012 | Idempotent success |
+| TC-prc-017 | Execute | Resolve a thread via the explicit status action | `harness_execute(resource_type="pr_comment", action="set_status", params={"repo_id":"my-repo", "pr_number":1, "comment_id":123}, body={"status":"resolved"})` | Sets the thread to resolved and returns the comment activity with a resolved timestamp |
+| TC-prc-018 | Execute | Reopen a thread via the explicit status action | `harness_execute(resource_type="pr_comment", action="set_status", params={"repo_id":"my-repo", "pr_number":1, "comment_id":123}, body={"status":"active"})` | Sets the thread back to active and returns the comment activity without a resolved timestamp |
+| TC-prc-019 | Error | Invalid comment status | `harness_execute(resource_type="pr_comment", action="set_status", params={"repo_id":"my-repo", "pr_number":1, "comment_id":123}, body={"status":"closed"})` | Returns a validation error before HTTP; status must be `resolved` or `active` |
+| TC-prc-020 | Error | set_status on a reply instead of the parent comment | `harness_execute(resource_type="pr_comment", action="set_status", params={"repo_id":"my-repo", "pr_number":1, "comment_id":<reply_id>}, body={"status":"resolved"})` | Returns 400; comment_id must be the parent comment, not a reply |
 
 ## Notes
-- `pr_comment` is write-only for comment create/update/delete. Read comments with `pr_activity`.
+- `pr_comment` is write-only for comment create/update/delete and thread status. Read comments with `pr_activity`.
 - To read all PR comments, use `harness_list(resource_type="pr_activity", params={"repo_id":"my-repo", "pr_number":1}, filters={"type":["comment","code-comment"]})`.
-- `pr_comment` create requires `repo_id` and `pr_number`; update/delete also require `comment_id` or `resource_id`
+- `pr_comment` create requires `repo_id` and `pr_number`; update/delete/set_status also require `comment_id` or `resource_id`
+- `set_status` `comment_id` must be the parent comment; replies return 400
 - General comments only need `text`; inline PR comments also need `path` and `line_new`/`line_old`
 - Inline comments can optionally include `source_commit_sha` and `target_commit_sha` for precise diff context
 - Text field supports markdown formatting

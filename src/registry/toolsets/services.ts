@@ -66,6 +66,11 @@ export const servicesToolset: ToolsetDefinition = {
       identifierFields: ["service_id"],
       listFilterFields: [
         { name: "search_term", description: "Filter services by name or keyword" },
+        {
+          name: "deployment_type",
+          description:
+            "Filter by deployment type (e.g. Kubernetes, NativeHelm, ECS). Pass the Next Gen service type string; unknown values are forwarded as-is.",
+        },
         { name: "sort", description: "Field to sort by (e.g. name, identifier)" },
         { name: "order", description: "Sort order", enum: ["asc", "desc"] },
       ],
@@ -77,6 +82,7 @@ export const servicesToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             search_term: "searchTerm",
+            deployment_type: "type",
             sort: "sort",
             order: "order",
             page: "page",
