@@ -5,7 +5,7 @@
 | **Resource Type** | `pr_comment` |
 | **Display Name** | PR Comment |
 | **Toolset** | pull-requests |
-| **Scope** | account |
+| **Scope** | account, org, or project (scopeOptional) |
 | **Operations** | create, update, delete |
 | **Execute Actions** | resolve, unresolve |
 | **Identifier Fields** | repo_id, pr_number, comment_id |

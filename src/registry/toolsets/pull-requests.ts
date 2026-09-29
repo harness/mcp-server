@@ -1,5 +1,6 @@
 import type { HarnessClientInterface, ParamsSchema, PreflightContext, ToolsetDefinition } from "../types.js";
 import { passthrough } from "../extractors.js";
+import { isRecord } from "../../utils/type-guards.js";
 
 const REPO_PARAMS: ParamsSchema = {
   fields: [
@@ -299,6 +300,27 @@ function prReviewerCreateBody(input: Record<string, unknown>): { reviewer_id: nu
   return { reviewer_id: id };
 }
 
+// The global harness_list compaction whitelist (src/utils/compact.ts) drops "text",
+// "resolved", "resolver", and "sub_order" because they don't match any generic
+// identity/status/type/ownership pattern — which would silently strip exactly the
+// fields callers need to read a comment and find its resolve/unresolve target
+// (pr_comment.resolve requires the top-level comment's `id`, identified by
+// parent_id === null). Keep this list explicit rather than falling back to the
+// generic whitelist.
+function compactPrActivity(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  if (typeof item.id === "number" || typeof item.id === "string") slim.id = item.id;
+  // Always surface parent_id (even when null) — null is the signal that this row
+  // is a thread root and its id is a valid comment_id for resolve/unresolve.
+  slim.parent_id = item.parent_id ?? null;
+  if (typeof item.type === "string") slim.type = item.type;
+  if (typeof item.kind === "string") slim.kind = item.kind;
+  if (typeof item.text === "string") slim.text = item.text;
+  if (isRecord(item.author)) slim.author = item.author;
+  if (item.resolved !== null && item.resolved !== undefined) slim.resolved = item.resolved;
+  return slim;
+}
+
 export const pullRequestsToolset: ToolsetDefinition = {
   name: "pull-requests",
   displayName: "Pull Requests",
@@ -563,13 +585,21 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_comment",
       displayName: "PR Comment",
       description:
-        "Create, update, or delete comments on a pull request. Use execute actions 'resolve' and 'unresolve' to change a comment thread's status. To READ/LIST comments, use pr_activity with kind=comment. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
+        "Create, update, or delete comments on a pull request. Use execute actions 'resolve' and 'unresolve' to change a comment thread's status. To READ/LIST comments, use pr_activity with filters: {type: ['comment', 'code-comment']}. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["repo_id", "pr_number", "comment_id"],
       diagnosticHint:
         "The pr_comment resource is for comment writes. To list or read comments, use harness_list with resource_type='pr_activity' and filters: {type: ['comment', 'code-comment']}.",
+      relatedResources: [
+        {
+          resourceType: "pr_activity",
+          relationship: "sibling",
+          description:
+            "Look up the comment thread with harness_list(resource_type=\"pr_activity\", filters: {type: ['comment', 'code-comment']}), then pass a row's id as pr_comment.comment_id — only when that row's parent_id is null (a reply cannot change status).",
+        },
+      ],
       operations: {
         create: {
           method: "POST",
@@ -664,7 +694,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           paramsSchema: PR_COMMENT_PARAMS,
           actionDescription:
-            "Resolve a pull request comment thread. comment_id must be a top-level comment id from harness_list(resource_type=\"pr_activity\") — the backend rejects reply ids with \"Can't change status of replies.\" Takes no body.",
+            "Resolve a pull request comment thread. comment_id must be a row's id from harness_list(resource_type=\"pr_activity\", filters: {type: ['comment', 'code-comment']}) where that row's parent_id is null — the backend rejects reply ids with \"Can't change status of replies.\" Takes no body.",
           bodySchema: {
             description: "No body required — the action sends the resolved status itself.",
             fields: [],
@@ -684,7 +714,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           paramsSchema: PR_COMMENT_PARAMS,
           actionDescription:
-            "Reopen (unresolve) a previously resolved pull request comment thread. comment_id must be a top-level comment id from harness_list(resource_type=\"pr_activity\"). Takes no body.",
+            "Reopen (unresolve) a previously resolved pull request comment thread. comment_id must be a row's id from harness_list(resource_type=\"pr_activity\", filters: {type: ['comment', 'code-comment']}) where that row's parent_id is null. Takes no body.",
           bodySchema: {
             description: "No body required — the action sends the active status itself.",
             fields: [],
@@ -733,7 +763,8 @@ export const pullRequestsToolset: ToolsetDefinition = {
         { name: "before", description: "Only entries created before this timestamp (unix millis)", type: "number" },
       ],
       diagnosticHint:
-        "To list all PR comments, use filters: {type: ['comment', 'code-comment']}. For general comments only, use {type: 'comment'} or {kind: 'comment'}. For inline PR comments, use {type: 'code-comment'} or {kind: 'change-comment'}.",
+        "To list all PR comments, use filters: {type: ['comment', 'code-comment']}. For general comments only, use {type: 'comment'} or {kind: 'comment'}. For inline PR comments, use {type: 'code-comment'} or {kind: 'change-comment'}. To resolve/unresolve a thread, pass the row's id as pr_comment.comment_id — only when parent_id is null (a reply cannot change status).",
+      compactItem: compactPrActivity,
       operations: {
         list: {
           method: "GET",
