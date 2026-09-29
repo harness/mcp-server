@@ -12,7 +12,14 @@ const log = createLogger("harness-client");
 
 const HARNESS_MCP_USER_AGENT = `harness-mcp-server/${getVersion()}`;
 
+/** Harness-native FME v4. Distinct from legacy Split calls, which use product "fme". */
+const FME_V4_PATH = "/fme/api/v4";
+
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
+function isHarnessFmeV4Path(path: string): boolean {
+  return path === FME_V4_PATH || path.startsWith(`${FME_V4_PATH}/`);
+}
 
 /**
  * Whether the caller explicitly set a body (including empty string).
@@ -236,11 +243,18 @@ export class HarnessClient {
     const isFme = options.product === "fme";
     const accountId = this.resolveAccountId();
     const headers: Record<string, string> = {
-      ...(isFme
-        ? { "User-Agent": HARNESS_MCP_USER_AGENT }
-        : { "Harness-Account": accountId }),
+      ...(isFme ? {} : { "Harness-Account": accountId }),
       ...options.headers,
     };
+    // Legacy Split traffic is product "fme". Harness-native v4 calls
+    // (/fme/api/v4/...) force product back to "harness", so the path is what
+    // service-web-admin sees. Keep Harness-Account on those requests.
+    if (
+      (isFme || isHarnessFmeV4Path(options.path)) &&
+      getHeaderValue(headers, "user-agent") === undefined
+    ) {
+      headers["User-Agent"] = HARNESS_MCP_USER_AGENT;
+    }
     // gRPC-proxy services (query-service, schema-service, config-service) require x-tenant-id,
     // consistent with how /log-service/ gets accountID in buildUrl.
     if (
