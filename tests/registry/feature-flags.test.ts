@@ -2296,7 +2296,6 @@ describe("fme_metric", () => {
         format: "PERCENTAGE",
         aggregation: "COUNT",
         isPositive: true,
-        spread: "PER",
         baseEventTypes: [{ eventTypeId: "e1" }],
         triggerEventType: { eventTypeId: "e0" },
         tags: ["checkout"],
@@ -2313,7 +2312,6 @@ describe("fme_metric", () => {
       format: "PERCENTAGE",
       aggregation: "COUNT",
       isPositive: true,
-      spread: "PER",
       baseEventTypes: [{ eventTypeId: "e1", propertyFilters: [], propertyForValue: null }],
       triggerEventType: { eventTypeId: "e0" },
       tags: [{ name: "checkout" }],
@@ -2321,47 +2319,26 @@ describe("fme_metric", () => {
     });
   });
 
-  it("create: throws when spread is missing (MCP-only stricter contract)", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
+  it("create: drops spread even if the caller passes it (ACROSS has no create path)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "m1" });
     const client = makeClient(mockRequest);
 
-    await expect(
-      registry.dispatch(client, "fme_metric", "create", {
-        org_id: "o1",
-        project_id: "p1",
-        body: {
-          name: "checkout-conversion",
-          trafficType: "user",
-          format: "PERCENTAGE",
-          aggregation: "COUNT",
-          isPositive: true,
-          baseEventTypes: [{ eventTypeId: "e1" }],
-        },
-      }),
-    ).rejects.toThrow(/spread is required/);
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
+    await registry.dispatch(client, "fme_metric", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      body: {
+        name: "checkout-conversion",
+        trafficType: "user",
+        format: "PERCENTAGE",
+        aggregation: "COUNT",
+        isPositive: true,
+        spread: "ACROSS",
+        baseEventTypes: [{ eventTypeId: "e1" }],
+      },
+    });
 
-  it("create: throws when spread is explicitly null", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_metric", "create", {
-        org_id: "o1",
-        project_id: "p1",
-        body: {
-          name: "checkout-conversion",
-          trafficType: "user",
-          format: "PERCENTAGE",
-          aggregation: "COUNT",
-          isPositive: true,
-          spread: null,
-          baseEventTypes: [{ eventTypeId: "e1" }],
-        },
-      }),
-    ).rejects.toThrow(/spread is required/);
-    expect(mockRequest).not.toHaveBeenCalled();
+    const req = firstRequest(mockRequest);
+    expect(req.body).not.toHaveProperty("spread");
   });
 
   it("update: PATCHes with merge-patch content type and only the fields present in body", async () => {
