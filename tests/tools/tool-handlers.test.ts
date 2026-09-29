@@ -1686,6 +1686,34 @@ describe("harness_update — PR comment", () => {
   });
 });
 
+describe("harness_execute — PR comment", () => {
+  it("maps resource_id to comment_id for resolve without overwriting repo_id (identifierFields[0])", async () => {
+    // pr_comment.identifierFields is ["repo_id", "pr_number", "comment_id"].
+    // resolve's pathParams also use repo_id, so applyExecuteActionTargetRemap
+    // must NOT let resource_id clobber the already-set repo_id — it should
+    // land on the last identifier field (comment_id) instead.
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ id: 123, parent_id: null, resolved: 1700000000 });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient, makeConfig());
+
+    const result = await prServer.call("harness_execute", {
+      resource_type: "pr_comment",
+      action: "resolve",
+      resource_id: "123",
+      params: { repo_id: "my-repo", pr_number: "42" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(prRequest).toHaveBeenCalledOnce();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string };
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/comments/123/status");
+  });
+});
+
 describe("harness_delete", () => {
   let server: ReturnType<typeof makeMcpServer>;
   let registry: Registry;

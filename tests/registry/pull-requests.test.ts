@@ -802,6 +802,204 @@ describe("pr_comment bodyBuilder translation", () => {
   });
 });
 
+describe("pr_comment resolve and unresolve execute actions", () => {
+  // The real Code API status endpoint returns the same flat pull-request
+  // activity object create/update return (id, text, resolved, resolver,
+  // parent_id, ...) — never an NG { data } envelope. Mocks below mirror that
+  // shape rather than wrapping it, since responseExtractor is `passthrough`.
+  const RESOLVED_ACTIVITY = {
+    id: 123,
+    parent_id: null,
+    text: "Looks good",
+    resolved: 1700000000,
+    resolver: { id: 7, name: "Jane Reviewer" },
+  };
+  const ACTIVE_ACTIVITY = {
+    id: 123,
+    parent_id: null,
+    text: "Looks good",
+  };
+
+  it("resolves a comment thread with the resolved status body and returns the flat activity", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue(RESOLVED_ACTIVITY);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(client, "pr_comment", "resolve", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      comment_id: "123",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown; params: Record<string, unknown> };
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/code/api/v1/repos/rc_tools/pullreq/42/comments/123/status");
+    expect(call.body).toEqual({ status: "resolved" });
+    // Explicit org_id/project_id must land as query params on the status PUT
+    // (Code API query params, not body fields — skipScopeBodyInjection only
+    // suppresses the body, not params).
+    expect(call.params).toMatchObject({ orgIdentifier: "AI_Devops", projectIdentifier: "Sanity" });
+    expect(result).toMatchObject({ resolved: 1700000000, resolver: { id: 7, name: "Jane Reviewer" } });
+  });
+
+  it("does not leak config HARNESS_ORG/HARNESS_PROJECT into resolve's query params when scope is omitted", async () => {
+    // pr_comment is scopeOptional: config defaults must NOT be used as a
+    // fallback for org_id/project_id — only explicit input does.
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue(RESOLVED_ACTIVITY);
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_comment", "resolve", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      comment_id: "123",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params).not.toHaveProperty("orgIdentifier");
+    expect(call.params).not.toHaveProperty("projectIdentifier");
+  });
+
+  it("unresolves a comment thread with the active status body and returns the flat activity", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue(ACTIVE_ACTIVITY);
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatchExecute(client, "pr_comment", "unresolve", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      comment_id: "123",
+      org_id: "AI_Devops",
+      project_id: "Sanity",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown; params: Record<string, unknown> };
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/code/api/v1/repos/rc_tools/pullreq/42/comments/123/status");
+    expect(call.body).toEqual({ status: "active" });
+    expect(call.params).toMatchObject({ orgIdentifier: "AI_Devops", projectIdentifier: "Sanity" });
+    expect(result).toEqual(ACTIVE_ACTIVITY);
+    expect(result).not.toHaveProperty("resolved");
+    expect(result).not.toHaveProperty("resolver");
+  });
+
+  it("does not leak config HARNESS_ORG/HARNESS_PROJECT into unresolve's query params when scope is omitted", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue(ACTIVE_ACTIVITY);
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_comment", "unresolve", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      comment_id: "123",
+    });
+
+    const call = mockRequest.mock.calls[0]![0] as { params: Record<string, unknown> };
+    expect(call.params).not.toHaveProperty("orgIdentifier");
+    expect(call.params).not.toHaveProperty("projectIdentifier");
+  });
+
+  it("rejects resolve when comment_id is missing", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pr_comment", "resolve", {
+        repo_id: "rc_tools",
+        pr_number: "42",
+      }),
+    ).rejects.toThrow(/comment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("declares both status actions with a low_write, retry-safe policy", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const def = registry.getResource("pr_comment");
+
+    for (const action of ["resolve", "unresolve"]) {
+      const spec = def.executeActions?.[action];
+      expect(spec, `pr_comment is missing the ${action} action`).toBeDefined();
+      expect(spec!.operationPolicy).toEqual({ risk: "low_write", retryPolicy: "safe" });
+      expect(spec!.paramsSchema?.fields.map((f) => f.name)).toContain("comment_id");
+    }
+  });
+
+  it("declares pr_activity as a related resource for finding a resolvable comment_id", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const def = registry.getResource("pr_comment");
+
+    expect(def.relatedResources).toEqual(
+      expect.arrayContaining([expect.objectContaining({ resourceType: "pr_activity" })]),
+    );
+  });
+});
+
+describe("pr_activity compactItem", () => {
+  it("uses compactItem, not skipCompact, so default harness_list(compact=true) stays usable for resolve/unresolve", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const resource = registry.getResource("pr_activity");
+    expect(resource.operations.list?.skipCompact).toBeFalsy();
+    expect(resource.compactItem).toBeTypeOf("function");
+  });
+
+  it("keeps id, parent_id, text, type, kind, author, and resolved; drops repo_id/pullreq_id/metadata/payload", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const compactFn = registry.getResource("pr_activity").compactItem!;
+
+    const threadRoot = compactFn({
+      id: 123,
+      parent_id: null,
+      repo_id: 55,
+      pullreq_id: 7,
+      order: 1,
+      sub_order: 0,
+      type: "comment",
+      kind: "comment",
+      text: "Looks good overall",
+      payload: { raw: true },
+      resolved: 1700000000,
+      resolver: { id: 7, name: "Jane Reviewer" },
+      author: { id: 3, name: "John Author" },
+    });
+
+    expect(threadRoot).toEqual({
+      id: 123,
+      parent_id: null,
+      type: "comment",
+      kind: "comment",
+      text: "Looks good overall",
+      author: { id: 3, name: "John Author" },
+      resolved: 1700000000,
+    });
+
+    // A reply row (non-null parent_id, no resolved) must still surface parent_id
+    // so callers can tell it apart from a thread root before attempting resolve.
+    const reply = compactFn({
+      id: 124,
+      parent_id: 123,
+      repo_id: 55,
+      pullreq_id: 7,
+      sub_order: 1,
+      type: "comment",
+      kind: "comment",
+      text: "Thanks!",
+      author: { id: 3, name: "John Author" },
+    });
+
+    expect(reply).toEqual({
+      id: 124,
+      parent_id: 123,
+      type: "comment",
+      kind: "comment",
+      text: "Thanks!",
+      author: { id: 3, name: "John Author" },
+    });
+  });
+});
+
 describe("pr_comment set_status", () => {
   it("resolves a comment thread with PUT /status and body { status: \"resolved\" } only", async () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
