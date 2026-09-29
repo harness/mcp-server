@@ -37,7 +37,7 @@ const COST_FIELDS = new Set([
   "totalMonthlyCost", "totalMonthlySaving",
 ]);
 
-const ALWAYS_KEEP = new Set(["openInHarness"]);
+const ALWAYS_KEEP = new Set(["openInHarness", "_summary", "_message", "_result"]);
 
 /** Identifier-like key pattern: pipelineIdentifier, projectId, env_id, etc. */
 const IDENTIFIER_PATTERN = /(?:Identifier|Id|_id)$/;
