@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HarnessClient } from "../../src/client/harness-client.js";
 import { HarnessApiError } from "../../src/utils/errors.js";
 import type { Config } from "../../src/config.js";
+import { getVersion } from "../../src/utils/cli.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -488,7 +489,7 @@ describe("HarnessClient", () => {
       expect(headers["Harness-Account"]).toBe("resolved-account");
     });
 
-    it("sets Harness-Client header for FME requests", async () => {
+    it("sets User-Agent header for FME requests", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());
 
@@ -499,17 +500,32 @@ describe("HarnessClient", () => {
       });
 
       const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
-      expect(headers["Harness-Client"]).toBe("fme-mcp-server");
+      expect(headers["User-Agent"]).toBe(`harness-mcp-server/${getVersion()}`);
     });
 
-    it("does not set Harness-Client header for non-FME requests", async () => {
+    it("does not override User-Agent header for non-FME requests", async () => {
       fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
       const client = new HarnessClient(makeConfig());
 
       await client.request({ path: "/test" });
 
       const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
-      expect(headers["Harness-Client"]).toBeUndefined();
+      expect(headers["User-Agent"]).toBeUndefined();
+    });
+
+    it("lets caller-provided User-Agent override the default for FME requests", async () => {
+      fetchSpy.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
+      const client = new HarnessClient(makeConfig());
+
+      await client.request({
+        path: "/internal/api/v2/workspaces",
+        product: "fme",
+        baseUrl: "https://api.split.io",
+        headers: { "User-Agent": "caller-provided-agent" },
+      });
+
+      const headers = fetchSpy.mock.calls[0][1]?.headers as Record<string, string>;
+      expect(headers["User-Agent"]).toBe("caller-provided-agent");
     });
 
     it.each([

@@ -6,8 +6,11 @@ import { createLogger } from "../utils/logger.js";
 import { redactJsonString, redactSensitiveFields } from "../utils/redact.js";
 import { isFormDataBody, isRecord } from "../utils/type-guards.js";
 import { assertJsonEventStreamLimits, readJsonEventStream } from "./sse.js";
+import { getVersion } from "../utils/cli.js";
 
 const log = createLogger("harness-client");
+
+const HARNESS_MCP_USER_AGENT = `harness-mcp-server/${getVersion()}`;
 
 const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 
@@ -234,7 +237,7 @@ export class HarnessClient {
     const accountId = this.resolveAccountId();
     const headers: Record<string, string> = {
       ...(isFme
-        ? { "Harness-Client": "fme-mcp-server" }
+        ? { "User-Agent": HARNESS_MCP_USER_AGENT }
         : { "Harness-Account": accountId }),
       ...options.headers,
     };
