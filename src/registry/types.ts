@@ -186,6 +186,8 @@ export interface BodyFieldSpec {
   required: boolean;
   /** Brief description (shown to agents) */
   description: string;
+  /** Allowed values, if the field is constrained to a known set. Surfaced by harness_describe. */
+  enum?: string[];
   /** For "object" type: nested fields */
   fields?: BodyFieldSpec[];
   /** For "array" type: item type description */

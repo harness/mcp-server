@@ -128,6 +128,24 @@ function submitReviewBody(input: Record<string, unknown>): Record<string, unknow
   return liftBodyFields(input, PR_SUBMIT_REVIEW_BODY_FIELDS, "pr_reviewer.submit_review");
 }
 
+const PR_COMMENT_STATUSES = ["resolved", "active"] as const;
+const PR_COMMENT_STATUS_BODY_FIELDS: readonly MergeBodyField[] = [
+  { wire: "status" },
+];
+
+function prCommentSetStatusBody(input: Record<string, unknown>): Record<string, unknown> {
+  const merged = liftBodyFields(input, PR_COMMENT_STATUS_BODY_FIELDS, "pr_comment.set_status");
+  const raw = typeof merged.status === "string" ? merged.status.trim().toLowerCase() : undefined;
+  const status = PR_COMMENT_STATUSES.find((value) => value === raw);
+  if (!status) {
+    throw new Error(
+      "status is required for pr_comment.set_status and must be \"resolved\" or \"active\". " +
+      "Use \"resolved\" to close the thread and \"active\" to reopen it.",
+    );
+  }
+  return { status };
+}
+
 function pullRequestUpdatePath(input: Record<string, unknown>): string {
   const repoIdentifier = requiredPathPart(input, "repo_id");
   const prNumber = requiredPathPart(input, "pr_number");
@@ -297,6 +315,40 @@ function prReviewerCreateBody(input: Record<string, unknown>): { reviewer_id: nu
     throw new Error("pr_reviewer.create is missing reviewer_id.");
   }
   return { reviewer_id: id };
+}
+
+/**
+ * Compact projection for pr_activity list items. The generic compactItems()
+ * whitelist keeps only id/*_id/type/kind/author, which drops the fields that
+ * make an activity readable and actionable: `text` (the comment itself),
+ * `resolved`/`resolver` (thread status for pr_comment.set_status), `sub_order`
+ * (0 = parent, >0 = reply — set_status rejects replies), `payload` (the detail
+ * of system activities, whose `text` is empty), and `code_comment` (inline
+ * location). Still drops the heavy fields: mentions, reactions, metadata.
+ */
+const PR_ACTIVITY_COMPACT_FIELDS = [
+  "id", "parent_id", "repo_id", "pullreq_id", "order", "sub_order",
+  "type", "kind", "text", "payload", "code_comment",
+  "resolved", "resolver", "author", "created", "edited", "deleted",
+  "openInHarness",
+];
+
+function compactPrActivity(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of PR_ACTIVITY_COMPACT_FIELDS) {
+    const value = item[key];
+    if (value === undefined) continue;
+    // Comment activities carry an empty payload object — keep the key out of the
+    // projection rather than spending tokens on `{}` for every comment row.
+    if (key === "payload" && isEmptyRecord(value)) continue;
+    slim[key] = value;
+  }
+  return slim;
+}
+
+function isEmptyRecord(value: unknown): boolean {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+    && Object.keys(value as Record<string, unknown>).length === 0;
 }
 
 export const pullRequestsToolset: ToolsetDefinition = {
@@ -563,13 +615,15 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_comment",
       displayName: "PR Comment",
       description:
-        "Create, update, or delete comments on a pull request. To READ/LIST comments, use pr_activity with kind=comment. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
+        "Create, update, or delete comments on a pull request, and resolve or reopen threads with execute action set_status. To READ/LIST comments, use pr_activity with kind=comment. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["repo_id", "pr_number", "comment_id"],
+      executeHint:
+        "Resolve or reopen a comment thread with harness_execute(resource_type='pr_comment', action='set_status', params={repo_id, pr_number, comment_id}, body={status: 'resolved'} or {status: 'active'}). comment_id must be the parent comment, not a reply. resource_id may be used in place of comment_id.",
       diagnosticHint:
-        "The pr_comment resource is for comment writes. To list or read comments, use harness_list with resource_type='pr_activity' and filters: {type: ['comment', 'code-comment']}.",
+        "The pr_comment resource is for comment writes. To list or read comments, use harness_list with resource_type='pr_activity' and filters: {type: ['comment', 'code-comment']}. To resolve or reopen a thread, use harness_execute(resource_type='pr_comment', action='set_status') with the parent comment_id and body.status 'resolved' or 'active'.",
       operations: {
         create: {
           method: "POST",
@@ -649,6 +703,36 @@ export const pullRequestsToolset: ToolsetDefinition = {
           paramsSchema: PR_COMMENT_PARAMS,
         },
       },
+      executeActions: {
+        set_status: {
+          method: "PUT",
+          path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments/{pullreqCommentId}/status",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          skipScopeBodyInjection: true,
+          pathParams: {
+            repo_id: "repoIdentifier",
+            pr_number: "prNumber",
+            comment_id: "pullreqCommentId",
+          },
+          bodyBuilder: prCommentSetStatusBody,
+          responseExtractor: passthrough,
+          paramsSchema: PR_COMMENT_PARAMS,
+          actionDescription:
+            "Set a comment thread to resolved or active. comment_id must be the parent comment, not a reply. Body fields: status (required — 'resolved' to close the thread, 'active' to reopen it).",
+          bodySchema: {
+            description: "Comment thread status",
+            fields: [
+              {
+                name: "status",
+                type: "string",
+                required: true,
+                description: "Thread status: resolved (close the thread) or active (reopen it)",
+                enum: [...PR_COMMENT_STATUSES],
+              },
+            ],
+          },
+        },
+      },
     },
     {
       resourceType: "pr_check",
@@ -684,6 +768,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
       scope: "account",
       scopeOptional: true,
       identifierFields: ["repo_id", "pr_number"],
+      compactItem: compactPrActivity,
       listFilterFields: [
         { name: "kind", description: "Activity kind filter: change-comment, comment, system", enum: ["change-comment", "comment", "system"] },
         { name: "type", description: "Activity type filter: comment, code-comment, review-submit, reviewer-add, reviewer-delete, state-change, branch-update, branch-delete, branch-restore, merge, title-change, label-modify, target-branch-change, user-group-reviewer-add, user-group-reviewer-delete", enum: ["comment", "code-comment", "review-submit", "reviewer-add", "reviewer-delete", "state-change", "branch-update", "branch-delete", "branch-restore", "merge", "title-change", "label-modify", "target-branch-change", "user-group-reviewer-add", "user-group-reviewer-delete"] },
@@ -691,7 +776,7 @@ export const pullRequestsToolset: ToolsetDefinition = {
         { name: "before", description: "Only entries created before this timestamp (unix millis)", type: "number" },
       ],
       diagnosticHint:
-        "To list all PR comments, use filters: {type: ['comment', 'code-comment']}. For general comments only, use {type: 'comment'} or {kind: 'comment'}. For inline PR comments, use {type: 'code-comment'} or {kind: 'change-comment'}.",
+        "To list all PR comments, use filters: {type: ['comment', 'code-comment']}. For general comments only, use {type: 'comment'} or {kind: 'comment'}. For inline PR comments, use {type: 'code-comment'} or {kind: 'change-comment'}. Each item carries text, resolved (absent = thread still open), and sub_order (0 = parent comment, >0 = reply) — pass a parent id to harness_execute(resource_type='pr_comment', action='set_status') to resolve or reopen that thread.",
       operations: {
         list: {
           method: "GET",
