@@ -32,8 +32,10 @@ const EVENT_GROUPS = [
  *   - `"user_messages,ai"` — the registry passes a string query value through
  *     verbatim (`index.ts` query-param mapping), yielding one unparseable value
  *     `eventGroups=USER_MESSAGES%2CAI`.
- *   - `["user_messages"]` — arrays are repeated correctly by the client, but
- *     `canonicalizeListFilterEnums` only rewrites strings, so lowercase survives.
+ *   - `"user_messages,ai"` again, after `canonicalizeListFilterEnums` — it
+ *     uppercases the string but joins it back into one value, which JAX-RS still
+ *     will not split. (String arrays are already canonicalized there; the
+ *     preflight is needed to split the comma form.)
  *
  * Accepts either shape and emits a trimmed, UPPERCASE array; deletes the key when
  * nothing is left so an empty filter reads as "all named groups" rather than an

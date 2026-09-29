@@ -126,6 +126,17 @@ describe("activity_timeline — harness_list", () => {
     expect(callArgs.params.projectId).toBe("test-project");
   });
 
+  it.each(["incidents/INC-1924", "alerts/ALERT-7"])("fills activity_id from a UI URL (%s)", async (tail) => {
+    const id = tail.split("/")[1];
+    const result = await server.call("harness_list", {
+      resource_type: "activity_timeline",
+      url: `https://harness0.harness.io/ng/account/acc/module/ir/orgs/PROD/projects/AI_SRE/${tail}`,
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { path: string };
+    expect(callArgs.path).toBe(`/gateway/ir/tp/api/v1/mc/activities/${id}/timeline`);
+  });
+
   it("errors when activity_id is omitted instead of calling the API", async () => {
     const result = await server.call("harness_list", { resource_type: "activity_timeline" });
     expect(result.isError).toBe(true);

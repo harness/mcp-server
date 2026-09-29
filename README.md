@@ -2050,6 +2050,7 @@ Available toolset names:
 | `registries-v3` *(opt-in)* | package_v3, version_v3, file_v3, registry_metadata_v3, package_metadata_v3, version_metadata_v3, file_metadata_v3, metadata_key_v3, metadata_value_v3, artifact_scan_v3, bulk_scan_evaluation_v3, firewall_exception_v3, firewall_exception_version_v3                                       |
 | `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
 | `vibe`                | vibe_project, vibe_app_lifecycle |
+| `timelines`           | activity_timeline |
 
 
 ## Architecture
