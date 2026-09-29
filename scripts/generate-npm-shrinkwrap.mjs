@@ -17,6 +17,10 @@ import {
   isSecureAdmZipVersion,
   SECURE_ADM_ZIP_VERSION,
 } from "./adm-zip-security-lib.mjs";
+import {
+  isSecureIpAddressVersion,
+  SECURE_IP_ADDRESS_VERSION,
+} from "./ip-address-security-lib.mjs";
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const shrinkwrapPath = join(repoRoot, "npm-shrinkwrap.json");
@@ -80,6 +84,19 @@ if (checkMode) {
       .map(([path, metadata]) => `${path}@${metadata?.version ?? "missing"}`)
       .join(", ");
     failCheck(details || "adm-zip is missing");
+  }
+
+  const ipAddressInstalls = Object.entries(shrinkwrap.packages ?? {}).filter(([path]) =>
+    path === "node_modules/ip-address" || path.endsWith("/node_modules/ip-address"),
+  );
+  const insecureIpAddressInstalls = ipAddressInstalls.filter(
+    ([, metadata]) => !isSecureIpAddressVersion(metadata?.version, SECURE_IP_ADDRESS_VERSION),
+  );
+  if (ipAddressInstalls.length === 0 || insecureIpAddressInstalls.length > 0) {
+    const details = insecureIpAddressInstalls
+      .map(([path, metadata]) => `${path}@${metadata?.version ?? "missing"}`)
+      .join(", ");
+    failCheck(details || `ip-address is missing (need >=${SECURE_IP_ADDRESS_VERSION})`);
   }
 
   console.error("npm-shrinkwrap.json metadata is up to date");

@@ -3,8 +3,12 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-/** Minimum ip-address release that classifies RFC 8215 NAT64 local-use as private. */
-export const SECURE_IP_ADDRESS_VERSION = "10.5.1";
+/**
+ * Minimum ip-address release that closes the current classifier advisories:
+ * NAT64 local-use (10.5.1), cross-family subnet checks, and unbounded
+ * Address6 parse diagnostics (both 10.7.1).
+ */
+export const SECURE_IP_ADDRESS_VERSION = "10.7.1";
 
 /**
  * Compare semver-like versions (major.minor.patch). Pre-release/build metadata is ignored.

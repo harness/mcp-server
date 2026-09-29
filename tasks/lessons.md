@@ -185,3 +185,4 @@
 
 ## Targeted pnpm Transitive Updates
 - `pnpm update ip-address --depth 20` also rewrote unrelated direct dependency ranges to match existing overrides. Restore those incidental manifest changes before validating shrinkwrap consistency; review the full diff even for targeted updates.
+- `npm-shrinkwrap.json` is what npm publish and the MCPB bundle install. A pnpm override floor of `>=10.5.1` still accepts `10.7.0`, which classifies NAT64 local-use correctly but remains vulnerable to the cross-family `isInSubnet` check and the unbounded `Address6` diagnostic (both fixed in `10.7.1`). When raising a security minimum, set the floor to the latest patched release and bump the shrinkwrap pin to that same resolved version; `npm-shrinkwrap:check` only compared adm-zip until the ip-address floor was added.

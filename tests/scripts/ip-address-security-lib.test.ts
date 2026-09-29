@@ -19,19 +19,27 @@ function loadInstalledAddress6() {
   expect(installs.length, "expected ip-address under node_modules").toBeGreaterThan(0);
 
   return require(installs[0]) as {
-    Address6: new (address: string) => {
-      isPrivate(): boolean;
-      isGlobal(): boolean;
-      isLoopback(): boolean;
+    Address4: new (address: string) => {
+      isInSubnet(other: unknown): boolean;
+    };
+    Address6: {
+      new (address: string): {
+        isPrivate(): boolean;
+        isGlobal(): boolean;
+        isLoopback(): boolean;
+        isInSubnet(other: unknown): boolean;
+      };
+      isValid(address: string): boolean;
     };
   };
 }
 
 describe("ip-address-security-lib", () => {
-  it("compares semver patch levels for the NAT64 security floor", () => {
+  it("compares semver patch levels for the ip-address security floor", () => {
     expect(isSecureIpAddressVersion("10.4.0", SECURE_IP_ADDRESS_VERSION)).toBe(false);
-    expect(isSecureIpAddressVersion("10.5.0", SECURE_IP_ADDRESS_VERSION)).toBe(false);
-    expect(isSecureIpAddressVersion("10.5.1", SECURE_IP_ADDRESS_VERSION)).toBe(true);
+    expect(isSecureIpAddressVersion("10.5.1", SECURE_IP_ADDRESS_VERSION)).toBe(false);
+    expect(isSecureIpAddressVersion("10.7.0", SECURE_IP_ADDRESS_VERSION)).toBe(false);
+    expect(isSecureIpAddressVersion("10.7.1", SECURE_IP_ADDRESS_VERSION)).toBe(true);
     expect(isSecureIpAddressVersion("10.7.2", SECURE_IP_ADDRESS_VERSION)).toBe(true);
   });
 
@@ -61,6 +69,7 @@ describe("ip-address-security-lib", () => {
   });
 
   it("flags vulnerable ip-address installs under node_modules", () => {
+    expect(findIpAddressInstallDirs(root).length).toBeGreaterThan(0);
     expect(listInsecureIpAddressInstalls(root)).toEqual([]);
   });
 
@@ -89,5 +98,19 @@ describe("ip-address-security-lib", () => {
     const documentation = new Address6("2001:db8::1");
     expect(documentation.isPrivate()).toBe(false);
     expect(documentation.isGlobal()).toBe(false);
+  });
+
+  it("does not treat an address as contained in a subnet of the other family", () => {
+    const { Address4, Address6 } = loadInstalledAddress6();
+
+    expect(new Address6("a00::1").isInSubnet(new Address4("10.0.0.0/8"))).toBe(false);
+    expect(new Address4("32.0.0.1").isInSubnet(new Address6("2000::/3"))).toBe(false);
+  });
+
+  it("rejects an overlong IPv6 literal before parsing it", () => {
+    const { Address6 } = loadInstalledAddress6();
+
+    expect(Address6.isValid("f".repeat(46))).toBe(false);
+    expect(() => new Address6("f".repeat(46))).toThrow(/at most 45 characters/);
   });
 });

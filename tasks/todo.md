@@ -797,3 +797,10 @@ Validation: build, typecheck, shrinkwrap, docs, standards (79 tests), and diff c
 - [x] Verify NAT64 classification, build, shrinkwrap consistency, and tests.
 
 Validation: installed SDK dependency-chain checks passed for NAT64 local-use examples and range boundaries, with well-known loopback and public IPv6 controls. Build, frozen offline install, shrinkwrap consistency, and diff checks passed. Full suite outside the sandbox: 169 files / 3,880 tests passed; initial sandbox failures were localhost listen EPERM.
+
+## ip-address 10.7.1 floor (follow-up)
+
+- [x] Raise the pnpm override and `SECURE_IP_ADDRESS_VERSION` from 10.5.1 to 10.7.1 so 10.7.0 is not treated as patched.
+- [x] Pin `npm-shrinkwrap.json` `ip-address` to 10.7.2, matching `pnpm-lock.yaml`.
+- [x] Fail `npm-shrinkwrap:check` when any shrinkwrap `ip-address` install is below that floor.
+- [x] Confirm shrinkwrap check and the ip-address security tests pass.
