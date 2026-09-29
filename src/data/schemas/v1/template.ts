@@ -792,6 +792,14 @@ const schema: Record<string, any> = {
             "container": {
               "description": "Caller-side container overrides merged into the resolved template step. Applied for any V1 step template whose spec contains run, run-test, or background (including git-clone and build-and-push templates that wrap those steps).\n",
               "$ref": "#/definitions/template_v1/common/TemplateContainerOverlay"
+            },
+            "sourceStepType": {
+              "description": "Merge-time origin of an unresolved agent alias. Set to Agent when this template ref was produced from an agent identity. Used for CI metrics; not sent to lite-engine.\n",
+              "type": "string"
+            },
+            "sourceName": {
+              "description": "Identifier of the originating agent template when sourceStepType is set. First write wins so an outer custom agent is not overwritten by inner harnessAI.\n",
+              "type": "string"
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -5025,6 +5033,14 @@ const schema: Record<string, any> = {
                     ]
                   }
                 }
+              },
+              "sourceStepType": {
+                "description": "Merge-time origin of an expanded step. Set to Agent when this run was produced from an agent template. Used for CI metrics; not sent to lite-engine.\n",
+                "type": "string"
+              },
+              "sourceName": {
+                "description": "Identifier of the originating agent template when sourceStepType is set. First write wins so an outer custom agent is not overwritten by inner harnessAI.\n",
+                "type": "string"
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
