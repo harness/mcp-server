@@ -801,3 +801,110 @@ describe("pr_comment bodyBuilder translation", () => {
     }));
   });
 });
+
+describe("pr_comment set_status", () => {
+  it("resolves a comment thread with PUT /status and body { status: \"resolved\" } only", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ id: 123, resolved: 1_700_000_000_000 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_comment", "set_status", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      comment_id: "123",
+      org_id: "custom-org",
+      project_id: "custom-project",
+      body: { status: "resolved", extra: "ignored" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "PUT",
+      path: "/code/api/v1/repos/my_repo/pullreq/5/comments/123/status",
+      body: { status: "resolved" },
+      retryPolicy: "safe",
+    }));
+  });
+
+  it("reopens a comment thread with status active", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ id: 123 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_comment", "set_status", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      comment_id: "123",
+      body: { status: "active" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "PUT",
+      path: "/code/api/v1/repos/my_repo/pullreq/5/comments/123/status",
+      body: { status: "active" },
+    }));
+  });
+
+  it("rejects a missing status before HTTP", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pr_comment", "set_status", {
+        repo_id: "my_repo",
+        pr_number: "5",
+        comment_id: "123",
+        body: {},
+      }),
+    ).rejects.toThrow(/status is required for pr_comment.set_status/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown status before HTTP", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatchExecute(client, "pr_comment", "set_status", {
+        repo_id: "my_repo",
+        pr_number: "5",
+        comment_id: "123",
+        body: { status: "closed" },
+      }),
+    ).rejects.toThrow(/must be "resolved" or "active"/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("canonicalizes mixed-case status to the declared enum", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({ id: 123, resolved: 1_700_000_000_000 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_comment", "set_status", {
+      repo_id: "my_repo",
+      pr_number: "5",
+      comment_id: "123",
+      body: { status: "Resolved" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      body: { status: "resolved" },
+    }));
+  });
+
+  it("documents set_status on pr_comment execute actions", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const commentDef = registry.getResource("pr_comment");
+    const statusField = commentDef.executeActions?.set_status?.bodySchema?.fields.find((f) => f.name === "status");
+    expect(commentDef.executeActions?.set_status?.operationPolicy).toEqual({
+      risk: "low_write",
+      retryPolicy: "safe",
+    });
+    expect(commentDef.executeHint).toContain("set_status");
+    expect(commentDef.diagnosticHint).toContain("set_status");
+    expect(statusField?.enum).toEqual(["resolved", "active"]);
+    expect(statusField?.required).toBe(true);
+  });
+});

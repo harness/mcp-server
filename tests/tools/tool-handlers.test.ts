@@ -2345,6 +2345,30 @@ pipeline:
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
   });
 
+  it("maps resource_id to comment_id for pr_comment set_status", async () => {
+    const prServer = makeMcpServer("accept");
+    const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const prRequest = vi.fn().mockResolvedValue({ id: 123, resolved: 1_700_000_000_000 });
+    const prClient = makeClient(prRequest);
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(prServer, prRegistry, prClient, makeConfig());
+
+    const result = await prServer.call("harness_execute", {
+      resource_type: "pr_comment",
+      action: "set_status",
+      resource_id: "123",
+      params: { repo_id: "my-repo", pr_number: "42" },
+      body: { status: "resolved" },
+    });
+
+    expect(result.isError).toBeUndefined();
+    expect(prRequest).toHaveBeenCalledOnce();
+    const call = prRequest.mock.calls[0]![0] as { method?: string; path?: string; body?: unknown };
+    expect(call.method).toBe("PUT");
+    expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/comments/123/status");
+    expect(call.body).toEqual({ status: "resolved" });
+  });
+
   it("explicit resource_id overrides URL-derived pr_number", async () => {
     const prServer = makeMcpServer("accept");
     const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));

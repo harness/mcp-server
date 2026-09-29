@@ -128,6 +128,24 @@ function submitReviewBody(input: Record<string, unknown>): Record<string, unknow
   return liftBodyFields(input, PR_SUBMIT_REVIEW_BODY_FIELDS, "pr_reviewer.submit_review");
 }
 
+const PR_COMMENT_STATUSES = ["resolved", "active"] as const;
+const PR_COMMENT_STATUS_BODY_FIELDS: readonly MergeBodyField[] = [
+  { wire: "status" },
+];
+
+function prCommentSetStatusBody(input: Record<string, unknown>): Record<string, unknown> {
+  const merged = liftBodyFields(input, PR_COMMENT_STATUS_BODY_FIELDS, "pr_comment.set_status");
+  const raw = typeof merged.status === "string" ? merged.status.trim().toLowerCase() : undefined;
+  const status = PR_COMMENT_STATUSES.find((value) => value === raw);
+  if (!status) {
+    throw new Error(
+      "status is required for pr_comment.set_status and must be \"resolved\" or \"active\". " +
+      "Use \"resolved\" to close the thread and \"active\" to reopen it.",
+    );
+  }
+  return { status };
+}
+
 function pullRequestUpdatePath(input: Record<string, unknown>): string {
   const repoIdentifier = requiredPathPart(input, "repo_id");
   const prNumber = requiredPathPart(input, "pr_number");
@@ -563,13 +581,15 @@ export const pullRequestsToolset: ToolsetDefinition = {
       resourceType: "pr_comment",
       displayName: "PR Comment",
       description:
-        "Create, update, or delete comments on a pull request. To READ/LIST comments, use pr_activity with kind=comment. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
+        "Create, update, or delete comments on a pull request, and resolve or reopen threads with execute action set_status. To READ/LIST comments, use pr_activity with kind=comment. Works at account, org, or project scope — pass org_id/project_id for the space the repo lives in; omit both for account-scoped repos.",
       toolset: "pull-requests",
       scope: "account",
       scopeOptional: true,
       identifierFields: ["repo_id", "pr_number", "comment_id"],
+      executeHint:
+        "Resolve or reopen a comment thread with harness_execute(resource_type='pr_comment', action='set_status', params={repo_id, pr_number, comment_id}, body={status: 'resolved'} or {status: 'active'}). comment_id must be the parent comment, not a reply. resource_id may be used in place of comment_id.",
       diagnosticHint:
-        "The pr_comment resource is for comment writes. To list or read comments, use harness_list with resource_type='pr_activity' and filters: {type: ['comment', 'code-comment']}.",
+        "The pr_comment resource is for comment writes. To list or read comments, use harness_list with resource_type='pr_activity' and filters: {type: ['comment', 'code-comment']}. To resolve or reopen a thread, use harness_execute(resource_type='pr_comment', action='set_status') with the parent comment_id and body.status 'resolved' or 'active'.",
       operations: {
         create: {
           method: "POST",
@@ -647,6 +667,36 @@ export const pullRequestsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           description: "Delete a pull request comment",
           paramsSchema: PR_COMMENT_PARAMS,
+        },
+      },
+      executeActions: {
+        set_status: {
+          method: "PUT",
+          path: "/code/api/v1/repos/{repoIdentifier}/pullreq/{prNumber}/comments/{pullreqCommentId}/status",
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          skipScopeBodyInjection: true,
+          pathParams: {
+            repo_id: "repoIdentifier",
+            pr_number: "prNumber",
+            comment_id: "pullreqCommentId",
+          },
+          bodyBuilder: prCommentSetStatusBody,
+          responseExtractor: passthrough,
+          paramsSchema: PR_COMMENT_PARAMS,
+          actionDescription:
+            "Set a comment thread to resolved or active. comment_id must be the parent comment, not a reply. Body fields: status (required — 'resolved' to close the thread, 'active' to reopen it).",
+          bodySchema: {
+            description: "Comment thread status",
+            fields: [
+              {
+                name: "status",
+                type: "string",
+                required: true,
+                description: "Thread status: resolved (close the thread) or active (reopen it)",
+                enum: [...PR_COMMENT_STATUSES],
+              },
+            ],
+          },
         },
       },
     },
