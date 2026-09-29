@@ -9,6 +9,19 @@ const PACKAGE_TYPES = [
   "TERRAFORM", "TERRAFORM_BACKEND", "CONAN", "WOLFI", "ALPINE",
 ];
 
+/**
+ * HAR list search. `queryParams` keys are caller inputs; the value is the
+ * API query name (`search_term` on the v1 list endpoints).
+ *
+ * `search` is the `listFilterFields` name `harness_describe` advertises.
+ * `search_term` is the global `harness_list` / `harness_search` argument.
+ * `search` is last so an explicit filter wins when both are set.
+ */
+const HAR_LIST_SEARCH_QUERY: Record<string, string> = {
+  search_term: "search_term",
+  search: "search_term",
+};
+
 const registryCreateSchema: BodySchema = {
   description:
     "Registry body (RegistryRequest). The registry kind (VIRTUAL or UPSTREAM) is set via `config.type`. " +
@@ -26,7 +39,9 @@ const registryCreateSchema: BodySchema = {
         "VIRTUAL: `{ type: 'VIRTUAL', upstreamProxies: ['<spaceRef>/<registryName>', ...] }`. " +
         "UPSTREAM: `{ type: 'UPSTREAM', source: 'Dockerhub|PyPi|NpmJs|MavenCentral|NugetOrg|Crates|" +
         "RubyGems|GoProxy|HuggingFace|Anaconda|Pubdev|Packagist|PuppetForge|HelmChartRepo|" +
-        "ConanCenter|TerraformRegistry|CRAN|Wolfi|Alpine|Custom', url: '<url>' }` (url required for Custom source).",
+        "ConanCenter|TerraformRegistry|CRAN|Wolfi|Alpine|Custom', authType: 'AccessKeySecretKey|Anonymous|" +
+        "UserPassword|BearerToken', url: '<url>' }` (`authType` is required for UPSTREAM — use 'Anonymous' " +
+        "when no credentials are needed; url required for Custom source).",
     },
     { name: "parentRef", type: "string", required: false, description: "Scope ref accountId/orgId/projectId — auto-filled from scope; override only when creating in a different scope" },
     { name: "description", type: "string", required: false, description: "Human-readable description" },
@@ -87,7 +102,7 @@ export const registriesToolset: ToolsetDefinition = {
             `/har/api/v1/spaces/${harSpaceRef(input, config)}/+/registries`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
-            search: "search_term",
+            ...HAR_LIST_SEARCH_QUERY,
             type: "type",
             package_type: "package_type",
             page: "page",
@@ -163,10 +178,10 @@ export const registriesToolset: ToolsetDefinition = {
           path: "/har/api/v1/registry",
           pathBuilder: (input, config) =>
             `/har/api/v1/registry/${harRegistryRef(input, config)}/+/artifacts`,
-          pathParams: { registry_id: "registryIdentifier" },
+          pathParams: { registry_id: "registryIdentifier", artifact_id: "artifactIdentifier" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
-            search: "search_term",
+            ...HAR_LIST_SEARCH_QUERY,
             page: "page",
             size: "size",
           },
@@ -199,7 +214,7 @@ export const registriesToolset: ToolsetDefinition = {
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
-            search: "search_term",
+            ...HAR_LIST_SEARCH_QUERY,
             page: "page",
             size: "size",
           },
@@ -233,7 +248,7 @@ export const registriesToolset: ToolsetDefinition = {
           queryParams: {
             sort_order: "sort_order",
             sort_field: "sort_field",
-            search: "search_term",
+            ...HAR_LIST_SEARCH_QUERY,
             page: "page",
             size: "size",
           },

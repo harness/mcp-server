@@ -139,6 +139,29 @@ describe("compactItems", () => {
     expect(result[0]).not.toHaveProperty("yaml");
   });
 
+  it("keeps underscore-prefixed extractor hints, including sentinel rows", () => {
+    const items = [
+      { id: "art1", name: "nginx", _next_step: "call scs_bom_violation" },
+      { _summary: { total: 1, by_type: { CONTAINER: 1 } } },
+      { _total: 2, _reminder: "report only these", _note: "page size" },
+      { _message: "empty", _result: "EMPTY" },
+    ];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]).toMatchObject({
+      id: "art1",
+      name: "nginx",
+      _next_step: "call scs_bom_violation",
+    });
+    expect(result[1]).toEqual({ _summary: { total: 1, by_type: { CONTAINER: 1 } } });
+    expect(result[2]).toEqual({ _total: 2, _reminder: "report only these", _note: "page size" });
+    expect(result[3]).toEqual({ _message: "empty", _result: "EMPTY" });
+  });
+
+  it("still strips GraphQL __typename", () => {
+    const [stripped] = compactItems([{ __typename: "TimeSeriesDataPoints", name: "spend" }]) as Record<string, unknown>[];
+    expect(stripped).toEqual({ name: "spend" });
+  });
+
   it("merges openInHarness into name when compactFn output includes both", () => {
     const compactFn = (item: Record<string, unknown>) => ({
       name: item.name as string,

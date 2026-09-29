@@ -444,7 +444,7 @@ export const scsToolset: ToolsetDefinition = {
         { name: "source_id", description: "Artifact source ID (get from harness_list resource_type=scs_artifact_source)", required: true },
         { name: "search_term", description: "Filter artifacts by name or keyword" },
       ],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifact}",
       operations: {
         list: {
           method: "POST",
@@ -656,7 +656,7 @@ export const scsToolset: ToolsetDefinition = {
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifact}",
       operations: {
         get: {
           method: "GET",
@@ -691,7 +691,7 @@ export const scsToolset: ToolsetDefinition = {
       toolset: "scs",
       scope: "project",
       identifierFields: ["artifact_id"],
-      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifactId}",
+      deepLinkTemplate: "/ng/account/{accountId}/all/orgs/{orgIdentifier}/projects/{projectIdentifier}/supply-chain/artifacts/{artifact}",
       operations: {
         get: {
           method: "GET",

@@ -1,5 +1,12 @@
 # Harness MCP Server — Task Tracking
 
+## PR 1030 review follow-up (2026-09-29)
+
+- [x] Keep both HAR list search inputs (`search` and `search_term`) mapped to the API query `search_term`.
+- [x] Keep extractor hint fields through list compact, not only `_summary` / `_message` / `_result`.
+- [x] Do not let a list item's `name` replace an artifact id already resolved from the request.
+- [x] Add dispatch regressions and run focused tests. Full suite: 3884 passed.
+
 ## Version Bump 3.2.28 (2026-09-16)
 
 - [x] Update package, shrinkwrap, and MCPB manifest versions to 3.2.28.
