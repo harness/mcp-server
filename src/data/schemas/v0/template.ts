@@ -543,6 +543,12 @@ const schema: Record<string, any> = {
                   "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode_template"
                 },
                 {
+                  "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepNode_template"
+                },
+                {
+                  "$ref": "#/definitions/pipeline/steps/custom/CdStoPolicyEnforcementStepNode_template"
+                },
+                {
                   "$ref": "#/definitions/pipeline/steps/common/EnforceAttestationStepNode_template"
                 },
                 {
@@ -59944,6 +59950,735 @@ const schema: Record<string, any> = {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false
           },
+          "CdStoPolicyEnforcementStepNode_template": {
+            "title": "CdStoPolicyEnforcementStepNode_template",
+            "type": "object",
+            "required": [
+              "spec"
+            ],
+            "properties": {
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "CdStoPolicyEnforcement"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "CdStoPolicyEnforcement"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/CdStoPolicyEnforcementStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "CdStoPolicyEnforcementStepInfo": {
+            "title": "CdStoPolicyEnforcementStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "policySetIds",
+                  "infrastructure"
+                ],
+                "properties": {
+                  "policySetIds": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "policy_enforcement_execution_id": {
+                    "type": "string"
+                  },
+                  "targetName": {
+                    "type": "string"
+                  },
+                  "targetVariant": {
+                    "type": "string"
+                  },
+                  "productName": {
+                    "type": "string"
+                  },
+                  "infrastructure": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/custom/ContainerK8sInfra"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/custom/ContainerECSDirectInfra"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ContainerK8sInfra": {
+            "title": "ContainerK8sInfra",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/steps/custom/ContainerStepInfra"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "spec",
+                  "type"
+                ],
+                "properties": {
+                  "spec": {
+                    "$ref": "#/definitions/pipeline/steps/custom/ContainerInfraYamlSpec"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "KubernetesDirect",
+                      "VM"
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for ContainerK8sInfra"
+              }
+            }
+          },
+          "ContainerStepInfra": {
+            "title": "ContainerStepInfra",
+            "type": "object",
+            "discriminator": "type",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "KubernetesDirect",
+                  "VM",
+                  "ECSDirect"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for ContainerStepInfra"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ContainerInfraYamlSpec": {
+            "title": "ContainerInfraYamlSpec",
+            "type": "object",
+            "required": [
+              "connectorRef"
+            ],
+            "properties": {
+              "annotations": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "automountServiceAccountToken": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "connectorRef": {
+                "type": "string"
+              },
+              "containerSecurityContext": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/SecurityContext"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "initTimeout": {
+                "type": "string"
+              },
+              "labels": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "namespace": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2147483647
+              },
+              "nodeSelector": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "os": {
+                "oneOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "Linux",
+                      "MacOS",
+                      "Windows"
+                    ]
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "priorityClassName": {
+                "type": "string"
+              },
+              "resources": {
+                "$ref": "#/definitions/pipeline/common/ContainerResource"
+              },
+              "runAsUser": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "serviceAccountName": {
+                "type": "string"
+              },
+              "tolerations": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/custom/Toleration"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "volumes": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/custom/ContainerVolume"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for ContainerInfraYamlSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "SecurityContext": {
+            "title": "SecurityContext",
+            "type": "object",
+            "properties": {
+              "allowPrivilegeEscalation": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "capabilities": {
+                "$ref": "#/definitions/pipeline/steps/custom/Capabilities"
+              },
+              "privileged": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "procMount": {
+                "type": "string"
+              },
+              "readOnlyRootFilesystem": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "runAsGroup": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "runAsNonRoot": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "runAsUser": {
+                "oneOf": [
+                  {
+                    "type": "integer",
+                    "format": "int32"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for SecurityContext"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "Capabilities": {
+            "title": "Capabilities",
+            "type": "object",
+            "properties": {
+              "add": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "drop": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for Capabilities"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "Toleration": {
+            "title": "Toleration",
+            "type": "object",
+            "properties": {
+              "effect": {
+                "type": "string"
+              },
+              "key": {
+                "type": "string"
+              },
+              "operator": {
+                "type": "string"
+              },
+              "tolerationSeconds": {
+                "type": "integer",
+                "format": "int32"
+              },
+              "value": {
+                "type": "string"
+              },
+              "description": {
+                "desc": "This is the description for Toleration"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ContainerVolume": {
+            "title": "ContainerVolume",
+            "type": "object",
+            "discriminator": "type",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "EmptyDir",
+                  "PersistentVolumeClaim",
+                  "HostPath",
+                  "ConfigMap",
+                  "Secret"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for ContainerVolume"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "ContainerECSDirectInfra": {
+            "title": "ContainerECSDirectInfra",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/steps/custom/ContainerStepInfra"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "spec",
+                  "type"
+                ],
+                "properties": {
+                  "spec": {
+                    "$ref": "#/definitions/pipeline/steps/custom/ECSDirectInfraYamlSpec"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "ECSDirect"
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "properties": {
+              "description": {
+                "desc": "This is the description for ContainerECSDirectInfra"
+              }
+            }
+          },
+          "ECSDirectInfraYamlSpec": {
+            "title": "ECSDirectInfraYamlSpec",
+            "type": "object",
+            "required": [
+              "connectorRef"
+            ],
+            "properties": {
+              "connectorRef": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "harnessImageConnectorRef": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "cluster": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "region": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "subnets": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "securityGroups": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "taskRoleArn": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "executionRoleArn": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "initTimeout": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "enableExecuteCommand": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "logGroupName": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "volumes": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/steps/common/CIVolume"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "containerSecurityContext": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/SecurityContext"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
+                    "minLength": 1
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                  }
+                ]
+              },
+              "description": {
+                "desc": "This is the description for ECSDirectInfraYamlSpec"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "Attestation": {
             "title": "Attestation",
             "type": "object",
@@ -60884,598 +61619,6 @@ const schema: Record<string, any> = {
                 "desc": "This is the description for ContainerStepInfo"
               }
             }
-          },
-          "ContainerK8sInfra": {
-            "title": "ContainerK8sInfra",
-            "allOf": [
-              {
-                "$ref": "#/definitions/pipeline/steps/custom/ContainerStepInfra"
-              },
-              {
-                "type": "object",
-                "required": [
-                  "spec",
-                  "type"
-                ],
-                "properties": {
-                  "spec": {
-                    "$ref": "#/definitions/pipeline/steps/custom/ContainerInfraYamlSpec"
-                  },
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "KubernetesDirect",
-                      "VM"
-                    ]
-                  }
-                }
-              }
-            ],
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "properties": {
-              "description": {
-                "desc": "This is the description for ContainerK8sInfra"
-              }
-            }
-          },
-          "ContainerStepInfra": {
-            "title": "ContainerStepInfra",
-            "type": "object",
-            "discriminator": "type",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "KubernetesDirect",
-                  "VM",
-                  "ECSDirect"
-                ]
-              },
-              "description": {
-                "desc": "This is the description for ContainerStepInfra"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "ContainerInfraYamlSpec": {
-            "title": "ContainerInfraYamlSpec",
-            "type": "object",
-            "required": [
-              "connectorRef"
-            ],
-            "properties": {
-              "annotations": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "automountServiceAccountToken": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "connectorRef": {
-                "type": "string"
-              },
-              "containerSecurityContext": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/SecurityContext"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "initTimeout": {
-                "type": "string"
-              },
-              "labels": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "namespace": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 2147483647
-              },
-              "nodeSelector": {
-                "oneOf": [
-                  {
-                    "type": "object",
-                    "additionalProperties": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "os": {
-                "oneOf": [
-                  {
-                    "type": "string",
-                    "enum": [
-                      "Linux",
-                      "MacOS",
-                      "Windows"
-                    ]
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "priorityClassName": {
-                "type": "string"
-              },
-              "resources": {
-                "$ref": "#/definitions/pipeline/common/ContainerResource"
-              },
-              "runAsUser": {
-                "oneOf": [
-                  {
-                    "type": "integer",
-                    "format": "int32"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "serviceAccountName": {
-                "type": "string"
-              },
-              "tolerations": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/steps/custom/Toleration"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "volumes": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/steps/custom/ContainerVolume"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "description": {
-                "desc": "This is the description for ContainerInfraYamlSpec"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "SecurityContext": {
-            "title": "SecurityContext",
-            "type": "object",
-            "properties": {
-              "allowPrivilegeEscalation": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "capabilities": {
-                "$ref": "#/definitions/pipeline/steps/custom/Capabilities"
-              },
-              "privileged": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "procMount": {
-                "type": "string"
-              },
-              "readOnlyRootFilesystem": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "runAsGroup": {
-                "oneOf": [
-                  {
-                    "type": "integer",
-                    "format": "int32"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "runAsNonRoot": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "runAsUser": {
-                "oneOf": [
-                  {
-                    "type": "integer",
-                    "format": "int32"
-                  },
-                  {
-                    "type": "string"
-                  }
-                ]
-              },
-              "description": {
-                "desc": "This is the description for SecurityContext"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "Capabilities": {
-            "title": "Capabilities",
-            "type": "object",
-            "properties": {
-              "add": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "drop": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  }
-                ]
-              },
-              "description": {
-                "desc": "This is the description for Capabilities"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "Toleration": {
-            "title": "Toleration",
-            "type": "object",
-            "properties": {
-              "effect": {
-                "type": "string"
-              },
-              "key": {
-                "type": "string"
-              },
-              "operator": {
-                "type": "string"
-              },
-              "tolerationSeconds": {
-                "type": "integer",
-                "format": "int32"
-              },
-              "value": {
-                "type": "string"
-              },
-              "description": {
-                "desc": "This is the description for Toleration"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "ContainerVolume": {
-            "title": "ContainerVolume",
-            "type": "object",
-            "discriminator": "type",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "EmptyDir",
-                  "PersistentVolumeClaim",
-                  "HostPath",
-                  "ConfigMap",
-                  "Secret"
-                ]
-              },
-              "description": {
-                "desc": "This is the description for ContainerVolume"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
-          "ContainerECSDirectInfra": {
-            "title": "ContainerECSDirectInfra",
-            "allOf": [
-              {
-                "$ref": "#/definitions/pipeline/steps/custom/ContainerStepInfra"
-              },
-              {
-                "type": "object",
-                "required": [
-                  "spec",
-                  "type"
-                ],
-                "properties": {
-                  "spec": {
-                    "$ref": "#/definitions/pipeline/steps/custom/ECSDirectInfraYamlSpec"
-                  },
-                  "type": {
-                    "type": "string",
-                    "enum": [
-                      "ECSDirect"
-                    ]
-                  }
-                }
-              }
-            ],
-            "$schema": "http://json-schema.org/draft-07/schema#",
-            "properties": {
-              "description": {
-                "desc": "This is the description for ContainerECSDirectInfra"
-              }
-            }
-          },
-          "ECSDirectInfraYamlSpec": {
-            "title": "ECSDirectInfraYamlSpec",
-            "type": "object",
-            "required": [
-              "connectorRef"
-            ],
-            "properties": {
-              "connectorRef": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "harnessImageConnectorRef": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "cluster": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "region": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "subnets": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "securityGroups": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "taskRoleArn": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "executionRoleArn": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "initTimeout": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "enableExecuteCommand": {
-                "oneOf": [
-                  {
-                    "type": "boolean"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "logGroupName": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "volumes": {
-                "oneOf": [
-                  {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/definitions/pipeline/steps/common/CIVolume"
-                    }
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "containerSecurityContext": {
-                "oneOf": [
-                  {
-                    "$ref": "#/definitions/pipeline/steps/custom/SecurityContext"
-                  },
-                  {
-                    "type": "string",
-                    "pattern": "^<\\+input>((\\.)((executionInput\\(\\))|(allowedValues|selectOneFrom|selectManyFrom|default|regex)\\(.+?\\)))*$",
-                    "minLength": 1
-                  },
-                  {
-                    "$ref": "#/definitions/pipeline/steps/common/common-jexl"
-                  }
-                ]
-              },
-              "description": {
-                "desc": "This is the description for ECSDirectInfraYamlSpec"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "CustomApprovalStepNode_template": {
             "title": "CustomApprovalStepNode_template",
@@ -76123,6 +76266,100 @@ const schema: Record<string, any> = {
               }
             }
           },
+          "CdStoPolicyEnforcementStepNode": {
+            "title": "CdStoPolicyEnforcementStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for CdStoPolicyEnforcementStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "CdStoPolicyEnforcement"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "CdStoPolicyEnforcement"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/CdStoPolicyEnforcementStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
           "CdSscaOrchestrationStepNode": {
             "title": "CdSscaOrchestrationStepNode",
             "type": "object",
@@ -78210,6 +78447,151 @@ const schema: Record<string, any> = {
               "policy",
               "source"
             ]
+          },
+          "StoPolicyEnforcementStepNode_template": {
+            "title": "StoPolicyEnforcementStepNode_template",
+            "type": "object",
+            "required": [
+              "spec"
+            ],
+            "properties": {
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "StoPolicyEnforcement"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "StoPolicyEnforcement"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "StoPolicyEnforcementStepInfo": {
+            "title": "StoPolicyEnforcementStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "policySetIds"
+                ],
+                "properties": {
+                  "policySetIds": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "policy_enforcement_execution_id": {
+                    "type": "string"
+                  },
+                  "targetName": {
+                    "type": "string"
+                  },
+                  "targetVariant": {
+                    "type": "string"
+                  },
+                  "productName": {
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
+          "CIVolume": {
+            "title": "CIVolume",
+            "type": "object",
+            "discriminator": "type",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "EmptyDir",
+                  "PersistentVolumeClaim",
+                  "HostPath"
+                ]
+              },
+              "description": {
+                "desc": "This is the description for CIVolume"
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "EnforceAttestationStepNode_template": {
             "title": "EnforceAttestationStepNode_template",
@@ -100833,25 +101215,6 @@ const schema: Record<string, any> = {
               }
             ]
           },
-          "CIVolume": {
-            "title": "CIVolume",
-            "type": "object",
-            "discriminator": "type",
-            "properties": {
-              "type": {
-                "type": "string",
-                "enum": [
-                  "EmptyDir",
-                  "PersistentVolumeClaim",
-                  "HostPath"
-                ]
-              },
-              "description": {
-                "desc": "This is the description for CIVolume"
-              }
-            },
-            "$schema": "http://json-schema.org/draft-07/schema#"
-          },
           "fme-flag-common-flag-name": {
             "title": "fme-flag-common-flag-name",
             "type": "string",
@@ -111528,6 +111891,100 @@ const schema: Record<string, any> = {
                   "properties": {
                     "spec": {
                       "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "StoPolicyEnforcementStepNode": {
+            "title": "StoPolicyEnforcementStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for StoPolicyEnforcementStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "StoPolicyEnforcement"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "StoPolicyEnforcement"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepInfo"
                     }
                   }
                 }
@@ -139834,7 +140291,13 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/CdSscaEnforcementStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/CdStoPolicyEnforcementStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
@@ -150577,6 +151040,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/CdSscaEnforcementStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/CdStoPolicyEnforcementStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/custom/JiraCreateStepNode"
                   },
                   {
@@ -151437,6 +151903,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
@@ -153579,6 +154048,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
