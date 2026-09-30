@@ -1,5 +1,10 @@
 # Harness MCP Server — Task Tracking
 
+## HAR list search filter (2026-09-30)
+
+- [x] Forward both `search` (describe filter) and `search_term` (harness_list argument) to the HAR `search_term` query param.
+- [x] Regression tests for registry, artifact, artifact_version, and artifact_file list.
+
 ## Version Bump 3.2.28 (2026-09-16)
 
 - [x] Update package, shrinkwrap, and MCPB manifest versions to 3.2.28.
