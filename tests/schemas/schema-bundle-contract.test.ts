@@ -220,4 +220,51 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream CdStoPolicyEnforcement step definitions in v0 pipeline custom steps", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const customSteps = pipelineDefs.pipeline.steps.custom as Record<string, unknown>;
+
+    expect(customSteps).toHaveProperty("CdStoPolicyEnforcementStepNode");
+    expect(customSteps).toHaveProperty("CdStoPolicyEnforcementStepInfo");
+
+    const stepNode = customSteps.CdStoPolicyEnforcementStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("CdStoPolicyEnforcement");
+
+    const stepInfo = customSteps.CdStoPolicyEnforcementStepInfo as {
+      allOf: Array<{ required?: string[]; properties?: Record<string, unknown> }>;
+    };
+    const spec = stepInfo.allOf.find((part) => part.required?.includes("policySetIds"));
+    expect(spec?.required).toContain("infrastructure");
+    expect(spec?.properties).toHaveProperty("policySetIds");
+  });
+
+  it("includes upstream CdStoPolicyEnforcement step definitions in v0 template custom steps", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const customSteps = templateDefs.pipeline.steps.custom as Record<string, unknown>;
+
+    expect(customSteps).toHaveProperty("CdStoPolicyEnforcementStepNode");
+    expect(customSteps).toHaveProperty("CdStoPolicyEnforcementStepNode_template");
+    expect(customSteps).toHaveProperty("CdStoPolicyEnforcementStepInfo");
+  });
+
+  it("includes upstream user-groups on v1 notification channels in pipeline and template", () => {
+    const channels = ["PmsWebhookChannel", "PmsDatadogChannel"] as const;
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const ns = defs[key] as Record<
+        string,
+        { properties: Record<string, { description?: string; oneOf?: unknown[] }> }
+      >;
+
+      for (const channel of channels) {
+        const config = ns[channel];
+        expect(config.properties).toHaveProperty("user-groups");
+        expect(config.properties["user-groups"].description).toContain("user group");
+        expect(config.properties["user-groups"].oneOf).toHaveLength(2);
+      }
+    }
+  });
 });
