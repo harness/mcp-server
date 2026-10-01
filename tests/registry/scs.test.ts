@@ -2400,3 +2400,41 @@ describe("scs_sbom download dispatch", () => {
     ).resolves.toMatchObject({ download_url: "https://s3.example/presigned" });
   });
 });
+
+describe("SCS artifact deep links align pathParams with template (#1030)", () => {
+  it.each([
+    "artifact_security",
+    "scs_artifact_remediation",
+    "scs_chain_of_custody",
+  ] as const)("get openInHarness resolves {artifact} for %s", async (resourceType) => {
+    const res = findResource(resourceType);
+    expect(res.deepLinkTemplate).toContain("/supply-chain/artifacts/{artifact}");
+    expect(res.deepLinkTemplate).not.toContain("{artifactId}");
+
+    const getSpec = res.operations.get;
+    expect(getSpec?.pathParams?.artifact_id).toBe("artifact");
+
+    const request = vi.fn().mockResolvedValue({ status: "OK" });
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const input: Record<string, unknown> = {
+      org_id: "SSCA",
+      project_id: "Sanity",
+      artifact_id: "art-deep-link",
+    };
+    if (resourceType === "artifact_security") {
+      input.source_id = "src-1";
+    }
+    if (resourceType === "scs_artifact_remediation") {
+      input.purl = "pkg:npm/express@4.18.0";
+    }
+
+    const result = (await registry.dispatch(makeClient(request), resourceType, "get", input)) as Record<
+      string,
+      unknown
+    >;
+
+    const link = String(result.openInHarness);
+    expect(link).toContain("/supply-chain/artifacts/art-deep-link");
+    expect(link).not.toMatch(/\{artifact/i);
+  });
+});
