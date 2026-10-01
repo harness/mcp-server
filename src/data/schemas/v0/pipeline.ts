@@ -7316,6 +7316,157 @@ const schema: Record<string, any> = {
             "$schema": "http://json-schema.org/draft-07/schema#",
             "additionalProperties": false
           },
+          "CdStoPolicyEnforcementStepNode": {
+            "title": "CdStoPolicyEnforcementStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for CdStoPolicyEnforcementStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "CdStoPolicyEnforcement"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "CdStoPolicyEnforcement"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/custom/CdStoPolicyEnforcementStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "CdStoPolicyEnforcementStepInfo": {
+            "title": "CdStoPolicyEnforcementStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "policySetIds",
+                  "infrastructure"
+                ],
+                "properties": {
+                  "policySetIds": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "policy_enforcement_execution_id": {
+                    "type": "string"
+                  },
+                  "targetName": {
+                    "type": "string"
+                  },
+                  "targetVariant": {
+                    "type": "string"
+                  },
+                  "productName": {
+                    "type": "string"
+                  },
+                  "infrastructure": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/custom/ContainerK8sInfra"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/custom/ContainerECSDirectInfra"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "SbomDrift": {
             "title": "SbomDrift",
             "type": "object",
@@ -32360,6 +32511,146 @@ const schema: Record<string, any> = {
               "policy",
               "source"
             ]
+          },
+          "StoPolicyEnforcementStepNode": {
+            "title": "StoPolicyEnforcementStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for StoPolicyEnforcementStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "StoPolicyEnforcement"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "StoPolicyEnforcement"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "StoPolicyEnforcementStepInfo": {
+            "title": "StoPolicyEnforcementStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "policySetIds"
+                ],
+                "properties": {
+                  "policySetIds": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "policy_enforcement_execution_id": {
+                    "type": "string"
+                  },
+                  "targetName": {
+                    "type": "string"
+                  },
+                  "targetVariant": {
+                    "type": "string"
+                  },
+                  "productName": {
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
           },
           "SscaOrchestrationStepNode": {
             "title": "SscaOrchestrationStepNode",
@@ -109040,6 +109331,12 @@ const schema: Record<string, any> = {
           {
             "type": "object",
             "properties": {
+              "userGroups": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "webhookUrl": {
                 "type": "string"
               },
@@ -109064,11 +109361,13 @@ const schema: Record<string, any> = {
           },
           {
             "type": "object",
-            "required": [
-              "url",
-              "apiKey"
-            ],
             "properties": {
+              "userGroups": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "url": {
                 "type": "string"
               },
@@ -111333,7 +111632,13 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/custom/CdSscaEnforcementStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/custom/CdStoPolicyEnforcementStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
@@ -120788,6 +121093,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
                   },
                   {
@@ -121360,6 +121668,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
@@ -122169,6 +122480,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/CdSscaEnforcementStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/custom/CdStoPolicyEnforcementStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/custom/JiraCreateStepNode"
