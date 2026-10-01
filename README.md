@@ -1541,7 +1541,7 @@ IaCM list responses expose `page_count` as the count for the current page only (
 | -------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `pull_request` | x    | x   | x      | x      |        | `close`, `merge` |
 | `pr_reviewer`  | x    |     | x      |        |        | `submit_review` |
-| `pr_comment`   |      |     | x      | x      | x      | `resolve`, `unresolve`, `set_status` |
+| `pr_comment`   |      |     | x      | x      | x      | `resolve`, `unresolve` |
 | `pr_check`     | x    |     |        |        |        |                 |
 | `pr_activity`  | x    |     |        |        |        |                 |
 
@@ -1549,7 +1549,7 @@ Use `harness_execute(resource_type="pull_request", action="close", ...)` for an 
 
 Use `harness_list(resource_type="pr_activity", filters={type: ["comment", "code-comment"]}, ...)` to read PR comments. Use `pr_comment` for comment write operations.
 
-Use `harness_execute(resource_type="pr_comment", action="resolve", ...)` to resolve a comment thread and `action="unresolve"` to reopen it; neither takes a body. Use `action="set_status"` with `body={status: "resolved"}` or `{status: "active"}` to set the status explicitly. `comment_id` must be a row's `id` from `pr_activity` where that row's `parent_id` is `null`; the backend rejects reply ids.
+Use `harness_execute(resource_type="pr_comment", action="resolve", ...)` to resolve a comment thread and `action="unresolve"` to reopen it; neither takes a body. `comment_id` must be a row's `id` from `pr_activity` where that row's `parent_id` is `null`; the API rejects reply ids.
 
 
 ### Release Management

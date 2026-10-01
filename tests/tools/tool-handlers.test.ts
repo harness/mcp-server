@@ -2373,7 +2373,7 @@ pipeline:
     expect(call.path).toBe("/code/api/v1/repos/my-repo/pullreq/42/state");
   });
 
-  it("maps resource_id to comment_id for pr_comment set_status", async () => {
+  it("maps resource_id to comment_id for pr_comment resolve", async () => {
     const prServer = makeMcpServer("accept");
     const prRegistry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
     const prRequest = vi.fn().mockResolvedValue({ id: 123, resolved: 1_700_000_000_000 });
@@ -2383,10 +2383,9 @@ pipeline:
 
     const result = await prServer.call("harness_execute", {
       resource_type: "pr_comment",
-      action: "set_status",
+      action: "resolve",
       resource_id: "123",
       params: { repo_id: "my-repo", pr_number: "42" },
-      body: { status: "resolved" },
     });
 
     expect(result.isError).toBeUndefined();
