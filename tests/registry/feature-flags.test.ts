@@ -3111,6 +3111,37 @@ describe("fme_experiment_alerting", () => {
     expect(firstRequest(mockRequest).body).toEqual({ isEnabled: false });
   });
 
+  it("update: strips body keys other than isEnabled", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: {}, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment_alerting", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { isEnabled: true, id: "other", threshold: 0.5 },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ isEnabled: true });
+  });
+
+  it("update: throws when experiment_id or org_id/project_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment_alerting", "update", {
+        org_id: "o1",
+        project_id: "p1",
+        body: { isEnabled: true },
+      }),
+    ).rejects.toThrow(/experiment_id/);
+    await expect(
+      registry.dispatch(client, "fme_experiment_alerting", "update", { experiment_id: "e1", body: { isEnabled: true } }),
+    ).rejects.toThrow("fme_experiment_alerting: org_id and project_id are required (account is taken from config).");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
   it("exposes only get and update, and declares isEnabled as the required update field", () => {
     const resource = findResource("fme_experiment_alerting");
     expect(resource.operations.list).toBeUndefined();

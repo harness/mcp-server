@@ -127,8 +127,8 @@ function applyFmeExperimentParentTypeQuery(input: Record<string, unknown>, opera
   input.parent_type = parentType;
 }
 
-// Shared by fme_metric/fme_experiment/fme_experiment_settings .update — all three
-// send JSON Merge Patch (RFC 7396) bodies built from the same whitelist-and-copy shape.
+// Shared by the fme_* .update operations — each sends a JSON Merge Patch (RFC 7396) body
+// built from the same whitelist-and-copy shape.
 function buildFmeMergePatch(
   body: Record<string, unknown> | undefined,
   patchableFields: readonly string[],
@@ -472,7 +472,7 @@ const fmeExperimentSettingsUpdateSchema: BodySchema = {
 
 const fmeExperimentAlertingUpdateSchema: BodySchema = {
   description:
-    "Set whether an Experiment is subscribed to significance-regression alerting via JSON Merge Patch (RFC 7396). isEnabled is required and cannot be null (400 if omitted or null). Implicitly creates the underlying alert policy if none exists.",
+    "Set whether an Experiment is subscribed to significance-regression alerting via JSON Merge Patch (RFC 7396). isEnabled is required and cannot be null (400 if omitted or null).",
   fields: [
     { name: "isEnabled", type: "boolean", required: true, description: "true to subscribe the experiment to alert evaluation, false to unsubscribe" },
   ],
@@ -2280,8 +2280,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "Whether a single Experiment is subscribed to significance-regression alerting. An alert fires when a calculation " +
         "run completes and an evaluated metric result is statistically significant (per the experiment's applied " +
         "fme_experiment_settings) with an undesired direction past the degradation threshold. Harness-native only " +
-        "(org_id + project_id). Supports get and update only (no list/delete — alerting is 1:1 with the experiment and " +
-        "its id equals the experiment id).",
+        "(org_id + project_id). Supports get and update only.",
       toolset: "feature-flags",
       scope: "project",
       scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
@@ -2318,8 +2317,9 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: fmeV4EntityExtract,
           bodySchema: fmeExperimentAlertingUpdateSchema,
           description:
-            "Subscribe or unsubscribe the experiment from alerting. Body must contain isEnabled (boolean, required). " +
-            "Implicitly creates the alert policy if one doesn't exist. 404 if the experiment doesn't exist.",
+            "Subscribe or unsubscribe the experiment from alerting. Body must contain isEnabled (boolean, required; " +
+            "400 if omitted or null). 404 if the experiment doesn't exist; 403 if the caller lacks edit permission. " +
+            "Only the subscription is editable here — the degradation threshold is not configurable through this resource.",
         },
       },
     },
