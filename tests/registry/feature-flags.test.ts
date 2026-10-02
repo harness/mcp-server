@@ -3027,6 +3027,196 @@ describe("fme_experiment_settings", () => {
   });
 });
 
+describe("fme_change_request", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: routes to /fme/api/v4/change-requests with account_id/organization_identifier/project_identifier params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", { org_id: "o1", project_id: "p1" });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("GET");
+    expect(req.path).toBe("/fme/api/v4/change-requests");
+    expect(req.product).toBeUndefined();
+    expect(req.params).toEqual({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+  });
+
+  it("list: resource_scope='account' omits organization_identifier/project_identifier (account-wide)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", { resource_scope: "account" });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/change-requests");
+    expect(req.params).toEqual({ account_id: "test-account" });
+  });
+
+  it("list: throws when org_id/project_id missing without resource_scope='account' (no silent fallback to ambient config)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "fme_change_request", "list", {})).rejects.toThrow(
+      /fme_change_request: org_id and project_id are required.*resource_scope='account'/,
+    );
+    await expect(registry.dispatch(client, "fme_change_request", "list", { org_id: "o1" })).rejects.toThrow(
+      /org_id and project_id are required/,
+    );
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: rejects legacy workspace_id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { workspace_id: "ws1", org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/Harness-native \(org_id\/project_id\) only/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: maps each documented filter to the correct query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 20, offset: 10, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      status: ["REQUESTED", "PUBLISHED"],
+      filter: "APPROVALS",
+      environment_id: ["env1", "env2"],
+      resource_type: "SEGMENT",
+      segment_type: "LARGE",
+      offset: 10,
+      limit: 20,
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({
+      status: ["REQUESTED", "PUBLISHED"],
+      filter: "APPROVALS",
+      environment_id: ["env1", "env2"],
+      resource_type: "SEGMENT",
+      segment_type: "LARGE",
+      offset: 10,
+      limit: 20,
+    });
+  });
+
+  it("list: splits comma-separated status/environment_id into repeated params and canonicalizes case", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      status: "requested, scheduled",
+      environment_id: "env1,env2",
+      filter: "submissions",
+      resource_type: "feature_flag",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({
+      status: ["REQUESTED", "SCHEDULED"],
+      environment_id: ["env1", "env2"],
+      filter: "SUBMISSIONS",
+      resource_type: "FEATURE_FLAG",
+    });
+  });
+
+  it("list: harness_list size maps to limit", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 5, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_change_request", "list", { org_id: "o1", project_id: "p1", size: 5 });
+
+    expect(firstRequest(mockRequest).params).toMatchObject({ limit: 5 });
+  });
+
+  it("list: rejects invalid status/filter/resource_type values without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const scope = { org_id: "o1", project_id: "p1" };
+
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, status: ["REQUESTED", "PENDING"] }),
+    ).rejects.toThrow(/invalid status 'PENDING'/);
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, filter: "MINE" }),
+    ).rejects.toThrow(/invalid filter 'MINE'/);
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, resource_type: "EXPERIMENT" }),
+    ).rejects.toThrow(/invalid resource_type 'EXPERIMENT'/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: requires segment_type iff resource_type=SEGMENT", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+    const scope = { org_id: "o1", project_id: "p1" };
+
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, resource_type: "SEGMENT" }),
+    ).rejects.toThrow(/segment_type is required when resource_type is SEGMENT/);
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, resource_type: "FEATURE_FLAG", segment_type: "STANDARD" }),
+    ).rejects.toThrow(/segment_type is only allowed together with resource_type=SEGMENT/);
+    await expect(
+      registry.dispatch(client, "fme_change_request", "list", { ...scope, segment_type: "STANDARD" }),
+    ).rejects.toThrow(/segment_type is only allowed together with resource_type=SEGMENT/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: extractor maps {data, totalCount} to a closed {items, total}", async () => {
+    const changeRequests = [
+      {
+        id: "cr1",
+        status: "REQUESTED",
+        resourceType: "FEATURE_FLAG",
+        resourceName: "checkout-flag",
+        environment: { id: "env1", name: "Production" },
+        approvalConfig: { approvers: [{ id: "g1", type: "GROUP", name: "platform-team" }] },
+        createdBy: { id: "u1", type: "USER", name: "Alice", email: "alice@example.com" },
+        organizationIdentifier: "o1",
+        projectIdentifier: "p1",
+        createdAt: "2026-09-01T10:00:00.000Z",
+      },
+    ];
+    const mockRequest = vi.fn().mockResolvedValue({ data: changeRequests, limit: 100, offset: 0, totalCount: 7 });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_change_request", "list", { org_id: "o1", project_id: "p1" });
+
+    expect(result).toEqual({ items: changeRequests, total: 7 });
+  });
+
+  it("list: skips compaction so resourceName/environment/approvalConfig/createdBy survive", () => {
+    expect(getOperation("fme_change_request", "list").skipCompact).toBe(true);
+  });
+
+  it("is list-only and supports project and account scope", () => {
+    const resource = findResource("fme_change_request");
+    expect(resource.operations.list).toBeDefined();
+    expect(resource.operations.get).toBeUndefined();
+    expect(resource.operations.create).toBeUndefined();
+    expect(resource.operations.update).toBeUndefined();
+    expect(resource.operations.delete).toBeUndefined();
+    expect(resource.scope).toBe("project");
+    expect(resource.supportedScopes).toEqual(["account", "project"]);
+  });
+});
+
 describe("fme_experiment_result", () => {
   let registry: Registry;
 
