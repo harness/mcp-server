@@ -3027,6 +3027,103 @@ describe("fme_experiment_settings", () => {
   });
 });
 
+describe("fme_experiment_alerting", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("get: routes to /fme/api/v4/experiments/{experiment_id}/alerting and URL-encodes the id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "e1", isEnabled: false });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment_alerting", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1/with slash",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("GET");
+    expect(req.path).toBe("/fme/api/v4/experiments/e1%2Fwith%20slash/alerting");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(result).toEqual({ id: "e1", isEnabled: false });
+  });
+
+  it("get: throws when experiment_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment_alerting", "get", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/experiment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: throws when org_id/project_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment_alerting", "get", { experiment_id: "e1" }),
+    ).rejects.toThrow("fme_experiment_alerting: org_id and project_id are required (account is taken from config).");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("update: PATCHes with merge-patch content type and flattens the entity/governance envelope", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", isEnabled: true },
+      governance: { status: "NONE", details: [] },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment_alerting", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { isEnabled: true },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("PATCH");
+    expect(req.path).toBe("/fme/api/v4/experiments/e1/alerting");
+    expect(req.headers).toMatchObject({ "Content-Type": "application/merge-patch+json" });
+    expect(req.body).toEqual({ isEnabled: true });
+    expect(result).toEqual({ id: "e1", isEnabled: true, governance: { status: "NONE", details: [] } });
+  });
+
+  it("update: forwards isEnabled: false (not dropped as falsy)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: {}, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment_alerting", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { isEnabled: false },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ isEnabled: false });
+  });
+
+  it("exposes only get and update, and declares isEnabled as the required update field", () => {
+    const resource = findResource("fme_experiment_alerting");
+    expect(resource.operations.list).toBeUndefined();
+    expect(resource.operations.create).toBeUndefined();
+    expect(resource.operations.delete).toBeUndefined();
+    expect(resource.operations.get).toBeDefined();
+    expect(resource.operations.update?.operationPolicy?.risk).toBe("low_write");
+    expect(resource.operations.update?.bodySchema?.fields).toEqual([
+      expect.objectContaining({ name: "isEnabled", type: "boolean", required: true }),
+    ]);
+  });
+});
+
 describe("fme_experiment_result", () => {
   let registry: Registry;
 

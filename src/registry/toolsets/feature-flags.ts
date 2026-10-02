@@ -470,6 +470,14 @@ const fmeExperimentSettingsUpdateSchema: BodySchema = {
   ],
 };
 
+const fmeExperimentAlertingUpdateSchema: BodySchema = {
+  description:
+    "Set whether an Experiment is subscribed to significance-regression alerting via JSON Merge Patch (RFC 7396). isEnabled is required and cannot be null (400 if omitted or null). Implicitly creates the underlying alert policy if none exists.",
+  fields: [
+    { name: "isEnabled", type: "boolean", required: true, description: "true to subscribe the experiment to alert evaluation, false to unsubscribe" },
+  ],
+};
+
 const fmeRbsUpdateDefinitionSchema: BodySchema = {
   description: "Update a rule-based segment definition in an environment. Rules use: {condition: {combiner: 'AND', matchers: [{type, attribute, ...}]}}. Matcher types: IN_LIST_STRING (strings:[]), GREATER_THAN_OR_EQUAL_NUMBER (number:N), LESS_THAN_OR_EQUAL_NUMBER (number:N), BETWEEN_NUMBER (between:{from,to}), BOOLEAN (bool:true/false), ON_DATE (date:ms), IN_SPLIT (depends:{splitName,treatment}). Combiner values: AND, OR.",
   fields: [
@@ -2262,6 +2270,56 @@ export const featureFlagsToolset: ToolsetDefinition = {
             "Revert an experiment's settings to organization defaults by removing the experiment-level override " +
             "(source becomes ORGANIZATION_DEFAULT) — the override's values are lost. Idempotent — safe to call when " +
             "no override exists (no-op, same response).",
+        },
+      },
+    },
+    {
+      resourceType: "fme_experiment_alerting",
+      displayName: "FME Experiment Alerting",
+      description:
+        "Whether a single Experiment is subscribed to significance-regression alerting. An alert fires when a calculation " +
+        "run completes and an evaluated metric result is statistically significant (per the experiment's applied " +
+        "fme_experiment_settings) with an undesired direction past the degradation threshold. Harness-native only " +
+        "(org_id + project_id). Supports get and update only (no list/delete — alerting is 1:1 with the experiment and " +
+        "its id equals the experiment id).",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["experiment_id"],
+      operations: {
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_alerting");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
+            return { path: `/fme/api/v4/experiments/${id}/alerting` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get whether the experiment is subscribed to alerting ({id, isEnabled}). Returns isEnabled: false when no " +
+            "alert policy has ever been configured; only 404s when the experiment itself doesn't exist.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_alerting");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
+            return { path: `/fme/api/v4/experiments/${id}/alerting` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return buildFmeMergePatch(body, ["isEnabled"]);
+          },
+          responseExtractor: fmeV4EntityExtract,
+          bodySchema: fmeExperimentAlertingUpdateSchema,
+          description:
+            "Subscribe or unsubscribe the experiment from alerting. Body must contain isEnabled (boolean, required). " +
+            "Implicitly creates the alert policy if one doesn't exist. 404 if the experiment doesn't exist.",
         },
       },
     },
