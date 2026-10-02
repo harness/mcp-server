@@ -170,6 +170,73 @@ function compactFmeExperiment(item: Record<string, unknown>): Record<string, unk
   return slim;
 }
 
+const FME_CHANGE_REQUEST_STATUSES = ["REQUESTED", "SCHEDULED", "PROCESSING", "PUBLISHED", "REJECTED", "WITHDRAWN", "FAILED"] as const;
+const FME_CHANGE_REQUEST_FILTERS = ["ALL", "APPROVALS", "SUBMISSIONS"] as const;
+const FME_CHANGE_REQUEST_RESOURCE_TYPES = ["FEATURE_FLAG", "SEGMENT"] as const;
+
+// status and environment_id are repeatable query params (status=A&status=B). Accept an array or a
+// comma-separated string and normalize to a string[] so each value becomes its own query param.
+function toFmeQueryList(raw: unknown): string[] | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const parts = (Array.isArray(raw) ? raw : String(raw).split(","))
+    .map((v) => (typeof v === "string" ? v.trim() : String(v)))
+    .filter((v) => v.length > 0);
+  return parts.length > 0 ? parts : undefined;
+}
+
+function canonicalizeFmeEnum<T extends string>(
+  raw: unknown,
+  allowed: readonly T[],
+  field: string,
+  operation: string,
+): T | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  const value = String(raw).trim();
+  const match = allowed.find((v) => v.toLowerCase() === value.toLowerCase());
+  if (match === undefined) {
+    throw new Error(`fme_change_request.${operation}: invalid ${field} '${value}'. Must be one of: ${allowed.join(", ")}.`);
+  }
+  return match;
+}
+
+function applyFmeChangeRequestListQuery(input: Record<string, unknown>): void {
+  if (input.workspace_id) {
+    throw new Error("fme_change_request: Harness-native (org_id/project_id) only — pass org_id+project_id instead of workspace_id.");
+  }
+  if (input.resource_scope !== "account" && (!input.org_id || !input.project_id)) {
+    throw new Error(
+      "fme_change_request: org_id and project_id are required (account is taken from config). " +
+        "To list change requests across the whole account, pass resource_scope='account' instead.",
+    );
+  }
+
+  const statuses = toFmeQueryList(input.status);
+  if (statuses) {
+    input.status = statuses.map((s) => canonicalizeFmeEnum(s, FME_CHANGE_REQUEST_STATUSES, "status", "list"));
+  } else {
+    delete input.status;
+  }
+  const environmentIds = toFmeQueryList(input.environment_id);
+  if (environmentIds) input.environment_id = environmentIds;
+  else delete input.environment_id;
+
+  const filter = canonicalizeFmeEnum(input.filter, FME_CHANGE_REQUEST_FILTERS, "filter", "list");
+  if (filter) input.filter = filter;
+  const resourceType = canonicalizeFmeEnum(input.resource_type, FME_CHANGE_REQUEST_RESOURCE_TYPES, "resource_type", "list");
+  if (resourceType) input.resource_type = resourceType;
+  const segmentType = canonicalizeFmeEnum(input.segment_type, FME_SEGMENT_KINDS, "segment_type", "list");
+  if (segmentType) input.segment_type = segmentType;
+
+  if (resourceType === "SEGMENT" && !segmentType) {
+    throw new Error(
+      `fme_change_request.list: segment_type is required when resource_type is SEGMENT (${FME_SEGMENT_KINDS.join(" | ")}).`,
+    );
+  }
+  if (segmentType && resourceType !== "SEGMENT") {
+    throw new Error("fme_change_request.list: segment_type is only allowed together with resource_type=SEGMENT.");
+  }
+}
+
 function resolveFmeCreateSegmentType(body: Record<string, unknown> | undefined): FmeSegmentKind {
   const primary = body?.segmentType;
   if (primary === undefined || primary === null || primary === "") {
@@ -2305,6 +2372,86 @@ export const featureFlagsToolset: ToolsetDefinition = {
             "comparison treatment) pair. If the experiment has never been calculated, or a filtered metric id doesn't " +
             "exist on the experiment, returns 200 with a partial/empty result. No environment_id filter — the " +
             "experiment has exactly one environment (see fme_experiment.environment).",
+        },
+      },
+    },
+    // ── FME Change Request (Harness-native only; read-only list) ──
+    {
+      resourceType: "fme_change_request",
+      displayName: "FME Change Request",
+      description:
+        "Change requests (approval workflow items) for feature flag and segment changes. Harness-native only. Read-only: " +
+        "list only. Project-scoped by default (org_id + project_id); pass resource_scope='account' to list across the whole " +
+        "account. By default only pending (REQUESTED) change requests are returned — pass status to see other lifecycle " +
+        "states. filter=APPROVALS returns change requests where the caller is an approver (excluding the caller's own " +
+        "submissions), SUBMISSIONS returns the caller's own, ALL (default) returns both. Sorted by most recently modified first.",
+      toolset: "feature-flags",
+      scope: "project",
+      supportedScopes: ["account", "project"],
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: [],
+      searchAliases: ["approval", "approvals", "change proposal", "pending approval"],
+      listFilterFields: [
+        {
+          name: "status",
+          description:
+            "Filter by one or more lifecycle statuses (array or comma-separated). Defaults to [REQUESTED] (pending approval); explicit values replace the default.",
+          enum: [...FME_CHANGE_REQUEST_STATUSES],
+        },
+        {
+          name: "filter",
+          description:
+            "APPROVALS = change requests where the caller is an approver (excludes the caller's own submissions); SUBMISSIONS = submitted by the caller; ALL (default) = both.",
+          enum: [...FME_CHANGE_REQUEST_FILTERS],
+        },
+        {
+          name: "environment_id",
+          description:
+            "Filter to one or more environment IDs (array or comma-separated; get from fme_environment). Each must belong to the project.",
+        },
+        {
+          name: "resource_type",
+          description: "Filter to one resource kind. SEGMENT requires segment_type.",
+          enum: [...FME_CHANGE_REQUEST_RESOURCE_TYPES],
+        },
+        {
+          name: "segment_type",
+          description: "Segment kind. Required when resource_type=SEGMENT; not allowed otherwise.",
+          enum: [...FME_SEGMENT_KINDS],
+        },
+        { name: "offset", description: "Pagination offset (default 0)", type: "number" },
+        { name: "limit", description: "Page size (1-100, default 100)", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            applyFmeChangeRequestListQuery(input);
+            return { path: "/fme/api/v4/change-requests" };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            status: "status",
+            filter: "filter",
+            environment_id: "environment_id",
+            resource_type: "resource_type",
+            segment_type: "segment_type",
+            offset: "offset",
+            size: "limit",
+            limit: "limit",
+          },
+          responseExtractor: fmeV4PaginatedListExtract,
+          // resourceName, resourceType, environment, createdBy and approvalConfig identify what a change
+          // request is about and who must act on it; the generic compact whitelist would drop all of them.
+          skipCompact: true,
+          description:
+            "List change requests (harness_list size maps to limit; pass offset directly via filters). Defaults to pending " +
+            "(REQUESTED) only. Each item has id, status, resourceType, resourceName, resourceId, segmentType (segments " +
+            "only), environment {id, name}, approvalConfig.approvers, title, comment, createdBy, createdAt, modifiedAt; " +
+            "null fields are omitted. resourceId can be the literal string \"Undefined\" for feature flag change requests — " +
+            "use resourceName to identify the flag. Use environment_id values from fme_environment; an unknown " +
+            "environment_id can fail with a 500 instead of a 400.",
         },
       },
     },
