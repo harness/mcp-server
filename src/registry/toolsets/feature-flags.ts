@@ -2449,9 +2449,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             "List change requests (harness_list size maps to limit; pass offset directly via filters). Defaults to pending " +
             "(REQUESTED) only. Each item has id, status, resourceType, resourceName, resourceId, segmentType (segments " +
             "only), environment {id, name}, approvalConfig.approvers, title, comment, createdBy, createdAt, modifiedAt; " +
-            "null fields are omitted. resourceId can be the literal string \"Undefined\" for feature flag change requests — " +
-            "use resourceName to identify the flag. Use environment_id values from fme_environment; an unknown " +
-            "environment_id can fail with a 500 instead of a 400.",
+            "null fields are omitted. Use environment_id values from fme_environment.",
         },
       },
     },
