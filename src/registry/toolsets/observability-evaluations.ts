@@ -59,7 +59,7 @@ function scopeOrThrow(input: JsonRecord, config: PathBuilderConfig): { org: stri
   const project = nonEmptyString(input.project_id) ?? config.HARNESS_PROJECT ?? "";
   if (!org || !project) {
     throw new Error(
-      "Observability Evaluation Rules require org_id and project_id. Set HARNESS_ORG/HARNESS_PROJECT or pass both values.",
+      "Observability evals require org_id and project_id. Set HARNESS_ORG/HARNESS_PROJECT or pass both values.",
     );
   }
   return { org, project };
@@ -71,8 +71,20 @@ function base(input: JsonRecord, config: PathBuilderConfig): string {
 }
 
 function configPath(input: JsonRecord, config: PathBuilderConfig): string {
-  const configId = requireUuid(input.config_id, "config_id");
-  return `${base(input, config)}/online-eval-configs/${configId}`;
+  const evalId = requireUuid(input.eval_id, "eval_id");
+  return `${base(input, config)}/online-eval-configs/${evalId}`;
+}
+
+function observabilityEvalExtract(raw: unknown): unknown {
+  const record = asRecord(raw);
+  if (!record || typeof record.config_id !== "string") return raw;
+  const { config_id: evalId, ...response } = record;
+  return { ...response, eval_id: evalId };
+}
+
+function observabilityEvalListExtract(raw: unknown): { items: unknown[]; total: number } {
+  const { items, total } = aiEvalsListExtract(raw);
+  return { items: items.map(observabilityEvalExtract), total };
 }
 
 function unwrapRecord(value: unknown, description: string): JsonRecord {
@@ -280,18 +292,18 @@ async function validateMetricSet(ctx: PreflightContext, input: JsonRecord, metri
 
 async function validateOnlineConfigWrite(ctx: PreflightContext, isUpdate: boolean): Promise<void> {
   const input = ctx.input;
-  const body = requireBody(input, isUpdate ? "Observability evaluation rule update" : "Observability evaluation rule create");
+  const body = requireBody(input, isUpdate ? "Observability eval update" : "Observability eval create");
   if (isUpdate && body.enabled === false && Object.keys(body).every(key => key === "enabled")) {
-    requireUuid(input.config_id, "config_id");
+    requireUuid(input.eval_id, "eval_id");
     return;
   }
-  const configId = isUpdate ? requireUuid(input.config_id, "config_id") : undefined;
+  const evalId = isUpdate ? requireUuid(input.eval_id, "eval_id") : undefined;
   const existing = isUpdate
     ? await getAiEvalsResource(
       ctx,
       input,
-      `${base(input, { HARNESS_ORG: ctx.registry.orgId, HARNESS_PROJECT: ctx.registry.projectId })}/online-eval-configs/${configId}`,
-      `config_id=${configId}`,
+      `${base(input, { HARNESS_ORG: ctx.registry.orgId, HARNESS_PROJECT: ctx.registry.projectId })}/online-eval-configs/${evalId}`,
+      `eval_id=${evalId}`,
     )
     : undefined;
   const effective = { ...existing, ...body };
@@ -299,7 +311,7 @@ async function validateOnlineConfigWrite(ctx: PreflightContext, isUpdate: boolea
   if (body.name !== undefined && !nonEmptyString(body.name)) throw new Error("name must be a non-empty string.");
   if (effective.scope !== "trace") {
     throw new Error(
-      "Observability evaluation currently supports scope='trace' only. The scoring job emits trace-scoped score rows.",
+      "Observability evals currently support scope='trace' only. The scoring job emits trace-scoped score rows.",
     );
   }
   const sampling = effective.sampling_percentage ?? 100;
@@ -368,7 +380,8 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
       scope: "project",
       scopeOptional: true,
       headerBasedScoping: true,
-      identifierFields: ["config_id"],
+      identifierFields: ["eval_id"],
+      searchAliases: ["observability_evals"],
       diagnosticHint:
         "Use an existing MetricSet UUID. The configuration is consumed by a scheduled Spark scorer, not the ad-hoc trace evaluator. " +
         "Only trace scope, sampling_percentage in (0,100], non-code/non-embedding metrics, and direct LLM judge connectors are accepted.",
@@ -382,8 +395,8 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/online-eval-configs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { page: "page", size: "limit" },
-          responseExtractor: aiEvalsListExtract,
+          queryParams: { page: "page", limit: "limit" },
+          responseExtractor: observabilityEvalListExtract,
           description: "List observability evals",
         },
         get: {
@@ -391,7 +404,7 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: configPath,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          responseExtractor: passthrough,
+          responseExtractor: observabilityEvalExtract,
           description: "Get an observability eval",
         },
         create: {
@@ -402,7 +415,7 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
           preflight: async ctx => validateOnlineConfigWrite(ctx, false),
           bodyBuilder: input => input.body ?? {},
           bodySchema: createOnlineEvalConfigSchema,
-          responseExtractor: passthrough,
+          responseExtractor: observabilityEvalExtract,
           description: "Create a validated observability eval",
         },
         update: {
@@ -413,8 +426,8 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
           preflight: async ctx => validateOnlineConfigWrite(ctx, true),
           bodyBuilder: input => input.body ?? {},
           bodySchema: updateOnlineEvalConfigSchema,
-          responseExtractor: passthrough,
-          description: "Update a rule; use enabled=false to disable",
+          responseExtractor: observabilityEvalExtract,
+          description: "Update an observability eval; use enabled=false to disable",
         },
         delete: {
           method: "DELETE",
