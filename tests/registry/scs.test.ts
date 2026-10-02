@@ -2400,3 +2400,48 @@ describe("scs_sbom download dispatch", () => {
     ).resolves.toMatchObject({ download_url: "https://s3.example/presigned" });
   });
 });
+
+// ─── SCS supply-chain artifact deep links (#1030) ───────────────────────────
+
+describe("SCS artifact deep links — {artifact} placeholder (#1030)", () => {
+  const BASE =
+    "https://app.harness.io/ng/account/test-account/all/orgs/default/projects/test-project/supply-chain/artifacts";
+
+  it.each([
+    "artifact_security",
+    "scs_artifact_remediation",
+    "scs_chain_of_custody",
+  ] as const)("deepLinkTemplate on %s uses {artifact} aligned with pathParams", (resourceType) => {
+    const res = findResource(resourceType);
+    expect(res.deepLinkTemplate).toContain("/artifacts/{artifact}");
+    expect(res.deepLinkTemplate).not.toContain("{artifactId}");
+    const getSpec = res.operations.get;
+    expect(getSpec?.pathParams?.artifact_id).toBe("artifact");
+  });
+
+  it("artifact_security get resolves openInHarness without a literal placeholder", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const client = makeClient(
+      vi.fn().mockResolvedValue({ id: "art-42", name: "payments-api" }),
+    );
+    const result = (await registry.dispatch(client, "artifact_security", "get", {
+      org_id: "default",
+      project_id: "test-project",
+      source_id: "src-1",
+      artifact_id: "art-42",
+    })) as Record<string, unknown>;
+    expect(result.openInHarness).toBe(`${BASE}/art-42`);
+    expect(String(result.openInHarness)).not.toMatch(/\{artifact/);
+  });
+
+  it("scs_chain_of_custody get resolves openInHarness for artifact_id", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "scs" }));
+    const client = makeClient(vi.fn().mockResolvedValue({ events: [] }));
+    const result = (await registry.dispatch(client, "scs_chain_of_custody", "get", {
+      org_id: "default",
+      project_id: "test-project",
+      artifact_id: "art-99",
+    })) as Record<string, unknown>;
+    expect(result.openInHarness).toBe(`${BASE}/art-99`);
+  });
+});
