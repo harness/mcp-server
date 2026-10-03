@@ -104,6 +104,22 @@ describe("compactItems", () => {
     expect(result[0].openInHarness).toBe("https://app.harness.io/ng/pipelines/p1");
   });
 
+  it("keeps SCS list marker fields (_summary, _message, _result)", () => {
+    const items = [
+      {
+        _summary: { total: 2, by_type: { CONTAINER: 2 } },
+        _message: "No CVEs matched the filter.",
+        _result: "EMPTY",
+        yaml: "should-be-stripped",
+      },
+    ];
+    const result = compactItems(items) as Record<string, unknown>[];
+    expect(result[0]._summary).toEqual({ total: 2, by_type: { CONTAINER: 2 } });
+    expect(result[0]._message).toBe("No CVEs matched the filter.");
+    expect(result[0]._result).toBe("EMPTY");
+    expect(result[0]).not.toHaveProperty("yaml");
+  });
+
   it("passes through non-object items unchanged", () => {
     const items = ["string", 42, null];
     expect(compactItems(items)).toEqual(["string", 42, null]);
