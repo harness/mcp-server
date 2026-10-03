@@ -2518,6 +2518,36 @@ describe("fme_experiment", () => {
     });
   });
 
+  it("list: forwards the tags filter as a repeated array query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+      tags: ["backend", "Team A"],
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({ tags: ["backend", "Team A"] });
+  });
+
+  it("list: omits tags param when the filter is absent or empty", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+      tags: [],
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).not.toHaveProperty("tags");
+  });
+
   it("list: canonicalizes lowercase status array entries", async () => {
     const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
     const client = makeClient(mockRequest);
@@ -2599,6 +2629,8 @@ describe("fme_experiment", () => {
       keyMetrics: ["m1"],
       supportingMetrics: ["m2"],
       owners: [{ type: "USER", id: "u1" }],
+      tags: [{ type: "TAG", id: "t1", name: "backend" }],
+      rule: "default rule",
     };
 
     const [compacted] = compactItems([item], resource.compactItem) as Record<string, unknown>[];
@@ -2615,7 +2647,16 @@ describe("fme_experiment", () => {
       baselineTreatment: "off",
       comparisonTreatments: ["on"],
       owners: [{ type: "USER", id: "u1" }],
+      tags: [{ type: "TAG", id: "t1", name: "backend" }],
+      rule: "default rule",
     });
+  });
+
+  it("list: compactItem keeps a null rule and an empty tags list", async () => {
+    const resource = findResource("fme_experiment");
+    const [compacted] = compactItems([{ id: "e1", name: "x", rule: null, tags: [] }], resource.compactItem) as Record<string, unknown>[];
+
+    expect(compacted).toEqual({ id: "e1", name: "x", rule: null, tags: [] });
   });
 
   it("list: without compactItem the generic whitelist would drop parent/treatments/owners (documents why it's needed)", async () => {
@@ -2710,6 +2751,7 @@ describe("fme_experiment", () => {
       baselineTreatment: "off",
       comparisonTreatments: ["on"],
       keyMetrics: ["m1"],
+      rule: "default",
     });
     // fmeV4EntityExtract flattens {entity, governance} to the entity's own fields + governance
     expect(result).toEqual({ id: "e1", name: "checkout-experiment", governance: { status: "NONE", details: [] } });
@@ -2764,6 +2806,50 @@ describe("fme_experiment", () => {
 
     const req = firstRequest(mockRequest);
     expect(req.body).not.toHaveProperty("owners");
+  });
+
+  const createBase = {
+    parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+    name: "checkout-experiment",
+    startAt: "2025-06-01T12:00:00Z",
+    endAt: "2025-07-01T12:00:00Z",
+    baselineTreatment: "off",
+    comparisonTreatments: ["on"],
+  };
+
+  async function createWithBody(extra: Record<string, unknown>) {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", name: "checkout-experiment" },
+      governance: { status: "NONE", details: [] },
+    });
+    await registry.dispatch(makeClient(mockRequest), "fme_experiment", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "env1",
+      body: { ...createBase, ...extra },
+    });
+    return firstRequest(mockRequest);
+  }
+
+  it("create: forwards rule and tags when present in body", async () => {
+    const req = await createWithBody({ rule: "beta users", tags: [{ name: "backend" }, { name: "growth" }] });
+    expect(req.body).toMatchObject({ rule: "beta users", tags: [{ name: "backend" }, { name: "growth" }] });
+  });
+
+  it("create: defaults rule to \"default\" when omitted and omits tags", async () => {
+    const req = await createWithBody({});
+    expect(req.body).toMatchObject({ rule: "default" });
+    expect(req.body).not.toHaveProperty("tags");
+  });
+
+  it("create: defaults rule to \"default\" when rule is null", async () => {
+    const req = await createWithBody({ rule: null });
+    expect(req.body).toMatchObject({ rule: "default" });
+  });
+
+  it("create: forwards tags: [] as-is", async () => {
+    const req = await createWithBody({ tags: [] });
+    expect(req.body).toMatchObject({ tags: [] });
   });
 
   it("create: throws when environment_id missing", async () => {
@@ -2856,6 +2942,51 @@ describe("fme_experiment", () => {
 
     const req = firstRequest(mockRequest);
     expect(req.body).toEqual({ owners: [] });
+  });
+
+  it("update: forwards rule and replacement tags", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { rule: "beta users", tags: [{ name: "backend" }] },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ rule: "beta users", tags: [{ name: "backend" }] });
+  });
+
+  it("update: sends rule: null and tags: null through as clears", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { rule: null, tags: null },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ rule: null, tags: null });
+  });
+
+  it("update: sends tags: [] through as a clear and does not inject a default rule", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { tags: [] },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ tags: [] });
   });
 
   it("delete: DELETEs to /fme/api/v4/experiments/{experiment_id}, is classified as destructive risk, and flattens an entity/governance envelope", async () => {
