@@ -127,8 +127,8 @@ function applyFmeExperimentParentTypeQuery(input: Record<string, unknown>, opera
   input.parent_type = parentType;
 }
 
-// Shared by fme_metric/fme_experiment/fme_experiment_settings .update — all three
-// send JSON Merge Patch (RFC 7396) bodies built from the same whitelist-and-copy shape.
+// Shared by the fme_* .update operations — each sends a JSON Merge Patch (RFC 7396) body
+// built from the same whitelist-and-copy shape.
 function buildFmeMergePatch(
   body: Record<string, unknown> | undefined,
   patchableFields: readonly string[],
@@ -467,6 +467,14 @@ const fmeExperimentSettingsUpdateSchema: BodySchema = {
     { name: "minimumSampleSize", type: "number", required: false, description: "Minimum per-treatment sample size; null not allowed" },
     { name: "reviewPeriod", type: "string", required: false, description: "ISO-8601 duration (e.g. \"PT336H\"); null not allowed" },
     { name: "varianceReduction", type: "object", required: false, description: "{method: NONE|CUPED}, or null to clear (resets to method NONE)" },
+  ],
+};
+
+const fmeExperimentAlertingUpdateSchema: BodySchema = {
+  description:
+    "Set whether an Experiment is subscribed to significance-regression alerting via JSON Merge Patch (RFC 7396). isEnabled is required and cannot be null (400 if omitted or null).",
+  fields: [
+    { name: "isEnabled", type: "boolean", required: true, description: "true to subscribe the experiment to alert evaluation, false to unsubscribe" },
   ],
 };
 
@@ -2262,6 +2270,56 @@ export const featureFlagsToolset: ToolsetDefinition = {
             "Revert an experiment's settings to organization defaults by removing the experiment-level override " +
             "(source becomes ORGANIZATION_DEFAULT) — the override's values are lost. Idempotent — safe to call when " +
             "no override exists (no-op, same response).",
+        },
+      },
+    },
+    {
+      resourceType: "fme_experiment_alerting",
+      displayName: "FME Experiment Alerting",
+      description:
+        "Whether a single Experiment is subscribed to significance-regression alerting. An alert fires when a calculation " +
+        "run completes and an evaluated metric result is statistically significant (per the experiment's applied " +
+        "fme_experiment_settings) with an undesired direction past the degradation threshold. Harness-native only " +
+        "(org_id + project_id). Supports get and update only.",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["experiment_id"],
+      operations: {
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_alerting");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
+            return { path: `/fme/api/v4/experiments/${id}/alerting` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get whether the experiment is subscribed to alerting ({id, isEnabled}). Returns isEnabled: false when no " +
+            "alert policy has ever been configured; only 404s when the experiment itself doesn't exist.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_alerting");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
+            return { path: `/fme/api/v4/experiments/${id}/alerting` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return buildFmeMergePatch(body, ["isEnabled"]);
+          },
+          responseExtractor: fmeV4EntityExtract,
+          bodySchema: fmeExperimentAlertingUpdateSchema,
+          description:
+            "Subscribe or unsubscribe the experiment from alerting. Body must contain isEnabled (boolean, required; " +
+            "400 if omitted or null). 404 if the experiment doesn't exist; 403 if the caller lacks edit permission. " +
+            "Only the subscription is editable here — the degradation threshold is not configurable through this resource.",
         },
       },
     },
