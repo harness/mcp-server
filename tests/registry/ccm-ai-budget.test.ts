@@ -112,6 +112,23 @@ describe("ai_budget_override_request", () => {
     expect(body).toEqual({ policy_id: "p1", amount: 125, reason: "spike" });
   });
 
+  it("create dispatch accepts body.budget_id and sends policy_id", async () => {
+    const registry = new Registry(makeConfig());
+    const mockRequest = vi.fn().mockResolvedValue({ data: { id: "req-1" }, status: "SUCCESS" });
+    const client = { request: mockRequest, account: "acct-1" } as unknown as HarnessClient;
+
+    await registry.dispatch(client, "ai_budget_override_request", "create", {
+      body: { budget_id: "p1", amount: 125, reason: "spike" },
+    });
+
+    expect(mockRequest).toHaveBeenCalledOnce();
+    expect(mockRequest.mock.calls[0]![0]).toMatchObject({
+      method: "POST",
+      path: "/lw/api/accounts/internal/ai-governance/me/budgets/override/request",
+      body: { policy_id: "p1", amount: 125, reason: "spike" },
+    });
+  });
+
   it("get path includes request id", () => {
     const path = aiOverride!.operations.get!.pathBuilder!(
       { budget_id: "p1", override_request_id: "req-1" },
