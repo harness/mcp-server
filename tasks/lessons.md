@@ -183,5 +183,10 @@
   5. Test ambient `HARNESS_ORG`/`HARNESS_PROJECT` does not leak when account is the default (`scopeOptional`).
   6. Update README when writes change the advertised scope model.
 
+## Query Param Maps Are Input Key to API Key
+- **Issue**: HAR v1 list `queryParams` were changed from `search: "search_term"` to `search_term: "search_term"` to fix a search that "did nothing." `harness_describe` still advertises the filter name `search`. `harness_list(filters={search})` then sent no search query, so the API returned an unfiltered page. The top-level `search_term` argument started working at the same time.
+- **Fix**: Map both input keys onto the API's `search_term` query parameter. `search_term` is declared second so it wins when both are set.
+- **Rule**: `queryParams` is `{ inputKey: apiQueryKey }`. The describe filter name and the global `harness_list` `search_term` argument are different input keys. Changing one mapping does not retarget the other. Confirm the wire query name against the API before swapping the input key.
+
 ## Targeted pnpm Transitive Updates
 - `pnpm update ip-address --depth 20` also rewrote unrelated direct dependency ranges to match existing overrides. Restore those incidental manifest changes before validating shrinkwrap consistency; review the full diff even for targeted updates.

@@ -1,6 +1,19 @@
 import type { ToolsetDefinition, PathBuilderConfig, BodySchema } from "../types.js";
 import { ngExtract, harListExtract, passthrough } from "../extractors.js";
 
+/**
+ * HAR v1 list endpoints filter with the `search_term` query parameter.
+ *
+ * `harness_describe` advertises `search` via listFilterFields. `harness_list`
+ * also accepts a top-level `search_term` argument. Mapping only one input key
+ * drops the other, and the API then returns an unfiltered page.
+ * When both are set, `search_term` wins because it is declared second.
+ */
+const HAR_LIST_SEARCH_PARAMS = {
+  search: "search_term",
+  search_term: "search_term",
+} as const;
+
 // Canonical PackageType enum — matches RegistryRequest.PackageType in the v1 OpenAPI spec.
 const PACKAGE_TYPES = [
   "CARGO", "COMPOSER", "CONDA", "CRAN", "DART", "DEBIAN", "DOCKER",
@@ -89,7 +102,7 @@ export const registriesToolset: ToolsetDefinition = {
             `/har/api/v1/spaces/${harSpaceRef(input, config)}/+/registries`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
-            search_term: "search_term",
+            ...HAR_LIST_SEARCH_PARAMS,
             type: "type",
             package_type: "package_type",
             page: "page",
@@ -168,7 +181,7 @@ export const registriesToolset: ToolsetDefinition = {
           pathParams: { registry_id: "registryIdentifier", artifact_id: "artifactIdentifier" },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
-            search_term: "search_term",
+            ...HAR_LIST_SEARCH_PARAMS,
             page: "page",
             size: "size",
           },
@@ -201,7 +214,7 @@ export const registriesToolset: ToolsetDefinition = {
           },
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
-            search_term: "search_term",
+            ...HAR_LIST_SEARCH_PARAMS,
             page: "page",
             size: "size",
           },
@@ -235,7 +248,7 @@ export const registriesToolset: ToolsetDefinition = {
           queryParams: {
             sort_order: "sort_order",
             sort_field: "sort_field",
-            search_term: "search_term",
+            ...HAR_LIST_SEARCH_PARAMS,
             page: "page",
             size: "size",
           },
