@@ -8,12 +8,6 @@ import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
 import { createLogger } from "../utils/logger.js";
 import { createRequire } from "node:module";
-
-const _require = createRequire(import.meta.url);
-const Ajv = _require("ajv") as typeof import("ajv").default;
-const addFormats = _require("ajv-formats") as typeof import("ajv-formats").default;
-type ValidateFunction = import("ajv").ValidateFunction;
-type ErrorObject = import("ajv").ErrorObject;
 import { schemaOutputSchema } from "./output-schemas.js";
 import type { Config } from "../config.js";
 import {
@@ -26,6 +20,12 @@ import {
   type HarnessYamlScope,
 } from "./entity-schema/live.js";
 import type { JsonObject } from "./entity-schema/normalize.js";
+
+const _require = createRequire(import.meta.url);
+const Ajv = _require("ajv") as typeof import("ajv").default;
+const addFormats = _require("ajv-formats") as typeof import("ajv-formats").default;
+type ValidateFunction = import("ajv").ValidateFunction;
+type ErrorObject = import("ajv").ErrorObject;
 
 const log = createLogger("schema");
 
