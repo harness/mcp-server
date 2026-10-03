@@ -383,6 +383,21 @@ describe("business-value-review prompt", () => {
     expect(text).toContain("required to get per-item `monthlySaving`");
   });
 
+  it("documents CCM Open-tab defaults and Applied-tab applied_at semantics", async () => {
+    const client = await createTestClient();
+    const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+
+    expect(text).toContain("days_back=4");
+    expect(text).toContain("min_saving=1");
+    expect(text).toContain("OPEN");
+    expect(text).toContain("Do **not** map the UI date picker");
+    expect(text).toContain("applied_at_start");
+    expect(text).toContain("applied_at_end");
+    expect(text).toContain('recommendation_states: "APPLIED"');
+    expect(text).toContain("Do not use `days_back` for this window");
+  });
+
   it("targets historical quarters via start_time/end_time on perspective calls", async () => {
     const client = await createTestClient();
     const result = await client.getPrompt({ name: "business-value-review", arguments: {} });
