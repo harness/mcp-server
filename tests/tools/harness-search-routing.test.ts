@@ -372,7 +372,88 @@ describe("harness_search tier-0 semantic merge/dedup", () => {
   });
 });
 
+describe("harness_search result caps", () => {
+  it("limits total items across resource types and truncates long descriptions", async () => {
+    const server = makeMcpServer();
+    const listableTypes = Array.from({ length: 10 }, (_, i) => `cap_type_${i}`);
+    const dispatch = vi.fn().mockImplementation(async (_client, rt: string) => ({
+      items: Array.from({ length: 5 }, (_, j) => ({
+        identifier: `${rt}-item-${j}`,
+        description: "d".repeat(250),
+      })),
+      total: 5,
+    }));
+    const registry = {
+      getTypesForOperation: () => listableTypes,
+      getAllResourceTypes: () => listableTypes,
+      supportsOperation: (_rt: string, op: string) => op === "list",
+      getSupportedScopes: () => ["account", "org", "project"],
+      orgId: "default-org",
+      projectId: "default-project",
+      getResource: () => ({}),
+      dispatch,
+    } as unknown as Registry;
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(server, registry, makeClient(), undefined);
+
+    const result = await server.call("harness_search", {
+      query: "cap-test",
+      max_per_type: 5,
+      resource_types: listableTypes,
+    });
+    const data = parseResult(result) as {
+      results: Array<{ items: Array<Record<string, unknown>> }>;
+    };
+
+    const allItems = data.results.flatMap((entry) => entry.items);
+    expect(allItems.length).toBeLessThanOrEqual(30);
+    expect(allItems.length).toBe(30);
+    for (const item of allItems) {
+      const desc = item.description;
+      if (typeof desc === "string") {
+        expect(desc.endsWith("...")).toBe(true);
+        expect(desc.length).toBeLessThanOrEqual(203);
+      }
+    }
+  });
+});
+
 describe("live resource indexing guards", () => {
+  it("truncates list responses when listSizeGuard maxItems is exceeded", async () => {
+    const server = makeMcpServer();
+    const items = Array.from({ length: 25 }, (_, i) => ({ identifier: `kg-${i}`, name: `Type ${i}` }));
+    const dispatch = vi.fn().mockResolvedValue({ items, total: 25 });
+    const registry = {
+      getAllFilterFields: () => [],
+      getTypesForOperation: () => ["kg_queryable_type"],
+      getResource: () => ({
+        listSizeGuard: {
+          maxItems: 20,
+          searchRedirect: "harness_search(query='narrow')",
+        },
+      }),
+      dispatch,
+    } as unknown as Registry;
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(server, registry, makeClient());
+
+    const result = await server.call("harness_list", { resource_type: "kg_queryable_type" });
+    const data = parseResult(result) as {
+      items: unknown[];
+      _capped?: boolean;
+      _total_available?: number;
+      _returned?: number;
+      _hint?: string;
+    };
+
+    expect(data.items).toHaveLength(20);
+    expect(data._capped).toBe(true);
+    expect(data._total_available).toBe(25);
+    expect(data._returned).toBe(20);
+    expect(data._hint).toContain("capped to 20 of 25");
+    expect(data._hint).toContain("harness_search(query='narrow')");
+  });
+
   it("skips harness_list semantic indexing for items without a stable identifier", async () => {
     const server = makeMcpServer();
     const dispatch = vi.fn().mockResolvedValue({

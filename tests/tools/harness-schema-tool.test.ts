@@ -945,3 +945,119 @@ describe("maybeTruncateSchema", () => {
     expect(serialized).toContain("_truncated");
   });
 });
+
+const VALIDATION_DEMO_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["name"],
+  properties: {
+    name: { type: "string", enum: ["alpha", "beta"] },
+    nested: {
+      type: "object",
+      additionalProperties: false,
+      required: ["id"],
+      properties: {
+        id: { type: "string" },
+        label: { type: "string", description: "Human label" },
+      },
+    },
+  },
+};
+
+describe("harness_schema validate", () => {
+  function makeValidationServer() {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined, {
+      validation_demo: {
+        schema: VALIDATION_DEMO_SCHEMA,
+        description: "Validation demo schema",
+        group: "test",
+      },
+    });
+    return server;
+  }
+
+  it("returns valid: true for a conforming payload", async () => {
+    const server = makeValidationServer();
+    const result = await server.call("harness_schema", {
+      resource_type: "validation_demo",
+      validate: { name: "alpha", nested: { id: "n1" } },
+    });
+    const parsed = parseResult(result) as { valid: boolean };
+
+    expect(result.isError).toBeFalsy();
+    expect(parsed.valid).toBe(true);
+  });
+
+  it("requires resource_type when validate is set", async () => {
+    const server = makeValidationServer();
+    const result = await server.call("harness_schema", {
+      validate: { name: "alpha" },
+    });
+    const parsed = parseResult(result) as { error: string };
+
+    expect(result.isError).toBe(true);
+    expect(parsed.error).toMatch(/resource_type is required/);
+  });
+
+  it("surfaces enum fix_hint with allowed_values", async () => {
+    const server = makeValidationServer();
+    const result = await server.call("harness_schema", {
+      resource_type: "validation_demo",
+      validate: { name: "gamma" },
+    });
+    const parsed = parseResult(result) as {
+      valid: boolean;
+      errors: Array<{ keyword: string; fix_hint?: { allowed_values?: string[] } }>;
+    };
+
+    expect(parsed.valid).toBe(false);
+    const enumErr = parsed.errors.find((e) => e.keyword === "enum");
+    expect(enumErr?.fix_hint?.allowed_values).toEqual(["alpha", "beta"]);
+  });
+
+  it("surfaces additionalProperties fix_hint with allowed_properties", async () => {
+    const server = makeValidationServer();
+    const result = await server.call("harness_schema", {
+      resource_type: "validation_demo",
+      validate: { name: "alpha", unexpected: true },
+    });
+    const parsed = parseResult(result) as {
+      errors: Array<{ keyword: string; fix_hint?: { allowed_properties?: string[] } }>;
+    };
+
+    const err = parsed.errors.find((e) => e.keyword === "additionalProperties");
+    expect(err?.fix_hint?.allowed_properties).toEqual(expect.arrayContaining(["name", "nested"]));
+  });
+
+  it("surfaces required fix_hint with expected_schema for nested missing fields", async () => {
+    const server = makeValidationServer();
+    const result = await server.call("harness_schema", {
+      resource_type: "validation_demo",
+      validate: { name: "alpha", nested: {} },
+    });
+    const parsed = parseResult(result) as {
+      errors: Array<{
+        path: string;
+        keyword: string;
+        fix_hint?: { missing_property?: string; expected_schema?: Record<string, unknown> };
+      }>;
+    };
+
+    const err = parsed.errors.find((e) => e.keyword === "required" && e.path.includes("nested"));
+    expect(err?.fix_hint?.missing_property).toBe("id");
+    expect(err?.fix_hint?.expected_schema).toMatchObject({ type: "string" });
+  });
+
+  it("prioritizes additionalProperties errors ahead of required errors", async () => {
+    const server = makeValidationServer();
+    const result = await server.call("harness_schema", {
+      resource_type: "validation_demo",
+      validate: { stray: true },
+    });
+    const parsed = parseResult(result) as { errors: Array<{ keyword: string }> };
+
+    expect(parsed.errors[0]?.keyword).toBe("additionalProperties");
+    expect(parsed.errors.some((e) => e.keyword === "required")).toBe(true);
+  });
+});
