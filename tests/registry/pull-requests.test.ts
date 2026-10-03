@@ -439,6 +439,25 @@ describe("pull_request registry mappings", () => {
       body: { decision: "reviewed", commit_sha: "abc123" },
     }));
   });
+
+  it("submits a review when commit_sha is supplied at top level (harness_execute flattening)", async () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatchExecute(client, "pr_reviewer", "submit_review", {
+      repo_id: "rc_tools",
+      pr_number: "42",
+      commit_sha: "def456",
+      decision: "approved",
+    });
+
+    expect(mockRequest).toHaveBeenCalledWith(expect.objectContaining({
+      method: "POST",
+      path: "/code/api/v1/repos/rc_tools/pullreq/42/reviews",
+      body: { decision: "approved", commit_sha: "def456" },
+    }));
+  });
 });
 
 describe("pull_request list pagination and query mapping", () => {

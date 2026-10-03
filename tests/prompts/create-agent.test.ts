@@ -130,4 +130,27 @@ describe("create-agent prompt", () => {
     expect(text).toContain("Use `<+inputs.fieldName>` in Current Format and `${{inputs.fieldName}}` in Legacy Format");
     expect(text).toContain("never mix the two");
   });
+
+  it("documents ca_<slug> uid generation from agent name", async () => {
+    const text = await getPromptText({
+      agent_name: "Code Coverage Agent",
+      task_description: "Measure coverage",
+    });
+
+    expect(text).toContain("ca_code_coverage_agent");
+    expect(text).toContain('prefix with `ca_`');
+    expect(text).toContain("PR Reviewer");
+    expect(text).toContain("ca_pr_reviewer");
+  });
+
+  it("requires stopping spec edits when legacy-format MCP resource is unreadable", async () => {
+    const text = await getPromptText({
+      agent_name: "Legacy Safety Agent",
+      task_description: "Update legacy agent safely",
+    });
+
+    expect(text).toContain("If you cannot read MCP resources");
+    expect(text).toContain("do not rewrite or modify the `spec` at all");
+    expect(text).toContain("can't fetch the reference needed to safely edit a legacy-format agent's spec");
+  });
 });
