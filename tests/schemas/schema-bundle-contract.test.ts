@@ -220,4 +220,96 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream HelmDryRun step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = pipelineDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("HelmDryRunStepNode");
+    expect(cdSteps).toHaveProperty("HelmDryRunStepInfo");
+
+    const stepNode = cdSteps.HelmDryRunStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("HelmDryRun");
+
+    const stepInfo = cdSteps.HelmDryRunStepInfo as {
+      properties: Record<string, unknown>;
+    };
+    expect(stepInfo.properties).toHaveProperty("commandFlags");
+    expect(stepInfo.properties).toHaveProperty("encryptYamlOutput");
+  });
+
+  it("includes upstream HelmDryRun step definitions in v0 template", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const cdSteps = templateDefs.pipeline.steps.cd as Record<string, unknown>;
+
+    expect(cdSteps).toHaveProperty("HelmDryRunStepNode");
+    expect(cdSteps).toHaveProperty("HelmDryRunStepNode_template");
+    expect(cdSteps).toHaveProperty("HelmDryRunStepInfo");
+  });
+
+  it("includes upstream RiskScan step definitions in v0 pipeline", () => {
+    const pipelineDefs = SCHEMAS.pipeline.definitions as Record<string, Record<string, unknown>>;
+    const resilienceSteps = pipelineDefs.pipeline.steps.resiliencetesting as Record<string, unknown>;
+
+    expect(resilienceSteps).toHaveProperty("RiskScanStepNode");
+    expect(resilienceSteps).toHaveProperty("RiskScanStepInfo");
+
+    const stepNode = resilienceSteps.RiskScanStepNode as {
+      properties: { type: { enum: string[] } };
+    };
+    expect(stepNode.properties.type.enum).toContain("RiskScan");
+
+    const stepInfo = resilienceSteps.RiskScanStepInfo as {
+      allOf: Array<{ required?: string[]; properties?: Record<string, unknown> }>;
+    };
+    const specBody = stepInfo.allOf.find((part) => part.properties?.scanMode);
+    expect(specBody?.required).toContain("scanMode");
+  });
+
+  it("includes upstream RiskScan step definitions in v0 template", () => {
+    const templateDefs = SCHEMAS.template.definitions as Record<string, Record<string, unknown>>;
+    const resilienceSteps = templateDefs.pipeline.steps.resiliencetesting as Record<string, unknown>;
+
+    expect(resilienceSteps).toHaveProperty("RiskScanStepNode");
+    expect(resilienceSteps).toHaveProperty("RiskScanStepInfo");
+  });
+
+  it("renames v1 UnifiedTemplate iacm key to infrastructure in pipeline and template", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const unifiedTemplate = defs[key].common.UnifiedTemplate as {
+        properties: Record<string, unknown>;
+      };
+
+      expect(unifiedTemplate.properties).toHaveProperty("infrastructure");
+      expect(unifiedTemplate.properties).not.toHaveProperty("iacm");
+    }
+  });
+
+  it("includes delegate runtime shorthand in v1 RuntimeV1 enum", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const runtimeV1 = defs[key].stages.unified.RuntimeV1 as {
+        oneOf: Array<{ enum?: string[] }>;
+      };
+      const stringShorthand = runtimeV1.oneOf.find((variant) => Array.isArray(variant.enum));
+      expect(stringShorthand?.enum).toContain("delegate");
+    }
+  });
+
+  it("allows Expression values for all-infra on v1 EnvironmentV1 object variant", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const environmentV1 = defs[key].stages.unified.EnvironmentV1 as {
+        oneOf: Array<{ properties?: Record<string, { oneOf?: Array<{ $ref?: string; type?: string }> }> }>;
+      };
+      const objectVariant = environmentV1.oneOf.find((variant) => variant.properties?.["all-infra"]);
+      const allInfra = objectVariant?.properties?.["all-infra"];
+      const expressionRef = `#/definitions/${key}/common/Expression`;
+      expect(allInfra?.oneOf?.map((part) => part.$ref)).toContain(expressionRef);
+      expect(allInfra?.oneOf?.some((part) => part.type === "boolean")).toBe(true);
+    }
+  });
 });
