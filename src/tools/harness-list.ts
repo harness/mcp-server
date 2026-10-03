@@ -2,7 +2,7 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
-import { jsonResult, errorResult, normalizeHarnessListPayload } from "../utils/response-formatter.js";
+import { jsonResult, errorResult, normalizeHarnessListPayload, type ToolResult } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint, HarnessApiError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
@@ -93,6 +93,24 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
           if (Array.isArray(items)) {
             const compactFn = registry.getResource(resourceType).compactItem;
             result.items = compactItems(items, compactFn);
+          }
+        }
+
+        // Declarative list size guard: truncate oversized responses and inject
+        // narrowing hints so the agent doesn't consume 100K+ chars of context.
+        if (isRecord(result) && Array.isArray(result.items)) {
+          const guard = registry.getResource(resourceType).listSizeGuard;
+          if (guard && result.items.length > guard.maxItems) {
+            const totalItems = result.items.length;
+            result.items = result.items.slice(0, guard.maxItems);
+            (result as Record<string, unknown>)._capped = true;
+            (result as Record<string, unknown>)._total_available = totalItems;
+            (result as Record<string, unknown>)._returned = guard.maxItems;
+            let hint = `Response capped to ${guard.maxItems} of ${totalItems} items. Use search_term or filters to narrow results.`;
+            if (guard.searchRedirect) {
+              hint += ` Preferred: ${guard.searchRedirect}`;
+            }
+            (result as Record<string, unknown>)._hint = hint;
           }
         }
 

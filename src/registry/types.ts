@@ -486,6 +486,16 @@ export interface ResourceDefinition {
   }>;
   /** Execution guidance for LLMs. Describes how to discover and provide runtime inputs. */
   executeHint?: string;
+  /**
+   * Declarative response size guard for list operations. When the list result
+   * exceeds `maxItems`, the response is truncated and a hint is injected
+   * telling the agent how to narrow results. If `searchRedirect` is set, the
+   * hint includes a harness_search suggestion for this resource type.
+   */
+  listSizeGuard?: {
+    maxItems: number;
+    searchRedirect?: string;
+  };
   /** CRUD endpoint mappings */
   operations: Partial<Record<OperationName, EndpointSpec>>;
   /** Execute action mappings (e.g. run pipeline, toggle FF) */
