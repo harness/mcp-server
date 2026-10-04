@@ -805,3 +805,12 @@ Validation: installed SDK dependency-chain checks passed for NAT64 local-use exa
 - [x] Validate release metadata, shrinkwrap consistency, and build.
 
 Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, build, docs check, and git diff --check passed.
+
+## Version 3.2.32
+
+- [x] Pull latest main and create chore/version-3.2.32.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, build, and docs.
+Delivery: commit and push chore/version-3.2.32, then open a PR against main.
+
+Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, build, docs check, and git diff --check passed.
