@@ -915,6 +915,12 @@ describe("pr_comment resolve and unresolve execute actions", () => {
     expect(mockRequest).not.toHaveBeenCalled();
   });
 
+  it("exposes only resolve and unresolve execute actions (set_status removed as duplicate #1043)", () => {
+    const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
+    const def = registry.getResource("pr_comment");
+    expect(Object.keys(def.executeActions ?? {}).sort()).toEqual(["resolve", "unresolve"]);
+  });
+
   it("declares both status actions with a low_write, retry-safe policy", () => {
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "pull-requests" }));
     const def = registry.getResource("pr_comment");
