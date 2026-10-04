@@ -32361,6 +32361,166 @@ const schema: Record<string, any> = {
               "source"
             ]
           },
+          "StoPolicyEnforcementStepNode": {
+            "title": "StoPolicyEnforcementStepNode",
+            "type": "object",
+            "required": [
+              "identifier",
+              "name",
+              "spec"
+            ],
+            "properties": {
+              "description": {
+                "type": "string",
+                "desc": "This is the description for StoPolicyEnforcementStepNode"
+              },
+              "enforce": {
+                "$ref": "#/definitions/pipeline/common/PolicyConfig"
+              },
+              "failureStrategies": {
+                "oneOf": [
+                  {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/definitions/pipeline/common/FailureStrategyConfig"
+                    }
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "identifier": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_][0-9a-zA-Z_]{0,127}$"
+              },
+              "name": {
+                "type": "string",
+                "pattern": "^[a-zA-Z_0-9-.][-0-9a-zA-Z_\\s.]{0,127}$"
+              },
+              "strategy": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StrategyConfig"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              },
+              "timeout": {
+                "type": "string",
+                "pattern": "^(([1-9])+\\d+[s])|(((([1-9])+\\d*[mhwd])+([\\s]?\\d+[smhwd])*)|(.*<\\+.*>(?!.*\\.executionInput\\(\\)).*)|(^$))$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "StoPolicyEnforcement"
+                ]
+              },
+              "when": {
+                "oneOf": [
+                  {
+                    "$ref": "#/definitions/pipeline/common/StepWhenCondition"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "^<\\+input>$",
+                    "minLength": 1
+                  }
+                ]
+              }
+            },
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "type": {
+                      "const": "StoPolicyEnforcement"
+                    }
+                  }
+                },
+                "then": {
+                  "properties": {
+                    "spec": {
+                      "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepInfo"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "StoPolicyEnforcementStepInfo": {
+            "title": "StoPolicyEnforcementStepInfo",
+            "allOf": [
+              {
+                "$ref": "#/definitions/pipeline/common/StepSpecType"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "policySetIds"
+                ],
+                "properties": {
+                  "policySetIds": {
+                    "oneOf": [
+                      {
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "minItems": 1
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
+                  "orgId": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "projectId": {
+                    "oneOf": [
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/string-without-jexl"
+                      },
+                      {
+                        "$ref": "#/definitions/pipeline/steps/common/common-jexl"
+                      }
+                    ]
+                  },
+                  "policy_enforcement_execution_id": {
+                    "type": "string"
+                  },
+                  "targetName": {
+                    "type": "string"
+                  },
+                  "targetVariant": {
+                    "type": "string"
+                  },
+                  "productName": {
+                    "type": "string"
+                  }
+                }
+              }
+            ],
+            "$schema": "http://json-schema.org/draft-07/schema#"
+          },
           "SscaOrchestrationStepNode": {
             "title": "SscaOrchestrationStepNode",
             "type": "object",
@@ -80687,7 +80847,48 @@ const schema: Record<string, any> = {
                         "minLength": 1
                       }
                     ]
+                  },
+                  "deleteOldAsg": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
                   }
+                },
+                "if": {
+                  "properties": {
+                    "deleteOldAsg": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "deleteOldAsg"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "downsizeOldAsg": {
+                      "oneOf": [
+                        {
+                          "const": true
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "(<\\+.+>.*)",
+                          "minLength": 1
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "downsizeOldAsg"
+                  ]
                 }
               }
             ],
@@ -80724,9 +80925,50 @@ const schema: Record<string, any> = {
                   }
                 ]
               },
+              "deleteOldAsg": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
               "description": {
                 "desc": "This is the description for AsgBlueGreenSwapServiceStepInfo"
               }
+            },
+            "if": {
+              "properties": {
+                "deleteOldAsg": {
+                  "const": true
+                }
+              },
+              "required": [
+                "deleteOldAsg"
+              ]
+            },
+            "then": {
+              "properties": {
+                "downsizeOldAsg": {
+                  "oneOf": [
+                    {
+                      "const": true
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "(<\\+.+>.*)",
+                      "minLength": 1
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "downsizeOldAsg"
+              ]
             }
           },
           "GoogleFunctionsGenOneDeployStepNode": {
@@ -85000,7 +85242,61 @@ const schema: Record<string, any> = {
                         "minLength": 1
                       }
                     ]
+                  },
+                  "deleteOldAsg": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
                   }
+                },
+                "if": {
+                  "properties": {
+                    "deleteOldAsg": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "deleteOldAsg"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "downsizeOldAsg": {
+                      "oneOf": [
+                        {
+                          "const": true
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "(<\\+.+>.*)",
+                          "minLength": 1
+                        }
+                      ]
+                    },
+                    "weight": {
+                      "oneOf": [
+                        {
+                          "const": 100
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "(<\\+.+>.*)",
+                          "minLength": 1
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "downsizeOldAsg",
+                    "weight"
+                  ]
                 }
               }
             ],
@@ -85010,9 +85306,63 @@ const schema: Record<string, any> = {
               "downsizeOldAsg"
             ],
             "properties": {
+              "deleteOldAsg": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
+              },
               "description": {
                 "desc": "This is the description for AsgShiftTrafficStepInfo"
               }
+            },
+            "if": {
+              "properties": {
+                "deleteOldAsg": {
+                  "const": true
+                }
+              },
+              "required": [
+                "deleteOldAsg"
+              ]
+            },
+            "then": {
+              "properties": {
+                "downsizeOldAsg": {
+                  "oneOf": [
+                    {
+                      "const": true
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "(<\\+.+>.*)",
+                      "minLength": 1
+                    }
+                  ]
+                },
+                "weight": {
+                  "oneOf": [
+                    {
+                      "const": 100
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "(<\\+.+>.*)",
+                      "minLength": 1
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "downsizeOldAsg",
+                "weight"
+              ]
             }
           },
           "AsgPhasedDeployStepNode": {
@@ -85282,6 +85632,18 @@ const schema: Record<string, any> = {
                   "asgName": {
                     "type": "string"
                   },
+                  "deleteOldAsg": {
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "type": "string",
+                        "pattern": "(<\\+.+>.*)",
+                        "minLength": 1
+                      }
+                    ]
+                  },
                   "delegateSelectors": {
                     "oneOf": [
                       {
@@ -85316,6 +85678,35 @@ const schema: Record<string, any> = {
                       }
                     ]
                   }
+                },
+                "if": {
+                  "properties": {
+                    "deleteOldAsg": {
+                      "const": true
+                    }
+                  },
+                  "required": [
+                    "deleteOldAsg"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "resizeStrategy": {
+                      "oneOf": [
+                        {
+                          "const": "resize_new_first"
+                        },
+                        {
+                          "type": "string",
+                          "pattern": "(<\\+.+>.*)",
+                          "minLength": 1
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "resizeStrategy"
+                  ]
                 }
               }
             ],
@@ -85329,6 +85720,18 @@ const schema: Record<string, any> = {
             "properties": {
               "asgName": {
                 "type": "string"
+              },
+              "deleteOldAsg": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "string",
+                    "pattern": "(<\\+.+>.*)",
+                    "minLength": 1
+                  }
+                ]
               },
               "delegateSelectors": {
                 "oneOf": [
@@ -85367,6 +85770,35 @@ const schema: Record<string, any> = {
               "description": {
                 "desc": "This is the description for AsgSetupStepInfo"
               }
+            },
+            "if": {
+              "properties": {
+                "deleteOldAsg": {
+                  "const": true
+                }
+              },
+              "required": [
+                "deleteOldAsg"
+              ]
+            },
+            "then": {
+              "properties": {
+                "resizeStrategy": {
+                  "oneOf": [
+                    {
+                      "const": "resize_new_first"
+                    },
+                    {
+                      "type": "string",
+                      "pattern": "(<\\+.+>.*)",
+                      "minLength": 1
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "resizeStrategy"
+              ]
             }
           },
           "AsgRollbackStepNode": {
@@ -109040,6 +109472,12 @@ const schema: Record<string, any> = {
           {
             "type": "object",
             "properties": {
+              "userGroups": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "webhookUrl": {
                 "type": "string"
               },
@@ -109064,11 +109502,13 @@ const schema: Record<string, any> = {
           },
           {
             "type": "object",
-            "required": [
-              "url",
-              "apiKey"
-            ],
             "properties": {
+              "userGroups": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
               "url": {
                 "type": "string"
               },
@@ -111334,6 +111774,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
@@ -120788,6 +121231,9 @@ const schema: Record<string, any> = {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
                   },
                   {
+                    "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepNode"
+                  },
+                  {
                     "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
                   },
                   {
@@ -121360,6 +121806,9 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/StoPolicyEnforcementStepNode"
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
@@ -123375,6 +123824,42 @@ const schema: Record<string, any> = {
                   },
                   {
                     "$ref": "#/definitions/pipeline/steps/cd/AIVerifyNGStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaEnforcementStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaOrchestrationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaAibomOrchestrationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaComplianceStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaPrAttestationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SscaJunitAttestationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/SlsaVerificationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/ProvenanceStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/ArtifactSigningStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/ArtifactVerificationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/EnforceAttestationStepNode"
+                  },
+                  {
+                    "$ref": "#/definitions/pipeline/steps/common/DeployAttestationStepNode"
                   }
                 ]
               },
