@@ -4,10 +4,10 @@
 const schema: Record<string, any> = {
   "type": "object",
   "title": "inputSet_v1",
+  "additionalProperties": false,
   "required": [
-    "spec",
     "version",
-    "kind"
+    "name"
   ],
   "properties": {
     "version": {
@@ -17,30 +17,38 @@ const schema: Record<string, any> = {
         1
       ]
     },
-    "kind": {
-      "description": "defines the kind of yaml (pipeline/template)",
+    "name": {
+      "description": "Name of the input set. The identifier is derived from it.",
       "type": "string",
-      "enum": [
-        "input-set"
-      ]
+      "minLength": 1
+    },
+    "inputs": {
+      "description": "Map of pipeline input name to value. Keys are pipeline-specific and are validated at merge time, not here.",
+      "type": "object"
     },
     "spec": {
-      "type": "object",
-      "description": "inputs to be used in the linked template",
-      "additionalProperties": {
-        "anyOf": [
-          "string",
-          "array",
-          "list",
-          "object",
-          "boolean"
-        ]
-      },
-      "propertyNames": {
-        "pattern": "^[a-zA-Z_][0-9a-zA-Z_\\.$-]{0,127}$"
-      }
+      "$ref": "#/definitions/inputSet/overlay_spec"
     }
   },
-  "definitions": {}
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "inputSet": {
+      "overlay_spec": {
+        "title": "overlay_spec",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "input_sets": {
+            "description": "Identifiers of the input sets composed by this overlay input set.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "$schema": "http://json-schema.org/draft-07/schema#"
+      }
+    }
+  }
 };
 export default schema;
