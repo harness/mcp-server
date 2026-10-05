@@ -1,5 +1,5 @@
 import type { ToolsetDefinition, BodySchema } from "../types.js";
-import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract } from "../extractors.js";
+import { passthrough, fmeListExtract, fmeGetExtract, fmeV4PaginatedListExtract, fmeV4EntityExtract, fmeExperimentResultExtract } from "../extractors.js";
 import { isFmeHarnessNativeSelected, logFmeDeprecation, requireFmeHarnessNativeScope, requireFmeIdentifier, requireHarnessNativeSegmentScope, resolveFmeDualMode } from "../scope-utils.js";
 
 const fmeActionExtract = (raw: unknown) => {
@@ -100,6 +100,80 @@ function applyFmeOptionalStatusQuery(input: Record<string, unknown>, resource: s
     );
   }
   input.status = status;
+}
+
+const FME_EXPERIMENT_PARENT_TYPES = ["FEATURE_FLAG", "AI_CONFIG", "CONFIG"] as const;
+type FmeExperimentParentType = (typeof FME_EXPERIMENT_PARENT_TYPES)[number];
+
+function canonicalizeFmeExperimentParentType(raw: unknown): FmeExperimentParentType | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed) return undefined;
+  return FME_EXPERIMENT_PARENT_TYPES.find((type) => type.toLowerCase() === trimmed.toLowerCase());
+}
+
+function applyFmeExperimentParentTypeQuery(input: Record<string, unknown>, operation: string): void {
+  const raw = input.parent_type;
+  if (raw === undefined || raw === null || raw === "") {
+    throw new Error(
+      `fme_experiment.${operation}: parent_type is required (${FME_EXPERIMENT_PARENT_TYPES.join(" | ")}).`,
+    );
+  }
+  const parentType = canonicalizeFmeExperimentParentType(raw);
+  if (parentType === undefined) {
+    throw new Error(
+      `fme_experiment.${operation}: invalid parent_type '${String(raw)}'. Must be one of: ${FME_EXPERIMENT_PARENT_TYPES.join(", ")}.`,
+    );
+  }
+  input.parent_type = parentType;
+}
+
+// Shared by the fme_* .update operations — each sends a JSON Merge Patch (RFC 7396) body
+// built from the same whitelist-and-copy shape.
+function buildFmeMergePatch(
+  body: Record<string, unknown> | undefined,
+  patchableFields: readonly string[],
+  transform?: (field: string, value: unknown) => unknown,
+): Record<string, unknown> {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return {};
+  const patch: Record<string, unknown> = {};
+  for (const field of patchableFields) {
+    if (!(field in body)) continue;
+    const value = body[field];
+    patch[field] = transform ? transform(field, value) : value;
+  }
+  return patch;
+}
+
+// Targeting-rule label sent on create when the caller omits rule.
+const FME_EXPERIMENT_DEFAULT_RULE = "default";
+
+// fme_experiment list items: the generic compactItems() whitelist keeps id/name/description/status/
+// *At timestamps but drops parent, environmentId, and the treatment/ownership fields an agent needs
+// to pick an experiment (see fmeExperimentCreateSchema/fmeExperimentUpdateSchema for the full shape).
+function compactFmeExperiment(item: Record<string, unknown>): Record<string, unknown> {
+  const slim: Record<string, unknown> = {};
+  for (const key of [
+    "id",
+    "name",
+    "description",
+    "status",
+    "parent",
+    "environmentId",
+    "startAt",
+    "endAt",
+    "baselineTreatment",
+    "comparisonTreatments",
+    "owners",
+    "tags",
+    "rule",
+    "createdAt",
+    "updatedAt",
+    "openInHarness",
+  ]) {
+    if (item[key] !== undefined) slim[key] = item[key];
+  }
+  return slim;
 }
 
 function resolveFmeCreateSegmentType(body: Record<string, unknown> | undefined): FmeSegmentKind {
@@ -305,17 +379,17 @@ const fmeSegmentDefinitionUpdateSchema: BodySchema = {
 
 const fmeMetricCreateSchema: BodySchema = {
   description:
-    "Create a new metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required by the backend. spread is also required here — an MCP-only stricter contract: the backend silently defaults it to 'PER' when omitted, changing semantics for RATE metrics with no warning. owners is optional, but the backend currently rejects an empty/missing owners list with a 400 (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one owner until that ships.",
+    "Create a new metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required by the backend. owners is optional, but the backend currently rejects an empty/missing owners list with a 400 (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one owner until that ships. The backend also rejects creation with a 409 'Duplicate Definition' when another metric already has the same (trafficType, aggregation, spread, baseEventTypes, filterEventType) combination — this check is independent of name, so a differently-named metric with an identical shape still collides; use fme_metric list/get to check for an existing equivalent metric before retrying with a different base/filter event type.",
   fields: [
     { name: "name", type: "string", required: true, description: "Unique metric name within the project (must start with a letter; letters, digits, '-', '_' only; max 100 chars). Immutable after creation." },
     { name: "description", type: "string", required: false, description: "Optional human-readable description" },
     { name: "trafficType", type: "string", required: true, description: "Traffic type name (get from fme_traffic_type). Immutable after creation." },
     { name: "format", type: "string", required: true, description: "Display format. One of: NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES." },
-    { name: "aggregation", type: "string", required: true, description: "How individual event values are aggregated per unit. One of: TOTAL, COUNT, RATE, AVERAGE." },
+    { name: "aggregation", type: "string", required: true, description: "How individual event values are aggregated per unit. One of: TOTAL, COUNT, RATE, AVERAGE. Matches the webconsole 'Measure as' dropdown: COUNT = 'Count of events per <traffic type>' (baseEventTypes only, no propertyForValue); TOTAL = 'Sum of event values per <traffic type>' (baseEventTypes with propertyForValue set to the event property to sum, or omitted to sum the raw event value); AVERAGE = 'Average of event values per <traffic type>' (same shape as TOTAL); RATE = 'Percent of unique <traffic type>s' (baseEventTypes only, no propertyForValue). There is no RATIO value: 'Ratio of two events per <traffic type>' is built as aggregation COUNT with baseEventTypes set to the numerator event and filterEventType set to the denominator event with filterAggregation 'COUNT' — see filterEventType." },
     { name: "isPositive", type: "boolean", required: true, description: "true when an increase in this metric is a good outcome" },
-    { name: "spread", type: "string", required: true, description: "PER (per-unit) or ACROSS (population). Required here even though the backend accepts omitting it (defaults to PER) — set it explicitly, especially for RATE metrics where PER vs ACROSS changes what is measured." },
-    { name: "baseEventTypes", type: "array", required: true, description: "The base event type(s) this metric measures (at least one). Each entry: {eventTypeId, propertyFilters?, propertyForValue?} — propertyFilters/propertyForValue default to []/null when omitted. Get event type IDs from fme_event_type.", itemType: "object" },
-    { name: "filterEventType", type: "object", required: false, description: "Optional filter/trigger event that scopes which units are counted: {eventTypeId, filterAggregation?, propertyFilters?} — propertyFilters defaults to [] when omitted." },
+    { name: "baseEventTypes", type: "array", required: true, description: "The base event type(s) this metric measures (at least one; the numerator event for a ratio metric). Each entry: {eventTypeId, propertyFilters?, propertyForValue?} — propertyFilters/propertyForValue default to []/null when omitted. propertyForValue is only meaningful for aggregation TOTAL/AVERAGE (the event property to sum/average); leave it unset for COUNT/RATE and for ratio metrics. Get event type IDs from fme_event_type.", itemType: "object" },
+    { name: "filterEventType", type: "object", required: false, description: "Optional filter event that scopes which units are counted: {eventTypeId, filterAggregation?, propertyFilters?} — propertyFilters defaults to [] when omitted. Dual purpose: (1) 'has done' filtering for COUNT/TOTAL/AVERAGE/RATE metrics, or (2) the denominator event of a ratio metric — set aggregation: 'COUNT', baseEventTypes to the numerator event, and filterEventType to {eventTypeId: <denominator>, filterAggregation: 'COUNT'} to build the webconsole's 'Ratio of two events per <traffic type>' type." },
+    { name: "triggerEventType", type: "object", required: false, description: "Optional trigger event (HAS_DONE_BEFORE): the unit must have done this event before the base event to be counted. Shape: {eventTypeId}." },
     { name: "tags", type: "array", required: false, description: "Initial tags. Each entry is {name: string}; bare strings are accepted and auto-wrapped", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}. For now the backend rejects an empty or missing list with 400 \"Owners cannot be empty\" (owners is being deprecated behind a feature flag not yet enabled in prod) — pass at least one until it ships.", itemType: "object" },
     { name: "cap", type: "object", required: false, description: "Optional outlier/cap configuration: baseEventCountCap/baseEventSumCap/baseEventValueCap/filterEventCountCap/filterEventSumCap/filterEventValueCap/metricValueCap (all default 0 = no cap), plus granularity (MINUTES|HOURS|DAYS|WEEKS, default DAYS)" },
@@ -324,7 +398,7 @@ const fmeMetricCreateSchema: BodySchema = {
 
 const fmeMetricUpdateSchema: BodySchema = {
   description:
-    "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name and trafficType are immutable and not accepted here. format/aggregation/isPositive/spread cannot be cleared with null (rejected with 400). baseEventTypes/filterEventType/tags/owners/cap are full replacements when provided; null (or [] for arrays) clears filterEventType/tags/owners/cap.",
+    "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name and trafficType are immutable and not accepted here. format/aggregation/isPositive/spread cannot be cleared with null (rejected with 400). baseEventTypes/filterEventType/triggerEventType/tags/owners/cap are full replacements when provided; null (or [] for arrays) clears filterEventType/triggerEventType/tags/owners/cap.",
   fields: [
     { name: "description", type: "string", required: false, description: "Updated description; null clears it" },
     { name: "format", type: "string", required: false, description: "Updated format (NUMBER, DOLLAR, PERCENTAGE, SECONDS, MILLISECONDS, BYTES); cannot be cleared with null" },
@@ -333,9 +407,71 @@ const fmeMetricUpdateSchema: BodySchema = {
     { name: "spread", type: "string", required: false, description: "Updated spread (PER or ACROSS); cannot be cleared with null" },
     { name: "baseEventTypes", type: "array", required: false, description: "Replacement base-event list (full replacement, at least one entry required when provided). Each entry's propertyFilters/propertyForValue default to []/null when omitted.", itemType: "object" },
     { name: "filterEventType", type: "object", required: false, description: "Replacement filter event, or null to clear it. propertyFilters defaults to [] when omitted." },
+    { name: "triggerEventType", type: "object", required: false, description: "Replacement trigger event (HAS_DONE_BEFORE), or null to clear it. Shape: {eventTypeId}." },
     { name: "tags", type: "array", required: false, description: "Replacement tag list; null or [] clears all tags", itemType: "object" },
     { name: "owners", type: "array", required: false, description: "Replacement owner list; null or [] clears all owners", itemType: "object" },
     { name: "cap", type: "object", required: false, description: "Replacement cap configuration, or null to clear it" },
+  ],
+};
+
+const fmeExperimentCreateSchema: BodySchema = {
+  description:
+    "Create an Experiment. parent/name/startAt/endAt/baselineTreatment/comparisonTreatments are required by the backend. Requires environment_id as a param (the experiment is assigned in that environment). Do not send assignmentSource — the backend infers/creates the cloud assignment source (400 if present).",
+  fields: [
+    { name: "parent", type: "object", required: true, description: "{type: FEATURE_FLAG|AI_CONFIG|CONFIG, id?, name?} — at least one of id/name is required. CONFIG returns 404 in v1." },
+    { name: "name", type: "string", required: true, description: "Unique experiment name within the project (must start with a letter; letters, digits, '-', '_' only; 2-250 chars)." },
+    { name: "description", type: "string", required: false, description: "Optional human-readable description (max 250 chars)" },
+    { name: "hypothesis", type: "string", required: false, description: "Optional hypothesis this experiment is testing (max 500 chars)" },
+    { name: "startAt", type: "string", required: true, description: "ISO-8601 timestamp when the experiment starts" },
+    { name: "endAt", type: "string", required: true, description: "ISO-8601 timestamp when the experiment ends" },
+    { name: "baselineTreatment", type: "string", required: true, description: "Baseline treatment name" },
+    { name: "comparisonTreatments", type: "array", required: true, description: "Comparison treatment names, not including baselineTreatment (at least one)", itemType: "string" },
+    { name: "keyMetrics", type: "array", required: false, description: "Metric ids to set as key metrics. Omit for none.", itemType: "string" },
+    { name: "supportingMetrics", type: "array", required: false, description: "Metric ids to set as supporting metrics. Omit for none.", itemType: "string" },
+    { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}. Omit for none.", itemType: "object" },
+    { name: "rule", type: "string", required: false, description: "Targeting-rule label to scope results to: \"default\" or a specific targeting rule name on the parent flag. Defaults to \"default\" when omitted." },
+    { name: "tags", type: "array", required: false, description: "Initial tags. Each entry is {name: string}. Omit for none.", itemType: "object" },
+  ],
+};
+
+const fmeExperimentUpdateSchema: BodySchema = {
+  description:
+    "Partially update an Experiment via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name/startAt/endAt/baselineTreatment/comparisonTreatments/status cannot be cleared with null (comparisonTreatments also rejects []) — 400 if attempted. description/hypothesis/rule/keyMetrics/supportingMetrics/tags clear with null (or [] for the arrays). parent and environment cannot be changed.",
+  fields: [
+    { name: "name", type: "string", required: false, description: "Updated name; null not allowed" },
+    { name: "description", type: "string", required: false, description: "Updated description; null clears it" },
+    { name: "hypothesis", type: "string", required: false, description: "Updated hypothesis; null clears it" },
+    { name: "startAt", type: "string", required: false, description: "Updated start time (ISO-8601); null not allowed" },
+    { name: "endAt", type: "string", required: false, description: "Updated end time (ISO-8601); null not allowed" },
+    { name: "baselineTreatment", type: "string", required: false, description: "Updated baseline treatment; null not allowed" },
+    { name: "comparisonTreatments", type: "array", required: false, description: "Replacement comparison treatments (full replacement, at least one); null or [] returns 400", itemType: "string" },
+    { name: "keyMetrics", type: "array", required: false, description: "Replacement key metric ids; null or [] clears the list", itemType: "string" },
+    { name: "supportingMetrics", type: "array", required: false, description: "Replacement supporting metric ids; null or [] clears the list", itemType: "string" },
+    { name: "owners", type: "array", required: false, description: "Replacement owner list — {type: \"USER\", id or email} or {type: \"GROUP\", identifier}; null or [] clears", itemType: "object" },
+    { name: "rule", type: "string", required: false, description: "Updated targeting-rule label (\"default\" or a targeting rule name on the parent flag); null clears it, reverting to the default rule scope" },
+    { name: "tags", type: "array", required: false, description: "Replacement tag list — each entry {name: string}; null or [] clears all tags", itemType: "object" },
+    { name: "status", type: "string", required: false, description: "Updated lifecycle status (ACTIVE, PAUSED, ARCHIVED, COMPLETED); null not allowed. ARCHIVED is a status here, not a substitute for delete." },
+  ],
+};
+
+const fmeExperimentSettingsUpdateSchema: BodySchema = {
+  description:
+    "Partially update an Experiment's statistical & monitoring settings via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. Applying any patch implicitly creates/updates the experiment-level override (source becomes EXPERIMENT_OVERRIDE). statisticalTestType/significanceThreshold/multipleComparisonCorrection/minimumSampleSize/reviewPeriod cannot be cleared with null (400 if attempted). varianceReduction can be cleared with null (resets to method NONE).",
+  fields: [
+    { name: "statisticalTestType", type: "string", required: false, description: "FIXED_HORIZON or SEQUENTIAL; null not allowed" },
+    { name: "significanceThreshold", type: "number", required: false, description: "Between 0 and 1 inclusive; null not allowed" },
+    { name: "multipleComparisonCorrection", type: "string", required: false, description: "NONE or GROUPWISE_HOCHBERG; null not allowed" },
+    { name: "minimumSampleSize", type: "number", required: false, description: "Minimum per-treatment sample size; null not allowed" },
+    { name: "reviewPeriod", type: "string", required: false, description: "ISO-8601 duration (e.g. \"PT336H\"); null not allowed" },
+    { name: "varianceReduction", type: "object", required: false, description: "{method: NONE|CUPED}, or null to clear (resets to method NONE)" },
+  ],
+};
+
+const fmeExperimentAlertingUpdateSchema: BodySchema = {
+  description:
+    "Set whether an Experiment is subscribed to significance-regression alerting via JSON Merge Patch (RFC 7396). isEnabled is required and cannot be null (400 if omitted or null).",
+  fields: [
+    { name: "isEnabled", type: "boolean", required: true, description: "true to subscribe the experiment to alert evaluation, false to unsubscribe" },
   ],
 };
 
@@ -1661,24 +1797,17 @@ export const featureFlagsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
-            if (body?.spread === undefined || body?.spread === null) {
-              throw new Error(
-                "fme_metric.create: spread is required (MCP-only stricter contract — the backend " +
-                  "silently defaults to 'PER' when omitted, changing metric semantics for RATE " +
-                  "metrics). Pass 'PER' or 'ACROSS'.",
-              );
-            }
             return {
               name: body?.name,
               trafficType: body?.trafficType,
               format: body?.format,
               aggregation: body?.aggregation,
               isPositive: body?.isPositive,
-              spread: body.spread,
               baseEventTypes: normalizeFmeBaseEventTypes(body?.baseEventTypes),
               ...(body?.description !== undefined ? { description: body.description } : {}),
               ...(body?.owners !== undefined ? { owners: body.owners } : {}),
               ...(body?.filterEventType !== undefined ? { filterEventType: normalizeFmeFilterEventType(body.filterEventType) } : {}),
+              ...(body?.triggerEventType !== undefined ? { triggerEventType: body.triggerEventType } : {}),
               ...(body?.tags !== undefined ? { tags: normalizeFmeTags(body.tags) } : {}),
               ...(body?.cap !== undefined ? { cap: body.cap } : {}),
             };
@@ -1686,7 +1815,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: passthrough,
           bodySchema: fmeMetricCreateSchema,
           description:
-            "Create a metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes/spread are required (spread required is an MCP-only stricter contract; the backend otherwise defaults it to PER). Get event type IDs from fme_event_type first.",
+            "Create a metric definition. name/trafficType/format/aggregation/isPositive/baseEventTypes are required. Every new metric is PER-unit (spread=ACROSS is a deprecated, non-testable legacy value with no UI or MCP create path — see fme_metric.update if you need to inspect/patch an existing ACROSS metric). Get event type IDs from fme_event_type first.",
         },
         update: {
           method: "PATCH",
@@ -1700,43 +1829,39 @@ export const featureFlagsToolset: ToolsetDefinition = {
           headers: { "Content-Type": "application/merge-patch+json" },
           bodyBuilder: (input) => {
             const body = input.body as Record<string, unknown> | undefined;
-            if (!body || typeof body !== "object" || Array.isArray(body)) return {};
-            const patchableFields = [
-              "description",
-              "format",
-              "aggregation",
-              "isPositive",
-              "spread",
-              "baseEventTypes",
-              "filterEventType",
-              "tags",
-              "owners",
-              "cap",
-            ] as const;
-            const patch: Record<string, unknown> = {};
-            for (const field of patchableFields) {
-              if (!(field in body)) continue;
-              const value = body[field];
-              switch (field) {
-                case "tags":
-                  patch[field] = normalizeFmeTags(value);
-                  break;
-                case "baseEventTypes":
-                  patch[field] = value === null ? null : normalizeFmeBaseEventTypes(value);
-                  break;
-                case "filterEventType":
-                  patch[field] = value === null ? null : normalizeFmeFilterEventType(value);
-                  break;
-                default:
-                  patch[field] = value;
-              }
-            }
-            return patch;
+            return buildFmeMergePatch(
+              body,
+              [
+                "description",
+                "format",
+                "aggregation",
+                "isPositive",
+                "spread",
+                "baseEventTypes",
+                "filterEventType",
+                "triggerEventType",
+                "tags",
+                "owners",
+                "cap",
+              ],
+              (field, value) => {
+                switch (field) {
+                  case "tags":
+                    return normalizeFmeTags(value);
+                  case "baseEventTypes":
+                    return value === null ? null : normalizeFmeBaseEventTypes(value);
+                  case "filterEventType":
+                    return value === null ? null : normalizeFmeFilterEventType(value);
+                  default:
+                    return value;
+                }
+              },
+            );
           },
           responseExtractor: passthrough,
           bodySchema: fmeMetricUpdateSchema,
           description:
-            "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged; format/aggregation/isPositive/spread cannot be cleared with null. baseEventTypes/filterEventType/tags/owners/cap are full replacements when provided. name and trafficType are immutable and not accepted here.",
+            "Partially update a metric via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged; format/aggregation/isPositive/spread cannot be cleared with null. baseEventTypes/filterEventType/triggerEventType/tags/owners/cap are full replacements when provided. name and trafficType are immutable and not accepted here.",
         },
         delete: {
           method: "DELETE",
@@ -1752,10 +1877,326 @@ export const featureFlagsToolset: ToolsetDefinition = {
         },
       },
     },
+    {
+      resourceType: "fme_experiment",
+      displayName: "FME Experiment",
+      description:
+        "A workspace-scoped Experiment (A/B test) running on a Feature Flag, AI Config, or Config. Harness-native only " +
+        "(org_id + project_id; no legacy workspace_id support). Supports list, get, create, update, and delete. " +
+        "list requires parent_type; create requires environment_id (the experiment is assigned in one environment).",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["experiment_id"],
+      compactItem: compactFmeExperiment,
+      listFilterFields: [
+        { name: "parent_type", description: "Parent kind to list. Required. FEATURE_FLAG and AI_CONFIG are implemented; CONFIG returns 404.", enum: ["FEATURE_FLAG", "AI_CONFIG", "CONFIG"], required: true },
+        { name: "environment_id", description: "Filter to experiments assigned in this environment (get from fme_environment). Optional." },
+        { name: "parent_name", description: "Filter to this parent name (Feature Flag/AI Config/Config name matching parent_type). Unknown or mismatched name returns 404." },
+        { name: "name", description: "Filter by experiment title (used with match_type)." },
+        { name: "match_type", description: "How name is matched. Ignored when name is omitted.", enum: ["starts_with", "contains", "exact"] },
+        { name: "status", description: "Filter by lifecycle status. Defaults to [ACTIVE].", enum: ["ACTIVE", "PAUSED", "ARCHIVED", "COMPLETED"] },
+        { name: "tags", description: "Filter to experiments that have any of these tags, by tag name (array of names)." },
+        { name: "offset", description: "Pagination offset", type: "number" },
+        { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment");
+            applyFmeExperimentParentTypeQuery(input, "list");
+            return { path: "/fme/api/v4/experiments" };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: {
+            parent_type: "parent_type",
+            environment_id: "environment_id",
+            parent_name: "parent_name",
+            name: "name",
+            match_type: "match_type",
+            status: "status",
+            tags: "tags",
+            offset: "offset",
+            size: "limit",
+            limit: "limit",
+          },
+          responseExtractor: fmeV4PaginatedListExtract,
+          description:
+            "List experiments in a project, with pagination and filters (harness_list size maps to limit; pass offset directly " +
+            "via filters). parent_type is required. Defaults to ACTIVE experiments unless status is passed. " +
+            "Each item includes its tags and rule.",
+        },
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
+            return { path: `/fme/api/v4/experiments/${id}` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description: "Get a single experiment by ID, regardless of lifecycle status. CONFIG and warehouse-native experiments return 404.",
+        },
+        create: {
+          method: "POST",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment");
+            requireFmeIdentifier(input, "environment_id", "fme_experiment");
+            return { path: "/fme/api/v4/experiments" };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          queryParams: { environment_id: "environment_id" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return {
+              parent: body?.parent,
+              name: body?.name,
+              startAt: body?.startAt,
+              endAt: body?.endAt,
+              baselineTreatment: body?.baselineTreatment,
+              comparisonTreatments: body?.comparisonTreatments,
+              ...(body?.description !== undefined ? { description: body.description } : {}),
+              ...(body?.hypothesis !== undefined ? { hypothesis: body.hypothesis } : {}),
+              ...(body?.keyMetrics !== undefined ? { keyMetrics: body.keyMetrics } : {}),
+              ...(body?.supportingMetrics !== undefined ? { supportingMetrics: body.supportingMetrics } : {}),
+              ...(body?.owners !== undefined ? { owners: body.owners } : {}),
+              rule: body?.rule !== undefined && body.rule !== null ? body.rule : FME_EXPERIMENT_DEFAULT_RULE,
+              ...(body?.tags !== undefined ? { tags: body.tags } : {}),
+            };
+          },
+          responseExtractor: fmeV4EntityExtract,
+          bodySchema: fmeExperimentCreateSchema,
+          description:
+            "Create an experiment. Requires environment_id (param, the environment it's assigned in) plus " +
+            "parent/name/startAt/endAt/baselineTreatment/comparisonTreatments in the body. The parent must exist in " +
+            "that environment (404 if missing). Duplicate name returns 409. Optional rule scopes results to a targeting " +
+            "rule (defaults to \"default\") and tags attaches tags by name.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
+            return { path: `/fme/api/v4/experiments/${id}` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return buildFmeMergePatch(body, [
+              "name",
+              "description",
+              "hypothesis",
+              "startAt",
+              "endAt",
+              "baselineTreatment",
+              "comparisonTreatments",
+              "keyMetrics",
+              "supportingMetrics",
+              "status",
+              "owners",
+              "rule",
+              "tags",
+            ]);
+          },
+          responseExtractor: fmeV4EntityExtract,
+          bodySchema: fmeExperimentUpdateSchema,
+          description:
+            "Partially update an experiment via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. " +
+            "rule: null clears it; tags: null or [] clears all tags, otherwise the list replaces existing tags. " +
+            "Parent and environment cannot be changed. Renaming to a name already used in the project returns 409.",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment"));
+            return { path: `/fme/api/v4/experiments/${id}` };
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: fmeV4EntityExtract,
+          description:
+            "Delete an experiment by ID. Hard delete — permanent, no archive/restore (does not set status: ARCHIVED). " +
+            "The parent Feature Flag/AI Config/Config is not deleted.",
+        },
+      },
+    },
+    {
+      resourceType: "fme_experiment_settings",
+      displayName: "FME Experiment Settings",
+      description:
+        "Statistical & monitoring settings for a single Experiment (test type, significance threshold, multiple comparison " +
+        "correction, minimum sample size, review period, variance reduction). Harness-native only (org_id + project_id). " +
+        "An experiment either has its own override, or inherits organization defaults — GET always returns the applied " +
+        "settings and never 404s except when the experiment itself doesn't exist. Supports get, update, and delete only " +
+        "(no list — settings are 1:1 with the experiment).",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["experiment_id"],
+      operations: {
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_settings");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
+            return { path: `/fme/api/v4/experiments/${id}/settings` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get the applied settings for an experiment — its own override if one exists, otherwise organization " +
+            "defaults. source distinguishes ORGANIZATION_DEFAULT from EXPERIMENT_OVERRIDE. Never 404s for missing " +
+            "settings; only 404s when the experiment itself doesn't exist.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_settings");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
+            return { path: `/fme/api/v4/experiments/${id}/settings` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return buildFmeMergePatch(body, [
+              "statisticalTestType",
+              "significanceThreshold",
+              "multipleComparisonCorrection",
+              "minimumSampleSize",
+              "reviewPeriod",
+              "varianceReduction",
+            ]);
+          },
+          responseExtractor: fmeV4EntityExtract,
+          bodySchema: fmeExperimentSettingsUpdateSchema,
+          description:
+            "Partially update an experiment's settings via JSON Merge Patch (RFC 7396). Implicitly creates the " +
+            "experiment-level override if one doesn't already exist (source becomes EXPERIMENT_OVERRIDE).",
+        },
+        delete: {
+          method: "DELETE",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_settings");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_settings"));
+            return { path: `/fme/api/v4/experiments/${id}/settings` };
+          },
+          operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
+          responseExtractor: fmeV4EntityExtract,
+          description:
+            "Revert an experiment's settings to organization defaults by removing the experiment-level override " +
+            "(source becomes ORGANIZATION_DEFAULT) — the override's values are lost. Idempotent — safe to call when " +
+            "no override exists (no-op, same response).",
+        },
+      },
+    },
+    {
+      resourceType: "fme_experiment_alerting",
+      displayName: "FME Experiment Alerting",
+      description:
+        "Whether a single Experiment is subscribed to significance-regression alerting. An alert fires when a calculation " +
+        "run completes and an evaluated metric result is statistically significant (per the experiment's applied " +
+        "fme_experiment_settings) with an undesired direction past the degradation threshold. Harness-native only " +
+        "(org_id + project_id). Supports get and update only.",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["experiment_id"],
+      operations: {
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_alerting");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
+            return { path: `/fme/api/v4/experiments/${id}/alerting` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get whether the experiment is subscribed to alerting ({id, isEnabled}). Returns isEnabled: false when no " +
+            "alert policy has ever been configured; only 404s when the experiment itself doesn't exist.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_alerting");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
+            return { path: `/fme/api/v4/experiments/${id}/alerting` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return buildFmeMergePatch(body, ["isEnabled"]);
+          },
+          responseExtractor: fmeV4EntityExtract,
+          bodySchema: fmeExperimentAlertingUpdateSchema,
+          description:
+            "Subscribe or unsubscribe the experiment from alerting. Body must contain isEnabled (boolean, required; " +
+            "400 if omitted or null). 404 if the experiment doesn't exist; 403 if the caller lacks edit permission. " +
+            "Only the subscription is editable here — the degradation threshold is not configurable through this resource.",
+        },
+      },
+    },
+    {
+      resourceType: "fme_experiment_result",
+      displayName: "FME Experiment Result",
+      description:
+        "Evaluated (post-statistics) per-metric results for an Experiment's latest calculation run. Harness-native only " +
+        "(org_id + project_id). Read-only: list only (no get by id — results have no identifier of their own, and no " +
+        "environment_id filter — the experiment has exactly one environment, already embedded on the fme_experiment " +
+        "object). One row per (metric, comparison treatment) pair, flattened across all four metric categories " +
+        "(KEY, SUPPORTING, GUARDRAIL, ALERT) with a response-only category field. Reflects only the latest calculation " +
+        "run — no historical-run access.",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["experiment_id"],
+      listFilterFields: [
+        { name: "experiment_id", description: "Experiment ID (get from fme_experiment). Required.", required: true },
+        { name: "metric_ids", description: "Optional display filter to a subset of metrics. Never affects multiple comparison correction, which is always computed from the metric's real category membership. Unrecognized ids are silently dropped (200, not 400/404)." },
+        { name: "comparisons", description: "Optional filter to a subset of the experiment's comparison treatments. Defaults to all of the experiment's comparisonTreatments. The baseline treatment is always excluded." },
+      ],
+      operations: {
+        list: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_result");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_result"));
+            return { path: `/fme/api/v4/experiments/${id}/metric-results` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          queryParams: { metric_ids: "metric_ids", comparisons: "comparisons" },
+          responseExtractor: fmeExperimentResultExtract,
+          // Every field on a MetricResult row is the answer this resource exists to return (value,
+          // pvalue, impactLower/Upper, sample sizes, varianceReduction) — none of it fits the generic
+          // compact whitelist, so skip compaction rather than gutting the row to {metricId, category}.
+          skipCompact: true,
+          description:
+            "List evaluated metric results for an experiment's latest calculation run. One MetricResult per (metric, " +
+            "comparison treatment) pair. If the experiment has never been calculated, or a filtered metric id doesn't " +
+            "exist on the experiment, returns 200 with a partial/empty result. No environment_id filter — the " +
+            "experiment has exactly one environment (see fme_experiment.environment).",
+        },
+      },
+    },
     // ── FME Event Type (Harness-native only; read-only — no create/update/delete) ──
     // Discovery endpoint for fme_metric: use list/get here to resolve real event type IDs
-    // before referencing one in a metric's baseEventTypes/filterEventType or the
-    // event_type_ids list filter, instead of guessing an ID.
+    // before referencing one in a metric's baseEventTypes/filterEventType/triggerEventType or
+    // the event_type_ids list filter, instead of guessing an ID.
     {
       resourceType: "fme_event_type",
       displayName: "FME Event Type",
@@ -1765,7 +2206,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
         "supports list and get. Only event types with events received in the last 30 days are " +
         "visible; get returns 404 for an event type with no traffic type in the requesting " +
         "workspace's scope, or idle longer than 30 days. Use to discover event type IDs before " +
-        "referencing one in fme_metric's baseEventTypes/filterEventType or event_type_ids filter. " +
+        "referencing one in fme_metric's baseEventTypes/filterEventType/triggerEventType or " +
+        "event_type_ids filter. " +
         "Backed by /fme/api/v4/event-types.",
       toolset: "feature-flags",
       scope: "project",

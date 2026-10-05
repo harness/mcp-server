@@ -5,6 +5,7 @@ import type { RequestOptions } from "../../src/client/types.js";
 import { Registry } from "../../src/registry/index.js";
 import { featureFlagsToolset } from "../../src/registry/toolsets/feature-flags.js";
 import type { EndpointSpec, ResourceDefinition } from "../../src/registry/types.js";
+import { compactItems } from "../../src/utils/compact.js";
 
 function makeConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -851,10 +852,9 @@ describe("fme_environment Harness-native-only routing", () => {
       project_id: "p1",
     });
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       items: [{ id: "env1", name: "prod" }],
       total: 3,
-      totalCount: 3,
     });
   });
 
@@ -973,10 +973,9 @@ describe("fme_traffic_type and fme_rollout_status Harness-native-only list", () 
       project_id: "p1",
     });
 
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       items: [{ type: "TRAFFIC_TYPE", id: "tt1", name: "user" }],
       total: 3,
-      totalCount: 3,
     });
   });
 
@@ -2236,8 +2235,8 @@ describe("fme_metric", () => {
         format: "PERCENTAGE",
         aggregation: "COUNT",
         isPositive: true,
-        spread: "PER",
         baseEventTypes: [{ eventTypeId: "e1" }],
+        triggerEventType: { eventTypeId: "e0" },
         tags: ["checkout"],
         owners: [{ type: "USER", id: "u1" }],
       },
@@ -2252,54 +2251,33 @@ describe("fme_metric", () => {
       format: "PERCENTAGE",
       aggregation: "COUNT",
       isPositive: true,
-      spread: "PER",
       baseEventTypes: [{ eventTypeId: "e1", propertyFilters: [], propertyForValue: null }],
+      triggerEventType: { eventTypeId: "e0" },
       tags: [{ name: "checkout" }],
       owners: [{ type: "USER", id: "u1" }],
     });
   });
 
-  it("create: throws when spread is missing (MCP-only stricter contract)", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
+  it("create: drops spread even if the caller passes it (ACROSS has no create path)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "m1" });
     const client = makeClient(mockRequest);
 
-    await expect(
-      registry.dispatch(client, "fme_metric", "create", {
-        org_id: "o1",
-        project_id: "p1",
-        body: {
-          name: "checkout-conversion",
-          trafficType: "user",
-          format: "PERCENTAGE",
-          aggregation: "COUNT",
-          isPositive: true,
-          baseEventTypes: [{ eventTypeId: "e1" }],
-        },
-      }),
-    ).rejects.toThrow(/spread is required/);
-    expect(mockRequest).not.toHaveBeenCalled();
-  });
+    await registry.dispatch(client, "fme_metric", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      body: {
+        name: "checkout-conversion",
+        trafficType: "user",
+        format: "PERCENTAGE",
+        aggregation: "COUNT",
+        isPositive: true,
+        spread: "ACROSS",
+        baseEventTypes: [{ eventTypeId: "e1" }],
+      },
+    });
 
-  it("create: throws when spread is explicitly null", async () => {
-    const mockRequest = vi.fn().mockResolvedValue({});
-    const client = makeClient(mockRequest);
-
-    await expect(
-      registry.dispatch(client, "fme_metric", "create", {
-        org_id: "o1",
-        project_id: "p1",
-        body: {
-          name: "checkout-conversion",
-          trafficType: "user",
-          format: "PERCENTAGE",
-          aggregation: "COUNT",
-          isPositive: true,
-          spread: null,
-          baseEventTypes: [{ eventTypeId: "e1" }],
-        },
-      }),
-    ).rejects.toThrow(/spread is required/);
-    expect(mockRequest).not.toHaveBeenCalled();
+    const req = firstRequest(mockRequest);
+    expect(req.body).not.toHaveProperty("spread");
   });
 
   it("update: PATCHes with merge-patch content type and only the fields present in body", async () => {
@@ -2335,7 +2313,7 @@ describe("fme_metric", () => {
     expect(req.body).toEqual({ spread: "ACROSS" });
   });
 
-  it("update: null clears filterEventType/tags/owners/cap", async () => {
+  it("update: null clears filterEventType/triggerEventType/tags/owners/cap", async () => {
     const mockRequest = vi.fn().mockResolvedValue({});
     const client = makeClient(mockRequest);
 
@@ -2343,11 +2321,32 @@ describe("fme_metric", () => {
       org_id: "o1",
       project_id: "p1",
       metric_id: "m1",
-      body: { filterEventType: null, tags: null, owners: null, cap: null },
+      body: { filterEventType: null, triggerEventType: null, tags: null, owners: null, cap: null },
     });
 
     const req = firstRequest(mockRequest);
-    expect(req.body).toEqual({ filterEventType: null, tags: null, owners: null, cap: null });
+    expect(req.body).toEqual({
+      filterEventType: null,
+      triggerEventType: null,
+      tags: null,
+      owners: null,
+      cap: null,
+    });
+  });
+
+  it("update: sets triggerEventType", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_metric", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      metric_id: "m1",
+      body: { triggerEventType: { eventTypeId: "e0" } },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ triggerEventType: { eventTypeId: "e0" } });
   });
 
   it("update: does not crash when body is a non-object (e.g. a raw string)", async () => {
@@ -2388,6 +2387,975 @@ describe("fme_metric", () => {
     expect(resource.operations.update).toBeDefined();
     expect(resource.operations.delete).toBeDefined();
     expect(resource.operations.delete?.operationPolicy?.risk).toBe("destructive");
+  });
+});
+
+describe("fme_experiment", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: routes to /fme/api/v4/experiments with account_id/organization_identifier/project_identifier params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/experiments");
+    expect(req.product).toBeUndefined();
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+      parent_type: "FEATURE_FLAG",
+    });
+  });
+
+  it("list: throws when org_id/project_id missing (no silent fallback to ambient config)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(registry.dispatch(client, "fme_experiment", "list", { parent_type: "FEATURE_FLAG" })).rejects.toThrow(
+      "fme_experiment: org_id and project_id are required (account is taken from config).",
+    );
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: maps each documented filter to the correct query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+      environment_id: "env1",
+      parent_name: "checkout-flag",
+      name: "checkout",
+      match_type: "contains",
+      status: ["ACTIVE"],
+      offset: 10,
+      limit: 20,
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({
+      parent_type: "FEATURE_FLAG",
+      environment_id: "env1",
+      parent_name: "checkout-flag",
+      name: "checkout",
+      match_type: "contains",
+      status: ["ACTIVE"],
+      offset: 10,
+      limit: 20,
+    });
+  });
+
+  it("list: forwards the tags filter as a repeated array query param", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+      tags: ["backend", "Team A"],
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({ tags: ["backend", "Team A"] });
+  });
+
+  it("list: omits tags param when the filter is absent or empty", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+      tags: [],
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).not.toHaveProperty("tags");
+  });
+
+  it("list: canonicalizes lowercase status array entries", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 100, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+      status: ["active", "paused"],
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({ status: ["ACTIVE", "PAUSED"] });
+  });
+
+  it("list: rejects an empty parent_type without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment", "list", { org_id: "o1", project_id: "p1", parent_type: "" }),
+    ).rejects.toThrow(/parent_type is required/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: rejects an invalid parent_type without HTTP", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment", "list", { org_id: "o1", project_id: "p1", parent_type: "WIDGET" }),
+    ).rejects.toThrow(/invalid parent_type 'WIDGET'/i);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: extractor maps {data, totalCount} to {items, total}", async () => {
+    const experiments = [{ id: "e1", name: "checkout-experiment" }];
+    const mockRequest = vi.fn().mockResolvedValue({ data: experiments, limit: 100, offset: 0, totalCount: 1 });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+    })) as { items: unknown[]; total: number };
+
+    expect(result.items).toEqual(experiments);
+    expect(result.total).toBe(1);
+  });
+
+  it("list: result is a closed {items, total} — no raw data/limit/offset/totalCount envelope survives", async () => {
+    const experiments = [{ id: "e1", name: "checkout-experiment" }];
+    const mockRequest = vi.fn().mockResolvedValue({ data: experiments, limit: 100, offset: 0, totalCount: 1 });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+    });
+
+    expect(result).toEqual({ items: experiments, total: 1 });
+  });
+
+  it("list: compactItem keeps parent/environmentId/treatments/owners/status that the generic whitelist would drop", async () => {
+    const resource = findResource("fme_experiment");
+    const item = {
+      id: "e1",
+      name: "checkout-experiment",
+      description: "d",
+      hypothesis: "h",
+      status: "ACTIVE",
+      parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+      environmentId: "env1",
+      startAt: "2025-06-01T12:00:00Z",
+      endAt: "2025-07-01T12:00:00Z",
+      baselineTreatment: "off",
+      comparisonTreatments: ["on"],
+      keyMetrics: ["m1"],
+      supportingMetrics: ["m2"],
+      owners: [{ type: "USER", id: "u1" }],
+      tags: [{ type: "TAG", id: "t1", name: "backend" }],
+      rule: "default rule",
+    };
+
+    const [compacted] = compactItems([item], resource.compactItem) as Record<string, unknown>[];
+
+    expect(compacted).toEqual({
+      id: "e1",
+      name: "checkout-experiment",
+      description: "d",
+      status: "ACTIVE",
+      parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+      environmentId: "env1",
+      startAt: "2025-06-01T12:00:00Z",
+      endAt: "2025-07-01T12:00:00Z",
+      baselineTreatment: "off",
+      comparisonTreatments: ["on"],
+      owners: [{ type: "USER", id: "u1" }],
+      tags: [{ type: "TAG", id: "t1", name: "backend" }],
+      rule: "default rule",
+    });
+  });
+
+  it("list: compactItem keeps a null rule and an empty tags list", async () => {
+    const resource = findResource("fme_experiment");
+    const [compacted] = compactItems([{ id: "e1", name: "x", rule: null, tags: [] }], resource.compactItem) as Record<string, unknown>[];
+
+    expect(compacted).toEqual({ id: "e1", name: "x", rule: null, tags: [] });
+  });
+
+  it("list: without compactItem the generic whitelist would drop parent/treatments/owners (documents why it's needed)", async () => {
+    const item = {
+      id: "e1",
+      name: "checkout-experiment",
+      status: "ACTIVE",
+      parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+      baselineTreatment: "off",
+      comparisonTreatments: ["on"],
+      owners: [{ type: "USER", id: "u1" }],
+    };
+
+    const [stripped] = compactItems([item]) as Record<string, unknown>[];
+
+    expect(stripped).not.toHaveProperty("parent");
+    expect(stripped).not.toHaveProperty("baselineTreatment");
+    expect(stripped).not.toHaveProperty("comparisonTreatments");
+    expect(stripped).not.toHaveProperty("owners");
+  });
+
+  it("list: harness_list size maps to limit", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], limit: 5, offset: 0, totalCount: 0 });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      parent_type: "FEATURE_FLAG",
+      size: 5,
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({ limit: 5 });
+  });
+
+  it("get: routes to /fme/api/v4/experiments/{experiment_id} and URL-encodes the id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "e1/with slash", name: "checkout-experiment" });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1/with slash",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.path).toBe("/fme/api/v4/experiments/e1%2Fwith%20slash");
+  });
+
+  it("get: throws when experiment_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment", "get", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/experiment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("create: POSTs to /fme/api/v4/experiments with environment_id as a query param and the full body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", name: "checkout-experiment" },
+      governance: { status: "NONE", details: [] },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "env1",
+      body: {
+        parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+        name: "checkout-experiment",
+        startAt: "2025-06-01T12:00:00Z",
+        endAt: "2025-07-01T12:00:00Z",
+        baselineTreatment: "off",
+        comparisonTreatments: ["on"],
+        keyMetrics: ["m1"],
+      },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("POST");
+    expect(req.path).toBe("/fme/api/v4/experiments");
+    expect(req.params).toMatchObject({ environment_id: "env1" });
+    expect(req.body).toEqual({
+      parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+      name: "checkout-experiment",
+      startAt: "2025-06-01T12:00:00Z",
+      endAt: "2025-07-01T12:00:00Z",
+      baselineTreatment: "off",
+      comparisonTreatments: ["on"],
+      keyMetrics: ["m1"],
+      rule: "default",
+    });
+    // fmeV4EntityExtract flattens {entity, governance} to the entity's own fields + governance
+    expect(result).toEqual({ id: "e1", name: "checkout-experiment", governance: { status: "NONE", details: [] } });
+  });
+
+  it("create: forwards owners when present in body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", name: "checkout-experiment" },
+      governance: { status: "NONE", details: [] },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "env1",
+      body: {
+        parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+        name: "checkout-experiment",
+        startAt: "2025-06-01T12:00:00Z",
+        endAt: "2025-07-01T12:00:00Z",
+        baselineTreatment: "off",
+        comparisonTreatments: ["on"],
+        owners: [{ type: "USER", id: "u1" }],
+      },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toMatchObject({ owners: [{ type: "USER", id: "u1" }] });
+  });
+
+  it("create: omits the owners key entirely (not owners: undefined) when absent from body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", name: "checkout-experiment" },
+      governance: { status: "NONE", details: [] },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "env1",
+      body: {
+        parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+        name: "checkout-experiment",
+        startAt: "2025-06-01T12:00:00Z",
+        endAt: "2025-07-01T12:00:00Z",
+        baselineTreatment: "off",
+        comparisonTreatments: ["on"],
+      },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).not.toHaveProperty("owners");
+  });
+
+  const createBase = {
+    parent: { type: "FEATURE_FLAG", name: "checkout-flag" },
+    name: "checkout-experiment",
+    startAt: "2025-06-01T12:00:00Z",
+    endAt: "2025-07-01T12:00:00Z",
+    baselineTreatment: "off",
+    comparisonTreatments: ["on"],
+  };
+
+  async function createWithBody(extra: Record<string, unknown>) {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", name: "checkout-experiment" },
+      governance: { status: "NONE", details: [] },
+    });
+    await registry.dispatch(makeClient(mockRequest), "fme_experiment", "create", {
+      org_id: "o1",
+      project_id: "p1",
+      environment_id: "env1",
+      body: { ...createBase, ...extra },
+    });
+    return firstRequest(mockRequest);
+  }
+
+  it("create: forwards rule and tags when present in body", async () => {
+    const req = await createWithBody({ rule: "beta users", tags: [{ name: "backend" }, { name: "growth" }] });
+    expect(req.body).toMatchObject({ rule: "beta users", tags: [{ name: "backend" }, { name: "growth" }] });
+  });
+
+  it("create: defaults rule to \"default\" when omitted and omits tags", async () => {
+    const req = await createWithBody({});
+    expect(req.body).toMatchObject({ rule: "default" });
+    expect(req.body).not.toHaveProperty("tags");
+  });
+
+  it("create: defaults rule to \"default\" when rule is null", async () => {
+    const req = await createWithBody({ rule: null });
+    expect(req.body).toMatchObject({ rule: "default" });
+  });
+
+  it("create: forwards tags: [] as-is", async () => {
+    const req = await createWithBody({ tags: [] });
+    expect(req.body).toMatchObject({ tags: [] });
+  });
+
+  it("create: throws when environment_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment", "create", {
+        org_id: "o1",
+        project_id: "p1",
+        body: { parent: { type: "FEATURE_FLAG", name: "checkout-flag" }, name: "checkout-experiment" },
+      }),
+    ).rejects.toThrow(/environment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("update: PATCHes with merge-patch content type and only the fields present in body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1", status: "PAUSED" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { status: "PAUSED", description: null },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("PATCH");
+    expect(req.path).toBe("/fme/api/v4/experiments/e1");
+    expect(req.headers).toMatchObject({ "Content-Type": "application/merge-patch+json" });
+    expect(req.body).toEqual({ status: "PAUSED", description: null });
+  });
+
+  it("update: omits fields not present in body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: {}, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { endAt: "2025-08-01T12:00:00Z" },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ endAt: "2025-08-01T12:00:00Z" });
+  });
+
+  it("update: replaces owners when present in body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { owners: [{ type: "GROUP", identifier: "g1" }] },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ owners: [{ type: "GROUP", identifier: "g1" }] });
+  });
+
+  it("update: sends owners: null through as a clear", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { owners: null },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ owners: null });
+  });
+
+  it("update: sends owners: [] through as a clear", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { owners: [] },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ owners: [] });
+  });
+
+  it("update: forwards rule and replacement tags", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { rule: "beta users", tags: [{ name: "backend" }] },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ rule: "beta users", tags: [{ name: "backend" }] });
+  });
+
+  it("update: sends rule: null and tags: null through as clears", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { rule: null, tags: null },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ rule: null, tags: null });
+  });
+
+  it("update: sends tags: [] through as a clear and does not inject a default rule", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: { id: "e1" }, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { tags: [] },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ tags: [] });
+  });
+
+  it("delete: DELETEs to /fme/api/v4/experiments/{experiment_id}, is classified as destructive risk, and flattens an entity/governance envelope", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", name: "checkout-experiment", status: "ARCHIVED" },
+      governance: { status: "NONE", details: [] },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment", "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1/with slash",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("DELETE");
+    expect(req.path).toBe("/fme/api/v4/experiments/e1%2Fwith%20slash");
+    // fmeV4EntityExtract flattens {entity, governance} to the entity's own fields + governance,
+    // matching every other FME v4 mutation (create/update/fme_experiment_settings.delete) — a bare
+    // passthrough here would leak the {entity, governance} wrapper if the live response has one.
+    expect(result).toEqual({ id: "e1", name: "checkout-experiment", status: "ARCHIVED", governance: { status: "NONE", details: [] } });
+
+    const resource = findResource("fme_experiment");
+    expect(resource.operations.list).toBeDefined();
+    expect(resource.operations.get).toBeDefined();
+    expect(resource.operations.create).toBeDefined();
+    expect(resource.operations.update).toBeDefined();
+    expect(resource.operations.delete).toBeDefined();
+    expect(resource.operations.delete?.operationPolicy?.risk).toBe("destructive");
+  });
+
+  it("delete: returns a governance-only response unchanged when the live API has no entity to flatten", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment", "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+    });
+
+    expect(result).toEqual({ governance: { status: "NONE", details: [] } });
+  });
+});
+
+describe("fme_experiment_settings", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("get: routes to /fme/api/v4/experiments/{experiment_id}/settings and URL-encodes the id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      id: "e1",
+      source: "DEFAULT",
+      statisticalTestType: "SEQUENTIAL",
+      significanceThreshold: 0.05,
+      multipleComparisonCorrection: "GROUPWISE_HOCHBERG",
+      minimumSampleSize: 355,
+      reviewPeriod: "PT336H",
+      varianceReduction: { method: "NONE" },
+    });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment_settings", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1/with slash",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("GET");
+    expect(req.path).toBe("/fme/api/v4/experiments/e1%2Fwith%20slash/settings");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+  });
+
+  it("get: throws when experiment_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment_settings", "get", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/experiment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: throws when org_id/project_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment_settings", "get", { experiment_id: "e1" }),
+    ).rejects.toThrow("fme_experiment_settings: org_id and project_id are required (account is taken from config).");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("update: PATCHes with merge-patch content type, only the fields present in body, and flattens the entity/governance envelope", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", source: "EXPERIMENT_OVERRIDE", significanceThreshold: 0.01 },
+      governance: { status: "NONE", details: [] },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment_settings", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { significanceThreshold: 0.01, varianceReduction: null },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("PATCH");
+    expect(req.path).toBe("/fme/api/v4/experiments/e1/settings");
+    expect(req.headers).toMatchObject({ "Content-Type": "application/merge-patch+json" });
+    expect(req.body).toEqual({ significanceThreshold: 0.01, varianceReduction: null });
+    expect(result).toEqual({
+      id: "e1",
+      source: "EXPERIMENT_OVERRIDE",
+      significanceThreshold: 0.01,
+      governance: { status: "NONE", details: [] },
+    });
+  });
+
+  it("update: omits fields not present in body", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: {}, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment_settings", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { minimumSampleSize: 500 },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.body).toEqual({ minimumSampleSize: 500 });
+  });
+
+  it("delete: DELETEs to /fme/api/v4/experiments/{experiment_id}/settings, is classified as destructive risk, and flattens the envelope", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", source: "ORGANIZATION_DEFAULT" },
+      governance: { status: "NONE", details: [] },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment_settings", "delete", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("DELETE");
+    expect(req.path).toBe("/fme/api/v4/experiments/e1/settings");
+    expect(result).toEqual({ id: "e1", source: "ORGANIZATION_DEFAULT", governance: { status: "NONE", details: [] } });
+
+    const resource = findResource("fme_experiment_settings");
+    expect(resource.operations.list).toBeUndefined();
+    expect(resource.operations.get).toBeDefined();
+    expect(resource.operations.update).toBeDefined();
+    expect(resource.operations.delete).toBeDefined();
+    expect(resource.operations.delete?.operationPolicy?.risk).toBe("destructive");
+  });
+});
+
+describe("fme_experiment_alerting", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("get: routes to /fme/api/v4/experiments/{experiment_id}/alerting and URL-encodes the id", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ id: "e1", isEnabled: false });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment_alerting", "get", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1/with slash",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("GET");
+    expect(req.path).toBe("/fme/api/v4/experiments/e1%2Fwith%20slash/alerting");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    expect(result).toEqual({ id: "e1", isEnabled: false });
+  });
+
+  it("get: throws when experiment_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment_alerting", "get", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/experiment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("get: throws when org_id/project_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment_alerting", "get", { experiment_id: "e1" }),
+    ).rejects.toThrow("fme_experiment_alerting: org_id and project_id are required (account is taken from config).");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("update: PATCHes with merge-patch content type and flattens the entity/governance envelope", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      entity: { id: "e1", isEnabled: true },
+      governance: { status: "NONE", details: [] },
+    });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment_alerting", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { isEnabled: true },
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("PATCH");
+    expect(req.path).toBe("/fme/api/v4/experiments/e1/alerting");
+    expect(req.headers).toMatchObject({ "Content-Type": "application/merge-patch+json" });
+    expect(req.body).toEqual({ isEnabled: true });
+    expect(result).toEqual({ id: "e1", isEnabled: true, governance: { status: "NONE", details: [] } });
+  });
+
+  it("update: forwards isEnabled: false (not dropped as falsy)", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: {}, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment_alerting", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { isEnabled: false },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ isEnabled: false });
+  });
+
+  it("update: strips body keys other than isEnabled", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ entity: {}, governance: { status: "NONE", details: [] } });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment_alerting", "update", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      body: { isEnabled: true, id: "other", threshold: 0.5 },
+    });
+
+    expect(firstRequest(mockRequest).body).toEqual({ isEnabled: true });
+  });
+
+  it("update: throws when experiment_id or org_id/project_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment_alerting", "update", {
+        org_id: "o1",
+        project_id: "p1",
+        body: { isEnabled: true },
+      }),
+    ).rejects.toThrow(/experiment_id/);
+    await expect(
+      registry.dispatch(client, "fme_experiment_alerting", "update", { experiment_id: "e1", body: { isEnabled: true } }),
+    ).rejects.toThrow("fme_experiment_alerting: org_id and project_id are required (account is taken from config).");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("exposes only get and update, and declares isEnabled as the required update field", () => {
+    const resource = findResource("fme_experiment_alerting");
+    expect(resource.operations.list).toBeUndefined();
+    expect(resource.operations.create).toBeUndefined();
+    expect(resource.operations.delete).toBeUndefined();
+    expect(resource.operations.get).toBeDefined();
+    expect(resource.operations.update?.operationPolicy?.risk).toBe("low_write");
+    expect(resource.operations.update?.bodySchema?.fields).toEqual([
+      expect.objectContaining({ name: "isEnabled", type: "boolean", required: true }),
+    ]);
+  });
+});
+
+describe("fme_experiment_result", () => {
+  let registry: Registry;
+
+  beforeEach(() => {
+    registry = new Registry(makeConfig());
+  });
+
+  it("list: routes to /fme/api/v4/experiments/{experiment_id}/metric-results with account_id/organization_identifier/project_identifier params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], calculatedAt: null });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment_result", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1/with slash",
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.method).toBe("GET");
+    expect(req.path).toBe("/fme/api/v4/experiments/e1%2Fwith%20slash/metric-results");
+    expect(req.params).toMatchObject({
+      account_id: "test-account",
+      organization_identifier: "o1",
+      project_identifier: "p1",
+    });
+    // No environment_id param — the experiment already has exactly one environment.
+    expect(req.params).not.toHaveProperty("environment_id");
+  });
+
+  it("list: throws when experiment_id missing", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({});
+    const client = makeClient(mockRequest);
+
+    await expect(
+      registry.dispatch(client, "fme_experiment_result", "list", { org_id: "o1", project_id: "p1" }),
+    ).rejects.toThrow(/experiment_id/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("list: maps metric_ids/comparisons filters to query params", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({ data: [], calculatedAt: null });
+    const client = makeClient(mockRequest);
+
+    await registry.dispatch(client, "fme_experiment_result", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+      metric_ids: ["m1", "m2"],
+      comparisons: ["on"],
+    });
+
+    const req = firstRequest(mockRequest);
+    expect(req.params).toMatchObject({ metric_ids: ["m1", "m2"], comparisons: ["on"] });
+  });
+
+  it("list: extractor maps {data, calculatedAt} to {items, total, calculatedAt}", async () => {
+    const results = [
+      {
+        metricId: { id: "m1", name: null },
+        category: "KEY",
+        comparison: "off",
+        positive: true,
+        value: 0.0,
+        errorMargin: 0.0,
+        pvalue: null,
+        metricResultState: null,
+        impactLower: 0.0,
+        impactUpper: 0.0,
+        baselineMean: 1.0,
+        baselineSampleSize: 16,
+        comparisonSampleSize: 14,
+        varianceReduction: { status: "NOT_APPLIED", method: "NONE" },
+      },
+    ];
+    const mockRequest = vi.fn().mockResolvedValue({ data: results, calculatedAt: null });
+    const client = makeClient(mockRequest);
+
+    const result = (await registry.dispatch(client, "fme_experiment_result", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+    })) as { items: unknown[]; total: number; calculatedAt: string | null };
+
+    expect(result.items).toEqual(results);
+    expect(result.total).toBe(1);
+    expect(result.calculatedAt).toBeNull();
+  });
+
+  it("list: result is a closed {items, total, calculatedAt} — no raw data envelope survives", async () => {
+    const results = [{ metricId: { id: "m1", name: null }, category: "KEY", value: 0.5 }];
+    const mockRequest = vi.fn().mockResolvedValue({ data: results, calculatedAt: "2025-06-01T12:00:00Z" });
+    const client = makeClient(mockRequest);
+
+    const result = await registry.dispatch(client, "fme_experiment_result", "list", {
+      org_id: "o1",
+      project_id: "p1",
+      experiment_id: "e1",
+    });
+
+    expect(result).toEqual({ items: results, total: 1, calculatedAt: "2025-06-01T12:00:00Z" });
+  });
+
+  it("list: skips compaction so stat fields (value, pvalue, impact, sample sizes) survive harness_list's default compact", async () => {
+    const resource = findResource("fme_experiment_result");
+    expect(resource.operations.list?.skipCompact).toBe(true);
+
+    // Documents why: the generic compact whitelist would strip everything but metricId/category.
+    const row = {
+      metricId: { id: "m1", name: null },
+      category: "KEY",
+      comparison: "off",
+      value: 0.12,
+      pvalue: 0.03,
+      impactLower: 0.01,
+      impactUpper: 0.2,
+      baselineSampleSize: 16,
+      comparisonSampleSize: 14,
+    };
+    const [stripped] = compactItems([row]) as Record<string, unknown>[];
+    expect(stripped).not.toHaveProperty("value");
+    expect(stripped).not.toHaveProperty("pvalue");
+  });
+
+  it("is list-only: no get, create, update, or delete", () => {
+    const resource = findResource("fme_experiment_result");
+    expect(resource.operations.list).toBeDefined();
+    expect(resource.operations.get).toBeUndefined();
+    expect(resource.operations.create).toBeUndefined();
+    expect(resource.operations.update).toBeUndefined();
+    expect(resource.operations.delete).toBeUndefined();
   });
 });
 

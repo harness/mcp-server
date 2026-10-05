@@ -1548,15 +1548,40 @@ export function flattenTrafficType(item: Record<string, unknown>): void {
 
 /**
  * Public v4 paginated lists (`EnvironmentListResponse`, `TrafficTypeListResponse` / `RolloutStatusListResponse`):
- * `{ data, limit, offset, totalCount }`. Promote `data`→`items` and `totalCount`→`total`
- * so harness_list compact/output schema see a full total, not the current page length.
+ * `{ data, limit, offset, totalCount }`. Promote `data`→`items` and `totalCount`→`total`, and drop the rest of
+ * the raw envelope (`data`/`limit`/`offset`/`totalCount`) — otherwise it survives on the result alongside `items`
+ * and crosses the tool boundary uncompacted (harness_list's compact pass only touches `items`).
  */
 export const fmeV4PaginatedListExtract = (raw: unknown): unknown => {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const r = raw as Record<string, unknown>;
   if (!Array.isArray(r.data)) return raw;
   const total = typeof r.totalCount === "number" ? r.totalCount : r.data.length;
-  return { ...r, items: r.data, total };
+  return { items: r.data, total };
+};
+
+/**
+ * FME experiment metric-results (`{ data, calculatedAt }`) — not a normal pagination page, no
+ * `totalCount`. Promote `data`→`items`, drop `data` itself, and keep `calculatedAt` alongside.
+ */
+export const fmeExperimentResultExtract = (raw: unknown): unknown => {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const r = raw as Record<string, unknown>;
+  if (!Array.isArray(r.data)) return raw;
+  return { items: r.data, total: r.data.length, calculatedAt: r.calculatedAt ?? null };
+};
+
+/**
+ * Public v4 mutation envelopes (`ExperimentResponse`, `ExperimentSettingsResponse`, and other
+ * `{ entity, governance }` shapes): flatten `entity`'s fields to the top level and keep
+ * `governance` alongside them, so callers get the resource directly instead of having to reach
+ * into `.entity` — mirrors how `fmeV4PaginatedListExtract` promotes `data`→`items`.
+ */
+export const fmeV4EntityExtract = (raw: unknown): unknown => {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const r = raw as Record<string, unknown>;
+  if (r.entity === null || typeof r.entity !== "object" || Array.isArray(r.entity)) return raw;
+  return { ...(r.entity as Record<string, unknown>), governance: r.governance };
 };
 
 /** Extract FME feature flag list — passthrough with trafficType.id flattened on each item. */
@@ -2034,4 +2059,162 @@ export function yamlWriteBody(input: Record<string, unknown>): Record<string, un
   const out: Record<string, unknown> = { yaml: b.yaml };
   if (b.git_details !== undefined) out.git_details = b.git_details;
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// GitOps — AppProject mapping / Argo discovery / import / autocreate logs
+// ---------------------------------------------------------------------------
+
+/**
+ * v1 GetAppProjectMappingListByAgent returns `{ appProjMap: { <argoName>: Project } }`.
+ * harness_list expects `{ items, total }`. Flatten map keys into row objects.
+ */
+export function appProjMapExtract(raw: unknown): { items: unknown[]; total: number } {
+  if (!isRecord(raw)) return { items: [], total: 0 };
+  const map = raw.appProjMap;
+  if (!isRecord(map)) return { items: [], total: 0 };
+
+  const items: unknown[] = [];
+  for (const [argoproject, value] of Object.entries(map)) {
+    const proj = isRecord(value) ? value : {};
+    items.push({
+      argoproject,
+      orgIdentifier: proj.orgIdentifier ?? "",
+      projectIdentifier: proj.projectIdentifier ?? "",
+      autoCreateServiceEnv: proj.autoCreateServiceEnv ?? false,
+    });
+  }
+  return { items, total: items.length };
+}
+
+/** Flat discovery row — avoids forwarding the full AppProject proto. */
+function projectArgoProjectRow(item: unknown): Record<string, unknown> {
+  const rec = isRecord(item) ? item : {};
+  const meta = isRecord(rec.metadata) ? rec.metadata : {};
+  const spec = isRecord(rec.spec) ? rec.spec : {};
+  const row: Record<string, unknown> = {
+    name: String(meta.name ?? "").trim(),
+  };
+  const description = String(spec.description ?? "").trim();
+  if (description) row.description = description;
+  const createdAt = String(meta.creationTimestamp ?? "").trim();
+  if (createdAt) row.createdAt = createdAt;
+  return row;
+}
+
+/**
+ * AgentProjectService.List → harness_list discovery rows (name + light metadata).
+ * Always synthesize `total` (API often omits it).
+ */
+export function argoProjectListExtract(raw: unknown): { items: unknown[]; total: number; metadata?: unknown } {
+  if (Array.isArray(raw)) {
+    return { items: raw.map(projectArgoProjectRow), total: raw.length };
+  }
+  if (!isRecord(raw)) return { items: [], total: 0 };
+  const rawItems = Array.isArray(raw.items) ? raw.items : [];
+  const items = rawItems.map(projectArgoProjectRow);
+  const total = typeof raw.total === "number" ? raw.total : items.length;
+  return raw.metadata !== undefined
+    ? { items, total, metadata: raw.metadata }
+    : { items, total };
+}
+
+function countOrZero(v: unknown): number {
+  return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+/** Import response → flat MCP handoff (importRequestId + autoCreateCounts always present). */
+export function importReconcileExtract(raw: unknown): Record<string, unknown> {
+  const emptyCounts = { serviceCount: 0, environmentCount: 0, clusterLinkCount: 0 };
+  if (!isRecord(raw)) {
+    return { importRequestId: "", autoCreateCounts: emptyCounts };
+  }
+  const nested = isRecord(raw.reconcileAppResponse) ? raw.reconcileAppResponse : {};
+  const counts = isRecord(nested.autoCreateCounts) ? nested.autoCreateCounts : {};
+  const { reconcileAppResponse: _dropped, ...rest } = raw;
+  return {
+    ...rest,
+    importRequestId: String(raw.importRequestId ?? "").trim(),
+    autoCreateCounts: {
+      serviceCount: countOrZero(counts.serviceCount),
+      environmentCount: countOrZero(counts.environmentCount),
+      clusterLinkCount: countOrZero(counts.clusterLinkCount),
+    },
+  };
+}
+
+/**
+ * ListAutoCreateLogsResponse → harness_list shape.
+ * Preserves page aggregates (counted from returned logs, not DB-wide).
+ */
+export function autoCreateLogExtract(raw: unknown): Record<string, unknown> {
+  if (!isRecord(raw)) {
+    return { items: [], total: 0 };
+  }
+  const logs = Array.isArray(raw.logs) ? raw.logs : [];
+  const total = typeof raw.total === "number" ? raw.total : logs.length;
+  return {
+    items: logs,
+    total,
+    successServices: raw.successServices ?? 0,
+    failedServices: raw.failedServices ?? 0,
+    successEnvironments: raw.successEnvironments ?? 0,
+    failedEnvironments: raw.failedEnvironments ?? 0,
+    successClusterLinks: raw.successClusterLinks ?? 0,
+    failedClusterLinks: raw.failedClusterLinks ?? 0,
+  };
+}
+
+/**
+ * Project a `TimelineEventResponse` to its five documented fields, dropping the
+ * empty `actor` the backend emits for system-generated events.
+ *
+ * `message` is never truncated: there is no per-event get endpoint, so a trimmed
+ * message is unrecoverable (unlike an incident summary, which `harness_get`
+ * restores). Agents bound volume with `event_groups` and `size` instead.
+ */
+export function projectTimelineEvent(e: unknown): unknown {
+  if (!isRecord(e)) return e;
+  const out: Record<string, unknown> = {};
+  if (typeof e.eventId === "string") out.eventId = e.eventId;
+  if (typeof e.eventType === "string") out.eventType = e.eventType;
+  if (typeof e.timestamp === "number") out.timestamp = e.timestamp;
+  if (typeof e.actor === "string" && e.actor.length > 0) out.actor = e.actor;
+  if (typeof e.message === "string") out.message = e.message;
+  return out;
+}
+
+/**
+ * Map `CursorPaginatedResult<String, TimelineEventResponse>` onto the canonical
+ * list envelope.
+ *
+ * `total` can only be the page length — this endpoint builds the result with the
+ * 3-arg constructor, so `totalCount` is always null. `has_more` is therefore the
+ * only correct stop signal: the backend drops unrenderable events *after* the
+ * underlying query paged, so a page shorter than `pageSize` with more results
+ * pending is normal.
+ *
+ * Paired with `skipCompact: true` — the generic key whitelist keeps only
+ * `eventId` and `message`, dropping `eventType`, `actor`, and `timestamp` (which
+ * misses the case-sensitive timestamp-suffix pattern). Projecting here instead of
+ * via `compactItem` also makes compact and non-compact responses identical, which
+ * is right when there is nothing verbose to withhold.
+ */
+export function timelineListExtract(raw: unknown, input?: Record<string, unknown>): unknown {
+  if (!isRecord(raw)) return raw;
+  const items = Array.isArray(raw.results) ? raw.results.map(projectTimelineEvent) : [];
+  const hasMore = raw.hasMoreResults === true;
+  return {
+    items,
+    total: items.length,
+    pagination: {
+      cursor: typeof input?.cursor === "string" ? input.cursor : undefined,
+      // Suppressed on the terminal page: the backend echoes the last event's
+      // cursor even when hasMoreResults is false, so surfacing it unconditionally
+      // makes an agent's `while (next_cursor)` loop re-request the final page
+      // forever. Only ever emit a cursor that has a page behind it.
+      next_cursor: hasMore && typeof raw.nextPageCursor === "string" ? raw.nextPageCursor : undefined,
+      has_more: hasMore,
+    },
+  };
 }

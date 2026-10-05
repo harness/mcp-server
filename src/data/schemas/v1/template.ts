@@ -792,6 +792,14 @@ const schema: Record<string, any> = {
             "container": {
               "description": "Caller-side container overrides merged into the resolved template step. Applied for any V1 step template whose spec contains run, run-test, or background (including git-clone and build-and-push templates that wrap those steps).\n",
               "$ref": "#/definitions/template_v1/common/TemplateContainerOverlay"
+            },
+            "sourceStepType": {
+              "description": "Merge-time origin of an unresolved agent alias. Set to Agent when this template ref was produced from an agent identity. Used for CI metrics; not sent to lite-engine.\n",
+              "type": "string"
+            },
+            "sourceName": {
+              "description": "Identifier of the originating agent template when sourceStepType is set. First write wins so an outer custom agent is not overwritten by inner harnessAI.\n",
+              "type": "string"
             }
           },
           "$schema": "http://json-schema.org/draft-07/schema#"
@@ -1464,7 +1472,7 @@ const schema: Record<string, any> = {
             "idp": {
               "$ref": "#/definitions/template_v1/common/TemplateRef"
             },
-            "iacm": {
+            "infrastructure": {
               "$ref": "#/definitions/template_v1/common/TemplateRef"
             },
             "sto": {
@@ -2334,6 +2342,20 @@ const schema: Record<string, any> = {
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "user-groups": {
+            "description": "List of user group references.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
           "url": {
             "description": "Webhook URL.",
             "type": "string"
@@ -2381,6 +2403,20 @@ const schema: Record<string, any> = {
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "user-groups": {
+            "description": "List of user group references.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
           "api-key": {
             "description": "Datadog API key.",
             "type": "string"
@@ -2475,7 +2511,7 @@ const schema: Record<string, any> = {
                 },
                 {
                   "required": [
-                    "iacm"
+                    "infrastructure"
                   ]
                 },
                 {
@@ -2582,7 +2618,7 @@ const schema: Record<string, any> = {
                       },
                       {
                         "required": [
-                          "iacm"
+                          "infrastructure"
                         ]
                       },
                       {
@@ -2709,6 +2745,7 @@ const schema: Record<string, any> = {
               "steps": {
                 "type": "array",
                 "description": "List of steps to execute in the stage.",
+                "minItems": 1,
                 "items": {
                   "$ref": "#/definitions/template_v1/steps/unified/StepItems"
                 }
@@ -2806,7 +2843,8 @@ const schema: Record<string, any> = {
                   "cloud",
                   "shell",
                   "vm",
-                  "k8"
+                  "k8",
+                  "delegate"
                 ]
               },
               {
@@ -3667,7 +3705,14 @@ const schema: Record<string, any> = {
                   },
                   "all-infra": {
                     "description": "Deploy to all infrastructures in the environment. With a `deploy-to` runtime input sibling, every infrastructure is preselected in the run form; with no `deploy-to` sibling, deploys to all without prompting.",
-                    "type": "boolean"
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "$ref": "#/definitions/template_v1/common/Expression"
+                      }
+                    ]
                   },
                   "deploy-to": {
                     "description": "Infrastructure(s) to deploy to.",
@@ -3836,7 +3881,14 @@ const schema: Record<string, any> = {
               },
               "all-infra": {
                 "description": "Deploy to all infrastructures in the environment. With a `deploy-to` runtime input sibling, every infrastructure is preselected in the run form; with no `deploy-to` sibling, deploys to all without prompting.",
-                "type": "boolean"
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "$ref": "#/definitions/template_v1/common/Expression"
+                  }
+                ]
               },
               "deploy-to": {
                 "description": "Infrastructure(s) to deploy to.",
@@ -4007,7 +4059,14 @@ const schema: Record<string, any> = {
                   },
                   "all-env": {
                     "description": "Deploy to all environments in the group. With an `items` runtime input sibling, every environment is preselected in the run form; with no `items` sibling, deploys to all without prompting.",
-                    "type": "boolean"
+                    "oneOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "$ref": "#/definitions/template_v1/common/Expression"
+                      }
+                    ]
                   },
                   "parallel": {
                     "description": "Execute environments in parallel (all at once). Defaults to false, so environments run one at a time (serially) unless set to true.",
@@ -4554,7 +4613,7 @@ const schema: Record<string, any> = {
                 },
                 {
                   "required": [
-                    "iacm"
+                    "infrastructure"
                   ]
                 },
                 {
@@ -4725,7 +4784,7 @@ const schema: Record<string, any> = {
                       },
                       {
                         "required": [
-                          "iacm"
+                          "infrastructure"
                         ]
                       },
                       {
@@ -5003,6 +5062,14 @@ const schema: Record<string, any> = {
                     ]
                   }
                 }
+              },
+              "sourceStepType": {
+                "description": "Merge-time origin of an expanded step. Set to Agent when this run was produced from an agent template. Used for CI metrics; not sent to lite-engine.\n",
+                "type": "string"
+              },
+              "sourceName": {
+                "description": "Identifier of the originating agent template when sourceStepType is set. First write wins so an outer custom agent is not overwritten by inner harnessAI.\n",
+                "type": "string"
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"

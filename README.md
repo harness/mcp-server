@@ -2,7 +2,7 @@
 
 [![MCP Toplist](https://mcptoplist.com/badge/glama%2Fharness%2Fmcp-server.svg)](https://mcptoplist.com/server/glama%2Fharness%2Fmcp-server)
 
-An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 252 resource types.
+An MCP (Model Context Protocol) server that gives AI agents full access to the Harness.io platform through 11 consolidated tools and 260 resource types.
 
 ## Why Use This MCP Server
 
@@ -10,13 +10,8 @@ Most MCP servers map one tool per API endpoint. For a platform as broad as Harne
 
 This server is built differently:
 
-<<<<<<< Updated upstream
-- **11 tools, 252 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 41 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible coverage is available when you need inventory and playbook data.
-=======
-- **11 tools, 252 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
-- **Full platform coverage.** 41 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
->>>>>>> Stashed changes
+- **11 tools, 260 resource types.** A registry-based dispatch system routes `harness_list`, `harness_get`, `harness_create`, etc. to any Harness resource — pipelines, services, environments, orgs, projects, feature flags, cost data, and more. The LLM picks from 11 tools instead of hundreds.
+- **Full platform coverage.** 42 default toolsets spanning CI/CD, GitOps, Feature Flags, Cloud Cost Management, Security Testing, Chaos Engineering, Database DevOps, Internal Developer Portal, Software Supply Chain, Infrastructure as Code Management, Release Management, Governance, Service Overrides, Knowledge Graph, and more. Opt-in Ansible and observability-evaluation coverage is available when needed.
 - **Multi-project workflows out of the box.** Agents discover organizations and projects dynamically — no hardcoded env vars needed. Ask "show failed executions across all projects" and the agent can navigate the full account hierarchy.
 - **35 prompt templates.** Pre-built prompts for common workflows: build & deploy apps end-to-end, debug failed pipelines, review DORA metrics, triage vulnerabilities, optimize cloud costs, audit access control, plan feature flag rollouts, review pull requests, approve pending pipelines, and more.
 - **Works everywhere.** Stdio transport for local clients (Claude Desktop, Cursor, Devin Desktop), HTTP transport for remote/shared deployments, Docker and Kubernetes ready.
@@ -943,7 +938,7 @@ For v0 pipelines, use this sequence to reduce execution-time input errors:
   - **Constraint:** shorthand expansion is skipped when `inputs.build` is already present (explicit `build` wins).
 3. **Execute the run**
   - `harness_execute(resource_type="pipeline", action="run", resource_id="<pipeline_id>", ...)`
-  - For Git-backed pipelines whose YAML should be loaded from a non-default branch, pass `params.pipeline_branch` (sent to Harness as `pipelineBranchName`):
+  - For Git-backed pipelines whose YAML should be loaded from a non-default branch, pass `params.pipeline_branch` (sent to Harness as `branch`). This explicit definition selector takes precedence over the `params.branch` alias. `inputs.branch` independently selects the CI codebase branch:
 
     ```json
     {
@@ -1266,11 +1261,7 @@ Harness pipelines can be stored in three ways:
 
 ## Resource Types
 
-<<<<<<< Updated upstream
-252 resource types organized across 41 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
-=======
-252 resource types organized across 45 registered toolset definitions; 41 are default-enabled. Each resource type supports a subset of CRUD operations and optional execute actions.
->>>>>>> Stashed changes
+260 resource types organized across 42 toolsets. Each resource type supports a subset of CRUD operations and optional execute actions.
 
 ### Platform
 
@@ -1550,13 +1541,15 @@ IaCM list responses expose `page_count` as the count for the current page only (
 | -------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `pull_request` | x    | x   | x      | x      |        | `close`, `merge` |
 | `pr_reviewer`  | x    |     | x      |        |        | `submit_review` |
-| `pr_comment`   |      |     | x      | x      | x      |                 |
+| `pr_comment`   |      |     | x      | x      | x      | `resolve`, `unresolve` |
 | `pr_check`     | x    |     |        |        |        |                 |
 | `pr_activity`  | x    |     |        |        |        |                 |
 
 Use `harness_execute(resource_type="pull_request", action="close", ...)` for an explicit close operation. `harness_update` also accepts `body.state` (`open` or `closed`) and routes state changes to the dedicated Harness Code PR state endpoint; send title/description edits in a separate update call.
 
 Use `harness_list(resource_type="pr_activity", filters={type: ["comment", "code-comment"]}, ...)` to read PR comments. Use `pr_comment` for comment write operations.
+
+Use `harness_execute(resource_type="pr_comment", action="resolve", ...)` to resolve a comment thread and `action="unresolve"` to reopen it; neither takes a body. `comment_id` must be a row's `id` from `pr_activity` where that row's `parent_id` is `null`; the API rejects reply ids.
 
 
 ### Release Management
@@ -1661,6 +1654,10 @@ Read progress with `harness_get(resource_type="vibe_app_lifecycle", resource_id=
 | `fme_segment_definition`            | x    | x   | x      | x      | x      | `list_keys`, `add_keys`, `remove_keys`    |
 | `fme_metric`                        | x    | x   | x      | x      | x      |                                           |
 | `fme_event_type`                    | x    | x   |        |        |        |                                           |
+| `fme_experiment`                    | x    | x   | x      | x      | x      |                                           |
+| `fme_experiment_settings`           |      | x   |        | x      | x      |                                           |
+| `fme_experiment_alerting`           |      | x   |        | x      |        |                                           |
+| `fme_experiment_result`             | x    |     |        |        |        |                                           |
 
 
 **FME (Split.io) resources** — most `fme_`* resources are **Harness-native only**: every call requires `org_id`+`project_id` and hits Harness-native endpoints (standard `HARNESS_API_KEY`/`HARNESS_BASE_URL`, same auth as every other `harness_*` resource). Three resources — `fme_workspace`, `fme_identity`, `fme_segment_keys` — still support the deprecated legacy `workspace_id` (Split.io API, `api.split.io`) contract because no Harness-native equivalent exists for them yet.
@@ -1680,26 +1677,34 @@ Read progress with `harness_get(resource_type="vibe_app_lifecycle", resource_id=
 - **`fme_segment_definition`** — Native only. CRUD plus execute `list_keys`/`add_keys`/`remove_keys`. Update is description only. Delete fails with `hasDependents` while keys remain. Has no `enable`/`disable`/`change_request` actions (see "Removed in this change" below).
 - **`fme_metric`** — Harness-native only (no legacy `workspace_id` support). `list`/`get`/`create`/`update`/`delete` are wired to `/fme/api/v4/metrics` (`list`'s `harness_list` `size` maps to `limit`). `create` requires `spread` even though the backend `CreateMetricRequest` keeps it optional (default `PER`) — an MCP-side-only stricter contract, since omitting it silently changes a `RATE` metric's semantics. `update` is JSON Merge Patch; `name`/`trafficType` are immutable and not accepted. `delete` is a permanent hard delete (no archive/restore) — classified `destructive`.
 - **`fme_event_type`** — Harness-native only (no legacy `workspace_id` support). Read-only: `list`/`get` are wired to `/fme/api/v4/event-types`; `id` is the event name. Only event types with events in the last 30 days are visible; `get` returns a 404 for an event type outside the requesting workspace's traffic-type scope, or idle longer than 30 days. List filters: `name` (substring), `traffic_type` (by ID or name), `offset`/`limit` (`harness_list` `size` maps to `limit`). Use this to discover real event type IDs before referencing one in `fme_metric`'s `baseEventTypes`/`filterEventType` or `event_type_ids` filter, instead of guessing an ID.
+- **`fme_experiment`** — Harness-native only (no legacy `workspace_id` support). CRUD wired to `/fme/api/v4/experiments`. `list` requires `parent_type` (`FEATURE_FLAG`, `AI_CONFIG`; `CONFIG` returns 404) and defaults to `ACTIVE` experiments unless `status` is passed. `create` requires `environment_id` (query param) plus `parent`/`name`/`startAt`/`endAt`/`baselineTreatment`/`comparisonTreatments` in the body; the parent must exist in that environment. `update` is JSON Merge Patch; `parent` and `environment` cannot be changed. `delete` is a permanent hard delete — classified `destructive`. Optional `owners` on create/update: each entry is `{type: "USER", id or email}` or `{type: "GROUP", identifier}`. Optional `rule` (targeting-rule label results are scoped to; create defaults to `"default"` when omitted, update `null` clears it) and `tags` (`[{name}]`; update replaces the list, `null`/`[]` clears) on create/update. `list` accepts a `tags` array filter (experiments with any of the tag names); items include `tags` and `rule`.
+- **`fme_experiment_settings`** — Statistical & monitoring settings for a single experiment (test type, significance threshold, multiple comparison correction, minimum sample size, review period, variance reduction). `get`/`update`/`delete` only — 1:1 with the experiment, no `list`. `get` always returns applied settings (own override or organization defaults) and never 404s except when the experiment itself doesn't exist. `update` is JSON Merge Patch and implicitly creates the experiment-level override. `delete` reverts to organization defaults (idempotent) — classified `destructive` even though it's non-permanent.
+- **`fme_experiment_alerting`** — Whether a single experiment is subscribed to significance-regression alerting. `get`/`update` only. `get` returns `{id, isEnabled}` and reports `isEnabled: false` when no alert policy exists; it only 404s when the experiment itself doesn't exist. `update` is JSON Merge Patch with a required `isEnabled` boolean.
+- **`fme_experiment_result`** — Evaluated per-metric results for an experiment's latest calculation run. `list` only (no `get` — results have no identifier of their own). One row per (metric, comparison treatment) pair across all metric categories. Optional filters: `metric_ids`, `comparisons`. Reflects only the latest run — no historical access.
 
 In single-user/self-hosted mode, legacy-mode auth (for `fme_workspace`/`fme_identity`/`fme_segment_keys`) uses a Bearer token from `HARNESS_FME_API_KEY`, falling back to a non-placeholder `HARNESS_API_KEY`. `HARNESS_FME_API_KEY` may be a legacy Split admin key or an FME-entitled Harness PAT/SAT, but it is rejected in `multi-user` mode so shared deployments cannot override each session user's credential. Hosted OAuth/service-routing credentials for Harness platform APIs do not authenticate direct Split.io requests. Use `fme_traffic_type` to discover traffic type IDs, `fme_identity` to create/update identity attributes, and `fme_standard_segment`/`fme_segment_keys` to inspect standard segments and add member keys. `fme_rule_based_segment` provides CRUD for targeting segments, while `fme_rule_based_segment_definition` manages environment-specific segment rules with enable/disable and change request approval flows.
 
 ### GitOps
 
 
-| Resource Type              | List | Get | Create | Update | Delete | Execute Actions |
-| -------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
-| `gitops_agent`             | x    | x   |        |        |        |                 |
-| `gitops_application`       | x    | x   |        |        |        | `sync`          |
-| `gitops_cluster`           | x    | x   |        |        |        |                 |
-| `gitops_repository`        | x    | x   |        |        |        |                 |
-| `gitops_applicationset`    | x    | x   |        |        |        |                 |
-| `gitops_repo_credential`   | x    | x   |        |        |        |                 |
-| `gitops_app_event`         | x    |     |        |        |        |                 |
-| `gitops_pod_log`           |      | x   |        |        |        |                 |
-| `gitops_managed_resource`  | x    |     |        |        |        |                 |
-| `gitops_resource_action`   | x    |     |        |        |        |                 |
-| `gitops_dashboard`         |      | x   |        |        |        |                 |
-| `gitops_app_resource_tree` |      | x   |        |        |        |                 |
+| Resource Type                | List | Get | Create | Update | Delete | Execute Actions |
+| ---------------------------- | ---- | --- | ------ | ------ | ------ | --------------- |
+| `gitops_agent`               | x    | x   |        |        |        |                 |
+| `gitops_argo_project`        | x    |     |        |        |        |                 |
+| `gitops_app_project_mapping` | x    |     | x      | x      | x      | `import`        |
+| `gitops_autocreate_log`      | x    |     |        |        |        |                 |
+| `gitops_application`         | x    | x   |        |        |        | `sync`          |
+| `gitops_cluster`             | x    | x   |        |        |        |                 |
+| `gitops_repository`          | x    | x   |        |        |        |                 |
+| `gitops_applicationset`      | x    | x   |        |        |        |                 |
+| `gitops_repo_credential`     | x    | x   |        |        |        |                 |
+| `gitops_app_event`           | x    |     |        |        |        |                 |
+| `gitops_pod_log`             |      | x   |        |        |        |                 |
+| `gitops_managed_resource`    | x    |     |        |        |        |                 |
+| `gitops_resource_action`     | x    |     |        |        |        |                 |
+| `gitops_dashboard`           |      | x   |        |        |        |                 |
+| `gitops_app_resource_tree`   |      | x   |        |        |        |                 |
+| `gitops_cluster_link`        | x    |     | x      |        | x      |                 |
 
 
 ### Chaos Engineering
@@ -1761,6 +1766,10 @@ In single-user/self-hosted mode, legacy-mode auth (for `fme_workspace`/`fme_iden
 | `cost_recommendation_stats`  |      | x   |        |        |        |                                                                                |
 | `cost_recommendation_detail` |      | x   |        |        |        |                                                                                |
 | `cost_commitment`            |      | x   |        |        |        |                                                                                |
+| `ai_budget`                  | x    | x   | x      | x      | x      |                                                                                |
+| `ai_budget_overview`         |      | x   |        |        |        |                                                                                |
+| `ai_budget_consumption`      | x    |     |        |        |        |                                                                                |
+| `ai_budget_override_request` | x    | x   | x      |        |        | `approve`, `reject`                                                            |
 
 
 ### Software Engineering Insights (SEI)
@@ -1836,7 +1845,7 @@ Security exemption execute workflow:
 | Resource Type     | List | Get | Create | Update | Delete | Execute Actions |
 | ----------------- | ---- | --- | ------ | ------ | ------ | --------------- |
 | `user`            | x    | x   |        |        |        |                 |
-| `user_group`      | x    | x   | x      |        | x      |                 |
+| `user_group`      | x    | x   | x      | x      | x      |                 |
 | `service_account` | x    | x   | x      |        | x      |                 |
 | `role`            | x    | x   | x      |        | x      |                 |
 | `role_assignment` | x    |     | x      |        |        |                 |
@@ -1890,7 +1899,7 @@ Security exemption execute workflow:
 | `debug-pipeline-failure`       | Analyze a failed execution: accepts an execution ID, pipeline ID, or Harness URL. Gets stage/step breakdown, failure details, delegate info, and failed step logs via `harness_diagnose`, then provides root cause analysis and suggested fixes. Automatically follows chained pipeline failures.                                                                                     | `executionId` (optional), `projectId` (optional)                                                     |
 | `pipeline_summarizer`          | Fetch and summarize ALL step logs from a pipeline execution. Uses `harness_diagnose` with `include_logs: true, include_all_step_logs: true` to get every step's log, then presents a table with Step Name, Status, Duration, and What Happened (log-based summary). Does NOT skip any steps.                                                                                          | `executionId` (optional), `projectId` (optional)                                                     |
 | `create-pipeline`              | Generate a new pipeline YAML from natural language requirements, reviewing existing resources for context                                                                                                                                                                                                                                                                             | `description` (required), `projectId` (optional)                                                     |
-| `create-agent`                 | Interactively build a Harness AI agent — check existing agents, gather requirements, generate agent YAML spec using the agent-pipeline schema, confirm with user, then create or update via `harness_create`/`harness_update`                                                                                                                                                         | `agent_name` (required), `task_description` (required), `org_id` (optional), `project_id` (optional) |
+| `create-agent`                 | Interactively build a Harness AI agent — check existing agents (detecting current `agent.uses` vs. legacy `agent.step.group.steps` spec format when updating), gather requirements, generate the agent spec in the appropriate format, confirm with user, then create or update via `harness_create`/`harness_update`                                                                | `agent_name` (required), `task_description` (required), `org_id` (optional), `project_id` (optional) |
 | `onboard-service`              | Walk through onboarding a new service with environments and a deployment pipeline                                                                                                                                                                                                                                                                                                     | `serviceName` (required), `projectId` (optional)                                                     |
 | `dora-metrics-review`          | Review DORA metrics (deployment frequency, change failure rate, MTTR, lead time) with Elite/High/Medium/Low classification and improvement recommendations                                                                                                                                                                                                                            | `teamRefId` (optional), `dateStart` (optional), `dateEnd` (optional)                                 |
 | `setup-gitops-application`     | Guide through onboarding a GitOps application — verify agent, cluster, repo, and create the application                                                                                                                                                                                                                                                                               | `agentId` (required), `projectId` (optional)                                                         |
@@ -1951,19 +1960,17 @@ Security exemption execute workflow:
 | `schema:///trigger`                            | Harness trigger JSON Schema                                      | `application/schema+json` |
 | `schema:///pipeline_v1` **(Alpha)**            | Harness V1 pipeline JSON Schema (simplified stages/steps format) | `application/schema+json` |
 | `schema:///agent-pipeline`                     | Harness AI agent pipeline JSON Schema                            | `application/schema+json` |
+| `agent-docs:///legacy-format`                  | Legacy agent spec format reference (`agent.step.group.steps` / `PLUGIN_TASK`), read by the `create-agent` prompt when updating an existing legacy-format agent | `text/markdown`           |
 
 
 ## Toolset Filtering
 
-<<<<<<< Updated upstream
-By default, 41 of 45 toolsets are enabled. Three toolsets are opt-in and excluded from the defaults:
-=======
-By default, 41 of 45 toolsets are enabled. Four toolsets are opt-in and excluded from the defaults:
->>>>>>> Stashed changes
+By default, 42 of 46 toolsets are enabled. Four toolsets are opt-in and excluded from the defaults:
 
 - **`ansible`** — Harness Ansible (inventories, playbooks, hosts, activity). Opt-in because it is project-scoped and adds concepts many users do not need.
 - **`autonomous_work`** — Development Harness (autonomous work). Opt-in; see toolset description for scope.
-- **`registries-v3`** — Harness Artifact Registry v3 (packages, versions, files, metadata, scans, firewall exceptions including create). Opt-in until a v3 registry list lands, so agents don't have to disambiguate between v1 registries/artifacts and v3 packages/versions.
+- **`observability-evaluations`** — Scheduled production-telemetry evaluation rules. Opt-in because it depends on the deployed scoring control plane.
+- **`registries-v3`** — Harness Artifact Registry v3 (packages, versions, files, metadata, scans, firewall exceptions). Opt-in until v3 writes land, so agents don't have to disambiguate between v1 registries/artifacts and v3 packages/versions.
 
 ### Adding toolsets with `+` prefix
 
@@ -2016,14 +2023,14 @@ Available toolset names:
 | `audit`                 | audit_event                                                                                                                                                                                                                                                                                     |
 | `delegates`             | delegate, delegate_token                                                                                                                                                                                                                                                                        |
 | `repositories`          | repository, branch, commit, file_content, tag, repo_rule, space_rule                                                                                                                                                                                                                            |
-| `registries`            | registry, artifact, artifact_version, artifact_file, quarantine                                                                                                                                                                                                                                 |
+| `registries`            | registry, artifact, artifact_version, artifact_file                                                                                                                                                                                                                                             |
 | `file_store`            | file_store                                                                                                                                                                                                                                                                                      |
 | `templates`             | template                                                                                                                                                                                                                                                                                        |
 | `dashboards`            | dashboard, dashboard_data                                                                                                                                                                                                                                                                       |
 | `idp`                   | idp_entity, scorecard, scorecard_check, scorecard_stats, scorecard_check_stats, idp_score, idp_workflow, idp_tech_doc                                                                                                                                                                           |
 | `pull-requests`         | pull_request, pr_reviewer, pr_comment, pr_check, pr_activity                                                                                                                                                                                                                                    |
-| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys, fme_segment, fme_segment_definition, fme_metric, fme_event_type                       |
-| `gitops`                | gitops_agent, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree                                               |
+| `feature-flags`         | fme_workspace, fme_environment, fme_feature_flag, fme_feature_flag_definition, fme_rollout_status, fme_rule_based_segment, fme_rule_based_segment_definition, fme_traffic_type, fme_identity, fme_standard_segment, fme_segment_keys, fme_segment, fme_segment_definition, fme_metric, fme_event_type, fme_experiment, fme_experiment_settings, fme_experiment_alerting, fme_experiment_result                       |
+| `gitops`                | gitops_agent, gitops_argo_project, gitops_app_project_mapping, gitops_autocreate_log, gitops_application, gitops_cluster, gitops_repository, gitops_applicationset, gitops_repo_credential, gitops_app_event, gitops_pod_log, gitops_managed_resource, gitops_resource_action, gitops_dashboard, gitops_app_resource_tree, gitops_cluster_link |
 | `chaos`                 | chaos_experiment, chaos_experiment_run, chaos_experiment_variable, chaos_component_variable, chaos_input_set, chaos_experiment_template, chaos_probe, chaos_probe_in_run, chaos_probe_template, chaos_infrastructure, chaos_k8s_infrastructure, chaos_enabled_infrastructure, chaos_environment, chaos_hub, chaos_hub_fault, chaos_fault, chaos_fault_template, chaos_fault_experiment_run, chaos_action, chaos_action_template, chaos_loadtest, chaos_service, chaos_application_map, discovered_agent, discovered_namespace, discovered_service, discovered_network_map, chaos_guard_condition, chaos_guard_rule, chaos_recommendation, chaos_risk, chaos_dr_test, scanned_risk, chaos_risk_rule, chaos_risk_scan |
 | `ccm`                   | cost_perspective, cost_breakdown, cost_timeseries, cost_summary, cost_recommendation, cost_anomaly, cost_anomaly_summary, cost_category, cost_account_overview, cost_filter_value, cost_recommendation_stats, cost_recommendation_detail, cost_commitment                                       |
 | `sei`                   | sei_metric, sei_productivity_metric, sei_dora_metric, sei_team, sei_team_detail, sei_org_tree, sei_org_tree_detail, sei_business_alignment, sei_ai_usage, sei_ai_adoption, sei_ai_impact, sei_ai_raw_metric                                                                                     |
@@ -2031,6 +2038,7 @@ Available toolset names:
 | `evidence-vault`        | attestation                                                                                                                                                                                                                                                                                     |
 | `sto`                   | security_issue, security_issue_filter, security_exemption, remediation_diff                                                                                                                                                                                                                     |
 | `dbops`                 | database_schema, database_instance, database_snapshot_object, database_llm_authoring_pipeline                                                                                                                                                                                                   |
+| `autonomous_work` *(opt-in)* | work_item, work_item_resume, work_item_approve, work_timeline, work_budget, work_phase, work_phase_artifact, work_artifact, budget, budget_grant, budget_usage, work_class, work_trigger, capability, risk_evaluator, team, member, member_template, software_component, content_source_connector |
 | `access_control`        | user, user_group, service_account, role, role_assignment, resource_group, permission                                                                                                                                                                                                            |
 | `governance`            | policy, policy_set, policy_evaluation                                                                                                                                                                                                                                                           |
 | `freeze`                | freeze_window, global_freeze                                                                                                                                                                                                                                                                    |
@@ -2039,11 +2047,13 @@ Available toolset names:
 | `knowledge-graph`       | kg_queryable_type_summary, kg_grammar, hql_query                                                                                                                                                                                                                                                |
 | `semantic-layer`        | kg_type, kg_related_type                                                                                                                                                                                                                                                                        |
 | `ai-evals`              | eval_dataset, eval_dataset_item, evaluation, eval_run, eval_run_item, eval_run_by_eval, eval_metric, eval_metric_set, eval_metric_set_entry, eval_suite, eval_suite_evaluation, eval_suite_run, eval_target, eval_annotation, eval_analytics, eval_git_settings, eval_registry_item, eval_git_registration, online_eval |
+| `observability-evaluations` *(opt-in)* | observability_eval                                                                                                                                                                                                                                                               |
 | `iacm`                  | iacm_workspace, iacm_variable_set, iacm_resource, iacm_module, iacm_provider, iacm_workspace_costs, iacm_activity_resource_change                                                                                                                                                               |
 | `ansible` *(opt-in)*    | ansible_inventory, ansible_playbook, ansible_host, ansible_host_activity, ansible_activity                                                                                                                                                                                                      |
 | `registries-v3` *(opt-in)* | package_v3, version_v3, file_v3, registry_metadata_v3, package_metadata_v3, version_metadata_v3, file_metadata_v3, metadata_key_v3, metadata_value_v3, artifact_scan_v3, bulk_scan_evaluation_v3, firewall_exception_v3, firewall_exception_version_v3                                       |
 | `release-management`  | release_process, release_activity, release, release_execution_phase, release_execution_task, release_execution_activity, release_input, release_execution_phase_input, release_execution_phase_output, release_execution_activity_input, release_execution_activity_output |
 | `vibe`                | vibe_project, vibe_app_lifecycle |
+| `timelines`           | activity_timeline |
 
 
 ## Architecture
@@ -2061,13 +2071,8 @@ Available toolset names:
                           |
                  +--------v---------+
                 |    Registry       |  <-- Declarative resource definitions
-<<<<<<< Updated upstream
-                |  41 Toolsets      |      (data files, not code)
-                |  252 Resource Types|
-=======
-                | 45 Toolsets (41 default) |
-                |  252 Resource Types|
->>>>>>> Stashed changes
+                | 46 Toolsets (42 default) |
+                |  260 Resource Types|
                  +--------+---------+
                           |
                  +--------v---------+
@@ -2367,7 +2372,7 @@ The Harness MCP server pairs well with **[Harness Skills](https://github.com/har
 | `Read-only mode is enabled ... operations are not allowed`                       | `HARNESS_READ_ONLY=true` blocks create/update/delete/execute                                         | Set `HARNESS_READ_ONLY=false` if write operations are intended                                                                       |
 | Pipeline run fails pre-flight with unresolved required inputs                    | Provided `inputs` did not cover required runtime placeholders                                        | Fetch `runtime_input_template`, supply missing simple keys, or use `input_set_ids` for structural inputs                             |
 | Pipeline CI shorthand (`branch`, `tag`, `pr_number`, `commit_sha`) did not apply | `inputs.build` was already provided, so shorthand expansion was intentionally skipped                | Remove `inputs.build` to use shorthand expansion, or keep full explicit `build` structure                                            |
-| Pipeline run loaded the wrong YAML revision                                     | The pipeline definition is stored in Git and the run did not specify the desired pipeline branch      | Pass `params.pipeline_branch` on the `run` action; this maps to Harness `pipelineBranchName`                                         |
+| Pipeline run loaded the wrong YAML revision                                     | The pipeline definition is stored in Git and the run did not specify the desired pipeline branch      | Pass `params.pipeline_branch` on the `run` action; this maps to Harness `branch`                                                     |
 | `wait: true` returned `_wait.error`                                              | The pipeline trigger succeeded, but server-side polling failed                                       | Recheck the `execution_id` with `harness_get(resource_type="execution", ...)` before deciding whether to rerun                        |
 | `wait: true` returned `execution_timed_out: true`                                | The execution did not reach a terminal status before `wait_timeout_seconds`                          | Use the returned `execution_id` to recheck status; wait for a terminal status before running `harness_diagnose`                       |
 | Execution logs are empty or blob downloads return 403                           | Harness-hosted log blob URLs require the configured Harness client/auth path, especially for internal or self-managed hosts | Keep `HARNESS_BASE_URL` pointed at the target Harness host and use `harness_get(resource_type="execution_log", ...)` or `harness_diagnose(..., include_logs=true)` rather than bypassing the MCP client |

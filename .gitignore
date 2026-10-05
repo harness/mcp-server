@@ -4,6 +4,7 @@ node_modules/
 build/
 dist/
 .env
+.env.local
 *.tgz
 *.mcpb
 .DS_Store

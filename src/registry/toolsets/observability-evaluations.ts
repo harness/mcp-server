@@ -254,7 +254,7 @@ async function validateMetricSet(ctx: PreflightContext, input: JsonRecord, metri
     const kind = nonEmptyString(metric.kind) ?? nonEmptyString(config.kind);
     if (!type || UNSUPPORTED_METRIC_TYPES.has(type)) {
       throw new Error(
-        `Metric ${metricName} has type ${type ?? "unknown"}, which cannot be positively validated for observability evaluation.`,
+        `Metric ${metricName} has type ${type ?? "unknown"}, which cannot be positively validated for an observability eval.`,
       );
     }
     if (kind === "spec_grounding") {
@@ -341,7 +341,7 @@ const createOnlineEvalConfigSchema: BodySchema = {
 
 const updateOnlineEvalConfigSchema: BodySchema = {
   description:
-    "Patch an observability evaluation rule. name, enabled, and target_id are header edits; changing scope, metric_set_id, selector_filters, or sampling_percentage creates a new immutable config version. Set enabled=false to disable.",
+    "Patch an observability eval. name, enabled, and target_id are header edits; changing scope, metric_set_id, selector_filters, or sampling_percentage creates a new immutable config version. Set enabled=false to disable.",
   fields: [
     { name: "name", type: "string", required: false, description: "New name" },
     { name: "enabled", type: "boolean", required: false, description: "Set false to disable; set true only after strict runtime validation" },
@@ -360,10 +360,10 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
   optIn: true,
   resources: [
     {
-      resourceType: "observability_evaluation_rule",
-      displayName: "Observability Evaluation Rule",
+      resourceType: "observability_eval",
+      displayName: "Observability Eval",
       description:
-        "Persistent rule for evaluating sampled production telemetry. Material edits create immutable versions; disabling stops future scoring without deleting prior scores.",
+        "Persistent observability eval of sampled production telemetry. Material edits create immutable versions; disabling stops future scoring without deleting prior scores.",
       toolset: "observability-evaluations",
       scope: "project",
       scopeOptional: true,
@@ -384,7 +384,7 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: { page: "page", size: "limit" },
           responseExtractor: aiEvalsListExtract,
-          description: "List observability evaluation rules",
+          description: "List observability evals",
         },
         get: {
           method: "GET",
@@ -392,7 +392,7 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
           pathBuilder: configPath,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           responseExtractor: passthrough,
-          description: "Get an observability evaluation rule",
+          description: "Get an observability eval",
         },
         create: {
           method: "POST",
@@ -403,7 +403,7 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
           bodyBuilder: input => input.body ?? {},
           bodySchema: createOnlineEvalConfigSchema,
           responseExtractor: passthrough,
-          description: "Create a validated observability evaluation rule",
+          description: "Create a validated observability eval",
         },
         update: {
           method: "PATCH",
@@ -422,7 +422,7 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
           pathBuilder: configPath,
           operationPolicy: { risk: "destructive", retryPolicy: "do_not_retry" },
           responseExtractor: passthrough,
-          description: "Permanently delete an observability evaluation rule",
+          description: "Permanently delete an observability eval",
         },
       },
     },

@@ -12,7 +12,9 @@ import type { FilterFieldSpec } from "./types.js";
  *
  * - Case-insensitive match → rewrite to the declared enum value
  * - Comma-separated multi-values are canonicalized token-by-token
- * - Non-string values are left untouched (typed filters stay as-is)
+ * - Arrays of strings are canonicalized element-by-element (some list filters,
+ *   e.g. fme_experiment's status, are passed as arrays rather than CSV strings)
+ * - Other non-string values are left untouched (typed filters stay as-is)
  *
  * Values with no case-insensitive match are passed through unchanged.
  * `listFilterFields.enum` is hand-maintained documentation metadata that
@@ -26,9 +28,23 @@ export function canonicalizeListFilterEnums(
   for (const field of fields) {
     if (!field.enum?.length) continue;
     const raw = input[field.name];
+    const canonicalByLower = new Map(field.enum.map((v) => [v.toLowerCase(), v]));
+
+    if (Array.isArray(raw)) {
+      let changed = false;
+      const canonicalized = raw.map((part) => {
+        if (typeof part !== "string") return part;
+        const canonical = canonicalByLower.get(part.toLowerCase());
+        if (canonical === undefined || canonical === part) return part;
+        changed = true;
+        return canonical;
+      });
+      if (changed) input[field.name] = canonicalized;
+      continue;
+    }
+
     if (typeof raw !== "string") continue;
 
-    const canonicalByLower = new Map(field.enum.map((v) => [v.toLowerCase(), v]));
     const hasMultiple = raw.includes(",");
     const parts = hasMultiple
       ? raw.split(",").map((s) => s.trim()).filter((s) => s.length > 0)

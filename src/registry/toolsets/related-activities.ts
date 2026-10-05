@@ -18,7 +18,7 @@ const RESOURCE_TYPE_BY_TEMPLATE_TYPE: Record<string, string> = {
  * Project a single related-activity entry to the fields an agent can act on,
  * identically in the list and detail views.
  *
- * Shared by every Mission Control toolset that surfaces `relatedActivities`
+ * Shared by every AI-SRE toolset that surfaces `relatedActivities`
  * (incidents, alerts, deploys): the backend returns the same RelatedActivity
  * DTO on all of them, and an edge means the same thing whichever end you
  * fetched it from, so the projection is defined once here.

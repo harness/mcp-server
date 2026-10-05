@@ -92,6 +92,14 @@ When adding **writes** (create/update/delete), also check the agent user flow an
 pnpm build && pnpm docs:generate   # always pair them
 ```
 
+Its count rewrites are regex-based, so two README strings are **not** covered and must be
+updated by hand when the toolset count changes — `docs:check` will not catch them:
+
+- `N resource types organized across N registered toolset definitions; N are default-enabled`
+  ("toolset definitions" doesn't match the `N toolsets` pattern)
+- the architecture diagram's `| N Toolsets (N default) |` (the parenthetical breaks the
+  `| N Toolsets |` pattern)
+
 ### HARNESS_API_KEY is optional in multi-user mode
 
 Single-user mode: `HARNESS_API_KEY` required, used for every session.

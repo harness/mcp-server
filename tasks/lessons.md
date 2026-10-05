@@ -182,3 +182,6 @@
   4. Walk the **user flow**: create at org/project → list/get/update must work with the same `resource_scope` / org / project.
   5. Test ambient `HARNESS_ORG`/`HARNESS_PROJECT` does not leak when account is the default (`scopeOptional`).
   6. Update README when writes change the advertised scope model.
+
+## Targeted pnpm Transitive Updates
+- `pnpm update ip-address --depth 20` also rewrote unrelated direct dependency ranges to match existing overrides. Restore those incidental manifest changes before validating shrinkwrap consistency; review the full diff even for targeted updates.
