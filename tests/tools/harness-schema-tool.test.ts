@@ -944,4 +944,138 @@ describe("maybeTruncateSchema", () => {
     expect(serialized).toContain("_drill");
     expect(serialized).toContain("_truncated");
   });
+
+  it("fits definition-group catalogs under the size budget", () => {
+    const groups: Record<string, unknown> = {};
+    for (let i = 0; i < 40; i++) {
+      groups[`group${i}`] = {
+        Node: {
+          description: "D".repeat(800),
+          allOf: [
+            {
+              if: { type: "object", description: "I".repeat(400) },
+              then: { properties: { flag: { type: "boolean", description: "T".repeat(400) } } },
+            },
+          ],
+          properties: {
+            child: { $ref: "#/definitions/drill_demo/child", description: "C".repeat(400) },
+          },
+        },
+      };
+    }
+    const catalog = { type: "object", ...groups };
+    expect(JSON.stringify(catalog).length).toBeGreaterThan(SCHEMA_TRUNCATION_THRESHOLD);
+
+    const { schema, truncated, overBudget } = maybeTruncateSchema(catalog, "root");
+    expect(truncated).toBe(true);
+    expect(overBudget).not.toBe(true);
+    expect(JSON.stringify(schema).length).toBeLessThanOrEqual(SCHEMA_TRUNCATION_THRESHOLD);
+  });
+});
+
+const DRILL_SCHEMA = {
+  definitions: {
+    drill_demo: {
+      root: {
+        allOf: [
+          {
+            if: { type: "object" },
+            then: { properties: { enabled: { type: "boolean" } } },
+          },
+        ],
+        properties: {
+          child: { $ref: "#/definitions/drill_demo/child" },
+        },
+      },
+      child: {
+        type: "object",
+        properties: { name: { type: "string", description: "child name" } },
+      },
+    },
+  },
+};
+
+describe("harness_schema drill paths and validate", () => {
+  it("resolves drill paths through $ref targets and allOf indexes", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined, {
+      drill_demo: {
+        schema: DRILL_SCHEMA,
+        description: "Drill path fixture",
+        group: "test",
+      },
+    });
+
+    const throughRef = parseResult(await server.call("harness_schema", {
+      resource_type: "drill_demo",
+      path: "root.properties.child.properties.name",
+    })) as { schema?: { description?: string }; error?: string };
+    expect(throughRef.error).toBeUndefined();
+    expect(throughRef.schema?.description).toBe("child name");
+
+    const throughAllOf = parseResult(await server.call("harness_schema", {
+      resource_type: "drill_demo",
+      path: "root.allOf.0.then",
+    })) as { schema?: { properties?: { enabled?: { type?: string } } }; error?: string };
+    expect(throughAllOf.error).toBeUndefined();
+    expect(throughAllOf.schema?.properties?.enabled?.type).toBe("boolean");
+  });
+
+  it("validates bundled pipeline payloads instead of failing schema compilation", async () => {
+    const server = makeMcpServer();
+    registerSchemaTool(server, undefined, undefined, undefined);
+
+    const invalid = parseResult(await server.call("harness_schema", {
+      resource_type: "pipeline",
+      validate: {},
+    })) as { valid?: boolean; errors?: Array<{ keyword: string }>; error?: string };
+    expect(invalid.error).toBeUndefined();
+    expect(invalid.valid).toBe(false);
+    expect(invalid.errors?.some((err) => err.keyword === "required")).toBe(true);
+
+    const valid = parseResult(await server.call("harness_schema", {
+      resource_type: "pipeline",
+      validate: {
+        pipeline: {
+          identifier: "p",
+          name: "P",
+          projectIdentifier: "proj",
+          orgIdentifier: "org",
+        },
+      },
+    })) as { valid?: boolean; error?: string };
+    expect(valid.error).toBeUndefined();
+    expect(valid.valid).toBe(true);
+  }, 20_000);
+
+  it("validates live entity schemas fetched for the resource type", async () => {
+    const server = makeMcpServer();
+    const requestMock = vi.fn().mockResolvedValue({
+      data: {
+        type: "object",
+        required: ["connector"],
+        properties: {
+          connector: {
+            type: "object",
+            required: ["identifier"],
+            properties: { identifier: { type: "string" } },
+          },
+        },
+      },
+    });
+    registerSchemaTool(server, undefined, {
+      account: "acct",
+      request: requestMock,
+    } as unknown as HarnessClient, undefined);
+
+    const result = parseResult(await server.call("harness_schema", {
+      resource_type: "connector",
+      validate: {},
+    })) as { valid?: boolean; errors?: Array<{ keyword: string }>; error?: string };
+
+    expect(result.error).toBeUndefined();
+    expect(result.valid).toBe(false);
+    expect(result.errors?.[0]?.keyword).toBe("required");
+    expect(requestMock).toHaveBeenCalled();
+  });
 });

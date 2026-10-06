@@ -314,7 +314,6 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
             }
           }
           // Remove empty entries
-          const before = entries.length;
           const removed = entries.filter(e => e.items.length === 0);
           entries.splice(0, entries.length, ...entries.filter(e => e.items.length > 0));
           if (removed.length > 0) {
@@ -325,26 +324,49 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
         }
 
         // --- Enforce payload size cap ---
+        const originalMatches = totalMatches + semanticMatchCount;
         const skippedCount = semanticRouted
           ? candidateTypes.length - targetTypes.length
           : 0;
-        let payload = {
-          query: args.query,
-          total_matches: totalMatches + semanticMatchCount,
-          searched_types: targetTypes.length,
-          ...(semanticRouted ? { semantic_routed: true, types_skipped_count: skippedCount } : {}),
-          results: entries,
-          ...(Object.keys(errors).length > 0 ? { errors } : {}),
+        const buildPayload = () => {
+          const returnedMatches = entries.reduce((sum, entry) => sum + entry.items.length, 0);
+          const resultsCapped = returnedMatches < originalMatches;
+          return {
+            query: args.query,
+            total_matches: originalMatches,
+            searched_types: targetTypes.length,
+            ...(semanticRouted ? { semantic_routed: true, types_skipped_count: skippedCount } : {}),
+            ...(resultsCapped
+              ? {
+                  results_capped: true,
+                  returned_matches: returnedMatches,
+                  _hint: `Showing ${returnedMatches} of ${originalMatches} matches. Narrow the query or pass resource_types.`,
+                }
+              : {}),
+            results: entries,
+            ...(Object.keys(errors).length > 0 ? { errors } : {}),
+          };
         };
+        let payload = buildPayload();
         let serialized = JSON.stringify(payload);
 
-        // If still over budget, progressively drop lowest-tier result groups
-        while (serialized.length > MAX_RESULT_CHARS && entries.length > 1) {
-          const dropped = entries.pop()!;
-          log.info(`Size cap: dropped ${dropped.resource_type} (tier ${dropped.tier}, ${dropped.match_count} items) to fit ${MAX_RESULT_CHARS} char budget`, {
-            current_size: serialized.length,
-          });
-          payload = { ...payload, results: entries };
+        // If still over budget, progressively drop lowest-tier result groups,
+        // then items inside the last remaining group.
+        while (serialized.length > MAX_RESULT_CHARS && (entries.length > 1 || (entries[0]?.items.length ?? 0) > 1)) {
+          const last = entries[entries.length - 1];
+          if (!last) break;
+          if (entries.length > 1 && last.items.length <= 1) {
+            const dropped = entries.pop()!;
+            log.info(`Size cap: dropped ${dropped.resource_type} (tier ${dropped.tier}, ${dropped.match_count} items) to fit ${MAX_RESULT_CHARS} char budget`, {
+              current_size: serialized.length,
+            });
+          } else if (last.items.length > 1) {
+            last.items.pop();
+            last.match_count = last.items.length;
+          } else {
+            break;
+          }
+          payload = buildPayload();
           serialized = JSON.stringify(payload);
         }
 

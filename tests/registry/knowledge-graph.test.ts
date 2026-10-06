@@ -217,6 +217,53 @@ describe("kg_queryable_type_summary list extractor", () => {
 
     expect(result.items[0]!.connectorId).toBe("");
   });
+
+  it("filters the catalog by search_term across identifier, name, description, kind, and tags", async () => {
+    const mockRequest = vi.fn().mockResolvedValue({
+      queryable_types: [
+        {
+          type: {
+            entity_type: {
+              id: "ci_pipeline",
+              name: "CI Pipeline",
+              description: "Continuous integration runs",
+              annotations: [{ key: "deploy" }],
+            },
+          },
+          type_reference: { object_kind: "OBJECT_KIND_ENTITY" },
+        },
+        {
+          type: {
+            view_type: { id: "cost_view", name: "Cost", description: "Spend" },
+          },
+          type_reference: { object_kind: "OBJECT_KIND_VIEW" },
+        },
+      ],
+    });
+    const client = makeClient(mockRequest);
+
+    const byName = (await registry.dispatch(client, "kg_queryable_type_summary", "list", {
+      search_term: "pipeline",
+    })) as { items: Record<string, unknown>[]; total: number };
+    expect(byName.total).toBe(1);
+    expect(byName.items[0]!.identifier).toBe("ci_pipeline");
+
+    const byKind = (await registry.dispatch(client, "kg_queryable_type_summary", "list", {
+      query: "OBJECT_KIND_VIEW",
+    })) as { items: Record<string, unknown>[] };
+    expect(byKind.items.map((item) => item.identifier)).toEqual(["cost_view"]);
+
+    const byTag = (await registry.dispatch(client, "kg_queryable_type_summary", "list", {
+      name: "deploy",
+    })) as { items: Record<string, unknown>[] };
+    expect(byTag.items.map((item) => item.identifier)).toEqual(["ci_pipeline"]);
+
+    const none = (await registry.dispatch(client, "kg_queryable_type_summary", "list", {
+      search_term: "does-not-exist",
+    })) as { items: unknown[]; total: number };
+    expect(none.total).toBe(0);
+    expect(none.items).toEqual([]);
+  });
 });
 
 // ---------------------------------------------------------------------------

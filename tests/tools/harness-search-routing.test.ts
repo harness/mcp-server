@@ -224,6 +224,42 @@ describe("harness_search semantic routing integration", () => {
     expect(mockRequest).toHaveBeenCalledTimes(2);
   });
 
+  it("caps oversized result sets and reports how many matches were omitted", async () => {
+    mockRequest.mockResolvedValue({
+      data: {
+        content: Array.from({ length: 40 }, (_, index) => ({
+          identifier: `pipeline-${index}`,
+          name: `Pipeline ${index}`,
+          description: "x".repeat(500),
+        })),
+        totalElements: 40,
+      },
+    });
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(server, registry, client);
+
+    const result = await server.call("harness_search", {
+      query: "pipeline",
+      resource_types: ["pipeline"],
+    });
+    const data = parseResult(result) as {
+      total_matches: number;
+      results_capped?: boolean;
+      returned_matches?: number;
+      _hint?: string;
+      results: Array<{ items: Array<{ description?: string }> }>;
+    };
+
+    expect(data.results_capped).toBe(true);
+    expect(data.total_matches).toBe(40);
+    expect(data.returned_matches).toBeLessThanOrEqual(30);
+    expect(data.returned_matches).toBe(data.results.reduce((sum, entry) => sum + entry.items.length, 0));
+    expect(data._hint).toContain("40");
+    const description = data.results[0]?.items[0]?.description ?? "";
+    expect(description.endsWith("...")).toBe(true);
+    expect(description.length).toBeLessThanOrEqual(203);
+  });
+
   it("falls back to full scatter-gather when routing scores are below threshold", async () => {
     const searchManager = makeSearchManager([
       makeSemanticResult(ROUTING_THRESHOLD - 0.05, { resource_type: "pipeline" }),

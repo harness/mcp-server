@@ -13,7 +13,25 @@ const MAX_DESC_LEN = 80;
  * Returns id, name, description (truncated), object_kind, connectorId, annotations.
  * No field metadata.
  */
-const queryableTypeSummaryExtract = (raw: unknown): { items: unknown[]; total: number } => {
+function queryableTypeSearchTerm(input: Record<string, unknown> | undefined): string | undefined {
+  if (!input) return undefined;
+  for (const key of ["search_term", "query", "name", "search"]) {
+    const value = input[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function queryableTypeMatchesTerm(item: Record<string, unknown>, term: string): boolean {
+  const needle = term.toLowerCase();
+  const fields = [item.identifier, item.name, item.description, item.kind];
+  if (fields.some((value) => typeof value === "string" && value.toLowerCase().includes(needle))) {
+    return true;
+  }
+  return Array.isArray(item.tags) && item.tags.some((tag) => typeof tag === "string" && tag.toLowerCase().includes(needle));
+}
+
+const queryableTypeSummaryExtract = (raw: unknown, input?: Record<string, unknown>): { items: unknown[]; total: number } => {
   const r = raw as { queryable_types?: Record<string, unknown>[] };
   const items: unknown[] = [];
 
@@ -77,7 +95,14 @@ const queryableTypeSummaryExtract = (raw: unknown): { items: unknown[]; total: n
     items.push(item);
   }
 
-  return { items, total: items.length };
+  // The query-service catalog ignores search_term. Filter here so harness_list
+  // search_term and harness_search(query) return matching types instead of the
+  // unfiltered catalog (which listSizeGuard would otherwise slice arbitrarily).
+  const term = queryableTypeSearchTerm(input);
+  const matched = term
+    ? items.filter((item) => queryableTypeMatchesTerm(item as Record<string, unknown>, term))
+    : items;
+  return { items: matched, total: matched.length };
 };
 
 const grammarExtract = (raw: unknown): unknown => {
@@ -180,7 +205,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
   description:
     "Harness Knowledge Graph query engine — discover queryable types, build and execute HQL " +
     "(Harness Query Language) queries, and explore data models and connections. " +
-    "Start with harness_search(query='...') to discover relevant KG types, then get field details " +
+    "Start with harness_search(query='...', resource_types=['kg_queryable_type_summary']) to discover relevant KG types, then get field details " +
     "for each selected type via kg_type (semantic-layer toolset), and use hql_query to validate and run queries.",
   resources: [
     {
@@ -189,9 +214,9 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
       description:
         "Lightweight summaries of types queryable via HQL. Returns identifier (type_id for " +
         "HQL queries), name, description, kind (OBJECT_KIND_*), connectorId, tags. No field " +
-        "metadata. Prefer harness_search(query='<what you need>') for targeted discovery — " +
-        "it returns relevant KG types directly without loading the full catalog. " +
-        "Fall back to this list only when search returns no KG type matches. " +
+        "metadata. Prefer harness_search(query='<what you need>', resource_types=['kg_queryable_type_summary']) " +
+        "or this list with search_term — both filter by identifier, name, description, kind, and tags. " +
+        "An unfiltered list is capped. " +
         "Then fetch field details per type via " +
         "harness_get(resource_type='kg_type', resource_id='<identifier>', params={kind: '<kind>'}). " +
         "Types sharing the same non-empty connectorId can be JOINed. Empty connectorId means " +
@@ -203,7 +228,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
       listFilterFields: KG_QUERYABLE_TYPE_FILTERS,
       listSizeGuard: {
         maxItems: 20,
-        searchRedirect: "harness_search(query='<what you need>') returns relevant KG types directly.",
+        searchRedirect: "harness_search(query='<what you need>', resource_types=['kg_queryable_type_summary']) filters by name, identifier, kind, and description. harness_list search_term does the same.",
       },
       operations: {
         list: {
@@ -215,6 +240,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           description:
             "List queryable type summaries (identifier, name, description, kind, connectorId, tags). " +
+            "Pass search_term to filter by identifier, name, description, kind, or tag. " +
             "Pass kinds=[...] to filter. Use identifier + kind to fetch field details via kg_type get.",
         },
       },
@@ -257,9 +283,9 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
       identifierFields: [],
       executeHint:
         "1. Learn grammar: harness_get(resource_type='kg_grammar'). " +
-        "2. Discover types: harness_search(query='<what you need>') — returns relevant KG types directly. " +
-        "Any KG type identifier from search can be passed to harness_get. " +
-        "Fall back to harness_list(resource_type='kg_queryable_type_summary') only if search returns no KG matches. " +
+        "2. Discover types: harness_search(query='<what you need>', resource_types=['kg_queryable_type_summary']) " +
+        "or harness_list(resource_type='kg_queryable_type_summary', search_term='<what you need>'). " +
+        "Any KG type identifier from those results can be passed to harness_get. " +
         "3. Get fields per type: harness_get(resource_type='kg_type', resource_id='<identifier>', params={kind: '<kind>'}). " +
         "4. Validate: harness_execute(resource_type='hql_query', action='validate', " +
         "body={query_string: 'find view \"ci:pipeline_execution_summary_ci\" | select {count()}'}). " +

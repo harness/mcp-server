@@ -2,7 +2,7 @@ import * as z from "zod/v4";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Registry } from "../registry/index.js";
 import type { HarnessClient } from "../client/harness-client.js";
-import { jsonResult, errorResult, normalizeHarnessListPayload, type ToolResult } from "../utils/response-formatter.js";
+import { jsonResult, errorResult, normalizeHarnessListPayload } from "../utils/response-formatter.js";
 import { isUserError, isUserFixableApiError, toMcpError, enrichErrorWithHint, HarnessApiError } from "../utils/errors.js";
 import { compactItems } from "../utils/compact.js";
 import { applyUrlDefaults } from "../utils/url-parser.js";
@@ -96,25 +96,9 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
           }
         }
 
-        // Declarative list size guard: truncate oversized responses and inject
-        // narrowing hints so the agent doesn't consume 100K+ chars of context.
-        if (isRecord(result) && Array.isArray(result.items)) {
-          const guard = registry.getResource(resourceType).listSizeGuard;
-          if (guard && result.items.length > guard.maxItems) {
-            const totalItems = result.items.length;
-            result.items = result.items.slice(0, guard.maxItems);
-            (result as Record<string, unknown>)._capped = true;
-            (result as Record<string, unknown>)._total_available = totalItems;
-            (result as Record<string, unknown>)._returned = guard.maxItems;
-            let hint = `Response capped to ${guard.maxItems} of ${totalItems} items. Use search_term or filters to narrow results.`;
-            if (guard.searchRedirect) {
-              hint += ` Preferred: ${guard.searchRedirect}`;
-            }
-            (result as Record<string, unknown>)._hint = hint;
-          }
-        }
-
-        // Fire-and-forget: index items for semantic search (skipped in multi-user + local)
+        // Fire-and-forget: index items for semantic search (skipped in multi-user + local).
+        // Index before the size guard so a response cap does not drop the rest of the page
+        // from the entity index.
         if (searchManager && isRecord(result) && Array.isArray(result.items)) {
           const accountId = client.account;
           void Promise.all(
@@ -131,6 +115,27 @@ export function registerListTool(server: McpServer, registry: Registry, client: 
               });
             })
           ).catch(() => { /* never surface indexing errors to caller */ });
+        }
+
+        // Declarative list size guard: truncate oversized responses and inject
+        // narrowing hints so the agent doesn't consume 100K+ chars of context.
+        if (isRecord(result) && Array.isArray(result.items)) {
+          const guard = registry.getResource(resourceType).listSizeGuard;
+          if (guard && result.items.length > guard.maxItems) {
+            const pageItems = result.items.length;
+            const totalAvailable = typeof result.total === "number" ? result.total : pageItems;
+            result.items = result.items.slice(0, guard.maxItems);
+            (result as Record<string, unknown>)._capped = true;
+            (result as Record<string, unknown>)._total_available = totalAvailable;
+            (result as Record<string, unknown>)._returned = guard.maxItems;
+            let hint = `Response capped to ${guard.maxItems} of ${pageItems} items in this response.`;
+            if (totalAvailable > pageItems) {
+              hint += ` ${totalAvailable} ${totalAvailable === 1 ? "match" : "matches"} overall.`;
+            }
+            hint += " Use search_term or filters to narrow results.";
+            if (guard.searchRedirect) hint += ` Preferred: ${guard.searchRedirect}`;
+            (result as Record<string, unknown>)._hint = hint;
+          }
         }
 
         return jsonResult(result);

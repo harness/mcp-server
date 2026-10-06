@@ -814,3 +814,10 @@ Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, b
 Delivery: commit and push chore/version-3.2.32, then open a PR against main.
 
 Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, build, docs check, and git diff --check passed.
+
+## PR 1051 review fixes
+
+- [x] Make harness_schema validate compile real pipeline/template schemas and live entity schemas.
+- [x] Keep truncated schema drills under the size budget and resolvable through $ref and array indexes.
+- [x] Filter KG queryable types by search text so the list cap and search redirect can find types.
+- [x] Report harness_search caps and index list items before applying listSizeGuard.
