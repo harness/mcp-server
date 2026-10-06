@@ -2751,7 +2751,7 @@ describe("fme_experiment", () => {
       baselineTreatment: "off",
       comparisonTreatments: ["on"],
       keyMetrics: ["m1"],
-      rule: "default",
+      rule: "default rule",
     });
     // fmeV4EntityExtract flattens {entity, governance} to the entity's own fields + governance
     expect(result).toEqual({ id: "e1", name: "checkout-experiment", governance: { status: "NONE", details: [] } });
@@ -2836,15 +2836,15 @@ describe("fme_experiment", () => {
     expect(req.body).toMatchObject({ rule: "beta users", tags: [{ name: "backend" }, { name: "growth" }] });
   });
 
-  it("create: defaults rule to \"default\" when omitted and omits tags", async () => {
+  it("create: defaults rule to \"default rule\" when omitted and omits tags", async () => {
     const req = await createWithBody({});
-    expect(req.body).toMatchObject({ rule: "default" });
+    expect(req.body).toMatchObject({ rule: "default rule" });
     expect(req.body).not.toHaveProperty("tags");
   });
 
-  it("create: defaults rule to \"default\" when rule is null", async () => {
+  it("create: defaults rule to \"default rule\" when rule is null", async () => {
     const req = await createWithBody({ rule: null });
-    expect(req.body).toMatchObject({ rule: "default" });
+    expect(req.body).toMatchObject({ rule: "default rule" });
   });
 
   it("create: forwards tags: [] as-is", async () => {

@@ -1,5 +1,10 @@
 # Lessons Learned
 
+## FME Experiment Results Match the Impression Label "default rule"
+- **Issue**: `fme_experiment` create injected `rule: "default"` when the caller omitted it. Harness FME impression labels and the experiment targeting-rule dropdown use `default rule`. A stored rule of `default` matches no impressions, so the experiment looks like it has no results.
+- **Fix**: Default omitted and null create rules to `default rule`. Explicit rule strings are still forwarded unchanged.
+- **Rule**: The experiment `rule` field is an impression label, not the words "default treatment" or the string `default`.
+
 ## Nested File Paths Must Keep Slashes
 - **Issue**: Registry `pathParams` run `encodeURIComponent` on the whole file path, so `src/index.ts` became `src%2Findex.ts` and the content API 404'd. Empty `path` was also treated as unset, so `harness_get` mapped `resource_id` onto it. List deep links need `{filePath}` on items; a custom `compactItem` that drops `openInHarness` strips those links in `harness_list`.
 - **Fix**: `pathBuilder` encodes each path segment and allows `/content` with no extra path. Treat `input[field] === undefined` (not falsy) when mapping `resource_id`. Stamp `filePath` in the list extractor and keep `openInHarness` in `compactItem`.
