@@ -43,6 +43,7 @@ FROM ${RUNTIME_IMAGE} AS production
 WORKDIR /app
 
 RUN apt-get update \
+  && apt-get upgrade -y --no-install-recommends \
   && apt-get install -y --no-install-recommends ca-certificates libgomp1 libstdc++6 libpcre2-8-0 \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --gid 1000 node \
