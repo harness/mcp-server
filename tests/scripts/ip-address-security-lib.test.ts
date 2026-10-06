@@ -1,13 +1,24 @@
 import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { describe, expect, it } from "vitest";
 import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  findActiveIpAddressInstallDirs,
   findIpAddressInstallDirs,
   isSecureIpAddressVersion,
   listInsecureIpAddressInstalls,
   parseNpmShrinkwrapIpAddressVersion,
   parsePnpmLockIpAddressVersions,
+  readIpAddressVersion,
+  resolveActiveIpAddressDir,
   SECURE_IP_ADDRESS_VERSION,
 } from "../../scripts/ip-address-security-lib.mjs";
 
@@ -15,19 +26,39 @@ const root = process.cwd();
 const require = createRequire(import.meta.url);
 
 function loadInstalledAddress6() {
-  const installs = findIpAddressInstallDirs(root);
-  expect(installs.length, "expected ip-address under node_modules").toBeGreaterThan(0);
+  const dir = resolveActiveIpAddressDir(root);
+  expect(dir, "expected a linked ip-address install under node_modules").toBeTruthy();
 
-  return require(installs[0]) as {
+  const version = readIpAddressVersion(dir!);
+  const loaded = require(dir!) as {
     Address6: new (address: string) => {
       isPrivate(): boolean;
       isGlobal(): boolean;
       isLoopback(): boolean;
     };
   };
+  const probe = new loaded.Address6("::1");
+  expect(
+    typeof probe.isGlobal,
+    `ip-address@${version ?? "unknown"} has no isGlobal(); run pnpm install so the lockfile's ${SECURE_IP_ADDRESS_VERSION}+ copy is linked`,
+  ).toBe("function");
+  return loaded;
+}
+
+function writeIpAddressPackage(dir: string, version: string) {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "package.json"), JSON.stringify({ name: "ip-address", version }));
 }
 
 describe("ip-address-security-lib", () => {
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of tempDirs.splice(0)) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("compares semver patch levels for the NAT64 security floor", () => {
     expect(isSecureIpAddressVersion("10.4.0", SECURE_IP_ADDRESS_VERSION)).toBe(false);
     expect(isSecureIpAddressVersion("10.5.0", SECURE_IP_ADDRESS_VERSION)).toBe(false);
@@ -62,6 +93,59 @@ describe("ip-address-security-lib", () => {
 
   it("flags vulnerable ip-address installs under node_modules", () => {
     expect(listInsecureIpAddressInstalls(root)).toEqual([]);
+  });
+
+  it("ignores an unlinked pnpm virtual-store leftover", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-orphan-"));
+    tempDirs.push(packageRoot);
+    writeIpAddressPackage(
+      join(packageRoot, "node_modules/.pnpm/ip-address@10.4.0/node_modules/ip-address"),
+      "10.4.0",
+    );
+    const current = join(packageRoot, "node_modules/.pnpm/ip-address@10.7.2/node_modules/ip-address");
+    writeIpAddressPackage(current, "10.7.2");
+    const linkDir = join(packageRoot, "node_modules/.pnpm/express-rate-limit@8.3.2/node_modules");
+    mkdirSync(linkDir, { recursive: true });
+    symlinkSync("../../ip-address@10.7.2/node_modules/ip-address", join(linkDir, "ip-address"), "dir");
+
+    expect(findIpAddressInstallDirs(packageRoot)).toHaveLength(2);
+    expect(findActiveIpAddressInstallDirs(packageRoot)).toEqual([current]);
+    expect(listInsecureIpAddressInstalls(packageRoot)).toEqual([]);
+    expect(resolveActiveIpAddressDir(packageRoot)).toBe(current);
+  });
+
+  it("still flags a linked vulnerable ip-address install", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-linked-"));
+    tempDirs.push(packageRoot);
+    const vulnerable = join(packageRoot, "node_modules/.pnpm/ip-address@10.4.0/node_modules/ip-address");
+    writeIpAddressPackage(vulnerable, "10.4.0");
+    const linkDir = join(packageRoot, "node_modules/.pnpm/express-rate-limit@8.3.2/node_modules");
+    mkdirSync(linkDir, { recursive: true });
+    symlinkSync("../../ip-address@10.4.0/node_modules/ip-address", join(linkDir, "ip-address"), "dir");
+
+    expect(listInsecureIpAddressInstalls(packageRoot)).toEqual([
+      { dir: vulnerable, version: "10.4.0" },
+    ]);
+    expect(resolveActiveIpAddressDir(packageRoot)).toBe(vulnerable);
+  });
+
+  it("still flags a real nested install outside the pnpm virtual store", () => {
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-nested-"));
+    tempDirs.push(packageRoot);
+    const nested = join(packageRoot, "node_modules/some-pkg/node_modules/ip-address");
+    writeIpAddressPackage(nested, "10.4.0");
+
+    expect(listInsecureIpAddressInstalls(packageRoot)).toEqual([
+      { dir: nested, version: "10.4.0" },
+    ]);
   });
 
   it("classifies RFC 8215 NAT64 local-use addresses as non-global private space", () => {
