@@ -7,7 +7,6 @@ import { SCHEMAS } from "../data/schemas/index.js";
 import type { SchemaEntry } from "../data/schemas/types.js";
 import { getExample, searchExamples, getExamplesForResource } from "../data/examples/index.js";
 import { createLogger } from "../utils/logger.js";
-import { createRequire } from "node:module";
 import { schemaOutputSchema } from "./output-schemas.js";
 import type { Config } from "../config.js";
 import {
@@ -20,12 +19,6 @@ import {
   type HarnessYamlScope,
 } from "./entity-schema/live.js";
 import type { JsonObject } from "./entity-schema/normalize.js";
-
-const _require = createRequire(import.meta.url);
-const Ajv = _require("ajv") as typeof import("ajv").default;
-const addFormats = _require("ajv-formats") as typeof import("ajv-formats").default;
-type ValidateFunction = import("ajv").ValidateFunction;
-type ErrorObject = import("ajv").ErrorObject;
 
 const log = createLogger("schema");
 
@@ -79,134 +72,6 @@ function inlineRefs(schema: Record<string, unknown>, node: unknown, depth = 0): 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
-}
-
-/**
- * Size-based schema truncation threshold in characters.
- * Schemas larger than this are depth-truncated to keep tool results within
- * a context-friendly budget. The threshold is checked on the JSON-serialised
- * output *before* the tool returns; schemas under the limit pass through
- * untouched so small/medium drills (properties.options ≈ 5-10 K) keep full
- * fidelity.
- */
-const SCHEMA_TRUNCATION_THRESHOLD = 30_000; // ~30 KB
-
-/**
- * Truncate a resolved JSON-Schema node to a maximum nesting depth.
- *
- * Properties beyond `maxDepth` are collapsed to a compact summary:
- * `{ type, description?, _truncated: true, _drill: "<path hint>" }`.
- *
- * Scalar fields (`type`, `const`, `enum`, `description`, `deprecated`) are
- * always preserved at every depth so the agent knows the field exists and
- * its basic shape. Only nested `properties`, `items`, `oneOf`, `anyOf`,
- * `allOf` subtrees are collapsed.
- *
- * @param node      The fully-resolved schema subtree.
- * @param maxDepth  Maximum depth to keep fully expanded (default 2).
- * @param basePath  Dot-path prefix used to build `_drill` hints.
- */
-function truncateSchema(
-  node: unknown,
-  maxDepth: number = 2,
-  basePath: string = "",
-  currentDepth: number = 0,
-): unknown {
-  if (!node || typeof node !== "object") return node;
-
-  if (Array.isArray(node)) {
-    return node.map((item, i) =>
-      truncateSchema(item, maxDepth, basePath, currentDepth),
-    );
-  }
-
-  const obj = node as Record<string, unknown>;
-  const result: Record<string, unknown> = {};
-
-  for (const [key, value] of Object.entries(obj)) {
-    // Always keep scalar schema keywords
-    if (
-      typeof value === "string" ||
-      typeof value === "number" ||
-      typeof value === "boolean" ||
-      value === null
-    ) {
-      result[key] = value;
-      continue;
-    }
-
-    // Keep enum arrays (they're small string/number lists)
-    if (key === "enum" && Array.isArray(value)) {
-      result[key] = value;
-      continue;
-    }
-
-    // Keep required arrays
-    if (key === "required" && Array.isArray(value)) {
-      result[key] = value;
-      continue;
-    }
-
-    // For nested structure keys, check depth
-    if (currentDepth >= maxDepth && isRecord(value)) {
-      // Collapse to summary
-      const v = value as Record<string, unknown>;
-      const summary: Record<string, unknown> = { _truncated: true };
-      if (v.type) summary.type = v.type;
-      if (v.description) summary.description = v.description;
-      if (v.const) summary.const = v.const;
-      if (v.enum) summary.enum = v.enum;
-      const drillPath = basePath ? `${basePath}.${key}` : key;
-      summary._drill = drillPath;
-      result[key] = summary;
-      continue;
-    }
-
-    // Recurse into properties one level deeper
-    const childPath = basePath ? `${basePath}.${key}` : key;
-    const childDepthIncrement =
-      key === "properties" || key === "items" || key === "oneOf" || key === "anyOf" || key === "allOf"
-        ? 1
-        : 0;
-    result[key] = truncateSchema(
-      value,
-      maxDepth,
-      childPath,
-      currentDepth + childDepthIncrement,
-    );
-  }
-
-  return result;
-}
-
-/**
- * Apply size-based truncation to a resolved schema. If the serialised size
- * exceeds SCHEMA_TRUNCATION_THRESHOLD, progressively lower the depth limit
- * until it fits (or hits depth 1 as a floor).
- */
-function maybeTruncateSchema(
-  resolved: unknown,
-  basePath: string,
-): { schema: unknown; truncated: boolean; depth?: number } {
-  const raw = JSON.stringify(resolved);
-  if (raw.length <= SCHEMA_TRUNCATION_THRESHOLD) {
-    return { schema: resolved, truncated: false };
-  }
-
-  // Try progressively lower depths
-  for (const depth of [3, 2, 1]) {
-    const truncated = truncateSchema(resolved, depth, basePath);
-    const size = JSON.stringify(truncated).length;
-    if (size <= SCHEMA_TRUNCATION_THRESHOLD || depth === 1) {
-      log.info(
-        `Schema truncated: ${raw.length} -> ${size} chars at depth ${depth} (base: ${basePath})`,
-      );
-      return { schema: truncated, truncated: true, depth };
-    }
-  }
-
-  // Should not reach here, but depth=1 is the floor
-  return { schema: truncateSchema(resolved, 1, basePath), truncated: true, depth: 1 };
 }
 
 function uniqueStrings(values: string[]): string[] {
@@ -487,205 +352,6 @@ function listAvailableSchemaNames(
   return [...staticSchemaKeys, ...live];
 }
 
-// ---------------------------------------------------------------------------
-// Schema validation (used by the `validate` parameter of harness_schema)
-// ---------------------------------------------------------------------------
-
-const _validatorCache = new Map<string, ValidateFunction>();
-
-function getOrCompileValidator(
-  resourceType: string,
-  schema: Record<string, unknown>,
-): ValidateFunction {
-  let validate = _validatorCache.get(resourceType);
-  if (!validate) {
-    const ajv = new Ajv({ allErrors: true, strict: false });
-    addFormats(ajv);
-    validate = ajv.compile(schema);
-    _validatorCache.set(resourceType, validate);
-  }
-  return validate;
-}
-
-const VALIDATION_ERROR_PRIORITY: Record<string, number> = {
-  additionalProperties: 0,
-  required: 1,
-  enum: 2,
-  type: 3,
-  const: 4,
-};
-const MAX_VALIDATION_ERRORS = 8;
-
-function formatValidationError(err: ErrorObject): string {
-  const path = err.instancePath || "/";
-  if (err.keyword === "additionalProperties" && err.params?.additionalProperty) {
-    return `${path}: additional property '${err.params.additionalProperty}' not allowed (additionalProperties: false)`;
-  }
-  return `${path}: ${err.message ?? err.keyword}`;
-}
-
-/**
- * Extract a compact fix hint for a validation error by navigating the schema
- * to the relevant sub-definition. For `required` errors, returns the shape of
- * the missing property. For `additionalProperties`, names the allowed keys.
- * For `enum`/`const`, lists allowed values. This makes the validation response
- * self-contained so the caller doesn't need extra schema fetches to fix errors.
- */
-function extractFixHint(
-  err: ErrorObject,
-  schema: Record<string, unknown>,
-): Record<string, unknown> | undefined {
-  try {
-    const pathParts = err.instancePath ? err.instancePath.split("/").filter(Boolean) : [];
-
-    if (err.keyword === "required" && err.params?.missingProperty) {
-      const missingProp = err.params.missingProperty as string;
-      const parentNode = navigateSchemaByDataPath(schema, pathParts);
-      if (parentNode) {
-        const props = (parentNode as Record<string, unknown>).properties as Record<string, unknown> | undefined;
-        const propSchema = props?.[missingProp];
-        if (propSchema && typeof propSchema === "object") {
-          const resolved = inlineRefs(schema, propSchema);
-          const truncated = truncateSchema(resolved, 2, missingProp);
-          return { missing_property: missingProp, expected_schema: truncated };
-        }
-      }
-    }
-
-    if (err.keyword === "additionalProperties" && err.params?.additionalProperty) {
-      const parentNode = navigateSchemaByDataPath(schema, pathParts);
-      if (parentNode) {
-        const props = (parentNode as Record<string, unknown>).properties as Record<string, unknown> | undefined;
-        if (props) {
-          return { allowed_properties: Object.keys(props) };
-        }
-      }
-    }
-
-    if (err.keyword === "enum" && err.params?.allowedValues) {
-      return { allowed_values: err.params.allowedValues };
-    }
-
-    if (err.keyword === "const" && err.params?.allowedValue !== undefined) {
-      return { expected_value: err.params.allowedValue };
-    }
-
-    if (err.keyword === "type" && err.params?.type) {
-      return { expected_type: err.params.type };
-    }
-  } catch {
-    // Best-effort — don't fail the whole validation response
-  }
-  return undefined;
-}
-
-/**
- * Navigate a JSON Schema by a data-path (from ajv instancePath) to find the
- * schema node that describes that location. Walks through `properties` and
- * `items` as needed.
- */
-function navigateSchemaByDataPath(
-  schema: Record<string, unknown>,
-  pathParts: string[],
-): unknown {
-  let current: unknown = schema;
-  for (const part of pathParts) {
-    if (!current || typeof current !== "object") return undefined;
-    const node = current as Record<string, unknown>;
-
-    // Try resolving $ref first
-    if (typeof node["$ref"] === "string") {
-      const resolved = resolveRef(schema, node["$ref"]);
-      if (resolved && typeof resolved === "object") {
-        current = resolved;
-      } else {
-        return undefined;
-      }
-    }
-
-    const cur = current as Record<string, unknown>;
-
-    // Array index → items
-    if (/^\d+$/.test(part)) {
-      const items = cur.items;
-      if (items && typeof items === "object") {
-        current = items;
-      } else {
-        return undefined;
-      }
-      continue;
-    }
-
-    // Named property
-    const props = cur.properties as Record<string, unknown> | undefined;
-    if (props?.[part]) {
-      current = props[part];
-      continue;
-    }
-
-    // oneOf/anyOf — try each branch
-    for (const combiner of ["oneOf", "anyOf", "allOf"]) {
-      const variants = cur[combiner];
-      if (Array.isArray(variants)) {
-        for (const variant of variants) {
-          if (!variant || typeof variant !== "object") continue;
-          let resolved = variant as Record<string, unknown>;
-          if (typeof resolved["$ref"] === "string") {
-            const ref = resolveRef(schema, resolved["$ref"]);
-            if (ref && typeof ref === "object") resolved = ref as Record<string, unknown>;
-          }
-          const vProps = resolved.properties as Record<string, unknown> | undefined;
-          if (vProps?.[part]) {
-            current = vProps[part];
-            break;
-          }
-        }
-        if (current !== cur) break;
-      }
-    }
-
-    if (current === cur) return undefined;
-  }
-
-  // Resolve final $ref
-  if (current && typeof current === "object" && typeof (current as Record<string, unknown>)["$ref"] === "string") {
-    const resolved = resolveRef(schema, (current as Record<string, unknown>)["$ref"] as string);
-    if (resolved) current = resolved;
-  }
-
-  return current;
-}
-
-function validateDataAgainstSchema(
-  resourceType: string,
-  schema: Record<string, unknown>,
-  data: unknown,
-): { valid: true } | { valid: false; error_count: number; errors: Array<{ path: string; message: string; keyword: string; fix_hint?: Record<string, unknown> }> } {
-  const validate = getOrCompileValidator(resourceType, schema);
-  const valid = validate(data);
-  if (valid) {
-    return { valid: true };
-  }
-  const sorted = [...(validate.errors ?? [])].sort(
-    (a, b) =>
-      (VALIDATION_ERROR_PRIORITY[a.keyword] ?? 99) -
-      (VALIDATION_ERROR_PRIORITY[b.keyword] ?? 99),
-  );
-  return {
-    valid: false,
-    error_count: validate.errors?.length ?? 0,
-    errors: sorted.slice(0, MAX_VALIDATION_ERRORS).map((err) => {
-      const hint = extractFixHint(err, schema);
-      return {
-        path: err.instancePath || "/",
-        message: formatValidationError(err),
-        keyword: err.keyword,
-        ...(hint ? { fix_hint: hint } : {}),
-      };
-    }),
-  };
-}
-
 export function registerSchemaTool(
   server: McpServer,
   _registry: Registry | undefined,
@@ -716,7 +382,7 @@ export function registerSchemaTool(
     "harness_schema",
     {
       description:
-        "Fetch Harness YAML schema or examples for a resource type, or validate data against a schema. " +
+        "Fetch Harness YAML schema or examples for a resource type. " +
         "Pipeline/template schemas are bundled from harness-schema; connector, environment, service, " +
         "secret, and infrastructure schemas are fetched live from NG /yaml-schema (pass scope, org_id, project_id). " +
         "release_process and release_activity schemas are fetched live from /gateway/rmg/api/yamlSchema. " +
@@ -724,8 +390,7 @@ export function registerSchemaTool(
         "Use with path to drill into a specific section. " +
         "Use with example to fetch a named example YAML snippet. " +
         "Use with example_search to find examples by keyword. " +
-        "Use with validate to check a data payload against the full untruncated schema. " +
-        "Precedence: validate > example > example_search > path > summary. " +
+        "Precedence: example > example_search > path > summary. " +
         `Available schemas: ${availableSchemas.join(", ")}.`,
       inputSchema: {
         resource_type: z
@@ -768,14 +433,6 @@ export function registerSchemaTool(
               "to fetch an entity-specific schema. Omit for generic create-time schemas — a placeholder " +
               "identifier is sent automatically for all live entity types at any scope.",
           ),
-        validate: z
-          .record(z.string(), z.any())
-          .optional()
-          .describe(
-            "Data payload to validate against the schema (requires resource_type). " +
-              "Returns {valid: true} or {valid: false, errors: [...]} with path-anchored messages. " +
-              "Uses the full untruncated schema — no depth limits.",
-          ),
       },
       outputSchema: schemaOutputSchema,
       annotations: {
@@ -787,18 +444,6 @@ export function registerSchemaTool(
     },
     async (args) => {
       try {
-        if (args.validate !== undefined) {
-          if (!args.resource_type) {
-            return errorResult("resource_type is required when using validate.");
-          }
-          const schema = allSchemas[args.resource_type];
-          if (!schema) {
-            return errorResult(`Unknown schema: ${args.resource_type}`);
-          }
-          const result = validateDataAgainstSchema(args.resource_type, schema, args.validate);
-          return jsonResult({ resource_type: args.resource_type, ...result });
-        }
-
         if (args.example) {
           const ex = getExample(args.example);
           if (!ex) {
@@ -884,24 +529,11 @@ export function registerSchemaTool(
           }
 
           const resolved = inlineRefs(schema as JsonObject, node);
-          const { schema: truncated, truncated: wasTruncated, depth } = maybeTruncateSchema(
-            resolved,
-            `properties.${args.path}`,
-          );
           return jsonResult({
             resource_type: args.resource_type,
             path: args.path,
             source,
-            schema: truncated,
-            ...(wasTruncated
-              ? {
-                  _truncated: true,
-                  _truncation_depth: depth,
-                  _hint:
-                    "Schema was truncated to fit context. Fields marked _truncated:true can be " +
-                    "expanded with harness_schema(resource_type=..., path='<_drill value>').",
-                }
-              : {}),
+            schema: resolved,
           });
         }
 
@@ -930,10 +562,6 @@ export function registerSchemaTool(
         }
 
         const resolved = inlineRefs(schema, match.node);
-        const { schema: truncated, truncated: wasTruncated, depth } = maybeTruncateSchema(
-          resolved,
-          match.path,
-        );
         return jsonResult({
           resource_type: args.resource_type,
           // Resolved path may be a nested dotted path when a bare definition
@@ -941,16 +569,7 @@ export function registerSchemaTool(
           path: match.path,
           ...(match.path !== args.path ? { requested_path: args.path } : {}),
           source: "harness-schema",
-          schema: truncated,
-          ...(wasTruncated
-            ? {
-                _truncated: true,
-                _truncation_depth: depth,
-                _hint:
-                  "Schema was truncated to fit context. Fields marked _truncated:true can be " +
-                  "expanded with harness_schema(resource_type=..., path='<_drill value>').",
-              }
-            : {}),
+          schema: resolved,
         });
       } catch (err) {
         return errorResult(err instanceof Error ? err.message : String(err));
@@ -958,6 +577,3 @@ export function registerSchemaTool(
     },
   );
 }
-
-// Exported for unit tests only.
-export const _test = { truncateSchema, maybeTruncateSchema, SCHEMA_TRUNCATION_THRESHOLD };

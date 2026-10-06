@@ -214,13 +214,15 @@ describe("harness_search semantic routing integration", () => {
     const data = parseResult(result) as {
       semantic_routed?: boolean;
       searched_types: number;
-      types_skipped_count?: number;
+      types_skipped?: string[];
     };
 
     expect(data.semantic_routed).toBe(true);
     // connector prediction + pipeline safety floor (both in pipelines+connectors toolset)
     expect(data.searched_types).toBe(2);
-    expect(data.types_skipped_count).toBe(fullTypeCount - 2);
+    expect(data.types_skipped).toHaveLength(fullTypeCount - 2);
+    expect(data.types_skipped).not.toContain("pipeline");
+    expect(data.types_skipped).not.toContain("connector");
     expect(mockRequest).toHaveBeenCalledTimes(2);
   });
 
