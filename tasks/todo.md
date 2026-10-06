@@ -824,3 +824,11 @@ Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, b
 Resolved fast-uri to 4.2.1 (minimum 4.1.5), source-map-js to 1.2.2, and Transformers to 4.3.0. The supported ONNX/global-agent update removes roarr and sprintf-js. npm-shrinkwrap already contained fast-uri 4.2.1 and Transformers 4.3.0; synchronized its root dependency minimum.
 
 Validation: pnpm audit reports zero vulnerabilities; all 3,944 tests across 171 files passed. Build, docs, shrinkwrap consistency, frozen offline install, Transformers import smoke check, and diff checks passed.
+
+## Version 3.2.33
+
+- [x] Pull latest main and create chore/version-3.2.33.
+- [x] Synchronize package, shrinkwrap, bundle manifests, and release test versions.
+- [x] Validate release tests, shrinkwrap consistency, build, and docs.
+
+Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, build, docs check, and git diff --check passed. Latest main includes the four dependency security fixes.
