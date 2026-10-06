@@ -814,3 +814,13 @@ Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, b
 Delivery: commit and push chore/version-3.2.32, then open a PR against main.
 
 Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, build, docs check, and git diff --check passed.
+
+## Dependency security alerts 94–97 (2026-10-05)
+
+- [x] Pull latest main, create security branch, and verify GitHub advisories.
+- [x] Upgrade fast-uri and source-map-js; remove sprintf-js through a supported Transformers update.
+- [x] Verify both lockfiles, audit, build, and tests.
+
+Resolved fast-uri to 4.2.1 (minimum 4.1.5), source-map-js to 1.2.2, and Transformers to 4.3.0. The supported ONNX/global-agent update removes roarr and sprintf-js. npm-shrinkwrap already contained fast-uri 4.2.1 and Transformers 4.3.0; synchronized its root dependency minimum.
+
+Validation: pnpm audit reports zero vulnerabilities; all 3,944 tests across 171 files passed. Build, docs, shrinkwrap consistency, frozen offline install, Transformers import smoke check, and diff checks passed.

@@ -21,7 +21,7 @@
         "zod": "^4.0.0"
       },
       "optionalDependencies": {
-        "@huggingface/transformers": "^4.2.0"
+        "@huggingface/transformers": "^4.3.0"
       }
     },
     "node_modules/@emnapi/runtime": {
