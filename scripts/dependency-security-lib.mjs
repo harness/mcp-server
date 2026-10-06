@@ -12,6 +12,9 @@ export const SECURE_SOURCE_MAP_JS_VERSION = "1.2.2";
 /** Minimum @huggingface/transformers release that drops vulnerable sprintf-js (via global-agent). */
 export const SECURE_TRANSFORMERS_VERSION = "4.3.0";
 
+/** Minimum proxy-addr release for CVE-2026-90711 (added in revert #1061). */
+export const SECURE_PROXY_ADDR_VERSION = "2.0.8";
+
 /**
  * Compare semver-like versions (major.minor.patch). Pre-release/build metadata is ignored.
  * @returns {boolean}
