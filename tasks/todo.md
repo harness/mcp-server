@@ -832,3 +832,9 @@ Validation: pnpm audit reports zero vulnerabilities; all 3,944 tests across 171 
 - [x] Validate release tests, shrinkwrap consistency, build, and docs.
 
 Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, build, docs check, and git diff --check passed. Latest main includes the four dependency security fixes.
+
+## ip-address test failures after pull (2026-10-06)
+
+- [x] Confirm main's lockfile already pins ip-address 10.7.2 and CI is green.
+- [x] Reproduce a stale `node_modules/.pnpm/ip-address@10.4.0` directory surviving `pnpm install --frozen-lockfile`.
+- [x] Count only linked installs in the NAT64 security check, and load the express-rate-limit copy for classification tests.

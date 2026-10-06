@@ -185,3 +185,4 @@
 
 ## Targeted pnpm Transitive Updates
 - `pnpm update ip-address --depth 20` also rewrote unrelated direct dependency ranges to match existing overrides. Restore those incidental manifest changes before validating shrinkwrap consistency; review the full diff even for targeted updates.
+- `pnpm install --frozen-lockfile` does not delete an unlinked `node_modules/.pnpm/ip-address@<old>` directory once the lockfile already matches. Security scans of that virtual store must follow dependency symlinks; otherwise a leftover 10.4.0 fails NAT64 tests even when express-rate-limit links the patched release.

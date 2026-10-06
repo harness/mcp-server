@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
+import { join, relative, sep } from "node:path";
 
 /** Minimum ip-address release that classifies RFC 8215 NAT64 local-use as private. */
 export const SECURE_IP_ADDRESS_VERSION = "10.5.1";
@@ -141,11 +141,134 @@ export function findIpAddressInstallDirs(packageRoot) {
 }
 
 /**
+ * pnpm virtual-store entries look like node_modules/.pnpm/ip-address@10.4.0/node_modules/ip-address.
+ * @param {string} packageRoot
+ * @param {string} dir
+ * @param {string} packageName
+ * @returns {boolean}
+ */
+function isPnpmVirtualStoreEntry(packageRoot, dir, packageName) {
+  const parts = relative(packageRoot, dir).split(sep);
+  return parts.length === 5
+    && parts[0] === "node_modules"
+    && parts[1] === ".pnpm"
+    && parts[2].startsWith(`${packageName}@`)
+    && parts[3] === "node_modules"
+    && parts[4] === packageName;
+}
+
+/**
+ * Dependency links are symlinks named after the package. Virtual-store directories
+ * with no inbound symlink are leftovers `pnpm install` does not remove.
+ * @param {string} packageRoot
+ * @param {string} packageName
+ * @returns {string[]}
+ */
+function findPackageSymlinks(packageRoot, packageName) {
+  const nodeModules = join(packageRoot, "node_modules");
+  if (!existsSync(nodeModules)) {
+    return [];
+  }
+
+  /** @type {string[]} */
+  const found = [];
+
+  /** @param {string} dir */
+  function walk(dir) {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name === ".bin") {
+        continue;
+      }
+      const child = join(dir, entry.name);
+      if (entry.isSymbolicLink()) {
+        if (entry.name === packageName) {
+          found.push(child);
+        }
+        continue;
+      }
+      if (entry.isDirectory()) {
+        walk(child);
+      }
+    }
+  }
+
+  walk(nodeModules);
+  return found;
+}
+
+/**
+ * @param {string} linkPath
+ * @returns {string | null}
+ */
+function safeRealpath(linkPath) {
+  try {
+    return realpathSync(linkPath);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Installs Node can actually load: symlinked virtual-store entries, plus real
+ * directories that are not unused pnpm store leftovers.
+ * @param {string} packageRoot
+ * @returns {string[]}
+ */
+export function findActiveIpAddressInstallDirs(packageRoot) {
+  const linkedTargets = new Set(
+    findPackageSymlinks(packageRoot, "ip-address")
+      .map((linkPath) => safeRealpath(linkPath))
+      .filter((target) => target !== null),
+  );
+
+  return findIpAddressInstallDirs(packageRoot).filter((dir) => {
+    const realDir = safeRealpath(dir);
+    if (realDir && linkedTargets.has(realDir)) {
+      return true;
+    }
+    return !isPnpmVirtualStoreEntry(packageRoot, dir, "ip-address");
+  });
+}
+
+/**
+ * Prefer the copy express-rate-limit links, which is the module the server loads.
+ * @param {string} packageRoot
+ * @returns {string | null}
+ */
+export function resolveActiveIpAddressDir(packageRoot) {
+  const active = findActiveIpAddressInstallDirs(packageRoot);
+  if (active.length === 0) {
+    return null;
+  }
+
+  const consumerLink = findPackageSymlinks(packageRoot, "ip-address")
+    .find((linkPath) => linkPath.includes(`${sep}express-rate-limit@`));
+  if (consumerLink) {
+    const target = safeRealpath(consumerLink);
+    const match = target
+      ? active.find((dir) => safeRealpath(dir) === target)
+      : undefined;
+    if (match) {
+      return match;
+    }
+  }
+
+  const secure = active.filter((dir) => isSecureIpAddressVersion(readIpAddressVersion(dir)));
+  return secure[0] ?? active[0];
+}
+
+/**
  * @param {string} packageRoot
  * @returns {{ dir: string; version: string | null }[]}
  */
 export function listInsecureIpAddressInstalls(packageRoot) {
-  return findIpAddressInstallDirs(packageRoot)
+  return findActiveIpAddressInstallDirs(packageRoot)
     .map((dir) => ({ dir, version: readIpAddressVersion(dir) }))
     .filter(({ version }) => !isSecureIpAddressVersion(version));
 }
