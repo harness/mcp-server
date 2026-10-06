@@ -258,18 +258,61 @@ describe("CCM custom time window — start_time/end_time override across perspec
     expect(before).toBe(Q4_END);
   });
 
-  it("falls back to relative time_filter when only one bound is provided", async () => {
+  it("rejects a lone bound instead of silently falling back to a relative window", async () => {
+    await expect(
+      registry.dispatch(client, "cost_timeseries", "list", {
+        perspective_id: "test-perspective",
+        start_time: Q4_START, // end_time missing → invalid custom window
+        time_filter: "LAST_MONTH",
+        time_resolution: "MONTH",
+        group_by: "none",
+      }),
+    ).rejects.toThrow(/start_time and end_time must be provided together/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("accepts YYYY-MM-DD dates; date-only end_time includes the whole day (CCM-37122)", async () => {
     await registry.dispatch(client, "cost_timeseries", "list", {
       perspective_id: "test-perspective",
-      start_time: Q4_START, // end_time missing → not a valid custom window
-      time_filter: "LAST_MONTH",
-      time_resolution: "MONTH",
+      start_time: "2026-09-28",
+      end_time: "2026-09-29",
+      time_resolution: "DAY",
       group_by: "none",
     });
     const { after, before } = extractTimeFilters(mockRequest.mock.calls[0][0] as Record<string, unknown>);
-    // LAST_MONTH relative to FIXED_NOW (May 2026) → April 2026.
-    expect(after).toBe(Date.UTC(2026, 3, 1));
-    expect(before).toBe(Date.UTC(2026, 3, 30, 23, 59, 59, 999));
+    expect(after).toBe(Date.UTC(2026, 8, 28));
+    expect(before).toBe(Date.UTC(2026, 8, 29, 23, 59, 59, 999));
+  });
+
+  it("rejects unparseable dates instead of falling back to LAST_30_DAYS", async () => {
+    await expect(
+      registry.dispatch(client, "cost_timeseries", "list", {
+        perspective_id: "test-perspective",
+        start_time: "sept 28th",
+        end_time: "sept 29th",
+        group_by: "none",
+      }),
+    ).rejects.toThrow(/Invalid start_time/);
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("cost_timeseries returns dated items, inferred date_range and requested_window", async () => {
+    mockRequest.mockResolvedValue({
+      data: { perspectiveTimeSeriesStats: { stats: [{ time: Date.UTC(2026, 8, 28), values: [] }] } },
+    });
+    const result = (await registry.dispatch(client, "cost_timeseries", "list", {
+      perspective_id: "test-perspective",
+      start_time: "2026-09-28",
+      end_time: "2026-09-29",
+      time_resolution: "DAY",
+      group_by: "none",
+    })) as { items: Array<{ date: string }>; date_range: unknown; requested_window: unknown };
+    expect(result.items[0].date).toBe("2026-09-28");
+    expect(result.date_range).toEqual({ first: "2026-09-28", last: "2026-09-28" });
+    expect(result.requested_window).toEqual({
+      start: "2026-09-28T00:00:00.000Z",
+      end: "2026-09-29T23:59:59.999Z",
+    });
   });
 });
 
