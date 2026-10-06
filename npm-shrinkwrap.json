@@ -11,8 +11,6 @@
         "@hono/node-server": "^2.0.10",
         "@modelcontextprotocol/sdk": "^1.27.1",
         "adm-zip": "^0.6.1",
-        "ajv": "^8.20.0",
-        "ajv-formats": "^3.0.1",
         "dotenv": "^17.3.1",
         "express": "^5.2.1",
         "hono": "^4.13.5",

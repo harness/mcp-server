@@ -180,7 +180,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
   description:
     "Harness Knowledge Graph query engine — discover queryable types, build and execute HQL " +
     "(Harness Query Language) queries, and explore data models and connections. " +
-    "Start with harness_search(query='...') to discover relevant KG types, then get field details " +
+    "Start with kg_queryable_type_summary to pick relevant types, then get field details " +
     "for each selected type via kg_type (semantic-layer toolset), and use hql_query to validate and run queries.",
   resources: [
     {
@@ -189,10 +189,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
       description:
         "Lightweight summaries of types queryable via HQL. Returns identifier (type_id for " +
         "HQL queries), name, description, kind (OBJECT_KIND_*), connectorId, tags. No field " +
-        "metadata. Prefer harness_search(query='<what you need>') for targeted discovery — " +
-        "it returns relevant KG types directly without loading the full catalog. " +
-        "Fall back to this list only when search returns no KG type matches. " +
-        "Then fetch field details per type via " +
+        "metadata. Use this FIRST to select types, then fetch field details per type via " +
         "harness_get(resource_type='kg_type', resource_id='<identifier>', params={kind: '<kind>'}). " +
         "Types sharing the same non-empty connectorId can be JOINed. Empty connectorId means " +
         "no shared backing connector—do not infer JOIN eligibility from connector alone. " +
@@ -201,10 +198,6 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
       scope: "account",
       identifierFields: [],
       listFilterFields: KG_QUERYABLE_TYPE_FILTERS,
-      listSizeGuard: {
-        maxItems: 20,
-        searchRedirect: "harness_search(query='<what you need>') returns relevant KG types directly.",
-      },
       operations: {
         list: {
           method: "POST",
@@ -257,9 +250,7 @@ export const knowledgeGraphToolset: ToolsetDefinition = {
       identifierFields: [],
       executeHint:
         "1. Learn grammar: harness_get(resource_type='kg_grammar'). " +
-        "2. Discover types: harness_search(query='<what you need>') — returns relevant KG types directly. " +
-        "Any KG type identifier from search can be passed to harness_get. " +
-        "Fall back to harness_list(resource_type='kg_queryable_type_summary') only if search returns no KG matches. " +
+        "2. Discover types: harness_list(resource_type='kg_queryable_type_summary') — note the 'identifier' and 'kind' fields. " +
         "3. Get fields per type: harness_get(resource_type='kg_type', resource_id='<identifier>', params={kind: '<kind>'}). " +
         "4. Validate: harness_execute(resource_type='hql_query', action='validate', " +
         "body={query_string: 'find view \"ci:pipeline_execution_summary_ci\" | select {count()}'}). " +
