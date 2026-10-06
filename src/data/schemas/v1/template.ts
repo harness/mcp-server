@@ -2342,6 +2342,20 @@ const schema: Record<string, any> = {
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "user-groups": {
+            "description": "List of user group references.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
           "url": {
             "description": "Webhook URL.",
             "type": "string"
@@ -2389,6 +2403,20 @@ const schema: Record<string, any> = {
         "type": "object",
         "additionalProperties": false,
         "properties": {
+          "user-groups": {
+            "description": "List of user group references.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            ]
+          },
           "api-key": {
             "description": "Datadog API key.",
             "type": "string"
@@ -2717,6 +2745,7 @@ const schema: Record<string, any> = {
               "steps": {
                 "type": "array",
                 "description": "List of steps to execute in the stage.",
+                "minItems": 1,
                 "items": {
                   "$ref": "#/definitions/template_v1/steps/unified/StepItems"
                 }

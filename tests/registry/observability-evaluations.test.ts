@@ -48,8 +48,8 @@ function makeClient(request = vi.fn().mockResolvedValue({})): HarnessClient {
 }
 
 function resource(): ResourceDefinition {
-  const definition = observabilityEvaluationsToolset.resources.find(item => item.resourceType === "observability_evaluation_rule");
-  if (!definition) throw new Error("observability_evaluation_rule must be registered");
+  const definition = observabilityEvaluationsToolset.resources.find(item => item.resourceType === "observability_eval");
+  if (!definition) throw new Error("observability_eval must be registered");
   return definition;
 }
 
@@ -122,7 +122,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce({ config_id: CONFIG_ID });
     const registry = new Registry(makeConfig());
 
-    await registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", { body: validBody() });
+    await registry.dispatch(makeClient(request), "observability_eval", "create", { body: validBody() });
 
     expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
       method: "GET",
@@ -154,7 +154,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce({ config_id: CONFIG_ID });
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "observability-evaluations" }));
 
-    await registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", { body: validBody() });
+    await registry.dispatch(makeClient(request), "observability_eval", "create", { body: validBody() });
 
     expect(request).toHaveBeenCalledTimes(4);
     expect(request).toHaveBeenNthCalledWith(3, expect.objectContaining({
@@ -174,7 +174,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce({ config_id: CONFIG_ID });
     const registry = new Registry(makeConfig());
 
-    await registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", { body: validBody() });
+    await registry.dispatch(makeClient(request), "observability_eval", "create", { body: validBody() });
 
     expect(request).toHaveBeenNthCalledWith(3, expect.objectContaining({
       method: "GET",
@@ -193,7 +193,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce({ name: "Answer quality", type: "llm", kind: "geval", config: { criteria: "Helpful and correct" } });
     const registry = new Registry(makeConfig());
 
-    await expect(registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", {
+    await expect(registry.dispatch(makeClient(request), "observability_eval", "create", {
       body: validBody(),
     })).rejects.toThrow(/requires judge_llm_config.connector_ref/);
     expect(request).toHaveBeenCalledTimes(2);
@@ -210,7 +210,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce({ config_id: CONFIG_ID });
     const registry = new Registry(makeConfig());
 
-    await registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", { body: validBody() });
+    await registry.dispatch(makeClient(request), "observability_eval", "create", { body: validBody() });
 
     expect(request).toHaveBeenNthCalledWith(3, expect.objectContaining({
       method: "GET",
@@ -231,7 +231,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce({ config_id: CONFIG_ID });
     const registry = new Registry(makeConfig());
 
-    await registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", { body: validBody() });
+    await registry.dispatch(makeClient(request), "observability_eval", "create", { body: validBody() });
 
     expect(request).toHaveBeenNthCalledWith(3, expect.objectContaining({
       method: "GET",
@@ -250,7 +250,7 @@ describe("Observability Evaluations toolset", () => {
     const registry = new Registry(makeConfig());
     const { selector_filters: _selectors, sampling_percentage: _sampling, ...body } = validBody();
 
-    await registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", { body });
+    await registry.dispatch(makeClient(request), "observability_eval", "create", { body });
 
     expect(request).toHaveBeenCalledTimes(4);
     expect(request).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -263,7 +263,7 @@ describe("Observability Evaluations toolset", () => {
     const request = vi.fn().mockResolvedValue({ message: "disabled" });
     const registry = new Registry(makeConfig());
 
-    await registry.dispatch(makeClient(request), "observability_evaluation_rule", "update", {
+    await registry.dispatch(makeClient(request), "observability_eval", "update", {
       config_id: CONFIG_ID,
       body: { enabled: false },
     });
@@ -289,7 +289,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce({ config_id: CONFIG_ID, active_version: 2 });
     const registry = new Registry(makeConfig());
 
-    await registry.dispatch(makeClient(request), "observability_evaluation_rule", "update", {
+    await registry.dispatch(makeClient(request), "observability_eval", "update", {
       config_id: CONFIG_ID,
       body: { sampling_percentage: 50 },
     });
@@ -310,7 +310,7 @@ describe("Observability Evaluations toolset", () => {
     const request = vi.fn();
     const registry = new Registry(makeConfig());
 
-    await expect(registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", {
+    await expect(registry.dispatch(makeClient(request), "observability_eval", "create", {
       body: { ...validBody(), sampling_percentage: 0 },
     })).rejects.toThrow(/must be a finite percentage in \(0, 100\]/);
     expect(request).not.toHaveBeenCalled();
@@ -320,7 +320,7 @@ describe("Observability Evaluations toolset", () => {
     const request = vi.fn();
     const registry = new Registry(makeConfig());
 
-    await expect(registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", {
+    await expect(registry.dispatch(makeClient(request), "observability_eval", "create", {
       body: { ...validBody(), scope: "span" },
     })).rejects.toThrow(/scope='trace' only/);
     expect(request).not.toHaveBeenCalled();
@@ -332,7 +332,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce({ name: "Embedding similarity", type: "embedding", kind: "embedding_similarity" });
     const registry = new Registry(makeConfig());
 
-    await expect(registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", {
+    await expect(registry.dispatch(makeClient(request), "observability_eval", "create", {
       body: validBody(),
     })).rejects.toThrow(/cannot be positively validated/);
     expect(request).toHaveBeenCalledTimes(2);
@@ -346,7 +346,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce({ data: { connector: { type: "OpenAI", harnessManaged: true } } });
     const registry = new Registry(makeConfig());
 
-    await expect(registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", {
+    await expect(registry.dispatch(makeClient(request), "observability_eval", "create", {
       body: validBody(),
     })).rejects.toThrow(/scheduled scorer does not resolve/);
     expect(request).toHaveBeenCalledTimes(3);
@@ -360,7 +360,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce({ data: { connector: { type: "OpenAI", harnessManaged: false, spec: { model: "gpt-4.1-mini" } } } });
     const registry = new Registry(makeConfig());
 
-    await expect(registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", {
+    await expect(registry.dispatch(makeClient(request), "observability_eval", "create", {
       body: validBody(),
     })).rejects.toThrow(/no supported API-key secret reference/);
     expect(request).toHaveBeenCalledTimes(3);
@@ -376,7 +376,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce({ data: { connector: { type: "OpenAI", harnessManaged: false, spec: { apiKeyRef: "account.openai-key" } } } });
     const registry = new Registry(makeConfig());
 
-    await expect(registry.dispatch(makeClient(request), "observability_evaluation_rule", "create", {
+    await expect(registry.dispatch(makeClient(request), "observability_eval", "create", {
       body: validBody(),
     })).rejects.toThrow(/requires a non-empty model/);
     expect(request).toHaveBeenCalledTimes(3);
@@ -386,10 +386,10 @@ describe("Observability Evaluations toolset", () => {
     const request = vi.fn();
     const registry = new Registry(makeConfig());
 
-    await expect(registry.dispatch(makeClient(request), "observability_evaluation_rule", "get", {
+    await expect(registry.dispatch(makeClient(request), "observability_eval", "get", {
       config_id: "../metric-sets",
     })).rejects.toThrow(/config_id must be a UUID/);
-    await expect(registry.dispatch(makeClient(request), "observability_evaluation_rule", "delete", {
+    await expect(registry.dispatch(makeClient(request), "observability_eval", "delete", {
       config_id: "../metric-sets",
     })).rejects.toThrow(/config_id must be a UUID/);
 

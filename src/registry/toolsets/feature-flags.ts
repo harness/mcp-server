@@ -127,8 +127,8 @@ function applyFmeExperimentParentTypeQuery(input: Record<string, unknown>, opera
   input.parent_type = parentType;
 }
 
-// Shared by fme_metric/fme_experiment/fme_experiment_settings .update — all three
-// send JSON Merge Patch (RFC 7396) bodies built from the same whitelist-and-copy shape.
+// Shared by the fme_* .update operations — each sends a JSON Merge Patch (RFC 7396) body
+// built from the same whitelist-and-copy shape.
 function buildFmeMergePatch(
   body: Record<string, unknown> | undefined,
   patchableFields: readonly string[],
@@ -143,6 +143,9 @@ function buildFmeMergePatch(
   }
   return patch;
 }
+
+// Targeting-rule label sent on create when the caller omits rule.
+const FME_EXPERIMENT_DEFAULT_RULE = "default";
 
 // fme_experiment list items: the generic compactItems() whitelist keeps id/name/description/status/
 // *At timestamps but drops parent, environmentId, and the treatment/ownership fields an agent needs
@@ -161,6 +164,8 @@ function compactFmeExperiment(item: Record<string, unknown>): Record<string, unk
     "baselineTreatment",
     "comparisonTreatments",
     "owners",
+    "tags",
+    "rule",
     "createdAt",
     "updatedAt",
     "openInHarness",
@@ -436,12 +441,14 @@ const fmeExperimentCreateSchema: BodySchema = {
     { name: "keyMetrics", type: "array", required: false, description: "Metric ids to set as key metrics. Omit for none.", itemType: "string" },
     { name: "supportingMetrics", type: "array", required: false, description: "Metric ids to set as supporting metrics. Omit for none.", itemType: "string" },
     { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}. Omit for none.", itemType: "object" },
+    { name: "rule", type: "string", required: false, description: "Targeting-rule label to scope results to: \"default\" or a specific targeting rule name on the parent flag. Defaults to \"default\" when omitted." },
+    { name: "tags", type: "array", required: false, description: "Initial tags. Each entry is {name: string}. Omit for none.", itemType: "object" },
   ],
 };
 
 const fmeExperimentUpdateSchema: BodySchema = {
   description:
-    "Partially update an Experiment via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name/startAt/endAt/baselineTreatment/comparisonTreatments/status cannot be cleared with null (comparisonTreatments also rejects []) — 400 if attempted. description/hypothesis/keyMetrics/supportingMetrics clear with null (or [] for the arrays). parent and environment cannot be changed.",
+    "Partially update an Experiment via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. name/startAt/endAt/baselineTreatment/comparisonTreatments/status cannot be cleared with null (comparisonTreatments also rejects []) — 400 if attempted. description/hypothesis/rule/keyMetrics/supportingMetrics/tags clear with null (or [] for the arrays). parent and environment cannot be changed.",
   fields: [
     { name: "name", type: "string", required: false, description: "Updated name; null not allowed" },
     { name: "description", type: "string", required: false, description: "Updated description; null clears it" },
@@ -453,6 +460,8 @@ const fmeExperimentUpdateSchema: BodySchema = {
     { name: "keyMetrics", type: "array", required: false, description: "Replacement key metric ids; null or [] clears the list", itemType: "string" },
     { name: "supportingMetrics", type: "array", required: false, description: "Replacement supporting metric ids; null or [] clears the list", itemType: "string" },
     { name: "owners", type: "array", required: false, description: "Replacement owner list — {type: \"USER\", id or email} or {type: \"GROUP\", identifier}; null or [] clears", itemType: "object" },
+    { name: "rule", type: "string", required: false, description: "Updated targeting-rule label (\"default\" or a targeting rule name on the parent flag); null clears it, reverting to the default rule scope" },
+    { name: "tags", type: "array", required: false, description: "Replacement tag list — each entry {name: string}; null or [] clears all tags", itemType: "object" },
     { name: "status", type: "string", required: false, description: "Updated lifecycle status (ACTIVE, PAUSED, ARCHIVED, COMPLETED); null not allowed. ARCHIVED is a status here, not a substitute for delete." },
   ],
 };
@@ -467,6 +476,14 @@ const fmeExperimentSettingsUpdateSchema: BodySchema = {
     { name: "minimumSampleSize", type: "number", required: false, description: "Minimum per-treatment sample size; null not allowed" },
     { name: "reviewPeriod", type: "string", required: false, description: "ISO-8601 duration (e.g. \"PT336H\"); null not allowed" },
     { name: "varianceReduction", type: "object", required: false, description: "{method: NONE|CUPED}, or null to clear (resets to method NONE)" },
+  ],
+};
+
+const fmeExperimentAlertingUpdateSchema: BodySchema = {
+  description:
+    "Set whether an Experiment is subscribed to significance-regression alerting via JSON Merge Patch (RFC 7396). isEnabled is required and cannot be null (400 if omitted or null).",
+  fields: [
+    { name: "isEnabled", type: "boolean", required: true, description: "true to subscribe the experiment to alert evaluation, false to unsubscribe" },
   ],
 };
 
@@ -2070,6 +2087,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
         { name: "name", description: "Filter by experiment title (used with match_type)." },
         { name: "match_type", description: "How name is matched. Ignored when name is omitted.", enum: ["starts_with", "contains", "exact"] },
         { name: "status", description: "Filter by lifecycle status. Defaults to [ACTIVE].", enum: ["ACTIVE", "PAUSED", "ARCHIVED", "COMPLETED"] },
+        { name: "tags", description: "Filter to experiments that have any of these tags, by tag name (array of names)." },
         { name: "offset", description: "Pagination offset", type: "number" },
         { name: "limit", description: "Page size (max 100, default 100)", type: "number" },
       ],
@@ -2090,6 +2108,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             name: "name",
             match_type: "match_type",
             status: "status",
+            tags: "tags",
             offset: "offset",
             size: "limit",
             limit: "limit",
@@ -2097,7 +2116,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           responseExtractor: fmeV4PaginatedListExtract,
           description:
             "List experiments in a project, with pagination and filters (harness_list size maps to limit; pass offset directly " +
-            "via filters). parent_type is required. Defaults to ACTIVE experiments unless status is passed.",
+            "via filters). parent_type is required. Defaults to ACTIVE experiments unless status is passed. " +
+            "Each item includes its tags and rule.",
         },
         get: {
           method: "GET",
@@ -2135,6 +2155,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
               ...(body?.keyMetrics !== undefined ? { keyMetrics: body.keyMetrics } : {}),
               ...(body?.supportingMetrics !== undefined ? { supportingMetrics: body.supportingMetrics } : {}),
               ...(body?.owners !== undefined ? { owners: body.owners } : {}),
+              rule: body?.rule !== undefined && body.rule !== null ? body.rule : FME_EXPERIMENT_DEFAULT_RULE,
+              ...(body?.tags !== undefined ? { tags: body.tags } : {}),
             };
           },
           responseExtractor: fmeV4EntityExtract,
@@ -2142,7 +2164,8 @@ export const featureFlagsToolset: ToolsetDefinition = {
           description:
             "Create an experiment. Requires environment_id (param, the environment it's assigned in) plus " +
             "parent/name/startAt/endAt/baselineTreatment/comparisonTreatments in the body. The parent must exist in " +
-            "that environment (404 if missing). Duplicate name returns 409.",
+            "that environment (404 if missing). Duplicate name returns 409. Optional rule scopes results to a targeting " +
+            "rule (defaults to \"default\") and tags attaches tags by name.",
         },
         update: {
           method: "PATCH",
@@ -2168,12 +2191,15 @@ export const featureFlagsToolset: ToolsetDefinition = {
               "supportingMetrics",
               "status",
               "owners",
+              "rule",
+              "tags",
             ]);
           },
           responseExtractor: fmeV4EntityExtract,
           bodySchema: fmeExperimentUpdateSchema,
           description:
             "Partially update an experiment via JSON Merge Patch (RFC 7396). Omit a field to leave it unchanged. " +
+            "rule: null clears it; tags: null or [] clears all tags, otherwise the list replaces existing tags. " +
             "Parent and environment cannot be changed. Renaming to a name already used in the project returns 409.",
         },
         delete: {
@@ -2262,6 +2288,56 @@ export const featureFlagsToolset: ToolsetDefinition = {
             "Revert an experiment's settings to organization defaults by removing the experiment-level override " +
             "(source becomes ORGANIZATION_DEFAULT) — the override's values are lost. Idempotent — safe to call when " +
             "no override exists (no-op, same response).",
+        },
+      },
+    },
+    {
+      resourceType: "fme_experiment_alerting",
+      displayName: "FME Experiment Alerting",
+      description:
+        "Whether a single Experiment is subscribed to significance-regression alerting. An alert fires when a calculation " +
+        "run completes and an evaluated metric result is statistically significant (per the experiment's applied " +
+        "fme_experiment_settings) with an undesired direction past the degradation threshold. Harness-native only " +
+        "(org_id + project_id). Supports get and update only.",
+      toolset: "feature-flags",
+      scope: "project",
+      scopeParams: FME_HARNESS_NATIVE_SCOPE_PARAMS,
+      identifierFields: ["experiment_id"],
+      operations: {
+        get: {
+          method: "GET",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_alerting");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
+            return { path: `/fme/api/v4/experiments/${id}/alerting` };
+          },
+          operationPolicy: { risk: "read", retryPolicy: "safe" },
+          responseExtractor: passthrough,
+          description:
+            "Get whether the experiment is subscribed to alerting ({id, isEnabled}). Returns isEnabled: false when no " +
+            "alert policy has ever been configured; only 404s when the experiment itself doesn't exist.",
+        },
+        update: {
+          method: "PATCH",
+          path: "",
+          routeResolver: (input) => {
+            requireHarnessNativeSegmentScope(input, "fme_experiment_alerting");
+            const id = encodeURIComponent(requireFmeIdentifier(input, "experiment_id", "fme_experiment_alerting"));
+            return { path: `/fme/api/v4/experiments/${id}/alerting` };
+          },
+          operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          headers: { "Content-Type": "application/merge-patch+json" },
+          bodyBuilder: (input) => {
+            const body = input.body as Record<string, unknown> | undefined;
+            return buildFmeMergePatch(body, ["isEnabled"]);
+          },
+          responseExtractor: fmeV4EntityExtract,
+          bodySchema: fmeExperimentAlertingUpdateSchema,
+          description:
+            "Subscribe or unsubscribe the experiment from alerting. Body must contain isEnabled (boolean, required; " +
+            "400 if omitted or null). 404 if the experiment doesn't exist; 403 if the caller lacks edit permission. " +
+            "Only the subscription is editable here — the degradation threshold is not configurable through this resource.",
         },
       },
     },
