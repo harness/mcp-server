@@ -223,7 +223,33 @@ describe("harness_search semantic routing integration", () => {
     expect(data.types_skipped).toHaveLength(fullTypeCount - 2);
     expect(data.types_skipped).not.toContain("pipeline");
     expect(data.types_skipped).not.toContain("connector");
+    expect(data).not.toHaveProperty("types_skipped_count");
+    expect(data.types_skipped).toEqual(
+      expect.arrayContaining([expect.any(String)]),
+    );
     expect(mockRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not truncate long item descriptions in keyword search results", async () => {
+    const longDescription = "x".repeat(250);
+    const clientWithLongDesc = makeClient(vi.fn().mockResolvedValue({
+      data: { content: [{ identifier: "p1", description: longDescription }], totalElements: 1 },
+    }));
+    const searchManager = makeSearchManager([
+      makeSemanticResult(ROUTING_THRESHOLD - 0.05, { resource_type: "pipeline" }),
+    ]);
+    const { registerSearchTool } = await import("../../src/tools/harness-search.js");
+    registerSearchTool(server, registry, clientWithLongDesc, searchManager);
+
+    const result = await server.call("harness_search", { query: "deploy" });
+    const data = parseResult(result) as {
+      results: Array<{ items: Array<Record<string, unknown>> }>;
+    };
+
+    const descriptions = data.results.flatMap((entry) =>
+      entry.items.map((item) => item.description).filter((d): d is string => typeof d === "string"),
+    );
+    expect(descriptions).toContain(longDescription);
   });
 
   it("falls back to full scatter-gather when routing scores are below threshold", async () => {
@@ -408,6 +434,36 @@ describe("live resource indexing guards", () => {
         project_id: "default-project",
       }),
     }));
+  });
+
+  it("returns the full kg_queryable_type_summary list without harness_list response capping", async () => {
+    const server = makeMcpServer();
+    const items = Array.from({ length: 25 }, (_, i) => ({
+      identifier: `type-${i}`,
+      name: `Type ${i}`,
+      kind: "OBJECT_KIND_ENTITY",
+      connectorId: "",
+    }));
+    const dispatch = vi.fn().mockResolvedValue({ items, total: items.length });
+    const registry = {
+      getAllFilterFields: () => [],
+      getTypesForOperation: () => ["kg_queryable_type_summary"],
+      getResource: () => ({ scope: "account" }),
+      dispatch,
+    } as unknown as Registry;
+    const { registerListTool } = await import("../../src/tools/harness-list.js");
+    registerListTool(server, registry, makeClient(), undefined);
+
+    const result = await server.call("harness_list", { resource_type: "kg_queryable_type_summary" });
+    const data = parseResult(result) as {
+      items: unknown[];
+      _capped?: boolean;
+      _hint?: string;
+    };
+
+    expect(data.items).toHaveLength(25);
+    expect(data._capped).toBeUndefined();
+    expect(data._hint).toBeUndefined();
   });
 
   it("scope-qualifies semantic indexing for duplicate resource identifiers", async () => {

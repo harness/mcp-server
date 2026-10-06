@@ -220,4 +220,23 @@ describe("schema bundle contract", () => {
       expect(dynamicStage.properties.dynamic.properties).toHaveProperty("source-config");
     }
   });
+
+  it("includes upstream Jira project and issue type constraints on UnifiedJiraApprovalStepSpec", () => {
+    for (const key of ["pipeline_v1", "template_v1"] as const) {
+      const defs = SCHEMAS[key].definitions as Record<string, Record<string, unknown>>;
+      const unified = defs[key].steps.unified as Record<string, unknown>;
+      const spec = unified.UnifiedJiraApprovalStepSpec as {
+        properties: Record<string, { type?: string; description?: string }>;
+      };
+
+      expect(spec.properties.project).toMatchObject({
+        type: "string",
+        description: expect.stringContaining("Jira project key"),
+      });
+      expect(spec.properties.type).toMatchObject({
+        type: "string",
+        description: expect.stringContaining("Jira issue type"),
+      });
+    }
+  });
 });
