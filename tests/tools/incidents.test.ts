@@ -154,6 +154,7 @@ describe("incident — harness_list", () => {
         summary: "short",
         keyEvents: [{ timestamp: 1, status: "FIXING", details: "x" }, { timestamp: 2, status: "FIXING", details: "y" }],
         rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true }],
+        rootCauseTheoriesSha: "sha-1",
         __internalMeta: { trace: "abc" },
       }],
       totalCount: 1,
@@ -161,6 +162,7 @@ describe("incident — harness_list", () => {
     const result = await server.call("harness_list", { resource_type: "incident" });
     const data = parseResult(result) as { items: Array<Record<string, unknown>> };
     const item = data.items[0]!;
+    expect(item).not.toHaveProperty("rootCauseTheoriesSha");
     expect(item.prettyId).toBe("INC-1");
     expect(item.severity).toEqual({ id: "1", label: "SEV1" });
     expect(item.impactedServices).toEqual(["svc-a"]);
@@ -360,6 +362,20 @@ describe("incident — harness_get", () => {
       title: "CPU spike",
       name: "relates to",
     }]);
+  });
+
+  it("keeps theory ids and the RCA fingerprint needed to confirm, rule out, or undo a theory", async () => {
+    mockRequest.mockResolvedValueOnce({
+      prettyId: "INC-42",
+      rootCauseTheories: [{ id: "theory-1", message: "db", status: "INVESTIGATING", confidence: 50, aiGenerated: false }],
+      rootCauseTheoriesSha: "sha-1",
+    });
+    const result = await server.call("harness_get", { resource_type: "incident", resource_id: "INC-42" });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.rootCauseTheories).toEqual([
+      { id: "theory-1", message: "db", status: "INVESTIGATING", confidence: 50, aiGenerated: false },
+    ]);
+    expect(data.rootCauseTheoriesSha).toBe("sha-1");
   });
 
   it("keeps the full summary in the detail view", async () => {

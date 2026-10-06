@@ -12,6 +12,7 @@ import { isRecord } from "../../utils/type-guards.js";
 function projectRootCauseTheory(t: unknown): unknown {
   if (!isRecord(t)) return t;
   const out: Record<string, unknown> = {};
+  if (typeof t.id === "string") out.id = t.id;
   if (typeof t.message === "string") out.message = t.message;
   if (typeof t.status === "string") out.status = t.status;
   if (typeof t.confidence === "number") out.confidence = t.confidence;
@@ -83,6 +84,9 @@ function projectIncident(raw: Record<string, unknown>, verbose: boolean): Record
     slim.rootCauseTheories = verbose
       ? raw.rootCauseTheories.map(projectRootCauseTheory)
       : raw.rootCauseTheories.length;
+  }
+  if (verbose && typeof raw.rootCauseTheoriesSha === "string") {
+    slim.rootCauseTheoriesSha = raw.rootCauseTheoriesSha;
   }
   if (Array.isArray(raw.relatedActivities) && raw.relatedActivities.length > 0) {
     slim.relatedActivities = raw.relatedActivities.map(projectRelatedActivity);
