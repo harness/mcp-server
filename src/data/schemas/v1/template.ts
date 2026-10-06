@@ -6018,6 +6018,14 @@ const schema: Record<string, any> = {
               "run": {
                 "description": "Run step configuration for script execution.",
                 "$ref": "#/definitions/template_v1/steps/unified/RunStepInfoV1"
+              },
+              "project": {
+                "description": "Jira project key. The fetched issue must belong to this project.",
+                "type": "string"
+              },
+              "type": {
+                "description": "Jira issue type. The fetched issue must be of this type.",
+                "type": "string"
               }
             },
             "$schema": "http://json-schema.org/draft-07/schema#"
