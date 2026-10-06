@@ -43,6 +43,12 @@ export const searchOutputSchema = z.object({
   query: z.string().describe("The search query that was executed"),
   total_matches: z.number().describe("Total number of matching results"),
   searched_types: z.number().describe("Number of resource types searched"),
+  semantic_routed: z.boolean().optional().describe("True when semantic routing narrowed the types searched"),
+  types_skipped_count: z.number().optional().describe("How many listable types semantic routing skipped"),
+  results_capped: z.boolean().optional().describe("True when matches were omitted to stay within the result budget"),
+  returned_matches: z.number().optional().describe("Matches included after the result cap"),
+  _hint: z.string().optional().describe("How to narrow a capped search result"),
+  errors: z.record(z.string(), z.string()).optional().describe("Per-type search errors"),
   results: z.array(z.object({
     resource_type: z.string().describe("Resource type"),
     match_count: z.number().describe("Number of matches in this type"),

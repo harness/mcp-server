@@ -352,6 +352,66 @@ export function getEntitySchemaSummary(
   };
 }
 
+function resolveHashRef(schema: JsonObject, ref: string): unknown {
+  if (!ref.startsWith("#/")) return undefined;
+  let current: unknown = schema;
+  for (const part of ref.slice(2).split("/")) {
+    if (!isRecord(current)) return undefined;
+    current = current[part];
+  }
+  return current;
+}
+
+function dereferenceNode(schema: JsonObject, node: unknown): unknown {
+  const seen = new Set<unknown>();
+  let current = node;
+  while (isRecord(current) && typeof current.$ref === "string" && current.$ref.startsWith("#/")) {
+    if (seen.has(current)) return current;
+    seen.add(current);
+    const resolved = resolveHashRef(schema, current.$ref);
+    if (!isRecord(resolved) && !Array.isArray(resolved)) return current;
+    current = resolved;
+  }
+  return current;
+}
+
+/** Read one drill-path segment, following `$ref` and numeric array indexes. */
+function stepSchemaPath(
+  schema: JsonObject,
+  current: unknown,
+  part: string,
+  preferProperties: boolean,
+): { found: true; value: unknown } | { found: false } {
+  const node = dereferenceNode(schema, current);
+  if (Array.isArray(node)) {
+    if (!/^\d+$/.test(part)) return { found: false };
+    const index = Number(part);
+    if (index >= node.length) return { found: false };
+    return { found: true, value: node[index] };
+  }
+  if (!isRecord(node)) return { found: false };
+  if (preferProperties && isRecord(node.properties) && Object.hasOwn(node.properties, part)) {
+    return { found: true, value: node.properties[part] };
+  }
+  if (Object.hasOwn(node, part)) return { found: true, value: node[part] };
+  return { found: false };
+}
+
+function walkSchemaPath(
+  schema: JsonObject,
+  start: unknown,
+  parts: string[],
+  preferProperties: boolean,
+): unknown {
+  let current = start;
+  for (const part of parts) {
+    const step = stepSchemaPath(schema, current, part, preferProperties);
+    if (!step.found) return undefined;
+    current = step.value;
+  }
+  return current;
+}
+
 export function navigateEntitySchemaPath(
   schema: JsonObject,
   resourceType: string,
@@ -368,54 +428,20 @@ export function navigateEntitySchemaPath(
       ? path.slice(rootProperty.length + 1)
       : path;
     const parts = normalizedPath.split(".").filter(Boolean);
-    let current: unknown = rootDef;
-    for (const part of parts) {
-      if (!current || typeof current !== "object" || Array.isArray(current)) return undefined;
-      const obj = current as JsonObject;
-      const props = obj.properties as JsonObject | undefined;
-      if (props && part in props) {
-        current = props[part];
-        continue;
-      }
-      if (part in obj) {
-        current = obj[part];
-        continue;
-      }
-      return undefined;
-    }
-    return current;
+    return walkSchemaPath(schema, rootDef, parts, true);
   }
 
   const resourceDefs = getResourceDefinitions(schema, resourceType);
   if (resourceDefs) {
     if (resourceDefs[path]) return resourceDefs[path];
 
-    const parts = path.split(".");
-    let current: unknown = resourceDefs;
-    for (const part of parts) {
-      if (current && typeof current === "object" && !Array.isArray(current)) {
-        current = (current as JsonObject)[part];
-      } else {
-        current = undefined;
-        break;
-      }
-    }
-    if (current !== undefined) return current;
+    const walked = walkSchemaPath(schema, resourceDefs, path.split("."), false);
+    if (walked !== undefined) return walked;
   }
 
   const definitions = schema.definitions;
   if (!isRecord(definitions)) return undefined;
-
-  const parts = path.split(".");
-  let current: unknown = definitions;
-  for (const part of parts) {
-    if (current && typeof current === "object" && !Array.isArray(current)) {
-      current = (current as JsonObject)[part];
-    } else {
-      return undefined;
-    }
-  }
-  return current;
+  return walkSchemaPath(schema, definitions, path.split("."), false);
 }
 
 export interface LiveSchemaFetcher {
