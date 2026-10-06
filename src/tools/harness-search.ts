@@ -18,6 +18,19 @@ import { entityResultMatchesEffectiveScope } from "../search/entity-index.js";
 const log = createLogger("search");
 const RESOURCE_SCOPES: readonly ResourceScope[] = ["account", "org", "project"];
 
+/**
+ * Hard ceiling on serialized JSON result size (chars).  Results above this
+ * threshold get spilled to a navigable file by the runner, blowing up context.
+ * We trim lower-tier entries to stay under this budget.
+ */
+const MAX_RESULT_CHARS = 80_000;
+
+/** Hard cap on items across all types — prevents context explosion. */
+const MAX_TOTAL_ITEMS = 30;
+
+/** Truncate description strings longer than this. */
+const MAX_DESCRIPTION_CHARS = 200;
+
 /** Relevance tiers — lower number = more relevant. */
 const RELEVANCE_TIERS: Record<string, number> = {
   pipeline: 1, service: 1, environment: 1, connector: 1, execution: 1,
@@ -273,17 +286,69 @@ export function registerSearchTool(server: McpServer, registry: Registry, client
           return b.match_count - a.match_count;
         });
 
-        const skippedTypes = semanticRouted
-          ? candidateTypes.filter((rt) => !targetTypes.includes(rt))
-          : [];
-        return jsonResult({
+        // --- Truncate description fields to keep items compact ---
+        for (const entry of entries) {
+          for (const item of entry.items as Array<Record<string, unknown>>) {
+            if (typeof item["description"] === "string" && item["description"].length > MAX_DESCRIPTION_CHARS) {
+              item["description"] = item["description"].slice(0, MAX_DESCRIPTION_CHARS) + "...";
+            }
+          }
+        }
+
+        // --- Enforce total item cap across all types ---
+        let totalItems = entries.reduce((sum, e) => sum + e.items.length, 0);
+        if (totalItems > MAX_TOTAL_ITEMS) {
+          // Drop items from lowest-tier (highest tier number) entries first
+          for (let i = entries.length - 1; i >= 0 && totalItems > MAX_TOTAL_ITEMS; i--) {
+            const excess = totalItems - MAX_TOTAL_ITEMS;
+            const entry = entries[i] as SearchResultEntry | undefined;
+            if (!entry) continue;
+            if (entry.items.length <= excess) {
+              totalItems -= entry.items.length;
+              entry.items = [];
+              entry.match_count = 0;
+            } else {
+              entry.items = entry.items.slice(0, entry.items.length - excess);
+              entry.match_count = entry.items.length;
+              totalItems = MAX_TOTAL_ITEMS;
+            }
+          }
+          // Remove empty entries
+          const before = entries.length;
+          const removed = entries.filter(e => e.items.length === 0);
+          entries.splice(0, entries.length, ...entries.filter(e => e.items.length > 0));
+          if (removed.length > 0) {
+            log.info(`Item cap: dropped ${removed.length} empty type entries`, {
+              dropped: removed.map(e => e.resource_type),
+            });
+          }
+        }
+
+        // --- Enforce payload size cap ---
+        const skippedCount = semanticRouted
+          ? candidateTypes.length - targetTypes.length
+          : 0;
+        let payload = {
           query: args.query,
           total_matches: totalMatches + semanticMatchCount,
           searched_types: targetTypes.length,
-          ...(semanticRouted ? { semantic_routed: true, types_skipped: skippedTypes } : {}),
+          ...(semanticRouted ? { semantic_routed: true, types_skipped_count: skippedCount } : {}),
           results: entries,
           ...(Object.keys(errors).length > 0 ? { errors } : {}),
-        });
+        };
+        let serialized = JSON.stringify(payload);
+
+        // If still over budget, progressively drop lowest-tier result groups
+        while (serialized.length > MAX_RESULT_CHARS && entries.length > 1) {
+          const dropped = entries.pop()!;
+          log.info(`Size cap: dropped ${dropped.resource_type} (tier ${dropped.tier}, ${dropped.match_count} items) to fit ${MAX_RESULT_CHARS} char budget`, {
+            current_size: serialized.length,
+          });
+          payload = { ...payload, results: entries };
+          serialized = JSON.stringify(payload);
+        }
+
+        return jsonResult(payload);
       } catch (err) {
         if (isUserError(err)) return errorResult(err.message);
         if (isUserFixableApiError(err)) return errorResult(err.message);
