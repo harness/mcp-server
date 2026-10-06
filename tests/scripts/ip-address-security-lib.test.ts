@@ -148,6 +148,52 @@ describe("ip-address-security-lib", () => {
     ]);
   });
 
+  it("returns null when no ip-address install exists", () => {
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-empty-"));
+    tempDirs.push(packageRoot);
+    mkdirSync(join(packageRoot, "node_modules"), { recursive: true });
+
+    expect(findActiveIpAddressInstallDirs(packageRoot)).toEqual([]);
+    expect(resolveActiveIpAddressDir(packageRoot)).toBeNull();
+    expect(listInsecureIpAddressInstalls(packageRoot)).toEqual([]);
+  });
+
+  it("prefers a secure active install when express-rate-limit does not link ip-address", () => {
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-secure-fallback-"));
+    tempDirs.push(packageRoot);
+    const vulnerable = join(packageRoot, "node_modules/pkg-a/node_modules/ip-address");
+    const patched = join(packageRoot, "node_modules/pkg-b/node_modules/ip-address");
+    writeIpAddressPackage(vulnerable, "10.4.0");
+    writeIpAddressPackage(patched, "10.7.2");
+
+    expect(findActiveIpAddressInstallDirs(packageRoot).sort()).toEqual([vulnerable, patched].sort());
+    expect(listInsecureIpAddressInstalls(packageRoot)).toEqual([{ dir: vulnerable, version: "10.4.0" }]);
+    expect(resolveActiveIpAddressDir(packageRoot)).toBe(patched);
+  });
+
+  it("prefers the express-rate-limit linked copy over another secure install", () => {
+    if (process.platform === "win32") {
+      return;
+    }
+
+    const packageRoot = mkdtempSync(join(tmpdir(), "ip-address-erl-pref-"));
+    tempDirs.push(packageRoot);
+    const erlLinked = join(packageRoot, "node_modules/.pnpm/ip-address@10.5.1/node_modules/ip-address");
+    const otherSecure = join(packageRoot, "node_modules/.pnpm/ip-address@10.7.2/node_modules/ip-address");
+    writeIpAddressPackage(erlLinked, "10.5.1");
+    writeIpAddressPackage(otherSecure, "10.7.2");
+
+    const erlModules = join(packageRoot, "node_modules/.pnpm/express-rate-limit@8.3.2/node_modules");
+    const otherModules = join(packageRoot, "node_modules/.pnpm/other-pkg@1.0.0/node_modules");
+    mkdirSync(erlModules, { recursive: true });
+    mkdirSync(otherModules, { recursive: true });
+    symlinkSync("../../ip-address@10.5.1/node_modules/ip-address", join(erlModules, "ip-address"), "dir");
+    symlinkSync("../../ip-address@10.7.2/node_modules/ip-address", join(otherModules, "ip-address"), "dir");
+
+    expect(listInsecureIpAddressInstalls(packageRoot)).toEqual([]);
+    expect(resolveActiveIpAddressDir(packageRoot)).toBe(erlLinked);
+  });
+
   it("classifies RFC 8215 NAT64 local-use addresses as non-global private space", () => {
     const { Address6 } = loadInstalledAddress6();
 
