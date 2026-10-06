@@ -105,6 +105,14 @@ function incidentGetExtract(raw: unknown): unknown {
   return projectIncident(raw, true);
 }
 
+function addRootCauseTheoryExtract(raw: unknown): unknown {
+  if (!isRecord(raw)) return raw;
+  const out: Record<string, unknown> = {};
+  if (raw.theory !== undefined) out.theory = projectRootCauseTheory(raw.theory);
+  if (typeof raw.created === "boolean") out.created = raw.created;
+  return out;
+}
+
 /**
  * Compact an incident list item. The list response carries the same multi-KB
  * keyEvents / rootCauseTheories arrays and narrative summary as the detail view;
@@ -164,6 +172,19 @@ const incidentUpdateSchema: BodySchema = {
   ],
 };
 
+const addRootCauseTheorySchema: BodySchema = {
+  description: "Human-authored root-cause theory to add (AddRootCauseTheoryRequest)",
+  fields: [
+    { name: "message", type: "string", required: true, description: "The root-cause theory text" },
+    {
+      name: "status",
+      type: "string",
+      required: false,
+      description: "Initial theory status: INVESTIGATING (default) or CONFIRMED",
+    },
+  ],
+};
+
 export const incidentsToolset: ToolsetDefinition = {
   name: "incidents",
   displayName: "AI-SRE Incidents",
@@ -172,7 +193,8 @@ export const incidentsToolset: ToolsetDefinition = {
     {
       resourceType: "incident",
       displayName: "Incident",
-      description: "AI-SRE incident-management entity. Supports list/get/create/update plus a close action. "
+      description: "AI-SRE incident-management entity. Supports list/get/create/update plus close and "
+        + "add_root_cause_theory actions. "
         + "This entity carries current state only — the incident's history (runbook runs, pages, notes, status "
         + "changes) is a separate resource: harness_list(resource_type='activity_timeline', "
         + "filters={activity_id: <prettyId>}). An empty keyEvents here does not mean nothing happened.",
@@ -268,6 +290,19 @@ export const incidentsToolset: ToolsetDefinition = {
           // body entirely when bodyBuilder is absent.
           responseExtractor: incidentGetExtract,
           actionDescription: "Close an incident (transitions status to closed).",
+        },
+        add_root_cause_theory: {
+          method: "POST",
+          path: "/gateway/ir/tp/api/v1/mc/incidents/{incidentId}/root-cause-theories",
+          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+          pathParams: { incident_id: "incidentId" },
+          bodyBuilder: buildBodyNormalized(),
+          bodySchema: addRootCauseTheorySchema,
+          responseExtractor: addRootCauseTheoryExtract,
+          actionDescription:
+            "Add a human-authored root-cause theory to an incident. If a theory with the same message already "
+            + "exists, no duplicate is created: the existing theory is returned with created=false and its status "
+            + "is left unchanged. The response's theory.id identifies the theory for later status changes.",
         },
       },
     },

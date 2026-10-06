@@ -511,3 +511,61 @@ describe("incident — harness_execute (close)", () => {
     expect(data).not.toHaveProperty("correlationId");
   });
 });
+
+describe("incident — harness_execute (add_root_cause_theory)", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let mockRequest: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    server = makeMcpServer("accept");
+    mockRequest = vi.fn().mockResolvedValue({
+      theory: { id: "theory-1", message: "db", status: "INVESTIGATING", confidence: 0, aiGenerated: false },
+      created: true,
+    });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server, new Registry(makeConfig()), makeClient(mockRequest), makeConfig());
+  });
+
+  it("posts the theory to the incident's root-cause-theories path", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "add_root_cause_theory",
+      resource_id: "INC-42",
+      body: { message: "db", status: "CONFIRMED" },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42/root-cause-theories");
+    expect(callArgs.body).toEqual({ message: "db", status: "CONFIRMED" });
+  });
+
+  it("returns the projected theory and whether it was created", async () => {
+    mockRequest.mockResolvedValueOnce({
+      theory: { id: "theory-1", message: "db", status: "CONFIRMED", confidence: 0, aiGenerated: false, internal: "x" },
+      created: false,
+    });
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "add_root_cause_theory",
+      resource_id: "INC-42",
+      body: { message: "db" },
+    });
+    expect(parseResult(result)).toEqual({
+      theory: { id: "theory-1", message: "db", status: "CONFIRMED", confidence: 0, aiGenerated: false },
+      created: false,
+    });
+  });
+
+  it("rejects a body without a message before calling the API", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "add_root_cause_theory",
+      resource_id: "INC-42",
+      body: { status: "CONFIRMED" },
+    });
+    expect(result.isError).toBe(true);
+    expect((parseResult(result) as { error: string }).error).toContain("message");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
