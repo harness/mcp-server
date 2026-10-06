@@ -1,4 +1,4 @@
-import type { ToolsetDefinition, BodySchema, ParamsSchema } from "../types.js";
+import type { ToolsetDefinition, BodySchema, EndpointSpec, ParamsSchema } from "../types.js";
 import { buildBodyNormalized } from "../../utils/body-normalizer.js";
 import { offsetListExtract } from "../extractors.js";
 import { MC_SCOPE } from "./scopes.js";
@@ -203,6 +203,26 @@ const rootCauseTheoryStatusSchema: BodySchema = {
   ],
 };
 
+function rootCauseTheoryStatusAction(
+  pathSuffix: "confirm" | "rule-out" | "undo",
+  effect: string,
+): EndpointSpec & { actionDescription: string } {
+  return {
+    method: "POST",
+    path: `/gateway/ir/tp/api/v1/mc/incidents/{incidentId}/root-cause-theories/{theoryId}/${pathSuffix}`,
+    operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
+    pathParams: { incident_id: "incidentId", theory_id: "theoryId" },
+    paramsSchema: rootCauseTheoryParamsSchema,
+    bodyBuilder: buildBodyNormalized(),
+    bodySchema: rootCauseTheoryStatusSchema,
+    responseExtractor: incidentGetExtract,
+    actionDescription:
+      `${effect} Pass theory_id via params and body.expectedOldRcaSha from the latest harness_get. `
+      + "Fails if the incident's root-cause theories changed since that read: call harness_get again and retry "
+      + "with the new rootCauseTheoriesSha. Returns the updated incident, including the new rootCauseTheoriesSha.",
+  };
+}
+
 export const incidentsToolset: ToolsetDefinition = {
   name: "incidents",
   displayName: "AI-SRE Incidents",
@@ -211,8 +231,8 @@ export const incidentsToolset: ToolsetDefinition = {
     {
       resourceType: "incident",
       displayName: "Incident",
-      description: "AI-SRE incident-management entity. Supports list/get/create/update plus close, "
-        + "add_root_cause_theory, and confirm_root_cause_theory actions. "
+      description: "AI-SRE incident-management entity. Supports list/get/create/update plus close and "
+        + "root-cause theory actions (add, confirm, rule out, undo). "
         + "This entity carries current state only — the incident's history (runbook runs, pages, notes, status "
         + "changes) is a separate resource: harness_list(resource_type='activity_timeline', "
         + "filters={activity_id: <prettyId>}). An empty keyEvents here does not mean nothing happened.",
@@ -322,21 +342,18 @@ export const incidentsToolset: ToolsetDefinition = {
             + "exists, no duplicate is created: the existing theory is returned with created=false and its status "
             + "is left unchanged. The response's theory.id identifies the theory for later status changes.",
         },
-        confirm_root_cause_theory: {
-          method: "POST",
-          path: "/gateway/ir/tp/api/v1/mc/incidents/{incidentId}/root-cause-theories/{theoryId}/confirm",
-          operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
-          pathParams: { incident_id: "incidentId", theory_id: "theoryId" },
-          paramsSchema: rootCauseTheoryParamsSchema,
-          bodyBuilder: buildBodyNormalized(),
-          bodySchema: rootCauseTheoryStatusSchema,
-          responseExtractor: incidentGetExtract,
-          actionDescription:
-            "Mark a root-cause theory as the confirmed root cause. Pass theory_id via params and "
-            + "body.expectedOldRcaSha from the latest harness_get. Fails if the incident's root-cause theories "
-            + "changed since that read: call harness_get again and retry with the new rootCauseTheoriesSha. "
-            + "Returns the updated incident, including the new rootCauseTheoriesSha.",
-        },
+        confirm_root_cause_theory: rootCauseTheoryStatusAction(
+          "confirm",
+          "Mark a root-cause theory as the confirmed root cause.",
+        ),
+        rule_out_root_cause_theory: rootCauseTheoryStatusAction(
+          "rule-out",
+          "Mark a root-cause theory as ruled out.",
+        ),
+        undo_root_cause_theory_status: rootCauseTheoryStatusAction(
+          "undo",
+          "Return a confirmed or ruled-out root-cause theory to INVESTIGATING.",
+        ),
       },
     },
   ],

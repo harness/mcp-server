@@ -657,3 +657,45 @@ describe("incident — harness_execute (confirm_root_cause_theory)", () => {
     expect((parseResult(result) as { error: string }).error).toContain("has changed since it was last loaded");
   });
 });
+
+describe("incident — harness_execute (root-cause theory status actions)", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let mockRequest: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    server = makeMcpServer("accept");
+    mockRequest = vi.fn().mockResolvedValue({ prettyId: "INC-42", rootCauseTheoriesSha: "sha-2" });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server, new Registry(makeConfig()), makeClient(mockRequest), makeConfig());
+  });
+
+  it.each([
+    ["confirm_root_cause_theory", "confirm"],
+    ["rule_out_root_cause_theory", "rule-out"],
+    ["undo_root_cause_theory_status", "undo"],
+  ])("%s posts the fingerprint to the theory's %s path", async (action, suffix) => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action,
+      resource_id: "INC-42",
+      params: { theory_id: "theory-1" },
+      body: { expectedOldRcaSha: "sha-1" },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe(`/gateway/ir/tp/api/v1/mc/incidents/INC-42/root-cause-theories/theory-1/${suffix}`);
+    expect(callArgs.body).toEqual({ expectedOldRcaSha: "sha-1" });
+    expect((parseResult(result) as Record<string, unknown>).rootCauseTheoriesSha).toBe("sha-2");
+  });
+
+  it.each(["confirm_root_cause_theory", "rule_out_root_cause_theory", "undo_root_cause_theory_status"])(
+    "%s requires theory_id and expectedOldRcaSha and is a non-retried low_write",
+    (action) => {
+      const spec = new Registry(makeConfig()).getResource("incident").executeActions?.[action];
+      expect(spec?.operationPolicy).toEqual({ risk: "low_write", retryPolicy: "do_not_retry" });
+      expect(spec?.paramsSchema?.fields.find((f) => f.name === "theory_id")?.required).toBe(true);
+      expect(spec?.bodySchema?.fields.find((f) => f.name === "expectedOldRcaSha")?.required).toBe(true);
+    },
+  );
+});
