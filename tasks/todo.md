@@ -832,3 +832,9 @@ Validation: pnpm audit reports zero vulnerabilities; all 3,944 tests across 171 
 - [x] Validate release tests, shrinkwrap consistency, build, and docs.
 
 Validation: 11 release metadata/workflow tests passed; shrinkwrap consistency, build, docs check, and git diff --check passed. Latest main includes the four dependency security fixes.
+
+## FME experiment default rule label (2026-10-06)
+
+- [x] Default omitted `fme_experiment` create `rule` to the impression label `default rule`.
+- [x] Update schema, README, and registry tests.
+- [x] Run focused feature-flag tests.

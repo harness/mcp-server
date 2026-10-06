@@ -144,8 +144,10 @@ function buildFmeMergePatch(
   return patch;
 }
 
-// Targeting-rule label sent on create when the caller omits rule.
-const FME_EXPERIMENT_DEFAULT_RULE = "default";
+// Impression label of a flag's default rule. Harness records that label as
+// "default rule" (see the experiment targeting-rule dropdown and SDK impression
+// examples). "default" matches no impressions, so omitted creates must not use it.
+const FME_EXPERIMENT_DEFAULT_RULE = "default rule";
 
 // fme_experiment list items: the generic compactItems() whitelist keeps id/name/description/status/
 // *At timestamps but drops parent, environmentId, and the treatment/ownership fields an agent needs
@@ -441,7 +443,7 @@ const fmeExperimentCreateSchema: BodySchema = {
     { name: "keyMetrics", type: "array", required: false, description: "Metric ids to set as key metrics. Omit for none.", itemType: "string" },
     { name: "supportingMetrics", type: "array", required: false, description: "Metric ids to set as supporting metrics. Omit for none.", itemType: "string" },
     { name: "owners", type: "array", required: false, description: "Each entry is {type: \"USER\", id or email} or {type: \"GROUP\", identifier}. Omit for none.", itemType: "object" },
-    { name: "rule", type: "string", required: false, description: "Targeting-rule label to scope results to: \"default\" or a specific targeting rule name on the parent flag. Defaults to \"default\" when omitted." },
+    { name: "rule", type: "string", required: false, description: "Targeting-rule label to scope results to: \"default rule\" (the flag's default-rule impression label) or a specific targeting rule name on the parent flag. Defaults to \"default rule\" when omitted." },
     { name: "tags", type: "array", required: false, description: "Initial tags. Each entry is {name: string}. Omit for none.", itemType: "object" },
   ],
 };
@@ -460,7 +462,7 @@ const fmeExperimentUpdateSchema: BodySchema = {
     { name: "keyMetrics", type: "array", required: false, description: "Replacement key metric ids; null or [] clears the list", itemType: "string" },
     { name: "supportingMetrics", type: "array", required: false, description: "Replacement supporting metric ids; null or [] clears the list", itemType: "string" },
     { name: "owners", type: "array", required: false, description: "Replacement owner list — {type: \"USER\", id or email} or {type: \"GROUP\", identifier}; null or [] clears", itemType: "object" },
-    { name: "rule", type: "string", required: false, description: "Updated targeting-rule label (\"default\" or a targeting rule name on the parent flag); null clears it, reverting to the default rule scope" },
+    { name: "rule", type: "string", required: false, description: "Updated targeting-rule label (\"default rule\", the flag's default-rule impression label, or a targeting rule name on the parent flag); null clears it" },
     { name: "tags", type: "array", required: false, description: "Replacement tag list — each entry {name: string}; null or [] clears all tags", itemType: "object" },
     { name: "status", type: "string", required: false, description: "Updated lifecycle status (ACTIVE, PAUSED, ARCHIVED, COMPLETED); null not allowed. ARCHIVED is a status here, not a substitute for delete." },
   ],
@@ -2165,7 +2167,7 @@ export const featureFlagsToolset: ToolsetDefinition = {
             "Create an experiment. Requires environment_id (param, the environment it's assigned in) plus " +
             "parent/name/startAt/endAt/baselineTreatment/comparisonTreatments in the body. The parent must exist in " +
             "that environment (404 if missing). Duplicate name returns 409. Optional rule scopes results to a targeting " +
-            "rule (defaults to \"default\") and tags attaches tags by name.",
+            "rule (defaults to \"default rule\", the impression label of the flag's default rule) and tags attaches tags by name.",
         },
         update: {
           method: "PATCH",
