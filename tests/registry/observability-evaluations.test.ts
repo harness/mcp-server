@@ -101,7 +101,7 @@ describe("Observability Evaluations toolset", () => {
     const definition = resource();
     expect(definition.identifierFields).toEqual(["eval_id"]);
     expect(definition.searchAliases).toContain("observability_evals");
-    expect(definition.operations.list!.queryParams).toEqual({ page: "page", limit: "limit" });
+    expect(definition.operations.list!.queryParams).toEqual({ page: "page", size: "limit" });
     expect(definition.operations.list!.pathBuilder!({}, { HARNESS_ORG: "org", HARNESS_PROJECT: "project" }))
       .toBe("/gateway/ai-evals/api/v1/orgs/org/projects/project/online-eval-configs");
     expect(definition.operations.get!.pathBuilder!(
@@ -138,11 +138,11 @@ describe("Observability Evaluations toolset", () => {
     });
   });
 
-  it("dispatches list, get, and delete using public eval IDs", async () => {
+  it("dispatches list page/size as backend page/limit, and get/delete by eval_id", async () => {
     const request = vi.fn().mockResolvedValue({ data: [] });
     const registry = new Registry(makeConfig());
 
-    await registry.dispatch(makeClient(request), "observability_eval", "list", { page: 2, limit: 25 });
+    await registry.dispatch(makeClient(request), "observability_eval", "list", { page: 2, size: 25 });
     await registry.dispatch(makeClient(request), "observability_eval", "get", { eval_id: EVAL_ID });
     await registry.dispatch(makeClient(request), "observability_eval", "delete", { eval_id: EVAL_ID });
 

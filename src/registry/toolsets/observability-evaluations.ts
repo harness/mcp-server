@@ -395,7 +395,8 @@ export const observabilityEvaluationsToolset: ToolsetDefinition = {
           path: "",
           pathBuilder: (input, config) => `${base(input, config)}/online-eval-configs`,
           operationPolicy: { risk: "read", retryPolicy: "safe" },
-          queryParams: { page: "page", limit: "limit" },
+          // harness_list sends `size`; the AI Evals list query parameter is `limit`.
+          queryParams: { page: "page", size: "limit" },
           responseExtractor: observabilityEvalListExtract,
           description: "List observability evals",
         },
