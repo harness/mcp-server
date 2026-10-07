@@ -142,6 +142,33 @@ describe("Redis OAuth proxy vault", () => {
     expect(await first.takeTransactionByState("state-1")).toBeUndefined();
   });
 
+  it("takes broker transactions by Harness state and clears sibling indexes", async () => {
+    const { first } = vaultPair();
+    await first.putBrokerTransaction("txn-1", brokerTransaction({ harnessState: "harness-state-1" }));
+
+    const taken = await first.takeBrokerTransactionByHarnessState("harness-state-1");
+    expect(taken?.id).toBe("txn-1");
+    expect(await first.takeBrokerTransactionByUpstreamState("upstream-state")).toBeUndefined();
+  });
+
+  it("replaces stale broker indexes when upstream state changes", async () => {
+    const { first, second } = vaultPair();
+    await first.putBrokerTransaction("txn-1", brokerTransaction({ upstreamState: "old-state" }));
+    await first.putBrokerTransaction("txn-1", brokerTransaction({ upstreamState: "new-state" }));
+
+    expect(await second.takeBrokerTransactionByUpstreamState("old-state")).toBeUndefined();
+    expect((await second.takeBrokerTransactionByUpstreamState("new-state"))?.id).toBe("txn-1");
+  });
+
+  it("deleteBrokerTransaction removes broker lookup indexes", async () => {
+    const { first } = vaultPair();
+    await first.putBrokerTransaction("txn-1", brokerTransaction({ harnessState: "harness-state-1" }));
+    await first.deleteBrokerTransaction("txn-1");
+
+    expect(await first.takeBrokerTransactionByUpstreamState("upstream-state")).toBeUndefined();
+    expect(await first.takeBrokerTransactionByHarnessState("harness-state-1")).toBeUndefined();
+  });
+
   it("serializes refresh work for the same user", async () => {
     const { first } = vaultPair();
     const order: string[] = [];
@@ -205,5 +232,26 @@ describe("oauth-proxy vault mode configuration", () => {
       HARNESS_MCP_OAUTH_PROXY_REDIS_URL: "redis://oauth-vault:6379/0",
     });
     expect(config.HARNESS_MCP_OAUTH_PROXY_REDIS_KEY_PREFIX).toBe("harness-mcp:oauth");
+  });
+
+  it("requires HTTPS upstream and proxy URLs unless HARNESS_ALLOW_HTTP is set", () => {
+    expect(() => ConfigSchema.parse({
+      ...proxyEnv,
+      HARNESS_MCP_UPSTREAM_ISSUER: "http://login.example.com/oauth2/default",
+    })).toThrow("Upstream issuer, JWKS, and OAuth proxy public URLs must use HTTPS");
+
+    const allowed = ConfigSchema.parse({
+      ...proxyEnv,
+      HARNESS_ALLOW_HTTP: "true",
+      HARNESS_MCP_UPSTREAM_ISSUER: "http://login.example.com/oauth2/default",
+    });
+    expect(allowed.HARNESS_MCP_UPSTREAM_ISSUER).toBe("http://login.example.com/oauth2/default");
+  });
+
+  it("rejects oauth-proxy vault keys that are not 32 bytes", () => {
+    expect(() => ConfigSchema.parse({
+      ...proxyEnv,
+      HARNESS_MCP_OAUTH_PROXY_VAULT_KEY: Buffer.from("short").toString("base64"),
+    })).toThrow("32-byte key");
   });
 });
