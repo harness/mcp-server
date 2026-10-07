@@ -41,6 +41,15 @@ describe("parseTimeInput", () => {
   it("rejects datetimes with trailing junk or out-of-range parts", () => {
     expect(() => parseTimeInput("2026-09-28T10:00 garbage", "start_time")).toThrow(/Invalid start_time/);
     expect(() => parseTimeInput("2026-09-28T25:00:00Z", "start_time")).toThrow(/Invalid start_time/);
+    // Date.parse overflows these into a different day; the parser must not.
+    expect(() => parseTimeInput("2026-02-31T00:00:00Z", "start_time")).toThrow(/Invalid start_time/);
+    expect(() => parseTimeInput("2026-09-28T24:00:00Z", "start_time")).toThrow(/Invalid start_time/);
+    expect(() => parseTimeInput("2026-09-28T00:60:00Z", "start_time")).toThrow(/Invalid start_time/);
+  });
+
+  it("reads fractional seconds as milliseconds, not as an integer", () => {
+    expect(parseTimeInput("2026-09-28T00:00:00.1Z", "start_time")).toBe(SEP_28 + 100);
+    expect(parseTimeInput("2026-09-28T00:00:00.12Z", "start_time")).toBe(SEP_28 + 120);
   });
 
   it("throws on invalid input instead of dropping it", () => {

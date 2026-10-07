@@ -12,10 +12,12 @@
 
 const DAY_MS = 86_400_000;
 const DATE_ONLY_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-/** ISO 8601 datetime; guards against Date.parse's lenient legacy formats (e.g. "sept 28"). */
-const ISO_DATETIME_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:?\d{2})?$/i;
-/** Trailing timezone designator on an ISO datetime. */
-const TZ_SUFFIX_RE = /(Z|[+-]\d{2}:?\d{2})$/i;
+/**
+ * Strict ISO 8601 datetime. Captures calendar parts so we can reject impossible
+ * dates ourselves — Date.parse overflows 2026-02-31 and 24:00 into a different day.
+ */
+const ISO_DATETIME_RE =
+  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?(Z|[+-]\d{2}:?\d{2})?$/i;
 
 /** Epoch values below this are treated as seconds, at or above as milliseconds. */
 const MS_THRESHOLD = 1e11;
@@ -67,13 +69,50 @@ export function parseTimeInput(
     return opts.endOfDay ? start + DAY_MS - 1 : start;
   }
 
-  if (!ISO_DATETIME_RE.test(str)) throw invalid(field, value);
-  // A datetime without an offset would be read in the server's local timezone by
-  // Date.parse; CCM buckets are UTC, so treat zone-less values as UTC.
-  const iso = str.replace(" ", "T");
-  const parsed = Date.parse(TZ_SUFFIX_RE.test(iso) ? iso : `${iso}Z`);
-  if (Number.isNaN(parsed)) throw invalid(field, value);
-  return parsed;
+  return parseIsoDateTime(str, field, value);
+}
+
+/**
+ * Parse an ISO datetime from its components. Zone-less values are UTC.
+ * Out-of-range parts and impossible calendar dates throw instead of overflowing
+ * into a neighboring day (Date.parse("2026-02-31T00:00:00Z") is March 3).
+ */
+function parseIsoDateTime(str: string, field: string, value: unknown): number {
+  const m = ISO_DATETIME_RE.exec(str);
+  if (!m) throw invalid(field, value);
+
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  const day = Number(m[3]);
+  const hour = Number(m[4]);
+  const minute = Number(m[5]);
+  const second = m[6] !== undefined ? Number(m[6]) : 0;
+  // ".1" is 100ms and ".12" is 120ms — pad to milliseconds, don't treat as an integer.
+  const millis = m[7] !== undefined ? Number(m[7].padEnd(3, "0")) : 0;
+  const tz = m[8];
+
+  if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) {
+    throw invalid(field, value);
+  }
+
+  const midnight = Date.UTC(year, month - 1, day);
+  const check = new Date(midnight);
+  if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) {
+    throw invalid(field, value);
+  }
+
+  let offsetMinutes = 0;
+  if (tz && tz.toUpperCase() !== "Z") {
+    const tzMatch = /^([+-])(\d{2}):?(\d{2})$/.exec(tz);
+    if (!tzMatch) throw invalid(field, value);
+    const sign = tzMatch[1] === "+" ? 1 : -1;
+    const offH = Number(tzMatch[2]);
+    const offMin = Number(tzMatch[3]);
+    if (offH > 23 || offMin > 59) throw invalid(field, value);
+    offsetMinutes = sign * (offH * 60 + offMin);
+  }
+
+  return Date.UTC(year, month - 1, day, hour, minute, second, millis) - offsetMinutes * 60_000;
 }
 
 /**
@@ -89,10 +128,17 @@ export function parseCustomWindow(input: Record<string, unknown>): { startMs?: n
         'Example: start_time "2026-09-28", end_time "2026-09-29".',
     );
   }
-  if (startMs !== undefined && endMs !== undefined && startMs > endMs) {
-    throw new Error(`start_time must not be after end_time (got ${new Date(startMs).toISOString()} > ${new Date(endMs).toISOString()}).`);
-  }
+  assertWindowOrder(startMs, endMs);
   return { startMs, endMs };
+}
+
+/** Reject an inverted window when both bounds are present. A missing bound is allowed. */
+export function assertWindowOrder(startMs: number | undefined, endMs: number | undefined): void {
+  if (startMs !== undefined && endMs !== undefined && startMs > endMs) {
+    throw new Error(
+      `start_time must not be after end_time (got ${new Date(startMs).toISOString()} > ${new Date(endMs).toISOString()}).`,
+    );
+  }
 }
 
 /** UTC calendar date ("YYYY-MM-DD") for an epoch-ms timestamp. */
