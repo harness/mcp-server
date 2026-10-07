@@ -154,6 +154,7 @@ describe("incident — harness_list", () => {
         summary: "short",
         keyEvents: [{ timestamp: 1, status: "FIXING", details: "x" }, { timestamp: 2, status: "FIXING", details: "y" }],
         rootCauseTheories: [{ message: "db", status: "CONFIRMED", confidence: 90, aiGenerated: true }],
+        rootCauseTheoriesSha: "sha-1",
         __internalMeta: { trace: "abc" },
       }],
       totalCount: 1,
@@ -161,6 +162,7 @@ describe("incident — harness_list", () => {
     const result = await server.call("harness_list", { resource_type: "incident" });
     const data = parseResult(result) as { items: Array<Record<string, unknown>> };
     const item = data.items[0]!;
+    expect(item).not.toHaveProperty("rootCauseTheoriesSha");
     expect(item.prettyId).toBe("INC-1");
     expect(item.severity).toEqual({ id: "1", label: "SEV1" });
     expect(item.impactedServices).toEqual(["svc-a"]);
@@ -362,6 +364,20 @@ describe("incident — harness_get", () => {
     }]);
   });
 
+  it("keeps theory ids and the RCA fingerprint needed to confirm, rule out, or undo a theory", async () => {
+    mockRequest.mockResolvedValueOnce({
+      prettyId: "INC-42",
+      rootCauseTheories: [{ id: "theory-1", message: "db", status: "INVESTIGATING", confidence: 50, aiGenerated: false }],
+      rootCauseTheoriesSha: "sha-1",
+    });
+    const result = await server.call("harness_get", { resource_type: "incident", resource_id: "INC-42" });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.rootCauseTheories).toEqual([
+      { id: "theory-1", message: "db", status: "INVESTIGATING", confidence: 50, aiGenerated: false },
+    ]);
+    expect(data.rootCauseTheoriesSha).toBe("sha-1");
+  });
+
   it("keeps the full summary in the detail view", async () => {
     const long = "x".repeat(1500);
     mockRequest.mockResolvedValueOnce({ prettyId: "INC-42", summary: long });
@@ -494,4 +510,192 @@ describe("incident — harness_execute (close)", () => {
     expect(data).not.toHaveProperty("__internalMeta");
     expect(data).not.toHaveProperty("correlationId");
   });
+});
+
+describe("incident — harness_execute (add_root_cause_theory)", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let mockRequest: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    server = makeMcpServer("accept");
+    mockRequest = vi.fn().mockResolvedValue({
+      theory: { id: "theory-1", message: "db", status: "INVESTIGATING", confidence: 0, aiGenerated: false },
+      created: true,
+    });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server, new Registry(makeConfig()), makeClient(mockRequest), makeConfig());
+  });
+
+  it("posts the theory to the incident's root-cause-theories path", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "add_root_cause_theory",
+      resource_id: "INC-42",
+      body: { message: "db", status: "CONFIRMED" },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42/root-cause-theories");
+    expect(callArgs.body).toEqual({ message: "db", status: "CONFIRMED" });
+  });
+
+  it("returns the projected theory and whether it was created", async () => {
+    mockRequest.mockResolvedValueOnce({
+      theory: { id: "theory-1", message: "db", status: "CONFIRMED", confidence: 0, aiGenerated: false, internal: "x" },
+      created: false,
+    });
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "add_root_cause_theory",
+      resource_id: "INC-42",
+      body: { message: "db" },
+    });
+    expect(parseResult(result)).toEqual({
+      theory: { id: "theory-1", message: "db", status: "CONFIRMED", confidence: 0, aiGenerated: false },
+      created: false,
+    });
+  });
+
+  it("rejects a body without a message before calling the API", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "add_root_cause_theory",
+      resource_id: "INC-42",
+      body: { status: "CONFIRMED" },
+    });
+    expect(result.isError).toBe(true);
+    expect((parseResult(result) as { error: string }).error).toContain("message");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("incident — harness_execute (confirm_root_cause_theory)", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let mockRequest: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    server = makeMcpServer("accept");
+    mockRequest = vi.fn().mockResolvedValue({
+      prettyId: "INC-42",
+      rootCauseTheories: [{ id: "theory-1", message: "db", status: "CONFIRMED", confidence: 50, aiGenerated: false }],
+      rootCauseTheoriesSha: "sha-2",
+      __internalMeta: { trace: "abc" },
+    });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server, new Registry(makeConfig()), makeClient(mockRequest), makeConfig());
+  });
+
+  it("posts the fingerprint to the theory's confirm path", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "confirm_root_cause_theory",
+      resource_id: "INC-42",
+      params: { theory_id: "theory-1" },
+      body: { expectedOldRcaSha: "sha-1" },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe("/gateway/ir/tp/api/v1/mc/incidents/INC-42/root-cause-theories/theory-1/confirm");
+    expect(callArgs.body).toEqual({ expectedOldRcaSha: "sha-1" });
+  });
+
+  it("returns the updated incident with the new fingerprint", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "confirm_root_cause_theory",
+      resource_id: "INC-42",
+      params: { theory_id: "theory-1" },
+      body: { expectedOldRcaSha: "sha-1" },
+    });
+    const data = parseResult(result) as Record<string, unknown>;
+    expect(data.rootCauseTheories).toEqual([
+      { id: "theory-1", message: "db", status: "CONFIRMED", confidence: 50, aiGenerated: false },
+    ]);
+    expect(data.rootCauseTheoriesSha).toBe("sha-2");
+    expect(data).not.toHaveProperty("__internalMeta");
+  });
+
+  it("errors without calling the API when theory_id is missing", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "confirm_root_cause_theory",
+      resource_id: "INC-42",
+      body: { expectedOldRcaSha: "sha-1" },
+    });
+    expect(result.isError).toBe(true);
+    expect((parseResult(result) as { error: string }).error).toContain("theory_id");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("errors without calling the API when the fingerprint is missing", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "confirm_root_cause_theory",
+      resource_id: "INC-42",
+      params: { theory_id: "theory-1" },
+      body: {},
+    });
+    expect(result.isError).toBe(true);
+    expect((parseResult(result) as { error: string }).error).toContain("expectedOldRcaSha");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
+
+  it("surfaces a stale-fingerprint conflict from the backend as an error", async () => {
+    mockRequest.mockRejectedValueOnce(
+      new Error("The root cause theory has changed since it was last loaded. Please refresh and try again."),
+    );
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "confirm_root_cause_theory",
+      resource_id: "INC-42",
+      params: { theory_id: "theory-1" },
+      body: { expectedOldRcaSha: "stale" },
+    });
+    expect(result.isError).toBe(true);
+    expect((parseResult(result) as { error: string }).error).toContain("has changed since it was last loaded");
+  });
+});
+
+describe("incident — harness_execute (root-cause theory status actions)", () => {
+  let server: ReturnType<typeof makeMcpServer>;
+  let mockRequest: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    server = makeMcpServer("accept");
+    mockRequest = vi.fn().mockResolvedValue({ prettyId: "INC-42", rootCauseTheoriesSha: "sha-2" });
+    const { registerExecuteTool } = await import("../../src/tools/harness-execute.js");
+    registerExecuteTool(server, new Registry(makeConfig()), makeClient(mockRequest), makeConfig());
+  });
+
+  it.each([
+    ["confirm_root_cause_theory", "confirm"],
+    ["rule_out_root_cause_theory", "rule-out"],
+    ["undo_root_cause_theory_status", "undo"],
+  ])("%s posts the fingerprint to the theory's %s path", async (action, suffix) => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action,
+      resource_id: "INC-42",
+      params: { theory_id: "theory-1" },
+      body: { expectedOldRcaSha: "sha-1" },
+    });
+    expect(result.isError).toBeUndefined();
+    const callArgs = mockRequest.mock.calls[0]![0] as { method: string; path: string; body: unknown };
+    expect(callArgs.method).toBe("POST");
+    expect(callArgs.path).toBe(`/gateway/ir/tp/api/v1/mc/incidents/INC-42/root-cause-theories/theory-1/${suffix}`);
+    expect(callArgs.body).toEqual({ expectedOldRcaSha: "sha-1" });
+    expect((parseResult(result) as Record<string, unknown>).rootCauseTheoriesSha).toBe("sha-2");
+  });
+
+  it.each(["confirm_root_cause_theory", "rule_out_root_cause_theory", "undo_root_cause_theory_status"])(
+    "%s requires theory_id and expectedOldRcaSha and is a non-retried low_write",
+    (action) => {
+      const spec = new Registry(makeConfig()).getResource("incident").executeActions?.[action];
+      expect(spec?.operationPolicy).toEqual({ risk: "low_write", retryPolicy: "do_not_retry" });
+      expect(spec?.paramsSchema?.fields.find((f) => f.name === "theory_id")?.required).toBe(true);
+      expect(spec?.bodySchema?.fields.find((f) => f.name === "expectedOldRcaSha")?.required).toBe(true);
+    },
+  );
 });
