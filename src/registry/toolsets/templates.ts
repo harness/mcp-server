@@ -1,6 +1,7 @@
 import YAML from "yaml";
 import type { BodySchema, ParamsSchema, PathBuilderConfig, ToolsetDefinition } from "../types.js";
 import { ngExtract, pageExtract, passthrough, v1ListExtract } from "../extractors.js";
+import { collectV1GitDetails, firstGitString, remoteGitUpdatePreflight } from "../remote-git-preflight.js";
 import { SCOPE_BEHAVIOR_DOC, templateV1BasePathFromScope } from "../scope-utils.js";
 
 /** Pass via harness_get/update/delete `params` — not top-level tool fields. */
@@ -94,6 +95,21 @@ const TEMPLATE_V0_UPDATE_PARAMS: ParamsSchema = {
         "Git commitId from GET response gitDetails — required for remote updates. Pass via params.",
     },
     {
+      name: "commit_msg",
+      required: false,
+      description: "Git commit message. Pass via params.",
+    },
+    {
+      name: "is_new_branch",
+      required: false,
+      description: "When true, commit the update on a new branch. Pass base_branch as the branch to fork from. Pass via params.",
+    },
+    {
+      name: "base_branch",
+      required: false,
+      description: "Existing branch to fork when is_new_branch is true. Pass via params.",
+    },
+    {
       name: "comments",
       required: false,
       description: "Optional update comment. Pass via params.",
@@ -136,6 +152,37 @@ const TEMPLATE_V1_GET_PARAMS: ParamsSchema = {
       description:
         "Template version to fetch. Omit for stable/default; set to pin a specific version. Pass via params.",
     },
+    { name: "branch", required: false, description: "Git branch alias — maps to branch_name on the wire. Pass via params." },
+    { name: "branch_name", required: false, description: "Git branch — sent as branch_name. Alias of branch. Pass via params." },
+    { name: "repo_name", required: false, description: "Git repository name for Git Experience. Pass via params." },
+    { name: "connector_ref", required: false, description: "Git connector for remote templates. Pass via params." },
+    { name: "load_from_fallback_branch", required: false, description: "When true, load from the created non-default branch if the requested branch is empty. Pass via params." },
+  ],
+};
+
+const TEMPLATE_V1_GIT_PARAMS: ParamsSchema = {
+  fields: [
+    { name: "store_type", required: false, description: "INLINE (default) or REMOTE. Pass via params; mapped into body.git_details." },
+    { name: "branch", required: false, description: "Git branch (body.git_details.branch_name). Pass via params." },
+    { name: "repo_name", required: false, description: "Git repo name. Pass via params." },
+    { name: "file_path", required: false, description: "Path of the template YAML in the repo. Pass via params." },
+    { name: "connector_ref", required: false, description: "Git connector ref for external Git. Pass via params." },
+    { name: "is_harness_code_repo", required: false, description: "Set true for Harness Code repositories (body.git_details.is_harness_code_repo). Pass via params." },
+    { name: "commit_msg", required: false, description: "Commit message (body.git_details.commit_message). Pass via params." },
+    { name: "base_branch", required: false, description: "Base branch when creating a new branch. Pass via params." },
+  ],
+};
+
+const TEMPLATE_V1_UPDATE_PARAMS: ParamsSchema = {
+  fields: [
+    {
+      name: "version_label",
+      required: true,
+      description: "Template version label to update. Pass via params.",
+    },
+    ...TEMPLATE_V1_GIT_PARAMS.fields,
+    { name: "last_object_id", required: false, description: "Git blob/object id from GET git_details.object_id. Pass via params." },
+    { name: "last_commit_id", required: false, description: "Git commit id from GET git_details.commit_id. Pass via params." },
   ],
 };
 
@@ -170,6 +217,20 @@ function getTemplateYamlFromInput(input: Record<string, unknown>): string {
 function buildTemplateYamlBody(input: Record<string, unknown>): string {
   return getTemplateYamlFromInput(input);
 }
+
+/** v0 NG updates send Git fields as query params. */
+const templateGitUpdatePreflight = remoteGitUpdatePreflight({
+  resourceType: "template",
+  idKeys: ["template_id", "version_label"],
+});
+
+/** v1 REST updates send Git fields in body.git_details. */
+const templateV1GitUpdatePreflight = remoteGitUpdatePreflight({
+  resourceType: "template_v1",
+  idKeys: ["template_id", "version_label"],
+  getDefaults: { include_yaml: true },
+  copyNameTo: "template_name",
+});
 
 /**
  * NG delete path: /template/api/templates/{id}/{version} when version_label set,
@@ -253,7 +314,7 @@ function buildV1TemplateBody(input: Record<string, unknown>): Record<string, unk
     );
   }
   if (!name) {
-    name = identifier;
+    name = firstGitString(input.template_name) ?? identifier;
   }
   if (!label) {
     label = "1.0.0";
@@ -265,7 +326,7 @@ function buildV1TemplateBody(input: Record<string, unknown>): Record<string, unk
     identifier,
     name,
     label,
-    git_details: { store_type: "INLINE" },
+    git_details: collectV1GitDetails(input) ?? { store_type: "INLINE" },
   };
 
   if (b.description) result.description = b.description;
@@ -347,7 +408,7 @@ const templateV0CreateSchema: BodySchema = {
 
 const templateV0UpdateSchema: BodySchema = {
   description:
-    "Classic (v0) template YAML for NG API update (full version replacement). For remote templates, pass store_type='REMOTE' with git details via params (branch, connector_ref, repo_name, file_path) and last_object_id/last_commit_id from the GET response's gitDetails for conflict detection.",
+    "Classic (v0) template YAML for NG API update (full version replacement). For a Git-backed template, omitted branch, repo, file path, connector, and last_object_id/last_commit_id are loaded from the current template and sent as query params. Pass is_new_branch and base_branch to commit on a new branch instead of the current one.",
   fields: [
     {
       name: "template_yaml",
@@ -362,7 +423,7 @@ const templateV0UpdateSchema: BodySchema = {
 
 const templateV1CreateSchema: BodySchema = {
   description:
-    "Unified v1 template for template-service v1 REST API (JSON body). Use harness_schema(resource_type='template_v1') for the full YAML schema.",
+    "Unified v1 template for template-service v1 REST API (JSON body). Use harness_schema(resource_type='template_v1') for the full YAML schema. For remote templates, pass store_type='REMOTE' with repo_name, branch, and file_path via params — they become body.git_details.",
   fields: [
     {
       name: "template_yaml",
@@ -376,11 +437,12 @@ const templateV1CreateSchema: BodySchema = {
     { name: "label", type: "string", required: false, description: "Version label (defaults to 1.0.0)" },
     { name: "is_stable", type: "boolean", required: false, description: "Mark as stable/default version" },
     { name: "comments", type: "string", required: false, description: "Version comments" },
+    { name: "git_details", type: "object", required: false, description: "Git Experience create fields. Prefer params: store_type, repo_name, branch, file_path, connector_ref, is_harness_code_repo, commit_msg, base_branch." },
   ],
 };
 
 const templateV1UpdateSchema: BodySchema = {
-  description: "Unified v1 template for v1 REST API update. Requires template_id and version_label in params.",
+  description: "Unified v1 template for v1 REST API update. Requires template_id and version_label in params. For a Git-backed template, omitted Git location and last_object_id/last_commit_id are loaded from the current template and sent in body.git_details.",
   fields: [
     {
       name: "template_yaml",
@@ -393,6 +455,7 @@ const templateV1UpdateSchema: BodySchema = {
     { name: "label", type: "string", required: false, description: "Version label (defaults from version_label param)" },
     { name: "is_stable", type: "boolean", required: false, description: "Mark as stable/default version" },
     { name: "comments", type: "string", required: false, description: "Version update comments" },
+    { name: "git_details", type: "object", required: false, description: "Git Experience update fields, including last_object_id and last_commit_id. Prefer params; omitted remote fields are loaded from the current template." },
   ],
 };
 
@@ -498,6 +561,7 @@ export const templatesToolset: ToolsetDefinition = {
           path: "/template/api/templates/update/{templateIdentifier}/{versionLabel}",
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
           pathParams: { template_id: "templateIdentifier", version_label: "versionLabel" },
+          preflight: templateGitUpdatePreflight,
           headers: { "Content-Type": "application/yaml" },
           queryParams: {
             comments: "comments",
@@ -519,7 +583,7 @@ export const templatesToolset: ToolsetDefinition = {
           responseExtractor: ngExtract,
           paramsSchema: TEMPLATE_V0_UPDATE_PARAMS,
           description:
-            "Update a v0 template version via NG API. Requires template_id and version_label. Body is full v0 template YAML. For remote/git-backed templates, pass store_type='REMOTE' with git details (branch, connector_ref, repo_name, file_path) and last_object_id/last_commit_id from the GET response's gitDetails (objectId/commitId) — without branch the API fails with 'No branch provided for modifying the file'. For Harness Code: add is_harness_code_repo=true (no connector_ref needed).",
+            "Update a v0 template version via NG API. Requires template_id and version_label. Body is full v0 template YAML. For a Git-backed template, omitted branch, repo, file path, connector, and last_object_id/last_commit_id are loaded from the current template and sent as query params. Pass is_new_branch and base_branch to commit on a new branch. For Harness Code: add is_harness_code_repo=true (no connector_ref needed).",
         },
         delete: {
           method: "DELETE",
@@ -585,6 +649,12 @@ export const templatesToolset: ToolsetDefinition = {
           operationPolicy: { risk: "read", retryPolicy: "safe" },
           queryParams: {
             global: "global_template",
+            branch: "branch_name",
+            branch_name: "branch_name",
+            connector_ref: "connector_ref",
+            repo_name: "repo_name",
+            load_from_fallback_branch: "load_from_fallback_branch",
+            include_yaml: "include_yaml",
           },
           responseExtractor: passthrough,
           paramsSchema: TEMPLATE_V1_GET_PARAMS,
@@ -592,7 +662,8 @@ export const templatesToolset: ToolsetDefinition = {
             "Get unified v1 template YAML including its full inputs schema. " +
             "Use global=true to fetch a built-in global template by identifier — the response `yaml` field contains the `inputs:` block listing all valid `with:` params. " +
             "Omit version_label for stable; pass version_label for a specific version. " +
-            "Pass global and version_label via params (see harness_describe).",
+            "For Git-backed templates, pass branch and repo_name. The response git_details.object_id and git_details.commit_id are used when updating a remote v1 template. " +
+            "Pass global, version_label, and git fields via params (see harness_describe).",
         },
         create: {
           method: "POST",
@@ -601,21 +672,23 @@ export const templatesToolset: ToolsetDefinition = {
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           bodyBuilder: buildV1TemplateBody,
           bodySchema: templateV1CreateSchema,
+          paramsSchema: TEMPLATE_V1_GIT_PARAMS,
           responseExtractor: passthrough,
           description:
-            "Create a unified v1 template via v1 REST API (JSON body with template_yaml, yaml_version=1).",
+            "Create a unified v1 template via v1 REST API (JSON body with template_yaml, yaml_version=1). For remote templates, pass store_type='REMOTE' with repo_name, branch, and file_path via params — they become body.git_details.",
         },
         update: {
           method: "PUT",
           path: "/v1/orgs/{org}/projects/{project}/templates/{template}/versions/{version}",
           pathBuilder: (input, config) => templateV1VersionedPath(input, config),
           operationPolicy: { risk: "low_write", retryPolicy: "safe" },
+          preflight: templateV1GitUpdatePreflight,
           bodyBuilder: buildV1TemplateBody,
           bodySchema: templateV1UpdateSchema,
           responseExtractor: passthrough,
-          paramsSchema: TEMPLATE_V1_VERSION_PARAMS,
+          paramsSchema: TEMPLATE_V1_UPDATE_PARAMS,
           description:
-            "Update a unified v1 template version via v1 REST API. Requires template_id and version_label (via params). Body is JSON with template_yaml.",
+            "Update a unified v1 template version via v1 REST API. Requires template_id and version_label (via params). Body is JSON with template_yaml. For a Git-backed template, omitted branch, repo, file path, connector, and last_object_id/last_commit_id are loaded from the current template and sent in body.git_details.",
         },
         delete: {
           method: "DELETE",
