@@ -6,7 +6,7 @@ import { Registry } from "../../src/registry/index.js";
 import type { ResourceDefinition } from "../../src/registry/types.js";
 import { observabilityEvaluationsToolset } from "../../src/registry/toolsets/observability-evaluations.js";
 
-const CONFIG_ID = "11111111-1111-4111-8111-111111111111";
+const EVAL_ID = "11111111-1111-4111-8111-111111111111";
 const METRIC_SET_ID = "22222222-2222-4222-8222-222222222222";
 const METRIC_ID = "33333333-3333-4333-8333-333333333333";
 
@@ -99,12 +99,65 @@ describe("Observability Evaluations toolset", () => {
 
   it("routes list and get to scheduled config endpoints", () => {
     const definition = resource();
+    expect(definition.identifierFields).toEqual(["eval_id"]);
+    expect(definition.searchAliases).toContain("observability_evals");
+    expect(definition.operations.list!.queryParams).toEqual({ page: "page", limit: "limit" });
     expect(definition.operations.list!.pathBuilder!({}, { HARNESS_ORG: "org", HARNESS_PROJECT: "project" }))
       .toBe("/gateway/ai-evals/api/v1/orgs/org/projects/project/online-eval-configs");
     expect(definition.operations.get!.pathBuilder!(
-      { config_id: CONFIG_ID },
+      { eval_id: EVAL_ID },
       { HARNESS_ORG: "org", HARNESS_PROJECT: "project" },
-    )).toBe(`/gateway/ai-evals/api/v1/orgs/org/projects/project/online-eval-configs/${CONFIG_ID}`);
+    )).toBe(`/gateway/ai-evals/api/v1/orgs/org/projects/project/online-eval-configs/${EVAL_ID}`);
+  });
+
+  it("discovers the public observability_eval resource through its plural alias", () => {
+    const registry = new Registry(makeConfig());
+
+    expect(registry.searchResources("observability_evals")).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: "observability_eval",
+        toolset: "observability-evaluations",
+      }),
+    ]));
+  });
+
+  it("returns eval_id instead of the backend config_id field", () => {
+    const definition = resource();
+    const response = { config_id: EVAL_ID, name: "Production quality" };
+
+    expect(definition.operations.get!.responseExtractor!(response)).toEqual({
+      eval_id: EVAL_ID,
+      name: "Production quality",
+    });
+    expect(definition.operations.list!.responseExtractor!({
+      data: [response],
+      total_elements: 1,
+    })).toEqual({
+      items: [{ eval_id: EVAL_ID, name: "Production quality" }],
+      total: 1,
+    });
+  });
+
+  it("dispatches list, get, and delete using public eval IDs", async () => {
+    const request = vi.fn().mockResolvedValue({ data: [] });
+    const registry = new Registry(makeConfig());
+
+    await registry.dispatch(makeClient(request), "observability_eval", "list", { page: 2, limit: 25 });
+    await registry.dispatch(makeClient(request), "observability_eval", "get", { eval_id: EVAL_ID });
+    await registry.dispatch(makeClient(request), "observability_eval", "delete", { eval_id: EVAL_ID });
+
+    expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      method: "GET",
+      path: "/gateway/ai-evals/api/v1/orgs/default/projects/test-project/online-eval-configs",
+      params: { page: 2, limit: 25 },
+    }));
+    for (const call of [2, 3]) {
+      expect(request).toHaveBeenNthCalledWith(call, expect.objectContaining({
+        path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/online-eval-configs/${EVAL_ID}`,
+      }));
+    }
+    expect(request).toHaveBeenNthCalledWith(2, expect.objectContaining({ method: "GET" }));
+    expect(request).toHaveBeenNthCalledWith(3, expect.objectContaining({ method: "DELETE" }));
   });
 
   it("marks disable as an update and deletion as destructive", () => {
@@ -119,7 +172,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce(validPreflightResponses()[0])
       .mockResolvedValueOnce(validPreflightResponses()[1])
       .mockResolvedValueOnce(validPreflightResponses()[2])
-      .mockResolvedValueOnce({ config_id: CONFIG_ID });
+      .mockResolvedValueOnce({ eval_id: EVAL_ID });
     const registry = new Registry(makeConfig());
 
     await registry.dispatch(makeClient(request), "observability_eval", "create", { body: validBody() });
@@ -151,7 +204,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce(validPreflightResponses()[0])
       .mockResolvedValueOnce(validPreflightResponses()[1])
       .mockResolvedValueOnce(validPreflightResponses()[2])
-      .mockResolvedValueOnce({ config_id: CONFIG_ID });
+      .mockResolvedValueOnce({ eval_id: EVAL_ID });
     const registry = new Registry(makeConfig({ HARNESS_TOOLSETS: "observability-evaluations" }));
 
     await registry.dispatch(makeClient(request), "observability_eval", "create", { body: validBody() });
@@ -171,7 +224,7 @@ describe("Observability Evaluations toolset", () => {
       })
       .mockResolvedValueOnce({ name: "Answer quality", type: "llm", kind: "geval", config: { criteria: "Helpful and correct" } })
       .mockResolvedValueOnce(validPreflightResponses()[2])
-      .mockResolvedValueOnce({ config_id: CONFIG_ID });
+      .mockResolvedValueOnce({ eval_id: EVAL_ID });
     const registry = new Registry(makeConfig());
 
     await registry.dispatch(makeClient(request), "observability_eval", "create", { body: validBody() });
@@ -207,7 +260,7 @@ describe("Observability Evaluations toolset", () => {
       })
       .mockResolvedValueOnce({ name: "Answer quality", type: "llm", kind: "geval", config: { criteria: "Helpful and correct" } })
       .mockResolvedValueOnce(validPreflightResponses()[2])
-      .mockResolvedValueOnce({ config_id: CONFIG_ID });
+      .mockResolvedValueOnce({ eval_id: EVAL_ID });
     const registry = new Registry(makeConfig());
 
     await registry.dispatch(makeClient(request), "observability_eval", "create", { body: validBody() });
@@ -228,7 +281,7 @@ describe("Observability Evaluations toolset", () => {
       })
       .mockResolvedValueOnce({ name: "Answer quality", type: "llm", kind: "geval", config: { criteria: "Helpful and correct" } })
       .mockResolvedValueOnce(validPreflightResponses()[2])
-      .mockResolvedValueOnce({ config_id: CONFIG_ID });
+      .mockResolvedValueOnce({ eval_id: EVAL_ID });
     const registry = new Registry(makeConfig());
 
     await registry.dispatch(makeClient(request), "observability_eval", "create", { body: validBody() });
@@ -246,7 +299,7 @@ describe("Observability Evaluations toolset", () => {
       .mockResolvedValueOnce(validPreflightResponses()[0])
       .mockResolvedValueOnce(validPreflightResponses()[1])
       .mockResolvedValueOnce(validPreflightResponses()[2])
-      .mockResolvedValueOnce({ config_id: CONFIG_ID });
+      .mockResolvedValueOnce({ eval_id: EVAL_ID });
     const registry = new Registry(makeConfig());
     const { selector_filters: _selectors, sampling_percentage: _sampling, ...body } = validBody();
 
@@ -264,14 +317,14 @@ describe("Observability Evaluations toolset", () => {
     const registry = new Registry(makeConfig());
 
     await registry.dispatch(makeClient(request), "observability_eval", "update", {
-      config_id: CONFIG_ID,
+      eval_id: EVAL_ID,
       body: { enabled: false },
     });
 
     expect(request).toHaveBeenCalledTimes(1);
     expect(request).toHaveBeenCalledWith(expect.objectContaining({
       method: "PATCH",
-      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/online-eval-configs/${CONFIG_ID}`,
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/online-eval-configs/${EVAL_ID}`,
       body: { enabled: false },
     }));
   });
@@ -280,27 +333,27 @@ describe("Observability Evaluations toolset", () => {
     const request = vi.fn()
       .mockResolvedValueOnce({
         ...validBody(),
-        config_id: CONFIG_ID,
+        eval_id: EVAL_ID,
         active_version: 1,
       })
       .mockResolvedValueOnce(validPreflightResponses()[0])
       .mockResolvedValueOnce(validPreflightResponses()[1])
       .mockResolvedValueOnce(validPreflightResponses()[2])
-      .mockResolvedValueOnce({ config_id: CONFIG_ID, active_version: 2 });
+      .mockResolvedValueOnce({ eval_id: EVAL_ID, active_version: 2 });
     const registry = new Registry(makeConfig());
 
     await registry.dispatch(makeClient(request), "observability_eval", "update", {
-      config_id: CONFIG_ID,
+      eval_id: EVAL_ID,
       body: { sampling_percentage: 50 },
     });
 
     expect(request).toHaveBeenNthCalledWith(1, expect.objectContaining({
       method: "GET",
-      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/online-eval-configs/${CONFIG_ID}`,
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/online-eval-configs/${EVAL_ID}`,
     }));
     expect(request).toHaveBeenLastCalledWith(expect.objectContaining({
       method: "PATCH",
-      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/online-eval-configs/${CONFIG_ID}`,
+      path: `/gateway/ai-evals/api/v1/orgs/default/projects/test-project/online-eval-configs/${EVAL_ID}`,
       body: { sampling_percentage: 50 },
       retryPolicy: "do_not_retry",
     }));
@@ -382,16 +435,20 @@ describe("Observability Evaluations toolset", () => {
     expect(request).toHaveBeenCalledTimes(3);
   });
 
-  it("rejects non-UUID config IDs before building read or delete paths", async () => {
+  it("rejects invalid public eval_id values before building read or delete paths", async () => {
     const request = vi.fn();
     const registry = new Registry(makeConfig());
 
     await expect(registry.dispatch(makeClient(request), "observability_eval", "get", {
-      config_id: "../metric-sets",
-    })).rejects.toThrow(/config_id must be a UUID/);
+      eval_id: "../metric-sets",
+    })).rejects.toThrow(
+      "eval_id must be a UUID returned by an AI Evals read operation; do not invent an identifier.",
+    );
     await expect(registry.dispatch(makeClient(request), "observability_eval", "delete", {
-      config_id: "../metric-sets",
-    })).rejects.toThrow(/config_id must be a UUID/);
+      eval_id: "../metric-sets",
+    })).rejects.toThrow(
+      "eval_id must be a UUID returned by an AI Evals read operation; do not invent an identifier.",
+    );
 
     expect(request).not.toHaveBeenCalled();
   });

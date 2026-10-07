@@ -57,7 +57,7 @@
   "homepage": "https://github.com/harness/mcp-server#readme",
   "dependencies": {
     "@hono/node-server": "^2.0.10",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "adm-zip": "^0.6.1",
     "dotenv": "^17.3.1",
     "express": "^5.2.1",
@@ -118,7 +118,7 @@
       "fast-uri": ">=4.1.5",
       "source-map-js": ">=1.2.2",
       "body-parser": ">=2.3.0",
-      "sharp": ">=0.35.4",
+      "sharp": ">=0.35.5",
       "protobufjs": ">=8.6.0",
       "adm-zip": ">=0.6.1",
       "@opentelemetry/core": ">=2.8.0",
