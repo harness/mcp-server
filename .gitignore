@@ -5,6 +5,9 @@ build/
 dist/
 .env
 .env.local
+.env.poc
+.poc/
+.harness-mcp/
 *.tgz
 *.mcpb
 .DS_Store
