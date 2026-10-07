@@ -191,6 +191,20 @@ const rootCauseTheoryParamsSchema: ParamsSchema = {
   ],
 };
 
+const buildNormalizedBody = buildBodyNormalized();
+
+/**
+ * These actions require a JSON body. `buildBodyNormalized()` returns undefined
+ * when `body` is omitted, and the registry skips bodySchema checks unless the
+ * built body is an object — so a confirm/rule-out/undo with no body would POST
+ * without `expectedOldRcaSha` and skip the concurrency token. An empty object
+ * makes that required-field check run before any HTTP call.
+ */
+function buildRootCauseTheoryBody(input: Record<string, unknown>): unknown {
+  const built = buildNormalizedBody(input);
+  return built == null ? {} : built;
+}
+
 const rootCauseTheoryStatusSchema: BodySchema = {
   description: "Concurrency check for a root-cause theory status change (RootCauseTheoryStatusRequest)",
   fields: [
@@ -213,7 +227,7 @@ function rootCauseTheoryStatusAction(
     operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
     pathParams: { incident_id: "incidentId", theory_id: "theoryId" },
     paramsSchema: rootCauseTheoryParamsSchema,
-    bodyBuilder: buildBodyNormalized(),
+    bodyBuilder: buildRootCauseTheoryBody,
     bodySchema: rootCauseTheoryStatusSchema,
     responseExtractor: incidentGetExtract,
     actionDescription:
@@ -334,7 +348,7 @@ export const incidentsToolset: ToolsetDefinition = {
           path: "/gateway/ir/tp/api/v1/mc/incidents/{incidentId}/root-cause-theories",
           operationPolicy: { risk: "low_write", retryPolicy: "do_not_retry" },
           pathParams: { incident_id: "incidentId" },
-          bodyBuilder: buildBodyNormalized(),
+          bodyBuilder: buildRootCauseTheoryBody,
           bodySchema: addRootCauseTheorySchema,
           responseExtractor: addRootCauseTheoryExtract,
           actionDescription:

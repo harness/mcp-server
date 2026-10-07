@@ -568,6 +568,18 @@ describe("incident — harness_execute (add_root_cause_theory)", () => {
     expect((parseResult(result) as { error: string }).error).toContain("message");
     expect(mockRequest).not.toHaveBeenCalled();
   });
+
+  it("rejects an omitted body before calling the API", async () => {
+    const result = await server.call("harness_execute", {
+      resource_type: "incident",
+      action: "add_root_cause_theory",
+      resource_id: "INC-42",
+      params: { message: "db" },
+    });
+    expect(result.isError).toBe(true);
+    expect((parseResult(result) as { error: string }).error).toContain("message");
+    expect(mockRequest).not.toHaveBeenCalled();
+  });
 });
 
 describe("incident — harness_execute (confirm_root_cause_theory)", () => {
@@ -688,6 +700,21 @@ describe("incident — harness_execute (root-cause theory status actions)", () =
     expect(callArgs.body).toEqual({ expectedOldRcaSha: "sha-1" });
     expect((parseResult(result) as Record<string, unknown>).rootCauseTheoriesSha).toBe("sha-2");
   });
+
+  it.each(["confirm_root_cause_theory", "rule_out_root_cause_theory", "undo_root_cause_theory_status"])(
+    "%s rejects an omitted body before calling the API",
+    async (action) => {
+      const result = await server.call("harness_execute", {
+        resource_type: "incident",
+        action,
+        resource_id: "INC-42",
+        params: { theory_id: "theory-1", expectedOldRcaSha: "sha-1" },
+      });
+      expect(result.isError).toBe(true);
+      expect((parseResult(result) as { error: string }).error).toContain("expectedOldRcaSha");
+      expect(mockRequest).not.toHaveBeenCalled();
+    },
+  );
 
   it.each(["confirm_root_cause_theory", "rule_out_root_cause_theory", "undo_root_cause_theory_status"])(
     "%s requires theory_id and expectedOldRcaSha and is a non-retried low_write",
