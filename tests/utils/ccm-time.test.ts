@@ -22,6 +22,7 @@ describe("parseTimeInput", () => {
   it("passes epoch ms (number and numeric string) through", () => {
     expect(parseTimeInput(SEP_28, "start_time")).toBe(SEP_28);
     expect(parseTimeInput(String(SEP_28), "start_time")).toBe(SEP_28);
+    expect(parseTimeInput(`  ${SEP_28}  `, "start_time")).toBe(SEP_28);
   });
 
   it("treats 10-digit epoch values as seconds", () => {

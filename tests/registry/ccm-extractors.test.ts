@@ -7,6 +7,7 @@ import {
   ccmViewsExtract,
   ccmBreakdownExtract,
   ccmTimeseriesExtract,
+  ccmTimeseriesWithWindowExtract,
   ccmSummaryExtract,
   ccmRecommendationsExtract,
   countExtract,
@@ -120,6 +121,62 @@ describe("ccmTimeseriesExtract", () => {
 
   it("returns empty array when stats are missing", () => {
     expect(ccmTimeseriesExtract({})).toEqual([]);
+  });
+
+  it("leaves stats without a numeric time unchanged (no date field)", () => {
+    const stats = [{ timestamp: 1, cost: 50 }, null, { time: "not-a-number" }];
+    const raw = { data: { perspectiveTimeSeriesStats: { stats } } };
+    expect(ccmTimeseriesExtract(raw)).toEqual(stats);
+  });
+});
+
+describe("ccmTimeseriesWithWindowExtract", () => {
+  const raw = (stats: unknown[]) => ({
+    data: { perspectiveTimeSeriesStats: { stats } },
+  });
+
+  it("sorts date_range when the API returns out-of-order buckets", () => {
+    const result = ccmTimeseriesWithWindowExtract(
+      raw([
+        { time: 1790640000000, values: [] },
+        { time: 1790553600000, values: [] },
+        { time: 1790726400000, values: [] },
+      ]),
+    ) as { date_range: { first: string; last: string } };
+    expect(result.date_range).toEqual({ first: "2026-09-28", last: "2026-09-30" });
+  });
+
+  it("sets date_range to null when no dated items are returned", () => {
+    const result = ccmTimeseriesWithWindowExtract(raw([{ cost: 1 }, { time: "bad" }])) as {
+      date_range: null;
+      total: number;
+    };
+    expect(result.date_range).toBeNull();
+    expect(result.total).toBe(2);
+  });
+
+  it("omits requested_window when the caller used only a relative time_filter", () => {
+    const result = ccmTimeseriesWithWindowExtract(raw([{ time: 1790553600000 }]), {
+      time_filter: "LAST_30_DAYS",
+    }) as Record<string, unknown>;
+    expect(result).not.toHaveProperty("requested_window");
+  });
+
+  it("echoes requested_window for explicit YYYY-MM-DD bounds (CCM-37122)", () => {
+    const result = ccmTimeseriesWithWindowExtract(raw([]), {
+      start_time: "2026-09-28",
+      end_time: "2026-09-29",
+    }) as { requested_window: { start: string; end: string } };
+    expect(result.requested_window).toEqual({
+      start: "2026-09-28T00:00:00.000Z",
+      end: "2026-09-29T23:59:59.999Z",
+    });
+  });
+
+  it("rejects a lone custom bound instead of returning a partial window", () => {
+    expect(() =>
+      ccmTimeseriesWithWindowExtract(raw([]), { start_time: "2026-09-28" }),
+    ).toThrow(/start_time and end_time must be provided together/);
   });
 });
 
